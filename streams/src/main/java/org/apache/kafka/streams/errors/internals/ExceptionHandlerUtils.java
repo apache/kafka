@@ -15,12 +15,13 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streams.errors;
+package org.apache.kafka.streams.errors.internals;
 
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.ErrorHandlerContext;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
@@ -30,16 +31,16 @@ import java.util.List;
 /**
  * {@code ExceptionHandlerUtils} Contains utilities method that could be used by all exception handlers
  */
-class ExceptionHandlerUtils {
-    static final String HEADER_ERRORS_EXCEPTION_NAME = "__streams.errors.exception";
-    static final String HEADER_ERRORS_STACKTRACE_NAME = "__streams.errors.stacktrace";
-    static final String HEADER_ERRORS_EXCEPTION_MESSAGE_NAME = "__streams.errors.message";
-    static final String HEADER_ERRORS_TOPIC_NAME = "__streams.errors.topic";
-    static final String HEADER_ERRORS_PARTITION_NAME = "__streams.errors.partition";
-    static final String HEADER_ERRORS_OFFSET_NAME = "__streams.errors.offset";
+public class ExceptionHandlerUtils {
+    public static final String HEADER_ERRORS_EXCEPTION_NAME = "__streams.errors.exception";
+    public static final String HEADER_ERRORS_STACKTRACE_NAME = "__streams.errors.stacktrace";
+    public static final String HEADER_ERRORS_EXCEPTION_MESSAGE_NAME = "__streams.errors.message";
+    public static final String HEADER_ERRORS_TOPIC_NAME = "__streams.errors.topic";
+    public static final String HEADER_ERRORS_PARTITION_NAME = "__streams.errors.partition";
+    public static final String HEADER_ERRORS_OFFSET_NAME = "__streams.errors.offset";
 
 
-    static boolean shouldBuildDeadLetterQueueRecord(final String deadLetterQueueTopicName) {
+    public static boolean shouldBuildDeadLetterQueueRecord(final String deadLetterQueueTopicName) {
         return deadLetterQueueTopicName != null;
     }
 
@@ -52,7 +53,7 @@ class ExceptionHandlerUtils {
      * @param exception Thrown exception
      * @return A list of Dead Letter Queue records to produce
      */
-    static List<ProducerRecord<byte[], byte[]>> maybeBuildDeadLetterQueueRecords(final String deadLetterQueueTopicName,
+    public static List<ProducerRecord<byte[], byte[]>> maybeBuildDeadLetterQueueRecords(final String deadLetterQueueTopicName,
                                                                                  final byte[] key,
                                                                                  final byte[] value,
                                                                                  final ErrorHandlerContext context,
@@ -73,7 +74,7 @@ class ExceptionHandlerUtils {
      * @param context error handler context of the exception.
      * @return A dead letter queue record to produce.
      */
-    static ProducerRecord<byte[], byte[]> buildDeadLetterQueueRecord(final String deadLetterQueueTopicName,
+    public static ProducerRecord<byte[], byte[]> buildDeadLetterQueueRecord(final String deadLetterQueueTopicName,
                                                                      final byte[] key,
                                                                      final byte[] value,
                                                                      final ErrorHandlerContext context,

@@ -93,6 +93,8 @@ import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMo
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_V2;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.producerRecordSizeInBytes;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TOPIC_LEVEL_GROUP;
+import static org.apache.kafka.streams.errors.ProductionExceptionHandler.Response;
+import static org.apache.kafka.streams.errors.ProductionExceptionHandler.Result;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
@@ -2051,6 +2053,71 @@ public class RecordCollectorTest {
         assertEquals(exception, thrown.getCause());
     }
 
+    @Test
+    void shouldFailWithDeadLetterQueueRecords() {
+        ProducerRecord<byte[], byte[]> record = new ProducerRecord<>("topic", new byte[]{}, new byte[]{});
+        List<ProducerRecord<byte[], byte[]>> records = Collections.singletonList(record);
+
+        ProductionExceptionHandler.Response response = ProductionExceptionHandler.Response.fail(records);
+
+        assertEquals(Result.FAIL, response.result());
+        assertEquals(1, response.deadLetterQueueRecords().size());
+        assertEquals(record, response.deadLetterQueueRecords().get(0));
+    }
+
+    @Test
+    void shouldFailWithoutDeadLetterQueueRecords() {
+        ProductionExceptionHandler.Response response = ProductionExceptionHandler.Response.fail();
+
+        assertEquals(Result.FAIL, response.result());
+        assertTrue(response.deadLetterQueueRecords().isEmpty());
+    }
+
+    @Test
+    void shouldResumeWithDeadLetterQueueRecords() {
+        ProducerRecord<byte[], byte[]> record = new ProducerRecord<>("topic", new byte[]{}, new byte[]{});
+        List<ProducerRecord<byte[], byte[]>> records = Collections.singletonList(record);
+
+        Response response = Response.resume(records);
+
+        assertEquals(Result.RESUME, response.result());
+        assertEquals(1, response.deadLetterQueueRecords().size());
+        assertEquals(record, response.deadLetterQueueRecords().get(0));
+    }
+
+    @Test
+    void shouldResumeWithoutDeadLetterQueueRecords() {
+        Response response = Response.resume();
+
+        assertEquals(Result.RESUME, response.result());
+        assertTrue(response.deadLetterQueueRecords().isEmpty());
+    }
+
+    @Test
+    void shouldRetryWithoutDeadLetterQueueRecords() {
+        Response response = Response.retry();
+
+        assertEquals(Result.RETRY, response.result());
+        assertTrue(response.deadLetterQueueRecords().isEmpty());
+    }
+
+    @Test
+    void shouldNotBeModifiable() {
+        ProducerRecord<byte[], byte[]> record = new ProducerRecord<>("topic", new byte[]{}, new byte[]{});
+        List<ProducerRecord<byte[], byte[]>> records = Collections.singletonList(record);
+
+        Response response = Response.fail(records);
+
+        assertThrows(UnsupportedOperationException.class, () -> response.deadLetterQueueRecords().add(record));
+    }
+
+    @Test
+    void shouldReturnsEmptyList() {
+        Response response = Response.fail();
+
+        assertTrue(response.deadLetterQueueRecords().isEmpty());
+    }
+
     private RecordCollector newRecordCollector(final ProductionExceptionHandler productionExceptionHandler) {
         return new RecordCollectorImpl(
             logContext,
@@ -2217,7 +2284,7 @@ public class RecordCollectorTest {
         }
     }
 
-    public class OldProductionExceptionHandlerImplementation implements ProductionExceptionHandler {
+    public static class OldProductionExceptionHandlerImplementation implements ProductionExceptionHandler {
 
         @SuppressWarnings("deprecation")
         @Override
@@ -2231,7 +2298,7 @@ public class RecordCollectorTest {
         }
     }
 
-    public class OldProductionExceptionHandlerWithRecordContextImplementation implements ProductionExceptionHandler {
+    public static class OldProductionExceptionHandlerWithRecordContextImplementation implements ProductionExceptionHandler {
 
         @SuppressWarnings("deprecation")
         @Override

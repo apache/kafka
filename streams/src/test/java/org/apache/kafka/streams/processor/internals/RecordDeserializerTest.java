@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeader;
@@ -42,14 +43,18 @@ import org.junit.jupiter.params.provider.CsvSource;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import static org.apache.kafka.streams.errors.DeserializationExceptionHandler.Response;
+import static org.apache.kafka.streams.errors.DeserializationExceptionHandler.Result;
 import static org.apache.kafka.streams.StreamsConfig.DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class RecordDeserializerTest {
     private final String sourceNodeName = "source-node";
@@ -303,6 +308,64 @@ public class RecordDeserializerTest {
             assertEquals(1, collector.collected().size());
             assertEquals("dlq", collector.collected().get(0).topic());
         }
+    }
+
+    @Test
+    void shouldFailWithDeadLetterQueueRecords() {
+        ProducerRecord<byte[], byte[]> record = new ProducerRecord<>("topic", new byte[]{}, new byte[]{});
+        List<ProducerRecord<byte[], byte[]>> records = Collections.singletonList(record);
+
+        Response response = Response.fail(records);
+
+        assertEquals(Result.FAIL, response.result());
+        assertEquals(1, response.deadLetterQueueRecords().size());
+        assertEquals(record, response.deadLetterQueueRecords().get(0));
+    }
+
+    @Test
+    void shouldFailWithoutDeadLetterQueueRecords() {
+        Response response = DeserializationExceptionHandler.Response.fail();
+
+        assertEquals(Result.FAIL, response.result());
+        assertTrue(response.deadLetterQueueRecords().isEmpty());
+    }
+
+    @Test
+    void shouldResumeWithDeadLetterQueueRecords() {
+        ProducerRecord<byte[], byte[]> record = new ProducerRecord<>("topic", new byte[]{}, new byte[]{});
+        List<ProducerRecord<byte[], byte[]>> records = Collections.singletonList(record);
+
+        Response response = Response.resume(records);
+
+        assertEquals(Result.RESUME, response.result());
+        assertEquals(1, response.deadLetterQueueRecords().size());
+        assertEquals(record, response.deadLetterQueueRecords().get(0));
+    }
+
+    @Test
+    void shouldResumeWithoutDeadLetterQueueRecords() {
+        Response response = Response.resume();
+
+        assertEquals(Result.RESUME, response.result());
+        assertTrue(response.deadLetterQueueRecords().isEmpty());
+    }
+
+
+    @Test
+    void shouldNotBeModifiable() {
+        ProducerRecord<byte[], byte[]> record = new ProducerRecord<>("topic", new byte[]{}, new byte[]{});
+        List<ProducerRecord<byte[], byte[]>> records = Collections.singletonList(record);
+
+        Response response = Response.fail(records);
+
+        assertThrows(UnsupportedOperationException.class, () -> response.deadLetterQueueRecords().add(record));
+    }
+
+    @Test
+    void shouldReturnsEmptyList() {
+        Response response = Response.fail();
+
+        assertTrue(response.deadLetterQueueRecords().isEmpty());
     }
 
     static class TheSourceNode extends SourceNode<Object, Object> {

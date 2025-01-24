@@ -22,7 +22,7 @@ import org.apache.kafka.streams.StreamsConfig;
 
 import java.util.Map;
 
-import static org.apache.kafka.streams.errors.ExceptionHandlerUtils.maybeBuildDeadLetterQueueRecords;
+import static org.apache.kafka.streams.errors.internals.ExceptionHandlerUtils.maybeBuildDeadLetterQueueRecords;
 
 /**
  * {@code ProductionExceptionHandler} that always instructs streams to fail when an exception

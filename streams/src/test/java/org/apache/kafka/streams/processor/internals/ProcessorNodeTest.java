@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.InvalidOffsetException;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
@@ -56,10 +57,13 @@ import org.mockito.quality.Strictness;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 
+import static org.apache.kafka.streams.errors.ProcessingExceptionHandler.Response;
+import static org.apache.kafka.streams.errors.ProcessingExceptionHandler.Result;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.ROLLUP_VALUE;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -368,6 +372,64 @@ public class ProcessorNodeTest {
         assertTrue(se.getMessage().contains("default Serdes"));
         assertTrue(se.getMessage().contains("input types"));
         assertTrue(se.getMessage().contains("pname"));
+    }
+
+    @Test
+    void shouldFailWithDeadLetterQueueRecords() {
+        ProducerRecord<byte[], byte[]> record = new ProducerRecord<>("topic", new byte[]{}, new byte[]{});
+        List<ProducerRecord<byte[], byte[]>> records = Collections.singletonList(record);
+
+        Response response = Response.fail(records);
+
+        assertEquals(Result.FAIL, response.result());
+        assertEquals(1, response.deadLetterQueueRecords().size());
+        assertEquals(record, response.deadLetterQueueRecords().get(0));
+    }
+
+    @Test
+    void shouldFailWithoutDeadLetterQueueRecords() {
+        Response response = Response.fail();
+
+        assertEquals(Result.FAIL, response.result());
+        assertTrue(response.deadLetterQueueRecords().isEmpty());
+    }
+
+    @Test
+    void shouldResumeWithDeadLetterQueueRecords() {
+        ProducerRecord<byte[], byte[]> record = new ProducerRecord<>("topic", new byte[]{}, new byte[]{});
+        List<ProducerRecord<byte[], byte[]>> records = Collections.singletonList(record);
+
+        Response response = Response.resume(records);
+
+        assertEquals(Result.RESUME, response.result());
+        assertEquals(1, response.deadLetterQueueRecords().size());
+        assertEquals(record, response.deadLetterQueueRecords().get(0));
+    }
+
+    @Test
+    void shouldResumeWithoutDeadLetterQueueRecords() {
+        Response response = Response.resume();
+
+        assertEquals(Result.RESUME, response.result());
+        assertTrue(response.deadLetterQueueRecords().isEmpty());
+    }
+
+
+    @Test
+    void shouldNotBeModifiable() {
+        ProducerRecord<byte[], byte[]> record = new ProducerRecord<>("topic", new byte[]{}, new byte[]{});
+        List<ProducerRecord<byte[], byte[]>> records = Collections.singletonList(record);
+
+        Response response = Response.fail(records);
+
+        assertThrows(UnsupportedOperationException.class, () -> response.deadLetterQueueRecords().add(record));
+    }
+
+    @Test
+    void shouldReturnsEmptyList() {
+        Response response = Response.fail();
+
+        assertTrue(response.deadLetterQueueRecords().isEmpty());
     }
 
     @SuppressWarnings("unchecked")

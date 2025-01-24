@@ -24,7 +24,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 
-import static org.apache.kafka.streams.errors.ExceptionHandlerUtils.maybeBuildDeadLetterQueueRecords;
+import static org.apache.kafka.streams.errors.internals.ExceptionHandlerUtils.maybeBuildDeadLetterQueueRecords;
 
 /**
  * Processing exception handler that logs a processing exception and then
