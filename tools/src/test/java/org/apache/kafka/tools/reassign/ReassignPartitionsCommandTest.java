@@ -40,7 +40,7 @@ import org.apache.kafka.common.TopicPartitionReplica;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
-import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.api.Cluster;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
@@ -111,7 +111,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
     @ClusterConfigProperty(id = 4, key = "broker.rack", value = "rack1"),
 })
 public class ReassignPartitionsCommandTest {
-    private final ClusterInstance clusterInstance;
+    private final Cluster clusterInstance;
     private final Map<Integer, Map<String, Long>> unthrottledBrokerConfigs = IntStream
             .range(0, 4)
             .boxed()
@@ -119,7 +119,7 @@ public class ReassignPartitionsCommandTest {
         BROKER_LEVEL_THROTTLES.stream().collect(Collectors.toMap(Function.identity(), t -> -1L))
     ));
 
-    ReassignPartitionsCommandTest(ClusterInstance clusterInstance) {
+    ReassignPartitionsCommandTest(Cluster clusterInstance) {
         this.clusterInstance = clusterInstance;
     }
 

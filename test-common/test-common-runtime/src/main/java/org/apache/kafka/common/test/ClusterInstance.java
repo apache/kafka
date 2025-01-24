@@ -41,13 +41,10 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.config.SaslConfigs;
-import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
-import org.apache.kafka.common.test.api.ClusterConfig;
-import org.apache.kafka.common.test.api.ClusterTest;
-import org.apache.kafka.common.test.api.Type;
+import org.apache.kafka.common.test.api.Cluster;
 import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.server.fault.FaultHandlerException;
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpointFile;
@@ -75,9 +72,7 @@ import scala.jdk.javaapi.CollectionConverters;
 import static org.apache.kafka.clients.consumer.GroupProtocol.CLASSIC;
 import static org.apache.kafka.clients.consumer.GroupProtocol.CONSUMER;
 
-public interface ClusterInstance {
-
-    Type type();
+public interface ClusterInstance extends Cluster {
 
     Map<Integer, KafkaBroker> brokers();
 
@@ -89,45 +84,11 @@ public interface ClusterInstance {
     Map<Integer, ControllerServer> controllers();
 
     /**
-     * The immutable cluster configuration used to create this cluster.
-     */
-    ClusterConfig config();
-
-    /**
-     * Return the set of all controller IDs configured for this test. For kraft, this
-     * will return only the nodes which have the "controller" role enabled in `process.roles`.
-     */
-    Set<Integer> controllerIds();
-
-    /**
      * Return the set of all broker IDs configured for this test.
      */
     default Set<Integer> brokerIds() {
         return brokers().keySet();
     }
-
-    /**
-     * The listener for this cluster as configured by {@link ClusterTest} or by {@link ClusterConfig}. If
-     * unspecified by those sources, this will return the listener for the default security protocol PLAINTEXT
-     */
-    ListenerName clientListener();
-
-    /**
-     * The listener for the kraft cluster controller configured by controller.listener.names.
-     */
-    default Optional<ListenerName> controllerListenerName() {
-        return Optional.empty();
-    }
-
-    /**
-     * The broker connect string which can be used by clients for bootstrapping
-     */
-    String bootstrapServers();
-
-    /**
-     * The broker connect string which can be used by clients for bootstrapping to the controller quorum.
-     */
-    String bootstrapControllers();
 
     /**
      * A collection of all brokers in the cluster.
@@ -161,8 +122,6 @@ public interface ClusterInstance {
                 .orElseThrow(() -> new RuntimeException("No controller SocketServers found"));
     }
 
-    String clusterId();
-
     //---------------------------[producer/consumer/admin]---------------------------//
 
     default <K, V> Producer<K, V> producer(Map<String, Object> configs) {
@@ -173,10 +132,6 @@ public interface ClusterInstance {
         return new KafkaProducer<>(setClientSaslConfig(props));
     }
 
-    default <K, V> Producer<K, V> producer() {
-        return producer(Map.of());
-    }
-
     default <K, V> Consumer<K, V> consumer(Map<String, Object> configs) {
         Map<String, Object> props = new HashMap<>(configs);
         props.putIfAbsent(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
@@ -185,14 +140,6 @@ public interface ClusterInstance {
         props.putIfAbsent(ConsumerConfig.GROUP_ID_CONFIG, "group_" + TestUtils.randomString(5));
         props.putIfAbsent(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
         return new KafkaConsumer<>(setClientSaslConfig(props));
-    }
-
-    default <K, V> Consumer<K, V> consumer() {
-        return consumer(Map.of());
-    }
-
-    default <K, V> ShareConsumer<K, V> shareConsumer() {
-        return shareConsumer(Map.of());
     }
 
     default <K, V> ShareConsumer<K, V> shareConsumer(Map<String, Object> configs) {

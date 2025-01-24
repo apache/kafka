@@ -17,7 +17,7 @@
 package org.apache.kafka.tools;
 
 import org.apache.kafka.clients.admin.AdminClientConfig;
-import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.api.Cluster;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTests;
 import org.apache.kafka.common.test.api.Type;
@@ -48,7 +48,7 @@ class MetadataQuorumCommandTest {
         @ClusterTest(brokers = 2, controllers = 1),
         @ClusterTest(brokers = 1, controllers = 2),
     })
-    public void testDescribeQuorumReplicationSuccessful(ClusterInstance cluster) throws InterruptedException {
+    public void testDescribeQuorumReplicationSuccessful(Cluster cluster) throws InterruptedException {
         cluster.waitForReadyBrokers();
         String describeOutput = ToolsTestUtils.captureStandardOut(() ->
             MetadataQuorumCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(), "describe", "--replication")
@@ -90,12 +90,12 @@ class MetadataQuorumCommandTest {
         @ClusterTest(brokers = 2, controllers = 1),
         @ClusterTest(brokers = 1, controllers = 2),
     })
-    public void testDescribeQuorumStatusSuccessful(ClusterInstance cluster) throws InterruptedException {
+    public void testDescribeQuorumStatusSuccessful(Cluster cluster) throws InterruptedException {
         testDescribeQuorumStatusSuccessful(cluster, false);
         testDescribeQuorumStatusSuccessful(cluster, true);
     }
 
-    private void testDescribeQuorumStatusSuccessful(ClusterInstance cluster, boolean usingBootstrapController) throws InterruptedException {
+    private void testDescribeQuorumStatusSuccessful(Cluster cluster, boolean usingBootstrapController) throws InterruptedException {
         cluster.waitForReadyBrokers();
 
         String describeOutput = ToolsTestUtils.captureStandardOut(
@@ -134,12 +134,12 @@ class MetadataQuorumCommandTest {
     }
 
     @ClusterTest
-    public void testOnlyOneBrokerAndOneController(ClusterInstance cluster) {
+    public void testOnlyOneBrokerAndOneController(Cluster cluster) {
         testOnlyOneBrokerAndOneController(cluster, false);
         testOnlyOneBrokerAndOneController(cluster, true);
     }
 
-    public void testOnlyOneBrokerAndOneController(ClusterInstance cluster, boolean usingBootstrapController) {
+    public void testOnlyOneBrokerAndOneController(Cluster cluster, boolean usingBootstrapController) {
         String statusOutput = ToolsTestUtils.captureStandardOut(() ->
             MetadataQuorumCommand.mainNoExit(
                     usingBootstrapController ? "--bootstrap-controller" : "--bootstrap-server",
@@ -167,7 +167,7 @@ class MetadataQuorumCommandTest {
     }
 
     @ClusterTest(types = {Type.CO_KRAFT})
-    public void testHumanReadableOutput(ClusterInstance cluster) {
+    public void testHumanReadableOutput(Cluster cluster) {
         assertEquals(1, MetadataQuorumCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(), "describe", "--human-readable"));
         assertEquals(1, MetadataQuorumCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(), "describe", "--status", "--human-readable"));
         String out0 = ToolsTestUtils.captureStandardOut(() ->

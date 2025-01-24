@@ -31,8 +31,8 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.TestUtils;
+import org.apache.kafka.common.test.api.Cluster;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTests;
@@ -61,7 +61,7 @@ public class ConsumerIntegrationTest {
             @ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic")
         })
     })
-    public void testAsyncConsumerWithOldGroupCoordinator(ClusterInstance clusterInstance) throws Exception {
+    public void testAsyncConsumerWithOldGroupCoordinator(Cluster clusterInstance) throws Exception {
         String topic = "test-topic";
         clusterInstance.createTopic(topic, 1, (short) 1);
         try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(Map.of(
@@ -86,7 +86,7 @@ public class ConsumerIntegrationTest {
         @ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
         @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
     })
-    public void testFetchPartitionsAfterFailedListenerWithGroupProtocolClassic(ClusterInstance clusterInstance)
+    public void testFetchPartitionsAfterFailedListenerWithGroupProtocolClassic(Cluster clusterInstance)
             throws InterruptedException {
         testFetchPartitionsAfterFailedListener(clusterInstance, GroupProtocol.CLASSIC);
     }
@@ -95,12 +95,12 @@ public class ConsumerIntegrationTest {
         @ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
         @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
     })
-    public void testFetchPartitionsAfterFailedListenerWithGroupProtocolConsumer(ClusterInstance clusterInstance)
+    public void testFetchPartitionsAfterFailedListenerWithGroupProtocolConsumer(Cluster clusterInstance)
             throws InterruptedException {
         testFetchPartitionsAfterFailedListener(clusterInstance, GroupProtocol.CONSUMER);
     }
 
-    private static void testFetchPartitionsAfterFailedListener(ClusterInstance clusterInstance, GroupProtocol groupProtocol)
+    private static void testFetchPartitionsAfterFailedListener(Cluster clusterInstance, GroupProtocol groupProtocol)
             throws InterruptedException {
         var topic = "topic";
         try (var producer = clusterInstance.producer(Map.of(
@@ -134,7 +134,7 @@ public class ConsumerIntegrationTest {
         @ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
         @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
     })
-    public void testFetchPartitionsWithAlwaysFailedListenerWithGroupProtocolClassic(ClusterInstance clusterInstance)
+    public void testFetchPartitionsWithAlwaysFailedListenerWithGroupProtocolClassic(Cluster clusterInstance)
             throws InterruptedException {
         testFetchPartitionsWithAlwaysFailedListener(clusterInstance, GroupProtocol.CLASSIC);
     }
@@ -143,12 +143,12 @@ public class ConsumerIntegrationTest {
         @ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
         @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
     })
-    public void testFetchPartitionsWithAlwaysFailedListenerWithGroupProtocolConsumer(ClusterInstance clusterInstance)
+    public void testFetchPartitionsWithAlwaysFailedListenerWithGroupProtocolConsumer(Cluster clusterInstance)
             throws InterruptedException {
         testFetchPartitionsWithAlwaysFailedListener(clusterInstance, GroupProtocol.CONSUMER);
     }
 
-    private static void testFetchPartitionsWithAlwaysFailedListener(ClusterInstance clusterInstance, GroupProtocol groupProtocol)
+    private static void testFetchPartitionsWithAlwaysFailedListener(Cluster clusterInstance, GroupProtocol groupProtocol)
             throws InterruptedException {
         var topic = "topic";
         try (var producer = clusterInstance.producer(Map.of(
@@ -188,7 +188,7 @@ public class ConsumerIntegrationTest {
     }
 
     @ClusterTest(types = {Type.KRAFT}, brokers = 3)
-    public void testLeaderEpoch(ClusterInstance clusterInstance) throws Exception {
+    public void testLeaderEpoch(Cluster clusterInstance) throws Exception {
         String topic = "test-topic";
         clusterInstance.createTopic(topic, 1, (short) 2);
         var msgNum = 10;
@@ -227,7 +227,7 @@ public class ConsumerIntegrationTest {
         }
     }
 
-    private void sendMsg(ClusterInstance clusterInstance, String topic, int sendMsgNum) {
+    private void sendMsg(Cluster clusterInstance, String topic, int sendMsgNum) {
         try (var producer = clusterInstance.producer(Map.of(
                 ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class,
                 ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class,

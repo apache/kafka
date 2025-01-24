@@ -52,6 +52,7 @@ import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourceType;
 import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.api.Cluster;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
@@ -88,14 +89,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Timeout(120)
 @ClusterTestDefaults(types = {Type.KRAFT})
 public class BootstrapControllersIntegrationTest {
-    private Map<String, Object> adminConfig(ClusterInstance clusterInstance, boolean usingBootstrapControllers) {
+    private Map<String, Object> adminConfig(Cluster clusterInstance, boolean usingBootstrapControllers) {
         return usingBootstrapControllers ?
                 Collections.singletonMap(BOOTSTRAP_CONTROLLERS_CONFIG, clusterInstance.bootstrapControllers()) :
                 Collections.singletonMap(BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers());
     }
 
     @ClusterTest
-    public void testPutBrokersInBootstrapControllersConfig(ClusterInstance clusterInstance) {
+    public void testPutBrokersInBootstrapControllersConfig(Cluster clusterInstance) {
         Map<String, Object> config = Collections.singletonMap(BOOTSTRAP_CONTROLLERS_CONFIG, clusterInstance.bootstrapServers());
         try (Admin admin = Admin.create(config)) {
             ExecutionException exception = assertThrows(ExecutionException.class,
@@ -108,7 +109,7 @@ public class BootstrapControllersIntegrationTest {
     }
 
     @ClusterTest
-    public void testPutControllersInBootstrapBrokersConfig(ClusterInstance clusterInstance) {
+    public void testPutControllersInBootstrapBrokersConfig(Cluster clusterInstance) {
         Map<String, Object> config = Collections.singletonMap(BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapControllers());
         try (Admin admin = Admin.create(config)) {
             ExecutionException exception = assertThrows(ExecutionException.class,
@@ -120,16 +121,16 @@ public class BootstrapControllersIntegrationTest {
     }
 
     @ClusterTest
-    public void testDescribeClusterByControllers(ClusterInstance clusterInstance) throws Exception {
+    public void testDescribeClusterByControllers(Cluster clusterInstance) throws Exception {
         testDescribeCluster(clusterInstance, true);
     }
 
     @ClusterTest
-    public void testDescribeCluster(ClusterInstance clusterInstance) throws Exception {
+    public void testDescribeCluster(Cluster clusterInstance) throws Exception {
         testDescribeCluster(clusterInstance, false);
     }
 
-    private void testDescribeCluster(ClusterInstance clusterInstance, boolean usingBootstrapControllers) throws Exception {
+    private void testDescribeCluster(Cluster clusterInstance, boolean usingBootstrapControllers) throws Exception {
         try (Admin admin = Admin.create(adminConfig(clusterInstance, usingBootstrapControllers))) {
             DescribeClusterResult result = admin.describeCluster();
             assertEquals(clusterInstance.clusterId(), result.clusterId().get(1, TimeUnit.MINUTES));
@@ -140,16 +141,16 @@ public class BootstrapControllersIntegrationTest {
     }
 
     @ClusterTest
-    public void testDescribeFeaturesByControllers(ClusterInstance clusterInstance) throws Exception {
+    public void testDescribeFeaturesByControllers(Cluster clusterInstance) throws Exception {
         testDescribeFeatures(clusterInstance, true);
     }
 
     @ClusterTest
-    public void testDescribeFeatures(ClusterInstance clusterInstance) throws Exception {
+    public void testDescribeFeatures(Cluster clusterInstance) throws Exception {
         testDescribeFeatures(clusterInstance, false);
     }
 
-    private void testDescribeFeatures(ClusterInstance clusterInstance, boolean usingBootstrapControllers) throws Exception {
+    private void testDescribeFeatures(Cluster clusterInstance, boolean usingBootstrapControllers) throws Exception {
         try (Admin admin = Admin.create(adminConfig(clusterInstance, usingBootstrapControllers))) {
             DescribeFeaturesResult result = admin.describeFeatures();
             short metadataVersion = clusterInstance.config().metadataVersion().featureLevel();
@@ -160,16 +161,16 @@ public class BootstrapControllersIntegrationTest {
     }
 
     @ClusterTest
-    public void testUpdateFeaturesByControllers(ClusterInstance clusterInstance) {
+    public void testUpdateFeaturesByControllers(Cluster clusterInstance) {
         testUpdateFeatures(clusterInstance, true);
     }
 
     @ClusterTest
-    public void testUpdateFeatures(ClusterInstance clusterInstance) {
+    public void testUpdateFeatures(Cluster clusterInstance) {
         testUpdateFeatures(clusterInstance, false);
     }
 
-    private void testUpdateFeatures(ClusterInstance clusterInstance, boolean usingBootstrapControllers) {
+    private void testUpdateFeatures(Cluster clusterInstance, boolean usingBootstrapControllers) {
         try (Admin admin = Admin.create(adminConfig(clusterInstance, usingBootstrapControllers))) {
             UpdateFeaturesResult result = admin.updateFeatures(Collections.singletonMap("foo.bar.feature",
                             new FeatureUpdate((short) 1, FeatureUpdate.UpgradeType.UPGRADE)),
@@ -186,16 +187,16 @@ public class BootstrapControllersIntegrationTest {
     }
 
     @ClusterTest
-    public void testDescribeMetadataQuorumByControllers(ClusterInstance clusterInstance) throws Exception {
+    public void testDescribeMetadataQuorumByControllers(Cluster clusterInstance) throws Exception {
         testDescribeMetadataQuorum(clusterInstance, true);
     }
 
     @ClusterTest
-    public void testDescribeMetadataQuorum(ClusterInstance clusterInstance) throws Exception {
+    public void testDescribeMetadataQuorum(Cluster clusterInstance) throws Exception {
         testDescribeMetadataQuorum(clusterInstance, false);
     }
 
-    private void testDescribeMetadataQuorum(ClusterInstance clusterInstance, boolean usingBootstrapControllers) throws Exception {
+    private void testDescribeMetadataQuorum(Cluster clusterInstance, boolean usingBootstrapControllers) throws Exception {
         try (Admin admin = Admin.create(adminConfig(clusterInstance, usingBootstrapControllers))) {
             DescribeMetadataQuorumResult result = admin.describeMetadataQuorum();
             assertTrue(clusterInstance.controllerIds().contains(
@@ -204,7 +205,7 @@ public class BootstrapControllersIntegrationTest {
     }
 
     @ClusterTest
-    public void testUsingBootstrapControllersOnUnsupportedAdminApi(ClusterInstance clusterInstance) {
+    public void testUsingBootstrapControllersOnUnsupportedAdminApi(Cluster clusterInstance) {
         try (Admin admin = Admin.create(adminConfig(clusterInstance, true))) {
             ListOffsetsResult result = admin.listOffsets(Collections.singletonMap(
                     new TopicPartition("foo", 0), OffsetSpec.earliest()));
@@ -257,7 +258,7 @@ public class BootstrapControllersIntegrationTest {
     }
 
     @ClusterTest(brokers = 3)
-    public void testAlterReassignmentsWithBootstrapControllers(ClusterInstance clusterInstance) throws ExecutionException, InterruptedException {
+    public void testAlterReassignmentsWithBootstrapControllers(Cluster clusterInstance) throws ExecutionException, InterruptedException {
         String topicName = "foo";
         try (Admin admin = Admin.create(adminConfig(clusterInstance, false))) {
             Map<Integer, List<Integer>> assignments = new HashMap<>();

@@ -17,7 +17,7 @@
 package org.apache.kafka.tools;
 
 import org.apache.kafka.clients.admin.MockAdminClient;
-import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.api.Cluster;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.server.common.Feature;
@@ -49,7 +49,7 @@ public class FeatureCommandTest {
     private final List<Feature> testingFeatures = Arrays.stream(Feature.FEATURES).collect(Collectors.toList());
 
     @ClusterTest(types = {Type.KRAFT}, metadataVersion = MetadataVersion.IBP_3_3_IV1)
-    public void testDescribeWithKRaft(ClusterInstance cluster) {
+    public void testDescribeWithKRaft(Cluster cluster) {
         String commandOutput = ToolsTestUtils.captureStandardOut(() ->
                 assertEquals(0, FeatureCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(), "describe"))
         );
@@ -71,7 +71,7 @@ public class FeatureCommandTest {
 
     // Use the first MetadataVersion that supports KIP-919
     @ClusterTest(types = {Type.KRAFT}, metadataVersion = MetadataVersion.IBP_3_7_IV0)
-    public void testDescribeWithKRaftAndBootstrapControllers(ClusterInstance cluster) {
+    public void testDescribeWithKRaftAndBootstrapControllers(Cluster cluster) {
         String commandOutput = ToolsTestUtils.captureStandardOut(() ->
                 assertEquals(0, FeatureCommand.mainNoExit("--bootstrap-controller", cluster.bootstrapControllers(), "describe"))
         );
@@ -92,7 +92,7 @@ public class FeatureCommandTest {
     }
 
     @ClusterTest(types = {Type.KRAFT}, metadataVersion = MetadataVersion.IBP_3_3_IV1)
-    public void testUpgradeMetadataVersionWithKraft(ClusterInstance cluster) {
+    public void testUpgradeMetadataVersionWithKraft(Cluster cluster) {
         String commandOutput = ToolsTestUtils.captureStandardOut(() ->
                 assertEquals(0, FeatureCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(),
                         "upgrade", "--feature", "metadata.version=5"))
@@ -107,7 +107,7 @@ public class FeatureCommandTest {
     }
 
     @ClusterTest(types = {Type.KRAFT}, metadataVersion = MetadataVersion.IBP_3_3_IV1)
-    public void testDowngradeMetadataVersionWithKRaft(ClusterInstance cluster) {
+    public void testDowngradeMetadataVersionWithKRaft(Cluster cluster) {
         String commandOutput = ToolsTestUtils.captureStandardOut(() ->
                 assertEquals(1, FeatureCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(),
                         "disable", "--feature", "metadata.version"))
@@ -136,7 +136,7 @@ public class FeatureCommandTest {
     }
 
     @ClusterTest(types = {Type.KRAFT}, metadataVersion = MetadataVersion.IBP_3_8_IV0)
-    public void testUpgradeWithReleaseVersion(ClusterInstance cluster) {
+    public void testUpgradeWithReleaseVersion(Cluster cluster) {
         String commandOutput = ToolsTestUtils.captureStandardOut(() ->
                 assertEquals(1, FeatureCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(),
                         "upgrade", "--release-version", "3.7-IV3"))
@@ -155,7 +155,7 @@ public class FeatureCommandTest {
     }
 
     @ClusterTest(types = {Type.KRAFT}, metadataVersion = MetadataVersion.IBP_3_8_IV0)
-    public void testDowngradeWithReleaseVersion(ClusterInstance cluster) {
+    public void testDowngradeWithReleaseVersion(Cluster cluster) {
         String commandOutput = ToolsTestUtils.captureStandardOut(() ->
                 assertEquals(1, FeatureCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(),
                         "downgrade", "--release-version", "3.9-IV0"))

@@ -37,7 +37,7 @@ import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.api.Cluster;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.Type;
@@ -73,7 +73,7 @@ public class ClientTelemetryTest {
             serverProperties = {
                 @ClusterConfigProperty(key = METRIC_REPORTER_CLASSES_CONFIG, value = "kafka.admin.ClientTelemetryTest$GetIdClientTelemetry"),
             })
-    public void testClientInstanceId(ClusterInstance clusterInstance) throws InterruptedException, ExecutionException {
+    public void testClientInstanceId(Cluster clusterInstance) throws InterruptedException, ExecutionException {
         Map<String, Object> configs = new HashMap<>();
         configs.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers());
         configs.put(AdminClientConfig.ENABLE_METRICS_PUSH_CONFIG, true);
@@ -125,7 +125,7 @@ public class ClientTelemetryTest {
     }
 
     @ClusterTest(types = {Type.CO_KRAFT, Type.KRAFT})
-    public void testIntervalMsParser(ClusterInstance clusterInstance) {
+    public void testIntervalMsParser(Cluster clusterInstance) {
         List<String> alterOpts = asList("--bootstrap-server", clusterInstance.bootstrapServers(),
                 "--alter", "--entity-type", "client-metrics", "--entity-name", "test", "--add-config", "interval.ms=bbb");
         try (Admin client = clusterInstance.admin()) {
@@ -137,7 +137,7 @@ public class ClientTelemetryTest {
     }
 
     @ClusterTest(types = Type.KRAFT)
-    public void testMetrics(ClusterInstance clusterInstance) {
+    public void testMetrics(Cluster clusterInstance) {
         Map<String, Object> configs = new HashMap<>();
         configs.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers());
         List<String> expectedMetricsName = Arrays.asList("request-size-max", "io-wait-ratio", "response-total",

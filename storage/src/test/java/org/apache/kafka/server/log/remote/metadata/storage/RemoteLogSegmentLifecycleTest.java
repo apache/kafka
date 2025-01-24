@@ -19,7 +19,7 @@ package org.apache.kafka.server.log.remote.metadata.storage;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.api.Cluster;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.utils.Time;
@@ -61,9 +61,9 @@ public class RemoteLogSegmentLifecycleTest {
     private final TopicIdPartition topicIdPartition = new TopicIdPartition(topicId, tp);
     private final Time time = Time.SYSTEM;
     private final RemotePartitionMetadataStore spyRemotePartitionMetadataStore = spy(new RemotePartitionMetadataStore());
-    private final ClusterInstance clusterInstance;
+    private final Cluster clusterInstance;
 
-    RemoteLogSegmentLifecycleTest(ClusterInstance clusterInstance) {     // Constructor injections
+    RemoteLogSegmentLifecycleTest(Cluster clusterInstance) {     // Constructor injections
         this.clusterInstance = clusterInstance;
     }
 

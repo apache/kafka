@@ -31,7 +31,7 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
-import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.api.Cluster;
 import org.apache.kafka.common.test.api.ClusterConfig;
 import org.apache.kafka.common.test.api.ClusterTemplate;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
@@ -53,9 +53,9 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 public class DeleteOffsetsConsumerGroupCommandIntegrationTest {
     public static final String TOPIC_PREFIX = "foo.";
     public static final String GROUP_PREFIX = "test.group.";
-    private final ClusterInstance clusterInstance;
+    private final Cluster clusterInstance;
 
-    DeleteOffsetsConsumerGroupCommandIntegrationTest(ClusterInstance clusterInstance) {
+    DeleteOffsetsConsumerGroupCommandIntegrationTest(Cluster clusterInstance) {
         this.clusterInstance = clusterInstance;
     }
 

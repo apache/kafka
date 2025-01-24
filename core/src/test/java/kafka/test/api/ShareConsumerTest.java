@@ -46,11 +46,10 @@ import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.internals.Topic;
-import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.api.Cluster;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
@@ -116,13 +115,13 @@ import static org.junit.jupiter.api.Assertions.fail;
     types = {Type.KRAFT}
 )
 public class ShareConsumerTest {
-    private final ClusterInstance cluster;
+    private final Cluster cluster;
     private final TopicPartition tp = new TopicPartition("topic", 0);
     private final TopicPartition tp2 = new TopicPartition("topic2", 0);
     private final TopicPartition warmupTp = new TopicPartition("warmup", 0);
     private List<TopicPartition> sgsTopicPartitions;
 
-    public ShareConsumerTest(ClusterInstance cluster) {
+    public ShareConsumerTest(Cluster cluster) {
         this.cluster = cluster;
     }
 
@@ -1955,7 +1954,6 @@ public class ShareConsumerTest {
 
     private void warmup() throws InterruptedException {
         createTopic(warmupTp.topic());
-        waitForMetadataCache();
         ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(warmupTp.topic(), warmupTp.partition(), null, "key".getBytes(), "value".getBytes());
         Set<String> subscription = Collections.singleton(warmupTp.topic());
         alterShareAutoOffsetReset("warmupgroup1", "earliest");
@@ -1969,12 +1967,7 @@ public class ShareConsumerTest {
             TestUtils.waitForCondition(
                 () -> shareConsumer.poll(Duration.ofMillis(5000)).count() == 1, 30000, 200L, () -> "warmup record not received");
         }
-    }
-
-    private void waitForMetadataCache() throws InterruptedException {
-        TestUtils.waitForCondition(() ->
-                !cluster.brokers().get(0).metadataCache().getAliveBrokerNodes(new ListenerName("EXTERNAL")).isEmpty(),
-            DEFAULT_MAX_WAIT_MS, 100L, () -> "cache not up yet");
+        cluster.waitForTopic("__share_group_state", 3);
     }
 
     private void verifyShareGroupStateTopicRecordsProduced() {

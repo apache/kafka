@@ -21,7 +21,7 @@ import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.api.Cluster;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentId;
@@ -38,9 +38,9 @@ public class TopicBasedRemoteLogMetadataManagerRestartTest {
 
     private final Time time = Time.SYSTEM;
     private final String logDir = TestUtils.tempDirectory("_rlmm_segs_").getAbsolutePath();
-    private final ClusterInstance clusterInstance;
+    private final Cluster clusterInstance;
 
-    TopicBasedRemoteLogMetadataManagerRestartTest(ClusterInstance clusterInstance) {     // Constructor injections
+    TopicBasedRemoteLogMetadataManagerRestartTest(Cluster clusterInstance) {     // Constructor injections
         this.clusterInstance = clusterInstance;
     }
 

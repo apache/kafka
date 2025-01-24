@@ -16,7 +16,7 @@
  */
 package kafka.admin;
 
-import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.api.Cluster;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.test.NoRetryException;
@@ -38,9 +38,9 @@ public class UserScramCredentialsCommandTest {
     private static final String USER1 = "user1";
     private static final String USER2 = "user2";
 
-    private final ClusterInstance cluster;
+    private final Cluster cluster;
 
-    public UserScramCredentialsCommandTest(ClusterInstance cluster) {
+    public UserScramCredentialsCommandTest(Cluster cluster) {
         this.cluster = cluster;
     }
 

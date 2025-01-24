@@ -19,7 +19,7 @@ package org.apache.kafka.tools;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.common.errors.UnsupportedEndpointTypeException;
-import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.api.Cluster;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.Type;
 
@@ -42,14 +42,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class ClusterToolTest {
 
     @ClusterTest
-    public void testClusterId(ClusterInstance clusterInstance) {
+    public void testClusterId(Cluster clusterInstance) {
         String output = ToolsTestUtils.captureStandardOut(() ->
                 assertDoesNotThrow(() -> ClusterTool.execute("cluster-id", "--bootstrap-server", clusterInstance.bootstrapServers())));
         assertTrue(output.contains("Cluster ID: " + clusterInstance.clusterId()));
     }
 
     @ClusterTest(brokers = 3)
-    public void testUnregister(ClusterInstance clusterInstance) {
+    public void testUnregister(Cluster clusterInstance) {
         int brokerId;
         Set<Integer> brokerIds = clusterInstance.brokerIds();
         brokerIds.removeAll(clusterInstance.controllerIds());
@@ -62,7 +62,7 @@ public class ClusterToolTest {
     }
 
     @ClusterTest(brokers = 1, types = {Type.KRAFT, Type.CO_KRAFT})
-    public void testListEndpointsWithBootstrapServer(ClusterInstance clusterInstance) {
+    public void testListEndpointsWithBootstrapServer(Cluster clusterInstance) {
         String output = ToolsTestUtils.captureStandardOut(() ->
                 assertDoesNotThrow(() -> ClusterTool.execute("list-endpoints", "--bootstrap-server", clusterInstance.bootstrapServers())));
         String port = clusterInstance.bootstrapServers().split(":")[1];
@@ -73,7 +73,7 @@ public class ClusterToolTest {
     }
 
     @ClusterTest(brokers = 2, types = {Type.KRAFT, Type.CO_KRAFT})
-    public void testListEndpointsArgumentWithBootstrapServer(ClusterInstance clusterInstance) {
+    public void testListEndpointsArgumentWithBootstrapServer(Cluster clusterInstance) {
         List<Integer> brokerIds = clusterInstance.brokerIds().stream().collect(Collectors.toList());
         clusterInstance.shutdownBroker(brokerIds.get(0));
 
@@ -90,14 +90,14 @@ public class ClusterToolTest {
     }
 
     @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT})
-    public void testClusterIdWithBootstrapController(ClusterInstance clusterInstance) {
+    public void testClusterIdWithBootstrapController(Cluster clusterInstance) {
         String output = ToolsTestUtils.captureStandardOut(() ->
                 assertDoesNotThrow(() -> ClusterTool.execute("cluster-id", "--bootstrap-controller", clusterInstance.bootstrapControllers())));
         assertTrue(output.contains("Cluster ID: " + clusterInstance.clusterId()));
     }
 
     @ClusterTest(brokers = 3, types = {Type.KRAFT, Type.CO_KRAFT})
-    public void testUnregisterWithBootstrapController(ClusterInstance clusterInstance) {
+    public void testUnregisterWithBootstrapController(Cluster clusterInstance) {
         Set<Integer> brokerIds = clusterInstance.brokerIds();
         brokerIds.removeAll(clusterInstance.controllerIds());
         int brokerId = assertDoesNotThrow(() -> brokerIds.stream().findFirst().get());
@@ -112,7 +112,7 @@ public class ClusterToolTest {
     }
 
     @ClusterTest(brokers = 3, types = {Type.KRAFT, Type.CO_KRAFT})
-    public void testListEndpointsWithBootstrapController(ClusterInstance clusterInstance) {
+    public void testListEndpointsWithBootstrapController(Cluster clusterInstance) {
         String output = ToolsTestUtils.captureStandardOut(() ->
                 assertDoesNotThrow(() -> ClusterTool.execute("list-endpoints", "--bootstrap-controller", clusterInstance.bootstrapControllers())));
         String port = clusterInstance.bootstrapControllers().split(":")[1];
@@ -123,7 +123,7 @@ public class ClusterToolTest {
     }
 
     @ClusterTest(brokers = 3, types = {Type.KRAFT, Type.CO_KRAFT})
-    public void testListEndpointsArgumentWithBootstrapController(ClusterInstance clusterInstance) {
+    public void testListEndpointsArgumentWithBootstrapController(Cluster clusterInstance) {
         RuntimeException exception =
                 assertThrows(RuntimeException.class,
                         () -> ClusterTool.execute("list-endpoints", "--bootstrap-controller", clusterInstance.bootstrapControllers(), "--include-fenced-brokers"));

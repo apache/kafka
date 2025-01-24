@@ -24,7 +24,7 @@ import org.apache.kafka.clients.admin.CreateTopicsResult;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
-import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.api.Cluster;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
@@ -65,11 +65,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
     @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "2")
 })
 public class LeaderElectionCommandTest {
-    private final ClusterInstance cluster;
+    private final Cluster cluster;
     int broker2 = 1;
     int broker3 = 2;
 
-    public LeaderElectionCommandTest(ClusterInstance cluster) {
+    public LeaderElectionCommandTest(Cluster cluster) {
         this.cluster = cluster;
     }
 

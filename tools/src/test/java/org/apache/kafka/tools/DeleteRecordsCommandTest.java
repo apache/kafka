@@ -24,7 +24,7 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.api.Cluster;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.server.common.AdminCommandFailedException;
 import org.apache.kafka.server.common.AdminOperationException;
@@ -49,7 +49,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class DeleteRecordsCommandTest {
 
     @ClusterTest
-    public void testCommand(ClusterInstance cluster) throws Exception {
+    public void testCommand(Cluster cluster) throws Exception {
         Map<String, Object> adminProps = new HashMap<>();
 
         adminProps.put(AdminClientConfig.RETRIES_CONFIG, 1);

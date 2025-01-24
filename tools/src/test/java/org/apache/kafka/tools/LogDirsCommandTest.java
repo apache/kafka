@@ -23,7 +23,7 @@ import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.api.Cluster;
 import org.apache.kafka.common.test.api.ClusterTest;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -51,7 +51,7 @@ public class LogDirsCommandTest {
     private static final String TOPIC = "test-log-dirs-topic";
 
     @ClusterTest(brokers = 3)
-    public void testLogDirsWithoutBrokers(ClusterInstance clusterInstance) {
+    public void testLogDirsWithoutBrokers(Cluster clusterInstance) {
         createTopic(clusterInstance, TOPIC);
         try (Admin admin = Admin.create(Collections.singletonMap(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
             String output = assertDoesNotThrow(() -> execute(fromArgsToOptions("--bootstrap-server", clusterInstance.bootstrapServers(), "--describe"), admin));
@@ -71,7 +71,7 @@ public class LogDirsCommandTest {
     }
 
     @ClusterTest(brokers = 3)
-    public void testLogDirsWithBrokers(ClusterInstance clusterInstance) {
+    public void testLogDirsWithBrokers(Cluster clusterInstance) {
         createTopic(clusterInstance, TOPIC);
         try (Admin admin = Admin.create(Collections.singletonMap(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
             int brokerId = 0;
@@ -97,7 +97,7 @@ public class LogDirsCommandTest {
     }
 
     @ClusterTest
-    public void testLogDirsWithNonExistentTopic(ClusterInstance clusterInstance) {
+    public void testLogDirsWithNonExistentTopic(Cluster clusterInstance) {
         try (Admin admin = Admin.create(Collections.singletonMap(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
             String output = assertDoesNotThrow(() -> execute(fromArgsToOptions("--bootstrap-server", clusterInstance.bootstrapServers(), "--topic-list", TOPIC, "--describe"), admin));
             // check all brokers are present
@@ -117,7 +117,7 @@ public class LogDirsCommandTest {
     }
 
     @ClusterTest
-    public void testLogDirsWithSpecificTopic(ClusterInstance clusterInstance) {
+    public void testLogDirsWithSpecificTopic(Cluster clusterInstance) {
         createTopic(clusterInstance, TOPIC);
         createTopic(clusterInstance, "other-topic");
         try (Admin admin = Admin.create(Collections.singletonMap(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
@@ -219,7 +219,7 @@ public class LogDirsCommandTest {
         return ToolsTestUtils.captureStandardOut(runnable);
     }
 
-    private void createTopic(ClusterInstance clusterInstance, String topic) {
+    private void createTopic(Cluster clusterInstance, String topic) {
         try (Admin admin = Admin.create(Collections.singletonMap(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
             assertDoesNotThrow(() -> admin.createTopics(Collections.singletonList(new NewTopic(topic, Collections.singletonMap(0, Collections.singletonList(0))))).topicId(topic).get());
             assertDoesNotThrow(() -> clusterInstance.waitForTopic(topic, 1));

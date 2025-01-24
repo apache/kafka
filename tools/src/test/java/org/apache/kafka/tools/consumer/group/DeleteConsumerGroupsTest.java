@@ -25,7 +25,7 @@ import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.GroupNotEmptyException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.api.Cluster;
 import org.apache.kafka.common.test.api.ClusterConfig;
 import org.apache.kafka.common.test.api.ClusterTemplate;
 import org.apache.kafka.test.TestUtils;
@@ -77,7 +77,7 @@ public class DeleteConsumerGroupsTest {
     }
 
     @ClusterTemplate("generator")
-    public void testDeleteCmdNonExistingGroup(ClusterInstance cluster) {
+    public void testDeleteCmdNonExistingGroup(Cluster cluster) {
         String missingGroupId = getDummyGroupId();
         String[] cgcArgs = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete", "--group", missingGroupId};
         try (ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs)) {
@@ -88,7 +88,7 @@ public class DeleteConsumerGroupsTest {
     }
 
     @ClusterTemplate("generator")
-    public void testDeleteNonExistingGroup(ClusterInstance cluster) {
+    public void testDeleteNonExistingGroup(Cluster cluster) {
         String missingGroupId = getDummyGroupId();
         String[] cgcArgs = new String[]{"--bootstrap-server", cluster.bootstrapServers(), "--delete", "--group", missingGroupId};
         try (ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs)) {
@@ -102,7 +102,7 @@ public class DeleteConsumerGroupsTest {
     }
 
     @ClusterTemplate("generator")
-    public void testDeleteNonEmptyGroup(ClusterInstance cluster) throws Exception {
+    public void testDeleteNonEmptyGroup(Cluster cluster) throws Exception {
         for (GroupProtocol groupProtocol : cluster.supportedGroupProtocols()) {
             String groupId = composeGroupId(groupProtocol);
             String topicName = composeTopicName(groupProtocol);
@@ -135,7 +135,7 @@ public class DeleteConsumerGroupsTest {
     }
 
     @ClusterTemplate("generator")
-    void testDeleteEmptyGroup(ClusterInstance cluster) throws Exception {
+    void testDeleteEmptyGroup(Cluster cluster) throws Exception {
         for (GroupProtocol groupProtocol : cluster.supportedGroupProtocols()) {
             String groupId = composeGroupId(groupProtocol);
             String topicName = composeTopicName(groupProtocol);
@@ -169,7 +169,7 @@ public class DeleteConsumerGroupsTest {
     }
 
     @ClusterTemplate("generator")
-    public void testDeleteCmdAllGroups(ClusterInstance cluster) throws Exception {
+    public void testDeleteCmdAllGroups(Cluster cluster) throws Exception {
         for (GroupProtocol groupProtocol : cluster.supportedGroupProtocols()) {
             String topicName = composeTopicName(groupProtocol);
             // Create 3 groups with 1 consumer each
@@ -207,7 +207,7 @@ public class DeleteConsumerGroupsTest {
     }
 
     @ClusterTemplate("generator")
-    public void testDeleteCmdWithMixOfSuccessAndError(ClusterInstance cluster) throws Exception {
+    public void testDeleteCmdWithMixOfSuccessAndError(Cluster cluster) throws Exception {
         for (GroupProtocol groupProtocol : cluster.supportedGroupProtocols()) {
             String groupId = composeGroupId(groupProtocol);
             String topicName = composeTopicName(groupProtocol);
@@ -240,7 +240,7 @@ public class DeleteConsumerGroupsTest {
     }
 
     @ClusterTemplate("generator")
-    public void testDeleteWithMixOfSuccessAndError(ClusterInstance cluster) throws Exception {
+    public void testDeleteWithMixOfSuccessAndError(Cluster cluster) throws Exception {
         for (GroupProtocol groupProtocol : cluster.supportedGroupProtocols()) {
             String groupId = composeGroupId(groupProtocol);
             String topicName = composeTopicName(groupProtocol);
@@ -299,7 +299,7 @@ public class DeleteConsumerGroupsTest {
         return protocol != null ? missingGroupPrefix + protocol.name : missingGroupPrefix + "dummy";
     }
 
-    private AutoCloseable consumerGroupClosable(ClusterInstance cluster, GroupProtocol protocol, String groupId, String topicName) {
+    private AutoCloseable consumerGroupClosable(Cluster cluster, GroupProtocol protocol, String groupId, String topicName) {
         Map<String, Object> configs = composeConfigs(
                 cluster,
                 groupId,
@@ -326,7 +326,7 @@ public class DeleteConsumerGroupsTest {
         );
     }
 
-    private Map<String, Object> composeConfigs(ClusterInstance cluster, String groupId, String groupProtocol, Map<String, Object> customConfigs) {
+    private Map<String, Object> composeConfigs(Cluster cluster, String groupId, String groupProtocol, Map<String, Object> customConfigs) {
         Map<String, Object> configs = new HashMap<>();
         configs.put(BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
         configs.put(GROUP_ID_CONFIG, groupId);

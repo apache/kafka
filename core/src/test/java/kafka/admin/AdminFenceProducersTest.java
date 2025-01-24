@@ -27,7 +27,7 @@ import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.InvalidProducerEpochException;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.api.Cluster;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
@@ -56,9 +56,9 @@ public class AdminFenceProducersTest {
     private static final String TXN_ID = "mytxnid";
     private static final String INCORRECT_BROKER_PORT = "225";
     private static final ProducerRecord<byte[], byte[]> RECORD = new ProducerRecord<>(TOPIC_NAME, null, new byte[1]);
-    private final ClusterInstance clusterInstance;
+    private final Cluster clusterInstance;
 
-    AdminFenceProducersTest(ClusterInstance clusterInstance) {
+    AdminFenceProducersTest(Cluster clusterInstance) {
         this.clusterInstance = clusterInstance;
     }
 

@@ -32,6 +32,7 @@ import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.TestUtils;
+import org.apache.kafka.common.test.api.Cluster;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
@@ -74,7 +75,7 @@ public class DeleteTopicTest {
     private final Map<Integer, List<Integer>> expectedReplicaAssignment = Map.of(0, List.of(0, 1, 2));
 
     @ClusterTest
-    public void testDeleteTopicWithAllAliveReplicas(ClusterInstance cluster) throws Exception {
+    public void testDeleteTopicWithAllAliveReplicas(Cluster cluster) throws Exception {
         try (Admin admin = cluster.admin()) {
             admin.createTopics(List.of(new NewTopic(DEFAULT_TOPIC, expectedReplicaAssignment))).all().get();
             admin.deleteTopics(List.of(DEFAULT_TOPIC)).all().get();
@@ -258,7 +259,7 @@ public class DeleteTopicTest {
     }
 
     @ClusterTest
-    public void testDeleteTopicAlreadyMarkedAsDeleted(ClusterInstance cluster) throws Exception {
+    public void testDeleteTopicAlreadyMarkedAsDeleted(Cluster cluster) throws Exception {
         try (Admin admin = cluster.admin()) {
             admin.createTopics(List.of(new NewTopic(DEFAULT_TOPIC, expectedReplicaAssignment))).all().get();
             admin.deleteTopics(List.of(DEFAULT_TOPIC)).all().get();

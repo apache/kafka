@@ -25,6 +25,7 @@ import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.api.Cluster;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
@@ -45,7 +46,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 })
 public class BrokerApiVersionsCommandTest {
     @ClusterTest
-    public void testBrokerApiVersionsCommandOutput(ClusterInstance clusterInstance) {
+    public void testBrokerApiVersionsCommandOutput(Cluster clusterInstance) {
         String output = ToolsTestUtils.grabConsoleOutput(() ->
                 BrokerApiVersionsCommand.mainNoExit("--bootstrap-server", clusterInstance.bootstrapServers()));
         Iterator<String> lineIter = Arrays.stream(output.split("\n")).iterator();

@@ -19,6 +19,7 @@ package org.apache.kafka.common.test.junit;
 
 
 import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.api.Cluster;
 
 import org.junit.jupiter.api.TestTemplate;
 import org.junit.jupiter.api.extension.ExtensionContext;
@@ -27,6 +28,7 @@ import org.junit.jupiter.api.extension.ParameterResolver;
 import org.junit.platform.commons.util.AnnotationUtils;
 
 import java.lang.reflect.Executable;
+import java.util.Set;
 
 
 /**
@@ -42,13 +44,15 @@ import java.lang.reflect.Executable;
 public class ClusterInstanceParameterResolver implements ParameterResolver {
     private final ClusterInstance clusterInstance;
 
+    private final Set<Class<?>> supportedTypes = Set.of(ClusterInstance.class, Cluster.class);
+
     ClusterInstanceParameterResolver(ClusterInstance clusterInstance) {
         this.clusterInstance = clusterInstance;
     }
 
     @Override
     public boolean supportsParameter(ParameterContext parameterContext, ExtensionContext extensionContext) {
-        if (!parameterContext.getParameter().getType().equals(ClusterInstance.class)) {
+        if (!supportedTypes.contains(parameterContext.getParameter().getType())) {
             return false;
         }
 

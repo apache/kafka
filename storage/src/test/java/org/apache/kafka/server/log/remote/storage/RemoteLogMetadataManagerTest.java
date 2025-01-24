@@ -19,7 +19,7 @@ package org.apache.kafka.server.log.remote.storage;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.api.Cluster;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.utils.Time;
@@ -43,14 +43,14 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @ClusterTestDefaults(brokers = 3)
 public class RemoteLogMetadataManagerTest {
-    private final ClusterInstance clusterInstance;
+    private final Cluster clusterInstance;
     private static final TopicIdPartition TP0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
     private static final int SEG_SIZE = 1048576;
     private static final int BROKER_ID_0 = 0;
     private static final int BROKER_ID_1 = 1;
     private final Time time = Time.SYSTEM;
 
-    RemoteLogMetadataManagerTest(ClusterInstance clusterInstance) {
+    RemoteLogMetadataManagerTest(Cluster clusterInstance) {
         this.clusterInstance = clusterInstance;
     }
 

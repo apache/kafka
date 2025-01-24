@@ -35,7 +35,7 @@ import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.api.Cluster;
 import org.apache.kafka.common.test.api.ClusterConfig;
 import org.apache.kafka.common.test.api.ClusterTemplate;
 import org.apache.kafka.common.utils.AppInfoParser;
@@ -80,14 +80,14 @@ public class DescribeConsumerGroupTest {
     private static final List<List<String>> DESCRIBE_TYPE_MEMBERS = List.of(List.of("--members"), List.of("--members", "--verbose"));
     private static final List<List<String>> DESCRIBE_TYPE_STATE = List.of(List.of("--state"), List.of("--state", "--verbose"));
     private static final List<List<String>> DESCRIBE_TYPES = Stream.of(DESCRIBE_TYPE_OFFSETS, DESCRIBE_TYPE_MEMBERS, DESCRIBE_TYPE_STATE).flatMap(Collection::stream).toList();
-    private ClusterInstance clusterInstance;
+    private Cluster clusterInstance;
 
     private static List<ClusterConfig> generator() {
         return ConsumerGroupCommandTestUtils.generator();
     }
 
     @ClusterTemplate("generator")
-    public void testDescribeNonExistingGroup(ClusterInstance clusterInstance) {
+    public void testDescribeNonExistingGroup(Cluster clusterInstance) {
         String missingGroup = "missing.group";
 
         for (List<String> describeType : DESCRIBE_TYPES) {
@@ -107,7 +107,7 @@ public class DescribeConsumerGroupTest {
     }
 
     @ClusterTemplate("generator")
-    public void testDescribeOffsetsOfNonExistingGroup(ClusterInstance clusterInstance) throws Exception {
+    public void testDescribeOffsetsOfNonExistingGroup(Cluster clusterInstance) throws Exception {
         this.clusterInstance = clusterInstance;
         String missingGroup = "missing.group";
         for (GroupProtocol groupProtocol: clusterInstance.supportedGroupProtocols()) {
@@ -130,7 +130,7 @@ public class DescribeConsumerGroupTest {
     }
 
     @ClusterTemplate("generator")
-    public void testDescribeMembersOfNonExistingGroup(ClusterInstance clusterInstance) throws Exception {
+    public void testDescribeMembersOfNonExistingGroup(Cluster clusterInstance) throws Exception {
         this.clusterInstance = clusterInstance;
         String missingGroup = "missing.group";
         for (GroupProtocol groupProtocol: clusterInstance.supportedGroupProtocols()) {
@@ -151,7 +151,7 @@ public class DescribeConsumerGroupTest {
     }
 
     @ClusterTemplate("generator")
-    public void testDescribeStateOfNonExistingGroup(ClusterInstance clusterInstance) throws Exception {
+    public void testDescribeStateOfNonExistingGroup(Cluster clusterInstance) throws Exception {
         this.clusterInstance = clusterInstance;
         String missingGroup = "missing.group";
         for (GroupProtocol groupProtocol: clusterInstance.supportedGroupProtocols()) {
@@ -172,7 +172,7 @@ public class DescribeConsumerGroupTest {
     }
 
     @ClusterTemplate("generator")
-    public void testDescribeGroupOffsets(ClusterInstance clusterInstance) throws Exception {
+    public void testDescribeGroupOffsets(Cluster clusterInstance) throws Exception {
         this.clusterInstance = clusterInstance;
         for (GroupProtocol groupProtocol: clusterInstance.supportedGroupProtocols()) {
             String topic = TOPIC_PREFIX + groupProtocol.name();
@@ -213,7 +213,7 @@ public class DescribeConsumerGroupTest {
     }
 
     @ClusterTemplate("generator")
-    public void testDescribeGroupMembers(ClusterInstance clusterInstance) throws Exception {
+    public void testDescribeGroupMembers(Cluster clusterInstance) throws Exception {
         this.clusterInstance = clusterInstance;
         for (GroupProtocol groupProtocol: clusterInstance.supportedGroupProtocols()) {
             boolean isConsumer = groupProtocol.equals(GroupProtocol.CONSUMER);
@@ -259,7 +259,7 @@ public class DescribeConsumerGroupTest {
     }
 
     @ClusterTemplate("generator")
-    public void testDescribeGroupMemberWithMigration(ClusterInstance clusterInstance) throws Exception {
+    public void testDescribeGroupMemberWithMigration(Cluster clusterInstance) throws Exception {
         this.clusterInstance = clusterInstance;
         String topic = TOPIC_PREFIX + "migration";
         String group = GROUP_PREFIX + "migration";
@@ -310,7 +310,7 @@ public class DescribeConsumerGroupTest {
     }
 
     @ClusterTemplate("generator")
-    public void testDescribeGroupState(ClusterInstance clusterInstance) throws Exception {
+    public void testDescribeGroupState(Cluster clusterInstance) throws Exception {
         this.clusterInstance = clusterInstance;
         for (GroupProtocol groupProtocol: clusterInstance.supportedGroupProtocols()) {
             boolean isConsumer = groupProtocol.equals(GroupProtocol.CONSUMER);
@@ -352,7 +352,7 @@ public class DescribeConsumerGroupTest {
     }
 
     @ClusterTemplate("generator")
-    public void testDescribeExistingGroups(ClusterInstance clusterInstance) throws Exception {
+    public void testDescribeExistingGroups(Cluster clusterInstance) throws Exception {
         this.clusterInstance = clusterInstance;
         for (GroupProtocol groupProtocol: clusterInstance.supportedGroupProtocols()) {
             String topic = TOPIC_PREFIX + groupProtocol.name();
@@ -393,7 +393,7 @@ public class DescribeConsumerGroupTest {
     }
 
     @ClusterTemplate("generator")
-    public void testDescribeAllExistingGroups(ClusterInstance clusterInstance) throws Exception {
+    public void testDescribeAllExistingGroups(Cluster clusterInstance) throws Exception {
         this.clusterInstance = clusterInstance;
         for (GroupProtocol groupProtocol: clusterInstance.supportedGroupProtocols()) {
             String topic = TOPIC_PREFIX + groupProtocol.name();
@@ -434,7 +434,7 @@ public class DescribeConsumerGroupTest {
     }
 
     @ClusterTemplate("generator")
-    public void testDescribeOffsetsOfExistingGroup(ClusterInstance clusterInstance) throws Exception {
+    public void testDescribeOffsetsOfExistingGroup(Cluster clusterInstance) throws Exception {
         this.clusterInstance = clusterInstance;
         for (GroupProtocol groupProtocol: clusterInstance.supportedGroupProtocols()) {
             String topic = TOPIC_PREFIX + groupProtocol.name();
@@ -474,7 +474,7 @@ public class DescribeConsumerGroupTest {
     }
 
     @ClusterTemplate("generator")
-    public void testDescribeMembersOfExistingGroup(ClusterInstance clusterInstance) throws Exception {
+    public void testDescribeMembersOfExistingGroup(Cluster clusterInstance) throws Exception {
         this.clusterInstance = clusterInstance;
         for (GroupProtocol groupProtocol: clusterInstance.supportedGroupProtocols()) {
             String topic = TOPIC_PREFIX + groupProtocol.name();
@@ -501,7 +501,7 @@ public class DescribeConsumerGroupTest {
     }
 
     @ClusterTemplate("generator")
-    public void testDescribeStateOfExistingGroup(ClusterInstance clusterInstance) throws Exception {
+    public void testDescribeStateOfExistingGroup(Cluster clusterInstance) throws Exception {
         this.clusterInstance = clusterInstance;
         for (GroupProtocol groupProtocol: clusterInstance.supportedGroupProtocols()) {
             String topic = TOPIC_PREFIX + groupProtocol.name();
@@ -524,7 +524,7 @@ public class DescribeConsumerGroupTest {
     }
 
     @ClusterTemplate("generator")
-    public void testDescribeStateOfExistingGroupWithNonDefaultAssignor(ClusterInstance clusterInstance) throws Exception {
+    public void testDescribeStateOfExistingGroupWithNonDefaultAssignor(Cluster clusterInstance) throws Exception {
         this.clusterInstance = clusterInstance;
         for (GroupProtocol groupProtocol: clusterInstance.supportedGroupProtocols()) {
             String topic = TOPIC_PREFIX + groupProtocol.name();
@@ -562,7 +562,7 @@ public class DescribeConsumerGroupTest {
     }
 
     @ClusterTemplate("generator")
-    public void testDescribeExistingGroupWithNoMembers(ClusterInstance clusterInstance) throws Exception {
+    public void testDescribeExistingGroupWithNoMembers(Cluster clusterInstance) throws Exception {
         this.clusterInstance = clusterInstance;
         for (GroupProtocol groupProtocol: clusterInstance.supportedGroupProtocols()) {
             String topic = TOPIC_PREFIX + groupProtocol.name();
@@ -593,7 +593,7 @@ public class DescribeConsumerGroupTest {
     }
 
     @ClusterTemplate("generator")
-    public void testDescribeOffsetsOfExistingGroupWithNoMembers(ClusterInstance clusterInstance) throws Exception {
+    public void testDescribeOffsetsOfExistingGroupWithNoMembers(Cluster clusterInstance) throws Exception {
         this.clusterInstance = clusterInstance;
         for (GroupProtocol groupProtocol: clusterInstance.supportedGroupProtocols()) {
             String topic = TOPIC_PREFIX + groupProtocol.name();
@@ -630,7 +630,7 @@ public class DescribeConsumerGroupTest {
     }
 
     @ClusterTemplate("generator")
-    public void testDescribeMembersOfExistingGroupWithNoMembers(ClusterInstance clusterInstance) throws Exception {
+    public void testDescribeMembersOfExistingGroupWithNoMembers(Cluster clusterInstance) throws Exception {
         this.clusterInstance = clusterInstance;
         for (GroupProtocol groupProtocol: clusterInstance.supportedGroupProtocols()) {
             String topic = TOPIC_PREFIX + groupProtocol.name();
@@ -659,7 +659,7 @@ public class DescribeConsumerGroupTest {
     }
 
     @ClusterTemplate("generator")
-    public void testDescribeStateOfExistingGroupWithNoMembers(ClusterInstance clusterInstance) throws Exception {
+    public void testDescribeStateOfExistingGroupWithNoMembers(Cluster clusterInstance) throws Exception {
         this.clusterInstance = clusterInstance;
         for (GroupProtocol groupProtocol: clusterInstance.supportedGroupProtocols()) {
             String topic = TOPIC_PREFIX + groupProtocol.name();
@@ -690,7 +690,7 @@ public class DescribeConsumerGroupTest {
     }
 
     @ClusterTemplate("generator")
-    public void testDescribeWithConsumersWithoutAssignedPartitions(ClusterInstance clusterInstance) throws Exception {
+    public void testDescribeWithConsumersWithoutAssignedPartitions(Cluster clusterInstance) throws Exception {
         this.clusterInstance = clusterInstance;
         for (GroupProtocol groupProtocol: clusterInstance.supportedGroupProtocols()) {
             String topic = TOPIC_PREFIX + groupProtocol.name();
@@ -717,7 +717,7 @@ public class DescribeConsumerGroupTest {
     }
 
     @ClusterTemplate("generator")
-    public void testDescribeOffsetsWithConsumersWithoutAssignedPartitions(ClusterInstance clusterInstance) throws Exception {
+    public void testDescribeOffsetsWithConsumersWithoutAssignedPartitions(Cluster clusterInstance) throws Exception {
         this.clusterInstance = clusterInstance;
         for (GroupProtocol groupProtocol: clusterInstance.supportedGroupProtocols()) {
             String topic = TOPIC_PREFIX + groupProtocol.name();
@@ -740,7 +740,7 @@ public class DescribeConsumerGroupTest {
     }
 
     @ClusterTemplate("generator")
-    public void testDescribeMembersWithConsumersWithoutAssignedPartitions(ClusterInstance clusterInstance) throws Exception {
+    public void testDescribeMembersWithConsumersWithoutAssignedPartitions(Cluster clusterInstance) throws Exception {
         this.clusterInstance = clusterInstance;
         for (GroupProtocol groupProtocol: clusterInstance.supportedGroupProtocols()) {
             String topic = TOPIC_PREFIX + groupProtocol.name();
@@ -770,7 +770,7 @@ public class DescribeConsumerGroupTest {
     }
 
     @ClusterTemplate("generator")
-    public void testDescribeStateWithConsumersWithoutAssignedPartitions(ClusterInstance clusterInstance) throws Exception {
+    public void testDescribeStateWithConsumersWithoutAssignedPartitions(Cluster clusterInstance) throws Exception {
         this.clusterInstance = clusterInstance;
         for (GroupProtocol groupProtocol: clusterInstance.supportedGroupProtocols()) {
             String topic = TOPIC_PREFIX + groupProtocol.name();
@@ -790,7 +790,7 @@ public class DescribeConsumerGroupTest {
     }
 
     @ClusterTemplate("generator")
-    public void testDescribeWithMultiPartitionTopicAndMultipleConsumers(ClusterInstance clusterInstance) throws Exception {
+    public void testDescribeWithMultiPartitionTopicAndMultipleConsumers(Cluster clusterInstance) throws Exception {
         this.clusterInstance = clusterInstance;
         for (GroupProtocol groupProtocol: clusterInstance.supportedGroupProtocols()) {
             String topic = TOPIC_PREFIX + groupProtocol.name();
@@ -817,7 +817,7 @@ public class DescribeConsumerGroupTest {
     }
 
     @ClusterTemplate("generator")
-    public void testDescribeOffsetsWithMultiPartitionTopicAndMultipleConsumers(ClusterInstance clusterInstance) throws Exception {
+    public void testDescribeOffsetsWithMultiPartitionTopicAndMultipleConsumers(Cluster clusterInstance) throws Exception {
         this.clusterInstance = clusterInstance;
         for (GroupProtocol groupProtocol: clusterInstance.supportedGroupProtocols()) {
             String topic = TOPIC_PREFIX + groupProtocol.name();
@@ -841,7 +841,7 @@ public class DescribeConsumerGroupTest {
     }
 
     @ClusterTemplate("generator")
-    public void testDescribeMembersWithMultiPartitionTopicAndMultipleConsumers(ClusterInstance clusterInstance) throws Exception {
+    public void testDescribeMembersWithMultiPartitionTopicAndMultipleConsumers(Cluster clusterInstance) throws Exception {
         this.clusterInstance = clusterInstance;
         for (GroupProtocol groupProtocol: clusterInstance.supportedGroupProtocols()) {
             String topic = TOPIC_PREFIX + groupProtocol.name();
@@ -869,7 +869,7 @@ public class DescribeConsumerGroupTest {
     }
 
     @ClusterTemplate("generator")
-    public void testDescribeStateWithMultiPartitionTopicAndMultipleConsumers(ClusterInstance clusterInstance) throws Exception {
+    public void testDescribeStateWithMultiPartitionTopicAndMultipleConsumers(Cluster clusterInstance) throws Exception {
         this.clusterInstance = clusterInstance;
         for (GroupProtocol groupProtocol: clusterInstance.supportedGroupProtocols()) {
             String topic = TOPIC_PREFIX + groupProtocol.name();
@@ -889,7 +889,7 @@ public class DescribeConsumerGroupTest {
     }
 
     @ClusterTemplate("generator")
-    public void testDescribeSimpleConsumerGroup(ClusterInstance clusterInstance) throws Exception {
+    public void testDescribeSimpleConsumerGroup(Cluster clusterInstance) throws Exception {
         this.clusterInstance = clusterInstance;
         // Ensure that the offsets of consumers which don't use group management are still displayed
         for (GroupProtocol groupProtocol: clusterInstance.supportedGroupProtocols()) {
@@ -910,7 +910,7 @@ public class DescribeConsumerGroupTest {
     }
 
     @ClusterTemplate("generator")
-    public void testDescribeGroupWithShortInitializationTimeout(ClusterInstance clusterInstance) throws Exception {
+    public void testDescribeGroupWithShortInitializationTimeout(Cluster clusterInstance) throws Exception {
         this.clusterInstance = clusterInstance;
         for (GroupProtocol groupProtocol: clusterInstance.supportedGroupProtocols()) {
             String topic = TOPIC_PREFIX + groupProtocol.name();
@@ -936,7 +936,7 @@ public class DescribeConsumerGroupTest {
     }
 
     @ClusterTemplate("generator")
-    public void testDescribeGroupOffsetsWithShortInitializationTimeout(ClusterInstance clusterInstance) throws Exception {
+    public void testDescribeGroupOffsetsWithShortInitializationTimeout(Cluster clusterInstance) throws Exception {
         this.clusterInstance = clusterInstance;
         for (GroupProtocol groupProtocol: clusterInstance.supportedGroupProtocols()) {
             String topic = TOPIC_PREFIX + groupProtocol.name();
@@ -958,7 +958,7 @@ public class DescribeConsumerGroupTest {
     }
 
     @ClusterTemplate("generator")
-    public void testDescribeGroupMembersWithShortInitializationTimeout(ClusterInstance clusterInstance) throws Exception {
+    public void testDescribeGroupMembersWithShortInitializationTimeout(Cluster clusterInstance) throws Exception {
         this.clusterInstance = clusterInstance;
         for (GroupProtocol groupProtocol: clusterInstance.supportedGroupProtocols()) {
             String topic = TOPIC_PREFIX + groupProtocol.name();
@@ -982,7 +982,7 @@ public class DescribeConsumerGroupTest {
     }
 
     @ClusterTemplate("generator")
-    public void testDescribeGroupStateWithShortInitializationTimeout(ClusterInstance clusterInstance) throws Exception {
+    public void testDescribeGroupStateWithShortInitializationTimeout(Cluster clusterInstance) throws Exception {
         this.clusterInstance = clusterInstance;
         for (GroupProtocol groupProtocol: clusterInstance.supportedGroupProtocols()) {
             String topic = TOPIC_PREFIX + groupProtocol.name();
@@ -1004,7 +1004,7 @@ public class DescribeConsumerGroupTest {
     }
 
     @ClusterTemplate("generator")
-    public void testDescribeNonOffsetCommitGroup(ClusterInstance clusterInstance) throws Exception {
+    public void testDescribeNonOffsetCommitGroup(Cluster clusterInstance) throws Exception {
         this.clusterInstance = clusterInstance;
         for (GroupProtocol groupProtocol: clusterInstance.supportedGroupProtocols()) {
             String topic = TOPIC_PREFIX + groupProtocol.name();

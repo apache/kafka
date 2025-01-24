@@ -49,6 +49,7 @@ import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.api.Cluster;
 import org.apache.kafka.common.test.api.ClusterConfig;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTemplate;
@@ -328,7 +329,7 @@ public class TopicCommandTest {
         }
     }
 
-    private TopicCommand.TopicCommandOptions buildTopicCommandOptionsWithBootstrap(ClusterInstance clusterInstance, String... opts) {
+    private TopicCommand.TopicCommandOptions buildTopicCommandOptionsWithBootstrap(Cluster clusterInstance, String... opts) {
         String bootstrapServer = clusterInstance.bootstrapServers();
         String[] finalOptions = Stream.concat(Arrays.stream(opts),
                 Stream.of("--bootstrap-server", bootstrapServer)
@@ -379,7 +380,7 @@ public class TopicCommandTest {
             @ClusterConfigProperty(key = "log.segment.delete.delay.ms", value = "1000")
         }
     )
-    public void testCreate(ClusterInstance clusterInstance) throws InterruptedException, ExecutionException {
+    public void testCreate(Cluster clusterInstance) throws InterruptedException, ExecutionException {
         String testTopicName = TestUtils.randomString(10);
 
         try (Admin adminClient = clusterInstance.admin()) {
@@ -403,7 +404,7 @@ public class TopicCommandTest {
             @ClusterConfigProperty(key = "log.segment.delete.delay.ms", value = "1000")
         }
     )
-    public void testCreateWithDefaults(ClusterInstance clusterInstance) throws InterruptedException, ExecutionException {
+    public void testCreateWithDefaults(Cluster clusterInstance) throws InterruptedException, ExecutionException {
         String testTopicName = TestUtils.randomString(10);
 
         try (Admin adminClient = clusterInstance.admin()) {
@@ -436,7 +437,7 @@ public class TopicCommandTest {
             @ClusterConfigProperty(key = "log.segment.delete.delay.ms", value = "1000")
         }
     )
-    public void testCreateWithDefaultReplication(ClusterInstance clusterInstance) throws InterruptedException, ExecutionException {
+    public void testCreateWithDefaultReplication(Cluster clusterInstance) throws InterruptedException, ExecutionException {
         String testTopicName = TestUtils.randomString(10);
 
         try (Admin adminClient = clusterInstance.admin()) {
@@ -454,7 +455,7 @@ public class TopicCommandTest {
     }
 
     @ClusterTest(brokers = 3)
-    public void testCreateWithDefaultPartitions(ClusterInstance clusterInstance) throws InterruptedException, ExecutionException {
+    public void testCreateWithDefaultPartitions(Cluster clusterInstance) throws InterruptedException, ExecutionException {
         String testTopicName = TestUtils.randomString(10);
 
         try (Admin adminClient = clusterInstance.admin()) {
@@ -473,7 +474,7 @@ public class TopicCommandTest {
     }
 
     @ClusterTest(brokers = 3)
-    public void testCreateWithConfigs(ClusterInstance clusterInstance) throws Exception {
+    public void testCreateWithConfigs(Cluster clusterInstance) throws Exception {
         String testTopicName = TestUtils.randomString(10);
 
         try (Admin adminClient = clusterInstance.admin()) {
@@ -492,7 +493,7 @@ public class TopicCommandTest {
     }
 
     @ClusterTest(brokers = 3)
-    public void testCreateWhenAlreadyExists(ClusterInstance clusterInstance) throws Exception {
+    public void testCreateWhenAlreadyExists(Cluster clusterInstance) throws Exception {
         String testTopicName = TestUtils.randomString(10);
         try (Admin adminClient = clusterInstance.admin();
              TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
@@ -510,7 +511,7 @@ public class TopicCommandTest {
     }
 
     @ClusterTest(brokers = 3)
-    public void testCreateWhenAlreadyExistsWithIfNotExists(ClusterInstance clusterInstance) throws Exception {
+    public void testCreateWhenAlreadyExistsWithIfNotExists(Cluster clusterInstance) throws Exception {
         String testTopicName = TestUtils.randomString(10);
         try (Admin adminClient = clusterInstance.admin();
              TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
@@ -528,7 +529,7 @@ public class TopicCommandTest {
     }
 
     @ClusterTemplate("generate")
-    public void testCreateWithReplicaAssignment(ClusterInstance clusterInstance) throws Exception {
+    public void testCreateWithReplicaAssignment(Cluster clusterInstance) throws Exception {
         Map<Integer, List<Integer>> replicaAssignmentMap = new HashMap<>();
         try (Admin adminClient = clusterInstance.admin()) {
             String testTopicName = TestUtils.randomString(10);
@@ -559,7 +560,7 @@ public class TopicCommandTest {
     }
 
     @ClusterTest(brokers = 3)
-    public void testCreateWithInvalidReplicationFactor(ClusterInstance clusterInstance) throws Exception {
+    public void testCreateWithInvalidReplicationFactor(Cluster clusterInstance) throws Exception {
         String testTopicName = TestUtils.randomString(10);
         try (Admin adminClient = clusterInstance.admin();
              TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
@@ -571,7 +572,7 @@ public class TopicCommandTest {
     }
 
     @ClusterTest
-    public void testCreateWithNegativeReplicationFactor(ClusterInstance clusterInstance) throws Exception {
+    public void testCreateWithNegativeReplicationFactor(Cluster clusterInstance) throws Exception {
         String testTopicName = TestUtils.randomString(10);
         try (Admin adminClient = clusterInstance.admin();
              TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
@@ -582,7 +583,7 @@ public class TopicCommandTest {
     }
 
     @ClusterTest
-    public void testCreateWithNegativePartitionCount(ClusterInstance clusterInstance) throws Exception {
+    public void testCreateWithNegativePartitionCount(Cluster clusterInstance) throws Exception {
         String testTopicName = TestUtils.randomString(10);
         try (Admin adminClient = clusterInstance.admin();
              TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
@@ -592,7 +593,7 @@ public class TopicCommandTest {
     }
 
     @ClusterTest
-    public void testInvalidTopicLevelConfig(ClusterInstance clusterInstance) {
+    public void testInvalidTopicLevelConfig(Cluster clusterInstance) {
         String testTopicName = TestUtils.randomString(10);
         try (Admin adminClient = clusterInstance.admin()) {
             TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient);
@@ -605,7 +606,7 @@ public class TopicCommandTest {
     }
 
     @ClusterTest
-    public void testListTopics(ClusterInstance clusterInstance) throws InterruptedException {
+    public void testListTopics(Cluster clusterInstance) throws InterruptedException {
         String testTopicName = TestUtils.randomString(10);
         try (Admin adminClient = clusterInstance.admin()) {
             adminClient.createTopics(Collections.singletonList(new NewTopic(testTopicName, defaultNumPartitions, defaultReplicationFactor)));
@@ -617,7 +618,7 @@ public class TopicCommandTest {
     }
 
     @ClusterTest(brokers = 3)
-    public void testListTopicsWithIncludeList(ClusterInstance clusterInstance) throws InterruptedException {
+    public void testListTopicsWithIncludeList(Cluster clusterInstance) throws InterruptedException {
         try (Admin adminClient = clusterInstance.admin()) {
             String topic1 = "kafka.testTopic1";
             String topic2 = "kafka.testTopic2";
@@ -639,7 +640,7 @@ public class TopicCommandTest {
     }
 
     @ClusterTest(brokers = 3)
-    public void testListTopicsWithExcludeInternal(ClusterInstance clusterInstance) throws InterruptedException {
+    public void testListTopicsWithExcludeInternal(Cluster clusterInstance) throws InterruptedException {
         try (Admin adminClient = clusterInstance.admin()) {
             String topic1 = "kafka.testTopic1";
             String hiddenConsumerTopic = Topic.GROUP_METADATA_TOPIC_NAME;
@@ -712,7 +713,7 @@ public class TopicCommandTest {
     }
 
     @ClusterTest(brokers = 3)
-    public void testAlterAssignmentWithMoreAssignmentThanPartitions(ClusterInstance clusterInstance) throws Exception {
+    public void testAlterAssignmentWithMoreAssignmentThanPartitions(Cluster clusterInstance) throws Exception {
         String testTopicName = TestUtils.randomString(10);
         try (Admin adminClient = clusterInstance.admin();
              TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
@@ -731,7 +732,7 @@ public class TopicCommandTest {
     }
 
     @ClusterTemplate("generate")
-    public void testAlterAssignmentWithMorePartitionsThanAssignment(ClusterInstance clusterInstance) throws Exception {
+    public void testAlterAssignmentWithMorePartitionsThanAssignment(Cluster clusterInstance) throws Exception {
         String testTopicName = TestUtils.randomString(10);
         try (Admin adminClient = clusterInstance.admin();
              TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
@@ -749,7 +750,7 @@ public class TopicCommandTest {
     }
 
     @ClusterTest
-    public void testAlterWithInvalidPartitionCount(ClusterInstance clusterInstance) throws Exception {
+    public void testAlterWithInvalidPartitionCount(Cluster clusterInstance) throws Exception {
         String testTopicName = TestUtils.randomString(10);
 
         try (Admin adminClient = clusterInstance.admin();
@@ -764,7 +765,7 @@ public class TopicCommandTest {
     }
 
     @ClusterTest
-    public void testAlterWhenTopicDoesntExist(ClusterInstance clusterInstance) throws Exception {
+    public void testAlterWhenTopicDoesntExist(Cluster clusterInstance) throws Exception {
         String testTopicName = TestUtils.randomString(10);
 
         try (Admin adminClient = clusterInstance.admin();
@@ -777,7 +778,7 @@ public class TopicCommandTest {
     }
 
     @ClusterTest
-    public void testAlterWhenTopicDoesntExistWithIfExists(ClusterInstance clusterInstance) throws Exception {
+    public void testAlterWhenTopicDoesntExistWithIfExists(Cluster clusterInstance) throws Exception {
         String testTopicName = TestUtils.randomString(10);
         Admin adminClient = clusterInstance.admin();
 
@@ -880,7 +881,7 @@ public class TopicCommandTest {
             @ClusterConfigProperty(key = "log.segment.delete.delay.ms", value = "1000")
         }
     )
-    public void testTopicDeletion(ClusterInstance clusterInstance) throws Exception {
+    public void testTopicDeletion(Cluster clusterInstance) throws Exception {
         try (Admin adminClient = clusterInstance.admin();
              TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
             String testTopicName = TestUtils.randomString(10);
@@ -906,7 +907,7 @@ public class TopicCommandTest {
             @ClusterConfigProperty(key = "log.segment.delete.delay.ms", value = "1000")
         }
     )
-    public void testTopicWithCollidingCharDeletionAndCreateAgain(ClusterInstance clusterInstance) throws Exception {
+    public void testTopicWithCollidingCharDeletionAndCreateAgain(Cluster clusterInstance) throws Exception {
         try (Admin adminClient = clusterInstance.admin();
              TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
             // create the topic with colliding chars
@@ -937,7 +938,7 @@ public class TopicCommandTest {
             @ClusterConfigProperty(key = "log.segment.delete.delay.ms", value = "1000")
         }
     )
-    public void testDeleteInternalTopic(ClusterInstance clusterInstance) throws Exception {
+    public void testDeleteInternalTopic(Cluster clusterInstance) throws Exception {
         try (Admin adminClient = clusterInstance.admin();
              TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
 
@@ -967,7 +968,7 @@ public class TopicCommandTest {
             @ClusterConfigProperty(key = "log.segment.delete.delay.ms", value = "1000")
         }
     )
-    public void testDeleteWhenTopicDoesntExist(ClusterInstance clusterInstance) throws Exception {
+    public void testDeleteWhenTopicDoesntExist(Cluster clusterInstance) throws Exception {
         String testTopicName = TestUtils.randomString(10);
         try (Admin adminClient = clusterInstance.admin();
              TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
@@ -985,7 +986,7 @@ public class TopicCommandTest {
             @ClusterConfigProperty(key = "log.segment.delete.delay.ms", value = "1000")
         }
     )
-    public void testDeleteWhenTopicDoesntExistWithIfExists(ClusterInstance clusterInstance) throws Exception {
+    public void testDeleteWhenTopicDoesntExistWithIfExists(Cluster clusterInstance) throws Exception {
         String testTopicName = TestUtils.randomString(10);
         try (Admin adminClient = clusterInstance.admin();
              TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
@@ -994,7 +995,7 @@ public class TopicCommandTest {
     }
 
     @ClusterTemplate("generate")
-    public void testDescribe(ClusterInstance clusterInstance) throws InterruptedException {
+    public void testDescribe(Cluster clusterInstance) throws InterruptedException {
         String testTopicName = TestUtils.randomString(10);
         try (Admin adminClient = clusterInstance.admin()) {
             int partition = 2;
@@ -1010,7 +1011,7 @@ public class TopicCommandTest {
     }
 
     @ClusterTemplate("generate")
-    public void testDescribeWithDescribeTopicPartitionsApi(ClusterInstance clusterInstance) throws InterruptedException {
+    public void testDescribeWithDescribeTopicPartitionsApi(Cluster clusterInstance) throws InterruptedException {
         String testTopicName = TestUtils.randomString(10);
 
         try (Admin adminClient = clusterInstance.admin()) {
@@ -1041,7 +1042,7 @@ public class TopicCommandTest {
     }
 
     @ClusterTest
-    public void testDescribeWhenTopicDoesntExist(ClusterInstance clusterInstance) {
+    public void testDescribeWhenTopicDoesntExist(Cluster clusterInstance) {
         String testTopicName = TestUtils.randomString(10);
         try (Admin adminClient = clusterInstance.admin()) {
             TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient);
@@ -1054,7 +1055,7 @@ public class TopicCommandTest {
     }
 
     @ClusterTest
-    public void testDescribeWhenTopicDoesntExistWithIfExists(ClusterInstance clusterInstance) throws Exception {
+    public void testDescribeWhenTopicDoesntExistWithIfExists(Cluster clusterInstance) throws Exception {
         String testTopicName = TestUtils.randomString(10);
         try (Admin adminClient = clusterInstance.admin()) {
             TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient);
@@ -1150,7 +1151,7 @@ public class TopicCommandTest {
     }
 
     @ClusterTemplate("generate")
-    public void testDescribeUnderReplicatedPartitionsWhenReassignmentIsInProgress(ClusterInstance clusterInstance) throws ExecutionException, InterruptedException {
+    public void testDescribeUnderReplicatedPartitionsWhenReassignmentIsInProgress(Cluster clusterInstance) throws ExecutionException, InterruptedException {
         String testTopicName = TestUtils.randomString(10);
 
         try (Admin adminClient = clusterInstance.admin();
@@ -1321,7 +1322,7 @@ public class TopicCommandTest {
     }
 
     @ClusterTest(brokers = 3)
-    public void testDescribeReportOverriddenConfigs(ClusterInstance clusterInstance) throws InterruptedException {
+    public void testDescribeReportOverriddenConfigs(Cluster clusterInstance) throws InterruptedException {
         String testTopicName = TestUtils.randomString(10);
         try (Admin adminClient = clusterInstance.admin()) {
             String config = "file.delete.delay.ms=1000";
@@ -1340,7 +1341,7 @@ public class TopicCommandTest {
     }
 
     @ClusterTest
-    public void testDescribeAndListTopicsWithoutInternalTopics(ClusterInstance clusterInstance) throws InterruptedException {
+    public void testDescribeAndListTopicsWithoutInternalTopics(Cluster clusterInstance) throws InterruptedException {
         String testTopicName = TestUtils.randomString(10);
         try (Admin adminClient = clusterInstance.admin()) {
             adminClient.createTopics(Collections.singletonList(new NewTopic(testTopicName, defaultNumPartitions, defaultReplicationFactor)));
@@ -1362,7 +1363,7 @@ public class TopicCommandTest {
     }
 
     @ClusterTest
-    public void testDescribeDoesNotFailWhenListingReassignmentIsUnauthorized(ClusterInstance clusterInstance) throws Exception {
+    public void testDescribeDoesNotFailWhenListingReassignmentIsUnauthorized(Cluster clusterInstance) throws Exception {
         String testTopicName = TestUtils.randomString(10);
         Admin adminClient = clusterInstance.admin();
 
@@ -1386,7 +1387,7 @@ public class TopicCommandTest {
     }
 
     @ClusterTest(brokers = 3)
-    public void testCreateWithTopicNameCollision(ClusterInstance clusterInstance) throws Exception {
+    public void testCreateWithTopicNameCollision(Cluster clusterInstance) throws Exception {
         try (Admin adminClient = clusterInstance.admin();
              TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
 
@@ -1442,7 +1443,7 @@ public class TopicCommandTest {
         }
     }
 
-    private String captureDescribeTopicStandardOut(ClusterInstance clusterInstance, TopicCommand.TopicCommandOptions opts) {
+    private String captureDescribeTopicStandardOut(Cluster clusterInstance, TopicCommand.TopicCommandOptions opts) {
         Runnable runnable = () -> {
             try (Admin adminClient = clusterInstance.admin();
                  TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
@@ -1454,7 +1455,7 @@ public class TopicCommandTest {
         return ToolsTestUtils.captureStandardOut(runnable);
     }
 
-    private String captureListTopicStandardOut(ClusterInstance clusterInstance, TopicCommand.TopicCommandOptions opts) {
+    private String captureListTopicStandardOut(Cluster clusterInstance, TopicCommand.TopicCommandOptions opts) {
         Runnable runnable = () -> {
             try (Admin adminClient = clusterInstance.admin();
                  TopicCommand.TopicService topicService = new TopicCommand.TopicService(adminClient)) {
@@ -1505,7 +1506,7 @@ public class TopicCommandTest {
         }
     }
 
-    private KafkaProducer<String, String> createProducer(ClusterInstance clusterInstance) {
+    private KafkaProducer<String, String> createProducer(Cluster clusterInstance) {
         Properties producerProps = new Properties();
         producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers());
         producerProps.put(ProducerConfig.ACKS_CONFIG, "-1");

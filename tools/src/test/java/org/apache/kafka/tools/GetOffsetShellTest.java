@@ -28,7 +28,7 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.api.Cluster;
 import org.apache.kafka.common.test.api.ClusterConfig;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTemplate;
@@ -69,9 +69,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 })
 public class GetOffsetShellTest {
     private final int topicCount = 4;
-    private final ClusterInstance cluster;
+    private final Cluster cluster;
 
-    public GetOffsetShellTest(ClusterInstance cluster) {
+    public GetOffsetShellTest(Cluster cluster) {
         this.cluster = cluster;
     }
 

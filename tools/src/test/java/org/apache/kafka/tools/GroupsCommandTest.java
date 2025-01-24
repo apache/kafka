@@ -32,7 +32,7 @@ import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.api.Cluster;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.utils.Exit;
@@ -388,7 +388,7 @@ public class GroupsCommandTest {
             @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
         }
     )
-    public void testGroupCommand(ClusterInstance clusterInstance) throws Exception {
+    public void testGroupCommand(Cluster clusterInstance) throws Exception {
         String topic = "topic";
         String classicGroupId = "classic_group";
         String consumerGroupId = "consumer_group";
@@ -518,7 +518,7 @@ public class GroupsCommandTest {
         }
     }
 
-    private KafkaConsumer<String, String> createKafkaConsumer(ClusterInstance clusterInstance, String groupId, GroupProtocol groupProtocol) {
+    private KafkaConsumer<String, String> createKafkaConsumer(Cluster clusterInstance, String groupId, GroupProtocol groupProtocol) {
         return new KafkaConsumer<>(Map.of(
             ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers(),
             ConsumerConfig.GROUP_ID_CONFIG, groupId,
@@ -527,7 +527,7 @@ public class GroupsCommandTest {
             ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName()));
     }
 
-    private KafkaShareConsumer<String, String> createKafkaShareConsumer(ClusterInstance clusterInstance, String groupId) {
+    private KafkaShareConsumer<String, String> createKafkaShareConsumer(Cluster clusterInstance, String groupId) {
         return new KafkaShareConsumer<>(Map.of(
             ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers(),
             ConsumerConfig.GROUP_ID_CONFIG, groupId,

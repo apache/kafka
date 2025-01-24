@@ -28,7 +28,7 @@ import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.api.Cluster;
 import org.apache.kafka.common.test.api.ClusterConfig;
 import org.apache.kafka.common.test.api.ClusterTemplate;
 import org.apache.kafka.test.TestUtils;
@@ -68,9 +68,9 @@ public class ListConsumerGroupTest {
     private static final String TOPIC_PARTITIONS_GROUP_PREFIX = "test.topic.partitions.group.";
     private static final String TOPIC_GROUP_PREFIX = "test.topic.group.";
     private static final String PROTOCOL_GROUP_PREFIX = "test.protocol.group.";
-    private final ClusterInstance clusterInstance;
+    private final Cluster clusterInstance;
 
-    ListConsumerGroupTest(ClusterInstance clusterInstance) {
+    ListConsumerGroupTest(Cluster clusterInstance) {
         this.clusterInstance = clusterInstance;
     }
 

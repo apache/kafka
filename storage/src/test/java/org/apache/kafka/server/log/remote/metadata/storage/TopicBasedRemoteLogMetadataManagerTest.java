@@ -21,7 +21,7 @@ import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.api.Cluster;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.utils.Time;
@@ -51,12 +51,12 @@ import static org.mockito.Mockito.verify;
 @ClusterTestDefaults(brokers = 3)
 public class TopicBasedRemoteLogMetadataManagerTest {
     private static final int SEG_SIZE = 1048576;
-    private final ClusterInstance clusterInstance;
+    private final Cluster clusterInstance;
     private final RemotePartitionMetadataStore spyRemotePartitionMetadataEventHandler = spy(new RemotePartitionMetadataStore());
     private final Time time = Time.SYSTEM;
     private TopicBasedRemoteLogMetadataManager remoteLogMetadataManager;
 
-    TopicBasedRemoteLogMetadataManagerTest(ClusterInstance clusterInstance) {
+    TopicBasedRemoteLogMetadataManagerTest(Cluster clusterInstance) {
         this.clusterInstance = clusterInstance;
     }
 

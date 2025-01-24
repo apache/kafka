@@ -26,6 +26,7 @@ import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourceType;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.api.Cluster;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
@@ -265,12 +266,12 @@ public class AclCommandTest {
     }
 
     @ClusterTest
-    public void testPatternTypesWithAdminAPI(ClusterInstance cluster) {
+    public void testPatternTypesWithAdminAPI(Cluster cluster) {
         testPatternTypes(adminArgs(cluster.bootstrapServers(), Optional.empty()));
     }
 
     @ClusterTest
-    public void testPatternTypesWithAdminAPIAndBootstrapController(ClusterInstance cluster) {
+    public void testPatternTypesWithAdminAPIAndBootstrapController(Cluster cluster) {
         testPatternTypes(adminArgsWithBootstrapController(cluster.bootstrapControllers(), Optional.empty()));
     }
 

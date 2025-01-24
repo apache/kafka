@@ -44,6 +44,7 @@ import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.JaasUtils;
 import org.apache.kafka.common.test.TestUtils;
 import org.apache.kafka.common.test.api.AutoStart;
+import org.apache.kafka.common.test.api.Cluster;
 import org.apache.kafka.common.test.api.ClusterConfig;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTemplate;
@@ -113,7 +114,7 @@ public class ClusterTestExtensionsTest {
 
     // With no params, configuration comes from the annotation defaults as well as @ClusterTestDefaults (if present)
     @ClusterTest
-    public void testClusterTest(ClusterInstance clusterInstance) {
+    public void testClusterTest(Cluster clusterInstance) {
         Assertions.assertSame(this.clusterInstance, clusterInstance, "Injected objects should be the same");
         assertEquals(Type.KRAFT, clusterInstance.type()); // From the class level default
         assertEquals("default.value", clusterInstance.config().serverProperties().get("default.key"));
@@ -199,12 +200,12 @@ public class ClusterTestExtensionsTest {
     }
 
     @ClusterTest
-    public void testDefaults(ClusterInstance clusterInstance) {
+    public void testDefaults(Cluster clusterInstance) {
         assertEquals(MetadataVersion.latestTesting(), clusterInstance.config().metadataVersion());
     }
 
     @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT})
-    public void testSupportedNewGroupProtocols(ClusterInstance clusterInstance) {
+    public void testSupportedNewGroupProtocols(Cluster clusterInstance) {
         Set<GroupProtocol> supportedGroupProtocols = new HashSet<>();
         supportedGroupProtocols.add(CLASSIC);
         supportedGroupProtocols.add(CONSUMER);
@@ -219,14 +220,14 @@ public class ClusterTestExtensionsTest {
             @ClusterConfigProperty(key = NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "false"),
         })
     })
-    public void testNotSupportedNewGroupProtocols(ClusterInstance clusterInstance) {
+    public void testNotSupportedNewGroupProtocols(Cluster clusterInstance) {
         assertEquals(singleton(CLASSIC), clusterInstance.supportedGroupProtocols());
     }
 
 
 
     @ClusterTest(types = {Type.CO_KRAFT, Type.KRAFT}, brokers = 3)
-    public void testCreateTopic(ClusterInstance clusterInstance) throws Exception {
+    public void testCreateTopic(Cluster clusterInstance) throws Exception {
         String topicName = "test";
         int numPartition = 3;
         short numReplicas = 3;
@@ -242,7 +243,7 @@ public class ClusterTestExtensionsTest {
     }
 
     @ClusterTest(types = {Type.CO_KRAFT, Type.KRAFT}, brokers = 4)
-    public void testShutdownAndSyncMetadata(ClusterInstance clusterInstance) throws Exception {
+    public void testShutdownAndSyncMetadata(Cluster clusterInstance) throws Exception {
         String topicName = "test";
         int numPartition = 3;
         short numReplicas = 3;
@@ -275,7 +276,7 @@ public class ClusterTestExtensionsTest {
             @ClusterConfigProperty(key = "log.segment.delete.delay.ms", value = "1000")
         }
     )
-    public void testVerifyTopicDeletion(ClusterInstance clusterInstance) throws Exception {
+    public void testVerifyTopicDeletion(Cluster clusterInstance) throws Exception {
         try (Admin admin = clusterInstance.admin()) {
             String testTopic = "testTopic";
             admin.createTopics(singletonList(new NewTopic(testTopic, 1, (short) 1)));
@@ -289,7 +290,7 @@ public class ClusterTestExtensionsTest {
     }
 
     @ClusterTest(types = {Type.CO_KRAFT, Type.KRAFT}, brokers = 3)
-    public void testCreateProducerAndConsumer(ClusterInstance cluster) throws InterruptedException {
+    public void testCreateProducerAndConsumer(Cluster cluster) throws InterruptedException {
         String topic = "topic";
         String key = "key";
         String value = "value";
@@ -322,7 +323,7 @@ public class ClusterTestExtensionsTest {
         @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
         @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
     })
-    public void testCreateDefaultProducerAndConsumer(ClusterInstance cluster) throws InterruptedException {
+    public void testCreateDefaultProducerAndConsumer(Cluster cluster) throws InterruptedException {
         String topic = "topic";
         byte[] key = "key".getBytes(StandardCharsets.UTF_8);
         byte[] value = "value".getBytes(StandardCharsets.UTF_8);
@@ -347,7 +348,7 @@ public class ClusterTestExtensionsTest {
     }
 
     @ClusterTest(types = {Type.CO_KRAFT, Type.KRAFT}, controllerListener = "FOO")
-    public void testControllerListenerName(ClusterInstance cluster) throws ExecutionException, InterruptedException {
+    public void testControllerListenerName(Cluster cluster) throws ExecutionException, InterruptedException {
         assertEquals("FOO", cluster.controllerListenerName().get().value());
         try (Admin admin = cluster.admin(Map.of(), true)) {
             assertEquals(1, admin.describeMetadataQuorum().quorumInfo().get().nodes().size());
@@ -377,7 +378,7 @@ public class ClusterTestExtensionsTest {
             @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
         }
     )
-    public void testSaslPlaintext(ClusterInstance clusterInstance) throws CancellationException, ExecutionException, InterruptedException {
+    public void testSaslPlaintext(Cluster clusterInstance) throws CancellationException, ExecutionException, InterruptedException {
         assertEquals(SecurityProtocol.SASL_PLAINTEXT, clusterInstance.config().brokerSecurityProtocol());
 
         // default ClusterInstance#admin helper with admin credentials
@@ -484,7 +485,7 @@ public class ClusterTestExtensionsTest {
             @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
         }
     )
-    public void testSaslPlaintextWithController(ClusterInstance clusterInstance) throws CancellationException, ExecutionException, InterruptedException {
+    public void testSaslPlaintextWithController(Cluster clusterInstance) throws CancellationException, ExecutionException, InterruptedException {
         // default ClusterInstance#admin helper with admin credentials
         try (Admin admin = clusterInstance.admin(Map.of(), true)) {
             admin.describeAcls(AclBindingFilter.ANY).values().get();

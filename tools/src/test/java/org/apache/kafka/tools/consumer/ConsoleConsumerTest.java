@@ -34,7 +34,7 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
-import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.api.Cluster;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataKey;
@@ -291,7 +291,7 @@ public class ConsoleConsumerTest {
     }
 
     @ClusterTest(brokers = 3)
-    public void testTransactionLogMessageFormatter(ClusterInstance cluster) throws Exception {
+    public void testTransactionLogMessageFormatter(Cluster cluster) throws Exception {
         try (Admin admin = cluster.admin()) {
 
             NewTopic newTopic = new NewTopic(topic, 1, (short) 1);
@@ -330,7 +330,7 @@ public class ConsoleConsumerTest {
     }
 
     @ClusterTest(brokers = 3)
-    public void testOffsetsMessageFormatter(ClusterInstance cluster) throws Exception {
+    public void testOffsetsMessageFormatter(Cluster cluster) throws Exception {
         try (Admin admin = cluster.admin()) {
 
             NewTopic newTopic = new NewTopic(topic, 1, (short) 1);
@@ -372,7 +372,7 @@ public class ConsoleConsumerTest {
     }
 
     @ClusterTest(brokers = 3)
-    public void testGroupMetadataMessageFormatter(ClusterInstance cluster) throws Exception {
+    public void testGroupMetadataMessageFormatter(Cluster cluster) throws Exception {
         try (Admin admin = cluster.admin()) {
 
             NewTopic newTopic = new NewTopic(topic, 1, (short) 1);
@@ -415,7 +415,7 @@ public class ConsoleConsumerTest {
         }
     }
 
-    private void produceMessagesWithTxn(ClusterInstance cluster) {
+    private void produceMessagesWithTxn(Cluster cluster) {
         try (Producer<byte[], byte[]> producer = createTxnProducer(cluster)) {
             producer.initTransactions();
             producer.beginTransaction();
@@ -424,13 +424,13 @@ public class ConsoleConsumerTest {
         }
     }
 
-    private void produceMessages(ClusterInstance cluster) {
+    private void produceMessages(Cluster cluster) {
         try (Producer<byte[], byte[]> producer = new KafkaProducer<>(producerProps(cluster))) {
             producer.send(new ProducerRecord<>(topic, new byte[1_000 * 100]));
         }
     }
     
-    private String[] createConsoleConsumerArgs(ClusterInstance cluster, String topic, String formatter) {
+    private String[] createConsoleConsumerArgs(Cluster cluster, String topic, String formatter) {
         return new String[]{
             "--bootstrap-server", cluster.bootstrapServers(),
             "--topic", topic,
@@ -438,7 +438,7 @@ public class ConsoleConsumerTest {
         };
     }
 
-    private Producer<byte[], byte[]> createTxnProducer(ClusterInstance cluster) {
+    private Producer<byte[], byte[]> createTxnProducer(Cluster cluster) {
         Properties props = producerProps(cluster);
         props.put(ENABLE_IDEMPOTENCE_CONFIG, "true");
         props.put(ACKS_CONFIG, "all");
@@ -446,26 +446,26 @@ public class ConsoleConsumerTest {
         return new KafkaProducer<>(props);
     }
 
-    private Consumer<byte[], byte[]> createTxnConsumer(ClusterInstance cluster) {
+    private Consumer<byte[], byte[]> createTxnConsumer(Cluster cluster) {
         Properties props = consumerProps(cluster);
         props.put(ISOLATION_LEVEL_CONFIG, "read_committed");
         props.put(AUTO_OFFSET_RESET_CONFIG, "earliest");
         return new KafkaConsumer<>(props);
     }
 
-    private Consumer<byte[], byte[]> createOffsetConsumer(ClusterInstance cluster) {
+    private Consumer<byte[], byte[]> createOffsetConsumer(Cluster cluster) {
         Properties props = consumerProps(cluster);
         props.put(EXCLUDE_INTERNAL_TOPICS_CONFIG, "false");
         return new KafkaConsumer<>(props);
     }
 
-    private Consumer<byte[], byte[]> createGroupMetaDataConsumer(ClusterInstance cluster) {
+    private Consumer<byte[], byte[]> createGroupMetaDataConsumer(Cluster cluster) {
         Properties props = consumerProps(cluster);
         props.put(AUTO_OFFSET_RESET_CONFIG, "earliest");
         return new KafkaConsumer<>(props);
     }
     
-    private Properties producerProps(ClusterInstance cluster) {
+    private Properties producerProps(Cluster cluster) {
         Properties props = new Properties();
         props.put(BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
         props.put(KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
@@ -473,7 +473,7 @@ public class ConsoleConsumerTest {
         return props;
     }
     
-    private Properties consumerProps(ClusterInstance cluster) {
+    private Properties consumerProps(Cluster cluster) {
         Properties props = new Properties();
         props.put(BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
         props.put(KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());

@@ -35,6 +35,9 @@
     <!-- things from server-common -->
     <allow pkg="org.apache.kafka.server.common" />
 
+    <!-- things from clients -->
+    <allow pkg="org.apache.kafka.clients" />
+
     <allow pkg="java" />
     <allow pkg="javax.security" />
     <allow pkg="org.junit" />
