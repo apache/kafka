@@ -18,7 +18,6 @@
 package kafka.server.metadata
 
 import kafka.server.MetadataCache
-import kafka.server.metadata.KRaftMetadataCache.{getOfflineReplicas, getRandomAliveBroker}
 import kafka.utils.Logging
 import org.apache.kafka.admin.BrokerMetadata
 import org.apache.kafka.common._
@@ -207,7 +206,28 @@ class KRaftMetadataCache(
       }
     }
   }
-  
+
+  private def getOfflineReplicas(image: MetadataImage,
+                                 partition: PartitionRegistration,
+                                 listenerName: ListenerName): util.List[Integer] = {
+    val offlineReplicas = new util.ArrayList[Integer](0)
+    for (brokerId <- partition.replicas) {
+      Option(image.cluster().broker(brokerId)) match {
+        case None => offlineReplicas.add(brokerId)
+        case Some(broker) => if (isReplicaOffline(partition, listenerName, broker)) {
+          offlineReplicas.add(brokerId)
+        }
+      }
+    }
+    offlineReplicas
+  }
+
+  private def isReplicaOffline(partition: PartitionRegistration, listenerName: ListenerName, broker: BrokerRegistration) =
+    broker.fenced() || !broker.listeners().containsKey(listenerName.value()) || isReplicaInOfflineDir(broker, partition)
+
+  private def isReplicaInOfflineDir(broker: BrokerRegistration, partition: PartitionRegistration): Boolean =
+    !broker.hasOnlineDir(partition.directory(broker.id()))
+
   /**
    * Get the endpoint matching the provided listener if the broker is alive. Note that listeners can
    * be added dynamically, so a broker with a missing listener could be a transient error.
@@ -341,7 +361,12 @@ class KRaftMetadataCache(
     Option(_currentImage.cluster.broker(brokerId)).count(_.inControlledShutdown) == 1
   }
 
-  override def getAliveBrokers(): Iterable[BrokerMetadata] = KRaftMetadataCache.getAliveBrokers(_currentImage)
+  override def getAliveBrokers(): Iterable[BrokerMetadata] = getAliveBrokers(_currentImage)
+
+  private def getAliveBrokers(image: MetadataImage): Iterable[BrokerMetadata] = {
+    image.cluster().brokers().values().asScala.filterNot(_.fenced()).
+      map(b => new BrokerMetadata(b.id, b.rack))
+  }
 
   override def getAliveBrokerNode(brokerId: Int, listenerName: ListenerName): Option[Node] = {
     Option(_currentImage.cluster().broker(brokerId)).filterNot(_.fenced()).
@@ -416,6 +441,15 @@ class KRaftMetadataCache(
 
   override def getRandomAliveBrokerId: Option[Int] = {
     getRandomAliveBroker(_currentImage)
+  }
+
+  private def getRandomAliveBroker(image: MetadataImage): Option[Int] = {
+    val aliveBrokers = getAliveBrokers(image).toList
+    if (aliveBrokers.isEmpty) {
+      None
+    } else {
+      Some(aliveBrokers(ThreadLocalRandom.current().nextInt(aliveBrokers.size)).id)
+    }
   }
 
   def getAliveBrokerEpoch(brokerId: Int): Option[Long] = {
@@ -511,96 +545,3 @@ class KRaftMetadataCache(
   }
 }
 
-object KRaftMetadataCache {
-
-  def toCluster(clusterId: String, image: MetadataImage): Cluster = {
-    val brokerToNodes = new util.HashMap[Integer, java.util.List[Node]]
-    image.cluster().brokers()
-      .values().stream()
-      .filter(broker => !broker.fenced())
-      .forEach { broker => brokerToNodes.put(broker.id(), broker.nodes()) }
-
-    def getNodes(id: Int): java.util.List[Node] = brokerToNodes.get(id)
-
-    val partitionInfos = new util.ArrayList[PartitionInfo]
-    val internalTopics = new util.HashSet[String]
-    
-    def toArray(replicas: Array[Int]): Array[Node] = {
-      util.Arrays.stream(replicas)
-        .mapToObj(replica => getNodes(replica))
-        .flatMap(replica => replica.stream()).toArray(size => new Array[Node](size))
-    }
-    
-    val topicImages = image.topics().topicsByName().values()
-    if (topicImages != null) {
-      topicImages.forEach { topic =>
-        topic.partitions().forEach { (key, value) =>
-          val partitionId = key
-          val partition = value
-          val nodes = getNodes(partition.leader)
-          if (nodes != null) {
-            nodes.forEach(node => {
-              partitionInfos.add(new PartitionInfo(topic.name(),
-                partitionId,
-                node,
-                toArray(partition.replicas),
-                toArray(partition.isr),
-                getOfflineReplicas(image, partition).stream()
-                  .map(replica => getNodes(replica))
-                  .flatMap(replica => replica.stream()).toArray(size => new Array[Node](size))))
-            })
-            if (Topic.isInternal(topic.name())) {
-              internalTopics.add(topic.name())
-            }
-          }
-        }
-      }
-    }
-
-    val controllerNode = getNodes(getRandomAliveBroker(image).getOrElse(-1)) match {
-      case null => Node.noNode()
-      case nodes => nodes.get(0)
-    }
-    // Note: the constructor of Cluster does not allow us to reference unregistered nodes.
-    // So, for example, if partition foo-0 has replicas [1, 2] but broker 2 is not
-    // registered, we pass its replicas as [1, -1]. This doesn't make a lot of sense, but
-    // we are duplicating the behavior of ZkMetadataCache, for now.
-    new Cluster(clusterId, brokerToNodes.values().stream().flatMap(n => n.stream()).collect(util.stream.Collectors.toList()),
-      partitionInfos, Collections.emptySet(), internalTopics, controllerNode)
-  }
-
-  private def getOfflineReplicas(image: MetadataImage,
-                                 partition: PartitionRegistration,
-                                 listenerName: ListenerName = null): util.List[Integer] = {
-    val offlineReplicas = new util.ArrayList[Integer](0)
-    for (brokerId <- partition.replicas) {
-      Option(image.cluster().broker(brokerId)) match {
-        case None => offlineReplicas.add(brokerId)
-        case Some(broker) => if (listenerName == null || isReplicaOffline(partition, listenerName, broker)) {
-          offlineReplicas.add(brokerId)
-        }
-      }
-    }
-    offlineReplicas
-  }
-
-  private def isReplicaOffline(partition: PartitionRegistration, listenerName: ListenerName, broker: BrokerRegistration) =
-    broker.fenced() || !broker.listeners().containsKey(listenerName.value()) || isReplicaInOfflineDir(broker, partition)
-
-  private def isReplicaInOfflineDir(broker: BrokerRegistration, partition: PartitionRegistration): Boolean =
-    !broker.hasOnlineDir(partition.directory(broker.id()))
-
-  private def getRandomAliveBroker(image: MetadataImage): Option[Int] = {
-    val aliveBrokers = getAliveBrokers(image).toList
-    if (aliveBrokers.isEmpty) {
-      None
-    } else {
-      Some(aliveBrokers(ThreadLocalRandom.current().nextInt(aliveBrokers.size)).id)
-    }
-  }
-
-  private def getAliveBrokers(image: MetadataImage): Iterable[BrokerMetadata] = {
-    image.cluster().brokers().values().asScala.filterNot(_.fenced()).
-      map(b => new BrokerMetadata(b.id, b.rack))
-  }
-}
