@@ -889,7 +889,7 @@ def get_develocity_class_link(class_name: str, threshold_days: int, test_type: s
         threshold_days: Number of days to look back in search
         test_type: Type of test (e.g., "quarantinedTest", "test")
     """
-    base_url = "https://ge.apache.org/scans/tests"
+    base_url = "https://develocity.apache.org/scans/tests"
     params = {
         "search.rootProjectNames": "kafka",
         "search.tags": "github,trunk",
@@ -913,7 +913,7 @@ def get_develocity_method_link(class_name: str, method_name: str, threshold_days
         threshold_days: Number of days to look back in search
         test_type: Type of test (e.g., "quarantinedTest", "test")
     """
-    base_url = "https://ge.apache.org/scans/tests"
+    base_url = "https://develocity.apache.org/scans/tests"
     
     # Extract just the method name without the class prefix
     if '.' in method_name:
@@ -1186,7 +1186,7 @@ def main():
         exit(1)
 
     # Configuration
-    BASE_URL = "https://ge.apache.org"
+    BASE_URL = "https://develocity.apache.org"
     PROJECT = "kafka"
     QUARANTINE_THRESHOLD_DAYS = 7
     MIN_FAILURE_RATE = 0.1

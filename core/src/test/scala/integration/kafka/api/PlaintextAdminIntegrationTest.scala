@@ -28,7 +28,6 @@ import java.util.concurrent.{CountDownLatch, ExecutionException, TimeUnit}
 import java.util.{Collections, Optional, Properties}
 import java.{time, util}
 import kafka.integration.KafkaServerTestHarness
-import kafka.server.metadata.KRaftMetadataCache
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils._
 import kafka.utils.{Log4jController, TestInfoUtils, TestUtils}
@@ -208,10 +207,10 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     Admin.create(config)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   @Timeout(10)
-  def testDescribeUserScramCredentialsTimeout(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
+  def testDescribeUserScramCredentialsTimeout(quorum: String): Unit = {
     client = createInvalidAdminClient()
     try {
       // test describeUserScramCredentials(List<String> users, DescribeUserScramCredentialsOptions options)
@@ -3613,7 +3612,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
     def validateLogConfig(compressionType: String): Unit = {
       ensureConsistentKRaftMetadata()
-      val topicProps = brokers.head.metadataCache.asInstanceOf[KRaftMetadataCache].topicConfig(topic)
+      val topicProps = brokers.head.metadataCache.topicConfig(topic)
       val logConfig = LogConfig.fromProps(Collections.emptyMap[String, AnyRef], topicProps)
 
       assertEquals(compressionType, logConfig.originals.get(TopicConfig.COMPRESSION_TYPE_CONFIG))

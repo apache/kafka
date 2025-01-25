@@ -600,6 +600,11 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    */
   def hasOngoingTransaction(producerId: Long, producerEpoch: Short): Boolean = lock synchronized {
     val entry = producerStateManager.activeProducers.get(producerId)
+    // With transactions V2, if we see a future epoch, we are likely in the process of completing the previous transaction.
+    // Return early with ConcurrentTransactionsException until the transaction completes.
+    if (entry != null && entry.currentTxnFirstOffset.isPresent && entry.producerEpoch() < producerEpoch)
+      throw new ConcurrentTransactionsException("The producer attempted to update a transaction " +
+        "while another concurrent operation on the same transaction was ongoing.")
     entry != null && entry.currentTxnFirstOffset.isPresent && entry.producerEpoch() == producerEpoch
   }
 
@@ -791,7 +796,6 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
             validRecords = validateAndOffsetAssignResult.validatedRecords
             appendInfo.setMaxTimestamp(validateAndOffsetAssignResult.maxTimestampMs)
-            appendInfo.setShallowOffsetOfMaxTimestamp(validateAndOffsetAssignResult.shallowOffsetOfMaxTimestamp)
             appendInfo.setLastOffset(offset.value - 1)
             appendInfo.setRecordValidationStats(validateAndOffsetAssignResult.recordValidationStats)
             if (config.messageTimestampType == TimestampType.LOG_APPEND_TIME)
@@ -877,7 +881,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
               // will be cleaned up after the log directory is recovered. Note that the end offset of the
               // ProducerStateManager will not be updated and the last stable offset will not advance
               // if the append to the transaction index fails.
-              localLog.append(appendInfo.lastOffset, appendInfo.maxTimestamp, appendInfo.shallowOffsetOfMaxTimestamp, validRecords)
+              localLog.append(appendInfo.lastOffset, validRecords)
               updateHighWatermarkWithLogEndOffset()
 
               // update the producer state
@@ -1031,7 +1035,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
           // transaction is completed or aborted. We can guarantee the transaction coordinator knows about the transaction given step 1 and that the transaction is still
           // ongoing. If the transaction is expected to be ongoing, we will not set a VerificationGuard. If the transaction is aborted, hasOngoingTransaction is false and
           // requestVerificationGuard is the sentinel, so we will throw an error. A subsequent produce request (retry) should create verification state and return to phase 1.
-          if (batch.isTransactional && !hasOngoingTransaction(batch.producerId, batch.producerEpoch()) && batchMissingRequiredVerification(batch, requestVerificationGuard))
+          if (batch.isTransactional && !batch.isControlBatch && !hasOngoingTransaction(batch.producerId, batch.producerEpoch()) && batchMissingRequiredVerification(batch, requestVerificationGuard))
             throw new InvalidTxnStateException("Record was not part of an ongoing transaction")
         }
 
@@ -1052,7 +1056,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   }
 
   private def batchMissingRequiredVerification(batch: MutableRecordBatch, requestVerificationGuard: VerificationGuard): Boolean = {
-    producerStateManager.producerStateManagerConfig().transactionVerificationEnabled() && !batch.isControlBatch &&
+    producerStateManager.producerStateManagerConfig().transactionVerificationEnabled() &&
       !verificationGuard(batch.producerId).verify(requestVerificationGuard)
   }
 
@@ -1158,7 +1162,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     else
       OptionalInt.empty()
 
-    new LogAppendInfo(firstOffset, lastOffset, lastLeaderEpochOpt, maxTimestamp, shallowOffsetOfMaxTimestamp,
+    new LogAppendInfo(firstOffset, lastOffset, lastLeaderEpochOpt, maxTimestamp,
       RecordBatch.NO_TIMESTAMP, logStartOffset, RecordValidationStats.EMPTY, sourceCompression,
       validBytesCount, lastOffsetOfFirstBatch, Collections.emptyList[RecordError], LeaderHwChange.NONE)
   }
@@ -1325,51 +1329,6 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     val segmentsCopy = logSegments.asScala.toBuffer
     val targetSeg = segmentsCopy.find(_.largestTimestamp >= targetTimestamp)
     targetSeg.flatMap(_.findOffsetByTimestamp(targetTimestamp, startOffset).toScala)
-  }
-
-  def legacyFetchOffsetsBefore(timestamp: Long, maxNumOffsets: Int): Seq[Long] = {
-    // Cache to avoid race conditions. `toBuffer` is faster than most alternatives and provides
-    // constant time access while being safe to use with concurrent collections unlike `toArray`.
-    val allSegments = logSegments.asScala.toBuffer
-    val lastSegmentHasSize = allSegments.last.size > 0
-
-    val offsetTimeArray =
-      if (lastSegmentHasSize)
-        new Array[(Long, Long)](allSegments.length + 1)
-      else
-        new Array[(Long, Long)](allSegments.length)
-
-    for (i <- allSegments.indices)
-      offsetTimeArray(i) = (math.max(allSegments(i).baseOffset, logStartOffset), allSegments(i).lastModified)
-    if (lastSegmentHasSize)
-      offsetTimeArray(allSegments.length) = (logEndOffset, time.milliseconds)
-
-    var startIndex = -1
-    timestamp match {
-      case ListOffsetsRequest.LATEST_TIMESTAMP =>
-        startIndex = offsetTimeArray.length - 1
-      case ListOffsetsRequest.EARLIEST_TIMESTAMP =>
-        startIndex = 0
-      case _ =>
-        var isFound = false
-        debug("Offset time array = " + offsetTimeArray.foreach(o => "%d, %d".format(o._1, o._2)))
-        startIndex = offsetTimeArray.length - 1
-        while (startIndex >= 0 && !isFound) {
-          if (offsetTimeArray(startIndex)._2 <= timestamp)
-            isFound = true
-          else
-            startIndex -= 1
-        }
-    }
-
-    val retSize = maxNumOffsets.min(startIndex + 1)
-    val ret = new Array[Long](retSize)
-    for (j <- 0 until retSize) {
-      ret(j) = offsetTimeArray(startIndex)._1
-      startIndex -= 1
-    }
-    // ensure that the returned seq is in descending order of offsets
-    ret.toSeq.sortBy(-_)
   }
 
   /**

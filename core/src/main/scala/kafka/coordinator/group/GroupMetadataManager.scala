@@ -43,7 +43,7 @@ import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition}
 import org.apache.kafka.coordinator.group.{OffsetAndMetadata, OffsetConfig}
 import org.apache.kafka.coordinator.group.generated.{CoordinatorRecordType, GroupMetadataValue, LegacyOffsetCommitKey, OffsetCommitKey, OffsetCommitValue, GroupMetadataKey => GroupMetadataKeyData}
-import org.apache.kafka.server.common.{MetadataVersion, RequestLocal}
+import org.apache.kafka.server.common.RequestLocal
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.storage.log.FetchIsolation
 import org.apache.kafka.server.util.KafkaScheduler
@@ -54,7 +54,6 @@ import scala.collection.mutable.ArrayBuffer
 import scala.jdk.CollectionConverters._
 
 class GroupMetadataManager(brokerId: Int,
-                           interBrokerProtocolVersion: MetadataVersion,
                            config: OffsetConfig,
                            val replicaManager: ReplicaManager,
                            time: Time,
@@ -1061,11 +1060,10 @@ object GroupMetadataManager {
    * @return key for offset commit message
    */
   def offsetCommitKey(groupId: String, topicPartition: TopicPartition): Array[Byte] = {
-    MessageUtil.toCoordinatorTypePrefixedBytes(CoordinatorRecordType.OFFSET_COMMIT.id(),
-      new OffsetCommitKey()
-        .setGroup(groupId)
-        .setTopic(topicPartition.topic)
-        .setPartition(topicPartition.partition))
+    MessageUtil.toCoordinatorTypePrefixedBytes(new OffsetCommitKey()
+      .setGroup(groupId)
+      .setTopic(topicPartition.topic)
+      .setPartition(topicPartition.partition))
   }
 
   /**
@@ -1075,9 +1073,8 @@ object GroupMetadataManager {
    * @return key bytes for group metadata message
    */
   def groupMetadataKey(groupId: String): Array[Byte] = {
-    MessageUtil.toCoordinatorTypePrefixedBytes(CoordinatorRecordType.GROUP_METADATA.id(),
-      new GroupMetadataKeyData()
-        .setGroup(groupId))
+    MessageUtil.toCoordinatorTypePrefixedBytes(new GroupMetadataKeyData()
+      .setGroup(groupId))
   }
 
   /**
