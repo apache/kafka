@@ -237,24 +237,24 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
     @Override
-    public <VR> KStream<K, VR> mapValues(final ValueMapper<? super V, ? extends VR> valueMapper) {
+    public <VOut> KStream<K, VOut> mapValues(final ValueMapper<? super V, ? extends VOut> valueMapper) {
         return mapValues(withKey(valueMapper));
     }
 
     @Override
-    public <VR> KStream<K, VR> mapValues(final ValueMapper<? super V, ? extends VR> mapper,
-                                         final Named named) {
+    public <VOut> KStream<K, VOut> mapValues(final ValueMapper<? super V, ? extends VOut> mapper,
+                                             final Named named) {
         return mapValues(withKey(mapper), named);
     }
 
     @Override
-    public <VR> KStream<K, VR> mapValues(final ValueMapperWithKey<? super K, ? super V, ? extends VR> valueMapperWithKey) {
+    public <VOut> KStream<K, VOut> mapValues(final ValueMapperWithKey<? super K, ? super V, ? extends VOut> valueMapperWithKey) {
         return mapValues(valueMapperWithKey, NamedInternal.empty());
     }
 
     @Override
-    public <VR> KStream<K, VR> mapValues(final ValueMapperWithKey<? super K, ? super V, ? extends VR> valueMapperWithKey,
-                                         final Named named) {
+    public <VOut> KStream<K, VOut> mapValues(final ValueMapperWithKey<? super K, ? super V, ? extends VOut> valueMapperWithKey,
+                                             final Named named) {
         Objects.requireNonNull(valueMapperWithKey, "valueMapperWithKey can't be null");
         Objects.requireNonNull(named, "named can't be null");
 
@@ -279,13 +279,13 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
     @Override
-    public <KR, VR> KStream<KR, VR> map(final KeyValueMapper<? super K, ? super V, ? extends KeyValue<? extends KR, ? extends VR>> mapper) {
+    public <KOut, VOut> KStream<KOut, VOut> map(final KeyValueMapper<? super K, ? super V, ? extends KeyValue<? extends KOut, ? extends VOut>> mapper) {
         return map(mapper, NamedInternal.empty());
     }
 
     @Override
-    public <KR, VR> KStream<KR, VR> map(final KeyValueMapper<? super K, ? super V, ? extends KeyValue<? extends KR, ? extends VR>> mapper,
-                                        final Named named) {
+    public <KOut, VOut> KStream<KOut, VOut> map(final KeyValueMapper<? super K, ? super V, ? extends KeyValue<? extends KOut, ? extends VOut>> mapper,
+                                                final Named named) {
         Objects.requireNonNull(mapper, "mapper can't be null");
         Objects.requireNonNull(named, "named can't be null");
 
