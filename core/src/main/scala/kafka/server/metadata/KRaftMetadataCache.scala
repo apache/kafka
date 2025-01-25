@@ -58,14 +58,6 @@ class KRaftMetadataCache(
   // image values.
   @volatile private var _currentImage: MetadataImage = MetadataImage.EMPTY
 
-  // This method is the main hotspot when it comes to the performance of metadata requests,
-  // we should be careful about adding additional logic here.
-  private def maybeFilterAliveReplicas(image: MetadataImage,
-                                       brokers: Array[Int],
-                                       listenerName: ListenerName): java.util.List[Integer] = {
-      Replicas.toList(brokers)
-  }
-
   def currentImage(): MetadataImage = _currentImage
 
   // If errorUnavailableListeners=true, return LISTENER_NOT_FOUND if listener is missing on the broker.
@@ -77,8 +69,8 @@ class KRaftMetadataCache(
       case Some(topic) => Some(topic.partitions().entrySet().asScala.map { entry =>
         val partitionId = entry.getKey
         val partition = entry.getValue
-        val filteredReplicas = maybeFilterAliveReplicas(image, partition.replicas, listenerName)
-        val filteredIsr = maybeFilterAliveReplicas(image, partition.isr, listenerName)
+        val replicas = Replicas.toList(partition.replicas)
+        val isr = Replicas.toList(partition.isr)
         val offlineReplicas = getOfflineReplicas(image, partition, listenerName)
         val maybeLeader = getAliveEndpoint(image, partition.leader, listenerName)
         maybeLeader match {
@@ -96,17 +88,17 @@ class KRaftMetadataCache(
               .setPartitionIndex(partitionId)
               .setLeaderId(MetadataResponse.NO_LEADER_ID)
               .setLeaderEpoch(partition.leaderEpoch)
-              .setReplicaNodes(filteredReplicas)
-              .setIsrNodes(filteredIsr)
+              .setReplicaNodes(replicas)
+              .setIsrNodes(isr)
               .setOfflineReplicas(offlineReplicas)
           case Some(leader) =>
-            val error = if (filteredReplicas.size < partition.replicas.length) {
+            val error = if (replicas.size < partition.replicas.length) {
               debug(s"Error while fetching metadata for $topicName-$partitionId: replica information not available for " +
-                s"following brokers ${partition.replicas.filterNot(filteredReplicas.contains).mkString(",")}")
+                s"following brokers ${partition.replicas.filterNot(replicas.contains).mkString(",")}")
               Errors.REPLICA_NOT_AVAILABLE
-            } else if (filteredIsr.size < partition.isr.length) {
+            } else if (isr.size < partition.isr.length) {
               debug(s"Error while fetching metadata for $topicName-$partitionId: in sync replica information not available for " +
-                s"following brokers ${partition.isr.filterNot(filteredIsr.contains).mkString(",")}")
+                s"following brokers ${partition.isr.filterNot(isr.contains).mkString(",")}")
               Errors.REPLICA_NOT_AVAILABLE
             } else {
               Errors.NONE
@@ -117,8 +109,8 @@ class KRaftMetadataCache(
               .setPartitionIndex(partitionId)
               .setLeaderId(leader.id())
               .setLeaderEpoch(partition.leaderEpoch)
-              .setReplicaNodes(filteredReplicas)
-              .setIsrNodes(filteredIsr)
+              .setReplicaNodes(replicas)
+              .setIsrNodes(isr)
               .setOfflineReplicas(offlineReplicas)
         }
       }.iterator)
@@ -154,8 +146,8 @@ class KRaftMetadataCache(
         for (partitionId <- startIndex until upperIndex) {
           topic.partitions().get(partitionId) match {
             case partition : PartitionRegistration => {
-              val filteredReplicas = maybeFilterAliveReplicas(image, partition.replicas, listenerName)
-              val filteredIsr = maybeFilterAliveReplicas(image, partition.isr, listenerName)
+              val replicas = Replicas.toList(partition.replicas)
+              val isr = Replicas.toList(partition.isr)
               val offlineReplicas = getOfflineReplicas(image, partition, listenerName)
               val maybeLeader = getAliveEndpoint(image, partition.leader, listenerName)
               maybeLeader match {
@@ -164,8 +156,8 @@ class KRaftMetadataCache(
                     .setPartitionIndex(partitionId)
                     .setLeaderId(MetadataResponse.NO_LEADER_ID)
                     .setLeaderEpoch(partition.leaderEpoch)
-                    .setReplicaNodes(filteredReplicas)
-                    .setIsrNodes(filteredIsr)
+                    .setReplicaNodes(replicas)
+                    .setIsrNodes(isr)
                     .setOfflineReplicas(offlineReplicas)
                     .setEligibleLeaderReplicas(Replicas.toList(partition.elr))
                     .setLastKnownElr(Replicas.toList(partition.lastKnownElr)))
@@ -174,8 +166,8 @@ class KRaftMetadataCache(
                     .setPartitionIndex(partitionId)
                     .setLeaderId(leader.id())
                     .setLeaderEpoch(partition.leaderEpoch)
-                    .setReplicaNodes(filteredReplicas)
-                    .setIsrNodes(filteredIsr)
+                    .setReplicaNodes(replicas)
+                    .setIsrNodes(isr)
                     .setOfflineReplicas(offlineReplicas)
                     .setEligibleLeaderReplicas(Replicas.toList(partition.elr))
                     .setLastKnownElr(Replicas.toList(partition.lastKnownElr)))
