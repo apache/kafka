@@ -24,8 +24,10 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.ConfigEntry;
+import org.apache.kafka.clients.admin.FeatureUpdate;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.TopicDescription;
+import org.apache.kafka.clients.admin.UpdateFeaturesOptions;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -38,8 +40,10 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
 import org.apache.kafka.storage.internals.checkpoint.CleanShutdownFileHandler;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -57,6 +61,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.function.BiFunction;
@@ -75,12 +80,11 @@ public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarnes
         List<Properties> brokerConfigs = new ArrayList<>();
         brokerConfigs.addAll(scala.collection.JavaConverters.seqAsJavaList(TestUtils.createBrokerConfigs(
             5,
-            zkConnectOrNull(),
             true,
             true,
-            scala.Option.empty(),
-            scala.Option.empty(),
-            scala.Option.empty(),
+            scala.Option.<SecurityProtocol>empty(),
+            scala.Option.<File>empty(),
+            scala.Option.<Properties>empty(),
             true,
             false,
             false,
@@ -95,17 +99,9 @@ public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarnes
         )));
         List<KafkaConfig> configs = new ArrayList<>();
         for (Properties props : brokerConfigs) {
-            props.put(KafkaConfig.ElrEnabledProp(), "true");
             configs.add(KafkaConfig.fromProps(props));
         }
         return JavaConverters.asScalaBuffer(configs).toSeq();
-    }
-
-    @Override
-    public Seq<Properties> kraftControllerConfigs() {
-        Properties properties = new Properties();
-        properties.put(KafkaConfig.ElrEnabledProp(), "true");
-        return new scala.collection.mutable.ListBuffer<Properties>().addOne(properties);
     }
 
     @BeforeEach
@@ -116,7 +112,12 @@ public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarnes
         bootstrapServer = bootstrapServers(listenerName());
         props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, bootstrapServer);
         adminClient = Admin.create(props);
-        testTopicName = String.format("%s-%s", info.getTestMethod().get().getName(), TestUtils.randomString(10));
+        adminClient.updateFeatures(
+            Map.of(EligibleLeaderReplicasVersion.FEATURE_NAME,
+                new FeatureUpdate(EligibleLeaderReplicasVersion.ELRV_1.featureLevel(), FeatureUpdate.UpgradeType.UPGRADE)),
+            new UpdateFeaturesOptions()
+        );
+        testTopicName = String.format("%s-%s", info.getTestMethod().get().getName(), "ELR-test");
     }
 
     @AfterEach
@@ -153,9 +154,11 @@ public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarnes
             killBroker(initialReplicas.get(1).id());
             killBroker(initialReplicas.get(2).id());
 
+            System.out.println("----test 1");
             waitForIsrAndElr((isrSize, elrSize) -> {
                 return isrSize == 1 && elrSize == 2;
             });
+            System.out.println("----test 2");
 
             topicPartitionInfo = adminClient.describeTopics(Collections.singletonList(testTopicName))
                 .allTopicNames().get().get(testTopicName).partitions().get(0);
@@ -166,12 +169,13 @@ public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarnes
             waitForIsrAndElr((isrSize, elrSize) -> {
                 return isrSize == 0 && elrSize == 3;
             });
+            System.out.println("----test 3");
 
             topicPartitionInfo = adminClient.describeTopics(Collections.singletonList(testTopicName))
                 .allTopicNames().get().get(testTopicName).partitions().get(0);
             assertEquals(1, topicPartitionInfo.lastKnownElr().size(), topicPartitionInfo.toString());
             int expectLastKnownLeader = initialReplicas.get(3).id();
-            assertEquals(expectLastKnownLeader, topicPartitionInfo.lastKnownElr().getFirst().id(), topicPartitionInfo.toString());
+            assertEquals(expectLastKnownLeader, topicPartitionInfo.lastKnownElr().get(0).id(), topicPartitionInfo.toString());
 
             // At this point, all the replicas are failed and the last know leader is No.3 and 3 members in the ELR.
             // Restart one broker of the ELR and it should be the leader.
@@ -179,10 +183,12 @@ public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarnes
             int expectLeader = topicPartitionInfo.elr().stream()
                 .filter(node -> node.id() != expectLastKnownLeader).collect(Collectors.toList()).get(0).id();
 
+            System.out.println("----test 3.5=" + expectLeader + "  " + topicPartitionInfo.lastKnownElr());
             startBroker(expectLeader);
             waitForIsrAndElr((isrSize, elrSize) -> {
                 return isrSize == 1 && elrSize == 2;
             });
+            System.out.println("----test 4");
 
             topicPartitionInfo = adminClient.describeTopics(Collections.singletonList(testTopicName))
                 .allTopicNames().get().get(testTopicName).partitions().get(0);
@@ -196,6 +202,7 @@ public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarnes
             waitForIsrAndElr((isrSize, elrSize) -> {
                 return isrSize == 3 && elrSize == 0;
             });
+            System.out.println("----test 5");
 
             topicPartitionInfo = adminClient.describeTopics(Collections.singletonList(testTopicName))
                 .allTopicNames().get().get(testTopicName).partitions().get(0);
@@ -421,6 +428,7 @@ public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarnes
                     TopicDescription topicDescription = adminClient.describeTopics(Collections.singletonList(testTopicName))
                             .allTopicNames().get().get(testTopicName);
                     TopicPartitionInfo partition = topicDescription.partitions().get(0);
+                    System.out.println("---" + partition);
                     if (!isIsrAndElrSizeSatisfied.apply(partition.isr().size(), partition.elr().size())) return false;
                 } catch (Exception e) {
                     return false;
