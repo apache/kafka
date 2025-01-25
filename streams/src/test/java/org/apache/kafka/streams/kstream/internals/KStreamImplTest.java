@@ -557,7 +557,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.join(null, MockValueJoiner.TOSTRING_JOINER, JoinWindows.of(ofMillis(10))));
-        assertThat(exception.getMessage(), equalTo("otherStream can't be null"));
+        assertThat(exception.getMessage(), equalTo("otherStream cannot be null"));
     }
 
     @SuppressWarnings("deprecation")
@@ -570,7 +570,7 @@ public class KStreamImplTest {
                 MockValueJoiner.TOSTRING_JOINER,
                 JoinWindows.of(ofMillis(10)),
                 StreamJoined.as("name")));
-        assertThat(exception.getMessage(), equalTo("otherStream can't be null"));
+        assertThat(exception.getMessage(), equalTo("otherStream cannot be null"));
     }
 
     @SuppressWarnings("deprecation")
@@ -588,7 +588,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.join(testStream, (ValueJoinerWithKey<? super String, ? super String, ? super String, ?>) null, JoinWindows.of(ofMillis(10))));
-        assertThat(exception.getMessage(), equalTo("joiner can't be null"));
+        assertThat(exception.getMessage(), equalTo("joiner cannot be null"));
     }
 
     @SuppressWarnings("deprecation")
@@ -614,7 +614,7 @@ public class KStreamImplTest {
                     (ValueJoinerWithKey<? super String, ? super String, ? super String, ?>) null,
                     JoinWindows.of(ofMillis(10)),
                     StreamJoined.as("name")));
-        assertThat(exception.getMessage(), equalTo("joiner can't be null"));
+        assertThat(exception.getMessage(), equalTo("joiner cannot be null"));
     }
 
     @Test
@@ -622,7 +622,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.join(testStream, MockValueJoiner.TOSTRING_JOINER, null));
-        assertThat(exception.getMessage(), equalTo("windows can't be null"));
+        assertThat(exception.getMessage(), equalTo("windows cannot be null"));
     }
 
     @Test
@@ -634,7 +634,7 @@ public class KStreamImplTest {
                 MockValueJoiner.TOSTRING_JOINER,
                 null,
                 StreamJoined.as("name")));
-        assertThat(exception.getMessage(), equalTo("windows can't be null"));
+        assertThat(exception.getMessage(), equalTo("windows cannot be null"));
     }
 
     @SuppressWarnings("deprecation")
@@ -647,7 +647,7 @@ public class KStreamImplTest {
                 MockValueJoiner.TOSTRING_JOINER,
                 JoinWindows.of(ofMillis(10)),
                 null));
-        assertThat(exception.getMessage(), equalTo("streamJoined can't be null"));
+        assertThat(exception.getMessage(), equalTo("streamJoined cannot be null"));
     }
 
     @SuppressWarnings("deprecation")
@@ -656,7 +656,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.leftJoin(null, MockValueJoiner.TOSTRING_JOINER, JoinWindows.of(ofMillis(10))));
-        assertThat(exception.getMessage(), equalTo("otherStream can't be null"));
+        assertThat(exception.getMessage(), equalTo("otherStream cannot be null"));
     }
 
     @SuppressWarnings("deprecation")
@@ -669,7 +669,7 @@ public class KStreamImplTest {
                 MockValueJoiner.TOSTRING_JOINER,
                 JoinWindows.of(ofMillis(10)),
                 StreamJoined.as("name")));
-        assertThat(exception.getMessage(), equalTo("otherStream can't be null"));
+        assertThat(exception.getMessage(), equalTo("otherStream cannot be null"));
     }
 
     @SuppressWarnings("deprecation")
@@ -687,7 +687,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.leftJoin(testStream, (ValueJoinerWithKey<? super String, ? super String, ? super String, ?>) null, JoinWindows.of(ofMillis(10))));
-        assertThat(exception.getMessage(), equalTo("joiner can't be null"));
+        assertThat(exception.getMessage(), equalTo("joiner cannot be null"));
     }
 
     @SuppressWarnings("deprecation")
@@ -713,7 +713,7 @@ public class KStreamImplTest {
                     (ValueJoinerWithKey<? super String, ? super String, ? super String, ?>) null,
                     JoinWindows.of(ofMillis(10)),
                     StreamJoined.as("name")));
-        assertThat(exception.getMessage(), equalTo("joiner can't be null"));
+        assertThat(exception.getMessage(), equalTo("joiner cannot be null"));
     }
 
 
@@ -722,7 +722,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.leftJoin(testStream, MockValueJoiner.TOSTRING_JOINER, null));
-        assertThat(exception.getMessage(), equalTo("windows can't be null"));
+        assertThat(exception.getMessage(), equalTo("windows cannot be null"));
     }
 
     @Test
@@ -734,7 +734,7 @@ public class KStreamImplTest {
                 MockValueJoiner.TOSTRING_JOINER,
                 null,
                 StreamJoined.as("name")));
-        assertThat(exception.getMessage(), equalTo("windows can't be null"));
+        assertThat(exception.getMessage(), equalTo("windows cannot be null"));
     }
 
     @SuppressWarnings("deprecation")
@@ -747,7 +747,7 @@ public class KStreamImplTest {
                 MockValueJoiner.TOSTRING_JOINER,
                 JoinWindows.of(ofMillis(10)),
                 null));
-        assertThat(exception.getMessage(), equalTo("streamJoined can't be null"));
+        assertThat(exception.getMessage(), equalTo("streamJoined cannot be null"));
     }
 
     @SuppressWarnings("deprecation")
@@ -756,7 +756,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.outerJoin(null, MockValueJoiner.TOSTRING_JOINER, JoinWindows.of(ofMillis(10))));
-        assertThat(exception.getMessage(), equalTo("otherStream can't be null"));
+        assertThat(exception.getMessage(), equalTo("otherStream cannot be null"));
     }
 
     @SuppressWarnings("deprecation")
@@ -769,7 +769,7 @@ public class KStreamImplTest {
                 MockValueJoiner.TOSTRING_JOINER,
                 JoinWindows.of(ofMillis(10)),
                 StreamJoined.as("name")));
-        assertThat(exception.getMessage(), equalTo("otherStream can't be null"));
+        assertThat(exception.getMessage(), equalTo("otherStream cannot be null"));
     }
 
     @SuppressWarnings("deprecation")
@@ -787,7 +787,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.outerJoin(testStream, (ValueJoinerWithKey<? super String, ? super String, ? super String, ?>) null, JoinWindows.of(ofMillis(10))));
-        assertThat(exception.getMessage(), equalTo("joiner can't be null"));
+        assertThat(exception.getMessage(), equalTo("joiner cannot be null"));
     }
 
     @SuppressWarnings("deprecation")
@@ -813,7 +813,7 @@ public class KStreamImplTest {
                     (ValueJoinerWithKey<? super String, ? super String, ? super String, ?>) null,
                     JoinWindows.of(ofMillis(10)),
                     StreamJoined.as("name")));
-        assertThat(exception.getMessage(), equalTo("joiner can't be null"));
+        assertThat(exception.getMessage(), equalTo("joiner cannot be null"));
     }
 
     @Test
@@ -821,7 +821,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.outerJoin(testStream, MockValueJoiner.TOSTRING_JOINER, null));
-        assertThat(exception.getMessage(), equalTo("windows can't be null"));
+        assertThat(exception.getMessage(), equalTo("windows cannot be null"));
     }
 
     @Test
@@ -833,7 +833,7 @@ public class KStreamImplTest {
                 MockValueJoiner.TOSTRING_JOINER,
                 null,
                 StreamJoined.as("name")));
-        assertThat(exception.getMessage(), equalTo("windows can't be null"));
+        assertThat(exception.getMessage(), equalTo("windows cannot be null"));
     }
 
     @SuppressWarnings("deprecation")
@@ -846,7 +846,7 @@ public class KStreamImplTest {
                 MockValueJoiner.TOSTRING_JOINER,
                 JoinWindows.of(ofMillis(10)),
                 null));
-        assertThat(exception.getMessage(), equalTo("streamJoined can't be null"));
+        assertThat(exception.getMessage(), equalTo("streamJoined cannot be null"));
     }
 
     @Test
