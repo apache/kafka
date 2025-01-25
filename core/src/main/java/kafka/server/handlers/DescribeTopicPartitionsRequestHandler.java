@@ -20,7 +20,7 @@ package kafka.server.handlers;
 import kafka.network.RequestChannel;
 import kafka.server.AuthHelper;
 import kafka.server.KafkaConfig;
-import kafka.server.metadata.KRaftMetadataCache;
+import kafka.server.MetadataCache;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InvalidRequestException;
@@ -44,12 +44,12 @@ import static org.apache.kafka.common.acl.AclOperation.DESCRIBE;
 import static org.apache.kafka.common.resource.ResourceType.TOPIC;
 
 public class DescribeTopicPartitionsRequestHandler {
-    KRaftMetadataCache metadataCache;
+    MetadataCache metadataCache;
     AuthHelper authHelper;
     KafkaConfig config;
 
     public DescribeTopicPartitionsRequestHandler(
-        KRaftMetadataCache metadataCache,
+        MetadataCache metadataCache,
         AuthHelper authHelper,
         KafkaConfig config
     ) {
@@ -104,7 +104,7 @@ public class DescribeTopicPartitionsRequestHandler {
             return isAuthorized;
         });
 
-        DescribeTopicPartitionsResponseData response = metadataCache.getTopicMetadataForDescribeTopicResponse(
+        DescribeTopicPartitionsResponseData response = metadataCache.describeTopicResponse(
             CollectionConverters.asScala(authorizedTopicsStream.iterator()),
             abstractRequest.context().listenerName,
             (String topicName) -> topicName.equals(cursorTopicName) ? cursor.partitionIndex() : 0,

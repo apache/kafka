@@ -25,18 +25,17 @@ import org.apache.kafka.clients.producer.{Producer, ProducerConfig, ProducerReco
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.RecordTooLargeException
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterFeature, ClusterInstance, ClusterTest, ClusterTestDefaults, ClusterTestExtensions, ClusterTests, Type}
+import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterFeature, ClusterTest, ClusterTestDefaults, ClusterTests, Type}
 import org.apache.kafka.common.message.InitProducerIdRequestData
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.{InitProducerIdRequest, InitProducerIdResponse}
-import org.apache.kafka.common.test.TestUtils
+import org.apache.kafka.common.test.{ClusterInstance, TestUtils}
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.server.common.{Feature, MetadataVersion}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertInstanceOf, assertThrows, assertTrue}
-import org.junit.jupiter.api.extension.ExtendWith
 
 import java.time.Duration
 import java.util
@@ -53,7 +52,6 @@ import scala.jdk.CollectionConverters._
   new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
   new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
 ))
-@ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 class ProducerIntegrationTest {
 
   @ClusterTests(Array(
