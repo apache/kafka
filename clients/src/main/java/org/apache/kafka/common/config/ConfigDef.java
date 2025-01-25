@@ -80,7 +80,7 @@ import java.util.stream.Collectors;
  */
 public class ConfigDef {
 
-    private static final Pattern COMMA_WITH_WHITESPACE = Pattern.compile("\\s*,\\s*");
+    private static final Pattern COMMA_WITH_WHITESPACE_OR_ONLY_WHITESPACE = Pattern.compile("\\s*,\\s*|\\s+");
 
     /**
      * A unique Java object which represents the lack of a default value.
@@ -759,7 +759,7 @@ public class ConfigDef {
                         if (trimmed.isEmpty())
                             return Collections.emptyList();
                         else
-                            return Arrays.asList(COMMA_WITH_WHITESPACE.split(trimmed, -1));
+                            return Arrays.asList(COMMA_WITH_WHITESPACE_OR_ONLY_WHITESPACE.split(trimmed, -1));
                     else
                         throw new ConfigException(name, value, "Expected a comma separated list.");
                 case CLASS:
