@@ -44,7 +44,6 @@ import java.util.Map;
 public abstract class AbstractKafkaConfig extends AbstractConfig {
     public static final ConfigDef CONFIG_DEF = Utils.mergeConfigs(List.of(
         RemoteLogManagerConfig.configDef(),
-        ZkConfigs.CONFIG_DEF,
         ServerConfigs.CONFIG_DEF,
         KRaftConfigs.CONFIG_DEF,
         SocketServerConfigs.CONFIG_DEF,
