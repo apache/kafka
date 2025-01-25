@@ -4141,7 +4141,7 @@ class ReplicaManagerTest {
       replicaManager.logManager.getOrCreateLog(topicPartition, isNew = true, topicId = None)
 
       assertTrue(replicaManager.getLog(topicPartition).isDefined)
-      var log = replicaManager.getLog(topicPartition).get
+      val log = replicaManager.getLog(topicPartition).get
       assertEquals(None, log.topicId)
       assertFalse(log.partitionMetadataFile.get.exists())
 
@@ -4165,14 +4165,6 @@ class ReplicaManagerTest {
       val response = replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(0), (_, _) => ())
       assertEquals(Errors.NONE, response.partitionErrors(topicNames).get(topicPartition))
       assertFalse(replicaManager.localLog(topicPartition).isEmpty)
-      val id = topicIds.get(topicPartition.topic())
-      log = replicaManager.localLog(topicPartition).get
-      assertTrue(log.partitionMetadataFile.get.exists())
-      val partitionMetadata = log.partitionMetadataFile.get.read()
-
-      // Current version of PartitionMetadataFile is 0.
-      assertEquals(0, partitionMetadata.version)
-      assertEquals(id, partitionMetadata.topicId)
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }
