@@ -129,7 +129,7 @@ public interface KStream<K, V> {
      * @param mapper
      *        a {@link KeyValueMapper} that computes a new key for each input record
      *
-     * @param <KOut> the new key type of the result stream
+     * @param <KOut> the new key type of the result {@code KStream}
      *
      * @return A {@code KStream} that contains records with new key (possibly of a different type) and unmodified value.
      *
