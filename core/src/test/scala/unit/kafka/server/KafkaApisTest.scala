@@ -212,18 +212,13 @@ class KafkaApisTest extends Logging {
   private def setupFeatures(featureVersions: Seq[FeatureVersion]): Unit = {
     if (featureVersions.isEmpty) return
 
-    metadataCache match {
-      case cache: KRaftMetadataCache =>
-        when(cache.features()).thenReturn {
-          new FinalizedFeatures(
-            MetadataVersion.latestTesting,
-            featureVersions.map { featureVersion =>
-              featureVersion.featureName -> featureVersion.featureLevel.asInstanceOf[java.lang.Short]
-            }.toMap.asJava,
-            0)
-        }
-
-      case _ => throw new IllegalStateException("Test must set an instance of KRaftMetadataCache")
+    when(metadataCache.features()).thenReturn {
+      new FinalizedFeatures(
+        MetadataVersion.latestTesting,
+        featureVersions.map { featureVersion =>
+          featureVersion.featureName -> featureVersion.featureLevel.asInstanceOf[java.lang.Short]
+        }.toMap.asJava,
+        0)
     }
   }
 
