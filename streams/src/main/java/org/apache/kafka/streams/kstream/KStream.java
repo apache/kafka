@@ -661,7 +661,7 @@ public interface KStream<K, V> {
                                       final Named named);
 
     /**
-     * Print the records of this stream using the options provided by {@link Printed}.
+     * Print the records of this {@code KStream} using the options provided by {@link Printed}.
      * Note that this is mainly for debugging/testing purposes, and it will try to flush on each record print.
      * It <em>SHOULD NOT</em> be used for production usage if performance requirements are concerned.
      *
@@ -670,7 +670,7 @@ public interface KStream<K, V> {
     void print(final Printed<K, V> printed);
 
     /**
-     * Perform an action on each record of this stream.
+     * Perform an action on each record of this {@code KStream}.
      * This is a stateless record-by-record operation (cf. {@link #process(ProcessorSupplier, String...)} for
      * stateful record processing).
      *
@@ -693,7 +693,7 @@ public interface KStream<K, V> {
     void foreach(final ForeachAction<? super K, ? super V> action, final Named named);
 
     /**
-     * Perform an action on each record of this stream.
+     * Perform an action on each record of this {@code KStream}.
      * This is a stateless record-by-record operation (cf. {@link #process(ProcessorSupplier, String...)} for
      * stateful record processing).
      *
@@ -718,14 +718,14 @@ public interface KStream<K, V> {
     KStream<K, V> peek(final ForeachAction<? super K, ? super V> action, final Named named);
 
     /**
-     * Split this stream into different branches. The returned {@link BranchedKStream} instance can be used for routing
-     * the records to different branches depending on evaluation against the supplied predicates.
+     * Split this {@code KStream} into different branches. The returned {@link BranchedKStream} instance can be used
+     * for routing the records to different branches depending on evaluation against the supplied predicates.
      * Records are evaluated against the predicates in the order they are provided with the first matching predicate
      * accepting the record. Branching is a stateless record-by-record operation.
      * See {@link BranchedKStream} for a detailed description and usage example.
      *
-     * <p>Splitting a stream ensures, that each input record is sent to at most one result stream.
-     * There is no operator for broadcasting/multicasting records into multiple result streams.
+     * <p>Splitting a {@code KStream} guarantees, that each input record is sent to at most one result {@code KStream}.
+     * There is no operator for broadcasting/multicasting records into multiple result {@code KStream}.
      * If you want to broadcast records, you can apply multiple downstream operators to the same {@code KStream}
      * instance:
      * <pre>{@code
@@ -734,7 +734,7 @@ public interface KStream<K, V> {
      * KStream<...> stream2 = stream.mapValue(...);
      * KStream<...> stream3 = stream.flatMap(...);
      * }</pre>
-     * Multicasting can be achieved with braodcasting into multiple filter operations:
+     * Multicasting can be achieved with broadcasting into multiple filter operations:
      * <pre>{@code
      * // Multicasting: every record of `stream` is sent to all three filters, and thus, may be part of
      * // multiple result streams, `stream1`, `stream2`, and/or `stream3`
@@ -757,7 +757,7 @@ public interface KStream<K, V> {
     BranchedKStream<K, V> split(final Named named);
 
     /**
-     * Merge this stream and the given stream.
+     * Merge this {@code KStream} and the given {@code KStream}.
      *
      * <p>There is no ordering guarantee between records from this {@code KStream} and records from
      * the provided {@code KStream} in the merged stream.
