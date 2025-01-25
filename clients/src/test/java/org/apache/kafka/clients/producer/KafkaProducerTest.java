@@ -95,6 +95,7 @@ import org.apache.kafka.test.MockSerializer;
 import org.apache.kafka.test.TestUtils;
 
 import org.apache.logging.log4j.Level;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
@@ -135,6 +136,7 @@ import javax.management.ObjectName;
 
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.singletonMap;
+import static org.apache.kafka.clients.producer.KafkaProducer.NETWORK_THREAD_PREFIX;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -203,6 +205,12 @@ public class KafkaProducerTest {
     @BeforeEach
     public void setup(TestInfo testInfo) {
         this.testInfo = testInfo;
+    }
+
+    @AfterEach
+    public void detectLeaks() {
+        // Assert no thread leakage of Kafka producer.
+        TestUtils.assertNoLeakedThreadsWithNameAndDaemonStatus(NETWORK_THREAD_PREFIX, Boolean.TRUE);
     }
 
     @Test
