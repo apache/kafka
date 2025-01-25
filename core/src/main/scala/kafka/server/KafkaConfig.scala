@@ -605,15 +605,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
     if (nodeId != brokerId) {
       throw new ConfigException(s"You must set `${KRaftConfigs.NODE_ID_CONFIG}` to the same value as `${ServerConfigs.BROKER_ID_CONFIG}`.")
     }
-    if (processRoles.isEmpty) {
-      throw new ConfigException(s"You must set `${KRaftConfigs.PROCESS_ROLES_CONFIG}`. ZooKeeper mode is not supported.")
-    } else {
-      // KRaft-based metadata quorum
-      if (nodeId < 0) {
-        throw new ConfigException(s"Missing configuration `${KRaftConfigs.NODE_ID_CONFIG}` which is required " +
-          s"when `process.roles` is defined (i.e. when running in KRaft mode).")
-      }
-    }
+    // KRaft-based metadata quorum
     require(logRollTimeMillis >= 1, "log.roll.ms must be greater than or equal to 1")
     require(logRollTimeJitterMillis >= 0, "log.roll.jitter.ms must be greater than or equal to 0")
     require(logRetentionTimeMillis >= 1 || logRetentionTimeMillis == -1, "log.retention.ms must be unlimited (-1) or, greater than or equal to 1")
@@ -704,14 +696,10 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
       validateControllerQuorumVotersMustContainNodeIdForKRaftController()
       validateAdvertisedControllerListenersNonEmptyForKRaftController()
       validateControllerListenerNamesMustAppearInListenersForKRaftController()
-    } else {
-      // controller listener names must be empty when not in KRaft mode
-      require(controllerListenerNames.isEmpty,
-        s"${KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG} must be empty when not running in KRaft mode: ${controllerListenerNames.asJava}")
     }
 
     val listenerNames = listeners.map(_.listenerName).toSet
-    if (processRoles.isEmpty || processRoles.contains(ProcessRole.BrokerRole)) {
+    if (processRoles.contains(ProcessRole.BrokerRole)) {
       // validations for all broker setups (i.e. ZooKeeper and KRaft broker-only and KRaft co-located)
       validateAdvertisedBrokerListenersNonEmptyForBroker()
       require(advertisedBrokerListenerNames.contains(interBrokerListenerName),

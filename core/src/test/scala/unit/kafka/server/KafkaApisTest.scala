@@ -155,11 +155,12 @@ class KafkaApisTest extends Logging {
     metrics.close()
   }
 
-  def createKafkaApis(interBrokerProtocolVersion: MetadataVersion = MetadataVersion.latestTesting,
-                      authorizer: Option[Authorizer] = None,
-                      configRepository: ConfigRepository = new MockConfigRepository(),
-                      overrideProperties: Map[String, String] = Map.empty,
-                      featureVersions: Seq[FeatureVersion] = Seq.empty): KafkaApis = {
+  def createKafkaApis(
+    authorizer: Option[Authorizer] = None,
+    configRepository: ConfigRepository = new MockConfigRepository(),
+    overrideProperties: Map[String, String] = Map.empty,
+    featureVersions: Seq[FeatureVersion] = Seq.empty
+  ): KafkaApis = {
 
     val properties = TestUtils.createBrokerConfig(brokerId)
     properties.put(KRaftConfigs.NODE_ID_CONFIG, brokerId.toString)
