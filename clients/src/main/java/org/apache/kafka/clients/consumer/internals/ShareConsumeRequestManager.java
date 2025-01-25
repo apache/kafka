@@ -87,8 +87,8 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
     private final IdempotentCloser idempotentCloser = new IdempotentCloser();
     private Uuid memberId;
     private boolean fetchMoreRecords = false;
-    private final Map<TopicIdPartition, Map<Integer, Acknowledgements>> fetchAcknowledgementsToSend;
-    private final Map<TopicIdPartition, Acknowledgements> fetchAcknowledgementsInFlight;
+    private final Map<Integer, Map<TopicIdPartition, Acknowledgements>> fetchAcknowledgementsToSend;
+    private final Map<Integer, Map<TopicIdPartition, Acknowledgements>> fetchAcknowledgementsInFlight;
     private final Map<Integer, Tuple<AcknowledgeRequestState>> acknowledgeRequestStates;
     private final long retryBackoffMs;
     private final long retryBackoffMaxMs;
@@ -146,7 +146,6 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
 
         Map<Node, ShareSessionHandler> handlerMap = new HashMap<>();
         Map<String, Uuid> topicIds = metadata.topicIds();
-        Set<TopicIdPartition> fetchedPartitions = new HashSet<>();
         for (TopicPartition partition : partitionsToFetch()) {
             Optional<Node> leaderOpt = metadata.currentLeader(partition).leader;
 
@@ -173,20 +172,16 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
 
                 TopicIdPartition tip = new TopicIdPartition(topicId, partition);
                 Acknowledgements acknowledgementsToSend = null;
-                Map<Integer, Acknowledgements> nodeAcknowledgementsMap = fetchAcknowledgementsToSend.get(tip);
+                Map<TopicIdPartition, Acknowledgements> nodeAcknowledgementsMap = fetchAcknowledgementsToSend.get(node.id());
                 if (nodeAcknowledgementsMap != null) {
-                    acknowledgementsToSend = nodeAcknowledgementsMap.remove(node.id());
+                    acknowledgementsToSend = nodeAcknowledgementsMap.remove(tip);
                     if (acknowledgementsToSend != null) {
                         metricsManager.recordAcknowledgementSent(acknowledgementsToSend.size());
-                        fetchAcknowledgementsInFlight.put(tip, acknowledgementsToSend);
-                    }
-                    if (nodeAcknowledgementsMap.isEmpty()) {
-                        fetchAcknowledgementsToSend.remove(tip);
+                        fetchAcknowledgementsInFlight.computeIfAbsent(node.id(), k -> new HashMap<>()).put(tip, acknowledgementsToSend);
                     }
                 }
 
                 handler.addPartitionToFetch(tip, acknowledgementsToSend);
-                fetchedPartitions.add(tip);
                 topicNamesMap.putIfAbsent(new IdAndPartition(tip.topicId(), tip.partition()), tip.topic());
 
                 log.debug("Added fetch request for partition {} to node {}", tip, node.id());
@@ -198,37 +193,28 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         Cluster cluster = metadata.fetch();
 
         // Iterate over the session handlers to see if there are acknowledgements to be sent for partitions
-        // which are no longer part of the current subscription.
+        // which are no longer part of the current subscription, or whose records were fetched from a
+        // previous leader.
         sessionHandlers.forEach((nodeId, sessionHandler) -> {
             Node node = cluster.nodeById(nodeId);
             if (node != null) {
                 if (nodesWithPendingRequests.contains(node.id())) {
-                    log.trace("Skipping fetch because previous fetch request to {} has not been processed", node.id());
+                    log.trace("Skipping fetch because previous fetch request to {} has not been processed", nodeId);
                 } else {
-                    for (TopicIdPartition tip : sessionHandler.sessionPartitions()) {
-                        if (!fetchedPartitions.contains(tip)) {
-                            Map<Integer, Acknowledgements> nodeAcknowledgementsMap = fetchAcknowledgementsToSend.get(tip);
-                            if (nodeAcknowledgementsMap != null) {
-                                Acknowledgements acknowledgementsToSend = nodeAcknowledgementsMap.remove(node.id());
-                                if (acknowledgementsToSend != null) {
-                                    metricsManager.recordAcknowledgementSent(acknowledgementsToSend.size());
-                                    fetchAcknowledgementsInFlight.put(tip, acknowledgementsToSend);
+                    Map<TopicIdPartition, Acknowledgements> nodeAcksFromFetchMap = fetchAcknowledgementsToSend.get(nodeId);
+                    if (nodeAcksFromFetchMap != null) {
+                        nodeAcksFromFetchMap.forEach((tip, acks) -> {
+                            metricsManager.recordAcknowledgementSent(acks.size());
+                            fetchAcknowledgementsInFlight.computeIfAbsent(node.id(), k -> new HashMap<>()).put(tip, acks);
 
-                                    sessionHandler.addPartitionToFetch(tip, acknowledgementsToSend);
-                                    handlerMap.put(node, sessionHandler);
+                            sessionHandler.addPartitionToFetch(tip, acks);
+                            handlerMap.put(node, sessionHandler);
 
-                                    partitionsToForgetMap.putIfAbsent(node, new ArrayList<>());
-                                    partitionsToForgetMap.get(node).add(tip);
+                            partitionsToForgetMap.computeIfAbsent(node, k -> new ArrayList<>()).add(tip);
 
-                                    topicNamesMap.putIfAbsent(new IdAndPartition(tip.topicId(), tip.partition()), tip.topic());
-                                    fetchedPartitions.add(tip);
-                                    log.debug("Added fetch request for previously subscribed partition {} to node {}", tip, node.id());
-                                }
-                                if (nodeAcknowledgementsMap.isEmpty()) {
-                                    fetchAcknowledgementsToSend.remove(tip);
-                                }
-                            }
-                        }
+                            topicNamesMap.putIfAbsent(new IdAndPartition(tip.topicId(), tip.partition()), tip.topic());
+                            log.debug("Added fetch request for previously subscribed partition {} to node {}", tip, nodeId);
+                        });
                     }
                 }
             }
@@ -279,18 +265,19 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
 
         // The acknowledgements sent via ShareFetch are stored in this map.
         acknowledgementsMap.forEach((tip, nodeAcks) -> {
-            Map<Integer, Acknowledgements> currentNodeAcknowledgementsMap = fetchAcknowledgementsToSend.get(tip);
+            int nodeId = nodeAcks.getNodeId();
+            Map<TopicIdPartition, Acknowledgements> currentNodeAcknowledgementsMap = fetchAcknowledgementsToSend.get(nodeId);
             if (currentNodeAcknowledgementsMap != null) {
-                Acknowledgements currentAcknowledgementsForNode = currentNodeAcknowledgementsMap.get(nodeAcks.getNodeId());
+                Acknowledgements currentAcknowledgementsForNode = currentNodeAcknowledgementsMap.get(tip);
                 if (currentAcknowledgementsForNode != null) {
                     currentAcknowledgementsForNode.merge(nodeAcks.getAcknowledgements());
                 } else {
-                    currentNodeAcknowledgementsMap.put(nodeAcks.getNodeId(), nodeAcks.getAcknowledgements());
+                    currentNodeAcknowledgementsMap.put(tip, nodeAcks.getAcknowledgements());
                 }
             } else {
-                HashMap<Integer, Acknowledgements> nodeAcknowledgementsMap = new HashMap<>();
-                nodeAcknowledgementsMap.put(nodeAcks.getNodeId(), nodeAcks.getAcknowledgements());
-                fetchAcknowledgementsToSend.put(tip, nodeAcknowledgementsMap);
+                Map<TopicIdPartition, Acknowledgements> nodeAcknowledgementsMap = new HashMap<>();
+                nodeAcknowledgementsMap.put(tip, nodeAcks.getAcknowledgements());
+                fetchAcknowledgementsToSend.put(nodeId, nodeAcknowledgementsMap);
             }
         });
     }
@@ -605,21 +592,19 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             Node node = cluster.nodeById(nodeId);
             if (node != null) {
                 Map<TopicIdPartition, Acknowledgements> acknowledgementsMapForNode = new HashMap<>();
-                for (TopicIdPartition tip : sessionHandler.sessionPartitions()) {
-                    Acknowledgements acknowledgements = Acknowledgements.empty();
 
-                    Map<Integer, Acknowledgements> acksFromShareFetchMap = fetchAcknowledgementsToSend.get(tip);
-                    if (acksFromShareFetchMap != null) {
-                        Acknowledgements acksFromShareFetch = acksFromShareFetchMap.get(node.id());
-                        if (acksFromShareFetch != null) {
-                            acknowledgements.merge(acksFromShareFetch);
+                acknowledgementsMap.forEach((tip, nodeAcks) -> {
+                    Acknowledgements acknowledgements = Acknowledgements.empty();
+                    Map<TopicIdPartition, Acknowledgements> nodeAcksFromFetchMap = fetchAcknowledgementsToSend.get(nodeId);
+                    if (nodeAcksFromFetchMap != null) {
+                        Acknowledgements acksFromFetchMap = nodeAcksFromFetchMap.get(tip);
+                        if (acksFromFetchMap != null) {
+                            acknowledgements.merge(acksFromFetchMap);
                         }
                     }
-                    NodeAcknowledgements acknowledgementsForNode = acknowledgementsMap.get(tip);
-                    if (acknowledgementsForNode != null) {
-                        if (acknowledgementsForNode.getNodeId() == node.id()) {
-                            acknowledgements.merge(acknowledgementsForNode.getAcknowledgements());
-                        }
+
+                    if (nodeAcks.getNodeId() == node.id()) {
+                        acknowledgements.merge(nodeAcks.getAcknowledgements());
                     }
 
                     if (!acknowledgements.isEmpty()) {
@@ -629,7 +614,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                         log.debug("Added closing acknowledge request for partition {} to node {}", tip.topicPartition(), node.id());
                         resultCount.incrementAndGet();
                     }
-                }
+                });
 
                 acknowledgeRequestStates.putIfAbsent(nodeId, new Tuple<>(null, null, null));
 
@@ -704,14 +689,17 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
 
                 log.debug("ShareFetch for partition {} returned fetch data {}", tip, partitionData);
 
-                Acknowledgements acks = fetchAcknowledgementsInFlight.remove(tip);
-                if (acks != null) {
-                    if (partitionData.acknowledgeErrorCode() != Errors.NONE.code()) {
-                        metricsManager.recordFailedAcknowledgements(acks.size());
+                Map<TopicIdPartition, Acknowledgements> nodeAcknowledgementsInFlight = fetchAcknowledgementsInFlight.get(fetchTarget.id());
+                if (nodeAcknowledgementsInFlight != null) {
+                    Acknowledgements acks = nodeAcknowledgementsInFlight.remove(tip);
+                    if (acks != null) {
+                        if (partitionData.acknowledgeErrorCode() != Errors.NONE.code()) {
+                            metricsManager.recordFailedAcknowledgements(acks.size());
+                        }
+                        acks.setAcknowledgeErrorCode(Errors.forCode(partitionData.acknowledgeErrorCode()));
+                        Map<TopicIdPartition, Acknowledgements> acksMap = Collections.singletonMap(tip, acks);
+                        maybeSendShareAcknowledgeCommitCallbackEvent(acksMap);
                     }
-                    acks.setAcknowledgeErrorCode(Errors.forCode(partitionData.acknowledgeErrorCode()));
-                    Map<TopicIdPartition, Acknowledgements> acksMap = Collections.singletonMap(tip, acks);
-                    maybeSendShareAcknowledgeCommitCallbackEvent(acksMap);
                 }
 
                 Errors partitionError = Errors.forCode(partitionData.errorCode());
@@ -768,12 +756,15 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                         partition.partitionIndex(),
                         metadata.topicNames().get(topic.topicId()));
 
-                Acknowledgements acks = fetchAcknowledgementsInFlight.remove(tip);
-                if (acks != null) {
-                    metricsManager.recordFailedAcknowledgements(acks.size());
-                    acks.setAcknowledgeErrorCode(Errors.forException(error));
-                    Map<TopicIdPartition, Acknowledgements> acksMap = Collections.singletonMap(tip, acks);
-                    maybeSendShareAcknowledgeCommitCallbackEvent(acksMap);
+                Map<TopicIdPartition, Acknowledgements> nodeAcknowledgementsInFlight = fetchAcknowledgementsInFlight.get(fetchTarget.id());
+                if (nodeAcknowledgementsInFlight != null) {
+                    Acknowledgements acks = nodeAcknowledgementsInFlight.remove(tip);
+                    if (acks != null) {
+                        metricsManager.recordFailedAcknowledgements(acks.size());
+                        acks.setAcknowledgeErrorCode(Errors.forException(error));
+                        Map<TopicIdPartition, Acknowledgements> acksMap = Collections.singletonMap(tip, acks);
+                        maybeSendShareAcknowledgeCommitCallbackEvent(acksMap);
+                    }
                 }
             }));
         } finally {
