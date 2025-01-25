@@ -675,7 +675,7 @@ public interface KStream<K, V> {
      * stateful record processing).
      *
      * <p>{@code Foreach} is a terminal operation that may triggers side effects (such as logging or statistics
-     * collection) and returns {@code void} (cf {@link #peek(ForeachAction)}).
+     * collection) and returns {@code void} (cf. {@link #peek(ForeachAction)}).
      *
      * <p>Note that this operation may execute multiple times for a single record in failure cases,
      * and it is <em>not</em> guarded by "exactly-once processing guarantees".
@@ -698,7 +698,7 @@ public interface KStream<K, V> {
      * stateful record processing).
      *
      * <p>{@code Peek} is a non-terminal operation that may triggers side effects (such as logging or statistics
-     * collection) and returns an unchanged stream (cf {@link #foreach(ForeachAction)}).
+     * collection) and returns an unchanged {@code KStream} (cf. {@link #foreach(ForeachAction)}).
      *
      * <p>Note that this operation may execute multiple times for a single record in failure cases,
      * and it is <em>not</em> guarded by "exactly-once processing guarantees".
@@ -734,6 +734,7 @@ public interface KStream<K, V> {
      * KStream<...> stream2 = stream.mapValue(...);
      * KStream<...> stream3 = stream.flatMap(...);
      * }</pre>
+     *
      * Multicasting can be achieved with broadcasting into multiple filter operations:
      * <pre>{@code
      * // Multicasting: every record of `stream` is sent to all three filters, and thus, may be part of
