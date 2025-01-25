@@ -63,7 +63,7 @@ object ConfigCommand extends Logging {
 
   private val BrokerDefaultEntityName = ""
   val BrokerLoggerConfigType = "broker-loggers"
-  private val BrokerSupportedConfigTypes = ConfigType.ALL.asScala :+ BrokerLoggerConfigType :+ ConfigType.CLIENT_METRICS :+ ConfigType.GROUP
+  private val BrokerSupportedConfigTypes = ConfigType.ALL.asScala :+ BrokerLoggerConfigType
   private val DefaultScramIterations = 4096
 
   def main(args: Array[String]): Unit = {

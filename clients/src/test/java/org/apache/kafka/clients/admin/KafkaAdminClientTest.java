@@ -776,7 +776,7 @@ public class KafkaAdminClientTest {
         if (error == Errors.NONE) {
             return new ApiVersionsResponse.Builder().
                 setApiVersions(ApiVersionsResponse.filterApis(
-                    ApiMessageType.ListenerType.ZK_BROKER, false, false)).
+                    ApiMessageType.ListenerType.BROKER, false, false)).
                 setSupportedFeatures(
                     convertSupportedFeaturesMap(defaultFeatureMetadata().supportedFeatures())).
                 setFinalizedFeatures(
