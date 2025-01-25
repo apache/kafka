@@ -50,6 +50,17 @@ import scala.jdk.CollectionConverters._
 
 class KafkaConfigTest {
 
+  def createDefaultConfig(): Properties = {
+    val props = new Properties()
+    props.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker,controller")
+    props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
+    props.setProperty(KRaftConfigs.NODE_ID_CONFIG, "1")
+    props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, "PLAINTEXT://localhost:0,CONTROLLER://localhost:5000")
+    props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "2@localhost:5000")
+    props.setProperty(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "PLAINTEXT:PLAINTEXT,CONTROLLER:SASL_SSL")
+    props
+  }
+
   @Test
   def testLogRetentionTimeHoursProvided(): Unit = {
     val props = TestUtils.createBrokerConfig(0, port = 8181)
@@ -547,8 +558,7 @@ class KafkaConfigTest {
 
   @Test
   def testListenerNameMissingFromListenerSecurityProtocolMap(): Unit = {
-    val props = new Properties()
-    props.setProperty(ServerConfigs.BROKER_ID_CONFIG, "1")
+    val props = createDefaultConfig()
 
     props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, "SSL://localhost:9091,REPLICATION://localhost:9092")
     props.setProperty(ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG, "SSL")
@@ -557,8 +567,7 @@ class KafkaConfigTest {
 
   @Test
   def testInterBrokerListenerNameMissingFromListenerSecurityProtocolMap(): Unit = {
-    val props = new Properties()
-    props.setProperty(ServerConfigs.BROKER_ID_CONFIG, "1")
+    val props = createDefaultConfig()
 
     props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, "SSL://localhost:9091")
     props.setProperty(ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG, "REPLICATION")
@@ -567,8 +576,7 @@ class KafkaConfigTest {
 
   @Test
   def testInterBrokerListenerNameAndSecurityProtocolSet(): Unit = {
-    val props = new Properties()
-    props.setProperty(ServerConfigs.BROKER_ID_CONFIG, "1")
+    val props = createDefaultConfig()
 
     props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, "SSL://localhost:9091")
     props.setProperty(ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG, "SSL")
