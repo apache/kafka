@@ -835,35 +835,59 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
     @Override
-    public <VO, VR> KStream<K, VR> outerJoin(final KStream<K, VO> otherStream,
-                                             final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
-                                             final JoinWindows windows) {
-        return outerJoin(otherStream, toValueJoinerWithKey(joiner), windows);
+    public <VRight, VOut> KStream<K, VOut> outerJoin(final KStream<K, VRight> otherStream,
+                                                     final ValueJoiner<? super V, ? super VRight, ? extends VOut> joiner,
+                                                     final JoinWindows windows) {
+        return doJoin(
+            otherStream,
+            toValueJoinerWithKey(joiner),
+            windows,
+            StreamJoined.with(null, null, null),
+            new KStreamImplJoin(builder, true, true)
+        );
     }
 
     @Override
-    public <VO, VR> KStream<K, VR> outerJoin(final KStream<K, VO> otherStream,
-                                             final ValueJoinerWithKey<? super K, ? super V, ? super VO, ? extends VR> joiner,
-                                             final JoinWindows windows) {
-        return outerJoin(otherStream, joiner, windows, StreamJoined.with(null, null, null));
+    public <VRight, VOut> KStream<K, VOut> outerJoin(final KStream<K, VRight> otherStream,
+                                                     final ValueJoinerWithKey<? super K, ? super V, ? super VRight, ? extends VOut> joiner,
+                                                     final JoinWindows windows) {
+        return doJoin(
+            otherStream,
+            joiner,
+            windows,
+            StreamJoined.with(null, null, null),
+            new KStreamImplJoin(builder, true, true)
+        );
     }
 
     @Override
-    public <VO, VR> KStream<K, VR> outerJoin(final KStream<K, VO> otherStream,
-                                             final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
-                                             final JoinWindows windows,
-                                             final StreamJoined<K, V, VO> streamJoined) {
+    public <VRight, VOut> KStream<K, VOut> outerJoin(final KStream<K, VRight> otherStream,
+                                                     final ValueJoiner<? super V, ? super VRight, ? extends VOut> joiner,
+                                                     final JoinWindows windows,
+                                                     final StreamJoined<K, V, VRight> streamJoined) {
 
-        return outerJoin(otherStream, toValueJoinerWithKey(joiner), windows, streamJoined);
+        return doJoin(
+            otherStream,
+            toValueJoinerWithKey(joiner),
+            windows,
+            streamJoined,
+            new KStreamImplJoin(builder, true, true)
+        );
     }
 
     @Override
-    public <VO, VR> KStream<K, VR> outerJoin(final KStream<K, VO> otherStream,
-                                             final ValueJoinerWithKey<? super K, ? super V, ? super VO, ? extends VR> joiner,
-                                             final JoinWindows windows,
-                                             final StreamJoined<K, V, VO> streamJoined) {
+    public <VRight, VOut> KStream<K, VOut> outerJoin(final KStream<K, VRight> otherStream,
+                                                     final ValueJoinerWithKey<? super K, ? super V, ? super VRight, ? extends VOut> joiner,
+                                                     final JoinWindows windows,
+                                                     final StreamJoined<K, V, VRight> streamJoined) {
 
-        return doJoin(otherStream, joiner, windows, streamJoined, new KStreamImplJoin(builder, true, true));
+        return doJoin(
+            otherStream,
+            joiner,
+            windows,
+            streamJoined,
+            new KStreamImplJoin(builder, true, true)
+        );
     }
 
     private <VRight, VOut> KStream<K, VOut> doJoin(
