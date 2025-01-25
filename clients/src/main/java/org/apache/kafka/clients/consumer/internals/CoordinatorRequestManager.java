@@ -115,7 +115,7 @@ public class CoordinatorRequestManager implements RequestManager {
         );
 
         return unsentRequest.whenComplete((clientResponse, throwable) -> {
-            clearFatalError();
+            getAndClearFatalError();
             if (clientResponse != null) {
                 FindCoordinatorResponse response = (FindCoordinatorResponse) clientResponse.responseBody();
                 onResponse(clientResponse.receivedTimeMs(), response);
@@ -247,8 +247,10 @@ public class CoordinatorRequestManager implements RequestManager {
         return Optional.ofNullable(this.coordinator);
     }
     
-    public void clearFatalError() {
+    public Optional<Throwable> getAndClearFatalError() {
+        Optional<Throwable> fatalError = this.fatalError;
         this.fatalError = Optional.empty();
+        return fatalError;
     }
 
     public Optional<Throwable> fatalError() {
