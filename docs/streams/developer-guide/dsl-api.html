@@ -65,6 +65,7 @@
                     </ul>
                     </li>
                     <li><a class="reference internal" href="#applying-processors-processor-api-integration" id="id37">Applying processors (Processor API integration)</a></li>
+                    <li><a class="reference internal" href="#transformers-removal-and-migration-to-processors" id="id37">Transformers removal and migration to processors</a></li>
                 </ul>
                 </li>
                 <li><a class="reference internal" href="#naming-a-streams-app" id="id33">Naming Operators in a Streams DSL application</a></li>
@@ -3479,6 +3480,611 @@ public class ReplacingSlangTextInMessagesExample {
                     <li><strong>Unified API:</strong> Consolidates multiple methods into a single, versatile API.</li>
                     <li><strong>Future-Proof:</strong> Ensures compatibility with the latest Kafka Streams releases.</li>
                 </ul>
+            </div>
+            <div class="section" id="transformers-removal-and-migration-to-processors">
+                <h3>
+                    <a class="headerlink" href="#transformers-removal-and-migration-to-processors" title="Permalink to this headline">
+                        Transformers removal and migration to processors
+                    </a>
+                </h3>
+                <p>As of Kafka 4.0, several deprecated methods in the Kafka Streams API, such as <code>transform</code>,
+                    <code>flatTransform</code>,<br><code>transformValues</code>, <code>flatTransformValues</code>, and
+                    <code>process</code> have been removed. These methods have been replaced with the<br>more versatile Processor API.
+                    This guide provides detailed steps for migrating existing code to use the new Processor<br>API and explains the
+                    benefits of the changes.</p>
+                <p>The following deprecated methods are no longer available in Kafka Streams:</p>
+                <ul>
+                    <li><code>KStream#transform</code></li>
+                    <li><code>KStream#flatTransform</code></li>
+                    <li><code>KStream#transformValues</code></li>
+                    <li><code>KStream#flatTransformValues</code></li>
+                    <li><code>KStream#process</code></li>
+                </ul>
+                <p>The Processor API now serves as a unified replacement for all these methods. It simplifies the API surface
+                    while<br>maintaining support for both stateless and stateful operations.</p>
+                <h4>Migration Examples</h4>
+                <p>To migrate from the deprecated <code>transform</code>, <code>transformValues</code>, <code>flatTransform</code>, and
+                    <code>flatTransformValues</code> methods to the<br>Processor API (PAPI) in Kafka Streams, let&#39;s resume the
+                    previouss examples. The new <code>process</code> and <code>processValues</code><br>methods enable a more flexible
+                    and reusable approach by requiring implementations of the <code>Processor</code>
+                    or<br><code>FixedKeyProcessor</code> interfaces.</p>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Example</th>
+                            <th>Migrating from</th>
+                            <th>Migrating to</th>
+                            <th>State Type</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><a href="#cumulative-discounts-for-a-loyalty-program-removal">Cumulative Discounts for a Loyalty Program</a>
+                            </td>
+                            <td><code>transform</code></td>
+                            <td><code>process</code></td>
+                            <td>Stateful</td>
+                        </tr>
+                        <tr>
+                            <td><a href="#categorizing-logs-by-severity-removal">Categorizing Logs by Severity</a></td>
+                            <td><code>flatTransform</code></td>
+                            <td><code>process</code></td>
+                            <td>Stateless</td>
+                        </tr>
+                        <tr>
+                            <td><a href="#traffic-radar-monitoring-car-count-removal">Traffic Radar Monitoring Car Count</a></td>
+                            <td><code>transformValues</code></td>
+                            <td><code>processValues</code></td>
+                            <td>Stateful</td>
+                        </tr>
+                        <tr>
+                            <td><a href="#replacing-slang-in-text-messages-removal">Replacing Slang in Text Messages</a></td>
+                            <td><code>flatTransformValues</code></td>
+                            <td><code>processValues</code></td>
+                            <td>Stateless</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <h5 id="cumulative-discounts-for-a-loyalty-program-removal">Cumulative Discounts for a Loyalty Program</h5>
+                <pre class="line-numbers"><code class="language-java">package org.apache.kafka.streams.kstream;
+
+import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.Stores;
+
+public class CumulativeDiscountsForALoyaltyProgramExample {
+    private static final double DISCOUNT_THRESHOLD = 100.0;
+    private static final String CUSTOMER_SPENDING_STORE = &quot;customer-spending-store&quot;;
+    private static final String DISCOUNT_NOTIFICATION_MESSAGE =
+            &quot;Discount applied! You have received a reward for your purchases.&quot;;
+    private static final String DISCOUNT_NOTIFICATIONS_TOPIC = &quot;discount-notifications-topic&quot;;
+    private static final String PURCHASE_EVENTS_TOPIC = &quot;purchase-events-topic&quot;;
+
+    public static void applyDiscountWithTransform(final StreamsBuilder builder) {
+        // Define the state store for tracking cumulative spending
+        builder.addStateStore(
+                Stores.keyValueStoreBuilder(
+                        Stores.inMemoryKeyValueStore(CUSTOMER_SPENDING_STORE),
+                        Serdes.String(),
+                        Serdes.Double()
+                )
+        );
+        final KStream&lt;String, Double&gt; purchaseStream = builder.stream(PURCHASE_EVENTS_TOPIC);
+        // Apply the Transformer with the state store
+        final KStream&lt;String, String&gt; notificationStream =
+                purchaseStream.transform(CumulativeDiscountTransformer::new, CUSTOMER_SPENDING_STORE);
+        // Send the notifications to the output topic
+        notificationStream.to(DISCOUNT_NOTIFICATIONS_TOPIC);
+    }
+
+    public static void applyDiscountWithProcess(final StreamsBuilder builder) {
+        // Define the state store for tracking cumulative spending
+        builder.addStateStore(
+                Stores.keyValueStoreBuilder(
+                        Stores.inMemoryKeyValueStore(CUSTOMER_SPENDING_STORE),
+                        org.apache.kafka.common.serialization.Serdes.String(),
+                        org.apache.kafka.common.serialization.Serdes.Double()
+                )
+        );
+        final KStream&lt;String, Double&gt; purchaseStream = builder.stream(PURCHASE_EVENTS_TOPIC);
+        // Apply the Processor with the state store
+        final KStream&lt;String, String&gt; notificationStream =
+                purchaseStream.process(CumulativeDiscountProcessor::new, CUSTOMER_SPENDING_STORE);
+        // Send the notifications to the output topic
+        notificationStream.to(DISCOUNT_NOTIFICATIONS_TOPIC);
+    }
+
+    private static class CumulativeDiscountTransformer implements Transformer&lt;String, Double, KeyValue&lt;String, String&gt;&gt; {
+        private KeyValueStore&lt;String, Double&gt; spendingStore;
+
+        @Override
+        public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
+            // Retrieve the state store for cumulative spending
+            spendingStore = context.getStateStore(CUSTOMER_SPENDING_STORE);
+        }
+
+        @Override
+        public KeyValue&lt;String, String&gt; transform(final String key, final Double value) {
+            if (value == null) {
+                return null; // Skip null purchase amounts
+            }
+
+            // Get the current spending total for the customer
+            Double currentSpending = spendingStore.get(key);
+            if (currentSpending == null) {
+                currentSpending = 0.0;
+            }
+            // Update the cumulative spending
+            currentSpending += value;
+            spendingStore.put(key, currentSpending);
+
+            // Check if the customer qualifies for a discount
+            if (currentSpending &gt;= DISCOUNT_THRESHOLD) {
+                // Reset the spending after applying the discount
+                spendingStore.put(key, currentSpending - DISCOUNT_THRESHOLD);
+                // Return a notification message
+                return new KeyValue&lt;&gt;(key, DISCOUNT_NOTIFICATION_MESSAGE);
+            }
+            return null; // No discount, so no output for this record
+        }
+
+        @Override
+        public void close() {
+        }
+    }
+
+    private static class CumulativeDiscountProcessor implements ContextualProcessor&lt;String, Double, String, String&gt; {
+        private KeyValueStore&lt;String, Double&gt; spendingStore;
+        private ProcessorContext&lt;String, String&gt; context;
+
+        @Override
+        public void init(final ProcessorContext&lt;String, String&gt; context) {
+            this.context = context;
+            // Retrieve the state store for cumulative spending
+            spendingStore = context.getStateStore(CUSTOMER_SPENDING_STORE);
+        }
+
+        @Override
+        public void process(final Record&lt;String, Double&gt; record) {
+            if (record.value() == null) {
+                return; // Skip null purchase amounts
+            }
+
+            // Get the current spending total for the customer
+            Double currentSpending = spendingStore.get(record.key());
+            if (currentSpending == null) {
+                currentSpending = 0.0;
+            }
+            // Update the cumulative spending
+            currentSpending += record.value();
+            spendingStore.put(record.key(), currentSpending);
+
+            // Check if the customer qualifies for a discount
+            if (currentSpending &gt;= DISCOUNT_THRESHOLD) {
+                // Reset the spending after applying the discount
+                spendingStore.put(record.key(), currentSpending - DISCOUNT_THRESHOLD);
+                // Send a discount notification
+                context.forward(record.withValue(DISCOUNT_NOTIFICATION_MESSAGE));
+            }
+        }
+    }
+}</code></pre>
+                <h5 id="categorizing-logs-by-severity-removal">Categorizing Logs by Severity</h5>
+                <p>Below, methods <code>categorizeWithFlatTransform</code> and <code>categorizeWithProcess</code> show how you can
+                    migrate from <code>flatTransform</code><br>to <code>process</code>.</p>
+                <pre class="line-numbers"><code class="language-java">package org.apache.kafka.streams.kstream;
+
+import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.processor.api.ContextualProcessor;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Record;
+
+import java.util.Collections;
+import java.util.List;
+
+public class CategorizingLogsBySeverityExample {
+    private static final String ERROR_LOGS_TOPIC = &quot;error-logs-topic&quot;;
+    private static final String INPUT_LOGS_TOPIC = &quot;input-logs-topic&quot;;
+    private static final String UNKNOWN_LOGS_TOPIC = &quot;unknown-logs-topic&quot;;
+    private static final String WARN_LOGS_TOPIC = &quot;warn-logs-topic&quot;;
+
+    public static void categorizeWithFlatTransform(final StreamsBuilder builder) {
+        final KStream&lt;String, String&gt; logStream = builder.stream(INPUT_LOGS_TOPIC);
+        logStream.flatTransform(LogSeverityTransformer::new)
+                .to((key, value, recordContext) -&gt; {
+                    // Determine the target topic dynamically
+                    if (&quot;ERROR&quot;.equals(key)) return ERROR_LOGS_TOPIC;
+                    if (&quot;WARN&quot;.equals(key)) return WARN_LOGS_TOPIC;
+                    return UNKNOWN_LOGS_TOPIC;
+                });
+    }
+
+    public static void categorizeWithProcess(final StreamsBuilder builder) {
+        final KStream&lt;String, String&gt; logStream = builder.stream(INPUT_LOGS_TOPIC);
+        logStream.process(LogSeverityProcessor::new)
+                .to((key, value, recordContext) -&gt; {
+                    // Determine the target topic dynamically
+                    if (&quot;ERROR&quot;.equals(key)) return ERROR_LOGS_TOPIC;
+                    if (&quot;WARN&quot;.equals(key)) return WARN_LOGS_TOPIC;
+                    return UNKNOWN_LOGS_TOPIC;
+                });
+    }
+
+    private static class LogSeverityTransformer implements Transformer&lt;String, String, Iterable&lt;KeyValue&lt;String, String&gt;&gt;&gt; {
+        @Override
+        public void init(org.apache.kafka.streams.processor.ProcessorContext context) {
+        }
+
+        @Override
+        public Iterable&lt;KeyValue&lt;String, String&gt;&gt; transform(String key, String value) {
+            if (value == null) {
+                return Collections.emptyList(); // Skip null values
+            }
+
+            // Assume the severity is the first word in the log message
+            // For example: &quot;ERROR: Disk not found&quot; -&gt; &quot;ERROR&quot;
+            int colonIndex = value.indexOf(&#39;:&#39;);
+            String severity = colonIndex &gt; 0 ? value.substring(0, colonIndex).trim() : &quot;UNKNOWN&quot;;
+
+            // Create appropriate KeyValue pair based on severity
+            return switch (severity) {
+                case &quot;ERROR&quot; -&gt; List.of(new KeyValue&lt;&gt;(&quot;ERROR&quot;, value));
+                case &quot;WARN&quot; -&gt; List.of(new KeyValue&lt;&gt;(&quot;WARN&quot;, value));
+                case &quot;INFO&quot; -&gt; Collections.emptyList(); // INFO logs are ignored
+                default -&gt; List.of(new KeyValue&lt;&gt;(&quot;UNKNOWN&quot;, value));
+            };
+        }
+
+        @Override
+        public void close() {
+        }
+    }
+
+    private static class LogSeverityProcessor extends ContextualProcessor&lt;String, String, String, String&gt; {
+        @Override
+        public void process(final Record&lt;String, String&gt; record) {
+            if (record.value() == null) {
+                return; // Skip null values
+            }
+
+            // Assume the severity is the first word in the log message
+            // For example: &quot;ERROR: Disk not found&quot; -&gt; &quot;ERROR&quot;
+            final int colonIndex = record.value().indexOf(&#39;:&#39;);
+            final String severity = colonIndex &gt; 0 ? record.value().substring(0, colonIndex).trim() : &quot;UNKNOWN&quot;;
+
+            // Route logs based on severity
+            switch (severity) {
+                case &quot;ERROR&quot;:
+                    context().forward(record.withKey(ERROR_LOGS_TOPIC));
+                    break;
+                case &quot;WARN&quot;:
+                    context().forward(record.withKey(WARN_LOGS_TOPIC));
+                    break;
+                case &quot;INFO&quot;:
+                    // INFO logs are ignored
+                    break;
+                default:
+                    // Forward to an &quot;unknown&quot; topic for logs with unrecognized severities
+                    context().forward(record.withKey(UNKNOWN_LOGS_TOPIC));
+            }
+        }
+    }
+}</code></pre>
+                <h5 id="traffic-radar-monitoring-car-count-removal">Traffic Radar Monitoring Car Count</h5>
+                <p>Below, methods <code>countWithTransformValues</code> and <code>countWithProcessValues</code> show how you can migrate
+                    from <code>transformValues</code><br>to <code>processValues</code>.</p>
+                <pre class="line-numbers"><code class="language-java">package org.apache.kafka.streams.kstream;
+
+import org.apache.kafka.streams.processor.api.FixedKeyProcessor;
+import org.apache.kafka.streams.processor.api.FixedKeyProcessorContext;
+import org.apache.kafka.streams.processor.api.FixedKeyRecord;
+import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.state.Stores;
+
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+
+public class TrafficRadarMonitoringCarCountExample {
+    private static final String DAILY_COUNT_STORE = &quot;price-state-store&quot;;
+    private static final String DAILY_COUNT_TOPIC = &quot;price-state-topic&quot;;
+    private static final String RADAR_COUNT_TOPIC = &quot;car-radar-topic&quot;;
+
+    public static void countWithTransformValues(final StreamsBuilder builder) {
+        // Define a state store for tracking daily car counts
+        builder.addStateStore(
+                Stores.keyValueStoreBuilder(
+                        Stores.inMemoryKeyValueStore(DAILY_COUNT_STORE),
+                        org.apache.kafka.common.serialization.Serdes.String(),
+                        org.apache.kafka.common.serialization.Serdes.Long()
+                )
+        );
+        final KStream&lt;Void, String&gt; radarStream = builder.stream(RADAR_COUNT_TOPIC);
+        // Apply the ValueTransformer with the state store
+        radarStream.transformValues(DailyCarCountTransformer::new, DAILY_COUNT_STORE)
+                .to(DAILY_COUNT_TOPIC);
+    }
+
+    public static void countWithProcessValues(final StreamsBuilder builder) {
+        // Define a state store for tracking daily car counts
+        builder.addStateStore(
+                Stores.keyValueStoreBuilder(
+                        Stores.inMemoryKeyValueStore(DAILY_COUNT_STORE),
+                        org.apache.kafka.common.serialization.Serdes.String(),
+                        org.apache.kafka.common.serialization.Serdes.Long()
+                )
+        );
+        final KStream&lt;Void, String&gt; radarStream = builder.stream(RADAR_COUNT_TOPIC);
+        // Apply the FixedKeyProcessor with the state store
+        radarStream.processValues(DailyCarCountProcessor::new, DAILY_COUNT_STORE)
+                .to(DAILY_COUNT_TOPIC);
+    }
+
+    private static class DailyCarCountTransformer implements ValueTransformerWithKey&lt;Void, String, String&gt; {
+        private KeyValueStore&lt;String, Long&gt; stateStore;
+        private static final DateTimeFormatter DATE_FORMATTER =
+                DateTimeFormatter.ofPattern(&quot;yyyy-MM-dd&quot;).withZone(ZoneId.systemDefault());
+
+        @Override
+        public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
+            // Access the state store
+            stateStore = context.getStateStore(DAILY_COUNT_STORE);
+        }
+
+        @Override
+        public String transform(Void readOnlyKey, String value) {
+            if (value == null) {
+                return null; // Skip null events
+            }
+
+            // Derive the current day from the event timestamp
+            final long timestamp = System.currentTimeMillis(); // Use system time for simplicity
+            final String currentDay = DATE_FORMATTER.format(Instant.ofEpochMilli(timestamp));
+            // Retrieve the current count for the day
+            Long dailyCount = stateStore.get(currentDay);
+            if (dailyCount == null) {
+                dailyCount = 0L;
+            }
+            // Increment the count
+            dailyCount++;
+            stateStore.put(currentDay, dailyCount);
+
+            // Return the current day&#39;s count
+            return String.format(&quot;Day: %s, Car Count: %s&quot;, currentDay, dailyCount);
+        }
+
+        @Override
+        public void close() {
+        }
+    }
+
+    private static class DailyCarCountProcessor implements FixedKeyProcessor&lt;Void, String, String&gt; {
+        private FixedKeyProcessorContext&lt;Void, String&gt; context;
+        private KeyValueStore&lt;String, Long&gt; stateStore;
+        private static final DateTimeFormatter DATE_FORMATTER =
+                DateTimeFormatter.ofPattern(&quot;yyyy-MM-dd&quot;).withZone(ZoneId.systemDefault());
+
+        @Override
+        public void init(final FixedKeyProcessorContext&lt;Void, String&gt; context) {
+            this.context = context;
+            stateStore = context.getStateStore(DAILY_COUNT_STORE);
+        }
+
+        @Override
+        public void process(final FixedKeyRecord&lt;Void, String&gt; record) {
+            if (record.value() == null) {
+                return; // Skip null events
+            }
+
+            // Derive the current day from the event timestamp
+            final long timestamp = System.currentTimeMillis(); // Use system time for simplicity
+            final String currentDay = DATE_FORMATTER.format(Instant.ofEpochMilli(timestamp));
+            // Retrieve the current count for the day
+            Long dailyCount = stateStore.get(currentDay);
+            if (dailyCount == null) {
+                dailyCount = 0L;
+            }
+            // Increment the count
+            dailyCount++;
+            stateStore.put(currentDay, dailyCount);
+
+            // Emit the current day&#39;s count
+            context.forward(record.withValue(String.format(&quot;Day: %s, Car Count: %s&quot;, currentDay, dailyCount)));
+        }
+    }
+}</code></pre>
+                <h5 id="replacing-slang-in-text-messages-removal">Replacing Slang in Text Messages</h5>
+                <p>Below, methods <code>replaceWithFlatTransformValues</code> and <code>replaceWithProcessValues</code> show how you can
+                    migrate from<br><code>flatTransformValues</code> to <code>processValues</code>.</p>
+                <pre class="line-numbers"><code class="language-java">package org.apache.kafka.streams.kstream;
+
+import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.processor.api.ContextualFixedKeyProcessor;
+import org.apache.kafka.streams.processor.api.FixedKeyRecord;
+
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Map;
+
+public class ReplacingSlangTextInMessagesExample {
+    private static final Map&lt;String, String&gt; SLANG_DICTIONARY = Map.of(
+            &quot;u&quot;, &quot;you&quot;,
+            &quot;brb&quot;, &quot;be right back&quot;,
+            &quot;omg&quot;, &quot;oh my god&quot;,
+            &quot;btw&quot;, &quot;by the way&quot;
+    );
+    private static final String INPUT_MESSAGES_TOPIC = &quot;input-messages-topic&quot;;
+    private static final String OUTPUT_MESSAGES_TOPIC = &quot;output-messages-topic&quot;;
+
+    public static void replaceWithFlatTransformValues(final StreamsBuilder builder) {
+        KStream&lt;String, String&gt; messageStream = builder.stream(INPUT_MESSAGES_TOPIC);
+        messageStream.flatTransformValues(SlangReplacementTransformer::new).to(OUTPUT_MESSAGES_TOPIC);
+    }
+
+    public static void replaceWithProcessValues(final StreamsBuilder builder) {
+        KStream&lt;String, String&gt; messageStream = builder.stream(INPUT_MESSAGES_TOPIC);
+        messageStream.processValues(SlangReplacementProcessor::new).to(OUTPUT_MESSAGES_TOPIC);
+    }
+
+    private static class SlangReplacementTransformer implements ValueTransformer&lt;String, Iterable&lt;String&gt;&gt; {
+
+        @Override
+        public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
+        }
+
+        @Override
+        public Iterable&lt;String&gt; transform(final String value) {
+            if (value == null) {
+                return Collections.emptyList(); // Skip null values
+            }
+
+            // Replace slang words in the message
+            final String[] words = value.split(&quot;\\s+&quot;);
+            return Arrays.asList(
+                    Arrays.stream(words)
+                            .map(word -&gt; SLANG_DICTIONARY.getOrDefault(word, word))
+                            .toArray(String[]::new)
+            );
+        }
+
+        @Override
+        public void close() {
+        }
+    }
+
+    private static class SlangReplacementProcessor extends ContextualFixedKeyProcessor&lt;String, String, String&gt; {
+        @Override
+        public void process(final FixedKeyRecord&lt;String, String&gt; record) {
+            if (record.value() == null) {
+                return; // Skip null values
+            }
+
+            // Replace slang words in the message
+            final String[] words = record.value().split(&quot;\\s+&quot;);
+            for (final String word : words) {
+                String replacedWord = SLANG_DICTIONARY.getOrDefault(word, word);
+                context().forward(record.withValue(replacedWord));
+            }
+        }
+    }
+}</code></pre>
+                <h4>Keynotes</h4>
+                <ul>
+                    <li><strong>Type Safety and Flexibility:</strong> The process and processValues APIs utilize
+                        <code>ProcessorContext</code> and <code>Record</code> or<br><code>FixedKeyRecord</code> objects for better type
+                        safety and flexibility of custom processing logic.</li>
+                    <li><strong>Clear State and Logic Management:</strong> Implementations for <code>Processor</code> or
+                        <code>FixedKeyProcessor</code> should manage state and<br>logic clearly. Use <code>context().forward()</code>
+                        for emitting records downstream.</li>
+                    <li><strong>Unified API:</strong> Consolidates multiple methods into a single, versatile API.</li>
+                    <li><strong>Future-Proof:</strong> Ensures compatibility with the latest Kafka Streams releases.</li>
+                </ul>
+                <h4>Removal of Old <code>process</code> Method</h4>
+                <p>It is worth mentioning that, in addition to the methods mentioned above, the <code>process</code> method (which is
+                    not part of the<br>Processor API) has also been removed. The following example shows how to migrate to the new
+                    <code>process</code>.</p>
+                <h5>Example</h5>
+                <ul>
+                    <li>
+                        <p><strong>Idea:</strong> The system monitors page views for a website in real-time. When a page reaches a
+                            predefined popularity<br>threshold (e.g., 1000 views), the system automatically sends an email alert to the
+                            site administrator or marketing<br>team to notify them of the page&#39;s success. This helps teams quickly
+                            identify high-performing content and act on it,<br>such as promoting the page further or analyzing the
+                            traffic source.</p>
+                    </li>
+                    <li>
+                        <p><strong>Real-World Context:</strong> In a content management system (CMS) for a news or blogging platform,
+                            it’s crucial to track<br>the popularity of articles or posts. For example:</p>
+                        <ul>
+                            <li><strong>Marketing Teams:</strong> Use the notification to highlight trending content on social media or
+                                email newsletters.</li>
+                            <li><strong>Operations Teams:</strong> Use the alert to ensure the site can handle increased traffic for
+                                popular pages.</li>
+                            <li><strong>Ad Managers:</strong> Identify pages where additional ad placements might maximize revenue.</li>
+                        </ul>
+                        <p>By automating the detection of popular pages, the system eliminates the need for manual monitoring and
+                            ensures timely<br>actions to capitalize on the content&#39;s performance.</p>
+                    </li>
+                </ul>
+                <pre class="line-numbers"><code class="language-java">package org.apache.kafka.streams.kstream;
+
+import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.processor.AbstractProcessor;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Record;
+
+public class PopularPageEmailAlertExample {
+    private static final String ALERTS_EMAIL = &quot;alerts@yourcompany.com&quot;;
+    private static final String PAGE_VIEWS_TOPIC = &quot;page-views-topic&quot;;
+
+    public static void alertWithOldProcess(StreamsBuilder builder) {
+        KStream&lt;String, Long&gt; pageViews = builder.stream(PAGE_VIEWS_TOPIC);
+        // Filter pages with exactly 1000 views and process them using the old API
+        pageViews.filter((pageId, viewCount) -&gt; viewCount == 1000)
+                .process(PopularPageEmailAlertOld::new);
+    }
+
+    public static void alertWithNewProcess(StreamsBuilder builder) {
+        KStream&lt;String, Long&gt; pageViews = builder.stream(PAGE_VIEWS_TOPIC);
+        // Filter pages with exactly 1000 views and process them using the new API
+        pageViews.filter((pageId, viewCount) -&gt; viewCount == 1000)
+                .process(PopularPageEmailAlertNew::new);
+    }
+
+    private static class PopularPageEmailAlertOld extends AbstractProcessor&lt;String, Long&gt; {
+        @Override
+        public void init(org.apache.kafka.streams.processor.ProcessorContext context) {
+            super.init(context);
+            System.out.println(&quot;Initialized email client for: &quot; + ALERTS_EMAIL);
+        }
+
+        @Override
+        public void process(String key, Long value) {
+            if (value == null) return;
+
+            if (value == 1000) {
+                // Send an email alert
+                System.out.printf(&quot;ALERT (Old API): Page %s has reached 1000 views. Sending email to %s%n&quot;, key, ALERTS_EMAIL);
+            }
+        }
+
+        @Override
+        public void close() {
+            System.out.println(&quot;Tearing down email client for: &quot; + ALERTS_EMAIL);
+        }
+    }
+
+    private static class PopularPageEmailAlertNew implements Processor&lt;String, Long, Void, Void&gt; {
+        @Override
+        public void init(ProcessorContext&lt;Void, Void&gt; context) {
+            System.out.println(&quot;Initialized email client for: &quot; + ALERTS_EMAIL);
+        }
+
+        @Override
+        public void process(Record&lt;String, Long&gt; record) {
+            if (record.value() == null) return;
+
+            if (record.value() == 1000) {
+                // Send an email alert
+                System.out.printf(&quot;ALERT (New API): Page %s has reached 1000 views. Sending email to %s%n&quot;, record.key(), ALERTS_EMAIL);
+            }
+        }
+
+        @Override
+        public void close() {
+            System.out.println(&quot;Tearing down email client for: &quot; + ALERTS_EMAIL);
+        }
+    }
+}</code></pre>
             </div>
         <div class="section" id="naming-a-streams-app">
             <a class="headerlink" href="#naming-a-streams-app" title="Permalink to this headline"><h2><a class="toc-backref" href="#id33">Naming Operators in a Streams DSL application</a></h2></a>
