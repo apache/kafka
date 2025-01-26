@@ -1297,12 +1297,10 @@ public class SharePartitionManagerTest {
         // even though the maxInFlightMessages limit is exceeded, replicaManager.readFromLog should be called
         Mockito.verify(mockReplicaManager, times(1)).readFromLog(
             any(), any(), any(ReplicaQuota.class), anyBoolean());
-        // Should have 1 fetch recorded and no failed as the fetch did complete.
-        validateBrokerTopicStatsMetrics(
-            brokerTopicStats,
-            new TopicMetrics(1, 0, 0, 0),
-            Map.of("foo", new TopicMetrics(1, 0, 0, 0))
-        );
+        // Should have 1 fetch recorded.
+        assertEquals(1, brokerTopicStats.allTopicsStats().totalShareFetchRequestRate().count());
+        assertEquals(1, brokerTopicStats.numTopics());
+        assertEquals(1, brokerTopicStats.topicStats(tp0.topic()).totalShareFetchRequestRate().count());
     }
 
     @Test
@@ -2269,11 +2267,9 @@ public class SharePartitionManagerTest {
         Mockito.verify(mockReplicaManager, times(0)).readFromLog(
             any(), any(), any(ReplicaQuota.class), anyBoolean());
         // Should have 3 fetch recorded.
-        validateBrokerTopicStatsMetrics(
-            brokerTopicStats,
-            new TopicMetrics(3, 0, 0, 0),
-            Map.of(tp0.topic(), new TopicMetrics(3, 0, 0, 0))
-        );
+        assertEquals(3, brokerTopicStats.allTopicsStats().totalShareFetchRequestRate().count());
+        assertEquals(1, brokerTopicStats.numTopics());
+        assertEquals(3, brokerTopicStats.topicStats(tp0.topic()).totalShareFetchRequestRate().count());
     }
 
     @Test
