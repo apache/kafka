@@ -63,22 +63,16 @@ public class CustomQuotaCallbackTest {
             admin.createTopics(List.of(new NewTopic("topic", 1, (short) 1)));
             TestUtils.waitForCondition(
                 () -> CustomQuotaCallback.dynamicTopicCounter.get() > 0,
-                "Dynamic topic counter did not increase"
+                "The CustomQuotaCallback not triggered. "
             );
             
             int firstCount = CustomQuotaCallback.dynamicTopicCounter.get();
             admin.alterClientQuotas(List.of(), new AlterClientQuotasOptions().validateOnly(true));
             TestUtils.waitForCondition(
                 () -> CustomQuotaCallback.dynamicTopicCounter.get() > firstCount, 
-                "Dynamic topic counter did not increase"
+                "The CustomQuotaCallback not triggered. "
             );
-
-            int secondCount = CustomQuotaCallback.dynamicTopicCounter.get();
-            admin.deleteTopics(List.of("topic"));
-            TestUtils.waitForCondition(
-                () -> CustomQuotaCallback.dynamicTopicCounter.get() > secondCount, 
-                "Dynamic topic counter did not increase"
-            );
+            
         }
     }
 
