@@ -3299,7 +3299,7 @@ public class ReplicationControlManagerTest {
         ctx.registerBrokers(1, 2, 3, 4);
         ctx.unfenceBrokers(1, 2, 3, 4);
         Uuid fooId = ctx.createTestTopic("foo", new int[][]{
-                new int[]{1, 2, 4}, new int[]{1, 3, 4}}).topicId();
+            new int[]{1, 2, 4}, new int[]{1, 3, 4}}).topicId();
         int partitionEpoch = ctx.replicationControl.getPartition(fooId, 0).partitionEpoch;
         ctx.replay(Arrays.asList(new ApiMessageAndVersion(new ClearElrRecord(), CLEAR_ELR_RECORD.highestSupportedVersion())));
         assertEquals(partitionEpoch, ctx.replicationControl.getPartition(fooId, 0).partitionEpoch);
