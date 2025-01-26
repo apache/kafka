@@ -86,7 +86,7 @@ class ApiVersionManagerTest {
     )))
 
     val versionManager = new DefaultApiVersionManager(
-      listenerType = ListenerType.ZK_BROKER,
+      listenerType = ListenerType.BROKER,
       forwardingManager = forwardingManager,
       brokerFeatures = brokerFeatures,
       metadataCache = metadataCache,

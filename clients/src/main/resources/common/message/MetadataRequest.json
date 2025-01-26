@@ -16,7 +16,7 @@
 {
   "apiKey": 3,
   "type": "request",
-  "listeners": ["zkBroker", "broker"],
+  "listeners": ["broker"],
   "name": "MetadataRequest",
   "validVersions": "4-13",
   "flexibleVersions": "9+",

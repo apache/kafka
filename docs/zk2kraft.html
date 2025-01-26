@@ -155,46 +155,51 @@
         </li>
         <li>
             <p>
-                Remove the metrics which is monitoring the latency in milliseconds for ZooKeeper requests from broker.
+                Remove the metrics which are only used in ZooKeeper mode.
             </p>
             <ul>
-                <li><code>kafka.server:type=ZooKeeperClientMetrics,name=ZooKeeperRequestLatencyMs</code></li>
-            </ul>
-            <p>
-                In Kraft mode, Zookeeper is not used, so the metrics is removed.
-            </p>
-        </li>
-        <li>
-            <p>
-                Remove the metrics which is monitoring the number of Zookeeper migrations.
-            </p>
-            <ul>
+                <li><code>kafka.controller:type=ControllerChannelManager,name=QueueSize</code></li>
+                <li><code>kafka.controller:type=ControllerChannelManager,name=RequestRateAndQueueTimeMs</code></li>
+                <li><code>kafka.controller:type=ControllerEventManager,name=EventQueueSize</code></li>
+                <li><code>kafka.controller:type=ControllerEventManager,name=EventQueueTimeMs</code></li>
+                <li><code>kafka.controller:type=ControllerStats,name=AutoLeaderBalanceRateAndTimeMs</code></li>
+                <li><code>kafka.controller:type=ControllerStats,name=ControlledShutdownRateAndTimeMs</code></li>
+                <li><code>kafka.controller:type=ControllerStats,name=ControllerChangeRateAndTimeMs</code></li>
+                <li><code>kafka.controller:type=ControllerStats,name=ControllerShutdownRateAndTimeMs</code></li>
+                <li><code>kafka.controller:type=ControllerStats,name=IdleRateAndTimeMs</code></li>
+                <li><code>kafka.controller:type=ControllerStats,name=IsrChangeRateAndTimeMs</code></li>
+                <li><code>kafka.controller:type=ControllerStats,name=LeaderAndIsrResponseReceivedRateAndTimeMs</code></li>
+                <li><code>kafka.controller:type=ControllerStats,name=LeaderElectionRateAndTimeMs</code></li>
+                <li><code>kafka.controller:type=ControllerStats,name=ListPartitionReassignmentRateAndTimeMs</code></li>
+                <li><code>kafka.controller:type=ControllerStats,name=LogDirChangeRateAndTimeMs</code></li>
+                <li><code>kafka.controller:type=ControllerStats,name=ManualLeaderBalanceRateAndTimeMs</code></li>
                 <li><code>kafka.controller:type=KafkaController,name=MigratingZkBrokerCount</code></li>
+                <li><code>kafka.controller:type=ControllerStats,name=PartitionReassignmentRateAndTimeMs</code></li>
+                <li><code>kafka.controller:type=ControllerStats,name=TopicChangeRateAndTimeMs</code></li>
+                <li><code>kafka.controller:type=ControllerStats,name=TopicDeletionRateAndTimeMs</code></li>
+                <li><code>kafka.controller:type=KafkaController,name=TopicsIneligibleToDeleteCount</code></li>
+                <li><code>kafka.controller:type=ControllerStats,name=TopicUncleanLeaderElectionEnableRateAndTimeMs</code></li>
+                <li><code>kafka.controller:type=ControllerStats,name=UncleanLeaderElectionEnableRateAndTimeMs</code></li>
+                <li><code>kafka.controller:type=ControllerStats,name=UncleanLeaderElectionsPerSec</code></li>
+                <li><code>kafka.controller:type=ControllerStats,name=UpdateFeaturesRateAndTimeMs</code></li>
+                <li><code>kafka.controller:type=ControllerStats,name=UpdateMetadataResponseReceivedRateAndTimeMs</code></li>
+                <li><code>kafka.controller:type=KafkaController,name=ActiveBrokerCount</code></li>
+                <li><code>kafka.controller:type=KafkaController,name=ActiveControllerCount</code></li>
+                <li><code>kafka.controller:type=KafkaController,name=ControllerState</code></li>
+                <li><code>kafka.controller:type=KafkaController,name=FencedBrokerCount</code></li>
+                <li><code>kafka.controller:type=KafkaController,name=GlobalPartitionCount</code></li>
+                <li><code>kafka.controller:type=KafkaController,name=GlobalTopicCount</code></li>
+                <li><code>kafka.controller:type=KafkaController,name=OfflinePartitionsCount</code></li>
+                <li><code>kafka.controller:type=KafkaController,name=PreferredReplicaImbalanceCount</code></li>
+                <li><code>kafka.controller:type=KafkaController,name=ReplicasIneligibleToDeleteCount</code></li>
+                <li><code>kafka.controller:type=KafkaController,name=ReplicasToDeleteCount</code></li>
+                <li><code>kafka.controller:type=KafkaController,name=TopicsToDeleteCount</code></li>
                 <li><code>kafka.controller:type=KafkaController,name=ZkMigrationState</code></li>
-            </ul>
-            <p>
-                Kafka remove all zookeeper dependencies, so the metrics is removed.
-            </p>
-        </li>
-        <li>
-            <p>
-                Remove the metrics which is monitoring requests waiting in the topic purgatory
-            </p>
-            <ul>
+                <li><code>kafka.server:type=DelayedOperationPurgatory,name=PurgatorySize,delayedOperation=ElectLeader</code></li>
                 <li><code>kafka.server:type=DelayedOperationPurgatory,name=PurgatorySize,delayedOperation=topic</code></li>
+                <li><code>kafka.server:type=DelayedOperationPurgatory,name=NumDelayedOperations,delayedOperation=ElectLeader</code></li>
                 <li><code>kafka.server:type=DelayedOperationPurgatory,name=NumDelayedOperations,delayedOperation=topic</code></li>
-            </ul>
-            <p>
-                In Kraft mode, Zookeeper is not used, so the metrics is removed.
-            </p>
-        </li>
-        <li>
-            <p>
-                Remove the metrics for leader election purgatory.
-            </p>
-            <ul>
-                <li><code>kafka.server:type=DelayedOperationPurgatory,delayedOperation=ElectLeader,name=PurgatorySize</code></li>
-                <li><code>kafka.server:type=DelayedOperationPurgatory,delayedOperation=ElectLeader,name=NumDelayedOperations</code></li>
+                <li><code>kafka.server:type=ZooKeeperClientMetrics,name=ZooKeeperRequestLatencyMs</code></li>
             </ul>
         </li>
     </ul>

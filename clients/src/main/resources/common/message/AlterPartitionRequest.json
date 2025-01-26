@@ -16,7 +16,7 @@
 {
   "apiKey": 56,
   "type": "request",
-  "listeners": ["zkBroker", "controller"],
+  "listeners": ["controller"],
   "name": "AlterPartitionRequest",
   // Version 1 adds LeaderRecoveryState field (KIP-704).
   //

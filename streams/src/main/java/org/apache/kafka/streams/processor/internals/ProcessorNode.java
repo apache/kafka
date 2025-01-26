@@ -209,13 +209,14 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
             // (instead of `RuntimeException`) to work well with those languages
             final ErrorHandlerContext errorHandlerContext = new DefaultErrorHandlerContext(
                 null, // only required to pass for DeserializationExceptionHandler
-                internalProcessorContext.topic(),
-                internalProcessorContext.partition(),
-                internalProcessorContext.offset(),
-                internalProcessorContext.headers(),
+                internalProcessorContext.recordContext().topic(),
+                internalProcessorContext.recordContext().partition(),
+                internalProcessorContext.recordContext().offset(),
+                internalProcessorContext.recordContext().headers(),
                 internalProcessorContext.currentNode().name(),
                 internalProcessorContext.taskId(),
-                internalProcessorContext.timestamp());
+                internalProcessorContext.recordContext().timestamp()
+            );
 
             final ProcessingExceptionHandler.ProcessingHandlerResponse response;
             try {

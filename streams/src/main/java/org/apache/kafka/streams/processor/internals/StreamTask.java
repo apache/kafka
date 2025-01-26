@@ -861,8 +861,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         final Record<Object, Object> toProcess = new Record<>(
             record.key(),
             record.value(),
-            processorContext.timestamp(),
-            processorContext.headers()
+            processorContext.recordContext().timestamp(),
+            processorContext.recordContext().headers()
         );
         maybeMeasureLatency(() -> currNode.process(toProcess), time, processLatencySensor);
 
