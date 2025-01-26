@@ -212,7 +212,7 @@ public class JmxReporter implements MetricsReporter {
         // avoid re-registering after being closed, which could lead to memory leaks
         // See KAFKA-18337 for more detail.
         if (closed) {
-            log.warn("JmxReporter has been closed!, cannot re-registering mbean {}", mbean);
+            log.warn("JmxReporter has been closed. Cannot reregister mbean {}", mbean);
             return;
         }
         unregister(mbean);
