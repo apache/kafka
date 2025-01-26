@@ -188,13 +188,11 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             }
         }
 
-        // Map storing the list of partitions to forget in the upcoming request.
-        Map<Node, List<TopicIdPartition>> partitionsToForgetMap = new HashMap<>();
-        Cluster cluster = metadata.fetch();
 
         // Iterate over the session handlers to see if there are acknowledgements to be sent for partitions
         // which are no longer part of the current subscription, or whose records were fetched from a
         // previous leader.
+        Cluster cluster = metadata.fetch();
         sessionHandlers.forEach((nodeId, sessionHandler) -> {
             Node node = cluster.nodeById(nodeId);
             if (node != null) {
@@ -207,10 +205,8 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                             metricsManager.recordAcknowledgementSent(acks.size());
                             fetchAcknowledgementsInFlight.computeIfAbsent(node.id(), k -> new HashMap<>()).put(tip, acks);
 
-                            sessionHandler.addPartitionToFetch(tip, acks);
+                            sessionHandler.addPartitionToAcknowledgeOnly(tip, acks);
                             handlerMap.put(node, sessionHandler);
-
-                            partitionsToForgetMap.computeIfAbsent(node, k -> new ArrayList<>()).add(tip);
 
                             topicNamesMap.putIfAbsent(new IdAndPartition(tip.topicId(), tip.partition()), tip.topic());
                             log.debug("Added fetch request for previously subscribed partition {} to node {}", tip, nodeId);
@@ -220,27 +216,13 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             }
         });
 
-        // Iterate over the share session handlers and build a list of request builders
-        Map<Node, ShareFetchRequest.Builder> builderMap = new LinkedHashMap<>();
-        for (Map.Entry<Node, ShareSessionHandler> entry : handlerMap.entrySet()) {
-            ShareFetchRequest.Builder builder = entry.getValue().newShareFetchBuilder(groupId, fetchConfig);
-            Node node = entry.getKey();
-
-            if (partitionsToForgetMap.containsKey(node)) {
-                if (builder.data().forgottenTopicsData() == null) {
-                    builder.data().setForgottenTopicsData(new ArrayList<>());
-                }
-                builder.updateForgottenData(partitionsToForgetMap.get(node));
-            }
-
-            builderMap.put(node, builder);
-        }
-
-        // Iterate over the map of request builders and build a list of UnsentRequests
-        List<UnsentRequest> requests = builderMap.entrySet().stream().map(entry -> {
+        // Iterate over the share session handlers and build a list of UnsentRequests
+        List<UnsentRequest> requests = handlerMap.entrySet().stream().map(entry -> {
             Node target = entry.getKey();
+            ShareSessionHandler handler = entry.getValue();
+
             log.trace("Building ShareFetch request to send to node {}", target.id());
-            ShareFetchRequest.Builder requestBuilder = entry.getValue();
+            ShareFetchRequest.Builder requestBuilder = handler.newShareFetchBuilder(groupId, fetchConfig);
 
             nodesWithPendingRequests.add(target.id());
 

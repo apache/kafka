@@ -103,6 +103,10 @@ public class ShareSessionHandler {
         }
     }
 
+    public void addPartitionToAcknowledgeOnly(TopicIdPartition topicIdPartition, Acknowledgements partitionAcknowledgements) {
+        nextAcknowledgements.put(topicIdPartition, partitionAcknowledgements);
+    }
+
     public ShareFetchRequest.Builder newShareFetchBuilder(String groupId, FetchConfig fetchConfig) {
         List<TopicIdPartition> added = new ArrayList<>();
         List<TopicIdPartition> removed = new ArrayList<>();
