@@ -20,6 +20,7 @@ import kafka.server.KafkaBroker;
 import kafka.server.KafkaConfig;
 import kafka.utils.Logging;
 import kafka.utils.TestUtils;
+
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AlterConfigOp;
@@ -45,14 +46,12 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
 import org.apache.kafka.storage.internals.checkpoint.CleanShutdownFileHandler;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-import scala.collection.JavaConverters;
-import scala.collection.Seq;
-import scala.collection.mutable.HashMap;
 
 import java.io.File;
 import java.time.Duration;
@@ -61,11 +60,14 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
+
+import scala.collection.JavaConverters;
+import scala.collection.Seq;
+import scala.collection.mutable.HashMap;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -422,7 +424,6 @@ public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarnes
                     TopicDescription topicDescription = adminClient.describeTopics(Collections.singletonList(testTopicName))
                             .allTopicNames().get().get(testTopicName);
                     TopicPartitionInfo partition = topicDescription.partitions().get(0);
-                    System.out.println("---" + partition);
                     if (!isIsrAndElrSizeSatisfied.apply(partition.isr().size(), partition.elr().size())) return false;
                 } catch (Exception e) {
                     return false;
