@@ -609,14 +609,13 @@ public class ReplicationControlManager {
         List<Integer> partitionIds = new ArrayList<>(topic.parts.keySet());
         for (int partitionId : partitionIds) {
             PartitionRegistration partition = topic.parts.get(partitionId);
-            PartitionRegistration nextPartition = partition.merge(
-                new PartitionChangeRecord().
-                    setPartitionId(partitionId).
-                    setTopicId(topic.id).
-                    setEligibleLeaderReplicas(Collections.emptyList()).
-                    setLastKnownElr(Collections.emptyList()));
-            if (!nextPartition.equals(partition)) {
-                topic.parts.put(partitionId, nextPartition);
+            if (partition.elr.length != 0 || partition.lastKnownElr.length != 0) {
+                topic.parts.put(partitionId, partition.merge(
+                    new PartitionChangeRecord().
+                        setPartitionId(partitionId).
+                        setTopicId(topic.id).
+                        setEligibleLeaderReplicas(Collections.emptyList()).
+                        setLastKnownElr(Collections.emptyList())));
                 numRemoved++;
             }
         }
