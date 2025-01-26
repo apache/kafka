@@ -25,14 +25,12 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataVa
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -40,8 +38,10 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasks;
 import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasksPerSubtopology;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class StreamsGroupMemberTest {
 
@@ -70,12 +70,18 @@ public class StreamsGroupMemberTest {
     private static final List<Integer> TASKS4 = List.of(3, 2, 1);
     private static final List<Integer> TASKS5 = List.of(6, 5, 4);
     private static final List<Integer> TASKS6 = List.of(9, 7);
-    private static final Map<String, Set<Integer>> ASSIGNED_ACTIVE_TASKS = mkTasksPerSubtopology(mkTasks(SUBTOPOLOGY1, TASKS1.toArray(Integer[]::new)));
-    private static final Map<String, Set<Integer>> ASSIGNED_STANDBY_TASKS = mkTasksPerSubtopology(mkTasks(SUBTOPOLOGY2, TASKS2.toArray(Integer[]::new)));
-    private static final Map<String, Set<Integer>> ASSIGNED_WARMUP_TASKS = mkTasksPerSubtopology(mkTasks(SUBTOPOLOGY1, TASKS3.toArray(Integer[]::new)));
-    private static final Map<String, Set<Integer>> ACTIVE_TASKS_PENDING_REVOCATION = mkTasksPerSubtopology(mkTasks(SUBTOPOLOGY2, TASKS4.toArray(Integer[]::new)));
-    private static final Map<String, Set<Integer>> STANDBY_TASKS_PENDING_REVOCATION = mkTasksPerSubtopology(mkTasks(SUBTOPOLOGY1, TASKS5.toArray(Integer[]::new)));
-    private static final Map<String, Set<Integer>> WARMUP_TASKS_PENDING_REVOCATION = mkTasksPerSubtopology(mkTasks(SUBTOPOLOGY2, TASKS6.toArray(Integer[]::new)));
+    private static final TasksTuple ASSIGNED_TASKS =
+        new TasksTuple(
+            mkTasksPerSubtopology(mkTasks(SUBTOPOLOGY1, TASKS1.toArray(Integer[]::new))),
+            mkTasksPerSubtopology(mkTasks(SUBTOPOLOGY2, TASKS2.toArray(Integer[]::new))),
+            mkTasksPerSubtopology(mkTasks(SUBTOPOLOGY1, TASKS3.toArray(Integer[]::new)))
+        );
+    private static final TasksTuple TASKS_PENDING_REVOCATION =
+        new TasksTuple(
+            mkTasksPerSubtopology(mkTasks(SUBTOPOLOGY2, TASKS4.toArray(Integer[]::new))),
+            mkTasksPerSubtopology(mkTasks(SUBTOPOLOGY1, TASKS5.toArray(Integer[]::new))),
+            mkTasksPerSubtopology(mkTasks(SUBTOPOLOGY2, TASKS6.toArray(Integer[]::new)))
+        );
 
     @Test
     public void testBuilderWithMemberIdIsNull() {
@@ -112,12 +118,8 @@ public class StreamsGroupMemberTest {
         assertNull(member.processId());
         assertNull(member.userEndpoint());
         assertNull(member.clientTags());
-        assertNull(member.assignedActiveTasks());
-        assertNull(member.assignedStandbyTasks());
-        assertNull(member.assignedWarmupTasks());
-        assertNull(member.activeTasksPendingRevocation());
-        assertNull(member.standbyTasksPendingRevocation());
-        assertNull(member.warmupTasksPendingRevocation());
+        assertNull(member.assignedTasks());
+        assertNull(member.tasksPendingRevocation());
     }
 
     @Test
@@ -136,12 +138,8 @@ public class StreamsGroupMemberTest {
         assertEquals(PROCESS_ID, member.processId());
         assertEquals(Optional.of(USER_ENDPOINT), member.userEndpoint());
         assertEquals(CLIENT_TAGS, member.clientTags());
-        assertEquals(ASSIGNED_ACTIVE_TASKS, member.assignedActiveTasks());
-        assertEquals(ASSIGNED_STANDBY_TASKS, member.assignedStandbyTasks());
-        assertEquals(ASSIGNED_WARMUP_TASKS, member.assignedWarmupTasks());
-        assertEquals(ACTIVE_TASKS_PENDING_REVOCATION, member.activeTasksPendingRevocation());
-        assertEquals(STANDBY_TASKS_PENDING_REVOCATION, member.standbyTasksPendingRevocation());
-        assertEquals(WARMUP_TASKS_PENDING_REVOCATION, member.warmupTasksPendingRevocation());
+        assertEquals(ASSIGNED_TASKS, member.assignedTasks());
+        assertEquals(TASKS_PENDING_REVOCATION, member.tasksPendingRevocation());
     }
 
     @Test
@@ -179,12 +177,8 @@ public class StreamsGroupMemberTest {
         assertNull(member.memberEpoch());
         assertNull(member.previousMemberEpoch());
         assertNull(member.state());
-        assertNull(member.assignedActiveTasks());
-        assertNull(member.assignedStandbyTasks());
-        assertNull(member.assignedWarmupTasks());
-        assertNull(member.activeTasksPendingRevocation());
-        assertNull(member.standbyTasksPendingRevocation());
-        assertNull(member.warmupTasksPendingRevocation());
+        assertNull(member.assignedTasks());
+        assertNull(member.tasksPendingRevocation());
     }
 
     @Test
@@ -208,12 +202,8 @@ public class StreamsGroupMemberTest {
         assertEquals(record.memberEpoch(), member.memberEpoch());
         assertEquals(record.previousMemberEpoch(), member.previousMemberEpoch());
         assertEquals(MemberState.fromValue(record.state()), member.state());
-        assertEquals(ASSIGNED_ACTIVE_TASKS, member.assignedActiveTasks());
-        assertEquals(ASSIGNED_STANDBY_TASKS, member.assignedStandbyTasks());
-        assertEquals(ASSIGNED_WARMUP_TASKS, member.assignedWarmupTasks());
-        assertEquals(ACTIVE_TASKS_PENDING_REVOCATION, member.activeTasksPendingRevocation());
-        assertEquals(STANDBY_TASKS_PENDING_REVOCATION, member.standbyTasksPendingRevocation());
-        assertEquals(WARMUP_TASKS_PENDING_REVOCATION, member.warmupTasksPendingRevocation());
+        assertEquals(ASSIGNED_TASKS, member.assignedTasks());
+        assertEquals(TASKS_PENDING_REVOCATION, member.tasksPendingRevocation());
         assertNull(member.instanceId());
         assertNull(member.rackId());
         assertNull(member.rebalanceTimeoutMs());
@@ -275,12 +265,8 @@ public class StreamsGroupMemberTest {
         assertEquals(member.state(), updatedMember.state());
         assertEquals(member.clientId(), updatedMember.clientId());
         assertEquals(member.clientHost(), updatedMember.clientHost());
-        assertEquals(member.assignedActiveTasks(), updatedMember.assignedActiveTasks());
-        assertEquals(member.assignedStandbyTasks(), updatedMember.assignedStandbyTasks());
-        assertEquals(member.assignedWarmupTasks(), updatedMember.assignedWarmupTasks());
-        assertEquals(member.activeTasksPendingRevocation(), updatedMember.activeTasksPendingRevocation());
-        assertEquals(member.standbyTasksPendingRevocation(), updatedMember.standbyTasksPendingRevocation());
-        assertEquals(member.warmupTasksPendingRevocation(), updatedMember.warmupTasksPendingRevocation());
+        assertEquals(member.assignedTasks(), updatedMember.assignedTasks());
+        assertEquals(member.tasksPendingRevocation(), updatedMember.tasksPendingRevocation());
     }
 
     @Test
@@ -306,25 +292,8 @@ public class StreamsGroupMemberTest {
         assertEquals(member.processId(), updatedMember.processId());
         assertEquals(member.userEndpoint(), updatedMember.userEndpoint());
         assertEquals(member.clientTags(), updatedMember.clientTags());
-        assertEquals(member.assignedActiveTasks(), updatedMember.assignedActiveTasks());
-        assertEquals(member.assignedStandbyTasks(), updatedMember.assignedStandbyTasks());
-        assertEquals(member.assignedWarmupTasks(), updatedMember.assignedWarmupTasks());
-        assertEquals(member.activeTasksPendingRevocation(), updatedMember.activeTasksPendingRevocation());
-        assertEquals(member.standbyTasksPendingRevocation(), updatedMember.standbyTasksPendingRevocation());
-        assertEquals(member.warmupTasksPendingRevocation(), updatedMember.warmupTasksPendingRevocation());
-    }
-
-    @Test
-    public void testReturnUnmodifiableFields() {
-        final StreamsGroupMember member = createStreamsGroupMember();
-
-        assertThrows(UnsupportedOperationException.class, () -> member.clientTags().put("not allowed", ""));
-        assertThrows(UnsupportedOperationException.class, () -> member.assignedActiveTasks().put("not allowed", Collections.emptySet()));
-        assertThrows(UnsupportedOperationException.class, () -> member.assignedStandbyTasks().put("not allowed", Collections.emptySet()));
-        assertThrows(UnsupportedOperationException.class, () -> member.assignedWarmupTasks().put("not allowed", Collections.emptySet()));
-        assertThrows(UnsupportedOperationException.class, () -> member.activeTasksPendingRevocation().put("not allowed", Collections.emptySet()));
-        assertThrows(UnsupportedOperationException.class, () -> member.standbyTasksPendingRevocation().put("not allowed", Collections.emptySet()));
-        assertThrows(UnsupportedOperationException.class, () -> member.warmupTasksPendingRevocation().put("not allowed", Collections.emptySet()));
+        assertEquals(member.assignedTasks(), updatedMember.assignedTasks());
+        assertEquals(member.tasksPendingRevocation(), updatedMember.tasksPendingRevocation());
     }
 
     @Test
@@ -333,7 +302,7 @@ public class StreamsGroupMemberTest {
         List<Integer> assignedTasks1 = Arrays.asList(10, 11, 12);
         List<Integer> assignedTasks2 = Arrays.asList(13, 14, 15);
         List<Integer> assignedTasks3 = Arrays.asList(16, 17, 18);
-        Assignment targetAssignment = new Assignment(
+        TasksTuple targetAssignment = new TasksTuple(
             mkMap(mkEntry(SUBTOPOLOGY1, new HashSet<>(assignedTasks3))),
             mkMap(mkEntry(SUBTOPOLOGY2, new HashSet<>(assignedTasks2))),
             mkMap(mkEntry(SUBTOPOLOGY3, new HashSet<>(assignedTasks1)))
@@ -404,6 +373,45 @@ public class StreamsGroupMemberTest {
         assertEquals(new StreamsGroupDescribeResponseData.Assignment(), streamsGroupDescribeMember.targetAssignment());
     }
 
+    @Test
+    public void testHasAssignedTasksChanged() {
+        StreamsGroupMember member1 = new StreamsGroupMember.Builder(MEMBER_ID)
+            .setAssignedTasks(new TasksTuple(
+                mkMap(mkEntry(SUBTOPOLOGY1, new HashSet<>(TASKS1))),
+                mkMap(mkEntry(SUBTOPOLOGY2, new HashSet<>(TASKS2))),
+                mkMap(mkEntry(SUBTOPOLOGY1, new HashSet<>(TASKS3)))
+            ))
+            .build();
+
+        StreamsGroupMember member2 = new StreamsGroupMember.Builder(MEMBER_ID)
+            .setAssignedTasks(new TasksTuple(
+                mkMap(mkEntry(SUBTOPOLOGY1, new HashSet<>(TASKS4))),
+                mkMap(mkEntry(SUBTOPOLOGY2, new HashSet<>(TASKS5))),
+                mkMap(mkEntry(SUBTOPOLOGY1, new HashSet<>(TASKS6)))
+            ))
+            .build();
+
+        assertTrue(StreamsGroupMember.hasAssignedTasksChanged(member1, member2));
+
+        StreamsGroupMember member3 = new StreamsGroupMember.Builder(MEMBER_ID)
+            .setAssignedTasks(new TasksTuple(
+                mkMap(mkEntry(SUBTOPOLOGY1, new HashSet<>(TASKS1))),
+                mkMap(mkEntry(SUBTOPOLOGY2, new HashSet<>(TASKS2))),
+                mkMap(mkEntry(SUBTOPOLOGY1, new HashSet<>(TASKS3)))
+            ))
+            .build();
+
+        StreamsGroupMember member4 = new StreamsGroupMember.Builder(MEMBER_ID)
+            .setAssignedTasks(new TasksTuple(
+                mkMap(mkEntry(SUBTOPOLOGY1, new HashSet<>(TASKS1))),
+                mkMap(mkEntry(SUBTOPOLOGY2, new HashSet<>(TASKS2))),
+                mkMap(mkEntry(SUBTOPOLOGY1, new HashSet<>(TASKS3)))
+            ))
+            .build();
+
+        assertFalse(StreamsGroupMember.hasAssignedTasksChanged(member3, member4));
+    }
+
     private StreamsGroupMember createStreamsGroupMember() {
         return new StreamsGroupMember.Builder(MEMBER_ID)
             .setMemberEpoch(MEMBER_EPOCH)
@@ -418,12 +426,8 @@ public class StreamsGroupMemberTest {
             .setProcessId(PROCESS_ID)
             .setUserEndpoint(USER_ENDPOINT)
             .setClientTags(CLIENT_TAGS)
-            .setAssignedActiveTasks(ASSIGNED_ACTIVE_TASKS)
-            .setAssignedStandbyTasks(ASSIGNED_STANDBY_TASKS)
-            .setAssignedWarmupTasks(ASSIGNED_WARMUP_TASKS)
-            .setActiveTasksPendingRevocation(ACTIVE_TASKS_PENDING_REVOCATION)
-            .setStandbyTasksPendingRevocation(STANDBY_TASKS_PENDING_REVOCATION)
-            .setWarmupTasksPendingRevocation(WARMUP_TASKS_PENDING_REVOCATION)
+            .setAssignedTasks(ASSIGNED_TASKS)
+            .setTasksPendingRevocation(TASKS_PENDING_REVOCATION)
             .build();
     }
 }

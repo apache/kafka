@@ -825,7 +825,7 @@ sasl.mechanism=PLAIN</code></pre></li>
                         Client credentials may be created and updated dynamically and updated credentials will be used to authenticate new connections.
                         <code>kafka-configs.sh</code> can be used to create and update credentials after Kafka brokers are started.</p>
                     <p>Create initial SCRAM credentials for user <i>admin</i> with password <i>admin-secret</i>:
-                    <pre><code class="language-bash">$ bin/kafka-storage.sh format -t $(bin/kafka-storage.sh random-uuid) -c config/kraft/server.properties --add-scram 'SCRAM-SHA-256=[name="admin",password="admin-secret"]'</code></pre>
+                    <pre><code class="language-bash">$ bin/kafka-storage.sh format -t $(bin/kafka-storage.sh random-uuid) -c config/server.properties --add-scram 'SCRAM-SHA-256=[name="admin",password="admin-secret"]'</code></pre>
                     <p>Create SCRAM credentials for user <i>alice</i> with password <i>alice-secret</i> (refer to <a href="#security_sasl_scram_clientconfig">Configuring Kafka Clients</a> for client configuration):
                     <pre><code class="language-bash">$ bin/kafka-configs.sh --bootstrap-server localhost:9092 --alter --add-config 'SCRAM-SHA-256=[iterations=8192,password=alice-secret]' --entity-type users --entity-name alice --command-config client.properties</code></pre>
                     <p>The default iteration count of 4096 is used if iterations are not specified. A random salt is created if it's not specified.

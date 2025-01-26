@@ -153,14 +153,11 @@ class ShareCoordinatorShardTest {
 
         SharePartitionKey shareCoordinatorKey = SharePartitionKey.getInstance(GROUP_ID, TOPIC_ID, PARTITION);
 
-        CoordinatorRecord record1 = new CoordinatorRecord(
-            new ApiMessageAndVersion(
-                new ShareSnapshotKey()
-                    .setGroupId(GROUP_ID)
-                    .setTopicId(TOPIC_ID)
-                    .setPartition(PARTITION),
-                (short) 0
-            ),
+        CoordinatorRecord record1 = CoordinatorRecord.record(
+            new ShareSnapshotKey()
+                .setGroupId(GROUP_ID)
+                .setTopicId(TOPIC_ID)
+                .setPartition(PARTITION),
             new ApiMessageAndVersion(
                 new ShareSnapshotValue()
                     .setSnapshotEpoch(0)
@@ -176,14 +173,11 @@ class ShareCoordinatorShardTest {
             )
         );
 
-        CoordinatorRecord record2 = new CoordinatorRecord(
-            new ApiMessageAndVersion(
-                new ShareSnapshotKey()
-                    .setGroupId(GROUP_ID)
-                    .setTopicId(TOPIC_ID)
-                    .setPartition(PARTITION),
-                (short) 0
-            ),
+        CoordinatorRecord record2 = CoordinatorRecord.record(
+            new ShareSnapshotKey()
+                .setGroupId(GROUP_ID)
+                .setTopicId(TOPIC_ID)
+                .setPartition(PARTITION),
             new ApiMessageAndVersion(
                 new ShareSnapshotValue()
                     .setSnapshotEpoch(1)

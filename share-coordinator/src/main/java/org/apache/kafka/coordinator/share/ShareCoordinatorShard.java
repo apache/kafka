@@ -207,16 +207,16 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
 
     @Override
     public void replay(long offset, long producerId, short producerEpoch, CoordinatorRecord record) throws RuntimeException {
-        ApiMessageAndVersion key = record.key();
+        ApiMessage key = record.key();
         ApiMessageAndVersion value = record.value();
 
         try {
-            switch (CoordinatorRecordType.fromId(key.version())) {
+            switch (CoordinatorRecordType.fromId(key.apiKey())) {
                 case SHARE_SNAPSHOT:
-                    handleShareSnapshot((ShareSnapshotKey) key.message(), (ShareSnapshotValue) messageOrNull(value), offset);
+                    handleShareSnapshot((ShareSnapshotKey) key, (ShareSnapshotValue) messageOrNull(value), offset);
                     break;
                 case SHARE_UPDATE:
-                    handleShareUpdate((ShareUpdateKey) key.message(), (ShareUpdateValue) messageOrNull(value));
+                    handleShareUpdate((ShareUpdateKey) key, (ShareUpdateValue) messageOrNull(value));
                     break;
                 default:
                     // Noop

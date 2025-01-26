@@ -14537,7 +14537,7 @@ public class GroupMetadataManagerTest {
             .withShareGroupAssignor(assignor)
             .build();
 
-        assertThrows(IllegalStateException.class, () ->
+        assertThrows(GroupIdNotFoundException.class, () ->
             context.shareGroupHeartbeat(
                 new ShareGroupHeartbeatRequestData()
                     .setGroupId(groupId)
