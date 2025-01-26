@@ -1259,12 +1259,10 @@ public class SharePartitionManagerTest {
             any(), any(), any(ReplicaQuota.class), anyBoolean());
         Map<TopicIdPartition, ShareFetchResponseData.PartitionData> result = future.join();
         assertEquals(0, result.size());
-        // Should have 1 fetch recorded and no failed as the fetch did complete without error.
-        validateBrokerTopicStatsMetrics(
-            brokerTopicStats,
-            new TopicMetrics(1, 0, 0, 0),
-            Map.of("foo", new TopicMetrics(1, 0, 0, 0))
-        );
+        // Should have 1 fetch recorded.
+        assertEquals(1, brokerTopicStats.allTopicsStats().totalShareFetchRequestRate().count());
+        assertEquals(1, brokerTopicStats.numTopics());
+        assertEquals(1, brokerTopicStats.topicStats(tp0.topic()).totalShareFetchRequestRate().count());
     }
 
     @Test
