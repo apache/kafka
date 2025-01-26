@@ -384,10 +384,10 @@ class BrokerServer(
         transactionCoordinator, shareCoordinator)
 
       dynamicConfigHandlers = Map[String, ConfigHandler](
-        ConfigType.TOPIC -> new TopicConfigHandler(replicaManager, config, quotaManagers),
-        ConfigType.BROKER -> new BrokerConfigHandler(config, quotaManagers),
-        ConfigType.CLIENT_METRICS -> new ClientMetricsConfigHandler(clientMetricsManager),
-        ConfigType.GROUP -> new GroupConfigHandler(groupCoordinator))
+        ConfigType.TOPIC.value -> new TopicConfigHandler(replicaManager, config, quotaManagers),
+        ConfigType.BROKER.value -> new BrokerConfigHandler(config, quotaManagers),
+        ConfigType.CLIENT_METRICS.value -> new ClientMetricsConfigHandler(clientMetricsManager),
+        ConfigType.GROUP.value -> new GroupConfigHandler(groupCoordinator))
 
       val featuresRemapped = BrokerFeatures.createDefaultFeatureMap(brokerFeatures)
 

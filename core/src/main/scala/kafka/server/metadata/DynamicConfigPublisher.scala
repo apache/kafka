@@ -58,7 +58,7 @@ class DynamicConfigPublisher(
           val props = newImage.configs().configProperties(resource)
           resource.`type`() match {
             case TOPIC =>
-              dynamicConfigHandlers.get(ConfigType.TOPIC).foreach(topicConfigHandler =>
+              dynamicConfigHandlers.get(ConfigType.TOPIC.value).foreach(topicConfigHandler =>
                 try {
                   // Apply changes to a topic's dynamic configuration.
                   info(s"Updating topic ${resource.name()} with new configuration : " +
@@ -71,7 +71,7 @@ class DynamicConfigPublisher(
                 }
               )
             case BROKER =>
-              dynamicConfigHandlers.get(ConfigType.BROKER).foreach(nodeConfigHandler =>
+              dynamicConfigHandlers.get(ConfigType.BROKER.value).foreach(nodeConfigHandler =>
                 if (resource.name().isEmpty) {
                   try {
                     // Apply changes to "cluster configs" (also known as default BROKER configs).
@@ -104,7 +104,7 @@ class DynamicConfigPublisher(
               )
             case CLIENT_METRICS =>
               // Apply changes to client metrics subscription.
-              dynamicConfigHandlers.get(ConfigType.CLIENT_METRICS).foreach(metricsConfigHandler =>
+              dynamicConfigHandlers.get(ConfigType.CLIENT_METRICS.value).foreach(metricsConfigHandler =>
                 try {
                   info(s"Updating client metrics ${resource.name()} with new configuration : " +
                     toLoggableProps(resource, props).mkString(","))
@@ -116,7 +116,7 @@ class DynamicConfigPublisher(
                 })
             case GROUP =>
               // Apply changes to a group's dynamic configuration.
-              dynamicConfigHandlers.get(ConfigType.GROUP).foreach(groupConfigHandler =>
+              dynamicConfigHandlers.get(ConfigType.GROUP.value).foreach(groupConfigHandler =>
                 try {
                   info(s"Updating group ${resource.name()} with new configuration : " +
                     toLoggableProps(resource, props).mkString(","))
