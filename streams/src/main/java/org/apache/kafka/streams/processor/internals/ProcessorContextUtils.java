@@ -37,13 +37,6 @@ public final class ProcessorContextUtils {
     /**
      * Should be removed as part of KAFKA-10217
      */
-    public static StreamsMetricsImpl metricsImpl(final ProcessorContext context) {
-        return (StreamsMetricsImpl) context.metrics();
-    }
-
-    /**
-     * Should be removed as part of KAFKA-10217
-     */
     public static StreamsMetricsImpl metricsImpl(final StateStoreContext context) {
         return (StreamsMetricsImpl) context.metrics();
     }
@@ -71,9 +64,10 @@ public final class ProcessorContextUtils {
         }
     }
 
-    public static InternalProcessorContext asInternalProcessorContext(final ProcessorContext context) {
+    @SuppressWarnings("unchecked")
+    public static <K, V> InternalProcessorContext<K, V> asInternalProcessorContext(final ProcessorContext context) {
         if (context instanceof InternalProcessorContext) {
-            return (InternalProcessorContext) context;
+            return (InternalProcessorContext<K, V>) context;
         } else {
             throw new IllegalArgumentException(
                 "This component requires internal features of Kafka Streams and must be disabled for unit tests."

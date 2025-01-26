@@ -709,7 +709,7 @@ class MetadataCacheTest {
   }
 
   @Test
-  def testGetTopicMetadataForDescribeTopicPartitionsResponse(): Unit = {
+  def testDescribeTopicResponse(): Unit = {
     val metadataCache = MetadataCache.kRaftMetadataCache(0, () => KRaftVersion.KRAFT_VERSION_0)
 
     val securityProtocol = SecurityProtocol.PLAINTEXT
@@ -810,7 +810,7 @@ class MetadataCacheTest {
     }
 
     // Basic test
-    var result = metadataCache.getTopicMetadataForDescribeTopicResponse(Seq(topic0, topic1).iterator, listenerName, _ => 0, 10, false).topics().asScala.toList
+    var result = metadataCache.describeTopicResponse(Seq(topic0, topic1).iterator, listenerName, _ => 0, 10, false).topics().asScala.toList
     assertEquals(2, result.size)
     var resultTopic = result(0)
     assertEquals(topic0, resultTopic.name())
@@ -827,7 +827,7 @@ class MetadataCacheTest {
     checkTopicMetadata(topic1, Set(0), resultTopic.partitions().asScala)
 
     // Quota reached
-    var response = metadataCache.getTopicMetadataForDescribeTopicResponse(Seq(topic0, topic1).iterator, listenerName, _ => 0, 2, false)
+    var response = metadataCache.describeTopicResponse(Seq(topic0, topic1).iterator, listenerName, _ => 0, 2, false)
     result = response.topics().asScala.toList
     assertEquals(1, result.size)
     resultTopic = result(0)
@@ -840,7 +840,7 @@ class MetadataCacheTest {
     assertEquals(2, response.nextCursor().partitionIndex())
 
     // With start index
-    result = metadataCache.getTopicMetadataForDescribeTopicResponse(Seq(topic0).iterator, listenerName, t => if (t.equals(topic0)) 1 else 0, 10, false).topics().asScala.toList
+    result = metadataCache.describeTopicResponse(Seq(topic0).iterator, listenerName, t => if (t.equals(topic0)) 1 else 0, 10, false).topics().asScala.toList
     assertEquals(1, result.size)
     resultTopic = result(0)
     assertEquals(topic0, resultTopic.name())
@@ -850,7 +850,7 @@ class MetadataCacheTest {
     checkTopicMetadata(topic0, Set(1, 2), resultTopic.partitions().asScala)
 
     // With start index and quota reached
-    response = metadataCache.getTopicMetadataForDescribeTopicResponse(Seq(topic0, topic1).iterator, listenerName, t => if (t.equals(topic0)) 2 else 0, 1, false)
+    response = metadataCache.describeTopicResponse(Seq(topic0, topic1).iterator, listenerName, t => if (t.equals(topic0)) 2 else 0, 1, false)
     result = response.topics().asScala.toList
     assertEquals(1, result.size)
 
@@ -864,7 +864,7 @@ class MetadataCacheTest {
     assertEquals(0, response.nextCursor().partitionIndex())
 
     // When the first topic does not exist
-    result = metadataCache.getTopicMetadataForDescribeTopicResponse(Seq("Non-exist", topic0).iterator, listenerName, t => if (t.equals("Non-exist")) 1 else 0, 1, false).topics().asScala.toList
+    result = metadataCache.describeTopicResponse(Seq("Non-exist", topic0).iterator, listenerName, t => if (t.equals("Non-exist")) 1 else 0, 1, false).topics().asScala.toList
     assertEquals(2, result.size)
     resultTopic = result(0)
     assertEquals("Non-exist", resultTopic.name())

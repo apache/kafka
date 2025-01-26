@@ -85,9 +85,9 @@ public class SinkNode<KIn, VIn> extends ProcessorNode<KIn, VIn, Void, Void> {
         final ProcessorRecordContext contextForExtraction =
             new ProcessorRecordContext(
                 timestamp,
-                context.offset(),
-                context.partition(),
-                context.topic(),
+                context.recordContext().offset(),
+                context.recordContext().partition(),
+                context.recordContext().topic(),
                 record.headers()
             );
 

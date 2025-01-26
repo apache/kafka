@@ -91,7 +91,10 @@ method_matcher = re.compile(r"([a-zA-Z_$][a-zA-Z0-9_$]+).*")
 def clean_test_name(test_name: str) -> str:
     cleaned = test_name.strip("\"").rstrip("()")
     m = method_matcher.match(cleaned)
-    return m.group(1)
+    if m is None:
+        raise ValueError(f"Could not parse test name '{test_name}'. Expected a valid Java method name.")
+    else:
+        return m.group(1)
 
 
 class TestCatalogExporter:

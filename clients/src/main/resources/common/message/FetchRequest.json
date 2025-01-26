@@ -16,7 +16,7 @@
 {
   "apiKey": 1,
   "type": "request",
-  "listeners": ["zkBroker", "broker", "controller"],
+  "listeners": ["broker", "controller"],
   "name": "FetchRequest",
   // Versions 0-3 were removed in Apache Kafka 4.0, Version 4 is the new baseline.
   //
