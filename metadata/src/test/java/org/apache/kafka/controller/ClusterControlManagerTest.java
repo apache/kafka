@@ -877,7 +877,7 @@ public class ClusterControlManagerTest {
             }).
             build();
         clusterControl.activate();
-        RecordTestUtils.replayAll(clusterControl, clusterControl.registerBroker(
+        List<ApiMessageAndVersion> records = clusterControl.registerBroker(
             new BrokerRegistrationRequestData().
                 setBrokerId(1).
                 setClusterId(clusterControl.clusterId()).
@@ -886,8 +886,14 @@ public class ClusterControlManagerTest {
             100,
             new FinalizedControllerFeatures(Collections.emptyMap(), 100L),
             true).
-                records());
-        List<ApiMessageAndVersion> records = clusterControl.registerBroker(
+                records();
+        records.add(new ApiMessageAndVersion(new BrokerRegistrationChangeRecord().
+            setBrokerId(1).setBrokerEpoch(100).
+            setInControlledShutdown(BrokerRegistrationInControlledShutdownChange.IN_CONTROLLED_SHUTDOWN.value()),
+            (short) 1));
+        RecordTestUtils.replayAll(clusterControl, records);
+
+        records = clusterControl.registerBroker(
             new BrokerRegistrationRequestData().
                 setBrokerId(1).
                 setClusterId(clusterControl.clusterId()).
@@ -900,6 +906,7 @@ public class ClusterControlManagerTest {
         RecordTestUtils.replayAll(clusterControl, records);
         assertEquals(Uuid.fromString("07OOcU7MQFeSmGAFPP2Zww"),
             clusterControl.brokerRegistrations().get(1).incarnationId());
+        assertFalse(clusterControl.brokerRegistrations().get(1).inControlledShutdown());
         if (isCleanShutdown) {
             assertEquals(100, clusterControl.brokerRegistrations().get(1).epoch());
             assertEquals(1, records.size());

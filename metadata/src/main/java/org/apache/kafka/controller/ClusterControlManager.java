@@ -349,7 +349,7 @@ public class ClusterControlManager {
         List<ApiMessageAndVersion> records = new ArrayList<>();
         BrokerRegistration existing = brokerRegistrations.get(brokerId);
         Uuid prevIncarnationId = null;
-        long storedBrokerEpoch = -2; // default BrokerRegistration.previousBrokerEpoch = -1
+        long storedBrokerEpoch = -2; // BrokerRegistration.previousBrokerEpoch default value is -1
         if (existing != null) {
             prevIncarnationId = existing.incarnationId();
             storedBrokerEpoch = existing.epoch();
@@ -431,6 +431,7 @@ public class ClusterControlManager {
         } else {
             isUncleanShutdownRegistration = !request.incarnationId().equals(prevIncarnationId);
         }
+        boolean isBrokerStartUp = !request.incarnationId().equals(prevIncarnationId);
 
         if (isUncleanShutdownRegistration) {
             int prevNumRecords = records.size();
@@ -457,7 +458,7 @@ public class ClusterControlManager {
             log.info("Amending registration of broker {}, incarnation ID {}. Broker epoch remains {}.",
                     request.brokerId(), request.incarnationId(), existing.epoch());
             record.setFenced(existing.fenced());
-            record.setInControlledShutdown(existing.inControlledShutdown());
+            record.setInControlledShutdown(isBrokerStartUp ? false : existing.inControlledShutdown());
             record.setBrokerEpoch(existing.epoch());
             record.setIncarnationId(request.incarnationId());
         }
