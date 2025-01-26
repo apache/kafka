@@ -2086,28 +2086,28 @@ class LogCleanerTest extends Logging {
 
       val cleaner1 = new logCleaner.CleanerThread(1)
       cleaner1.lastStats = new CleanerStats(time)
-      cleaner1.lastStats.endTime = cleaner1.lastStats.startTime + 1_000L
+      cleaner1.lastStats.endTime = cleaner1.lastStats.startTime + 1000L
       cleaners += cleaner1
 
       val cleaner2 = new logCleaner.CleanerThread(2)
       cleaner2.lastStats = new CleanerStats(time)
-      cleaner2.lastStats.endTime = cleaner2.lastStats.startTime + 2_000L
+      cleaner2.lastStats.endTime = cleaner2.lastStats.startTime + 2000L
       cleaners += cleaner2
 
       val cleaner3 = new logCleaner.CleanerThread(3)
       cleaner3.lastStats = new CleanerStats(time)
-      cleaner3.lastStats.endTime = cleaner3.lastStats.startTime + 3_000L
+      cleaner3.lastStats.endTime = cleaner3.lastStats.startTime + 3000L
       cleaners += cleaner3
 
       // expect the gauge value to reflect the maximum cleanTime
       assertMaxCleanTime(3)
 
       // Update cleanTime and verify the gauge value updates
-      cleaner1.lastStats.endTime = cleaner1.lastStats.startTime + 4_000L
+      cleaner1.lastStats.endTime = cleaner1.lastStats.startTime + 4000L
       assertMaxCleanTime(4)
 
       // All CleanerThreads have the same cleanTime
-      cleaners.foreach(cleaner => cleaner.lastStats.endTime = cleaner.lastStats.startTime + 1_500L)
+      cleaners.foreach(cleaner => cleaner.lastStats.endTime = cleaner.lastStats.startTime + 1500L)
       assertMaxCleanTime(1)
     } finally {
       logCleaner.shutdown()
@@ -2138,28 +2138,28 @@ class LogCleanerTest extends Logging {
 
       val cleaner1 = new logCleaner.CleanerThread(1)
       cleaner1.lastStats = new CleanerStats(time)
-      cleaner1.lastPreCleanStats.maxCompactionDelayMs = 1_000L
+      cleaner1.lastPreCleanStats.maxCompactionDelayMs = 1000L
       cleaners += cleaner1
 
       val cleaner2 = new logCleaner.CleanerThread(2)
       cleaner2.lastStats = new CleanerStats(time)
-      cleaner2.lastPreCleanStats.maxCompactionDelayMs = 2_000L
+      cleaner2.lastPreCleanStats.maxCompactionDelayMs = 2000L
       cleaners += cleaner2
 
       val cleaner3 = new logCleaner.CleanerThread(3)
       cleaner3.lastStats = new CleanerStats(time)
-      cleaner3.lastPreCleanStats.maxCompactionDelayMs = 3_000L
+      cleaner3.lastPreCleanStats.maxCompactionDelayMs = 3000L
       cleaners += cleaner3
 
       // expect the gauge value to reflect the maximum CompactionDelay
       assertMaxCompactionDelay(3)
 
       // Update CompactionDelay and verify the gauge value updates
-      cleaner1.lastPreCleanStats.maxCompactionDelayMs = 4_000L
+      cleaner1.lastPreCleanStats.maxCompactionDelayMs = 4000L
       assertMaxCompactionDelay(4)
 
       // All CleanerThreads have the same CompactionDelay
-      cleaners.foreach(_.lastPreCleanStats.maxCompactionDelayMs = 1_500L)
+      cleaners.foreach(_.lastPreCleanStats.maxCompactionDelayMs = 1500L)
       assertMaxCompactionDelay(1)
     } finally {
       logCleaner.shutdown()
