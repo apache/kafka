@@ -154,11 +154,9 @@ public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarnes
             killBroker(initialReplicas.get(1).id());
             killBroker(initialReplicas.get(2).id());
 
-            System.out.println("----test 1");
             waitForIsrAndElr((isrSize, elrSize) -> {
                 return isrSize == 1 && elrSize == 2;
             });
-            System.out.println("----test 2");
 
             topicPartitionInfo = adminClient.describeTopics(Collections.singletonList(testTopicName))
                 .allTopicNames().get().get(testTopicName).partitions().get(0);
@@ -169,7 +167,6 @@ public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarnes
             waitForIsrAndElr((isrSize, elrSize) -> {
                 return isrSize == 0 && elrSize == 3;
             });
-            System.out.println("----test 3");
 
             topicPartitionInfo = adminClient.describeTopics(Collections.singletonList(testTopicName))
                 .allTopicNames().get().get(testTopicName).partitions().get(0);
@@ -183,12 +180,10 @@ public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarnes
             int expectLeader = topicPartitionInfo.elr().stream()
                 .filter(node -> node.id() != expectLastKnownLeader).collect(Collectors.toList()).get(0).id();
 
-            System.out.println("----test 3.5=" + expectLeader + "  " + topicPartitionInfo.lastKnownElr());
             startBroker(expectLeader);
             waitForIsrAndElr((isrSize, elrSize) -> {
                 return isrSize == 1 && elrSize == 2;
             });
-            System.out.println("----test 4");
 
             topicPartitionInfo = adminClient.describeTopics(Collections.singletonList(testTopicName))
                 .allTopicNames().get().get(testTopicName).partitions().get(0);
@@ -202,7 +197,6 @@ public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarnes
             waitForIsrAndElr((isrSize, elrSize) -> {
                 return isrSize == 3 && elrSize == 0;
             });
-            System.out.println("----test 5");
 
             topicPartitionInfo = adminClient.describeTopics(Collections.singletonList(testTopicName))
                 .allTopicNames().get().get(testTopicName).partitions().get(0);
