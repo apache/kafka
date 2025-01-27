@@ -137,11 +137,11 @@ public abstract class Loggers {
             if (isValidRootLoggerName(logger)) {
                 foundLogger = rootLogger();
             } else {
-                Collection<org.apache.logging.log4j.core.Logger> currentLoggers = currentLoggers().values();
+                var currentLoggers = currentLoggers().values();
                 // search within existing loggers for the given name.
                 // using LogManger.getLogger() will create a logger if it doesn't exist
                 // (potential leak since these don't get cleaned up).
-                for (org.apache.logging.log4j.core.Logger currentLogger : currentLoggers) {
+                for (org.apache.logging.log4j.Logger currentLogger : currentLoggers) {
                     if (logger.equals(currentLogger.getName())) {
                         foundLogger = currentLogger;
                         break;
@@ -179,8 +179,8 @@ public abstract class Loggers {
 
             log.info("Setting level of namespace {} and children to {}", internalNameSpace, level);
 
-            Collection<org.apache.logging.log4j.core.Logger> loggers = loggers(internalNameSpace);
-            Map<String, LoggerLevel> nameToLevel = allLevels();
+            var loggers = loggers(internalNameSpace);
+            var nameToLevel = allLevels();
 
             List<String> result = new ArrayList<>();
             Configurator.setAllLevels(internalNameSpace, Level.valueOf(level));
@@ -220,10 +220,10 @@ public abstract class Loggers {
                 return currentLoggers().values();
             }
 
-            Collection<org.apache.logging.log4j.core.Logger> result = new ArrayList<>();
-            Map<String, org.apache.logging.log4j.core.Logger> nameToLogger = currentLoggers();
-            org.apache.logging.log4j.core.Logger ancestorLogger = lookupLogger(namespace);
-            Collection<org.apache.logging.log4j.core.Logger> currentLoggers = nameToLogger.values();
+            var result = new ArrayList<org.apache.logging.log4j.core.Logger>();
+            var nameToLogger = currentLoggers();
+            var ancestorLogger = lookupLogger(namespace);
+            var currentLoggers = nameToLogger.values();
 
             boolean present = false;
             for (org.apache.logging.log4j.core.Logger currentLogger : currentLoggers) {
@@ -250,7 +250,7 @@ public abstract class Loggers {
         // visible for testing
         Map<String, org.apache.logging.log4j.core.Logger> currentLoggers() {
             LoggerContext context = (LoggerContext) LogManager.getContext(false);
-            Map<String, org.apache.logging.log4j.core.Logger> results = new HashMap<>();
+            var results = new HashMap<String, org.apache.logging.log4j.core.Logger>();
             context.getConfiguration().getLoggers().forEach((name, logger) -> results.put(name, loggerContext.getLogger(name)));
             context.getLoggerRegistry().getLoggers().forEach(logger -> results.put(logger.getName(), logger));
             return results;
