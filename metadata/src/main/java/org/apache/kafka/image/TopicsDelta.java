@@ -57,6 +57,7 @@ public final class TopicsDelta {
     private final Set<Uuid> deletedTopicIds = new HashSet<>();
 
     private final Map<String, Uuid> createdTopics = new HashMap<>();
+    private final Set<Uuid> createdTopicIds = new HashSet<>();
 
     public TopicsDelta(TopicsImage image) {
         this.image = image;
@@ -75,6 +76,7 @@ public final class TopicsDelta {
             new TopicImage(record.name(), record.topicId(), Collections.emptyMap()));
         changedTopics.put(record.topicId(), delta);
         createdTopics.put(record.name(), record.topicId());
+        createdTopicIds.add(record.topicId());
     }
 
     TopicDelta getOrCreateTopicDelta(Uuid id) {
@@ -194,7 +196,7 @@ public final class TopicsDelta {
     }
 
     public Set<Uuid> createdTopicIds() {
-        return createdTopics.values().stream().collect(Collectors.toSet());
+        return createdTopicIds;
     }
 
     /**
