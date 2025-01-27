@@ -3104,9 +3104,13 @@ grouped
                         <a class="toc-backref" href="#id24">Applying processors (Processor API integration)</a>
                     </h3>
                 </a>
-                <p>Beyond the aforementioned stateless and stateful transformations, you may also leverage the Processor API from
-                    the
-                    DSL. There are a number of scenarios where this may be helpful:</p>
+                <p>Beyond the aforementioned <a class="reference internal"
+                        href="#streams-developer-guide-dsl-transformations-stateless">
+                        <span class="std std-ref">stateless</span></a> and
+                    <a class="reference internal" href="#streams-developer-guide-dsl-transformations-stateless"> <span
+                            class="std std-ref">stateful</span></a> transformations, you may also leverage the Processor API from the
+                    DSL. There are a number of scenarios where this may be helpful:
+                </p>
                 <ul>
                     <li><strong>Customization:</strong> You need to implement special, customized logic that is not or not yet
                         available
@@ -3229,7 +3233,7 @@ public class CumulativeDiscountsForALoyaltyProgramExample {
         notificationStream.to(DISCOUNT_NOTIFICATIONS_TOPIC);
     }
 
-    private static class CumulativeDiscountProcessor implements ContextualProcessor&lt;String, Double, String, String&gt; {
+    private static class CumulativeDiscountProcessor implements Processor&lt;String, Double, String, String&gt; {
         private KeyValueStore&lt;String, Double&gt; spendingStore;
         private ProcessorContext&lt;String, String&gt; context;
 
@@ -3282,8 +3286,6 @@ public class CumulativeDiscountsForALoyaltyProgramExample {
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.processor.api.ContextualProcessor;
-import org.apache.kafka.streams.processor.api.Processor;
-import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 
 import java.util.Collections;
@@ -3638,7 +3640,7 @@ public class CumulativeDiscountsForALoyaltyProgramExample {
         }
     }
 
-    private static class CumulativeDiscountProcessor implements ContextualProcessor&lt;String, Double, String, String&gt; {
+    private static class CumulativeDiscountProcessor implements Processor&lt;String, Double, String, String&gt; {
         private KeyValueStore&lt;String, Double&gt; spendingStore;
         private ProcessorContext&lt;String, String&gt; context;
 
@@ -3682,8 +3684,6 @@ public class CumulativeDiscountsForALoyaltyProgramExample {
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.processor.api.ContextualProcessor;
-import org.apache.kafka.streams.processor.api.Processor;
-import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 
 import java.util.Collections;
