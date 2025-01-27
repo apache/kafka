@@ -472,7 +472,7 @@ class ShareCoordinatorServiceTest {
             .thenReturn(CompletableFuture.completedFuture(response2));
 
         CompletableFuture<DeleteShareGroupStateResponseData> future = service.deleteState(
-            requestContext(ApiKeys.WRITE_SHARE_GROUP_STATE),
+            requestContext(ApiKeys.DELETE_SHARE_GROUP_STATE),
             request
         );
 
@@ -653,7 +653,7 @@ class ShareCoordinatorServiceTest {
         // 1. Empty topicsData
         assertEquals(new DeleteShareGroupStateResponseData(),
             service.deleteState(
-                requestContext(ApiKeys.WRITE_SHARE_GROUP_STATE),
+                requestContext(ApiKeys.DELETE_SHARE_GROUP_STATE),
                 new DeleteShareGroupStateRequestData().setGroupId(groupId)
             ).get(5, TimeUnit.SECONDS)
         );
@@ -661,7 +661,7 @@ class ShareCoordinatorServiceTest {
         // 2. Empty partitionsData
         assertEquals(new DeleteShareGroupStateResponseData(),
             service.deleteState(
-                requestContext(ApiKeys.WRITE_SHARE_GROUP_STATE),
+                requestContext(ApiKeys.DELETE_SHARE_GROUP_STATE),
                 new DeleteShareGroupStateRequestData().setGroupId(groupId).setTopics(List.of(
                     new DeleteShareGroupStateRequestData.DeleteStateData().setTopicId(topicId)))
             ).get(5, TimeUnit.SECONDS)
@@ -670,7 +670,7 @@ class ShareCoordinatorServiceTest {
         // 3. Invalid groupId
         assertEquals(new DeleteShareGroupStateResponseData(),
             service.deleteState(
-                requestContext(ApiKeys.WRITE_SHARE_GROUP_STATE),
+                requestContext(ApiKeys.DELETE_SHARE_GROUP_STATE),
                 new DeleteShareGroupStateRequestData().setGroupId(null).setTopics(List.of(
                     new DeleteShareGroupStateRequestData.DeleteStateData().setTopicId(topicId).setPartitions(List.of(
                         new DeleteShareGroupStateRequestData.PartitionData().setPartition(partition)))))
@@ -922,7 +922,7 @@ class ShareCoordinatorServiceTest {
             );
 
         CompletableFuture<DeleteShareGroupStateResponseData> future = service.deleteState(
-            requestContext(ApiKeys.WRITE_SHARE_GROUP_STATE),
+            requestContext(ApiKeys.DELETE_SHARE_GROUP_STATE),
             request
         );
 
@@ -1110,7 +1110,7 @@ class ShareCoordinatorServiceTest {
                         .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
                         .setErrorMessage("Unable to delete share group state: This server does not host this topic-partition."))))),
             service.deleteState(
-                requestContext(ApiKeys.WRITE_SHARE_GROUP_STATE),
+                requestContext(ApiKeys.DELETE_SHARE_GROUP_STATE),
                 new DeleteShareGroupStateRequestData().setGroupId(groupId)
                     .setTopics(List.of(new DeleteShareGroupStateRequestData.DeleteStateData()
                         .setTopicId(topicId)
