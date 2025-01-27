@@ -19,6 +19,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.DeleteShareGroupStateResponseData;
+import org.apache.kafka.common.message.WriteShareGroupStateResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
@@ -67,6 +68,16 @@ public class DeleteShareGroupStateResponse extends AbstractResponse {
         return new DeleteShareGroupStateResponse(
                 new DeleteShareGroupStateResponseData(new ByteBufferAccessor(buffer), version)
         );
+    }
+
+    public static DeleteShareGroupStateResponseData toResponseData(Uuid topicId, int partitionId) {
+        return new DeleteShareGroupStateResponseData()
+            .setResults(List.of(
+                new DeleteShareGroupStateResponseData.DeleteStateResult()
+                    .setTopicId(topicId)
+                    .setPartitions(List.of(
+                        new DeleteShareGroupStateResponseData.PartitionResult()
+                            .setPartition(partitionId)))));
     }
 
     public static DeleteShareGroupStateResponseData.PartitionResult toErrorResponsePartitionResult(
