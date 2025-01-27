@@ -232,6 +232,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     private void handleShareSnapshot(ShareSnapshotKey key, ShareSnapshotValue value, long offset) {
         SharePartitionKey mapKey = SharePartitionKey.getInstance(key.groupId(), key.topicId(), key.partition());
         if (value == null) {
+            log.debug("Tombstone records received for share partition key: {}", mapKey);
             // Consider this a tombstone.
             shareStateMap.remove(mapKey);
             leaderEpochMap.remove(mapKey);
