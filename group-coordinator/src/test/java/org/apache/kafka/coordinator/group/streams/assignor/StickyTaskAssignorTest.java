@@ -327,6 +327,30 @@ public class StickyTaskAssignorTest {
     }
 
     @Test
+    public void shouldNotAssignStandbyTasksToClientWithPreviousStandbyTasksAndCurrentActiveTasks() {
+        final AssignmentMemberSpec memberSpec1 = createAssignmentMemberSpec("process1", Collections.emptyMap(), mkMap(mkEntry("test-subtopology", Collections.singleton(0))));
+        final AssignmentMemberSpec memberSpec2 = createAssignmentMemberSpec("process2", Collections.emptyMap(), mkMap(mkEntry("test-subtopology", Collections.singleton(1))));
+        Map<String, AssignmentMemberSpec> members = mkMap(
+            mkEntry("member1", memberSpec1), mkEntry("member2", memberSpec2));
+        GroupAssignment result = assignor.assign(
+            new GroupSpecImpl(members, Collections.singletonList("test-subtopology"), mkMap(mkEntry("numStandbyReplicas", "1"))),
+            new TopologyDescriberImpl(2, true)
+        );
+        MemberAssignment testMember1 = result.members().get("member1");
+        assertNotNull(testMember1);
+        assertEquals(1, testMember1.activeTasks().get("test-subtopology").size());
+        assertEquals(Collections.singleton(0), testMember1.activeTasks().get("test-subtopology"));
+        assertEquals(1, testMember1.standbyTasks().get("test-subtopology").size());
+        assertEquals(Collections.singleton(1), testMember1.standbyTasks().get("test-subtopology"));
+        MemberAssignment testMember2 = result.members().get("member2");
+        assertNotNull(testMember2);
+        assertEquals(1, testMember2.activeTasks().get("test-subtopology").size());
+        assertEquals(Collections.singleton(1), testMember2.activeTasks().get("test-subtopology"));
+        assertEquals(1, testMember2.standbyTasks().get("test-subtopology").size());
+        assertEquals(Collections.singleton(0), testMember2.standbyTasks().get("test-subtopology"));
+    }
+
+    @Test
     public void shouldAssignBasedOnCapacityWhenMultipleClientHaveStandbyTasks() {
         final AssignmentMemberSpec memberSpec1 = createAssignmentMemberSpec("process1",
             mkMap(mkEntry("test-subtopology", Collections.singleton(0))),
