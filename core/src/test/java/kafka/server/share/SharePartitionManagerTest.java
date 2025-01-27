@@ -49,6 +49,7 @@ import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.ShareFetchRequest;
 import org.apache.kafka.common.requests.ShareFetchResponse;
 import org.apache.kafka.common.requests.ShareRequestMetadata;
+import org.apache.kafka.common.test.api.Flaky;
 import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
@@ -1267,6 +1268,7 @@ public class SharePartitionManagerTest {
         );
     }
 
+    @Flaky("KAFKA-18657")
     @Test
     public void testReplicaManagerFetchShouldProceed() {
         String groupId = "grp";
@@ -2201,6 +2203,7 @@ public class SharePartitionManagerTest {
         );
     }
 
+    @Flaky("KAFKA-18657")
     @Test
     public void testDelayedInitializationShouldCompleteFetchRequest() throws Exception {
         String groupId = "grp";
