@@ -935,9 +935,9 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
                 new byte[0],
                 new RecordHeaders(),
                 true,
-                context.offset(),
-                context.timestamp(),
-                context.partition(),
+                context.recordContext().offset(),
+                context.recordContext().timestamp(),
+                context.recordContext().partition(),
                 "")
         );
 

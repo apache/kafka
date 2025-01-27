@@ -37,6 +37,7 @@ import org.apache.kafka.server.storage.log.FetchIsolation;
 import org.apache.kafka.server.storage.log.FetchParams;
 import org.apache.kafka.server.storage.log.FetchPartitionData;
 import org.apache.kafka.storage.internals.log.OffsetResultHolder;
+import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -76,6 +77,7 @@ public class ShareFetchUtilsTest {
     private static final BiConsumer<SharePartitionKey, Throwable> EXCEPTION_HANDLER = (key, exception) -> {
         // No-op
     };
+    private static final BrokerTopicStats BROKER_TOPIC_STATS = new BrokerTopicStats();
 
     @Test
     public void testProcessFetchResponse() {
@@ -103,7 +105,7 @@ public class ShareFetchUtilsTest {
         sharePartitions.put(tp1, sp1);
 
         ShareFetch shareFetch = new ShareFetch(FETCH_PARAMS, groupId, memberId,
-            new CompletableFuture<>(), partitionMaxBytes, BATCH_SIZE, 100);
+            new CompletableFuture<>(), partitionMaxBytes, BATCH_SIZE, 100, BROKER_TOPIC_STATS);
 
         MemoryRecords records = MemoryRecords.withRecords(Compression.NONE,
             new SimpleRecord("0".getBytes(), "v".getBytes()),
@@ -164,7 +166,7 @@ public class ShareFetchUtilsTest {
         sharePartitions.put(tp1, sp1);
 
         ShareFetch shareFetch = new ShareFetch(FETCH_PARAMS, groupId, memberId,
-            new CompletableFuture<>(), partitionMaxBytes, BATCH_SIZE, 100);
+            new CompletableFuture<>(), partitionMaxBytes, BATCH_SIZE, 100, BROKER_TOPIC_STATS);
 
         Map<TopicIdPartition, FetchPartitionData> responseData = new HashMap<>();
         responseData.put(tp0, new FetchPartitionData(Errors.NONE, 0L, 0L,
@@ -204,7 +206,7 @@ public class ShareFetchUtilsTest {
         sharePartitions.put(tp1, sp1);
 
         ShareFetch shareFetch = new ShareFetch(FETCH_PARAMS, groupId, Uuid.randomUuid().toString(),
-            new CompletableFuture<>(), partitionMaxBytes, BATCH_SIZE, 100);
+            new CompletableFuture<>(), partitionMaxBytes, BATCH_SIZE, 100, BROKER_TOPIC_STATS);
 
         ReplicaManager replicaManager = mock(ReplicaManager.class);
 
@@ -295,7 +297,7 @@ public class ShareFetchUtilsTest {
         sharePartitions.put(tp0, sp0);
 
         ShareFetch shareFetch = new ShareFetch(FETCH_PARAMS, groupId, Uuid.randomUuid().toString(),
-            new CompletableFuture<>(), partitionMaxBytes, BATCH_SIZE, 100);
+            new CompletableFuture<>(), partitionMaxBytes, BATCH_SIZE, 100, BROKER_TOPIC_STATS);
 
         ReplicaManager replicaManager = mock(ReplicaManager.class);
 
@@ -365,7 +367,7 @@ public class ShareFetchUtilsTest {
         Uuid memberId = Uuid.randomUuid();
         // Set max fetch records to 10
         ShareFetch shareFetch = new ShareFetch(FETCH_PARAMS, groupId, memberId.toString(),
-            new CompletableFuture<>(), partitionMaxBytes, BATCH_SIZE, 10);
+            new CompletableFuture<>(), partitionMaxBytes, BATCH_SIZE, 10, BROKER_TOPIC_STATS);
 
         MemoryRecords records1 = MemoryRecords.withRecords(Compression.NONE,
             new SimpleRecord("0".getBytes(), "v".getBytes()),

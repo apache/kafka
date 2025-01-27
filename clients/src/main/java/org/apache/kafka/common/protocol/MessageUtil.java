@@ -233,7 +233,10 @@ public final class MessageUtil {
         else return Utils.toArray(buffer);
     }
 
-    public static ByteBuffer toCoordinatorTypePrefixedByteBuffer(final short type, final Message message) {
+    public static ByteBuffer toCoordinatorTypePrefixedByteBuffer(final ApiMessage message) {
+        if (message.apiKey() < 0) {
+            throw new IllegalArgumentException("Cannot serialize a message without an api key.");
+        }
         if (message.highestSupportedVersion() != 0 || message.lowestSupportedVersion() != 0) {
             throw new IllegalArgumentException("Cannot serialize a message with a different version than 0.");
         }
@@ -241,14 +244,14 @@ public final class MessageUtil {
         ObjectSerializationCache cache = new ObjectSerializationCache();
         int messageSize = message.size(cache, (short) 0);
         ByteBufferAccessor bytes = new ByteBufferAccessor(ByteBuffer.allocate(messageSize + 2));
-        bytes.writeShort(type);
+        bytes.writeShort(message.apiKey());
         message.write(bytes, cache, (short) 0);
         bytes.flip();
         return bytes.buffer();
     }
 
-    public static byte[] toCoordinatorTypePrefixedBytes(final short type, final Message message) {
-        ByteBuffer buffer = toCoordinatorTypePrefixedByteBuffer(type, message);
+    public static byte[] toCoordinatorTypePrefixedBytes(final ApiMessage message) {
+        ByteBuffer buffer = toCoordinatorTypePrefixedByteBuffer(message);
         // take the inner array directly if it is full of data.
         if (buffer.hasArray() &&
             buffer.arrayOffset() == 0 &&
