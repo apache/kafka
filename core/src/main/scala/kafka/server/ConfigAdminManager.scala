@@ -68,10 +68,6 @@ import scala.jdk.CollectionConverters._
  * - The second step is "persistence," and handles storing the configurations durably to our
  * metadata store.
  *
- * When KIP-590 forwarding is active, preprocessing will happen
- * on the broker, while persistence will happen on the active controller. (If KIP-590
- * forwarding is not active, then both steps are done on the same broker.)
- *
  * The active controller performs its own configuration validation step in
  * [[kafka.server.ControllerConfigurationValidator]]. This is mainly important for
  * TOPIC resources, since we already validated changes to BROKER resources on the
