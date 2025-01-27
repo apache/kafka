@@ -424,12 +424,12 @@ public abstract class AbstractFetch implements Closeable {
         for (TopicPartition partition : buffered) {
             // It's possible that at the time of the fetcher creating new fetch requests, a partition with buffered
             // data from a *previous* request is no longer assigned. So before attempting to retrieve the node
-            // information, check that the partition is still assigned as calling  SubscriptionState.position() on an
-            // unassigned partition will throw an IllegalStateException.
+            // information, check that the partition is still assigned and fetchable; an unassigned/invalid partition
+            // will throw an IllegalStateException in positionForPartition.
             //
             // Note: this check is not needed for the unbuffered partitions as the logic in
             // SubscriptionState.fetchablePartitions() only includes partitions currently assigned.
-            if (!subscriptions.isAssigned(partition))
+            if (!subscriptions.hasValidPosition(partition))
                 continue;
 
             SubscriptionState.FetchPosition position = positionForPartition(partition);
