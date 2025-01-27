@@ -574,7 +574,7 @@
       <allow pkg="org.apache.maven.artifact.versioning" />
       <allow pkg="org.eclipse.jetty.util" />
 
-      <file name="Loggers">
+      <file name="(Mock)?Loggers(Test)?" regex="true">
         <allow pkg="org.apache.logging.log4j" />
       </file>
 
