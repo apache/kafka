@@ -3592,7 +3592,7 @@ public class FetchRequestManagerTest {
         Set<TopicPartition> partitions = Set.of(tp0, tp1, tp2, tp3);
         assignFromUser(partitions, numNodes);
 
-        // Get all the nodes serving as the leader for these partitions, and then split them into the separate
+        // Get all the nodes serving as the leader for these partitions, and then pull out the separate
         // nodes and set of partitions to make things easier to keep track of later.
         List<Node> nodes = nodesForPartitionLeaders(partitions);
         Node node0 = nodes.get(0);
@@ -3603,38 +3603,50 @@ public class FetchRequestManagerTest {
         // Seek each partition so that it becomes eligible to fetch.
         partitions.forEach(tp -> subscriptions.seek(tp, 0));
 
-        // sendFetches() call #1 should issue requests to node 0 or node 1 since neither has buffered data.
+        // sendFetches() call #1 should issue requests to node 0 and node 1 since neither has buffered data.
         assertEquals(2, sendFetches());
         prepareFetchResponses(node0, node0Partitions, 0);
         prepareFetchResponses(node1, node1Partitions, 0);
         networkClientDelegate.poll(time.timer(0));
 
-        // Grab both partitions for node 0. The first partition will be collected so that it doesn't have anything
-        // in the fetch buffer. The second node will be left in the buffer, but will clear out its position's leader
-        // node.
         TopicPartition node0Partition1 = node0Partitions.remove(0);
         TopicPartition node0Partition2 = node0Partitions.remove(0);
 
-        assertEquals(4, fetcher.fetchBuffer.bufferedPartitions().size());
-        collectSelectedPartition(node0Partition1, partitions);
-        assertEquals(3, fetcher.fetchBuffer.bufferedPartitions().size());
+        // Per the fetch response, data for both of node 0's partitions are in the fetch buffer.
+        assertTrue(fetcher.fetchBuffer.bufferedPartitions().contains(node0Partition1));
+        assertTrue(fetcher.fetchBuffer.bufferedPartitions().contains(node0Partition2));
 
-        // Overwrite the position with an empty leader to trigger the test case.
-        SubscriptionState.FetchPosition leaderlessPosition = new SubscriptionState.FetchPosition(
+        // Collect node 0's first partition (node0Partition1) which will remove it from the fetch buffer.
+        collectSelectedPartition(node0Partition1, partitions);
+
+        // Node 0's first partition (node0Partition1) was collected so it's not in the fetch buffer, but node 0's
+        // second partition (node0Partition2) remains in the fetch buffer.
+        assertFalse(fetcher.fetchBuffer.bufferedPartitions().contains(node0Partition1));
+        assertTrue(fetcher.fetchBuffer.bufferedPartitions().contains(node0Partition2));
+
+        // Overwrite node0Partition2's position with an empty leader, but verify that it is still buffered. Having
+        // a leaderless, buffered partition is key to triggering the test case.
+        subscriptions.position(node0Partition2, new SubscriptionState.FetchPosition(
             0,
             Optional.empty(),
             Metadata.LeaderAndEpoch.noLeaderOrEpoch()
-        );
-        subscriptions.position(node0Partition2, leaderlessPosition);
+        ));
+        assertTrue(fetcher.fetchBuffer.bufferedPartitions().contains(node0Partition2));
 
-        // Both the collected partition and the position without a partition leader should have a retrievable position.
-        // Confirm that position() doesn't throw an exception and that the leader for the second partition is missing.
-        assertNotEquals(Optional.empty(), subscriptions.position(node0Partition1).currentLeader.leader);
-        assertEquals(Optional.empty(), subscriptions.position(node0Partition2).currentLeader.leader);
+        // Validate the state of the collected partition (node0Partition1) and leaderless partition (node0Partition2)
+        // before sending the fetch requests.
+        Optional<Node> node0Partition1Leader = subscriptions.position(node0Partition1).currentLeader.leader;
+        Optional<Node> node0Partition2Leader = subscriptions.position(node0Partition2).currentLeader.leader;
+        assertTrue(node0Partition1Leader.isPresent());
+        assertEquals(node0, node0Partition1Leader.get());
+        assertFalse(node0Partition2Leader.isPresent());
 
-        // sendFetches() call #2 should issue a fetch request to node 0 because its first partition was collected
-        // (and its buffer removed) and the second partition had its leader node cleared. As a result, there are now
-        // effectively no topic partitions for node 0.
+        // sendFetches() call #2 should issue a fetch request to node 0 because it has no buffered partitions:
+        //
+        // - node0Partition1 was collected and thus not in the fetch buffer
+        // - node0Partition2, while still in the fetch buffer, is leaderless
+        //
+        // As a result, there are now effectively no buffered partitions for which node 0 is the leader.
         assertEquals(1, sendFetches());
     }
 
