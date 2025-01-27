@@ -30,7 +30,7 @@ run-name: Build Scans for ${{ github.event.workflow_run.display_title}}
 #
 # This "workflow_run" triggered workflow is run in a privileged context and so does have access to
 # the repository secrets. Here we can download the build scan files produced by a PR and publish
-# them to ge.apache.org.
+# them to develocity.apache.org.
 #
 # If we need to do things like comment on, label, or otherwise modify PRs from public forks. This
 # workflow is the place to do it. PR number is ${{ github.event.workflow_run.pull_requests[0].number }}
@@ -59,7 +59,7 @@ jobs:
         uses: ./.github/actions/setup-gradle
         with:
           java-version: ${{ matrix.java }}
-          develocity-access-key: ${{ secrets.GE_ACCESS_TOKEN }}
+          develocity-access-key: ${{ secrets.DEVELOCITY_ACCESS_KEY }}
       - name: Download build scan archive
         id: download-build-scan
         uses: actions/download-artifact@v4

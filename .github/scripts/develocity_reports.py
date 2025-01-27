@@ -314,7 +314,7 @@ class TestAnalyzer:
             
             # Remove already found builds from the search list
             build_ids = [bid for bid in build_ids if bid not in builds]
-        
+
         if not build_ids:
             logger.info("All builds found in cache")
             return builds
@@ -733,7 +733,7 @@ def print_summary(problematic_tests: Dict[str, Dict], flaky_regressions: Dict[st
 
     # Combine and sort all test cases by failure rate
     all_problem_cases = []
-    
+
     # Process problematic quarantined tests
     if len(problematic_tests) > 0:
         print(f"Found {len(problematic_tests)} tests that have been quarantined for a while and are still flaky.")
@@ -742,7 +742,7 @@ def print_summary(problematic_tests: Dict[str, Dict], flaky_regressions: Dict[st
             total_runs = test_case.outcome_distribution.total
             method_name = test_case.name.split('.')[-1]
             if total_runs > 0:
-                failure_rate = (test_case.outcome_distribution.failed + 
+                failure_rate = (test_case.outcome_distribution.failed +
                               test_case.outcome_distribution.flaky) / total_runs
                 all_problem_cases.append({
                     'class': full_class_name,
@@ -750,7 +750,7 @@ def print_summary(problematic_tests: Dict[str, Dict], flaky_regressions: Dict[st
                     'failure_rate': failure_rate,
                     'total_runs': total_runs
                 })
-    
+
     # Process flaky regressions
     if len(flaky_regressions) > 0:
         print(f"Found {len(flaky_regressions)} tests that have started recently failing.")
@@ -763,8 +763,8 @@ def print_summary(problematic_tests: Dict[str, Dict], flaky_regressions: Dict[st
         })
 
     # Sort by failure rate descending
-    sorted_cases = sorted(all_problem_cases, 
-                         key=lambda x: x['failure_rate'], 
+    sorted_cases = sorted(all_problem_cases,
+                         key=lambda x: x['failure_rate'],
                          reverse=True)
     
     # Group by class
@@ -790,15 +790,12 @@ def main():
     token = None
     if os.environ.get("DEVELOCITY_ACCESS_TOKEN"):
         token = os.environ.get("DEVELOCITY_ACCESS_TOKEN")
-    elif os.environ.get("GE_ACCESS_TOKEN"):
-        # Special case for when we run in GHA
-        token = os.environ.get("GE_ACCESS_TOKEN").removeprefix("ge.apache.org=")
     else:
         print("No auth token was specified. You must set DEVELOCITY_ACCESS_TOKEN to your personal access token.")
         exit(1)
 
     # Configuration
-    BASE_URL = "https://ge.apache.org"
+    BASE_URL = "https://develocity.apache.org"
     PROJECT = "kafka"
     QUARANTINE_THRESHOLD_DAYS = 7
     MIN_FAILURE_RATE = 0.1
@@ -862,7 +859,7 @@ def main():
                 print(f"\nRecent Executions (last {len(details['recent_executions'])} runs):")
                 for entry in sorted(details['recent_executions'], key=lambda x: x.timestamp)[-5:]:
                     print(f"  {entry.timestamp.strftime('%Y-%m-%d %H:%M')} - {entry.outcome}")
-        
+
         # Print Cleared Tests
         print("\n## Cleared Tests (Ready for Unquarantine)")
         if not cleared_tests:
@@ -881,7 +878,7 @@ def main():
                 print(f"\nRecent Executions (last {len(details['recent_executions'])} runs):")
                 for entry in sorted(details['recent_executions'], key=lambda x: x.timestamp):
                     print(f"  {entry.timestamp.strftime('%Y-%m-%d %H:%M')} - {entry.outcome}")
-        
+
         # Print Defective Tests
         print("\n## High-Priority Quarantined Tests")
         if not problematic_tests:
@@ -889,11 +886,11 @@ def main():
         else:
             print("These are tests which have been quarantined for several days and need attention.")
             sorted_tests = sorted(
-                problematic_tests.items(), 
+                problematic_tests.items(),
                 key=lambda x: (x[1]['failure_rate'], x[1]['days_quarantined']),
                 reverse=True
             )
-            
+
             print(f"\nFound {len(sorted_tests)} high-priority quarantined test classes:")
             for full_class_name, details in sorted_tests:
                 class_result = details['container_result']
@@ -916,21 +913,21 @@ def main():
                     key=lambda x: (x.outcome_distribution.failed + x.outcome_distribution.flaky) / x.outcome_distribution.total if x.outcome_distribution.total > 0 else 0,
                     reverse=True
                 )
-                
+
                 for test_method in sorted_methods:
                     total_runs = test_method.outcome_distribution.total
                     if total_runs > 0:
                         failure_rate = (test_method.outcome_distribution.failed + test_method.outcome_distribution.flaky) / total_runs
-                        
+
                         # Extract the method name from the full test name
                         method_name = test_method.name.split('.')[-1]
-                        
+
                         print(f"\n  → {method_name}")
                         print(f"    Failure Rate: {failure_rate:.2%}")
                         print(f"    Runs: {total_runs:3d} | Failed: {test_method.outcome_distribution.failed:3d} | "
                               f"Flaky: {test_method.outcome_distribution.flaky:3d} | "
                               f"Passed: {test_method.outcome_distribution.passed:3d}")
-                        
+
                         # Show test method timeline
                         if test_method.timeline:
                             print(f"\n    Recent Executions (last {min(3, len(test_method.timeline))} of {len(test_method.timeline)} runs):")
@@ -939,7 +936,7 @@ def main():
                             for entry in sorted(test_method.timeline, key=lambda x: x.timestamp)[-3:]:
                                 date_str = entry.timestamp.strftime('%Y-%m-%d %H:%M')
                                 print(f"    {date_str:<17} {entry.outcome:<10} {entry.build_id}")
-                
+
     except Exception as e:
         logger.exception("Error occurred during report generation")
         print(f"Error occurred: {str(e)}")

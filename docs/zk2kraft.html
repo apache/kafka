@@ -188,5 +188,14 @@
                 In Kraft mode, Zookeeper is not used, so the metrics is removed.
             </p>
         </li>
+        <li>
+            <p>
+                Remove the metrics for leader election purgatory.
+            </p>
+            <ul>
+                <li><code>kafka.server:type=DelayedOperationPurgatory,delayedOperation=ElectLeader,name=PurgatorySize</code></li>
+                <li><code>kafka.server:type=DelayedOperationPurgatory,delayedOperation=ElectLeader,name=NumDelayedOperations</code></li>
+            </ul>
+        </li>
     </ul>
 </div>

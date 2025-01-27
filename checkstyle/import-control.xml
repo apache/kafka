@@ -635,7 +635,6 @@
         <allow pkg="org.apache.kafka.metadata" />
         <allow pkg="org.eclipse.jetty.client"/>
         <allow class="org.apache.kafka.storage.internals.log.CleanerConfig" />
-        <allow class="org.apache.kafka.server.config.ZkConfigs" />
       </subpackage>
     </subpackage>
 
