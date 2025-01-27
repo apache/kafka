@@ -43,7 +43,7 @@
   // by the DescribeCluster API (KIP-700).
   // Version 12 supports topicId.
   // Version 13 supports top-level error code in the response.
-  "validVersions": "4-13",
+  "validVersions": "1-13",
   "flexibleVersions": "9+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "3+", "ignorable": true,
