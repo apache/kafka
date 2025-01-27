@@ -3174,9 +3174,6 @@ class KafkaApis(val requestChannel: RequestChannel,
           }
         }
     }
-
-    requestHelper.sendMaybeThrottle(request, deleteShareGroupStateRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
-    CompletableFuture.completedFuture[Unit](())
   }
 
   def handleReadShareGroupStateSummaryRequest(request: RequestChannel.Request): Unit = {
