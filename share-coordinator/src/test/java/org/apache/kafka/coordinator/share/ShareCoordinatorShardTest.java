@@ -43,6 +43,7 @@ import org.apache.kafka.coordinator.share.generated.ShareUpdateValue;
 import org.apache.kafka.coordinator.share.metrics.ShareCoordinatorMetrics;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.TopicImage;
+import org.apache.kafka.image.TopicsImage;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.share.SharePartitionKey;
@@ -66,6 +67,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -1058,6 +1060,7 @@ class ShareCoordinatorShardTest {
     public void testDeleteStateInvalidRequestData() {
         ShareCoordinatorShard shard = new ShareCoordinatorShardBuilder().build();
 
+        // invalid partition
         int partition = -1;
 
         DeleteShareGroupStateRequestData request = new DeleteShareGroupStateRequestData()
@@ -1074,6 +1077,7 @@ class ShareCoordinatorShardTest {
         List<CoordinatorRecord> expectedRecords = List.of();
 
         assertEquals(expectedData, result.response());
+        assertEquals(expectedRecords, result.records());
         assertEquals(expectedRecords, result.records());
     }
 
@@ -1097,6 +1101,76 @@ class ShareCoordinatorShardTest {
 
         assertEquals(expectedData, result.response());
         assertEquals(expectedRecords, result.records());
+    }
+
+    @Test
+    public void testDeleteTopicIdNonExistentInMetadataImage() {
+        ShareCoordinatorShard shard = new ShareCoordinatorShardBuilder().build();
+        MetadataImage image = mock(MetadataImage.class);
+        shard.onNewMetadataImage(image, null);
+
+        DeleteShareGroupStateRequestData request = new DeleteShareGroupStateRequestData()
+            .setGroupId(GROUP_ID)
+            .setTopics(List.of(new DeleteShareGroupStateRequestData.DeleteStateData()
+                .setTopicId(TOPIC_ID)
+                .setPartitions(List.of(new DeleteShareGroupStateRequestData.PartitionData()
+                    .setPartition(0)))));
+
+        // topic id not found in cache
+        TopicsImage topicsImage = mock(TopicsImage.class);
+        when(topicsImage.getTopic(eq(TOPIC_ID))).thenReturn(
+            null
+        );
+        when(image.topics()).thenReturn(
+            topicsImage
+        );
+        CoordinatorResult<DeleteShareGroupStateResponseData, CoordinatorRecord> result = shard.deleteState(request);
+
+        DeleteShareGroupStateResponseData expectedData = DeleteShareGroupStateResponse.toErrorResponseData(
+            TOPIC_ID, 0, Errors.UNKNOWN_TOPIC_OR_PARTITION, Errors.UNKNOWN_TOPIC_OR_PARTITION.message());
+        List<CoordinatorRecord> expectedRecords = List.of();
+
+        assertEquals(expectedData, result.response());
+        assertEquals(expectedRecords, result.records());
+        verify(topicsImage, times(1)).getTopic(eq(TOPIC_ID));
+    }
+
+    @Test
+    public void testDeletePartitionIdNonExistentInMetadataImage() {
+        ShareCoordinatorShard shard = new ShareCoordinatorShardBuilder().build();
+        MetadataImage image = mock(MetadataImage.class);
+        shard.onNewMetadataImage(image, null);
+
+        DeleteShareGroupStateRequestData request = new DeleteShareGroupStateRequestData()
+            .setGroupId(GROUP_ID)
+            .setTopics(List.of(new DeleteShareGroupStateRequestData.DeleteStateData()
+                .setTopicId(TOPIC_ID)
+                .setPartitions(List.of(new DeleteShareGroupStateRequestData.PartitionData()
+                    .setPartition(0)))));
+
+        // topic id found in cache
+        TopicsImage topicsImage = mock(TopicsImage.class);
+        when(topicsImage.getTopic(eq(TOPIC_ID))).thenReturn(
+            mock(TopicImage.class)
+        );
+        when(image.topics()).thenReturn(
+            topicsImage
+        );
+
+        // partition id not found
+        when(topicsImage.getPartition(eq(TOPIC_ID), eq(0))).thenReturn(
+            null
+        );
+        CoordinatorResult<DeleteShareGroupStateResponseData, CoordinatorRecord> result = shard.deleteState(request);
+
+        DeleteShareGroupStateResponseData expectedData = DeleteShareGroupStateResponse.toErrorResponseData(
+            TOPIC_ID, 0, Errors.UNKNOWN_TOPIC_OR_PARTITION, Errors.UNKNOWN_TOPIC_OR_PARTITION.message());
+        List<CoordinatorRecord> expectedRecords = List.of();
+
+        assertEquals(expectedData, result.response());
+        assertEquals(expectedRecords, result.records());
+        verify(topicsImage, times(1)).getTopic(eq(TOPIC_ID));
+        verify(topicsImage, times(1)).getPartition(eq(TOPIC_ID), eq(0));
     }
 
     private static ShareGroupOffset groupOffset(ApiMessage record) {
