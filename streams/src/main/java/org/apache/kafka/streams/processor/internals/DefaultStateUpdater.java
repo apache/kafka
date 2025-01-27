@@ -674,7 +674,6 @@ public class DefaultStateUpdater implements StateUpdater {
                 measureCheckpointLatency(() -> task.maybeCheckpoint(true));
                 changelogReader.unregister(changelogPartitions);
                 addToRestoredTasks(task);
-                updatingTasks.remove(task.id());
                 log.info("Stateful active task " + task.id() + " completed restoration");
                 transitToUpdateStandbysIfOnlyStandbysLeft();
             }
@@ -690,6 +689,7 @@ public class DefaultStateUpdater implements StateUpdater {
             restoredActiveTasksLock.lock();
             try {
                 restoredActiveTasks.add(task);
+                updatingTasks.remove(task.id());
                 log.debug("Active task " + task.id() + " was added to the restored tasks");
                 restoredActiveTasksCondition.signalAll();
             } finally {

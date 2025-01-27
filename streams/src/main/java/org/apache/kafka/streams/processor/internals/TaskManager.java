@@ -31,6 +31,7 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.LockException;
@@ -102,6 +103,8 @@ public class TaskManager {
 
     // includes assigned & initialized tasks and unassigned tasks we locked temporarily during rebalance
     private final Set<TaskId> lockedTaskDirectories = new HashSet<>();
+
+    private Map<TaskId, BackoffRecord> taskIdToBackoffRecord = new HashMap<>();
 
     private final ActiveTaskCreator activeTaskCreator;
     private final StandbyTaskCreator standbyTaskCreator;
@@ -1006,14 +1009,22 @@ public class TaskManager {
     }
 
     private void addTaskToStateUpdater(final Task task) {
+        final long nowMs = time.milliseconds();
         try {
-            task.initializeIfNeeded();
-            stateUpdater.add(task);
+            if (canTryInitializeTask(task.id(), nowMs)) {
+                task.initializeIfNeeded();
+                taskIdToBackoffRecord.remove(task.id());
+                stateUpdater.add(task);
+            } else {
+                log.trace("Task {} is still not allowed to retry acquiring the state directory lock", task.id());
+                tasks.addPendingTasksToInit(Collections.singleton(task));
+            }
         } catch (final LockException lockException) {
             // The state directory may still be locked by another thread, when the rebalance just happened.
             // Retry in the next iteration.
             log.info("Encountered lock exception. Reattempting locking the state in the next iteration.", lockException);
             tasks.addPendingTasksToInit(Collections.singleton(task));
+            updateOrCreateBackoffRecord(task.id(), nowMs);
         }
     }
 
@@ -1769,7 +1780,6 @@ public class TaskManager {
             return standbyTasksInTaskRegistry;
         }
     }
-
     // For testing only.
     int commitAll() {
         return commit(tasks.allTasks());
@@ -2115,5 +2125,38 @@ public class TaskManager {
     // for testing only
     void addTask(final Task task) {
         tasks.addTask(task);
+    }
+
+    private boolean canTryInitializeTask(final TaskId taskId, final long nowMs) {
+        return !taskIdToBackoffRecord.containsKey(taskId) || taskIdToBackoffRecord.get(taskId).canAttempt(nowMs);
+    }
+
+    private void updateOrCreateBackoffRecord(final TaskId taskId, final long nowMs) {
+        if (taskIdToBackoffRecord.containsKey(taskId)) {
+            taskIdToBackoffRecord.get(taskId).recordAttempt(nowMs);
+        } else {
+            taskIdToBackoffRecord.put(taskId, new BackoffRecord(nowMs));
+        }
+    }
+
+    public static class BackoffRecord {
+        private long attempts;
+        private long lastAttemptMs;
+        private static final ExponentialBackoff EXPONENTIAL_BACKOFF = new ExponentialBackoff(1000, 2, 10000, 0.5);
+
+
+        public BackoffRecord(final long nowMs) {
+            this.attempts = 1;
+            this.lastAttemptMs = nowMs;
+        }
+
+        public void recordAttempt(final long nowMs) {
+            this.attempts++;
+            this.lastAttemptMs = nowMs;
+        }
+
+        public boolean canAttempt(final long nowMs) {
+            return nowMs - lastAttemptMs >= EXPONENTIAL_BACKOFF.backoff(attempts);
+        }
     }
 }

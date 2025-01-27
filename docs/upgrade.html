@@ -291,9 +291,9 @@
         <li>The Apache Zookeeper dependency has been upgraded to 3.8.1 due to 3.6 reaching end-of-life. To bring both your
             Kafka and Zookeeper clusters to the latest versions:
             <ul>
-                <li><b>>=2.4</b> Kafka clusters can be updated directly.
+                <li><b>&gt;=2.4</b> Kafka clusters can be updated directly.
                     Zookeeper clusters which are running binaries bundled with Kafka versions 2.4 or above can be updated directly.</li>
-                <li><b><2.4</b> Kafka clusters first need to be updated to a version greater than 2.4 and smaller than 3.6.
+                <li><b>&lt;2.4</b> Kafka clusters first need to be updated to a version greater than 2.4 and smaller than 3.6.
                 Zookeeper clusters which are running binaries bundled with Kafka versions below 2.4 need to be updated to any
                 binaries bundled with Kafka versions greater than 2.4 and smaller than 3.6. You can then follow the first bullet-point.</li>
             </ul>
@@ -322,6 +322,10 @@
             has been added to data partitions to prevent hanging transactions. This feature is enabled by default and can be disabled by setting <code>transaction.partition.verification.enable</code> to false.
             The configuration can also be updated dynamically and is applied to the broker. Workloads running on version 3.6.0 with compression can experience
             InvalidRecordExceptions and UnknownServerExceptions. Upgrading to 3.6.1 or newer or disabling the feature fixes the issue.
+        </li>
+	<li>The <code>ByteBufferDeserializer</code> (<a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=225152035">KIP-863</a>)
+	    was changed to avoid unnecessary deep-copies of data. This changes the behavior of the deserializer as user code cannot make any assumptions
+	    about buffer position, limit, capacity any longer.
         </li>
     </ul>
 

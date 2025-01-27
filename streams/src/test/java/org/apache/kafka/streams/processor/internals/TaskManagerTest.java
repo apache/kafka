@@ -1251,6 +1251,54 @@ public class TaskManagerTest {
     }
 
     @Test
+    public void shouldRetryInitializationWithBackoffWhenInitializationFails() {
+        final StreamTask task00 = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .withInputPartitions(taskId00Partitions)
+            .inState(State.RESTORING).build();
+        final StandbyTask task01 = standbyTask(taskId01, taskId01ChangelogPartitions)
+            .withInputPartitions(taskId01Partitions)
+            .inState(State.RUNNING).build();
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        when(tasks.drainPendingTasksToInit()).thenReturn(mkSet(task00, task01));
+        doThrow(new LockException("Lock Exception!")).when(task00).initializeIfNeeded();
+        taskManager = setUpTaskManager(StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE, tasks, true);
+
+        taskManager.checkStateUpdater(time.milliseconds(), noOpResetter);
+
+        // task00 should not be initialized due to LockException, task01 should be initialized
+        verify(task00).initializeIfNeeded();
+        verify(task01).initializeIfNeeded();
+        verify(tasks).addPendingTasksToInit(
+            argThat(tasksToInit -> tasksToInit.contains(task00) && !tasksToInit.contains(task01))
+        );
+        verify(stateUpdater, never()).add(task00);
+        verify(stateUpdater).add(task01);
+
+        time.sleep(500);
+
+        taskManager.checkStateUpdater(time.milliseconds(), noOpResetter);
+
+        // task00 should not be initialized since the backoff period has not passed
+        verify(task00, times(1)).initializeIfNeeded();
+        verify(tasks, times(2)).addPendingTasksToInit(
+            argThat(tasksToInit -> tasksToInit.contains(task00))
+        );
+        verify(stateUpdater, never()).add(task00);
+
+        time.sleep(5000);
+
+        // task00 should call initialize since the backoff period has passed
+        doNothing().when(task00).initializeIfNeeded();
+        taskManager.checkStateUpdater(time.milliseconds(), noOpResetter);
+
+        verify(task00, times(2)).initializeIfNeeded();
+        verify(tasks, times(2)).addPendingTasksToInit(
+            argThat(tasksToInit -> tasksToInit.contains(task00))
+        );
+        verify(stateUpdater).add(task00);
+    }
+
+    @Test
     public void shouldRethrowRuntimeExceptionInInitTaskWithStateUpdater() {
         final StreamTask task00 = statefulTask(taskId00, taskId00ChangelogPartitions)
             .withInputPartitions(taskId00Partitions)

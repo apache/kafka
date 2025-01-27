@@ -427,7 +427,7 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
     val image = _currentImage
     val result = new mutable.HashMap[Int, Node]()
     Option(image.topics().getTopic(tp.topic())).foreach { topic =>
-      topic.partitions().values().forEach { partition =>
+      Option(topic.partitions().get(tp.partition())).foreach { partition =>
         partition.replicas.foreach { replicaId =>
           val broker = image.cluster().broker(replicaId)
           if (broker != null && !broker.fenced()) {

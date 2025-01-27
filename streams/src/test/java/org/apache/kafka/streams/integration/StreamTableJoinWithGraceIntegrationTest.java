@@ -19,10 +19,12 @@ package org.apache.kafka.streams.integration;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Joined;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.IntegrationTest;
@@ -60,20 +62,20 @@ public class StreamTableJoinWithGraceIntegrationTest extends AbstractJoinIntegra
 
     @Before
     public void prepareTopology() throws InterruptedException {
-        super.prepareEnvironment();
         appID = "stream-table-join-integration-test";
         builder = new StreamsBuilder();
         joined = Joined.with(Serdes.Long(), Serdes.String(), Serdes.String(), "Grace", Duration.ofMillis(2));
     }
     
     @Test
-    public void testInnerWithVersionedStore() {
+    public void testInnerWithVersionedStore() throws Exception {
+        super.prepareEnvironment(false);
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner");
 
-        leftStream = builder.stream(INPUT_TOPIC_LEFT);
-        rightTable = builder.table(INPUT_TOPIC_RIGHT, Materialized.as(
+        leftStream = builder.stream(INPUT_TOPIC_LEFT, Consumed.with(Serdes.Long(), Serdes.String()));
+        rightTable = builder.table(INPUT_TOPIC_RIGHT, Consumed.with(Serdes.Long(), Serdes.String()), Materialized.as(
             Stores.persistentVersionedKeyValueStore(STORE_NAME, Duration.ofMinutes(5))));
-        leftStream.join(rightTable, valueJoiner, joined).to(OUTPUT_TOPIC);
+        leftStream.join(rightTable, valueJoiner, joined).to(OUTPUT_TOPIC, Produced.with(Serdes.Long(), Serdes.String()));
 
         final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
             null,
@@ -105,7 +107,8 @@ public class StreamTableJoinWithGraceIntegrationTest extends AbstractJoinIntegra
     }
 
     @Test
-    public void testLeftWithVersionedStore() {
+    public void testLeftWithVersionedStore() throws Exception {
+        super.prepareEnvironment(true);
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-left");
 
         leftStream = builder.stream(INPUT_TOPIC_LEFT);
