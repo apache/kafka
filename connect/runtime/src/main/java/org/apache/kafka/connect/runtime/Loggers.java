@@ -82,6 +82,9 @@ public abstract class Loggers {
         } catch (ClassCastException | LinkageError e) {
             log.info("No supported logging implementation found. Logging configuration endpoint will be disabled.");
             return new NoOpLoggers(time);
+        } catch (Exception e) {
+            log.warn("A problem occurred, while initializing the logging controller. Logging configuration endpoint will be disabled.", e);
+            return new NoOpLoggers(time);
         }
     }
 

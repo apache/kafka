@@ -17,6 +17,7 @@
 
 package kafka.utils
 
+import com.typesafe.scalalogging.Logger
 import kafka.utils.LoggingController.ROOT_LOGGER
 import org.apache.kafka.common.utils.Utils
 import org.apache.logging.log4j.core.LoggerContext
@@ -30,6 +31,8 @@ import scala.jdk.CollectionConverters._
 
 object LoggingController {
 
+  private val logger = Logger[LoggingController]
+
   /**
    * Note: In Log4j 1, the root logger's name was "root" and Kafka also followed that name for dynamic logging control feature.
    *
@@ -42,7 +45,12 @@ object LoggingController {
     try {
       new Log4jCoreController
     } catch {
-      case _: ClassCastException | _: LinkageError => new NoOpController
+      case _: ClassCastException | _: LinkageError =>
+        logger.info("No supported logging implementation found. Logging configuration endpoint will be disabled.")
+        new NoOpController
+      case e: Exception =>
+        logger.warn("A problem occurred, while initializing the logging controller. Logging configuration endpoint will be disabled.", e)
+        new NoOpController
     }
   }
 
