@@ -25,10 +25,7 @@ object Log4jControllerRegistration {
   private val logger = Logger(this.getClass.getName)
 
   private val loggingMBean = new LoggingController
-  // Legacy name
   registerMBean(loggingMBean, "kafka.Log4jController")
-  // New name
-  registerMBean(loggingMBean, "kafka.LoggingController")
 
   private def registerMBean(mbean: LoggingController, typeAttr: String): Unit = {
     try {
