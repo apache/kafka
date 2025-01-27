@@ -84,10 +84,15 @@ public class PartitionRotateStrategyTest {
         assertTrue(result.isEmpty());
     }
 
+    /**
+     * Create an ordered map of TopicIdPartition to partition max bytes.
+     * @param size The number of topic-partitions to create.
+     * @return The ordered map of TopicIdPartition to partition max bytes.
+     */
     private LinkedHashMap<TopicIdPartition, Integer> createPartitions(int size) {
         LinkedHashMap<TopicIdPartition, Integer> partitions = new LinkedHashMap<>();
         for (int i = 0; i < size; i++) {
-            partitions.put(new TopicIdPartition(Uuid.randomUuid(), i, "foo" + i), 2);
+            partitions.put(new TopicIdPartition(Uuid.randomUuid(), i, "foo" + i), 1 /* partition max bytes*/);
         }
         return partitions;
     }

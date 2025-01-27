@@ -34,7 +34,6 @@ public class ShareFetchTestUtils {
      *
      * @param partitionMaxBytes The maximum number of bytes that can be fetched for each partition.
      * @param topicIdPartitions The topic partitions to create the map for.
-     *
      * @return The ordered map of TopicIdPartition to partition max bytes.
      */
     public static LinkedHashMap<TopicIdPartition, Integer> orderedMap(int partitionMaxBytes, TopicIdPartition... topicIdPartitions) {
@@ -50,7 +49,6 @@ public class ShareFetchTestUtils {
      *
      * @param original The original map.
      * @param result The rotated map.
-     *
      * @param rotationAt The position to rotate the keys at.
      */
     public static void validateRotatedMapEquals(

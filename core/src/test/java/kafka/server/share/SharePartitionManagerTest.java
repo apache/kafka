@@ -2785,7 +2785,7 @@ public class SharePartitionManagerTest {
         // Verify the partitions rotation, rotate by 5 (12 % 7).
         resultShareFetch = captor.getValue();
         validateRotatedMapEquals(partitionMaxBytes, resultShareFetch.partitionMaxBytes(), 5);
-
+        // Rotation by Integer.MAX_VALUE, boundary test.
         sharePartitionManager.fetchMessages(groupId, memberId1.toString(), FETCH_PARAMS, Integer.MAX_VALUE, BATCH_SIZE,
             partitionMaxBytes);
         verify(sharePartitionManager, times(5)).processShareFetch(captor.capture());
