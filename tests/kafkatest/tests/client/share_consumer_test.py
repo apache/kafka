@@ -31,6 +31,8 @@ class ShareConsumerTest(VerifiableShareConsumerTest):
     num_producers = 1
     num_brokers = 3
 
+    default_timeout_sec = 600
+
     def __init__(self, test_context):
         super(ShareConsumerTest, self).__init__(test_context, num_consumers=self.num_consumers, num_producers=self.num_producers,
                                         num_zk=0, num_brokers=self.num_brokers, topics={
@@ -46,12 +48,12 @@ class ShareConsumerTest(VerifiableShareConsumerTest):
     def get_topic_partitions(self, topic):
         return [TopicPartition(topic["name"], i) for i in range(topic["partitions"])]
 
-    def wait_until_topic_replicas_settled(self, topic, expected_num_isr, timeout_sec=60):
+    def wait_until_topic_replicas_settled(self, topic, expected_num_isr, timeout_sec=default_timeout_sec):
         for partition in range(0, topic["partitions"]):
             wait_until(lambda: len(self.kafka.isr_idx_list(topic["name"], partition)) == expected_num_isr,
                        timeout_sec=timeout_sec, backoff_sec=1, err_msg="the expected number of ISRs did not settle in a reasonable amount of time")
 
-    def wait_until_topic_partition_leaders_settled(self, topic, timeout_sec=60):
+    def wait_until_topic_partition_leaders_settled(self, topic, timeout_sec=default_timeout_sec):
         def leader_settled(partition_leader, topicName, partition):
             try:
                 partition_leader(topicName, partition)
@@ -62,20 +64,20 @@ class ShareConsumerTest(VerifiableShareConsumerTest):
             wait_until(lambda: leader_settled(self.kafka.leader, topic["name"], partition),
                        timeout_sec=timeout_sec, backoff_sec=1, err_msg="partition leaders did not settle in a reasonable amount of time")
 
-    def rolling_bounce_brokers(self, topic, num_bounces=5, clean_shutdown=True, timeout_sec=60):
+    def rolling_bounce_brokers(self, topic, num_bounces=5, clean_shutdown=True, timeout_sec=default_timeout_sec):
         for _ in range(num_bounces):
             for i in range(len(self.kafka.nodes)):
                 node = self.kafka.nodes[i]
                 self.kafka.restart_node(node, clean_shutdown=clean_shutdown)
                 self.wait_until_topic_replicas_settled(topic, expected_num_isr = topic["replication_factor"], timeout_sec=timeout_sec)
 
-    def fail_brokers(self, topic, num_brokers=1, clean_shutdown=True, timeout_sec=60):
+    def fail_brokers(self, topic, num_brokers=1, clean_shutdown=True, timeout_sec=default_timeout_sec):
         for i in range(num_brokers):
             self.kafka.signal_node(self.kafka.nodes[i], signal.SIGTERM if clean_shutdown else signal.SIGKILL)
             self.wait_until_topic_replicas_settled(topic, topic["replication_factor"] - (i + 1))
         self.wait_until_topic_partition_leaders_settled(topic, timeout_sec=timeout_sec)
 
-    def rolling_bounce_share_consumers(self, consumer, keep_alive=0, num_bounces=5, clean_shutdown=True, timeout_sec=60):
+    def rolling_bounce_share_consumers(self, consumer, keep_alive=0, num_bounces=5, clean_shutdown=True, timeout_sec=default_timeout_sec):
         for _ in range(num_bounces):
             num_consumers_killed = 0
             for node in consumer.nodes[keep_alive:]:
@@ -90,7 +92,7 @@ class ShareConsumerTest(VerifiableShareConsumerTest):
                 self.await_all_members(consumer, timeout_sec=timeout_sec)
                 self.await_consumed_messages_by_a_consumer(consumer, node, timeout_sec=timeout_sec)
 
-    def bounce_all_share_consumers(self, consumer, keep_alive=0, num_bounces=5, clean_shutdown=True, timeout_sec=60):
+    def bounce_all_share_consumers(self, consumer, keep_alive=0, num_bounces=5, clean_shutdown=True, timeout_sec=default_timeout_sec):
         for _ in range(num_bounces):
             for node in consumer.nodes[keep_alive:]:
                 consumer.stop_node(node, clean_shutdown)
@@ -105,7 +107,7 @@ class ShareConsumerTest(VerifiableShareConsumerTest):
                 self.await_members(consumer, num_consumers=num_alive_consumers, timeout_sec=timeout_sec)
                 self.await_consumed_messages_by_a_consumer(consumer, node, timeout_sec=timeout_sec)
 
-    def fail_share_consumers(self, consumer, num_consumers=1, clean_shutdown=True, timeout_sec=60):
+    def fail_share_consumers(self, consumer, num_consumers=1, clean_shutdown=True, timeout_sec=default_timeout_sec):
         for i in range(num_consumers):
             consumer.kill_node(consumer.nodes[i], clean_shutdown=clean_shutdown)
             wait_until(lambda: len(consumer.dead_nodes()) == (i + 1),
@@ -126,9 +128,9 @@ class ShareConsumerTest(VerifiableShareConsumerTest):
         producer.start()
 
         consumer.start()
-        self.await_all_members(consumer, timeout_sec=60)
+        self.await_all_members(consumer, timeout_sec=self.default_timeout_sec)
 
-        self.await_acknowledged_messages(consumer, min_messages=total_messages, timeout_sec=60)
+        self.await_acknowledged_messages(consumer, min_messages=total_messages, timeout_sec=self.default_timeout_sec)
 
         assert consumer.total_consumed() >= producer.num_acked
         assert consumer.total_acknowledged() == producer.num_acked
@@ -154,9 +156,9 @@ class ShareConsumerTest(VerifiableShareConsumerTest):
         producer.start()
 
         consumer.start()
-        self.await_all_members(consumer, timeout_sec=60)
+        self.await_all_members(consumer, timeout_sec=self.default_timeout_sec)
 
-        self.await_acknowledged_messages(consumer, min_messages=total_messages, timeout_sec=60)
+        self.await_acknowledged_messages(consumer, min_messages=total_messages, timeout_sec=self.default_timeout_sec)
 
         assert consumer.total_consumed() >= producer.num_acked
         assert consumer.total_acknowledged() == producer.num_acked
@@ -184,20 +186,20 @@ class ShareConsumerTest(VerifiableShareConsumerTest):
         consumer = self.setup_share_group(self.TOPIC2["name"], offset_reset_strategy="earliest")
 
         producer.start()
-        self.await_produced_messages(producer)
+        self.await_produced_messages(producer, timeout_sec=self.default_timeout_sec)
 
         consumer.start()
-        self.await_all_members(consumer)
+        self.await_all_members(consumer, timeout_sec=self.default_timeout_sec)
 
-        self.await_consumed_messages(consumer, timeout_sec=60)
-        self.rolling_bounce_brokers(self.TOPIC2, num_bounces=1, clean_shutdown=clean_shutdown)
+        self.await_consumed_messages(consumer, timeout_sec=self.default_timeout_sec)
+        self.rolling_bounce_brokers(self.TOPIC2, num_bounces=1, clean_shutdown=clean_shutdown, timeout_sec=self.default_timeout_sec)
 
         # ensure that the share consumers do some work after the broker bounces
-        self.await_consumed_messages(consumer, min_messages=1000)
+        self.await_consumed_messages(consumer, min_messages=1000, timeout_sec=self.default_timeout_sec)
 
         producer.stop()
 
-        self.await_unique_consumed_messages(consumer, min_messages=producer.num_acked, timeout_sec=60)
+        self.await_unique_consumed_messages(consumer, min_messages=producer.num_acked, timeout_sec=self.default_timeout_sec)
 
         assert consumer.total_unique_consumed() >= producer.num_acked
 
@@ -220,20 +222,20 @@ class ShareConsumerTest(VerifiableShareConsumerTest):
         consumer = self.setup_share_group(self.TOPIC2["name"], offset_reset_strategy="earliest")
 
         producer.start()
-        self.await_produced_messages(producer)
+        self.await_produced_messages(producer, timeout_sec=self.default_timeout_sec)
 
         consumer.start()
-        self.await_all_members(consumer)
+        self.await_all_members(consumer, timeout_sec=self.default_timeout_sec)
 
         # shutdown the required number of brokers
-        self.fail_brokers(self.TOPIC2, num_brokers=num_failed_brokers, clean_shutdown=clean_shutdown)
+        self.fail_brokers(self.TOPIC2, num_brokers=num_failed_brokers, clean_shutdown=clean_shutdown, timeout_sec=self.default_timeout_sec)
 
         # ensure that the share consumers do some work after the broker failure
-        self.await_consumed_messages(consumer, min_messages=1000)
+        self.await_consumed_messages(consumer, min_messages=1000, timeout_sec=self.default_timeout_sec)
 
         producer.stop()
 
-        self.await_unique_consumed_messages(consumer, min_messages=producer.num_acked, timeout_sec=60)
+        self.await_unique_consumed_messages(consumer, min_messages=producer.num_acked, timeout_sec=self.default_timeout_sec)
 
         assert consumer.total_unique_consumed() >= producer.num_acked
 
@@ -262,19 +264,19 @@ class ShareConsumerTest(VerifiableShareConsumerTest):
         consumer = self.setup_share_group(self.TOPIC2["name"], offset_reset_strategy="earliest")
 
         producer.start()
-        self.await_produced_messages(producer)
+        self.await_produced_messages(producer, timeout_sec=self.default_timeout_sec)
 
         consumer.start()
-        self.await_all_members(consumer)
+        self.await_all_members(consumer, timeout_sec=self.default_timeout_sec)
 
         if bounce_mode == "all":
-            self.bounce_all_share_consumers(consumer, clean_shutdown=clean_shutdown)
+            self.bounce_all_share_consumers(consumer, clean_shutdown=clean_shutdown, timeout_sec=self.default_timeout_sec)
         else:
-            self.rolling_bounce_share_consumers(consumer, clean_shutdown=clean_shutdown)
+            self.rolling_bounce_share_consumers(consumer, clean_shutdown=clean_shutdown, timeout_sec=self.default_timeout_sec)
 
         producer.stop()
 
-        self.await_unique_consumed_messages(consumer, min_messages=producer.num_acked, timeout_sec=60)
+        self.await_unique_consumed_messages(consumer, min_messages=producer.num_acked, timeout_sec=self.default_timeout_sec)
 
         assert consumer.total_unique_consumed() >= producer.num_acked
 
@@ -293,20 +295,20 @@ class ShareConsumerTest(VerifiableShareConsumerTest):
 
         # startup the producer and ensure that some records have been written
         producer.start()
-        self.await_produced_messages(producer)
+        self.await_produced_messages(producer, timeout_sec=self.default_timeout_sec)
 
         consumer.start()
-        self.await_all_members(consumer)
+        self.await_all_members(consumer, timeout_sec=self.default_timeout_sec)
 
         # stop the required number of share consumers
-        self.fail_share_consumers(consumer, num_failed_consumers, clean_shutdown=clean_shutdown)
+        self.fail_share_consumers(consumer, num_failed_consumers, clean_shutdown=clean_shutdown, timeout_sec=self.default_timeout_sec)
 
         # ensure that the remaining consumer does some work
-        self.await_consumed_messages(consumer, min_messages=1000, timeout_sec=60)
+        self.await_consumed_messages(consumer, min_messages=1000, timeout_sec=self.default_timeout_sec)
 
         producer.stop()
 
-        self.await_unique_consumed_messages(consumer, min_messages=producer.num_acked, timeout_sec=60)
+        self.await_unique_consumed_messages(consumer, min_messages=producer.num_acked, timeout_sec=self.default_timeout_sec)
 
         assert consumer.total_unique_consumed() >= producer.num_acked
 
