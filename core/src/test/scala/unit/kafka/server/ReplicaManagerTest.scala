@@ -2927,7 +2927,7 @@ class ReplicaManagerTest {
       result.fire(errorOrGuard)
     }
 
-    replicaManager.maybeStartTransactionVerificationForPartition(
+    replicaManager.maybeSendPartitionToTransactionCoordinator(
       topicPartition,
       transactionalId,
       producerId,

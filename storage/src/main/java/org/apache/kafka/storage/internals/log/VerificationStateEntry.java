@@ -33,12 +33,14 @@ public class VerificationStateEntry {
     private final VerificationGuard verificationGuard;
     private int lowestSequence;
     private short epoch;
+    private boolean isTransactionsV2;
 
-    public VerificationStateEntry(long timestamp, int sequence, short epoch) {
+    public VerificationStateEntry(long timestamp, int sequence, short epoch, boolean isTransactionsV2) {
         this.timestamp = timestamp;
         this.verificationGuard = new VerificationGuard();
         this.lowestSequence = sequence;
         this.epoch = epoch;
+        this.isTransactionsV2 = isTransactionsV2;
     }
 
     public long timestamp() {
@@ -55,6 +57,10 @@ public class VerificationStateEntry {
 
     public short epoch() {
         return epoch;
+    }
+
+    public boolean isTransactionsV2() {
+        return isTransactionsV2;
     }
 
     /**

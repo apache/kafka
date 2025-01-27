@@ -67,10 +67,14 @@ object AddPartitionsToTxnManager {
  *    genericErrorSupported: This maps to the case when the clients are updated to handle the TransactionAbortableException
  *    addPartition:          This allows the partition to be added to the transactions inflight with the Produce and TxnOffsetCommit requests. Plus the behaviors in genericErrorSupported.
  */
-sealed trait TransactionSupportedOperation
+sealed trait TransactionSupportedOperation {
+  val isTV2 = false;
+}
 case object defaultError extends TransactionSupportedOperation
 case object genericErrorSupported extends TransactionSupportedOperation
-case object addPartition extends TransactionSupportedOperation
+case object addPartition extends TransactionSupportedOperation {
+  override val isTV2 = true
+}
 
 /*
  * Data structure to hold the transactional data to send to a node. Note -- at most one request per transactional ID

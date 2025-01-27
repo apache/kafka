@@ -569,11 +569,11 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    * Maybe create and return the VerificationGuard for the given producer ID if the transaction is not yet ongoing.
    * Creation starts the verification process. Otherwise return the sentinel VerificationGuard.
    */
-  def maybeStartTransactionVerification(producerId: Long, sequence: Int, epoch: Short): VerificationGuard = lock synchronized {
+  def maybeStartTransactionVerification(producerId: Long, sequence: Int, epoch: Short, isTV2: Boolean): VerificationGuard = lock synchronized {
     if (hasOngoingTransaction(producerId, epoch))
       VerificationGuard.SENTINEL
     else
-      maybeCreateVerificationGuard(producerId, sequence, epoch)
+      maybeCreateVerificationGuard(producerId, sequence, epoch, isTV2)
   }
 
   /**
@@ -581,8 +581,9 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    */
   private def maybeCreateVerificationGuard(producerId: Long,
                                            sequence: Int,
-                                           epoch: Short): VerificationGuard = lock synchronized {
-    producerStateManager.maybeCreateVerificationStateEntry(producerId, sequence, epoch).verificationGuard
+                                           epoch: Short,
+                                           isTV2: Boolean): VerificationGuard = lock synchronized {
+    producerStateManager.maybeCreateVerificationStateEntry(producerId, sequence, epoch, isTV2).verificationGuard
   }
 
   /**
