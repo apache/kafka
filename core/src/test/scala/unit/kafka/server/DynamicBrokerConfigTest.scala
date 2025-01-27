@@ -404,8 +404,8 @@ class DynamicBrokerConfigTest {
     // in an AlterConfigs request. Validation should fail with an exception if any of the configs are invalid.
     assertThrows(classOf[ConfigException], () => config.dynamicConfig.validate(props, perBrokerConfig = true))
 
-    // DynamicBrokerConfig#updateBrokerConfig is used to update configs from ZooKeeper during
-    // startup and when configs are updated in ZK. Update should apply valid configs and ignore
+    // DynamicBrokerConfig#updateBrokerConfig is used to update configs from broker during
+    // startup and when configs are updated in broker. Update should apply valid configs and ignore
     // invalid ones.
     config.dynamicConfig.updateBrokerConfig(0, props)
     validProps.foreach { case (name, value) => assertEquals(value, config.originals.get(name)) }
