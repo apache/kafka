@@ -18,7 +18,6 @@ package org.apache.kafka.coordinator.group.streams.assignor;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -45,7 +44,6 @@ public class MockAssignorTest {
         TaskAssignorException ex = assertThrows(TaskAssignorException.class, () -> assignor.assign(
             new GroupSpecImpl(
                 Collections.emptyMap(),
-                Collections.emptyList(),
                 new HashMap<>()
             ),
             new TopologyDescriberImpl(5, Collections.singletonList("test-subtopology"))
@@ -84,7 +82,6 @@ public class MockAssignorTest {
         TaskAssignorException ex = assertThrows(TaskAssignorException.class, () -> assignor.assign(
             new GroupSpecImpl(
                 Map.of("member1", memberSpec1, "member2", memberSpec2),
-                new ArrayList<>(),
                 new HashMap<>()
             ),
             new TopologyDescriberImpl(5, Collections.singletonList("test-subtopology"))
@@ -99,7 +96,6 @@ public class MockAssignorTest {
         final GroupAssignment result = assignor.assign(
             new GroupSpecImpl(
                 Collections.emptyMap(),
-                new ArrayList<>(),
                 new HashMap<>()
             ),
             new TopologyDescriberImpl(5, Collections.emptyList())
@@ -127,7 +123,6 @@ public class MockAssignorTest {
         final GroupAssignment result = assignor.assign(
             new GroupSpecImpl(
                 Collections.singletonMap("test_member", memberSpec),
-                new ArrayList<>(),
                 new HashMap<>()
             ),
             new TopologyDescriberImpl(4, List.of("test-subtopology"))
@@ -172,7 +167,6 @@ public class MockAssignorTest {
         final GroupAssignment result = assignor.assign(
             new GroupSpecImpl(
                 mkMap(mkEntry("test_member1", memberSpec1), mkEntry("test_member2", memberSpec2)),
-                new ArrayList<>(),
                 new HashMap<>()
             ),
             new TopologyDescriberImpl(4, List.of("test-subtopology1", "test-subtopology2"))
@@ -231,7 +225,6 @@ public class MockAssignorTest {
         final GroupAssignment result = assignor.assign(
             new GroupSpecImpl(
                 mkMap(mkEntry("test_member1", memberSpec1), mkEntry("test_member2", memberSpec2)),
-                new ArrayList<>(),
                 new HashMap<>()
             ),
             new TopologyDescriberImpl(4, List.of("test-subtopology1", "test-subtopology2"))

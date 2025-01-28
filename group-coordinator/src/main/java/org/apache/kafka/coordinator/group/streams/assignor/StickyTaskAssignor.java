@@ -33,7 +33,7 @@ import java.util.stream.Collectors;
 
 public class StickyTaskAssignor implements TaskAssignor {
 
-    public static final String STICKY_ASSIGNOR_NAME = "sticky";
+    private static final String STICKY_ASSIGNOR_NAME = "sticky";
     private static final Logger log = LoggerFactory.getLogger(StickyTaskAssignor.class);
 
     // helper data structures:
@@ -53,28 +53,39 @@ public class StickyTaskAssignor implements TaskAssignor {
 
     @Override
     public GroupAssignment assign(final GroupSpec groupSpec, final TopologyDescriber topologyDescriber) throws TaskAssignorException {
-
         initialize(groupSpec, topologyDescriber);
+        GroupAssignment assignments =  doAssign(groupSpec, topologyDescriber);
+        terminate();
+        return assignments;
+    }
 
+    private GroupAssignment doAssign(final GroupSpec groupSpec, final TopologyDescriber topologyDescriber) {
         //active
-        Set<TaskId> activeTasks = taskIds(groupSpec, topologyDescriber, true);
+        Set<TaskId> activeTasks = taskIds(topologyDescriber, true);
         assignActive(activeTasks);
 
         //standby
         final int numStandbyReplicas =
             groupSpec.assignmentConfigs().isEmpty() ? 0
-                : Integer.parseInt(groupSpec.assignmentConfigs().get("numStandbyReplicas"));
+                : Integer.parseInt(groupSpec.assignmentConfigs().get("num.standby.replicas"));
         if (numStandbyReplicas > 0) {
-            Set<TaskId> statefulTasks = taskIds(groupSpec, topologyDescriber, false);
+            Set<TaskId> statefulTasks = taskIds(topologyDescriber, false);
             assignStandby(statefulTasks, numStandbyReplicas);
         }
 
         return buildGroupAssignment(groupSpec.members().keySet());
     }
 
-    private Set<TaskId> taskIds(final GroupSpec groupSpec, final TopologyDescriber topologyDescriber, final boolean isActive) {
+    private void terminate() {
+        taskPairs = null;
+        activeTaskToPrevMember = null;
+        standbyTaskToPrevMember = null;
+        processIdToState = null;
+    }
+
+    private Set<TaskId> taskIds(final TopologyDescriber topologyDescriber, final boolean isActive) {
         Set<TaskId> ret = new HashSet<>();
-        for (String subtopology : groupSpec.subtopologies()) {
+        for (String subtopology : topologyDescriber.subtopologies()) {
             if (isActive || topologyDescriber.isStateful(subtopology)) {
                 int numberOfPartitions = topologyDescriber.numTasks(subtopology);
                 for (int i = 0; i < numberOfPartitions; i++) {
@@ -88,7 +99,7 @@ public class StickyTaskAssignor implements TaskAssignor {
     private void initialize(final GroupSpec groupSpec, final TopologyDescriber topologyDescriber) {
 
         allTasks = 0;
-        for (String subtopology : groupSpec.subtopologies()) {
+        for (String subtopology : topologyDescriber.subtopologies()) {
             int numberOfPartitions = topologyDescriber.numTasks(subtopology);
             allTasks += numberOfPartitions;
         }
@@ -269,13 +280,10 @@ public class StickyTaskAssignor implements TaskAssignor {
                     .map(ProcessState::processId)
                     .collect(Collectors.toSet());
 
-                final String errorMessage = "Unable to assign " + (numStandbyReplicas - i) +
-                    " of " + numStandbyReplicas + " standby tasks for task [" + task + "].";
-
                 if (availableProcesses.isEmpty()) {
                     log.warn("{} There is not enough available capacity. " +
                             "You should increase the number of threads and/or application instances to maintain the requested number of standby replicas.",
-                        errorMessage);
+                        errorMessage(numStandbyReplicas, i, task));
                     break;
                 }
                 Member standby = null;
@@ -306,7 +314,7 @@ public class StickyTaskAssignor implements TaskAssignor {
                             .map(mId -> new Member(pId, mId))).collect(Collectors.toSet());
                     standby = findMemberWithLeastLoad(availableMembers, task, false);
                     if (standby == null) {
-                        log.warn("{} Error in standby task assignment!", errorMessage);
+                        log.warn("{} Error in standby task assignment!", errorMessage(numStandbyReplicas, i, task));
                         break;
                     }
                 }
@@ -315,6 +323,11 @@ public class StickyTaskAssignor implements TaskAssignor {
             }
 
         }
+    }
+
+    private String errorMessage(final int numStandbyReplicas, final int i, final TaskId task) {
+        return "Unable to assign " + (numStandbyReplicas - i) +
+            " of " + numStandbyReplicas + " standby tasks for task [" + task + "].";
     }
 
     private boolean isLoadBalanced(final String processId) {

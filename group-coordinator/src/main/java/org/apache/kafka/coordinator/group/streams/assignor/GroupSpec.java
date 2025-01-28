@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.coordinator.group.streams.assignor;
 
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -32,7 +31,7 @@ public interface GroupSpec {
     /**
      * @return The list of subtopologies.
      */
-    List<String> subtopologies();
+//    List<String> subtopologies();
 
     /**
      * @return Any configurations passed to the assignor.
