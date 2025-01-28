@@ -26,8 +26,8 @@ import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.requests.LeaderAndIsrRequest;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
-
 import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
+
 import org.slf4j.Logger;
 
 import java.util.Arrays;
