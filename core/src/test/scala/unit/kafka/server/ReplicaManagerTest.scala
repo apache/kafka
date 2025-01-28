@@ -5996,7 +5996,7 @@ class ReplicaManagerTest {
 
     val groupId = "grp"
     val tp1 = new TopicIdPartition(Uuid.randomUuid, new TopicPartition("foo1", 0))
-    val partitionMaxBytes = new util.HashMap[TopicIdPartition, Integer]
+    val partitionMaxBytes = new util.LinkedHashMap[TopicIdPartition, Integer]
     partitionMaxBytes.put(tp1, 1000)
 
     val sp1 = mock(classOf[SharePartition])
@@ -6009,7 +6009,8 @@ class ReplicaManagerTest {
       groupId,
       Uuid.randomUuid.toString,
       future,
-      partitionMaxBytes, 500,
+      partitionMaxBytes,
+      500,
       100,
       brokerTopicStats)
 
