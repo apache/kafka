@@ -148,40 +148,51 @@ public class KafkaShareConsumerTest {
         // [A] A SHARE_FETCH in a new share session, fetching from topic topicId1, with no acknowledgements included.
         // The response includes 2 records which are acquired.
         client.prepareResponseFrom(body -> {
-            ShareFetchRequest request = (ShareFetchRequest) body;
-            return request.data().groupId().equals(groupId) &&
-                request.data().shareSessionEpoch() == 0 &&
-                request.data().batchSize() == batchSize &&
-                request.data().topics().get(0).topicId().equals(topicId1) &&
-                request.data().topics().get(0).partitions().size() == 1 &&
-                request.data().topics().get(0).partitions().get(0).acknowledgementBatches().isEmpty();
+            if (body instanceof ShareFetchRequest) {
+                ShareFetchRequest request = (ShareFetchRequest) body;
+                return request.data().groupId().equals(groupId) &&
+                    request.data().shareSessionEpoch() == 0 &&
+                    request.data().batchSize() == batchSize &&
+                    request.data().topics().get(0).topicId().equals(topicId1) &&
+                    request.data().topics().get(0).partitions().size() == 1 &&
+                    request.data().topics().get(0).partitions().get(0).acknowledgementBatches().isEmpty();
+            } else {
+                return false;
+            }
         }, shareFetchResponse(ti1p0, 2), node);
 
         // [B] A SHARE_ACKNOWLEDGE for the two records acquired in [A].
         client.prepareResponseFrom(body -> {
-            ShareAcknowledgeRequest request = (ShareAcknowledgeRequest) body;
-            return request.data().groupId().equals(groupId) &&
-                request.data().shareSessionEpoch() == 1 &&
-                request.data().topics().get(0).partitions().get(0).acknowledgementBatches().get(0).firstOffset() == 0 &&
-                request.data().topics().get(0).partitions().get(0).acknowledgementBatches().get(0).lastOffset() == 1 &&
-                request.data().topics().get(0).partitions().get(0).acknowledgementBatches().get(0).acknowledgeTypes().size() == 1 &&
-                request.data().topics().get(0).partitions().get(0).acknowledgementBatches().get(0).acknowledgeTypes().get(0) == (byte) 1;
+            if (body instanceof ShareAcknowledgeRequest) {
+                ShareAcknowledgeRequest request = (ShareAcknowledgeRequest) body;
+                return request.data().groupId().equals(groupId) &&
+                    request.data().shareSessionEpoch() == 1 &&
+                    request.data().topics().get(0).partitions().get(0).acknowledgementBatches().get(0).firstOffset() == 0 &&
+                    request.data().topics().get(0).partitions().get(0).acknowledgementBatches().get(0).lastOffset() == 1 &&
+                    request.data().topics().get(0).partitions().get(0).acknowledgementBatches().get(0).acknowledgeTypes().size() == 1 &&
+                    request.data().topics().get(0).partitions().get(0).acknowledgementBatches().get(0).acknowledgeTypes().get(0) == (byte) 1;
+            } else {
+                return false;
+            }
         }, shareAcknowledgeResponse(ti1p0), node);
 
         // [C] A SHARE_ACKNOWLEDGE which closes the share session.
         client.prepareResponseFrom(body -> {
-            ShareAcknowledgeRequest request = (ShareAcknowledgeRequest) body;
-            return request.data().groupId().equals(groupId) &&
-                request.data().shareSessionEpoch() == -1 &&
-                request.data().topics().isEmpty();
+            if (body instanceof ShareAcknowledgeRequest) {
+                ShareAcknowledgeRequest request = (ShareAcknowledgeRequest) body;
+                return request.data().groupId().equals(groupId) &&
+                    request.data().shareSessionEpoch() == -1 &&
+                    request.data().topics().isEmpty();
+            } else {
+                return false;
+            }
         }, shareAcknowledgeResponse(), node);
 
         try (KafkaShareConsumer<String, String> consumer = newShareConsumer(clientId1, metadata, client)) {
-
             consumer.subscribe(Set.of(topic1));
 
             // This will be a SHARE_GROUP_HEARTBEAT to establish the membership and then a SHARE_FETCH [A]
-            consumer.poll(Duration.ofMillis(heartbeatIntervalMs));
+            consumer.poll(Duration.ofMillis(5000));
 
             // This will be a SHARE_ACKNOWLEDGE [B]
             consumer.commitSync();
@@ -255,17 +266,21 @@ public class KafkaShareConsumerTest {
 
     private void shareGroupHeartbeat(MockClient client, Node coordinator, AtomicReference<Uuid> memberId, int memberEpoch, TopicIdPartition tip, AtomicInteger heartbeatsReceived, AtomicBoolean memberLeft) {
         client.prepareResponseFrom(body -> {
-            ShareGroupHeartbeatRequest request = (ShareGroupHeartbeatRequest) body;
-            if (request.data().memberEpoch() == 0) {
-                memberId.set(Uuid.fromString(request.data().memberId()));
-            }
-            if (request.data().memberEpoch() == -1) {
-                memberLeft.set(true);
+            if (body instanceof ShareGroupHeartbeatRequest) {
+                ShareGroupHeartbeatRequest request = (ShareGroupHeartbeatRequest) body;
+                if (request.data().memberEpoch() == 0) {
+                    memberId.set(Uuid.fromString(request.data().memberId()));
+                }
+                if (request.data().memberEpoch() == -1) {
+                    memberLeft.set(true);
+                } else {
+                    shareGroupHeartbeat(client, coordinator, memberId, memberEpoch + 1, tip, heartbeatsReceived, memberLeft);
+                }
+                heartbeatsReceived.addAndGet(1);
+                return true;
             } else {
-                shareGroupHeartbeat(client, coordinator, memberId, memberEpoch + 1, tip, heartbeatsReceived, memberLeft);
+                return false;
             }
-            heartbeatsReceived.addAndGet(1);
-            return true;
         }, shareGroupHeartbeatResponse(memberId.get(), memberEpoch, tip), coordinator);
     }
 
