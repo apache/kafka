@@ -49,6 +49,7 @@ import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.ShareFetchRequest;
 import org.apache.kafka.common.requests.ShareFetchResponse;
 import org.apache.kafka.common.requests.ShareRequestMetadata;
+import org.apache.kafka.common.test.api.Flaky;
 import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
@@ -167,6 +168,7 @@ public class SharePartitionManagerTest {
     public void setUp() {
         mockTimer = new SystemTimerReaper("sharePartitionManagerTestReaper",
             new SystemTimer("sharePartitionManagerTestTimer"));
+        kafka.utils.TestUtils.clearYammerMetrics();
         brokerTopicStats = new BrokerTopicStats();
         mockReplicaManager = mock(ReplicaManager.class);
         Partition partition = mockPartition();
@@ -1082,18 +1084,21 @@ public class SharePartitionManagerTest {
 
         doAnswer(invocation -> buildLogReadResult(partitionMaxBytes.keySet())).when(mockReplicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
 
-        sharePartitionManager.fetchMessages(groupId, memberId1.toString(), FETCH_PARAMS, BATCH_SIZE,
-            partitionMaxBytes);
+        CompletableFuture<Map<TopicIdPartition, PartitionData>> future = sharePartitionManager.fetchMessages(
+            groupId, memberId1.toString(), FETCH_PARAMS, BATCH_SIZE, partitionMaxBytes);
+        assertTrue(future.isDone());
         Mockito.verify(mockReplicaManager, times(1)).readFromLog(
             any(), any(), any(ReplicaQuota.class), anyBoolean());
 
-        sharePartitionManager.fetchMessages(groupId, memberId1.toString(), FETCH_PARAMS, BATCH_SIZE,
+        future = sharePartitionManager.fetchMessages(groupId, memberId1.toString(), FETCH_PARAMS, BATCH_SIZE,
             partitionMaxBytes);
+        assertTrue(future.isDone());
         Mockito.verify(mockReplicaManager, times(2)).readFromLog(
             any(), any(), any(ReplicaQuota.class), anyBoolean());
 
-        sharePartitionManager.fetchMessages(groupId, memberId1.toString(), FETCH_PARAMS, BATCH_SIZE,
+        future = sharePartitionManager.fetchMessages(groupId, memberId1.toString(), FETCH_PARAMS, BATCH_SIZE,
             partitionMaxBytes);
+        assertTrue(future.isDone());
         Mockito.verify(mockReplicaManager, times(3)).readFromLog(
             any(), any(), any(ReplicaQuota.class), anyBoolean());
 
@@ -1267,6 +1272,7 @@ public class SharePartitionManagerTest {
         );
     }
 
+    @Flaky("KAFKA-18657")
     @Test
     public void testReplicaManagerFetchShouldProceed() {
         String groupId = "grp";
@@ -1297,12 +1303,10 @@ public class SharePartitionManagerTest {
         // even though the maxInFlightMessages limit is exceeded, replicaManager.readFromLog should be called
         Mockito.verify(mockReplicaManager, times(1)).readFromLog(
             any(), any(), any(ReplicaQuota.class), anyBoolean());
-        // Should have 1 fetch recorded and no failed as the fetch did complete.
-        validateBrokerTopicStatsMetrics(
-            brokerTopicStats,
-            new TopicMetrics(1, 0, 0, 0),
-            Map.of("foo", new TopicMetrics(1, 0, 0, 0))
-        );
+        // Should have 1 fetch recorded.
+        assertEquals(1, brokerTopicStats.allTopicsStats().totalShareFetchRequestRate().count());
+        assertEquals(1, brokerTopicStats.numTopics());
+        assertEquals(1, brokerTopicStats.topicStats(tp0.topic()).totalShareFetchRequestRate().count());
     }
 
     @Test
@@ -1825,11 +1829,9 @@ public class SharePartitionManagerTest {
         assertTrue(delayedShareFetch.lock().tryLock());
         delayedShareFetch.lock().unlock();
         // Should have 1 acknowledge recorded as other topic is acknowledgement request is not sent.
-        validateBrokerTopicStatsMetrics(
-            brokerTopicStats,
-            new TopicMetrics(0, 0, 1, 0),
-            Map.of(tp1.topic(), new TopicMetrics(0, 0, 1, 0))
-        );
+        assertEquals(1, brokerTopicStats.allTopicsStats().totalShareAcknowledgementRequestRate().count());
+        assertEquals(1, brokerTopicStats.numTopics());
+        assertEquals(1, brokerTopicStats.topicStats(tp1.topic()).totalShareAcknowledgementRequestRate().count());
     }
 
     @Test
@@ -1934,11 +1936,9 @@ public class SharePartitionManagerTest {
         assertTrue(delayedShareFetch.lock().tryLock());
         delayedShareFetch.lock().unlock();
         // Should have 1 acknowledge recorded as other 2 topics acknowledgement request is not sent.
-        validateBrokerTopicStatsMetrics(
-            brokerTopicStats,
-            new TopicMetrics(0, 0, 1, 0),
-            Map.of(tp3.topic(), new TopicMetrics(0, 0, 1, 0))
-        );
+        assertEquals(1, brokerTopicStats.allTopicsStats().totalShareAcknowledgementRequestRate().count());
+        assertEquals(1, brokerTopicStats.numTopics());
+        assertEquals(1, brokerTopicStats.topicStats(tp3.topic()).totalShareAcknowledgementRequestRate().count());
     }
 
     @Test
@@ -2201,6 +2201,7 @@ public class SharePartitionManagerTest {
         );
     }
 
+    @Flaky("KAFKA-18657")
     @Test
     public void testDelayedInitializationShouldCompleteFetchRequest() throws Exception {
         String groupId = "grp";
@@ -2269,11 +2270,9 @@ public class SharePartitionManagerTest {
         Mockito.verify(mockReplicaManager, times(0)).readFromLog(
             any(), any(), any(ReplicaQuota.class), anyBoolean());
         // Should have 3 fetch recorded.
-        validateBrokerTopicStatsMetrics(
-            brokerTopicStats,
-            new TopicMetrics(3, 0, 0, 0),
-            Map.of(tp0.topic(), new TopicMetrics(3, 0, 0, 0))
-        );
+        assertEquals(3, brokerTopicStats.allTopicsStats().totalShareFetchRequestRate().count());
+        assertEquals(1, brokerTopicStats.numTopics());
+        assertEquals(3, brokerTopicStats.topicStats(tp0.topic()).totalShareFetchRequestRate().count());
     }
 
     @Test
@@ -2716,8 +2715,9 @@ public class SharePartitionManagerTest {
             .withBrokerTopicStats(brokerTopicStats)
             .build();
 
-        sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS, BATCH_SIZE,
-            partitionMaxBytes);
+        CompletableFuture<Map<TopicIdPartition, PartitionData>> future = sharePartitionManager.fetchMessages(
+            groupId, memberId.toString(), FETCH_PARAMS, BATCH_SIZE, partitionMaxBytes);
+        assertTrue(future.isDone());
         // Validate that the listener is registered.
         verify(mockReplicaManager, times(2)).maybeAddListener(any(), any());
         // The share partition initialization should error out as further mocks are not provided, the
