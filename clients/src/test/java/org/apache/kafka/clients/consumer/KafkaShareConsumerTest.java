@@ -104,19 +104,27 @@ public class KafkaShareConsumerTest {
         final AtomicReference<Uuid> memberId = new AtomicReference<>();
         final AtomicInteger heartbeatsReceived = new AtomicInteger();
         client.prepareResponseFrom(body -> {
-            ShareGroupHeartbeatRequest request = (ShareGroupHeartbeatRequest) body;
-            memberId.set(Uuid.fromString(request.data().memberId()));
-            boolean matches = request.data().memberEpoch() == 0;
-            heartbeatsReceived.addAndGet(1);
-
-            client.prepareResponseFrom(body2 -> {
-                ShareGroupHeartbeatRequest request2 = (ShareGroupHeartbeatRequest) body2;
-                boolean matches2 = request2.data().memberId().equals(memberId.get().toString()) && request2.data().memberEpoch() == 1;
+            if (body instanceof ShareGroupHeartbeatRequest) {
+                ShareGroupHeartbeatRequest request = (ShareGroupHeartbeatRequest) body;
+                memberId.set(Uuid.fromString(request.data().memberId()));
+                boolean matches = request.data().memberEpoch() == 0;
                 heartbeatsReceived.addAndGet(1);
-                return matches2;
-            }, shareGroupHeartbeatResponse(memberId.get(), 2, ti1p0), coordinator);
 
-            return matches;
+                client.prepareResponseFrom(body2 -> {
+                    if (body2 instanceof ShareGroupHeartbeatRequest) {
+                        ShareGroupHeartbeatRequest request2 = (ShareGroupHeartbeatRequest) body2;
+                        boolean matches2 = request2.data().memberId().equals(memberId.get().toString()) && request2.data().memberEpoch() == 1;
+                        heartbeatsReceived.addAndGet(1);
+                        return matches2;
+                    } else {
+                        return false;
+                    }
+                }, shareGroupHeartbeatResponse(memberId.get(), 2, ti1p0), coordinator);
+
+                return matches;
+            } else {
+                return false;
+            }
         }, shareGroupHeartbeatResponse(memberId.get(), 1, ti1p0), coordinator);
 
         try (KafkaShareConsumer<String, String> consumer = newShareConsumer(clientId1, metadata, client)) {
