@@ -51,7 +51,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -107,7 +106,7 @@ public class StateDirectory implements AutoCloseable {
     private final boolean hasPersistentStores;
     private final boolean hasNamedTopologies;
 
-    private final HashMap<TaskId, Thread> lockedTasksToOwner = new HashMap<>();
+    private final ConcurrentMap<TaskId, Thread> lockedTasksToOwner = new ConcurrentHashMap<>();
 
     private FileChannel stateDirLockChannel;
     private FileLock stateDirLock;
@@ -295,6 +294,9 @@ public class StateDirectory implements AutoCloseable {
 
             // now that we have exclusive ownership of the drained tasks, close them
             for (final Task task : drainedTasks) {
+                // main thread locked the task initially on startup, but has moved on and will not unlock
+                // so we need to explicitly swap lock ownership here as this method is called by a StreamThread
+                lockedTasksToOwner.replace(task.id(), Thread.currentThread());
                 task.suspend();
                 task.closeClean();
             }
