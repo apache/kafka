@@ -54,7 +54,6 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -62,7 +61,6 @@ import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
-import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryUtils;
@@ -721,16 +719,11 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                     Map<TopicIdPartition, Optional<KafkaException>> result = new HashMap<>();
                     Map<TopicIdPartition, Acknowledgements> completedAcknowledgements = ConsumerUtils.getResult(commitFuture);
                     completedAcknowledgements.forEach((tip, acks) -> {
-                        Errors ackErrorCode = acks.getAcknowledgeErrorCode();
-                        if (ackErrorCode == null) {
+                        KafkaException exception = acks.getAcknowledgeException();
+                        if (exception == null) {
                             result.put(tip, Optional.empty());
                         } else {
-                            ApiException exception = ackErrorCode.exception();
-                            if (exception == null) {
-                                result.put(tip, Optional.empty());
-                            } else {
-                                result.put(tip, Optional.of(ackErrorCode.exception()));
-                            }
+                            result.put(tip, Optional.of(exception));
                         }
                     });
                     return result;

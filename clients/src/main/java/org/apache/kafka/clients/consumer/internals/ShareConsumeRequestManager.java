@@ -23,6 +23,7 @@ import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.UnsentR
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgementCommitCallbackEvent;
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
@@ -678,7 +679,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                         if (partitionData.acknowledgeErrorCode() != Errors.NONE.code()) {
                             metricsManager.recordFailedAcknowledgements(acks.size());
                         }
-                        acks.setAcknowledgeErrorCode(Errors.forCode(partitionData.acknowledgeErrorCode()));
+                        acks.setAcknowledgeException(Errors.forCode(partitionData.acknowledgeErrorCode()).exception());
                         Map<TopicIdPartition, Acknowledgements> acksMap = Collections.singletonMap(tip, acks);
                         maybeSendShareAcknowledgeCommitCallbackEvent(acksMap);
                     }
@@ -743,7 +744,11 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                     Acknowledgements acks = nodeAcknowledgementsInFlight.remove(tip);
                     if (acks != null) {
                         metricsManager.recordFailedAcknowledgements(acks.size());
-                        acks.setAcknowledgeErrorCode(Errors.forException(error));
+                        if (error instanceof KafkaException) {
+                            acks.setAcknowledgeException((KafkaException) error);
+                        } else {
+                            acks.setAcknowledgeException(Errors.UNKNOWN_SERVER_ERROR.exception());
+                        }
                         Map<TopicIdPartition, Acknowledgements> acksMap = Collections.singletonMap(tip, acks);
                         maybeSendShareAcknowledgeCommitCallbackEvent(acksMap);
                     }
@@ -1079,7 +1084,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         void handleAcknowledgeErrorCode(TopicIdPartition tip, Errors acknowledgeErrorCode) {
             Acknowledgements acks = inFlightAcknowledgements.get(tip);
             if (acks != null) {
-                acks.setAcknowledgeErrorCode(acknowledgeErrorCode);
+                acks.setAcknowledgeException(acknowledgeErrorCode.exception());
             }
             resultHandler.complete(tip, acks, onCommitAsync());
         }
@@ -1091,7 +1096,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         void handleAcknowledgeTimedOut(TopicIdPartition tip) {
             Acknowledgements acks = incompleteAcknowledgements.get(tip);
             if (acks != null) {
-                acks.setAcknowledgeErrorCode(Errors.REQUEST_TIMED_OUT);
+                acks.setAcknowledgeException(Errors.REQUEST_TIMED_OUT.exception());
             }
             resultHandler.complete(tip, acks, onCommitAsync());
         }
@@ -1107,7 +1112,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
 
             acknowledgementsMapToClear.forEach((tip, acks) -> {
                 if (acks != null) {
-                    acks.setAcknowledgeErrorCode(errorCode);
+                    acks.setAcknowledgeException(errorCode.exception());
                 }
                 resultHandler.complete(tip, acks, onCommitAsync());
             });
