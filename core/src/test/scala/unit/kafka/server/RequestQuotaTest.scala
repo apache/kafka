@@ -183,7 +183,7 @@ class RequestQuotaTest extends BaseRequestTest {
   def testUnauthorizedThrottle(quorum: String): Unit = {
     RequestQuotaTest.principal = RequestQuotaTest.UnauthorizedPrincipal
 
-    val apiKeys = ApiKeys.kraftBrokerApis
+    val apiKeys = ApiKeys.brokerApis
     for (apiKey <- apiKeys.asScala.toSet -- RequestQuotaTest.Envelope) {
       submitTest(apiKey, () => checkUnauthorizedRequestThrottle(apiKey))
     }
@@ -192,11 +192,11 @@ class RequestQuotaTest extends BaseRequestTest {
   }
 
   private def clientActions: Set[ApiKeys] = {
-    ApiKeys.kraftBrokerApis.asScala.toSet -- clusterActions -- RequestQuotaTest.SaslActions -- RequestQuotaTest.Envelope
+    ApiKeys.brokerApis.asScala.toSet -- clusterActions -- RequestQuotaTest.SaslActions -- RequestQuotaTest.Envelope
   }
 
   private def clusterActions: Set[ApiKeys] = {
-    ApiKeys.kraftBrokerApis.asScala.filter(_.clusterAction).toSet
+    ApiKeys.brokerApis.asScala.filter(_.clusterAction).toSet
   }
 
   private def clusterActionsWithThrottleForBroker: Set[ApiKeys] = {

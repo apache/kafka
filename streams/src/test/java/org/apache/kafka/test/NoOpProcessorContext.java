@@ -81,12 +81,12 @@ public class NoOpProcessorContext extends AbstractProcessorContext<Object, Objec
 
     @Override
     public <K, V> void forward(final Record<K, V> record) {
-        forward(record.key(), record.value());
+        forwardedValues.put(record.key(), record.value());
     }
 
     @Override
     public <K, V> void forward(final Record<K, V> record, final String childName) {
-        forward(record.key(), record.value());
+        forwardedValues.put(record.key(), record.value());
     }
 
     @Override
@@ -96,7 +96,7 @@ public class NoOpProcessorContext extends AbstractProcessorContext<Object, Objec
 
     @Override
     public <K, V> void forward(final K key, final V value, final To to) {
-        forward(key, value);
+        forwardedValues.put(key, value);
     }
 
     @Override

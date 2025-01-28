@@ -25,19 +25,13 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.FileRecords
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, ListOffsetsRequest, ListOffsetsResponse}
 import org.apache.kafka.common.{IsolationLevel, TopicPartition}
-import org.apache.kafka.storage.internals.log.{LogSegment, LogStartOffsetIncrementReason, OffsetResultHolder}
+import org.apache.kafka.storage.internals.log.{LogStartOffsetIncrementReason, OffsetResultHolder}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
-import org.mockito.Mockito.{mock, when}
-import org.mockito.invocation.InvocationOnMock
-import org.mockito.stubbing.Answer
 
 import java.io.File
-import java.util
-import java.util.Arrays.asList
-import java.util.concurrent.atomic.AtomicInteger
 import java.util.{Optional, Properties, Random}
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
@@ -226,38 +220,6 @@ class LogOffsetTest extends BaseRequestTest {
       .setTargetTimes(buildTargetTimes(topicPartition, ListOffsetsRequest.EARLIEST_TIMESTAMP).asJava).build()
     val offsetFromResponse = findPartition(sendListOffsetsRequest(request).topics.asScala, topicPartition).offset
     assertEquals(0L, offsetFromResponse)
-  }
-
-  /* We test that `fetchOffsetsBefore` works correctly if `LogSegment.size` changes after each invocation (simulating
-   * a race condition) */
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testFetchOffsetsBeforeWithChangingSegmentSize(quorum: String): Unit = {
-    val log: UnifiedLog = mock(classOf[UnifiedLog])
-    val logSegment: LogSegment = mock(classOf[LogSegment])
-    when(logSegment.size).thenAnswer(new Answer[Int] {
-      private[this] val value = new AtomicInteger(0)
-      override def answer(invocation: InvocationOnMock): Int = value.getAndIncrement()
-    })
-    val logSegments = Seq(logSegment).asJava
-    when(log.logSegments).thenReturn(logSegments)
-    log.legacyFetchOffsetsBefore(System.currentTimeMillis, 100)
-  }
-
-  /* We test that `fetchOffsetsBefore` works correctly if `Log.logSegments` content and size are
-   * different (simulating a race condition) */
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testFetchOffsetsBeforeWithChangingSegments(quorum: String): Unit = {
-    val log: UnifiedLog = mock(classOf[UnifiedLog])
-    val logSegment: LogSegment = mock(classOf[LogSegment])
-    when(log.logSegments).thenReturn(
-      new util.AbstractCollection[LogSegment] {
-        override def size = 2
-        override def iterator = asList(logSegment).iterator
-      }
-    )
-    log.legacyFetchOffsetsBefore(System.currentTimeMillis, 100)
   }
 
   private def broker: KafkaBroker = brokers.head

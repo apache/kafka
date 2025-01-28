@@ -260,11 +260,11 @@ class BrokerLifecycleManager(
       new OfflineDirBrokerFailureEvent(directory))
   }
 
-  def resendBrokerRegistrationUnlessZkMode(): Unit = {
-    eventQueue.append(new ResendBrokerRegistrationUnlessZkModeEvent())
+  def resendBrokerRegistration(): Unit = {
+    eventQueue.append(new ResendBrokerRegistrationEvent())
   }
 
-  private class ResendBrokerRegistrationUnlessZkModeEvent extends EventQueue.Event {
+  private class ResendBrokerRegistrationEvent extends EventQueue.Event {
     override def run(): Unit = {
       registered = false
       scheduleNextCommunicationImmediately()

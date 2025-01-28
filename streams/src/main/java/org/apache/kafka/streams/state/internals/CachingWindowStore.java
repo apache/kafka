@@ -153,12 +153,13 @@ class CachingWindowStore
         final LRUCacheEntry entry =
             new LRUCacheEntry(
                 value,
-                internalContext.headers(),
+                internalContext.recordContext().headers(),
                 true,
-                internalContext.offset(),
-                internalContext.timestamp(),
-                internalContext.partition(),
-                internalContext.topic());
+                internalContext.recordContext().offset(),
+                internalContext.recordContext().timestamp(),
+                internalContext.recordContext().partition(),
+                internalContext.recordContext().topic()
+            );
         internalContext.cache().put(cacheName, cacheFunction.cacheKey(keyBytes), entry);
 
         maxObservedTimestamp.set(Math.max(keySchema.segmentTimestamp(keyBytes), maxObservedTimestamp.get()));

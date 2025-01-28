@@ -39,7 +39,7 @@ trait ConfigHandler {
 }
 
 /**
-  * The TopicConfigHandler will process topic config changes from ZooKeeper or the metadata log.
+  * The TopicConfigHandler will process topic config changes from the metadata log.
   * The callback provides the topic name and the full properties set.
   */
 class TopicConfigHandler(private val replicaManager: ReplicaManager,
