@@ -3501,9 +3501,10 @@ public class FetchRequestManagerTest {
         node0Partitions.remove(node0Partition2);
         assertEquals(1, fetcher.fetchBuffer.bufferedPartitions().size());
 
-        // Node 0's partitions have all been collected, so validate that and then reset the list of partitions
-        // from which to fetch data so the next fetch pass requests more data.
+        // Validate that all of node 0's partitions have all been collected.
         assertTrue(node0Partitions.isEmpty());
+
+        // Reset the list of partitions for node 0 so the next fetch pass requests data.
         node0Partitions = partitionsForNode(node0, partitions);
 
         // sendFetches() call #4 should issue a request to node 0 since its buffered data was collected.
@@ -3515,8 +3516,10 @@ public class FetchRequestManagerTest {
         node1Partitions.remove(node1Partition2);
         assertEquals(2, fetcher.fetchBuffer.bufferedPartitions().size());
 
-        // Node 1's partitions have likewise all been collected, so validate that and reset.
+        // Node 1's partitions have likewise all been collected, so validate that.
         assertTrue(node1Partitions.isEmpty());
+
+        // Again, reset the list of partitions, this time for node 1, so the next fetch pass requests data.
         node1Partitions = partitionsForNode(node1, partitions);
 
         // sendFetches() call #5 should issue a request to node 1 since its buffered data was collected.
