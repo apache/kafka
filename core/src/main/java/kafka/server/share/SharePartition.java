@@ -1106,8 +1106,9 @@ public class SharePartition {
      * the records are fetched and acquired.
      *
      * @return A boolean which indicates whether the fetch lock is acquired.
+     * Visible for testing.
      */
-    boolean maybeAcquireFetchLock() {
+    public boolean maybeAcquireFetchLock() {
         if (stateNotActive()) {
             return false;
         }
