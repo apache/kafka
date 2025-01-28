@@ -22,6 +22,7 @@ import org.apache.kafka.common.protocol.types.BoundField;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.TaggedFields;
 import org.apache.kafka.common.protocol.types.Type;
+import org.apache.kafka.common.requests.ProduceRequest;
 
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -178,7 +179,9 @@ public class Protocol {
             // Requests
             b.append("<b>Requests:</b><br>\n");
             Schema[] requests = key.messageType.requestSchemas();
-            for (short version = key.oldestVersion(); version <= key.latestVersion(); version++) {
+            // See `ProduceRequest.MIN_VERSION` for details on why we need to do this
+            short oldestVersion = key == ApiKeys.PRODUCE ? ProduceRequest.MIN_VERSION : key.oldestVersion();
+            for (short version = oldestVersion; version <= key.latestVersion(); version++) {
                 Schema schema = requests[version];
                 if (schema == null)
                     throw new IllegalStateException("Unexpected null schema for " + key + " with version " + version);
@@ -208,7 +211,7 @@ public class Protocol {
             // Responses
             b.append("<b>Responses:</b><br>\n");
             Schema[] responses = key.messageType.responseSchemas();
-            for (int i = 0; i < responses.length; i++) {
+            for (int i = oldestVersion; i < responses.length; i++) {
                 Schema schema = responses[i];
                 // Schema
                 if (schema != null) {

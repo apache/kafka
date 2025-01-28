@@ -40,6 +40,11 @@ import java.util.stream.Collectors;
 import static org.apache.kafka.common.requests.ProduceResponse.INVALID_OFFSET;
 
 public class ProduceRequest extends AbstractRequest {
+    // Versions 0-2 were removed in Apache Kafka 4.0, version 3 is the new baseline. Due to a bug in librdkafka,
+    // these versions have to be included in the api versions response (see KAFKA-18659), which means we cannot exclude
+    // them from the protocol definition. Instead, we reject requests with such versions in `KafkaApis` by returning
+    // `UnsupportedVersion` errors. We also special case the generated protocol html to exclude versions 0-2.
+    public static final short MIN_VERSION = 3;
     public static final short LAST_STABLE_VERSION_BEFORE_TRANSACTION_V2 = 11;
 
     public static Builder builder(ProduceRequestData data, boolean useTransactionV1Version) {
@@ -47,7 +52,7 @@ public class ProduceRequest extends AbstractRequest {
         // LAST_STABLE_VERSION_BEFORE_TRANSACTION_V2 so that the broker knows that we're using transaction protocol V1.
         short maxVersion = useTransactionV1Version ?
             LAST_STABLE_VERSION_BEFORE_TRANSACTION_V2 : ApiKeys.PRODUCE.latestVersion();
-        return new Builder(ApiKeys.PRODUCE.oldestVersion(), maxVersion, data);
+        return new Builder(MIN_VERSION, maxVersion, data);
     }
 
     public static Builder builder(ProduceRequestData data) {
@@ -67,11 +72,6 @@ public class ProduceRequest extends AbstractRequest {
         @Override
         public ProduceRequest build(short version) {
             return build(version, true);
-        }
-
-        // Visible for testing only
-        public ProduceRequest buildUnsafe(short version) {
-            return build(version, false);
         }
 
         private ProduceRequest build(short version, boolean validate) {
@@ -244,4 +244,5 @@ public class ProduceRequest extends AbstractRequest {
     public static boolean isTransactionV2Requested(short version) {
         return version > LAST_STABLE_VERSION_BEFORE_TRANSACTION_V2;
     }
+
 }

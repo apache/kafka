@@ -212,8 +212,7 @@ public class ProduceRequestTest {
             .setAcks((short) 1)
             .setTimeoutMs(1000);
         // Can't create ProduceRequest instance with version within [3, 7)
-        for (short version = 3; version < 7; version++) {
-
+        for (short version = ProduceRequest.MIN_VERSION; version < 7; version++) {
             ProduceRequest.Builder requestBuilder = new ProduceRequest.Builder(version, version, produceData);
             assertThrowsForAllVersions(requestBuilder, UnsupportedCompressionTypeException.class);
         }

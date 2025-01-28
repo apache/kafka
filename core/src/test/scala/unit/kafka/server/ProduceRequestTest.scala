@@ -32,6 +32,7 @@ import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.storage.log.metrics.BrokerTopicMetrics
 import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 import org.junit.jupiter.params.provider.ValueSource
@@ -254,7 +255,7 @@ class ProduceRequestTest extends BaseRequestTest {
     // Create a single-partition topic compressed with ZSTD
     val topicConfig = new Properties
     topicConfig.setProperty(TopicConfig.COMPRESSION_TYPE_CONFIG, BrokerCompressionType.ZSTD.name)
-    val partitionToLeader = createTopic(topic, topicConfig =  topicConfig)
+    val partitionToLeader = createTopic(topic, topicConfig = topicConfig)
     val leader = partitionToLeader(partition)
     val memoryRecords = MemoryRecords.withRecords(Compression.zstd().build(),
       new SimpleRecord(System.currentTimeMillis(), "key".getBytes, "value".getBytes))
@@ -281,6 +282,43 @@ class ProduceRequestTest extends BaseRequestTest {
     assertEquals(Errors.NONE, Errors.forCode(partitionProduceResponse1.errorCode))
     assertEquals(0, partitionProduceResponse1.baseOffset)
     assertEquals(-1, partitionProduceResponse1.logAppendTimeMs)
+  }
+
+  /**
+   * See `ProduceRequest.MIN_VERSION` for the details on why we need special handling for produce request v0-v2 (inclusive).
+   */
+  @Test
+  def testProduceRequestV0V1V2FailsWithUnsupportedVersion(): Unit = {
+    val topic = "topic"
+    val partition = 0
+    val partitionToLeader = createTopic(topic)
+    val leader = partitionToLeader(partition)
+    val memoryRecords = MemoryRecords.withRecords(Compression.none().build(),
+      new SimpleRecord(System.currentTimeMillis(), "key".getBytes, "value".getBytes))
+    val topicPartition = new TopicPartition("topic", partition)
+    val partitionRecords = new ProduceRequestData()
+      .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
+        new ProduceRequestData.TopicProduceData()
+          .setName("topic").setPartitionData(Collections.singletonList(
+            new ProduceRequestData.PartitionProduceData()
+              .setIndex(partition)
+              .setRecords(memoryRecords))))
+        .iterator))
+      .setAcks((-1).toShort)
+      .setTimeoutMs(3000)
+      .setTransactionalId(null)
+
+    for (i <- 0 until ProduceRequest.MIN_VERSION) {
+      val version = i.toShort
+      val produceResponse1 = sendProduceRequest(leader, new ProduceRequest.Builder(version, version, partitionRecords).build())
+      val topicProduceResponse1 = produceResponse1.data.responses.asScala.head
+      val partitionProduceResponse1 = topicProduceResponse1.partitionResponses.asScala.head
+      val tp1 = new TopicPartition(topicProduceResponse1.name, partitionProduceResponse1.index)
+      assertEquals(topicPartition, tp1)
+      assertEquals(Errors.UNSUPPORTED_VERSION, Errors.forCode(partitionProduceResponse1.errorCode))
+      assertEquals(-1, partitionProduceResponse1.baseOffset)
+      assertEquals(-1, partitionProduceResponse1.logAppendTimeMs)
+    }
   }
 
   private def sendProduceRequest(leaderId: Int, request: ProduceRequest): ProduceResponse = {
