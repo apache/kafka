@@ -1802,6 +1802,8 @@ public final class RaftClientTestContext {
                 partitionData.divergingEpoch()
                     .setEpoch(divergingEpoch)
                     .setEndOffset(divergingEpochEndOffset);
+
+                partitionData.setRecords(MemoryRecords.EMPTY);
             }
         );
     }
@@ -1830,6 +1832,8 @@ public final class RaftClientTestContext {
                 partitionData.snapshotId()
                     .setEpoch(snapshotId.epoch())
                     .setEndOffset(snapshotId.offset());
+
+                partitionData.setRecords(MemoryRecords.EMPTY);
             }
         );
     }
