@@ -134,7 +134,7 @@ public class KafkaShareConsumerTest {
 
     @Flaky("KAFKA-18488")
     @Test
-    public void testVerifyFetchAndAcknowledgeSync() throws InterruptedException {
+    public void testVerifyFetchAndCommitSyncImplicit() throws InterruptedException {
         ConsumerMetadata metadata = new ConsumerMetadata(0, 0, Long.MAX_VALUE, false, false,
             subscription, new LogContext(), new ClusterResourceListeners());
         MockClient client = new MockClient(time, metadata);
@@ -200,6 +200,63 @@ public class KafkaShareConsumerTest {
             consumer.commitSync();
 
             // This will be a SHARE_ACKNOWLEDGE [C] and a final SHARE_GROUP_HEARTBEAT to leave the group
+            consumer.close(Duration.ZERO);
+
+            assertTrue(memberLeft.get());
+            assertTrue(client.futureResponses().isEmpty());
+        }
+    }
+
+    @Test
+    public void testVerifyFetchAndCloseImplicit() throws InterruptedException {
+        ConsumerMetadata metadata = new ConsumerMetadata(0, 0, Long.MAX_VALUE, false, false,
+            subscription, new LogContext(), new ClusterResourceListeners());
+        MockClient client = new MockClient(time, metadata);
+
+        initMetadata(client, Map.of(topic1, 1));
+        Node node = metadata.fetch().nodes().get(0);
+
+        Node coordinator = findCoordinator(client, node);
+
+        final AtomicReference<Uuid> memberId = new AtomicReference<>();
+        final AtomicBoolean memberLeft = shareGroupHeartbeatGenerator(client, coordinator, memberId, ti1p0);
+
+        // [A] A SHARE_FETCH in a new share session, fetching from topic topicId1, with no acknowledgements included.
+        // The response includes 2 records which are acquired.
+        client.prepareResponseFrom(body -> {
+            if (body instanceof ShareFetchRequest) {
+                ShareFetchRequest request = (ShareFetchRequest) body;
+                return request.data().groupId().equals(groupId) &&
+                    request.data().shareSessionEpoch() == 0 &&
+                    request.data().batchSize() == batchSize &&
+                    request.data().topics().get(0).topicId().equals(topicId1) &&
+                    request.data().topics().get(0).partitions().size() == 1 &&
+                    request.data().topics().get(0).partitions().get(0).acknowledgementBatches().isEmpty();
+            } else {
+                return false;
+            }
+        }, shareFetchResponse(ti1p0, 2), node);
+
+        // [B] A SHARE_ACKNOWLEDGE which closes the share session. Because this is implicit acknowledgement,
+        // the acquired records are released by the broker when the share session is closed.
+        client.prepareResponseFrom(body -> {
+            if (body instanceof ShareAcknowledgeRequest) {
+                ShareAcknowledgeRequest request = (ShareAcknowledgeRequest) body;
+                return request.data().groupId().equals(groupId) &&
+                    request.data().shareSessionEpoch() == -1 &&
+                    request.data().topics().isEmpty();
+            } else {
+                return false;
+            }
+        }, shareAcknowledgeResponse(), node);
+
+        try (KafkaShareConsumer<String, String> consumer = newShareConsumer(clientId1, metadata, client)) {
+            consumer.subscribe(Set.of(topic1));
+
+            // This will be a SHARE_GROUP_HEARTBEAT to establish the membership and then a SHARE_FETCH [A]
+            consumer.poll(Duration.ofMillis(5000));
+
+            // This will be a SHARE_ACKNOWLEDGE [B] and a final SHARE_GROUP_HEARTBEAT to leave the group
             consumer.close(Duration.ZERO);
 
             assertTrue(memberLeft.get());
