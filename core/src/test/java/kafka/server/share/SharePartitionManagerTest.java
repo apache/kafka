@@ -2751,7 +2751,7 @@ public class SharePartitionManagerTest {
         LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes = orderedMap(PARTITION_MAX_BYTES,
             tp0, tp1, tp2, tp3, tp4, tp5, tp6);
 
-        SharePartitionManager sharePartitionManager = Mockito.spy(SharePartitionManagerBuilder.builder().build());
+        SharePartitionManager sharePartitionManager = Mockito.spy(SharePartitionManagerBuilder.builder().withBrokerTopicStats(brokerTopicStats).build());
         // Capture the arguments passed to processShareFetch.
         ArgumentCaptor<ShareFetch> captor = ArgumentCaptor.forClass(ShareFetch.class);
 
