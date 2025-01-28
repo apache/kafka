@@ -48,7 +48,6 @@ public class UnifiedLog {
      * @param segments                The segments of the log whose producer state is being rebuilt
      * @param logStartOffset          The log start offset
      * @param lastOffset              The last offset upto which the producer state needs to be rebuilt
-     * @param recordVersion           The record version
      * @param time                    The time instance used for checking the clock
      * @param reloadFromCleanShutdown True if the producer state is being built after a clean shutdown, false otherwise.
      * @param logPrefix               The logging prefix
@@ -83,7 +82,7 @@ public class UnifiedLog {
         // offset (see below). The next time the log is reloaded, we will load producer state using this snapshot
         // (or later snapshots). Otherwise, if there is no snapshot file, then we have to rebuild producer state
         // from the first segment.
-        if (!producerStateManager.latestSnapshotOffset().isPresent() && reloadFromCleanShutdown) {
+        if (producerStateManager.latestSnapshotOffset().isEmpty() && reloadFromCleanShutdown) {
             // To avoid an expensive scan through all the segments, we take empty snapshots from the start of the
             // last two segments and the last offset. This should avoid the full scan in the case that the log needs
             // truncation.

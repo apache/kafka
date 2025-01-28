@@ -634,15 +634,15 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
             }
         }
 
-        String groupProtocol = res.getString("groupProtocol");
+        GroupProtocol groupProtocol = GroupProtocol.of(res.getString("groupProtocol"));
+        consumerProps.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
 
         // 3.7.0 includes support for KIP-848 which introduced a new implementation of the consumer group protocol.
         // The two implementations use slightly different configuration, hence these arguments are conditional.
         //
         // See the Python class/method VerifiableConsumer.start_cmd() in verifiable_consumer.py for how the
         // command line arguments are passed in by the system test framework.
-        if (groupProtocol.equalsIgnoreCase(GroupProtocol.CONSUMER.name())) {
-            consumerProps.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol);
+        if (groupProtocol == GroupProtocol.CONSUMER) {
             String groupRemoteAssignor = res.getString("groupRemoteAssignor");
 
             if (groupRemoteAssignor != null)

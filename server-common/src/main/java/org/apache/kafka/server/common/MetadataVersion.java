@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.server.common;
 
-import org.apache.kafka.common.record.RecordVersion;
 
 import java.util.Arrays;
 import java.util.HashMap;
@@ -44,103 +43,6 @@ import java.util.regex.Pattern;
  * released version, they can use "0.10.0" when upgrading to the 0.10.0 release.
  */
 public enum MetadataVersion {
-
-    IBP_0_8_0(-1, "0.8.0", ""),
-    IBP_0_8_1(-1, "0.8.1", ""),
-    IBP_0_8_2(-1, "0.8.2", ""),
-    IBP_0_9_0(-1, "0.9.0", ""),
-
-    // 0.10.0-IV0 is introduced for KIP-31/32 which changes the message format.
-    IBP_0_10_0_IV0(-1, "0.10.0", "IV0"),
-
-    // 0.10.0-IV1 is introduced for KIP-36(rack awareness) and KIP-43(SASL handshake).
-    IBP_0_10_0_IV1(-1, "0.10.0", "IV1"),
-
-    // introduced for JoinGroup protocol change in KIP-62
-    IBP_0_10_1_IV0(-1, "0.10.1", "IV0"),
-
-    // 0.10.1-IV1 is introduced for KIP-74(fetch response size limit).
-    IBP_0_10_1_IV1(-1, "0.10.1", "IV1"),
-
-    // introduced ListOffsetRequest v1 in KIP-79
-    IBP_0_10_1_IV2(-1, "0.10.1", "IV2"),
-
-    // introduced UpdateMetadataRequest v3 in KIP-103
-    IBP_0_10_2_IV0(-1, "0.10.2", "IV0"),
-
-    // KIP-98 (idempotent and transactional producer support)
-    IBP_0_11_0_IV0(-1, "0.11.0", "IV0"),
-
-    // introduced DeleteRecordsRequest v0 and FetchRequest v4 in KIP-107
-    IBP_0_11_0_IV1(-1, "0.11.0", "IV1"),
-
-    // Introduced leader epoch fetches to the replica fetcher via KIP-101
-    IBP_0_11_0_IV2(-1, "0.11.0", "IV2"),
-
-    // Introduced LeaderAndIsrRequest V1, UpdateMetadataRequest V4 and FetchRequest V6 via KIP-112
-    IBP_1_0_IV0(-1, "1.0", "IV0"),
-
-    // Introduced DeleteGroupsRequest V0 via KIP-229, plus KIP-227 incremental fetch requests,
-    // and KafkaStorageException for fetch requests.
-    IBP_1_1_IV0(-1, "1.1", "IV0"),
-
-    // Introduced OffsetsForLeaderEpochRequest V1 via KIP-279 (Fix log divergence between leader and follower after fast leader fail over)
-    IBP_2_0_IV0(-1, "2.0", "IV0"),
-
-    // Several request versions were bumped due to KIP-219 (Improve quota communication)
-    IBP_2_0_IV1(-1, "2.0", "IV1"),
-
-    // Introduced new schemas for group offset (v2) and group metadata (v2) (KIP-211)
-    IBP_2_1_IV0(-1, "2.1", "IV0"),
-
-    // New Fetch, OffsetsForLeaderEpoch, and ListOffsets schemas (KIP-320)
-    IBP_2_1_IV1(-1, "2.1", "IV1"),
-
-    // Support ZStandard Compression Codec (KIP-110)
-    IBP_2_1_IV2(-1, "2.1", "IV2"),
-
-    // Introduced broker generation (KIP-380), and
-    // LeaderAndIsrRequest V2, UpdateMetadataRequest V5, StopReplicaRequest V1
-    IBP_2_2_IV0(-1, "2.2", "IV0"),
-
-    // New error code for ListOffsets when a new leader is lagging behind former HW (KIP-207)
-    IBP_2_2_IV1(-1, "2.2", "IV1"),
-
-    // Introduced static membership.
-    IBP_2_3_IV0(-1, "2.3", "IV0"),
-
-    // Add rack_id to FetchRequest, preferred_read_replica to FetchResponse, and replica_id to OffsetsForLeaderRequest
-    IBP_2_3_IV1(-1, "2.3", "IV1"),
-
-    // Add adding_replicas and removing_replicas fields to LeaderAndIsrRequest
-    IBP_2_4_IV0(-1, "2.4", "IV0"),
-
-    // Flexible version support in inter-broker APIs
-    IBP_2_4_IV1(-1, "2.4", "IV1"),
-
-    // No new APIs, equivalent to 2.4-IV1
-    IBP_2_5_IV0(-1, "2.5", "IV0"),
-
-    // Introduced StopReplicaRequest V3 containing the leader epoch for each partition (KIP-570)
-    IBP_2_6_IV0(-1, "2.6", "IV0"),
-
-    // Introduced feature versioning support (KIP-584)
-    IBP_2_7_IV0(-1, "2.7", "IV0"),
-
-    // Bup Fetch protocol for Raft protocol (KIP-595)
-    IBP_2_7_IV1(-1, "2.7", "IV1"),
-
-    // Introduced AlterPartition (KIP-497)
-    IBP_2_7_IV2(-1, "2.7", "IV2"),
-
-    // Flexible versioning on ListOffsets, WriteTxnMarkers and OffsetsForLeaderEpoch. Also adds topic IDs (KIP-516)
-    IBP_2_8_IV0(-1, "2.8", "IV0"),
-
-    // Introduced topic IDs to LeaderAndIsr and UpdateMetadata requests/responses (KIP-516)
-    IBP_2_8_IV1(-1, "2.8", "IV1"),
-
-    // Introduce AllocateProducerIds (KIP-730)
-    IBP_3_0_IV0(-1, "3.0", "IV0"),
 
     // Introduce ListOffsets V7 which supports listing offsets by max timestamp (KIP-734)
     // Assume message format version is 3.0 (KIP-724)
@@ -255,7 +157,7 @@ public enum MetadataVersion {
     // LATEST_STABLE_METADATA_VERSION version in tests/kafkatest/version.py
 
     /**
-     * An array containing all of the MetadataVersion entries.
+     * An array containing all the MetadataVersion entries.
      *
      * This is essentially a cached copy of MetadataVersion.values. Unlike that function, it doesn't
      * allocate a new array each time.
@@ -266,10 +168,6 @@ public enum MetadataVersion {
     private final String release;
     private final String ibpVersion;
     private final boolean didMetadataChange;
-
-    MetadataVersion(int featureLevel, String release, String subVersion) {
-        this(featureLevel, release, subVersion, true);
-    }
 
     MetadataVersion(int featureLevel, String release, String subVersion, boolean didMetadataChange) {
         this.featureLevel = (short) featureLevel;
@@ -290,44 +188,12 @@ public enum MetadataVersion {
         return featureLevel;
     }
 
-    public boolean isSaslInterBrokerHandshakeRequestEnabled() {
-        return this.isAtLeast(IBP_0_10_0_IV1);
-    }
-
-    public boolean isOffsetForLeaderEpochSupported() {
-        return this.isAtLeast(IBP_0_11_0_IV2);
-    }
-
-    public boolean isFeatureVersioningSupported() {
-        return this.isAtLeast(IBP_2_7_IV0);
-    }
-
-    public boolean isTruncationOnFetchSupported() {
-        return this.isAtLeast(IBP_2_7_IV1);
-    }
-
-    public boolean isAlterPartitionSupported() {
-        return this.isAtLeast(IBP_2_7_IV2);
-    }
-
-    public boolean isTopicIdsSupported() {
-        return this.isAtLeast(IBP_2_8_IV0);
-    }
-
-    public boolean isAllocateProducerIdsSupported() {
-        return this.isAtLeast(IBP_3_0_IV0);
-    }
-
     public boolean isLeaderRecoverySupported() {
         return this.isAtLeast(IBP_3_2_IV0);
     }
 
     public boolean isNoOpRecordSupported() {
         return this.isAtLeast(IBP_3_3_IV1);
-    }
-
-    public boolean isApiForwardingEnabled() {
-        return this.isAtLeast(IBP_3_4_IV0);
     }
 
     public boolean isScramSupported() {
@@ -356,16 +222,6 @@ public enum MetadataVersion {
 
     public boolean isKRaftSupported() {
         return this.featureLevel > 0;
-    }
-
-    public RecordVersion highestSupportedRecordVersion() {
-        if (this.isLessThan(IBP_0_10_0_IV0)) {
-            return RecordVersion.V0;
-        } else if (this.isLessThan(IBP_0_11_0_IV0)) {
-            return RecordVersion.V1;
-        } else {
-            return RecordVersion.V2;
-        }
     }
 
     public boolean isBrokerRegistrationChangeRecordSupported() {
@@ -438,43 +294,8 @@ public enum MetadataVersion {
             return 14;
         } else if (this.isAtLeast(IBP_3_1_IV0)) {
             return 13;
-        } else if (this.isAtLeast(IBP_2_7_IV1)) {
-            return 12;
-        } else if (this.isAtLeast(IBP_2_3_IV1)) {
-            return 11;
-        } else if (this.isAtLeast(IBP_2_1_IV2)) {
-            return 10;
-        } else if (this.isAtLeast(IBP_2_0_IV1)) {
-            return 8;
-        } else if (this.isAtLeast(IBP_1_1_IV0)) {
-            return 7;
-        } else if (this.isAtLeast(IBP_0_11_0_IV1)) {
-            return 5;
-        } else if (this.isAtLeast(IBP_0_11_0_IV0)) {
-            return 4;
-        } else if (this.isAtLeast(IBP_0_10_1_IV1)) {
-            return 3;
-        } else if (this.isAtLeast(IBP_0_10_0_IV0)) {
-            return 2;
-        } else if (this.isAtLeast(IBP_0_9_0)) {
-            return 1;
-        } else {
-            return 0;
         }
-    }
-
-    public short offsetForLeaderEpochRequestVersion() {
-        if (this.isAtLeast(IBP_2_8_IV0)) {
-            return 4;
-        } else if (this.isAtLeast(IBP_2_3_IV1)) {
-            return 3;
-        } else if (this.isAtLeast(IBP_2_1_IV1)) {
-            return 2;
-        } else if (this.isAtLeast(IBP_2_0_IV0)) {
-            return 1;
-        } else {
-            return 0;
-        }
+        return 12;
     }
 
     public short listOffsetRequestVersion() {
@@ -484,48 +305,8 @@ public enum MetadataVersion {
             return 9;
         } else if (this.isAtLeast(IBP_3_5_IV0)) {
             return 8;
-        } else if (this.isAtLeast(IBP_3_0_IV1)) {
+        } else {
             return 7;
-        } else if (this.isAtLeast(IBP_2_8_IV0)) {
-            return 6;
-        } else if (this.isAtLeast(IBP_2_2_IV1)) {
-            return 5;
-        } else if (this.isAtLeast(IBP_2_1_IV1)) {
-            return 4;
-        } else if (this.isAtLeast(IBP_2_0_IV1)) {
-            return 3;
-        } else if (this.isAtLeast(IBP_0_11_0_IV0)) {
-            return 2;
-        } else if (this.isAtLeast(IBP_0_10_1_IV2)) {
-            return 1;
-        } else {
-            return 0;
-        }
-    }
-
-    public short groupMetadataValueVersion() {
-        if (this.isLessThan(IBP_0_10_1_IV0)) {
-            return 0;
-        } else if (this.isLessThan(IBP_2_1_IV0)) {
-            return 1;
-        } else if (this.isLessThan(IBP_2_3_IV0)) {
-            return 2;
-        } else {
-            // Serialize with the highest supported non-flexible version
-            // until a tagged field is introduced or the version is bumped.
-            return 3;
-        }
-    }
-
-    public short offsetCommitValueVersion(boolean expireTimestampMs) {
-        if (isLessThan(MetadataVersion.IBP_2_1_IV0) || expireTimestampMs) {
-            return 1;
-        } else if (isLessThan(MetadataVersion.IBP_2_1_IV1)) {
-            return 2;
-        } else {
-            // Serialize with the highest supported non-flexible version
-            // until a tagged field is introduced or the version is bumped.
-            return  3;
         }
     }
 
@@ -600,22 +381,6 @@ public enum MetadataVersion {
         throw new IllegalArgumentException("No MetadataVersion with feature level " + version);
     }
 
-    /**
-     * Return the minimum `MetadataVersion` that supports `RecordVersion`.
-     */
-    public static MetadataVersion minSupportedFor(RecordVersion recordVersion) {
-        switch (recordVersion) {
-            case V0:
-                return IBP_0_8_0;
-            case V1:
-                return IBP_0_10_0_IV0;
-            case V2:
-                return IBP_0_11_0_IV0;
-            default:
-                throw new IllegalArgumentException("Invalid message format version " + recordVersion);
-        }
-    }
-
     // Testing only
     public static MetadataVersion latestTesting() {
         return VERSIONS[VERSIONS.length - 1];
@@ -652,14 +417,6 @@ public enum MetadataVersion {
             }
         }
         return version != lowVersion;
-    }
-
-    public short writeTxnMarkersRequestVersion() {
-        if (isAtLeast(IBP_2_8_IV0)) {
-            return 1;
-        } else {
-            return 0;
-        }
     }
 
     public boolean isAtLeast(MetadataVersion otherVersion) {

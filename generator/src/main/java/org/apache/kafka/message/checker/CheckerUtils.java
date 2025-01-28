@@ -79,7 +79,7 @@ class CheckerUtils {
         FieldSpec field,
         Versions topLevelFlexibleVersions
     ) {
-        if (!field.flexibleVersions().isPresent()) {
+        if (field.flexibleVersions().isEmpty()) {
             if (!topLevelFlexibleVersions.contains(field.taggedVersions())) {
                 throw new RuntimeException("Tagged versions for " + what + " " +
                         field.name() + " are " + field.taggedVersions() + ", but top " +

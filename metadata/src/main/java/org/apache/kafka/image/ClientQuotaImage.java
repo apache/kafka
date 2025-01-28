@@ -102,8 +102,7 @@ public final class ClientQuotaImage {
 
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof ClientQuotaImage)) return false;
-        ClientQuotaImage other = (ClientQuotaImage) o;
+        if (!(o instanceof ClientQuotaImage other)) return false;
         return quotas.equals(other.quotas);
     }
 

@@ -16,7 +16,7 @@
 {
   "apiKey": 56,
   "type": "request",
-  "listeners": ["zkBroker", "controller"],
+  "listeners": ["controller"],
   "name": "AlterPartitionRequest",
   // Version 1 adds LeaderRecoveryState field (KIP-704).
   //
@@ -54,7 +54,7 @@
         { "name": "LeaderRecoveryState", "type": "int8", "versions": "1+", "default": "0",
           "about": "1 if the partition is recovering from an unclean leader election; 0 otherwise." },
         { "name": "PartitionEpoch", "type": "int32", "versions": "0+",
-          "about": "The expected epoch of the partition which is being updated. For legacy cluster this is the ZkVersion in the LeaderAndIsr request." }
+          "about": "The expected epoch of the partition which is being updated." }
       ]}
     ]}
   ]

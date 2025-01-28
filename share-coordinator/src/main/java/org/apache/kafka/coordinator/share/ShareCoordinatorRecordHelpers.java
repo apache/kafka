@@ -28,12 +28,11 @@ import java.util.stream.Collectors;
 
 public class ShareCoordinatorRecordHelpers {
     public static CoordinatorRecord newShareSnapshotRecord(String groupId, Uuid topicId, int partitionId, ShareGroupOffset offsetData) {
-        return new CoordinatorRecord(
-            new ApiMessageAndVersion(new ShareSnapshotKey()
+        return CoordinatorRecord.record(
+            new ShareSnapshotKey()
                 .setGroupId(groupId)
                 .setTopicId(topicId)
                 .setPartition(partitionId),
-                ShareCoordinator.SHARE_SNAPSHOT_RECORD_KEY_VERSION),
             new ApiMessageAndVersion(new ShareSnapshotValue()
                 .setSnapshotEpoch(offsetData.snapshotEpoch())
                 .setStateEpoch(offsetData.stateEpoch())
@@ -46,17 +45,17 @@ public class ShareCoordinatorRecordHelpers {
                         .setDeliveryCount(batch.deliveryCount())
                         .setDeliveryState(batch.deliveryState()))
                     .collect(Collectors.toList())),
-                ShareCoordinator.SHARE_SNAPSHOT_RECORD_VALUE_VERSION)
+                (short) 0
+            )
         );
     }
 
     public static CoordinatorRecord newShareSnapshotUpdateRecord(String groupId, Uuid topicId, int partitionId, ShareGroupOffset offsetData) {
-        return new CoordinatorRecord(
-            new ApiMessageAndVersion(new ShareUpdateKey()
+        return CoordinatorRecord.record(
+            new ShareUpdateKey()
                 .setGroupId(groupId)
                 .setTopicId(topicId)
                 .setPartition(partitionId),
-                ShareCoordinator.SHARE_UPDATE_RECORD_KEY_VERSION),
             new ApiMessageAndVersion(new ShareUpdateValue()
                 .setSnapshotEpoch(offsetData.snapshotEpoch())
                 .setLeaderEpoch(offsetData.leaderEpoch())
@@ -68,7 +67,18 @@ public class ShareCoordinatorRecordHelpers {
                         .setDeliveryCount(batch.deliveryCount())
                         .setDeliveryState(batch.deliveryState()))
                     .collect(Collectors.toList())),
-                ShareCoordinator.SHARE_UPDATE_RECORD_VALUE_VERSION)
+                (short) 0
+            )
+        );
+    }
+
+    public static CoordinatorRecord newShareStateTombstoneRecord(String groupId, Uuid topicId, int partitionId) {
+        // Always generate share snapshot type record for tombstone.
+        return CoordinatorRecord.tombstone(
+            new ShareSnapshotKey()
+                .setGroupId(groupId)
+                .setTopicId(topicId)
+                .setPartition(partitionId)
         );
     }
 }

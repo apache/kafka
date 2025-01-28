@@ -341,6 +341,29 @@ public class RaftUtilTest {
         assertEquals(testCase.expectedJson, json.toString());
     }
 
+    // Test that the replicaDirectoryId field introduced in version 17 is ignorable for older versions.
+    // This is done by setting a FetchPartition's replicaDirectoryId explicitly to a non-zero uuid and
+    // checking that the FetchRequestData can still be written to an older version specified by
+    // testCase.version.
+    @ParameterizedTest
+    @MethodSource("singletonFetchRequestTestCases")
+    public void testFetchRequestV17Compatibility(final FetchRequestTestCase testCase) {
+        FetchRequestData fetchRequestData = RaftUtil.singletonFetchRequest(
+            topicPartition,
+            Uuid.ONE_UUID,
+            partition -> partition
+                .setPartitionMaxBytes(10)
+                .setCurrentLeaderEpoch(5)
+                .setFetchOffset(333)
+                .setLastFetchedEpoch(testCase.lastFetchedEpoch)
+                .setPartition(2)
+                .setReplicaDirectoryId(Uuid.ONE_UUID)
+                .setLogStartOffset(0)
+        );
+        JsonNode json = FetchRequestDataJsonConverter.write(fetchRequestData, testCase.version);
+        assertEquals(testCase.expectedJson, json.toString());
+    }
+
     @ParameterizedTest
     @MethodSource("singletonFetchResponseTestCases")
     public void testSingletonFetchResponseForAllVersion(final FetchResponseTestCase testCase) {
@@ -440,6 +463,35 @@ public class RaftUtilTest {
                 maxBytes,
                 position
         );
+        JsonNode json = FetchSnapshotRequestDataJsonConverter.write(fetchSnapshotRequestData, version);
+        assertEquals(expectedJson, json.toString());
+    }
+
+    // Test that the replicaDirectoryId field introduced in version 1 is ignorable for version 0
+    // This is done by setting a FetchPartition's replicaDirectoryId explicitly to a non-zero uuid and
+    // checking that the FetchSnapshotRequestData can still be written to an older version specified by
+    // testCase.version.
+    @ParameterizedTest
+    @MethodSource("fetchSnapshotRequestTestCases")
+    public void testSingletonFetchSnapshotRequestV1Compatibility(
+        short version,
+        Uuid directoryId,
+        String expectedJson
+    ) {
+        int epoch = 1;
+        int maxBytes = 1000;
+        int position = 10;
+
+        FetchSnapshotRequestData fetchSnapshotRequestData = RaftUtil.singletonFetchSnapshotRequest(
+            clusterId,
+            ReplicaKey.of(1, directoryId),
+            topicPartition,
+            epoch,
+            new OffsetAndEpoch(10, epoch),
+            maxBytes,
+            position
+        );
+        fetchSnapshotRequestData.topics().get(0).partitions().get(0).setReplicaDirectoryId(Uuid.ONE_UUID);
         JsonNode json = FetchSnapshotRequestDataJsonConverter.write(fetchSnapshotRequestData, version);
         assertEquals(expectedJson, json.toString());
     }

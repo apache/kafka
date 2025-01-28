@@ -443,7 +443,7 @@ public class MiniKdc {
             reader.lines().forEach(line -> stringBuilder.append(line).append("{3}"));
         }
         String output = MessageFormat.format(stringBuilder.toString(), realm, host, String.valueOf(port), System.lineSeparator());
-        Files.write(krb5conf.toPath(), output.getBytes(StandardCharsets.UTF_8));
+        Files.writeString(krb5conf.toPath(), output);
     }
 
     private void refreshJvmKerberosConfig() throws ClassNotFoundException, NoSuchMethodException, InvocationTargetException, IllegalAccessException {

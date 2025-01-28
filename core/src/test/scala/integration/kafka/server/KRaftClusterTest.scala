@@ -20,9 +20,7 @@ package kafka.server
 import kafka.log.UnifiedLog
 import kafka.network.SocketServer
 import kafka.server.IntegrationTestUtils.connectAndReceive
-import org.apache.kafka.common.test.{KafkaClusterTestKit, TestKitNodes}
 import kafka.utils.TestUtils
-import org.apache.commons.io.FileUtils
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.common.acl.{AclBinding, AclBindingFilter}
@@ -37,6 +35,7 @@ import org.apache.kafka.common.quota.ClientQuotaAlteration.Op
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter, ClientQuotaFilterComponent}
 import org.apache.kafka.common.requests.{ApiError, DescribeClusterRequest, DescribeClusterResponse}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
+import org.apache.kafka.common.test.{KafkaClusterTestKit, TestKitNodes}
 import org.apache.kafka.common.{Cluster, Endpoint, Reconfigurable, TopicPartition, TopicPartitionInfo}
 import org.apache.kafka.controller.{QuorumController, QuorumControllerIntegrationTestUtils}
 import org.apache.kafka.image.ClusterImage
@@ -57,7 +56,7 @@ import org.slf4j.LoggerFactory
 
 import java.io.File
 import java.nio.charset.StandardCharsets
-import java.nio.file.{FileSystems, Files, Path}
+import java.nio.file.{FileSystems, Files, Path, Paths}
 import java.{lang, util}
 import java.util.concurrent.{CompletableFuture, CompletionStage, ExecutionException, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
@@ -444,7 +443,7 @@ class KRaftClusterTest {
       "metadata from testkit", assertThrows(classOf[RuntimeException], () => {
         new KafkaClusterTestKit.Builder(
           new TestKitNodes.Builder().
-            setBootstrapMetadataVersion(MetadataVersion.IBP_2_7_IV0).
+            setBootstrapMetadataVersion(MetadataVersion.IBP_3_0_IV1).
             setNumBrokerNodes(1).
             setNumControllerNodes(1).build()).build()
     }).getMessage)
@@ -1353,7 +1352,7 @@ class KRaftClusterTest {
         // Shut down broker0 and wait until the ISR of foo-0 is set to [1, 2]
         broker0.shutdown()
         TestUtils.retry(60000) {
-          val info = broker1.metadataCache.getPartitionInfo("foo", 0)
+          val info = broker1.metadataCache.getLeaderAndIsr("foo", 0)
           assertTrue(info.isDefined)
           assertEquals(Set(1, 2), info.get.isr().asScala.toSet)
         }
@@ -1367,7 +1366,7 @@ class KRaftClusterTest {
         // Start up broker0 and wait until the ISR of foo-0 is set to [0, 1, 2]
         broker0.startup()
         TestUtils.retry(60000) {
-          val info = broker1.metadataCache.getPartitionInfo("foo", 0)
+          val info = broker1.metadataCache.getLeaderAndIsr("foo", 0)
           assertTrue(info.isDefined)
           assertEquals(Set(0, 1, 2), info.get.isr().asScala.toSet)
         }
@@ -1408,7 +1407,7 @@ class KRaftClusterTest {
         // Shut down broker0 and wait until the ISR of foo-0 is set to [1, 2]
         broker0.shutdown()
         TestUtils.retry(60000) {
-          val info = broker1.metadataCache.getPartitionInfo("foo", 0)
+          val info = broker1.metadataCache.getLeaderAndIsr("foo", 0)
           assertTrue(info.isDefined)
           assertEquals(Set(1, 2), info.get.isr().asScala.toSet)
         }
@@ -1422,7 +1421,7 @@ class KRaftClusterTest {
         // Start up broker0 and wait until the ISR of foo-0 is set to [0, 1, 2]
         broker0.startup()
         TestUtils.retry(60000) {
-          val info = broker1.metadataCache.getPartitionInfo("foo", 0)
+          val info = broker1.metadataCache.getLeaderAndIsr("foo", 0)
           assertTrue(info.isDefined)
           assertEquals(Set(0, 1, 2), info.get.isr().asScala.toSet)
           assertTrue(broker0.logManager.getLog(foo0, isFuture = true).isEmpty)
@@ -1433,6 +1432,15 @@ class KRaftClusterTest {
     } finally {
       cluster.close()
     }
+  }
+
+  def copyDirectory(src: String, dest: String): Unit = {
+    Files.walk(Paths.get(src)).forEach(p => {
+      val out = Paths.get(dest, p.toString().substring(src.length()))
+      if (!p.toString().equals(src)) {
+        Files.copy(p, out);
+      }
+    });
   }
 
   @Test
@@ -1464,7 +1472,7 @@ class KRaftClusterTest {
         // Shut down broker0 and wait until the ISR of foo-0 is set to [1, 2]
         broker0.shutdown()
         TestUtils.retry(60000) {
-          val info = broker1.metadataCache.getPartitionInfo("foo", 0)
+          val info = broker1.metadataCache.getLeaderAndIsr("foo", 0)
           assertTrue(info.isDefined)
           assertEquals(Set(1, 2), info.get.isr().asScala.toSet)
         }
@@ -1476,7 +1484,8 @@ class KRaftClusterTest {
         val parentDir = log.parentDir
         val targetParentDir = broker0.config.logDirs.filter(_ != parentDir).head
         val targetDirFile = new File(targetParentDir, log.dir.getName)
-        FileUtils.copyDirectory(log.dir, targetDirFile)
+        targetDirFile.mkdir()
+        copyDirectory(log.dir.toString(), targetDirFile.toString())
         assertTrue(targetDirFile.exists())
 
         // Rename original log to a future
@@ -1489,7 +1498,7 @@ class KRaftClusterTest {
         // Start up broker0 and wait until the ISR of foo-0 is set to [0, 1, 2]
         broker0.startup()
         TestUtils.retry(60000) {
-          val info = broker1.metadataCache.getPartitionInfo("foo", 0)
+          val info = broker1.metadataCache.getLeaderAndIsr("foo", 0)
           assertTrue(info.isDefined)
           assertEquals(Set(0, 1, 2), info.get.isr().asScala.toSet)
           assertTrue(broker0.logManager.getLog(foo0, isFuture = true).isEmpty)

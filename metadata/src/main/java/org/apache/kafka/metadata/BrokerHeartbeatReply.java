@@ -74,8 +74,7 @@ public class BrokerHeartbeatReply {
 
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof BrokerHeartbeatReply)) return false;
-        BrokerHeartbeatReply other = (BrokerHeartbeatReply) o;
+        if (!(o instanceof BrokerHeartbeatReply other)) return false;
         return other.isCaughtUp == isCaughtUp &&
             other.isFenced == isFenced &&
             other.inControlledShutdown == inControlledShutdown &&

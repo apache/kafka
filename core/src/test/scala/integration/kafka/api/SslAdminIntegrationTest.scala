@@ -127,7 +127,7 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
     SslAdminIntegrationTest.executor = None
     SslAdminIntegrationTest.lastUpdateRequestContext = None
 
-    startSasl(jaasSections(List.empty, None, KafkaSasl))
+    startSasl(jaasSections(List.empty, None))
   }
 
   override def createConfig: util.Map[String, Object] = {
