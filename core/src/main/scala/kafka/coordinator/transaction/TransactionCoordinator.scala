@@ -408,13 +408,13 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
 
           // generate the new transaction metadata with added partitions
           txnMetadata.inLock {
-            if (txnMetadata.producerId != producerId) {
+            if (txnMetadata.pendingTransitionInProgress) {
+              // return a retriable exception to let the client backoff and retry
+              Left(Errors.CONCURRENT_TRANSACTIONS)
+            } else if (txnMetadata.producerId != producerId) {
               Left(Errors.INVALID_PRODUCER_ID_MAPPING)
             } else if (txnMetadata.producerEpoch != producerEpoch) {
               Left(Errors.PRODUCER_FENCED)
-            } else if (txnMetadata.pendingTransitionInProgress) {
-              // return a retriable exception to let the client backoff and retry
-              Left(Errors.CONCURRENT_TRANSACTIONS)
             } else if (txnMetadata.state == PrepareCommit || txnMetadata.state == PrepareAbort) {
               Left(Errors.CONCURRENT_TRANSACTIONS)
             } else if (txnMetadata.state == Ongoing && partitions.subsetOf(txnMetadata.topicPartitions)) {
@@ -812,10 +812,10 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
               }
             }
 
-            if (txnMetadata.producerId != producerId && !retryOnOverflow)
-              Left(Errors.INVALID_PRODUCER_ID_MAPPING)
-            else if (txnMetadata.pendingTransitionInProgress && txnMetadata.pendingState.get != PrepareEpochFence)
+            if (txnMetadata.pendingTransitionInProgress && txnMetadata.pendingState.get != PrepareEpochFence)
               Left(Errors.CONCURRENT_TRANSACTIONS)
+            else if (txnMetadata.producerId != producerId && !retryOnOverflow)
+              Left(Errors.INVALID_PRODUCER_ID_MAPPING)
             else if (!isValidEpoch)
               Left(Errors.PRODUCER_FENCED)
             else txnMetadata.state match {

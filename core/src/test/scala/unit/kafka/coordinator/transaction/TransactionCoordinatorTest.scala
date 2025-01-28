@@ -185,12 +185,17 @@ class TransactionCoordinatorTest {
   @Test
   def shouldGenerateNewProducerIdIfEpochsExhaustedV2(): Unit = {
     initPidGenericMocks(transactionalId)
-    val nextProducerId = 11L
 
     val txnMetadata1 = new TransactionMetadata(transactionalId, producerId, producerId, RecordBatch.NO_PRODUCER_ID, (Short.MaxValue - 1).toShort,
       (Short.MaxValue - 2).toShort, txnTimeoutMs, Ongoing, mutable.Set.empty, time.milliseconds(), time.milliseconds(), TV_2)
-    val txnMetadata2 = new TransactionMetadata(transactionalId, producerId, producerId, nextProducerId, Short.MaxValue,
-      (Short.MaxValue - 1).toShort, txnTimeoutMs, PrepareCommit, mutable.Set.empty, time.milliseconds(), time.milliseconds(), TV_2)
+    // We start with txnMetadata1 so we can transform the metadata to PrepareCommit.
+    val txnMetadata2 = new TransactionMetadata(transactionalId, producerId, producerId, RecordBatch.NO_PRODUCER_ID, (Short.MaxValue - 1).toShort,
+      (Short.MaxValue - 2).toShort, txnTimeoutMs, Ongoing, mutable.Set.empty, time.milliseconds(), time.milliseconds(), TV_2)
+    val transitMetadata = txnMetadata2.prepareAbortOrCommit(PrepareCommit, TV_2, producerId2, time.milliseconds(), false)
+    txnMetadata2.completeTransitionTo(transitMetadata)
+
+    assertEquals(producerId, txnMetadata2.producerId)
+    assertEquals(Short.MaxValue, txnMetadata2.producerEpoch)
 
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
       .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata1))))
@@ -206,7 +211,7 @@ class TransactionCoordinatorTest {
     )).thenAnswer(_ => capturedErrorsCallback.getValue.apply(Errors.NONE))
 
     coordinator.handleEndTransaction(transactionalId, producerId, (Short.MaxValue - 1).toShort, TransactionResult.COMMIT, TV_2, endTxnCallback)
-    assertNotEquals(producerId, newProducerId)
+    assertEquals(producerId2, newProducerId)
     assertEquals(0, newEpoch)
     assertEquals(Errors.NONE, error)
   }
@@ -796,6 +801,39 @@ class TransactionCoordinatorTest {
     assertNotEquals(RecordBatch.NO_PRODUCER_ID, newProducerId)
     assertNotEquals(producerId, newProducerId)
     assertEquals(0, newEpoch)
+    verify(transactionManager, times(2)).getTransactionState(ArgumentMatchers.eq(transactionalId))
+  }
+
+  @Test
+  def shouldReturnConcurrentTxnOnAddPartitionsIfEndTxnV2EpochOverflowAndNotComplete(): Unit = {
+    val prepareWithPending = new TransactionMetadata(transactionalId, producerId, producerId,
+      producerId2, Short.MaxValue, (Short.MaxValue - 1).toShort, 1, PrepareCommit, collection.mutable.Set.empty[TopicPartition], 0, time.milliseconds(), TV_2)
+    val txnTransitMetadata = prepareWithPending.prepareComplete(time.milliseconds())
+
+    when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
+      .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, prepareWithPending))))
+
+    // Return CONCURRENT_TRANSACTIONS while transaction is still completing
+    coordinator.handleAddPartitionsToTransaction(transactionalId, producerId2, 0, partitions, errorsCallback, TV_2)
+    assertEquals(Errors.CONCURRENT_TRANSACTIONS, error)
+    verify(transactionManager).getTransactionState(ArgumentMatchers.eq(transactionalId))
+
+    prepareWithPending.completeTransitionTo(txnTransitMetadata)
+    assertEquals(CompleteCommit, prepareWithPending.state)
+    when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
+      .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, prepareWithPending))))
+    when(transactionManager.appendTransactionToLog(
+      ArgumentMatchers.eq(transactionalId),
+      ArgumentMatchers.eq(coordinatorEpoch),
+      any[TxnTransitMetadata],
+      capturedErrorsCallback.capture(),
+      any(),
+      any())
+    ).thenAnswer(_ => capturedErrorsCallback.getValue.apply(Errors.NONE))
+
+    coordinator.handleAddPartitionsToTransaction(transactionalId, producerId2, 0, partitions, errorsCallback, TV_2)
+
+    assertEquals(Errors.NONE, error)
     verify(transactionManager, times(2)).getTransactionState(ArgumentMatchers.eq(transactionalId))
   }
 
