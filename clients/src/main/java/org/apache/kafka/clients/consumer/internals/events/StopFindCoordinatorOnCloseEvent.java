@@ -17,7 +17,7 @@
 package org.apache.kafka.clients.consumer.internals.events;
 
 /**
- * This event raised when the consumer is closing to prevent the CoordinatorRequestManager from
+ * This event is raised when the consumer is closing to prevent the CoordinatorRequestManager from
  * generating FindCoordinator requests. This event ensures that no new coordinator requests
  * are initiated once the consumer has completed all coordinator-dependent operations and
  * is in the process of shutting down.
