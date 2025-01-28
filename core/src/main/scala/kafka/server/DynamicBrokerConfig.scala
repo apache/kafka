@@ -336,12 +336,12 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
   }
 
   /**
-   * All config updates through ZooKeeper are triggered through actual changes in values stored in ZooKeeper.
+   * Config updates are triggered through actual changes in stored values.
    * For some configs like SSL keystores and truststores, we also want to reload the store if it was modified
-   * in-place, even though the actual value of the file path and password haven't changed. This scenario alone
-   * is handled here when a config update request using admin client is processed by ZkAdminManager. If any of
-   * the SSL configs have changed, then the update will not be done here, but will be handled later when ZK
-   * changes are processed. At the moment, only listener configs are considered for reloading.
+   * in-place, even though the actual value of the file path and password haven't changed. This scenario is
+   * handled when a config update request using admin client is processed by the AdminManager. If any of
+   * the SSL configs have changed, then the update will be handled when configuration changes are processed.
+   * At the moment, only listener configs are considered for reloading.
    */
   private[server] def reloadUpdatedFilesWithoutConfigChange(newProps: Properties): Unit = CoreUtils.inWriteLock(lock) {
     reconfigurables.forEach(r => {

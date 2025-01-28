@@ -112,4 +112,25 @@ public class ShareCoordinatorRecordHelpersTest {
 
         assertEquals(expectedRecord, record);
     }
+
+    @Test
+    public void testNewShareStateTombstoneRecord() {
+        String groupId = "test-group";
+        Uuid topicId = Uuid.randomUuid();
+        int partitionId = 1;
+        CoordinatorRecord record = ShareCoordinatorRecordHelpers.newShareStateTombstoneRecord(
+            groupId,
+            topicId,
+            partitionId
+        );
+
+        CoordinatorRecord expectedRecord = CoordinatorRecord.tombstone(
+            new ShareSnapshotKey()
+                .setGroupId(groupId)
+                .setTopicId(topicId)
+                .setPartition(partitionId)
+        );
+
+        assertEquals(expectedRecord, record);
+    }
 }
