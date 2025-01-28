@@ -105,6 +105,10 @@ public final class TopicsDelta {
             } else {
                 topicId = createdTopics.get(record.topicName());
             }
+            if (topicId == null) {
+                throw new RuntimeException("Unable to clear elr for topic with name " +
+                    record.topicName() + ": no such topic found.");
+            }
             TopicDelta topicDelta = getOrCreateTopicDelta(topicId);
             topicDelta.replay(record);
         } else {

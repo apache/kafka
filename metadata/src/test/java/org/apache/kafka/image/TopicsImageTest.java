@@ -429,6 +429,21 @@ public class TopicsImageTest {
     }
 
     @Test
+    public void testClearElrRecordForNonExistTopic() {
+        TopicsImage image = new TopicsImage(newTopicsByIdMap(Collections.emptyList()),
+            newTopicsByNameMap(Collections.emptyList()));
+        TopicsDelta delta = new TopicsDelta(image);
+        List<ApiMessageAndVersion> topicRecords = new ArrayList<>();
+        topicRecords.addAll(Collections.singletonList(
+            new ApiMessageAndVersion(
+                new ClearElrRecord().setTopicName("non-exist"),
+                CLEAR_ELR_RECORD.highestSupportedVersion()
+            ))
+        );
+        assertThrows(RuntimeException.class, () -> RecordTestUtils.replayAll(delta, topicRecords));
+    }
+
+    @Test
     public void testLocalReassignmentChanges() {
         int localId = 3;
         Uuid zooId = Uuid.fromString("0hHJ3X5ZQ-CFfQ5xgpj90w");
