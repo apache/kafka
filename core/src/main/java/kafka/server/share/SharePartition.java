@@ -451,7 +451,7 @@ public class SharePartition {
 
                 List<PersisterStateBatch> stateBatches = partitionData.stateBatches();
                 boolean isGapPresentInStateBatches = false;
-                long previousOffset = startOffset;
+                long nextBatchFirstOffset = startOffset;
                 for (PersisterStateBatch stateBatch : stateBatches) {
                     if (stateBatch.firstOffset() < startOffset) {
                         log.error("Invalid state batch found for the share partition: {}-{}. The base offset: {}"
@@ -460,10 +460,10 @@ public class SharePartition {
                         throwable = new IllegalStateException(String.format("Failed to initialize the share partition %s-%s", groupId, topicIdPartition));
                         return;
                     }
-                    if (stateBatch.firstOffset() > previousOffset) {
+                    if (stateBatch.firstOffset() > nextBatchFirstOffset) {
                         isGapPresentInStateBatches = true;
                     }
-                    previousOffset = stateBatch.lastOffset() + 1;
+                    nextBatchFirstOffset = stateBatch.lastOffset() + 1;
                     InFlightBatch inFlightBatch = new InFlightBatch(EMPTY_MEMBER_ID, stateBatch.firstOffset(),
                         stateBatch.lastOffset(), RecordState.forId(stateBatch.deliveryState()), stateBatch.deliveryCount(), null);
                     cachedState.put(stateBatch.firstOffset(), inFlightBatch);
@@ -657,11 +657,8 @@ public class SharePartition {
             if (subMap.isEmpty()) {
                 log.trace("No cached data exists for the share partition for requested fetch batch: {}-{}",
                     groupId, topicIdPartition);
-                ShareAcquiredRecords acquiredRecords =  acquireNewBatchRecords(memberId, fetchPartitionData.records.batches(),
+                return acquireNewBatchRecords(memberId, fetchPartitionData.records.batches(),
                     firstBatch.baseOffset(), lastBatch.lastOffset(), batchSize, maxFetchRecords);
-                // Since new records have been acquired, the window tracking the gap in cachedState might need to be reduced
-                maybeUpdateReadGapFetchOffset(lastBatch.lastOffset() + 1);
-                return acquiredRecords;
             }
 
             // The acquired count is used to track the number of records acquired for the request.
@@ -675,10 +672,8 @@ public class SharePartition {
                 // inFlight batch in the cachedState
                 if (lastBatch.lastOffset() < (subMap.firstKey())) {
                     // The entire request batch is part of the gap
-                    ShareAcquiredRecords recs = acquireNewBatchRecords(memberId, fetchPartitionData.records.batches(),
+                    return acquireNewBatchRecords(memberId, fetchPartitionData.records.batches(),
                         firstBatch.baseOffset(), lastBatch.lastOffset(), batchSize, maxFetchRecords);
-                    maybeUpdateReadGapFetchOffset(lastBatch.lastOffset() + 1);
-                    return recs;
                 } else {
                     result.add(new AcquiredRecords()
                         .setFirstOffset(firstBatch.baseOffset())
@@ -2311,8 +2306,8 @@ public class SharePartition {
     }
 
     // Visible for testing
-    Optional<InitialReadGapOffset> initialReadGapOffset() {
-        return Optional.ofNullable(initialReadGapOffset);
+    InitialReadGapOffset initialReadGapOffset() {
+        return initialReadGapOffset;
     }
 
     /**
