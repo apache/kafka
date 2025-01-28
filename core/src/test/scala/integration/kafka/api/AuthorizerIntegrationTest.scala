@@ -37,7 +37,7 @@ import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProt
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.message.ListOffsetsRequestData.{ListOffsetsPartition, ListOffsetsTopic}
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.{OffsetForLeaderPartition, OffsetForLeaderTopic, OffsetForLeaderTopicCollection}
-import org.apache.kafka.common.message.{AddOffsetsToTxnRequestData, AlterPartitionReassignmentsRequestData, AlterReplicaLogDirsRequestData, ConsumerGroupDescribeRequestData, ConsumerGroupHeartbeatRequestData, CreateAclsRequestData, CreatePartitionsRequestData, CreateTopicsRequestData, DeleteAclsRequestData, DeleteGroupsRequestData, DeleteRecordsRequestData, DeleteTopicsRequestData, DescribeClusterRequestData, DescribeConfigsRequestData, DescribeGroupsRequestData, DescribeLogDirsRequestData, DescribeProducersRequestData, DescribeTransactionsRequestData, FindCoordinatorRequestData, HeartbeatRequestData, IncrementalAlterConfigsRequestData, JoinGroupRequestData, ListPartitionReassignmentsRequestData, ListTransactionsRequestData, MetadataRequestData, OffsetCommitRequestData, ProduceRequestData, SyncGroupRequestData, WriteTxnMarkersRequestData}
+import org.apache.kafka.common.message.{AddOffsetsToTxnRequestData, AlterPartitionReassignmentsRequestData, AlterReplicaLogDirsRequestData, ConsumerGroupDescribeRequestData, ConsumerGroupHeartbeatRequestData, CreateAclsRequestData, CreatePartitionsRequestData, CreateTopicsRequestData, DeleteAclsRequestData, DeleteGroupsRequestData, DeleteRecordsRequestData, DeleteTopicsRequestData, DescribeClusterRequestData, DescribeConfigsRequestData, DescribeGroupsRequestData, DescribeLogDirsRequestData, DescribeProducersRequestData, DescribeTransactionsRequestData, FetchResponseData, FindCoordinatorRequestData, HeartbeatRequestData, IncrementalAlterConfigsRequestData, JoinGroupRequestData, ListPartitionReassignmentsRequestData, ListTransactionsRequestData, MetadataRequestData, OffsetCommitRequestData, ProduceRequestData, SyncGroupRequestData, WriteTxnMarkersRequestData}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.{MemoryRecords, RecordBatch, SimpleRecord}
 import org.apache.kafka.common.requests.OffsetFetchResponse.PartitionData
@@ -59,6 +59,7 @@ import java.util.Collections.singletonList
 import org.apache.kafka.common.message.MetadataRequestData.MetadataRequestTopic
 import org.apache.kafka.common.message.WriteTxnMarkersRequestData.{WritableTxnMarker, WritableTxnMarkerTopic}
 import org.apache.kafka.coordinator.group.GroupConfig
+import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.function.Executable
 
 import scala.collection.mutable
@@ -806,6 +807,34 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     val clusterAcls = clusterAcl(clusterResource)
     addAndVerifyAcls(clusterAcls, clusterResource)
     sendRequestAndVerifyResponseError(request, resources, isAuthorized = true)
+  }
+
+  @Test
+  def testFetchConsumerRequest(): Unit = {
+    createTopicWithBrokerPrincipal(topic)
+
+    val request = createFetchRequest
+    val topicNames = getTopicNames().asJava
+
+    def partitionDatas(response: AbstractResponse): Iterable[FetchResponseData.PartitionData] = {
+      assertTrue(response.isInstanceOf[FetchResponse])
+      response.asInstanceOf[FetchResponse].responseData(topicNames, ApiKeys.FETCH.latestVersion).values().asScala
+    }
+
+    removeAllClientAcls()
+    val resources = Set(topicResource.resourceType, clusterResource.resourceType)
+    val failedResponse = sendRequestAndVerifyResponseError(request, resources, isAuthorized = false)
+    val failedPartitionDatas = partitionDatas(failedResponse)
+    assertEquals(1, failedPartitionDatas.size)
+    // Some clients (like librdkafka) always expect non-null records - even for the cases where an error is returned
+    failedPartitionDatas.foreach(partitionData => assertEquals(MemoryRecords.EMPTY, partitionData.records))
+
+    val readAcls = topicReadAcl(topicResource)
+    addAndVerifyAcls(readAcls, topicResource)
+    val succeededResponse = sendRequestAndVerifyResponseError(request, resources, isAuthorized = true)
+    val succeededPartitionDatas = partitionDatas(succeededResponse)
+    assertEquals(1, succeededPartitionDatas.size)
+    succeededPartitionDatas.foreach(partitionData => assertEquals(MemoryRecords.EMPTY, partitionData.records))
   }
 
   @ParameterizedTest
