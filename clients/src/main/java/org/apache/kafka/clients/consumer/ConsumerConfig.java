@@ -686,6 +686,7 @@ public class ConsumerConfig extends AbstractConfig {
     protected Map<String, Object> postProcessParsedConfig(final Map<String, Object> parsedValues) {
         CommonClientConfigs.postValidateSaslMechanismConfig(this);
         CommonClientConfigs.warnDisablingExponentialBackoff(this);
+        CommonClientConfigs.warnIfBootstrapServersIsSpaceDelimited(this);
         Map<String, Object> refinedConfigs = CommonClientConfigs.postProcessReconnectBackoffConfigs(this, parsedValues);
         maybeOverrideClientId(refinedConfigs);
         maybeOverrideEnableAutoCommit(refinedConfigs);

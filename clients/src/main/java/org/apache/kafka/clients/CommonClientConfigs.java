@@ -287,6 +287,16 @@ public class CommonClientConfigs {
         }
     }
 
+    public static void warnIfBootstrapServersIsSpaceDelimited(AbstractConfig config) {
+        String bootstrapServers = config.getString(BOOTSTRAP_SERVERS_CONFIG);
+        int bootstrapServerCount = bootstrapServers.trim().split("\\s+").length;
+        if (bootstrapServerCount > 1) {
+            log.warn("The configuration '{}' should be a comma-separated list of URLs. Please replace spaces with comma from the value '{}'. " +
+                    "Otherwise, the client will only connect to the first broker in the list.",
+                BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        }
+    }
+
     public static void postValidateSaslMechanismConfig(AbstractConfig config) {
         SecurityProtocol securityProtocol = SecurityProtocol.forName(config.getString(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG));
         String clientSaslMechanism = config.getString(SaslConfigs.SASL_MECHANISM);
