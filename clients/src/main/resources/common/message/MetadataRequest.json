@@ -18,7 +18,7 @@
   "type": "request",
   "listeners": ["broker"],
   "name": "MetadataRequest",
-  "validVersions": "1-13",
+  "validVersions": "0-13",
   "flexibleVersions": "9+",
   "fields": [
     // Versions 0-3 were removed in Apache Kafka 4.0, Version 4 is the new baseline.
