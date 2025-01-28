@@ -10547,6 +10547,96 @@ class KafkaApisTest extends Logging {
     })
   }
 
+  @Test
+  def testDeleteShareGroupStateSuccess(): Unit = {
+    val topicId = Uuid.randomUuid();
+    val deleteRequestData = new DeleteShareGroupStateRequestData()
+      .setGroupId("group1")
+      .setTopics(List(
+        new DeleteShareGroupStateRequestData.DeleteStateData()
+          .setTopicId(topicId)
+          .setPartitions(List(
+            new DeleteShareGroupStateRequestData.PartitionData()
+              .setPartition(1)
+          ).asJava)
+      ).asJava)
+
+    val deleteStateResultData: util.List[DeleteShareGroupStateResponseData.DeleteStateResult] = List(
+      new DeleteShareGroupStateResponseData.DeleteStateResult()
+        .setTopicId(topicId)
+        .setPartitions(List(
+          new DeleteShareGroupStateResponseData.PartitionResult()
+            .setPartition(1)
+            .setErrorCode(Errors.NONE.code())
+            .setErrorMessage(null)
+        ).asJava)
+    ).asJava
+
+    val config = Map(
+      ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true",
+    )
+
+    val response = getDeleteShareGroupResponse(
+      deleteRequestData,
+      config ++ ShareCoordinatorTestConfig.testConfigMap().asScala,
+      verifyNoErr = true,
+      null,
+      deleteStateResultData
+    )
+
+    assertNotNull(response.data)
+    assertEquals(1, response.data.results.size)
+  }
+
+  @Test
+  def testDeleteShareGroupStateAuthorizationFailed(): Unit = {
+    val topicId = Uuid.randomUuid();
+    val deleteRequestData = new DeleteShareGroupStateRequestData()
+      .setGroupId("group1")
+      .setTopics(List(
+        new DeleteShareGroupStateRequestData.DeleteStateData()
+          .setTopicId(topicId)
+          .setPartitions(List(
+            new DeleteShareGroupStateRequestData.PartitionData()
+              .setPartition(1)
+          ).asJava)
+      ).asJava)
+
+    val deleteStateResultData: util.List[DeleteShareGroupStateResponseData.DeleteStateResult] = List(
+      new DeleteShareGroupStateResponseData.DeleteStateResult()
+        .setTopicId(topicId)
+        .setPartitions(List(
+          new DeleteShareGroupStateResponseData.PartitionResult()
+            .setPartition(1)
+            .setErrorCode(Errors.NONE.code())
+            .setErrorMessage(null)
+        ).asJava)
+    ).asJava
+
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+    when(authorizer.authorize(any[RequestContext], any[util.List[Action]]))
+      .thenReturn(Seq(AuthorizationResult.DENIED).asJava, Seq(AuthorizationResult.ALLOWED).asJava)
+
+    val config = Map(
+      ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true",
+    )
+
+    val response = getDeleteShareGroupResponse(
+      deleteRequestData,
+      config ++ ShareCoordinatorTestConfig.testConfigMap().asScala,
+      verifyNoErr = false,
+      authorizer,
+      deleteStateResultData
+    )
+
+    assertNotNull(response.data)
+    assertEquals(1, response.data.results.size)
+    response.data.results.forEach(deleteResult => {
+      assertEquals(1, deleteResult.partitions.size)
+      assertEquals(Errors.CLUSTER_AUTHORIZATION_FAILED.code(), deleteResult.partitions.get(0).errorCode())
+    })
+  }
+
   def getShareGroupDescribeResponse(groupIds: util.List[String], configOverrides: Map[String, String] = Map.empty,
                                     verifyNoErr: Boolean = true, authorizer: Authorizer = null,
                                     describedGroups: util.List[ShareGroupDescribeResponseData.DescribedGroup]): ShareGroupDescribeResponse = {
@@ -10660,6 +10750,35 @@ class KafkaApisTest extends Logging {
       val expectedWriteShareGroupStateResponseData = new WriteShareGroupStateResponseData()
         .setResults(writeStateResult)
       assertEquals(expectedWriteShareGroupStateResponseData, response.data)
+    }
+    response
+  }
+
+  def getDeleteShareGroupResponse(requestData: DeleteShareGroupStateRequestData, configOverrides: Map[String, String] = Map.empty,
+                                  verifyNoErr: Boolean = true, authorizer: Authorizer = null,
+                                  deleteStateResult: util.List[DeleteShareGroupStateResponseData.DeleteStateResult]): DeleteShareGroupStateResponse = {
+    val requestChannelRequest = buildRequest(new DeleteShareGroupStateRequest.Builder(requestData, true).build())
+
+    val future = new CompletableFuture[DeleteShareGroupStateResponseData]()
+    when(shareCoordinator.deleteState(
+      any[RequestContext],
+      any[DeleteShareGroupStateRequestData]
+    )).thenReturn(future)
+    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    kafkaApis = createKafkaApis(
+      overrideProperties = configOverrides,
+      authorizer = Option(authorizer),
+    )
+    kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching())
+
+    future.complete(new DeleteShareGroupStateResponseData()
+      .setResults(deleteStateResult))
+
+    val response = verifyNoThrottling[DeleteShareGroupStateResponse](requestChannelRequest)
+    if (verifyNoErr) {
+      val expectedDeleteShareGroupStateResponseData = new DeleteShareGroupStateResponseData()
+        .setResults(deleteStateResult)
+      assertEquals(expectedDeleteShareGroupStateResponseData, response.data)
     }
     response
   }
