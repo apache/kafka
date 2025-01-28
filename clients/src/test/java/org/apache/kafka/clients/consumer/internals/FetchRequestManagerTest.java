@@ -3451,46 +3451,58 @@ public class FetchRequestManagerTest {
     public void testFetchRequestWithBufferedPartitions() {
         buildFetcher();
 
-        // The test requires that there are multiple nodes as the fetch request logic is based in part off of the
-        // partition-to-node relationship.
+        // The partitions are spread across multiple nodes to ensure the fetcher's logic correctly handles the
+        // partition-to-node mapping.
         int numNodes = 2;
         Set<TopicPartition> partitions = Set.of(tp0, tp1, tp2, tp3);
         assignFromUser(partitions, numNodes);
 
-        // Get all the nodes serving as the leader for these partitions, and then split them into the separate
-        // nodes and set of partitions to make things easier to keep track of later.
+        // Seek each partition so that it becomes eligible to fetch.
+        partitions.forEach(tp -> subscriptions.seek(tp, 0));
+
+        // Get all the nodes serving as the leader for these partitions.
         List<Node> nodes = nodesForPartitionLeaders(partitions);
+
+        // Extract the nodes and their respective set of partitions to make things easier to keep track of later.
+        assertEquals(2, nodes.size());
         Node node0 = nodes.get(0);
         Node node1 = nodes.get(1);
         List<TopicPartition> node0Partitions = partitionsForNode(node0, partitions);
         List<TopicPartition> node1Partitions = partitionsForNode(node1, partitions);
-
-        // Seek each partition so that it becomes eligible to fetch.
-        partitions.forEach(tp -> subscriptions.seek(tp, 0));
+        assertEquals(2, node0Partitions.size());
+        assertEquals(2, node1Partitions.size());
+        TopicPartition node0Partition1 = node0Partitions.get(0);
+        TopicPartition node0Partition2 = node0Partitions.get(1);
+        TopicPartition node1Partition1 = node1Partitions.get(0);
+        TopicPartition node1Partition2 = node1Partitions.get(1);
 
         // sendFetches() call #1 should issue requests to node 0 or node 1 since neither has buffered data.
         assertEquals(2, sendFetches());
         prepareFetchResponses(node0, node0Partitions, 0);
         prepareFetchResponses(node1, node1Partitions, 0);
         networkClientDelegate.poll(time.timer(0));
+
         assertEquals(4, fetcher.fetchBuffer.bufferedPartitions().size());
-        collectSelectedPartition(node0Partitions.remove(0), partitions);
+        collectSelectedPartition(node0Partition1, partitions);
+        node0Partitions.remove(node0Partition1);
         assertEquals(3, fetcher.fetchBuffer.bufferedPartitions().size());
 
         // sendFetches() call #2 shouldn't issue requests to either node 0 or node 1 since they both have buffered data.
         assertEquals(0, sendFetches());
         networkClientDelegate.poll(time.timer(0));
-        collectSelectedPartition(node1Partitions.remove(0), partitions);
+        collectSelectedPartition(node1Partition1, partitions);
+        node1Partitions.remove(node1Partition1);
         assertEquals(2, fetcher.fetchBuffer.bufferedPartitions().size());
 
         // sendFetches() call #3 shouldn't issue requests to either node 0 or node 1 since they both have buffered data.
         assertEquals(0, sendFetches());
         networkClientDelegate.poll(time.timer(0));
-        collectSelectedPartition(node0Partitions.remove(0), partitions);
+        collectSelectedPartition(node0Partition2, partitions);
+        node0Partitions.remove(node0Partition2);
         assertEquals(1, fetcher.fetchBuffer.bufferedPartitions().size());
 
         // Node 0's partitions have all been collected, so validate that and then reset the list of partitions
-        // from which to fetch data so the next pass should request can fetch more data.
+        // from which to fetch data so the next fetch pass requests more data.
         assertTrue(node0Partitions.isEmpty());
         node0Partitions = partitionsForNode(node0, partitions);
 
@@ -3498,7 +3510,9 @@ public class FetchRequestManagerTest {
         assertEquals(1, sendFetches());
         prepareFetchResponses(node0, node0Partitions, 10);
         networkClientDelegate.poll(time.timer(0));
-        collectSelectedPartition(node1Partitions.remove(0), partitions);
+
+        collectSelectedPartition(node1Partition2, partitions);
+        node1Partitions.remove(node1Partition2);
         assertEquals(2, fetcher.fetchBuffer.bufferedPartitions().size());
 
         // Node 1's partitions have likewise all been collected, so validate that and reset.
@@ -3533,22 +3547,30 @@ public class FetchRequestManagerTest {
     public void testFetchRequestWithBufferedPartitionNotAssigned() {
         buildFetcher();
 
-        // The test requires that there are multiple nodes as the fetch request logic is based in part off of the
-        // partition-to-node relationship.
+        // The partitions are spread across multiple nodes to ensure the fetcher's logic correctly handles the
+        // partition-to-node mapping.
         int numNodes = 2;
         Set<TopicPartition> partitions = Set.of(tp0, tp1, tp2, tp3);
         assignFromUser(partitions, numNodes);
 
-        // Get all the nodes serving as the leader for these partitions, and then split them into the separate
-        // nodes and set of partitions to make things easier to keep track of later.
+        // Seek each partition so that it becomes eligible to fetch.
+        partitions.forEach(tp -> subscriptions.seek(tp, 0));
+
+        // Get all the nodes serving as the leader for these partitions.
         List<Node> nodes = nodesForPartitionLeaders(partitions);
+
+        // Extract the nodes and their respective set of partitions to make things easier to keep track of later.
+        assertEquals(2, nodes.size());
         Node node0 = nodes.get(0);
         Node node1 = nodes.get(1);
         List<TopicPartition> node0Partitions = partitionsForNode(node0, partitions);
         List<TopicPartition> node1Partitions = partitionsForNode(node1, partitions);
-
-        // Seek each partition so that it becomes eligible to fetch.
-        partitions.forEach(tp -> subscriptions.seek(tp, 0));
+        assertEquals(2, node0Partitions.size());
+        assertEquals(2, node1Partitions.size());
+        TopicPartition node0Partition1 = node0Partitions.get(0);
+        TopicPartition node0Partition2 = node0Partitions.get(1);
+        TopicPartition node1Partition1 = node1Partitions.get(0);
+        TopicPartition node1Partition2 = node1Partitions.get(1);
 
         // sendFetches() call #1 should issue requests to node 0 or node 1 since neither has buffered data.
         assertEquals(2, sendFetches());
@@ -3556,23 +3578,22 @@ public class FetchRequestManagerTest {
         prepareFetchResponses(node1, node1Partitions, 0);
         networkClientDelegate.poll(time.timer(0));
 
-        // Grab both partitions for node 0. The first partition will be collected so that it doesn't have anything
-        // in the fetch buffer. The second node will be left in the buffer, but will be unassigned in a bit.
-        TopicPartition node0Partition1 = node0Partitions.remove(0);
-        TopicPartition node0Partition2 = node0Partitions.remove(0);
-
+        // Collect node0Partition1 so that it doesn't have anything in the fetch buffer.
         assertEquals(4, fetcher.fetchBuffer.bufferedPartitions().size());
         collectSelectedPartition(node0Partition1, partitions);
         assertEquals(3, fetcher.fetchBuffer.bufferedPartitions().size());
 
-        // Change the set of assigned partitions to exclude the remaining buffered partition for node 0, which means
-        // that partition is unassigned.
-        Set<TopicPartition> topicsWithoutUnassignedPartition = new HashSet<>(partitions);
-        topicsWithoutUnassignedPartition.remove(node0Partition2);
-        subscriptions.assignFromUser(topicsWithoutUnassignedPartition);
+        // Exclude node0Partition2 (the remaining buffered partition for node 0) when updating the assigned partitions
+        // to cause it to become unassigned.
+        subscriptions.assignFromUser(Set.of(
+            node0Partition1,
+            // node0Partition2,         // Intentionally omit this partition so that it is unassigned
+            node1Partition1,
+            node1Partition2
+        ));
 
-        // The collected partition should have a retrievable position, but the unassigned position should throw
-        // an error when attempting to retrieve its position.
+        // node0Partition1 (the collected partition) should have a retrievable position, but the node0Partition2
+        // (the unassigned position) should throw an error when attempting to retrieve its position.
         assertDoesNotThrow(() -> subscriptions.position(node0Partition1));
         assertThrows(IllegalStateException.class, () -> subscriptions.position(node0Partition2));
 
@@ -3586,67 +3607,50 @@ public class FetchRequestManagerTest {
     public void testFetchRequestWithBufferedPartitionMissingLeader() {
         buildFetcher();
 
-        // The test requires that there are multiple nodes as the fetch request logic is based in part off of the
-        // partition-to-node relationship.
-        int numNodes = 2;
-        Set<TopicPartition> partitions = Set.of(tp0, tp1, tp2, tp3);
-        assignFromUser(partitions, numNodes);
-
-        // Get all the nodes serving as the leader for these partitions, and then pull out the separate
-        // nodes and set of partitions to make things easier to keep track of later.
-        List<Node> nodes = nodesForPartitionLeaders(partitions);
-        Node node0 = nodes.get(0);
-        Node node1 = nodes.get(1);
-        List<TopicPartition> node0Partitions = partitionsForNode(node0, partitions);
-        List<TopicPartition> node1Partitions = partitionsForNode(node1, partitions);
+        Set<TopicPartition> partitions = Set.of(tp0, tp1);
+        assignFromUser(partitions);
 
         // Seek each partition so that it becomes eligible to fetch.
         partitions.forEach(tp -> subscriptions.seek(tp, 0));
 
-        // sendFetches() call #1 should issue requests to node 0 and node 1 since neither has buffered data.
-        assertEquals(2, sendFetches());
-        prepareFetchResponses(node0, node0Partitions, 0);
-        prepareFetchResponses(node1, node1Partitions, 0);
+        Node leader = metadata.fetch().leaderFor(tp0);
+
+        // sendFetches() call #1 should issue a request since there's no buffered data.
+        assertEquals(1, sendFetches());
+        prepareFetchResponses(leader, Set.of(tp0, tp1), 0);
         networkClientDelegate.poll(time.timer(0));
 
-        TopicPartition node0Partition1 = node0Partitions.remove(0);
-        TopicPartition node0Partition2 = node0Partitions.remove(0);
+        // Per the fetch response, data for both of the partitions are in the fetch buffer.
+        assertTrue(fetcher.fetchBuffer.bufferedPartitions().contains(tp0));
+        assertTrue(fetcher.fetchBuffer.bufferedPartitions().contains(tp1));
 
-        // Per the fetch response, data for both of node 0's partitions are in the fetch buffer.
-        assertTrue(fetcher.fetchBuffer.bufferedPartitions().contains(node0Partition1));
-        assertTrue(fetcher.fetchBuffer.bufferedPartitions().contains(node0Partition2));
+        // Collect the first partition (tp0) which will remove it from the fetch buffer.
+        collectSelectedPartition(tp0, partitions);
 
-        // Collect node 0's first partition (node0Partition1) which will remove it from the fetch buffer.
-        collectSelectedPartition(node0Partition1, partitions);
+        // Since tp0 was collected, it's not in the fetch buffer, but tp1 remains in the fetch buffer.
+        assertFalse(fetcher.fetchBuffer.bufferedPartitions().contains(tp0));
+        assertTrue(fetcher.fetchBuffer.bufferedPartitions().contains(tp1));
 
-        // Node 0's first partition (node0Partition1) was collected so it's not in the fetch buffer, but node 0's
-        // second partition (node0Partition2) remains in the fetch buffer.
-        assertFalse(fetcher.fetchBuffer.bufferedPartitions().contains(node0Partition1));
-        assertTrue(fetcher.fetchBuffer.bufferedPartitions().contains(node0Partition2));
-
-        // Overwrite node0Partition2's position with an empty leader, but verify that it is still buffered. Having
-        // a leaderless, buffered partition is key to triggering the test case.
-        subscriptions.position(node0Partition2, new SubscriptionState.FetchPosition(
+        // Overwrite tp1's position with an empty leader, but verify that it is still buffered. Having a leaderless,
+        // buffered partition is key to triggering the test case.
+        subscriptions.position(tp1, new SubscriptionState.FetchPosition(
             0,
             Optional.empty(),
             Metadata.LeaderAndEpoch.noLeaderOrEpoch()
         ));
-        assertTrue(fetcher.fetchBuffer.bufferedPartitions().contains(node0Partition2));
+        assertTrue(fetcher.fetchBuffer.bufferedPartitions().contains(tp1));
 
-        // Validate the state of the collected partition (node0Partition1) and leaderless partition (node0Partition2)
-        // before sending the fetch requests.
-        Optional<Node> node0Partition1Leader = subscriptions.position(node0Partition1).currentLeader.leader;
-        Optional<Node> node0Partition2Leader = subscriptions.position(node0Partition2).currentLeader.leader;
-        assertTrue(node0Partition1Leader.isPresent());
-        assertEquals(node0, node0Partition1Leader.get());
-        assertFalse(node0Partition2Leader.isPresent());
+        // Validate the state of the collected partition (tp0) and leaderless partition (tp1) before sending the
+        // fetch request.
+        assertTrue(subscriptions.position(tp0).currentLeader.leader.isPresent());
+        assertFalse(subscriptions.position(tp1).currentLeader.leader.isPresent());
 
-        // sendFetches() call #2 should issue a fetch request to node 0 because it has no buffered partitions:
+        // sendFetches() call #2 should issue a fetch request because it has no buffered partitions:
         //
-        // - node0Partition1 was collected and thus not in the fetch buffer
-        // - node0Partition2, while still in the fetch buffer, is leaderless
+        // - tp0 was collected and thus not in the fetch buffer
+        // - tp1, while still in the fetch buffer, is leaderless
         //
-        // As a result, there are now effectively no buffered partitions for which node 0 is the leader.
+        // As a result, there are now effectively no buffered partitions for which there is a leader.
         assertEquals(1, sendFetches());
     }
 
@@ -3654,22 +3658,28 @@ public class FetchRequestManagerTest {
     public void testFetchRequestWithBufferedPartitionMissingPosition() {
         buildFetcher();
 
-        // The test requires that there are multiple nodes as the fetch request logic is based in part off of the
-        // partition-to-node relationship.
+        // The partitions are spread across multiple nodes to ensure the fetcher's logic correctly handles the
+        // partition-to-node mapping.
         int numNodes = 2;
         Set<TopicPartition> partitions = Set.of(tp0, tp1, tp2, tp3);
         assignFromUser(partitions, numNodes);
 
-        // Get all the nodes serving as the leader for these partitions, and then split them into the separate
-        // nodes and set of partitions to make things easier to keep track of later.
+        // Seek each partition so that it becomes eligible to fetch.
+        partitions.forEach(tp -> subscriptions.seek(tp, 0));
+
+        // Get all the nodes serving as the leader for these partitions.
         List<Node> nodes = nodesForPartitionLeaders(partitions);
+
+        // Extract the nodes and their respective set of partitions to make things easier to keep track of later.
+        assertEquals(2, nodes.size());
         Node node0 = nodes.get(0);
         Node node1 = nodes.get(1);
         List<TopicPartition> node0Partitions = partitionsForNode(node0, partitions);
         List<TopicPartition> node1Partitions = partitionsForNode(node1, partitions);
-
-        // Seek each partition so that it becomes eligible to fetch.
-        partitions.forEach(tp -> subscriptions.seek(tp, 0));
+        assertEquals(2, node0Partitions.size());
+        assertEquals(2, node1Partitions.size());
+        TopicPartition node0Partition1 = node0Partitions.get(0);
+        TopicPartition node0Partition2 = node0Partitions.get(1);
 
         // sendFetches() call #1 should issue requests to node 0 or node 1 since neither has buffered data.
         assertEquals(2, sendFetches());
@@ -3677,23 +3687,18 @@ public class FetchRequestManagerTest {
         prepareFetchResponses(node1, node1Partitions, 0);
         networkClientDelegate.poll(time.timer(0));
 
-        // Grab both partitions for node 0. The first partition will be collected so that it doesn't have anything
-        // in the fetch buffer. The second node will be left in the buffer, but will clear out its position's leader
-        // node.
-        TopicPartition node0Partition1 = node0Partitions.remove(0);
-        TopicPartition node0Partition2 = node0Partitions.remove(0);
-
+        // Collect node 0's first partition (node0Partition1) which will remove it from the fetch buffer.
         assertEquals(4, fetcher.fetchBuffer.bufferedPartitions().size());
         collectSelectedPartition(node0Partition1, partitions);
         assertEquals(3, fetcher.fetchBuffer.bufferedPartitions().size());
 
-        // Overwrite the position with an empty leader to trigger the test case.
+        // Overwrite node0Partition2's position with an empty leader to trigger the test case.
         subscriptions.position(node0Partition2, null);
 
-        // Both the collected partition and the position without a partition leader should have a retrievable position.
-        // Confirm that position() doesn't throw an exception and that the leader for the second partition is missing.
-        assertNotEquals(Optional.empty(), subscriptions.position(node0Partition1).currentLeader.leader);
-        assertNull(subscriptions.position(node0Partition2));
+        // Confirm that calling SubscriptionState.position() succeeds for a leaderless partition. While it shouldn't
+        // throw an exception, it should return a null position.
+        SubscriptionState.FetchPosition position = assertDoesNotThrow(() -> subscriptions.position(node0Partition2));
+        assertNull(position);
 
         // sendFetches() call #2 will now fail to send any requests as we have an invalid position in the assignment.
         // The Consumer.poll() API will throw an IllegalStateException to the user.
