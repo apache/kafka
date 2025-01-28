@@ -665,26 +665,6 @@ public class SharePartition {
             int acquiredCount = 0;
             List<AcquiredRecords> result = new ArrayList<>();
 
-            // If baseOffset is less than the first key of submap, this means the fetch happened for a gap in the cachedState.
-            // Thus a new batch needs to be acquired for the gap.
-            if (baseOffset < subMap.firstKey()) {
-                // This is to check whether the fetched records are all part of the gap, or they overlap with the next
-                // inFlight batch in the cachedState
-                if (lastBatch.lastOffset() < (subMap.firstKey())) {
-                    // The entire request batch is part of the gap
-                    return acquireNewBatchRecords(memberId, fetchPartitionData.records.batches(),
-                        firstBatch.baseOffset(), lastBatch.lastOffset(), batchSize, maxFetchRecords);
-                } else {
-                    result.add(new AcquiredRecords()
-                        .setFirstOffset(firstBatch.baseOffset())
-                        .setLastOffset(subMap.firstKey() - 1)
-                        .setDeliveryCount((short) 1));
-                    acquiredCount += (int) (subMap.firstKey() - firstBatch.baseOffset());
-                    acquireNewBatchRecords(memberId, fetchPartitionData.records.batches(),
-                        firstBatch.baseOffset(), subMap.firstKey() - 1, batchSize, maxFetchRecords);
-                }
-            }
-
             log.trace("Overlap exists with in-flight records. Acquire the records if available for"
                 + " the share partition: {}-{}", groupId, topicIdPartition);
 
@@ -698,6 +678,29 @@ public class SharePartition {
                 }
 
                 InFlightBatch inFlightBatch = entry.getValue();
+
+                // If baseOffset is less than the key of the entry, this means the fetch happened for a gap in the cachedState.
+                // Thus, a new batch needs to be acquired for the gap.
+                if (baseOffset < entry.getKey()) {
+                    // This is to check whether the fetched records are all part of the gap, or they overlap with the next
+                    // inFlight batch in the cachedState
+                    if (lastBatch.lastOffset() < (entry.getKey())) {
+                        // The entire request batch is part of the gap
+                        return acquireNewBatchRecords(memberId, fetchPartitionData.records.batches(),
+                            baseOffset, lastBatch.lastOffset(), batchSize, maxFetchRecords);
+                    } else {
+                        result.add(new AcquiredRecords()
+                            .setFirstOffset(baseOffset)
+                            .setLastOffset(entry.getKey() - 1)
+                            .setDeliveryCount((short) 1));
+                        acquiredCount += (int) (entry.getKey() - baseOffset);
+                        acquireNewBatchRecords(memberId, fetchPartitionData.records.batches(),
+                            baseOffset, entry.getKey() - 1, batchSize, maxFetchRecords);
+                        baseOffset = inFlightBatch.lastOffset() + 1;
+                        continue;
+                    }
+                }
+                baseOffset = inFlightBatch.lastOffset() + 1;
                 // Compute if the batch is a full match.
                 boolean fullMatch = checkForFullMatch(inFlightBatch, firstBatch.baseOffset(), lastBatch.lastOffset());
 

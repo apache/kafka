@@ -2361,6 +2361,64 @@ public class SharePartitionTest {
     }
 
     @Test
+    public void testAcquireWhenRecordsFetchedFromMultipleNonAdjacentAcquirableGaps() {
+        Persister persister = Mockito.mock(Persister.class);
+        ReadShareGroupStateResult readShareGroupStateResult = Mockito.mock(ReadShareGroupStateResult.class);
+        Mockito.when(readShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
+            new TopicData<>(TOPIC_ID_PARTITION.topicId(), Collections.singletonList(
+                PartitionFactory.newPartitionAllData(0, 3, 11L, Errors.NONE.code(), Errors.NONE.message(),
+                    Arrays.asList(
+                        new PersisterStateBatch(21L, 30L, RecordState.ACKNOWLEDGED.id, (short) 2),
+                        new PersisterStateBatch(41L, 50L, RecordState.ARCHIVED.id, (short) 1)
+                    ))))));
+        Mockito.when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
+
+        WriteShareGroupStateResult writeShareGroupStateResult = Mockito.mock(WriteShareGroupStateResult.class);
+        Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
+            new TopicData<>(TOPIC_ID_PARTITION.topicId(), Collections.singletonList(
+                PartitionFactory.newPartitionErrorData(0, Errors.NONE.code(), Errors.NONE.message())))));
+        Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
+
+        SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
+
+        CompletableFuture<Void> result = sharePartition.maybeInitialize();
+        assertTrue(result.isDone());
+        assertFalse(result.isCompletedExceptionally());
+
+        assertEquals(SharePartitionState.ACTIVE, sharePartition.partitionState());
+        assertFalse(sharePartition.cachedState().isEmpty());
+        assertEquals(11, sharePartition.startOffset());
+        assertEquals(50, sharePartition.endOffset());
+        assertEquals(3, sharePartition.stateEpoch());
+        assertEquals(11, sharePartition.nextFetchOffset());
+
+        MemoryRecords records = memoryRecords(50, 11);
+
+        List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
+                MEMBER_ID,
+                BATCH_SIZE,
+                MAX_FETCH_RECORDS,
+                new FetchPartitionData(Errors.NONE, 3, 0, records,
+                    Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)),
+            30);
+
+        List<AcquiredRecords> expectedAcquiredRecord = new ArrayList<>(expectedAcquiredRecord(11, 20, 1));
+        expectedAcquiredRecord.addAll(expectedAcquiredRecord(31, 40, 1));
+        expectedAcquiredRecord.addAll(expectedAcquiredRecord(51, 60, 1));
+        assertArrayEquals(expectedAcquiredRecord.toArray(), acquiredRecordsList.toArray());
+
+        assertEquals(SharePartitionState.ACTIVE, sharePartition.partitionState());
+        assertFalse(sharePartition.cachedState().isEmpty());
+        assertEquals(11, sharePartition.startOffset());
+        assertEquals(60, sharePartition.endOffset());
+        assertEquals(3, sharePartition.stateEpoch());
+        assertEquals(61, sharePartition.nextFetchOffset());
+
+        SharePartition.InitialReadGapOffset initialReadGapOffset = sharePartition.initialReadGapOffset();
+        assertNull(initialReadGapOffset);
+    }
+
+    @Test
     public void testAcquireWhenRecordsFetchedAfterAcquirableGapsAreFetched() {
         Persister persister = Mockito.mock(Persister.class);
         ReadShareGroupStateResult readShareGroupStateResult = Mockito.mock(ReadShareGroupStateResult.class);
