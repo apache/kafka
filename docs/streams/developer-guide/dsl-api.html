@@ -3136,13 +3136,11 @@ grouped
                     </li>
                     <li><code>Processor</code>: A processor of key-value pair records;</li>
                     <li><code>ContextualProcessor</code>: An abstract implementation of <code>Processor</code> that manages the
-                        <code>ProcessorContext</code> instance and provides default no-op implementation of
-                        <code>Processor#close</code>.
+                        <code>ProcessorContext</code> instance.
                     </li>
                     <li><code>FixedKeyProcessor</code>: A processor of key-value pair records where keys are immutable;</li>
                     <li><code>ContextualFixedKeyProcessor</code>: An abstract implementation of <code>FixedKeyProcessor</code> that
-                        manages the <code>FixedKeyProcessorContext</code> instance and provides default no-op implementation of
-                        <code>Processor#close</code>;
+                        manages the <code>FixedKeyProcessorContext</code> instance.
                     </li>
                     <li><code>ProcessorSupplier</code>: A processor supplier that can create one or more <code>Processor</code>
                         instances; and</li>
