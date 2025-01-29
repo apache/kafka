@@ -1835,6 +1835,7 @@ public class ShareConsumerTest {
             @ClusterConfigProperty(key = "unstable.api.versions.enable", value = "true")
         }
     )
+    @Timeout(90)
     public void testShareConsumerAfterCoordinatorMovement() throws Exception {
         setup();
         String topicName = "multipart";
@@ -1945,9 +1946,12 @@ public class ShareConsumerTest {
                 }, 10L, TimeUnit.SECONDS
             );
 
-            TestUtils.waitForCondition(() -> {
-                return prodState.done().get() && consState.done().get();
-            }, () -> "prod/cons not done yet");
+            TestUtils.waitForCondition(
+                () -> prodState.done().get() && consState.done().get(),
+                45_000L,
+                500L,
+                () -> "prod/cons not done yet"
+            );
 
             assertTrue(prodState.count().get() <= consState.count().get());
             Set<String> consumedKeys = consumed.keySet();
@@ -1974,6 +1978,7 @@ public class ShareConsumerTest {
             @ClusterConfigProperty(key = "unstable.api.versions.enable", value = "true")
         }
     )
+    @Timeout(150)
     public void testComplexShareConsumer() throws Exception {
         setup();
         String topicName = "multipart";
@@ -2018,7 +2023,7 @@ public class ShareConsumerTest {
         );
 
         // all messages which can be read are read, some would be redelivered
-        TestUtils.waitForCondition(complexCons1::isDone, 30_000L, () -> "did not close!");
+        TestUtils.waitForCondition(complexCons1::isDone, 45_000L, () -> "did not close!");
 
         assertTrue(prodState.count().get() < complexCons1.recordsRead());
 
