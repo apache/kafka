@@ -19,6 +19,7 @@ package org.apache.kafka.coordinator.common.runtime;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.CompoundStat;
 import org.apache.kafka.common.metrics.Metrics;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
