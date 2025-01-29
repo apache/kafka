@@ -910,13 +910,13 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             builder);
     }
 
-    static <KStream, VStream, RepartitionNode extends BaseRepartitionNode<KStream, VStream>> String createRepartitionedSource(
+    static <Key, Value, RepartitionNode extends BaseRepartitionNode<Key, Value>> String createRepartitionedSource(
         final InternalStreamsBuilder builder,
-        final Serde<KStream> keySerde,
-        final Serde<VStream> valueSerde,
+        final Serde<Key> keySerde,
+        final Serde<Value> valueSerde,
         final String repartitionTopicNamePrefix,
-        final StreamPartitioner<KStream, VStream> streamPartitioner,
-        final BaseRepartitionNodeBuilder<KStream, VStream, RepartitionNode> baseRepartitionNodeBuilder
+        final StreamPartitioner<Key, Value> streamPartitioner,
+        final BaseRepartitionNodeBuilder<Key, Value, RepartitionNode> baseRepartitionNodeBuilder
     ) {
         final String repartitionTopicName = repartitionTopicNamePrefix.endsWith(REPARTITION_TOPIC_SUFFIX) ?
             repartitionTopicNamePrefix :
@@ -941,7 +941,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             nullKeyFilterProcessorName = repartitionTopicName + "-filter";
         }
 
-        final ProcessorParameters<KStream, VStream, KStream, VStream> processorParameters = new ProcessorParameters<>(
+        final ProcessorParameters<Key, Value, Key, Value> processorParameters = new ProcessorParameters<>(
             new KStreamFilter<>((k, v) -> true, false),
             nullKeyFilterProcessorName
         );
@@ -1108,10 +1108,10 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         return globalTableJoin(globalTable, keySelector, joiner, true, named);
     }
 
-    private <KGlobalTable, VGlobalTable, VOut> KStream<K, VOut> globalTableJoin(
-        final GlobalKTable<KGlobalTable, VGlobalTable> globalTable,
-        final KeyValueMapper<? super K, ? super V, ? extends KGlobalTable> keySelector,
-        final ValueJoinerWithKey<? super K, ? super V, ? super VGlobalTable, ? extends VOut> joiner,
+    private <GlobalKey, GlobalValue, VOut> KStream<K, VOut> globalTableJoin(
+        final GlobalKTable<GlobalKey, GlobalValue> globalTable,
+        final KeyValueMapper<? super K, ? super V, ? extends GlobalKey> keySelector,
+        final ValueJoinerWithKey<? super K, ? super V, ? super GlobalValue, ? extends VOut> joiner,
         final boolean leftJoin,
         final Named named
     ) {
@@ -1120,8 +1120,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         Objects.requireNonNull(joiner, "joiner can't be null");
         Objects.requireNonNull(named, "named can't be null");
 
-        final KTableValueGetterSupplier<KGlobalTable, VGlobalTable> valueGetterSupplier =
-            ((GlobalKTableImpl<KGlobalTable, VGlobalTable>) globalTable).valueGetterSupplier();
+        final KTableValueGetterSupplier<GlobalKey, GlobalValue> valueGetterSupplier =
+            ((GlobalKTableImpl<GlobalKey, GlobalValue>) globalTable).valueGetterSupplier();
         final String name = new NamedInternal(named).orElseGenerateWithPrefix(builder, LEFTJOIN_NAME);
         final ProcessorSupplier<K, V, K, VOut> processorSupplier = new KStreamGlobalKTableJoin<>(
             valueGetterSupplier,
