@@ -91,6 +91,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
 
@@ -117,6 +118,8 @@ import scala.collection.Seq;
 import scala.jdk.javaapi.CollectionConverters;
 
 import static kafka.server.share.DelayedShareFetchTest.mockTopicIdPartitionToReturnDataEqualToMinBytes;
+import static org.apache.kafka.server.share.fetch.ShareFetchTestUtils.orderedMap;
+import static org.apache.kafka.server.share.fetch.ShareFetchTestUtils.validateRotatedMapEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -1048,14 +1051,7 @@ public class SharePartitionManagerTest {
         TopicIdPartition tp4 = new TopicIdPartition(fooId, new TopicPartition("foo", 2));
         TopicIdPartition tp5 = new TopicIdPartition(barId, new TopicPartition("bar", 2));
         TopicIdPartition tp6 = new TopicIdPartition(fooId, new TopicPartition("foo", 3));
-        Map<TopicIdPartition, Integer> partitionMaxBytes = new HashMap<>();
-        partitionMaxBytes.put(tp0, PARTITION_MAX_BYTES);
-        partitionMaxBytes.put(tp1, PARTITION_MAX_BYTES);
-        partitionMaxBytes.put(tp2, PARTITION_MAX_BYTES);
-        partitionMaxBytes.put(tp3, PARTITION_MAX_BYTES);
-        partitionMaxBytes.put(tp4, PARTITION_MAX_BYTES);
-        partitionMaxBytes.put(tp5, PARTITION_MAX_BYTES);
-        partitionMaxBytes.put(tp6, PARTITION_MAX_BYTES);
+        LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes = orderedMap(PARTITION_MAX_BYTES, tp0, tp1, tp2, tp3, tp4, tp5, tp6);
 
         mockFetchOffsetForTimestamp(mockReplicaManager);
 
@@ -1085,18 +1081,18 @@ public class SharePartitionManagerTest {
         doAnswer(invocation -> buildLogReadResult(partitionMaxBytes.keySet())).when(mockReplicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
 
         CompletableFuture<Map<TopicIdPartition, PartitionData>> future = sharePartitionManager.fetchMessages(
-            groupId, memberId1.toString(), FETCH_PARAMS, BATCH_SIZE, partitionMaxBytes);
+            groupId, memberId1.toString(), FETCH_PARAMS, 1, BATCH_SIZE, partitionMaxBytes);
         assertTrue(future.isDone());
         Mockito.verify(mockReplicaManager, times(1)).readFromLog(
             any(), any(), any(ReplicaQuota.class), anyBoolean());
 
-        future = sharePartitionManager.fetchMessages(groupId, memberId1.toString(), FETCH_PARAMS, BATCH_SIZE,
+        future = sharePartitionManager.fetchMessages(groupId, memberId1.toString(), FETCH_PARAMS, 3, BATCH_SIZE,
             partitionMaxBytes);
         assertTrue(future.isDone());
         Mockito.verify(mockReplicaManager, times(2)).readFromLog(
             any(), any(), any(ReplicaQuota.class), anyBoolean());
 
-        future = sharePartitionManager.fetchMessages(groupId, memberId1.toString(), FETCH_PARAMS, BATCH_SIZE,
+        future = sharePartitionManager.fetchMessages(groupId, memberId1.toString(), FETCH_PARAMS, 10, BATCH_SIZE,
             partitionMaxBytes);
         assertTrue(future.isDone());
         Mockito.verify(mockReplicaManager, times(3)).readFromLog(
@@ -1136,11 +1132,7 @@ public class SharePartitionManagerTest {
         TopicIdPartition tp1 = new TopicIdPartition(fooId, new TopicPartition("foo", 1));
         TopicIdPartition tp2 = new TopicIdPartition(barId, new TopicPartition("bar", 0));
         TopicIdPartition tp3 = new TopicIdPartition(barId, new TopicPartition("bar", 1));
-        Map<TopicIdPartition, Integer> partitionMaxBytes = new HashMap<>();
-        partitionMaxBytes.put(tp0, PARTITION_MAX_BYTES);
-        partitionMaxBytes.put(tp1, PARTITION_MAX_BYTES);
-        partitionMaxBytes.put(tp2, PARTITION_MAX_BYTES);
-        partitionMaxBytes.put(tp3, PARTITION_MAX_BYTES);
+        LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes = orderedMap(PARTITION_MAX_BYTES, tp0, tp1, tp2, tp3);
 
         final Time time = new MockTime(0, System.currentTimeMillis(), 0);
 
@@ -1211,7 +1203,7 @@ public class SharePartitionManagerTest {
         try {
             for (int i = 0; i != threadCount; ++i) {
                 executorService.submit(() -> {
-                    sharePartitionManager.fetchMessages(groupId, memberId1.toString(), FETCH_PARAMS,
+                    sharePartitionManager.fetchMessages(groupId, memberId1.toString(), FETCH_PARAMS, 0,
                         BATCH_SIZE, partitionMaxBytes);
                 });
                 // We are blocking the main thread at an interval of 10 threads so that the currently running executorService threads can complete.
@@ -1235,8 +1227,7 @@ public class SharePartitionManagerTest {
         Uuid memberId = Uuid.randomUuid();
         Uuid fooId = Uuid.randomUuid();
         TopicIdPartition tp0 = new TopicIdPartition(fooId, new TopicPartition("foo", 0));
-        Map<TopicIdPartition, Integer> partitionMaxBytes = new HashMap<>();
-        partitionMaxBytes.put(tp0, PARTITION_MAX_BYTES);
+        LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes = orderedMap(PARTITION_MAX_BYTES, tp0);
 
         SharePartition sp0 = mock(SharePartition.class);
         when(sp0.maybeAcquireFetchLock()).thenReturn(true);
@@ -1258,7 +1249,7 @@ public class SharePartitionManagerTest {
             .build();
 
         CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future =
-            sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS,
+            sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS, 0,
                 BATCH_SIZE, partitionMaxBytes);
         Mockito.verify(mockReplicaManager, times(0)).readFromLog(
             any(), any(), any(ReplicaQuota.class), anyBoolean());
@@ -1279,7 +1270,7 @@ public class SharePartitionManagerTest {
         Uuid memberId = Uuid.randomUuid();
         Uuid fooId = Uuid.randomUuid();
         TopicIdPartition tp0 = new TopicIdPartition(fooId, new TopicPartition("foo", 0));
-        Map<TopicIdPartition, Integer> partitionMaxBytes = Collections.singletonMap(tp0, PARTITION_MAX_BYTES);
+        LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes = orderedMap(PARTITION_MAX_BYTES, tp0);
 
         mockFetchOffsetForTimestamp(mockReplicaManager);
 
@@ -1297,7 +1288,7 @@ public class SharePartitionManagerTest {
 
         doAnswer(invocation -> buildLogReadResult(partitionMaxBytes.keySet())).when(mockReplicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
 
-        sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS, BATCH_SIZE,
+        sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS, 0, BATCH_SIZE,
             partitionMaxBytes);
         // Since the nextFetchOffset does not point to endOffset + 1, i.e. some of the records in the cachedState are AVAILABLE,
         // even though the maxInFlightMessages limit is exceeded, replicaManager.readFromLog should be called
@@ -1738,9 +1729,7 @@ public class SharePartitionManagerTest {
         TopicIdPartition tp1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo1", 0));
         TopicIdPartition tp2 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo2", 0));
 
-        Map<TopicIdPartition, Integer> partitionMaxBytes = new HashMap<>();
-        partitionMaxBytes.put(tp1, PARTITION_MAX_BYTES);
-        partitionMaxBytes.put(tp2, PARTITION_MAX_BYTES);
+        LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes = orderedMap(PARTITION_MAX_BYTES, tp1, tp2);
 
         SharePartition sp1 = mock(SharePartition.class);
         SharePartition sp2 = mock(SharePartition.class);
@@ -1843,9 +1832,7 @@ public class SharePartitionManagerTest {
         TopicIdPartition tp2 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo2", 0));
         TopicIdPartition tp3 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo3", 0));
 
-        Map<TopicIdPartition, Integer> partitionMaxBytes = new HashMap<>();
-        partitionMaxBytes.put(tp1, PARTITION_MAX_BYTES);
-        partitionMaxBytes.put(tp2, PARTITION_MAX_BYTES);
+        LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes = orderedMap(PARTITION_MAX_BYTES, tp1, tp2);
 
         SharePartition sp1 = mock(SharePartition.class);
         SharePartition sp2 = mock(SharePartition.class);
@@ -1950,9 +1937,7 @@ public class SharePartitionManagerTest {
         TopicIdPartition tp2 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo2", 0));
         TopicIdPartition tp3 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo3", 0));
 
-        Map<TopicIdPartition, Integer> partitionMaxBytes = new HashMap<>();
-        partitionMaxBytes.put(tp1, PARTITION_MAX_BYTES);
-        partitionMaxBytes.put(tp2, PARTITION_MAX_BYTES);
+        LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes = orderedMap(PARTITION_MAX_BYTES, tp1, tp2);
 
         SharePartition sp1 = mock(SharePartition.class);
         SharePartition sp2 = mock(SharePartition.class);
@@ -2053,9 +2038,7 @@ public class SharePartitionManagerTest {
         TopicIdPartition tp2 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo2", 0));
         TopicIdPartition tp3 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo3", 0));
 
-        Map<TopicIdPartition, Integer> partitionMaxBytes = new HashMap<>();
-        partitionMaxBytes.put(tp1, PARTITION_MAX_BYTES);
-        partitionMaxBytes.put(tp2, PARTITION_MAX_BYTES);
+        LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes = orderedMap(PARTITION_MAX_BYTES, tp1, tp2);
 
         SharePartition sp1 = mock(SharePartition.class);
         SharePartition sp2 = mock(SharePartition.class);
@@ -2156,7 +2139,7 @@ public class SharePartitionManagerTest {
         Uuid memberId = Uuid.randomUuid();
         Uuid fooId = Uuid.randomUuid();
         TopicIdPartition tp0 = new TopicIdPartition(fooId, new TopicPartition("foo", 0));
-        Map<TopicIdPartition, Integer> partitionMaxBytes = Collections.singletonMap(tp0, PARTITION_MAX_BYTES);
+        LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes = orderedMap(PARTITION_MAX_BYTES, tp0);
 
         SharePartition sp0 = mock(SharePartition.class);
         Map<SharePartitionKey, SharePartition> partitionCacheMap = new HashMap<>();
@@ -2179,7 +2162,7 @@ public class SharePartitionManagerTest {
             .build();
 
         CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future =
-            sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS,
+            sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS, 0,
                 BATCH_SIZE, partitionMaxBytes);
         // Verify that the fetch request is completed.
         TestUtils.waitForCondition(
@@ -2208,7 +2191,7 @@ public class SharePartitionManagerTest {
         Uuid memberId = Uuid.randomUuid();
         Uuid fooId = Uuid.randomUuid();
         TopicIdPartition tp0 = new TopicIdPartition(fooId, new TopicPartition("foo", 0));
-        Map<TopicIdPartition, Integer> partitionMaxBytes = Collections.singletonMap(tp0, PARTITION_MAX_BYTES);
+        LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes = orderedMap(PARTITION_MAX_BYTES, tp0);
 
         SharePartition sp0 = mock(SharePartition.class);
         Map<SharePartitionKey, SharePartition> partitionCacheMap = new HashMap<>();
@@ -2236,15 +2219,15 @@ public class SharePartitionManagerTest {
 
         // Send 3 requests for share fetch for same share partition.
         CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future1 =
-            sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS,
+            sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS, 0,
                 BATCH_SIZE, partitionMaxBytes);
 
         CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future2 =
-            sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS,
+            sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS, 0,
                 BATCH_SIZE, partitionMaxBytes);
 
         CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future3 =
-            sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS,
+            sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS, 0,
                 BATCH_SIZE, partitionMaxBytes);
 
         Mockito.verify(sp0, times(3)).maybeInitialize();
@@ -2281,7 +2264,7 @@ public class SharePartitionManagerTest {
         Uuid memberId = Uuid.randomUuid();
         Uuid fooId = Uuid.randomUuid();
         TopicIdPartition tp0 = new TopicIdPartition(fooId, new TopicPartition("foo", 0));
-        Map<TopicIdPartition, Integer> partitionMaxBytes = Collections.singletonMap(tp0, PARTITION_MAX_BYTES);
+        LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes = orderedMap(PARTITION_MAX_BYTES, tp0);
 
         SharePartition sp0 = mock(SharePartition.class);
         Map<SharePartitionKey, SharePartition> partitionCacheMap = new HashMap<>();
@@ -2302,7 +2285,7 @@ public class SharePartitionManagerTest {
         // Return LeaderNotAvailableException to simulate initialization failure.
         when(sp0.maybeInitialize()).thenReturn(FutureUtils.failedFuture(new LeaderNotAvailableException("Leader not available")));
         CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future =
-            sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS,
+            sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS, 0,
                 BATCH_SIZE, partitionMaxBytes);
         TestUtils.waitForCondition(
             future::isDone,
@@ -2318,7 +2301,7 @@ public class SharePartitionManagerTest {
 
         // Return IllegalStateException to simulate initialization failure.
         when(sp0.maybeInitialize()).thenReturn(FutureUtils.failedFuture(new IllegalStateException("Illegal state")));
-        future = sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS,
+        future = sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS, 0,
             BATCH_SIZE, partitionMaxBytes);
         TestUtils.waitForCondition(
             future::isDone,
@@ -2332,7 +2315,7 @@ public class SharePartitionManagerTest {
         partitionCacheMap.put(new SharePartitionKey(groupId, tp0), sp0);
         // Return CoordinatorNotAvailableException to simulate initialization failure.
         when(sp0.maybeInitialize()).thenReturn(FutureUtils.failedFuture(new CoordinatorNotAvailableException("Coordinator not available")));
-        future = sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS,
+        future = sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS, 0,
             BATCH_SIZE, partitionMaxBytes);
         TestUtils.waitForCondition(
             future::isDone,
@@ -2346,7 +2329,7 @@ public class SharePartitionManagerTest {
         partitionCacheMap.put(new SharePartitionKey(groupId, tp0), sp0);
         // Return InvalidRequestException to simulate initialization failure.
         when(sp0.maybeInitialize()).thenReturn(FutureUtils.failedFuture(new InvalidRequestException("Invalid request")));
-        future = sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS,
+        future = sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS, 0,
             BATCH_SIZE, partitionMaxBytes);
         TestUtils.waitForCondition(
             future::isDone,
@@ -2360,7 +2343,7 @@ public class SharePartitionManagerTest {
         partitionCacheMap.put(new SharePartitionKey(groupId, tp0), sp0);
         // Return FencedStateEpochException to simulate initialization failure.
         when(sp0.maybeInitialize()).thenReturn(FutureUtils.failedFuture(new FencedStateEpochException("Fenced state epoch")));
-        future = sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS,
+        future = sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS, 0,
             BATCH_SIZE, partitionMaxBytes);
         TestUtils.waitForCondition(
             future::isDone,
@@ -2374,7 +2357,7 @@ public class SharePartitionManagerTest {
         partitionCacheMap.put(new SharePartitionKey(groupId, tp0), sp0);
         // Return NotLeaderOrFollowerException to simulate initialization failure.
         when(sp0.maybeInitialize()).thenReturn(FutureUtils.failedFuture(new NotLeaderOrFollowerException("Not leader or follower")));
-        future = sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS,
+        future = sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS, 0,
             BATCH_SIZE, partitionMaxBytes);
         TestUtils.waitForCondition(
             future::isDone,
@@ -2388,7 +2371,7 @@ public class SharePartitionManagerTest {
         partitionCacheMap.put(new SharePartitionKey(groupId, tp0), sp0);
         // Return RuntimeException to simulate initialization failure.
         when(sp0.maybeInitialize()).thenReturn(FutureUtils.failedFuture(new RuntimeException("Runtime exception")));
-        future = sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS,
+        future = sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS, 0,
             BATCH_SIZE, partitionMaxBytes);
         TestUtils.waitForCondition(
             future::isDone,
@@ -2406,13 +2389,12 @@ public class SharePartitionManagerTest {
         );
     }
 
-
     @Test
     @SuppressWarnings("unchecked")
     public void testShareFetchProcessingExceptions() throws Exception {
         String groupId = "grp";
         TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
-        Map<TopicIdPartition, Integer> partitionMaxBytes = Collections.singletonMap(tp0, PARTITION_MAX_BYTES);
+        LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes = orderedMap(PARTITION_MAX_BYTES, tp0);
 
         Map<SharePartitionKey, SharePartition> partitionCacheMap = (Map<SharePartitionKey, SharePartition>) mock(Map.class);
         // Throw the exception for first fetch request. Return share partition for next.
@@ -2425,7 +2407,7 @@ public class SharePartitionManagerTest {
             .build();
 
         CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future =
-            sharePartitionManager.fetchMessages(groupId, Uuid.randomUuid().toString(), FETCH_PARAMS,
+            sharePartitionManager.fetchMessages(groupId, Uuid.randomUuid().toString(), FETCH_PARAMS, 0,
                 BATCH_SIZE, partitionMaxBytes);
         TestUtils.waitForCondition(
             future::isDone,
@@ -2444,7 +2426,7 @@ public class SharePartitionManagerTest {
     public void testSharePartitionInitializationFailure() throws Exception {
         String groupId = "grp";
         TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
-        Map<TopicIdPartition, Integer> partitionMaxBytes = Collections.singletonMap(tp0, PARTITION_MAX_BYTES);
+        LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes = orderedMap(PARTITION_MAX_BYTES, tp0);
 
         // Send map to check no share partition is created.
         Map<SharePartitionKey, SharePartition> partitionCacheMap = new HashMap<>();
@@ -2466,7 +2448,7 @@ public class SharePartitionManagerTest {
 
         // Validate when exception is thrown.
         CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future =
-            sharePartitionManager.fetchMessages(groupId, Uuid.randomUuid().toString(), FETCH_PARAMS,
+            sharePartitionManager.fetchMessages(groupId, Uuid.randomUuid().toString(), FETCH_PARAMS, 0,
                 BATCH_SIZE, partitionMaxBytes);
         TestUtils.waitForCondition(
             future::isDone,
@@ -2476,7 +2458,7 @@ public class SharePartitionManagerTest {
         assertTrue(partitionCacheMap.isEmpty());
 
         // Validate when partition is not leader.
-        future = sharePartitionManager.fetchMessages(groupId, Uuid.randomUuid().toString(), FETCH_PARAMS,
+        future = sharePartitionManager.fetchMessages(groupId, Uuid.randomUuid().toString(), FETCH_PARAMS, 0,
             BATCH_SIZE, partitionMaxBytes);
         TestUtils.waitForCondition(
             future::isDone,
@@ -2502,10 +2484,7 @@ public class SharePartitionManagerTest {
         TopicIdPartition tp1 = new TopicIdPartition(memberId1, new TopicPartition("foo", 1));
         // For tp2, share partition initialization will fail.
         TopicIdPartition tp2 = new TopicIdPartition(memberId1, new TopicPartition("foo", 2));
-        Map<TopicIdPartition, Integer> partitionMaxBytes = Map.of(
-            tp0, PARTITION_MAX_BYTES,
-            tp1, PARTITION_MAX_BYTES,
-            tp2, PARTITION_MAX_BYTES);
+        LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes = orderedMap(PARTITION_MAX_BYTES, tp0, tp1, tp2);
 
         // Mark partition0 as not the leader.
         Partition partition0 = mock(Partition.class);
@@ -2546,7 +2525,7 @@ public class SharePartitionManagerTest {
 
         // Validate when exception is thrown.
         CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future =
-            sharePartitionManager.fetchMessages(groupId, Uuid.randomUuid().toString(), FETCH_PARAMS,
+            sharePartitionManager.fetchMessages(groupId, Uuid.randomUuid().toString(), FETCH_PARAMS, 0,
                 BATCH_SIZE, partitionMaxBytes);
         assertTrue(future.isDone());
         assertFalse(future.isCompletedExceptionally());
@@ -2578,7 +2557,7 @@ public class SharePartitionManagerTest {
         String groupId = "grp";
         Uuid memberId = Uuid.randomUuid();
         TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
-        Map<TopicIdPartition, Integer> partitionMaxBytes = Collections.singletonMap(tp0, PARTITION_MAX_BYTES);
+        LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes = orderedMap(PARTITION_MAX_BYTES, tp0);
 
         SharePartition sp0 = mock(SharePartition.class);
         when(sp0.maybeAcquireFetchLock()).thenReturn(true);
@@ -2602,7 +2581,7 @@ public class SharePartitionManagerTest {
             .build();
 
         CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future =
-            sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS,
+            sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS, 0,
                 BATCH_SIZE, partitionMaxBytes);
         validateShareFetchFutureException(future, tp0, Errors.UNKNOWN_SERVER_ERROR, "Exception");
         // Verify that the share partition is still in the cache on exception.
@@ -2611,7 +2590,7 @@ public class SharePartitionManagerTest {
         // Throw NotLeaderOrFollowerException from replica manager fetch which should evict instance from the cache.
         doThrow(new NotLeaderOrFollowerException("Leader exception")).when(mockReplicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
 
-        future = sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS,
+        future = sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS, 0,
             BATCH_SIZE, partitionMaxBytes);
         validateShareFetchFutureException(future, tp0, Errors.NOT_LEADER_OR_FOLLOWER, "Leader exception");
         assertTrue(partitionCacheMap.isEmpty());
@@ -2630,9 +2609,7 @@ public class SharePartitionManagerTest {
 
         TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
         TopicIdPartition tp1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("bar", 0));
-        Map<TopicIdPartition, Integer> partitionMaxBytes = new HashMap<>();
-        partitionMaxBytes.put(tp0, PARTITION_MAX_BYTES);
-        partitionMaxBytes.put(tp1, PARTITION_MAX_BYTES);
+        LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes = orderedMap(PARTITION_MAX_BYTES, tp0, tp1);
 
         SharePartition sp0 = mock(SharePartition.class);
         when(sp0.maybeAcquireFetchLock()).thenReturn(true);
@@ -2665,7 +2642,7 @@ public class SharePartitionManagerTest {
             .build();
 
         CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future =
-            sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS,
+            sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS, 0,
                 BATCH_SIZE, partitionMaxBytes);
         validateShareFetchFutureException(future, tp0, Errors.FENCED_STATE_EPOCH, "Fenced exception");
         // Verify that tp1 is still in the cache on exception.
@@ -2680,7 +2657,7 @@ public class SharePartitionManagerTest {
         // Throw FencedStateEpochException from replica manager fetch which should evict instance from the cache.
         doThrow(new FencedStateEpochException("Fenced exception again")).when(mockReplicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
 
-        future = sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS,
+        future = sharePartitionManager.fetchMessages(groupId, memberId.toString(), FETCH_PARAMS, 0,
             BATCH_SIZE, partitionMaxBytes);
         validateShareFetchFutureException(future, List.of(tp0, tp1), Errors.FENCED_STATE_EPOCH, "Fenced exception again");
         assertTrue(partitionCacheMap.isEmpty());
@@ -2701,9 +2678,7 @@ public class SharePartitionManagerTest {
 
         TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
         TopicIdPartition tp1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("bar", 0));
-        Map<TopicIdPartition, Integer> partitionMaxBytes = new HashMap<>();
-        partitionMaxBytes.put(tp0, PARTITION_MAX_BYTES);
-        partitionMaxBytes.put(tp1, PARTITION_MAX_BYTES);
+        LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes = orderedMap(PARTITION_MAX_BYTES, tp0, tp1);
 
         ReplicaManager mockReplicaManager = mock(ReplicaManager.class);
         Partition partition = mockPartition();
@@ -2716,7 +2691,7 @@ public class SharePartitionManagerTest {
             .build();
 
         CompletableFuture<Map<TopicIdPartition, PartitionData>> future = sharePartitionManager.fetchMessages(
-            groupId, memberId.toString(), FETCH_PARAMS, BATCH_SIZE, partitionMaxBytes);
+            groupId, memberId.toString(), FETCH_PARAMS, 0, BATCH_SIZE, partitionMaxBytes);
         assertTrue(future.isDone());
         // Validate that the listener is registered.
         verify(mockReplicaManager, times(2)).maybeAddListener(any(), any());
@@ -2760,6 +2735,63 @@ public class SharePartitionManagerTest {
 
         SharePartitionListener partitionListener = new SharePartitionListener(sharePartitionKey, mockReplicaManager, partitionCacheMap);
         testSharePartitionListener(sharePartitionKey, partitionCacheMap, mockReplicaManager, partitionListener::onBecomingFollower);
+    }
+
+    @Test
+    public void testFetchMessagesRotatePartitions() {
+        String groupId = "grp";
+        Uuid memberId1 = Uuid.randomUuid();
+        TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
+        TopicIdPartition tp1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 1));
+        TopicIdPartition tp2 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("bar", 0));
+        TopicIdPartition tp3 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("bar", 1));
+        TopicIdPartition tp4 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 2));
+        TopicIdPartition tp5 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("bar", 2));
+        TopicIdPartition tp6 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 3));
+        LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes = orderedMap(PARTITION_MAX_BYTES,
+            tp0, tp1, tp2, tp3, tp4, tp5, tp6);
+
+        SharePartitionManager sharePartitionManager = Mockito.spy(SharePartitionManagerBuilder.builder().withBrokerTopicStats(brokerTopicStats).build());
+        // Capture the arguments passed to processShareFetch.
+        ArgumentCaptor<ShareFetch> captor = ArgumentCaptor.forClass(ShareFetch.class);
+
+        sharePartitionManager.fetchMessages(groupId, memberId1.toString(), FETCH_PARAMS, 0, BATCH_SIZE,
+            partitionMaxBytes);
+        verify(sharePartitionManager, times(1)).processShareFetch(captor.capture());
+        // Verify the partitions rotation, no rotation.
+        ShareFetch resultShareFetch = captor.getValue();
+        validateRotatedMapEquals(resultShareFetch.partitionMaxBytes(), partitionMaxBytes, 0);
+
+        // Single rotation.
+        sharePartitionManager.fetchMessages(groupId, memberId1.toString(), FETCH_PARAMS, 1, BATCH_SIZE,
+            partitionMaxBytes);
+        verify(sharePartitionManager, times(2)).processShareFetch(captor.capture());
+        // Verify the partitions rotation, rotate by 1.
+        resultShareFetch = captor.getValue();
+        validateRotatedMapEquals(partitionMaxBytes, resultShareFetch.partitionMaxBytes(), 1);
+
+        // Rotation by 3, less that the number of partitions.
+        sharePartitionManager.fetchMessages(groupId, memberId1.toString(), FETCH_PARAMS, 3, BATCH_SIZE,
+            partitionMaxBytes);
+        verify(sharePartitionManager, times(3)).processShareFetch(captor.capture());
+        // Verify the partitions rotation, rotate by 3.
+        resultShareFetch = captor.getValue();
+        validateRotatedMapEquals(partitionMaxBytes, resultShareFetch.partitionMaxBytes(), 3);
+
+        // Rotation by 12, more than the number of partitions.
+        sharePartitionManager.fetchMessages(groupId, memberId1.toString(), FETCH_PARAMS, 12, BATCH_SIZE,
+            partitionMaxBytes);
+        verify(sharePartitionManager, times(4)).processShareFetch(captor.capture());
+        // Verify the partitions rotation, rotate by 5 (12 % 7).
+        resultShareFetch = captor.getValue();
+        validateRotatedMapEquals(partitionMaxBytes, resultShareFetch.partitionMaxBytes(), 5);
+        // Rotation by Integer.MAX_VALUE, boundary test.
+        sharePartitionManager.fetchMessages(groupId, memberId1.toString(), FETCH_PARAMS, Integer.MAX_VALUE, BATCH_SIZE,
+            partitionMaxBytes);
+        verify(sharePartitionManager, times(5)).processShareFetch(captor.capture());
+        // Verify the partitions rotation, rotate by 1 (2147483647 % 7).
+        resultShareFetch = captor.getValue();
+        validateRotatedMapEquals(partitionMaxBytes, resultShareFetch.partitionMaxBytes(), 1);
     }
 
     private void testSharePartitionListener(

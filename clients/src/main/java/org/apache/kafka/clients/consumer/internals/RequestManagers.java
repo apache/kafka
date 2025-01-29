@@ -303,7 +303,7 @@ public class RequestManagers implements Closeable {
                         null,
                         subscriptions,
                         metadata,
-                    time,
+                        time,
                         metrics);
 
                 // Update the group member ID label in the client telemetry reporter.

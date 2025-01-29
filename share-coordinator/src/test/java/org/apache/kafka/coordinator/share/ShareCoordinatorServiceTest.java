@@ -23,6 +23,8 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
 import org.apache.kafka.common.internals.Topic;
+import org.apache.kafka.common.message.DeleteShareGroupStateRequestData;
+import org.apache.kafka.common.message.DeleteShareGroupStateResponseData;
 import org.apache.kafka.common.message.ReadShareGroupStateRequestData;
 import org.apache.kafka.common.message.ReadShareGroupStateResponseData;
 import org.apache.kafka.common.message.ReadShareGroupStateSummaryRequestData;
@@ -49,7 +51,6 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -79,7 +80,7 @@ class ShareCoordinatorServiceTest {
     private CoordinatorRuntime<ShareCoordinatorShard, CoordinatorRecord> mockRuntime() {
         CoordinatorRuntime<ShareCoordinatorShard, CoordinatorRecord> runtime = mock(CoordinatorRuntime.class);
         when(runtime.activeTopicPartitions())
-            .thenReturn(Collections.singletonList(new TopicPartition(Topic.SHARE_GROUP_STATE_TOPIC_NAME, 0)));
+            .thenReturn(List.of(new TopicPartition(Topic.SHARE_GROUP_STATE_TOPIC_NAME, 0)));
         return runtime;
     }
 
@@ -133,13 +134,13 @@ class ShareCoordinatorServiceTest {
             .setTopics(Arrays.asList(
                     new WriteShareGroupStateRequestData.WriteStateData()
                         .setTopicId(topicId1)
-                        .setPartitions(Collections.singletonList(
+                        .setPartitions(List.of(
                             new WriteShareGroupStateRequestData.PartitionData()
                                 .setPartition(partition1)
                                 .setStartOffset(0)
                                 .setStateEpoch(1)
                                 .setLeaderEpoch(1)
-                                .setStateBatches(Collections.singletonList(new WriteShareGroupStateRequestData.StateBatch()
+                                .setStateBatches(List.of(new WriteShareGroupStateRequestData.StateBatch()
                                     .setFirstOffset(0)
                                     .setLastOffset(10)
                                     .setDeliveryCount((short) 1)
@@ -148,13 +149,13 @@ class ShareCoordinatorServiceTest {
                         )),
                     new WriteShareGroupStateRequestData.WriteStateData()
                         .setTopicId(topicId2)
-                        .setPartitions(Collections.singletonList(
+                        .setPartitions(List.of(
                             new WriteShareGroupStateRequestData.PartitionData()
                                 .setPartition(partition2)
                                 .setStartOffset(0)
                                 .setStateEpoch(1)
                                 .setLeaderEpoch(1)
-                                .setStateBatches(Collections.singletonList(new WriteShareGroupStateRequestData.StateBatch()
+                                .setStateBatches(List.of(new WriteShareGroupStateRequestData.StateBatch()
                                     .setFirstOffset(0)
                                     .setLastOffset(10)
                                     .setDeliveryCount((short) 1)
@@ -165,18 +166,18 @@ class ShareCoordinatorServiceTest {
             );
 
         WriteShareGroupStateResponseData response1 = new WriteShareGroupStateResponseData()
-            .setResults(Collections.singletonList(
+            .setResults(List.of(
                 new WriteShareGroupStateResponseData.WriteStateResult()
                     .setTopicId(topicId1)
-                    .setPartitions(Collections.singletonList(new WriteShareGroupStateResponseData.PartitionResult()
+                    .setPartitions(List.of(new WriteShareGroupStateResponseData.PartitionResult()
                         .setPartition(partition1)))
             ));
 
         WriteShareGroupStateResponseData response2 = new WriteShareGroupStateResponseData()
-            .setResults(Collections.singletonList(
+            .setResults(List.of(
                 new WriteShareGroupStateResponseData.WriteStateResult()
                     .setTopicId(topicId2)
-                    .setPartitions(Collections.singletonList(new WriteShareGroupStateResponseData.PartitionResult()
+                    .setPartitions(List.of(new WriteShareGroupStateResponseData.PartitionResult()
                         .setPartition(partition2)))
             ));
 
@@ -199,11 +200,11 @@ class ShareCoordinatorServiceTest {
         HashSet<WriteShareGroupStateResponseData.WriteStateResult> expectedResult = new HashSet<>(Arrays.asList(
             new WriteShareGroupStateResponseData.WriteStateResult()
                 .setTopicId(topicId2)
-                .setPartitions(Collections.singletonList(new WriteShareGroupStateResponseData.PartitionResult()
+                .setPartitions(List.of(new WriteShareGroupStateResponseData.PartitionResult()
                     .setPartition(partition2))),
             new WriteShareGroupStateResponseData.WriteStateResult()
                 .setTopicId(topicId1)
-                .setPartitions(Collections.singletonList(new WriteShareGroupStateResponseData.PartitionResult()
+                .setPartitions(List.of(new WriteShareGroupStateResponseData.PartitionResult()
                     .setPartition(partition1)))));
         assertEquals(expectedResult, result);
         verify(time, times(2)).hiResClockMs();
@@ -243,14 +244,14 @@ class ShareCoordinatorServiceTest {
             .setTopics(Arrays.asList(
                     new ReadShareGroupStateRequestData.ReadStateData()
                         .setTopicId(topicId1)
-                        .setPartitions(Collections.singletonList(
+                        .setPartitions(List.of(
                             new ReadShareGroupStateRequestData.PartitionData()
                                 .setPartition(partition1)
                                 .setLeaderEpoch(1)
                         )),
                     new ReadShareGroupStateRequestData.ReadStateData()
                         .setTopicId(topicId2)
-                        .setPartitions(Collections.singletonList(
+                        .setPartitions(List.of(
                             new ReadShareGroupStateRequestData.PartitionData()
                                 .setPartition(partition2)
                                 .setLeaderEpoch(1)
@@ -260,12 +261,12 @@ class ShareCoordinatorServiceTest {
 
         ReadShareGroupStateResponseData.ReadStateResult topicData1 = new ReadShareGroupStateResponseData.ReadStateResult()
             .setTopicId(topicId1)
-            .setPartitions(Collections.singletonList(new ReadShareGroupStateResponseData.PartitionResult()
+            .setPartitions(List.of(new ReadShareGroupStateResponseData.PartitionResult()
                 .setPartition(partition1)
                 .setErrorCode(Errors.NONE.code())
                 .setStateEpoch(1)
                 .setStartOffset(0)
-                .setStateBatches(Collections.singletonList(new ReadShareGroupStateResponseData.StateBatch()
+                .setStateBatches(List.of(new ReadShareGroupStateResponseData.StateBatch()
                     .setFirstOffset(0)
                     .setLastOffset(10)
                     .setDeliveryCount((short) 1)
@@ -275,7 +276,7 @@ class ShareCoordinatorServiceTest {
 
         ReadShareGroupStateResponseData.ReadStateResult topicData2 = new ReadShareGroupStateResponseData.ReadStateResult()
             .setTopicId(topicId2)
-            .setPartitions(Collections.singletonList(new ReadShareGroupStateResponseData.PartitionResult()
+            .setPartitions(List.of(new ReadShareGroupStateResponseData.PartitionResult()
                 .setPartition(partition2)
                 .setErrorCode(Errors.NONE.code())
                 .setStateEpoch(1)
@@ -301,9 +302,9 @@ class ShareCoordinatorServiceTest {
             any()
         ))
             .thenReturn(CompletableFuture.completedFuture(new ReadShareGroupStateResponseData()
-                .setResults(Collections.singletonList(topicData1))))
+                .setResults(List.of(topicData1))))
             .thenReturn(CompletableFuture.completedFuture(new ReadShareGroupStateResponseData()
-                .setResults(Collections.singletonList(topicData2))));
+                .setResults(List.of(topicData2))));
 
         CompletableFuture<ReadShareGroupStateResponseData> future = service.readState(
             requestContext(ApiKeys.READ_SHARE_GROUP_STATE),
@@ -345,14 +346,14 @@ class ShareCoordinatorServiceTest {
             .setTopics(Arrays.asList(
                     new ReadShareGroupStateSummaryRequestData.ReadStateSummaryData()
                         .setTopicId(topicId1)
-                        .setPartitions(Collections.singletonList(
+                        .setPartitions(List.of(
                             new ReadShareGroupStateSummaryRequestData.PartitionData()
                                 .setPartition(partition1)
                                 .setLeaderEpoch(1)
                         )),
                     new ReadShareGroupStateSummaryRequestData.ReadStateSummaryData()
                         .setTopicId(topicId2)
-                        .setPartitions(Collections.singletonList(
+                        .setPartitions(List.of(
                             new ReadShareGroupStateSummaryRequestData.PartitionData()
                                 .setPartition(partition2)
                                 .setLeaderEpoch(1)
@@ -362,7 +363,7 @@ class ShareCoordinatorServiceTest {
 
         ReadShareGroupStateSummaryResponseData.ReadStateSummaryResult topicData1 = new ReadShareGroupStateSummaryResponseData.ReadStateSummaryResult()
             .setTopicId(topicId1)
-            .setPartitions(Collections.singletonList(new ReadShareGroupStateSummaryResponseData.PartitionResult()
+            .setPartitions(List.of(new ReadShareGroupStateSummaryResponseData.PartitionResult()
                 .setPartition(partition1)
                 .setErrorCode(Errors.NONE.code())
                 .setStateEpoch(1)
@@ -371,7 +372,7 @@ class ShareCoordinatorServiceTest {
 
         ReadShareGroupStateSummaryResponseData.ReadStateSummaryResult topicData2 = new ReadShareGroupStateSummaryResponseData.ReadStateSummaryResult()
             .setTopicId(topicId2)
-            .setPartitions(Collections.singletonList(new ReadShareGroupStateSummaryResponseData.PartitionResult()
+            .setPartitions(List.of(new ReadShareGroupStateSummaryResponseData.PartitionResult()
                 .setPartition(partition2)
                 .setErrorCode(Errors.NONE.code())
                 .setStateEpoch(1)
@@ -385,9 +386,9 @@ class ShareCoordinatorServiceTest {
             any()
         ))
             .thenReturn(CompletableFuture.completedFuture(new ReadShareGroupStateSummaryResponseData()
-                .setResults(Collections.singletonList(topicData1))))
+                .setResults(List.of(topicData1))))
             .thenReturn(CompletableFuture.completedFuture(new ReadShareGroupStateSummaryResponseData()
-                .setResults(Collections.singletonList(topicData2))));
+                .setResults(List.of(topicData2))));
 
         CompletableFuture<ReadShareGroupStateSummaryResponseData> future = service.readStateSummary(
             requestContext(ApiKeys.READ_SHARE_GROUP_STATE_SUMMARY),
@@ -399,6 +400,93 @@ class ShareCoordinatorServiceTest {
         HashSet<ReadShareGroupStateSummaryResponseData.ReadStateSummaryResult> expectedResult = new HashSet<>(Arrays.asList(
             topicData1,
             topicData2));
+        assertEquals(expectedResult, result);
+    }
+
+    @Test
+    public void testDeleteStateSuccess() throws ExecutionException, InterruptedException, TimeoutException {
+        CoordinatorRuntime<ShareCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        Metrics metrics = new Metrics();
+        ShareCoordinatorMetrics coordinatorMetrics = new ShareCoordinatorMetrics(metrics);
+        Time time = mock(Time.class);
+        ShareCoordinatorService service = new ShareCoordinatorService(
+            new LogContext(),
+            ShareCoordinatorTestConfig.testConfig(),
+            runtime,
+            coordinatorMetrics,
+            time,
+            mock(Timer.class),
+            mock(PartitionWriter.class)
+        );
+
+        service.startup(() -> 1);
+
+        String groupId = "group1";
+        Uuid topicId1 = Uuid.randomUuid();
+        int partition1 = 0;
+
+        Uuid topicId2 = Uuid.randomUuid();
+        int partition2 = 1;
+
+        DeleteShareGroupStateRequestData request = new DeleteShareGroupStateRequestData()
+            .setGroupId(groupId)
+            .setTopics(Arrays.asList(
+                    new DeleteShareGroupStateRequestData.DeleteStateData()
+                        .setTopicId(topicId1)
+                        .setPartitions(List.of(
+                            new DeleteShareGroupStateRequestData.PartitionData()
+                                .setPartition(partition1)
+                        )),
+                    new DeleteShareGroupStateRequestData.DeleteStateData()
+                        .setTopicId(topicId2)
+                        .setPartitions(List.of(
+                            new DeleteShareGroupStateRequestData.PartitionData()
+                                .setPartition(partition2)
+                        ))
+                )
+            );
+
+        DeleteShareGroupStateResponseData response1 = new DeleteShareGroupStateResponseData()
+            .setResults(List.of(
+                new DeleteShareGroupStateResponseData.DeleteStateResult()
+                    .setTopicId(topicId1)
+                    .setPartitions(List.of(new DeleteShareGroupStateResponseData.PartitionResult()
+                        .setPartition(partition1)))
+            ));
+
+        DeleteShareGroupStateResponseData response2 = new DeleteShareGroupStateResponseData()
+            .setResults(List.of(
+                new DeleteShareGroupStateResponseData.DeleteStateResult()
+                    .setTopicId(topicId2)
+                    .setPartitions(List.of(new DeleteShareGroupStateResponseData.PartitionResult()
+                        .setPartition(partition2)))
+            ));
+
+        when(runtime.scheduleWriteOperation(
+            eq("delete-share-group-state"),
+            eq(new TopicPartition(Topic.SHARE_GROUP_STATE_TOPIC_NAME, 0)),
+            eq(Duration.ofMillis(5000)),
+            any()
+        ))
+            .thenReturn(CompletableFuture.completedFuture(response1))
+            .thenReturn(CompletableFuture.completedFuture(response2));
+
+        CompletableFuture<DeleteShareGroupStateResponseData> future = service.deleteState(
+            requestContext(ApiKeys.DELETE_SHARE_GROUP_STATE),
+            request
+        );
+
+        HashSet<DeleteShareGroupStateResponseData.DeleteStateResult> result = new HashSet<>(future.get(5, TimeUnit.SECONDS).results());
+
+        HashSet<DeleteShareGroupStateResponseData.DeleteStateResult> expectedResult = new HashSet<>(Arrays.asList(
+            new DeleteShareGroupStateResponseData.DeleteStateResult()
+                .setTopicId(topicId2)
+                .setPartitions(List.of(new DeleteShareGroupStateResponseData.PartitionResult()
+                    .setPartition(partition2))),
+            new DeleteShareGroupStateResponseData.DeleteStateResult()
+                .setTopicId(topicId1)
+                .setPartitions(List.of(new DeleteShareGroupStateResponseData.PartitionResult()
+                    .setPartition(partition1)))));
         assertEquals(expectedResult, result);
     }
 
@@ -433,7 +521,7 @@ class ShareCoordinatorServiceTest {
         assertEquals(new WriteShareGroupStateResponseData(),
             service.writeState(
                 requestContext(ApiKeys.WRITE_SHARE_GROUP_STATE),
-                new WriteShareGroupStateRequestData().setGroupId(groupId).setTopics(Collections.singletonList(
+                new WriteShareGroupStateRequestData().setGroupId(groupId).setTopics(List.of(
                     new WriteShareGroupStateRequestData.WriteStateData().setTopicId(topicId)))
             ).get(5, TimeUnit.SECONDS)
         );
@@ -442,8 +530,8 @@ class ShareCoordinatorServiceTest {
         assertEquals(new WriteShareGroupStateResponseData(),
             service.writeState(
                 requestContext(ApiKeys.WRITE_SHARE_GROUP_STATE),
-                new WriteShareGroupStateRequestData().setGroupId(null).setTopics(Collections.singletonList(
-                    new WriteShareGroupStateRequestData.WriteStateData().setTopicId(topicId).setPartitions(Collections.singletonList(
+                new WriteShareGroupStateRequestData().setGroupId(null).setTopics(List.of(
+                    new WriteShareGroupStateRequestData.WriteStateData().setTopicId(topicId).setPartitions(List.of(
                         new WriteShareGroupStateRequestData.PartitionData().setPartition(partition)))))
             ).get(5, TimeUnit.SECONDS)
         );
@@ -480,7 +568,7 @@ class ShareCoordinatorServiceTest {
         assertEquals(new ReadShareGroupStateResponseData(),
             service.readState(
                 requestContext(ApiKeys.READ_SHARE_GROUP_STATE),
-                new ReadShareGroupStateRequestData().setGroupId(groupId).setTopics(Collections.singletonList(
+                new ReadShareGroupStateRequestData().setGroupId(groupId).setTopics(List.of(
                     new ReadShareGroupStateRequestData.ReadStateData().setTopicId(topicId)))
             ).get(5, TimeUnit.SECONDS)
         );
@@ -489,8 +577,8 @@ class ShareCoordinatorServiceTest {
         assertEquals(new ReadShareGroupStateResponseData(),
             service.readState(
                 requestContext(ApiKeys.READ_SHARE_GROUP_STATE),
-                new ReadShareGroupStateRequestData().setGroupId(null).setTopics(Collections.singletonList(
-                    new ReadShareGroupStateRequestData.ReadStateData().setTopicId(topicId).setPartitions(Collections.singletonList(
+                new ReadShareGroupStateRequestData().setGroupId(null).setTopics(List.of(
+                    new ReadShareGroupStateRequestData.ReadStateData().setTopicId(topicId).setPartitions(List.of(
                         new ReadShareGroupStateRequestData.PartitionData().setPartition(partition)))))
             ).get(5, TimeUnit.SECONDS)
         );
@@ -527,7 +615,7 @@ class ShareCoordinatorServiceTest {
         assertEquals(new ReadShareGroupStateSummaryResponseData(),
             service.readStateSummary(
                 requestContext(ApiKeys.READ_SHARE_GROUP_STATE_SUMMARY),
-                new ReadShareGroupStateSummaryRequestData().setGroupId(groupId).setTopics(Collections.singletonList(
+                new ReadShareGroupStateSummaryRequestData().setGroupId(groupId).setTopics(List.of(
                     new ReadShareGroupStateSummaryRequestData.ReadStateSummaryData().setTopicId(topicId)))
             ).get(5, TimeUnit.SECONDS)
         );
@@ -536,9 +624,56 @@ class ShareCoordinatorServiceTest {
         assertEquals(new ReadShareGroupStateSummaryResponseData(),
             service.readStateSummary(
                 requestContext(ApiKeys.READ_SHARE_GROUP_STATE_SUMMARY),
-                new ReadShareGroupStateSummaryRequestData().setGroupId(null).setTopics(Collections.singletonList(
-                    new ReadShareGroupStateSummaryRequestData.ReadStateSummaryData().setTopicId(topicId).setPartitions(Collections.singletonList(
+                new ReadShareGroupStateSummaryRequestData().setGroupId(null).setTopics(List.of(
+                    new ReadShareGroupStateSummaryRequestData.ReadStateSummaryData().setTopicId(topicId).setPartitions(List.of(
                         new ReadShareGroupStateSummaryRequestData.PartitionData().setPartition(partition)))))
+            ).get(5, TimeUnit.SECONDS)
+        );
+    }
+
+    @Test
+    public void testDeleteStateValidationsError() throws ExecutionException, InterruptedException, TimeoutException {
+        CoordinatorRuntime<ShareCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        ShareCoordinatorService service = new ShareCoordinatorService(
+            new LogContext(),
+            ShareCoordinatorTestConfig.testConfig(),
+            runtime,
+            new ShareCoordinatorMetrics(),
+            Time.SYSTEM,
+            mock(Timer.class),
+            mock(PartitionWriter.class)
+        );
+
+        service.startup(() -> 1);
+
+        String groupId = "group1";
+        Uuid topicId = Uuid.randomUuid();
+        int partition = 0;
+
+        // 1. Empty topicsData
+        assertEquals(new DeleteShareGroupStateResponseData(),
+            service.deleteState(
+                requestContext(ApiKeys.DELETE_SHARE_GROUP_STATE),
+                new DeleteShareGroupStateRequestData().setGroupId(groupId)
+            ).get(5, TimeUnit.SECONDS)
+        );
+
+        // 2. Empty partitionsData
+        assertEquals(new DeleteShareGroupStateResponseData(),
+            service.deleteState(
+                requestContext(ApiKeys.DELETE_SHARE_GROUP_STATE),
+                new DeleteShareGroupStateRequestData().setGroupId(groupId).setTopics(List.of(
+                    new DeleteShareGroupStateRequestData.DeleteStateData().setTopicId(topicId)))
+            ).get(5, TimeUnit.SECONDS)
+        );
+
+        // 3. Invalid groupId
+        assertEquals(new DeleteShareGroupStateResponseData(),
+            service.deleteState(
+                requestContext(ApiKeys.DELETE_SHARE_GROUP_STATE),
+                new DeleteShareGroupStateRequestData().setGroupId(null).setTopics(List.of(
+                    new DeleteShareGroupStateRequestData.DeleteStateData().setTopicId(topicId).setPartitions(List.of(
+                        new DeleteShareGroupStateRequestData.PartitionData().setPartition(partition)))))
             ).get(5, TimeUnit.SECONDS)
         );
     }
@@ -568,13 +703,13 @@ class ShareCoordinatorServiceTest {
             .setTopics(Arrays.asList(
                     new WriteShareGroupStateRequestData.WriteStateData()
                         .setTopicId(topicId1)
-                        .setPartitions(Collections.singletonList(
+                        .setPartitions(List.of(
                             new WriteShareGroupStateRequestData.PartitionData()
                                 .setPartition(partition1)
                                 .setStartOffset(0)
                                 .setStateEpoch(1)
                                 .setLeaderEpoch(1)
-                                .setStateBatches(Collections.singletonList(new WriteShareGroupStateRequestData.StateBatch()
+                                .setStateBatches(List.of(new WriteShareGroupStateRequestData.StateBatch()
                                     .setFirstOffset(0)
                                     .setLastOffset(10)
                                     .setDeliveryCount((short) 1)
@@ -583,13 +718,13 @@ class ShareCoordinatorServiceTest {
                         )),
                     new WriteShareGroupStateRequestData.WriteStateData()
                         .setTopicId(topicId2)
-                        .setPartitions(Collections.singletonList(
+                        .setPartitions(List.of(
                             new WriteShareGroupStateRequestData.PartitionData()
                                 .setPartition(partition2)
                                 .setStartOffset(0)
                                 .setStateEpoch(1)
                                 .setLeaderEpoch(1)
-                                .setStateBatches(Collections.singletonList(new WriteShareGroupStateRequestData.StateBatch()
+                                .setStateBatches(List.of(new WriteShareGroupStateRequestData.StateBatch()
                                     .setFirstOffset(0)
                                     .setLastOffset(10)
                                     .setDeliveryCount((short) 1)
@@ -609,13 +744,13 @@ class ShareCoordinatorServiceTest {
         HashSet<WriteShareGroupStateResponseData.WriteStateResult> expectedResult = new HashSet<>(Arrays.asList(
             new WriteShareGroupStateResponseData.WriteStateResult()
                 .setTopicId(topicId2)
-                .setPartitions(Collections.singletonList(new WriteShareGroupStateResponseData.PartitionResult()
+                .setPartitions(List.of(new WriteShareGroupStateResponseData.PartitionResult()
                     .setPartition(partition2)
                     .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
                     .setErrorMessage("Share coordinator is not available."))),
             new WriteShareGroupStateResponseData.WriteStateResult()
                 .setTopicId(topicId1)
-                .setPartitions(Collections.singletonList(new WriteShareGroupStateResponseData.PartitionResult()
+                .setPartitions(List.of(new WriteShareGroupStateResponseData.PartitionResult()
                     .setPartition(partition1)
                     .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
                     .setErrorMessage("Share coordinator is not available.")))));
@@ -647,14 +782,14 @@ class ShareCoordinatorServiceTest {
             .setTopics(Arrays.asList(
                     new ReadShareGroupStateRequestData.ReadStateData()
                         .setTopicId(topicId1)
-                        .setPartitions(Collections.singletonList(
+                        .setPartitions(List.of(
                             new ReadShareGroupStateRequestData.PartitionData()
                                 .setPartition(partition1)
                                 .setLeaderEpoch(1)
                         )),
                     new ReadShareGroupStateRequestData.ReadStateData()
                         .setTopicId(topicId2)
-                        .setPartitions(Collections.singletonList(
+                        .setPartitions(List.of(
                             new ReadShareGroupStateRequestData.PartitionData()
                                 .setPartition(partition2)
                                 .setLeaderEpoch(1)
@@ -672,13 +807,13 @@ class ShareCoordinatorServiceTest {
         HashSet<ReadShareGroupStateResponseData.ReadStateResult> expectedResult = new HashSet<>(Arrays.asList(
             new ReadShareGroupStateResponseData.ReadStateResult()
                 .setTopicId(topicId2)
-                .setPartitions(Collections.singletonList(new ReadShareGroupStateResponseData.PartitionResult()
+                .setPartitions(List.of(new ReadShareGroupStateResponseData.PartitionResult()
                     .setPartition(partition2)
                     .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
                     .setErrorMessage("Share coordinator is not available."))),
             new ReadShareGroupStateResponseData.ReadStateResult()
                 .setTopicId(topicId1)
-                .setPartitions(Collections.singletonList(new ReadShareGroupStateResponseData.PartitionResult()
+                .setPartitions(List.of(new ReadShareGroupStateResponseData.PartitionResult()
                     .setPartition(partition1)
                     .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
                     .setErrorMessage("Share coordinator is not available.")))));
@@ -710,14 +845,14 @@ class ShareCoordinatorServiceTest {
             .setTopics(Arrays.asList(
                     new ReadShareGroupStateSummaryRequestData.ReadStateSummaryData()
                         .setTopicId(topicId1)
-                        .setPartitions(Collections.singletonList(
+                        .setPartitions(List.of(
                             new ReadShareGroupStateSummaryRequestData.PartitionData()
                                 .setPartition(partition1)
                                 .setLeaderEpoch(1)
                         )),
                     new ReadShareGroupStateSummaryRequestData.ReadStateSummaryData()
                         .setTopicId(topicId2)
-                        .setPartitions(Collections.singletonList(
+                        .setPartitions(List.of(
                             new ReadShareGroupStateSummaryRequestData.PartitionData()
                                 .setPartition(partition2)
                                 .setLeaderEpoch(1)
@@ -735,13 +870,74 @@ class ShareCoordinatorServiceTest {
         HashSet<ReadShareGroupStateSummaryResponseData.ReadStateSummaryResult> expectedResult = new HashSet<>(Arrays.asList(
             new ReadShareGroupStateSummaryResponseData.ReadStateSummaryResult()
                 .setTopicId(topicId2)
-                .setPartitions(Collections.singletonList(new ReadShareGroupStateSummaryResponseData.PartitionResult()
+                .setPartitions(List.of(new ReadShareGroupStateSummaryResponseData.PartitionResult()
                     .setPartition(partition2)
                     .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
                     .setErrorMessage("Share coordinator is not available."))),
             new ReadShareGroupStateSummaryResponseData.ReadStateSummaryResult()
                 .setTopicId(topicId1)
-                .setPartitions(Collections.singletonList(new ReadShareGroupStateSummaryResponseData.PartitionResult()
+                .setPartitions(List.of(new ReadShareGroupStateSummaryResponseData.PartitionResult()
+                    .setPartition(partition1)
+                    .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
+                    .setErrorMessage("Share coordinator is not available.")))));
+        assertEquals(expectedResult, result);
+    }
+
+    @Test
+    public void testDeleteStateWhenNotStarted() throws ExecutionException, InterruptedException, TimeoutException {
+        CoordinatorRuntime<ShareCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        ShareCoordinatorService service = new ShareCoordinatorService(
+            new LogContext(),
+            ShareCoordinatorTestConfig.testConfig(),
+            runtime,
+            new ShareCoordinatorMetrics(),
+            Time.SYSTEM,
+            mock(Timer.class),
+            mock(PartitionWriter.class)
+        );
+
+        String groupId = "group1";
+        Uuid topicId1 = Uuid.randomUuid();
+        int partition1 = 0;
+
+        Uuid topicId2 = Uuid.randomUuid();
+        int partition2 = 1;
+
+        DeleteShareGroupStateRequestData request = new DeleteShareGroupStateRequestData()
+            .setGroupId(groupId)
+            .setTopics(Arrays.asList(
+                    new DeleteShareGroupStateRequestData.DeleteStateData()
+                        .setTopicId(topicId1)
+                        .setPartitions(List.of(
+                            new DeleteShareGroupStateRequestData.PartitionData()
+                                .setPartition(partition1)
+                        )),
+                    new DeleteShareGroupStateRequestData.DeleteStateData()
+                        .setTopicId(topicId2)
+                        .setPartitions(List.of(
+                            new DeleteShareGroupStateRequestData.PartitionData()
+                                .setPartition(partition2)
+                        ))
+                )
+            );
+
+        CompletableFuture<DeleteShareGroupStateResponseData> future = service.deleteState(
+            requestContext(ApiKeys.DELETE_SHARE_GROUP_STATE),
+            request
+        );
+
+        HashSet<DeleteShareGroupStateResponseData.DeleteStateResult> result = new HashSet<>(future.get(5, TimeUnit.SECONDS).results());
+
+        HashSet<DeleteShareGroupStateResponseData.DeleteStateResult> expectedResult = new HashSet<>(Arrays.asList(
+            new DeleteShareGroupStateResponseData.DeleteStateResult()
+                .setTopicId(topicId2)
+                .setPartitions(List.of(new DeleteShareGroupStateResponseData.PartitionResult()
+                    .setPartition(partition2)
+                    .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
+                    .setErrorMessage("Share coordinator is not available."))),
+            new DeleteShareGroupStateResponseData.DeleteStateResult()
+                .setTopicId(topicId1)
+                .setPartitions(List.of(new DeleteShareGroupStateResponseData.PartitionResult()
                     .setPartition(partition1)
                     .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
                     .setErrorMessage("Share coordinator is not available.")))));
@@ -771,23 +967,23 @@ class ShareCoordinatorServiceTest {
             .thenReturn(FutureUtils.failedFuture(Errors.UNKNOWN_TOPIC_OR_PARTITION.exception()));
 
         assertEquals(new WriteShareGroupStateResponseData()
-                .setResults(Collections.singletonList(new WriteShareGroupStateResponseData.WriteStateResult()
+                .setResults(List.of(new WriteShareGroupStateResponseData.WriteStateResult()
                     .setTopicId(topicId)
-                    .setPartitions(Collections.singletonList(new WriteShareGroupStateResponseData.PartitionResult()
+                    .setPartitions(List.of(new WriteShareGroupStateResponseData.PartitionResult()
                         .setPartition(partition)
                         .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
                         .setErrorMessage("Unable to write share group state: This server does not host this topic-partition."))))),
             service.writeState(
                 requestContext(ApiKeys.WRITE_SHARE_GROUP_STATE),
                 new WriteShareGroupStateRequestData().setGroupId(groupId)
-                    .setTopics(Collections.singletonList(new WriteShareGroupStateRequestData.WriteStateData()
+                    .setTopics(List.of(new WriteShareGroupStateRequestData.WriteStateData()
                         .setTopicId(topicId)
-                        .setPartitions(Collections.singletonList(new WriteShareGroupStateRequestData.PartitionData()
+                        .setPartitions(List.of(new WriteShareGroupStateRequestData.PartitionData()
                             .setPartition(partition)
                             .setLeaderEpoch(1)
                             .setStartOffset(1)
                             .setStateEpoch(1)
-                            .setStateBatches(Collections.singletonList(new WriteShareGroupStateRequestData.StateBatch()
+                            .setStateBatches(List.of(new WriteShareGroupStateRequestData.StateBatch()
                                 .setFirstOffset(2)
                                 .setLastOffset(10)
                                 .setDeliveryCount((short) 1)
@@ -821,18 +1017,18 @@ class ShareCoordinatorServiceTest {
             .thenReturn(FutureUtils.failedFuture(Errors.UNKNOWN_SERVER_ERROR.exception()));
 
         assertEquals(new ReadShareGroupStateResponseData()
-                .setResults(Collections.singletonList(new ReadShareGroupStateResponseData.ReadStateResult()
+                .setResults(List.of(new ReadShareGroupStateResponseData.ReadStateResult()
                     .setTopicId(topicId)
-                    .setPartitions(Collections.singletonList(new ReadShareGroupStateResponseData.PartitionResult()
+                    .setPartitions(List.of(new ReadShareGroupStateResponseData.PartitionResult()
                         .setPartition(partition)
                         .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code())
                         .setErrorMessage("Unable to read share group state: The server experienced an unexpected error when processing the request."))))),
             service.readState(
                 requestContext(ApiKeys.READ_SHARE_GROUP_STATE),
                 new ReadShareGroupStateRequestData().setGroupId(groupId)
-                    .setTopics(Collections.singletonList(new ReadShareGroupStateRequestData.ReadStateData()
+                    .setTopics(List.of(new ReadShareGroupStateRequestData.ReadStateData()
                         .setTopicId(topicId)
-                        .setPartitions(Collections.singletonList(new ReadShareGroupStateRequestData.PartitionData()
+                        .setPartitions(List.of(new ReadShareGroupStateRequestData.PartitionData()
                             .setPartition(partition)
                             .setLeaderEpoch(1)
                         ))
@@ -864,20 +1060,62 @@ class ShareCoordinatorServiceTest {
             .thenReturn(FutureUtils.failedFuture(Errors.UNKNOWN_SERVER_ERROR.exception()));
 
         assertEquals(new ReadShareGroupStateSummaryResponseData()
-                .setResults(Collections.singletonList(new ReadShareGroupStateSummaryResponseData.ReadStateSummaryResult()
+                .setResults(List.of(new ReadShareGroupStateSummaryResponseData.ReadStateSummaryResult()
                     .setTopicId(topicId)
-                    .setPartitions(Collections.singletonList(new ReadShareGroupStateSummaryResponseData.PartitionResult()
+                    .setPartitions(List.of(new ReadShareGroupStateSummaryResponseData.PartitionResult()
                         .setPartition(partition)
                         .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code())
                         .setErrorMessage("Unable to read share group state summary: The server experienced an unexpected error when processing the request."))))),
             service.readStateSummary(
                 requestContext(ApiKeys.READ_SHARE_GROUP_STATE_SUMMARY),
                 new ReadShareGroupStateSummaryRequestData().setGroupId(groupId)
-                    .setTopics(Collections.singletonList(new ReadShareGroupStateSummaryRequestData.ReadStateSummaryData()
+                    .setTopics(List.of(new ReadShareGroupStateSummaryRequestData.ReadStateSummaryData()
                         .setTopicId(topicId)
-                        .setPartitions(Collections.singletonList(new ReadShareGroupStateSummaryRequestData.PartitionData()
+                        .setPartitions(List.of(new ReadShareGroupStateSummaryRequestData.PartitionData()
                             .setPartition(partition)
                             .setLeaderEpoch(1)
+                        ))
+                    ))
+            ).get(5, TimeUnit.SECONDS)
+        );
+    }
+
+    @Test
+    public void testDeleteFutureReturnsError() throws ExecutionException, InterruptedException, TimeoutException {
+        CoordinatorRuntime<ShareCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        ShareCoordinatorService service = new ShareCoordinatorService(
+            new LogContext(),
+            ShareCoordinatorTestConfig.testConfig(),
+            runtime,
+            new ShareCoordinatorMetrics(),
+            Time.SYSTEM,
+            mock(Timer.class),
+            mock(PartitionWriter.class)
+        );
+
+        service.startup(() -> 1);
+
+        String groupId = "group1";
+        Uuid topicId = Uuid.randomUuid();
+        int partition = 0;
+
+        when(runtime.scheduleWriteOperation(any(), any(), any(), any()))
+            .thenReturn(FutureUtils.failedFuture(Errors.UNKNOWN_TOPIC_OR_PARTITION.exception()));
+
+        assertEquals(new DeleteShareGroupStateResponseData()
+                .setResults(List.of(new DeleteShareGroupStateResponseData.DeleteStateResult()
+                    .setTopicId(topicId)
+                    .setPartitions(List.of(new DeleteShareGroupStateResponseData.PartitionResult()
+                        .setPartition(partition)
+                        .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
+                        .setErrorMessage("Unable to delete share group state: This server does not host this topic-partition."))))),
+            service.deleteState(
+                requestContext(ApiKeys.DELETE_SHARE_GROUP_STATE),
+                new DeleteShareGroupStateRequestData().setGroupId(groupId)
+                    .setTopics(List.of(new DeleteShareGroupStateRequestData.DeleteStateData()
+                        .setTopicId(topicId)
+                        .setPartitions(List.of(new DeleteShareGroupStateRequestData.PartitionData()
+                            .setPartition(partition)
                         ))
                     ))
             ).get(5, TimeUnit.SECONDS)

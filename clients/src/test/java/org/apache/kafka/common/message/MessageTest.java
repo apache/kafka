@@ -1127,6 +1127,8 @@ public final class MessageTest {
         for (short version : ApiKeys.CREATE_TOPICS.allVersions()) {
             verifyWriteRaisesNpe(version, createTopics);
         }
+        MetadataRequestData metadata = new MetadataRequestData().setTopics(null);
+        verifyWriteRaisesNpe((short) 0, metadata);
     }
 
     @Test
