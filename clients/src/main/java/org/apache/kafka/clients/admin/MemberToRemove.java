@@ -26,9 +26,16 @@ import java.util.Objects;
  */
 public class MemberToRemove {
     private final String groupInstanceId;
+    private final String memberId;
 
     public MemberToRemove(String groupInstanceId) {
         this.groupInstanceId = groupInstanceId;
+        this.memberId = null;
+    }
+
+    public MemberToRemove(String groupInstanceId, String memberId) {
+        this.groupInstanceId = groupInstanceId;
+        this.memberId = memberId;
     }
 
     @Override
@@ -49,7 +56,7 @@ public class MemberToRemove {
     MemberIdentity toMemberIdentity() {
         return new MemberIdentity()
             .setGroupInstanceId(groupInstanceId)
-            .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID);
+            .setMemberId(memberId != null ? memberId : JoinGroupRequest.UNKNOWN_MEMBER_ID);
     }
 
     public String groupInstanceId() {

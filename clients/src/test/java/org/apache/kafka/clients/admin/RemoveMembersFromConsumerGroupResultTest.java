@@ -21,6 +21,7 @@ import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -32,6 +33,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -39,7 +41,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 public class RemoveMembersFromConsumerGroupResultTest {
 
     private final MemberToRemove instanceOne = new MemberToRemove("instance-1");
-    private final MemberToRemove instanceTwo = new MemberToRemove("instance-2");
+    private final MemberToRemove instanceTwo = new MemberToRemove("instance-2", "member-id");
     private Set<MemberToRemove> membersToRemove;
     private Map<MemberIdentity, Errors> errorsMap;
 
@@ -103,6 +105,12 @@ public class RemoveMembersFromConsumerGroupResultTest {
         assertNull(noErrorResult.all().get());
         assertNull(noErrorResult.memberResult(instanceOne).get());
         assertNull(noErrorResult.memberResult(instanceTwo).get());
+    }
+
+    @Test
+    public void testMemberIdentityMemberId() {
+        assertEquals(JoinGroupRequest.UNKNOWN_MEMBER_ID, instanceOne.toMemberIdentity().memberId());
+        assertEquals("member-id", instanceTwo.toMemberIdentity().memberId());
     }
 
     private RemoveMembersFromConsumerGroupResult createAndVerifyMemberLevelError() throws InterruptedException, ExecutionException {
