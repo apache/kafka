@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import java.util.Objects;
+
 /**
  * This class combines Acknowledgements with the id of the node to use for acknowledging.
  */
@@ -25,7 +27,7 @@ public class NodeAcknowledgements {
 
     public NodeAcknowledgements(int nodeId, Acknowledgements acknowledgements) {
         this.nodeId = nodeId;
-        this.acknowledgements = acknowledgements;
+        this.acknowledgements = Objects.requireNonNull(acknowledgements);
     }
 
     public int nodeId() {
