@@ -748,8 +748,8 @@ class ReplicaManager(val config: KafkaConfig,
                   Some(new NotEnoughReplicasException(
                     s"Unable to verify the partition has been added to the transaction. Underlying error: ${error.toString}"))
                 } else {
-                  // Don't convert the Concurrent Transaction exception for TV2. Because the error is very common between
-                  // the transaction prepare commit and commit. Returning Concurrent Transaction is less confusing to the client.
+                  // Don't convert the Concurrent Transaction exception for TV2. Because the error is very common during
+                  // the transaction commit phase. Returning Concurrent Transaction is less confusing to the client.
                   None
                 }
               case _ => None
