@@ -39,6 +39,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -47,13 +48,13 @@ import java.util.stream.Collectors;
  */
 public class StreamsCoordinatorRecordHelpers {
 
-    private StreamsCoordinatorRecordHelpers() {
-    }
-
     public static CoordinatorRecord newStreamsGroupMemberRecord(
         String groupId,
         StreamsGroupMember member
     ) {
+        Objects.requireNonNull(groupId, "groupId should not be null here");
+        Objects.requireNonNull(member, "member should not be null here");
+
         return CoordinatorRecord.record(
             new StreamsGroupMemberMetadataKey()
                 .setGroupId(groupId)
@@ -89,6 +90,9 @@ public class StreamsCoordinatorRecordHelpers {
         String groupId,
         String memberId
     ) {
+        Objects.requireNonNull(groupId, "groupId should not be null here");
+        Objects.requireNonNull(memberId, "memberId should not be null here");
+
         return CoordinatorRecord.tombstone(
             new StreamsGroupMemberMetadataKey()
                 .setGroupId(groupId)
@@ -107,6 +111,9 @@ public class StreamsCoordinatorRecordHelpers {
         String groupId,
         Map<String, org.apache.kafka.coordinator.group.streams.TopicMetadata> newPartitionMetadata
     ) {
+        Objects.requireNonNull(groupId, "groupId should not be null here");
+        Objects.requireNonNull(newPartitionMetadata, "newPartitionMetadata should not be null here");
+
         StreamsGroupPartitionMetadataValue value = new StreamsGroupPartitionMetadataValue();
         newPartitionMetadata.forEach((topicName, topicMetadata) -> {
             List<StreamsGroupPartitionMetadataValue.PartitionMetadata> partitionMetadata = new ArrayList<>();
@@ -148,6 +155,8 @@ public class StreamsCoordinatorRecordHelpers {
     public static CoordinatorRecord newStreamsGroupPartitionMetadataTombstoneRecord(
         String groupId
     ) {
+        Objects.requireNonNull(groupId, "groupId should not be null here");
+
         return CoordinatorRecord.tombstone(
             new StreamsGroupPartitionMetadataKey()
                 .setGroupId(groupId)
@@ -158,6 +167,8 @@ public class StreamsCoordinatorRecordHelpers {
         String groupId,
         int newGroupEpoch
     ) {
+        Objects.requireNonNull(groupId, "groupId should not be null here");
+
         return CoordinatorRecord.record(
             new StreamsGroupMetadataKey()
                 .setGroupId(groupId),
@@ -178,6 +189,8 @@ public class StreamsCoordinatorRecordHelpers {
     public static CoordinatorRecord newStreamsGroupEpochTombstoneRecord(
         String groupId
     ) {
+        Objects.requireNonNull(groupId, "groupId should not be null here");
+
         return CoordinatorRecord.tombstone(
             new StreamsGroupMetadataKey()
                 .setGroupId(groupId)
@@ -189,6 +202,10 @@ public class StreamsCoordinatorRecordHelpers {
         String memberId,
         TasksTuple assignment
     ) {
+        Objects.requireNonNull(groupId, "groupId should not be null here");
+        Objects.requireNonNull(memberId, "memberId should not be null here");
+        Objects.requireNonNull(assignment, "assignment should not be null here");
+
         List<StreamsGroupTargetAssignmentMemberValue.TaskIds> activeTaskIds = new ArrayList<>(assignment.activeTasks().size());
         for (Map.Entry<String, Set<Integer>> entry : assignment.activeTasks().entrySet()) {
             activeTaskIds.add(
@@ -242,6 +259,9 @@ public class StreamsCoordinatorRecordHelpers {
         String groupId,
         String memberId
     ) {
+        Objects.requireNonNull(groupId, "groupId should not be null here");
+        Objects.requireNonNull(memberId, "memberId should not be null here");
+
         return CoordinatorRecord.tombstone(
             new StreamsGroupTargetAssignmentMemberKey()
                 .setGroupId(groupId)
@@ -254,6 +274,8 @@ public class StreamsCoordinatorRecordHelpers {
         String groupId,
         int assignmentEpoch
     ) {
+        Objects.requireNonNull(groupId, "groupId should not be null here");
+
         return CoordinatorRecord.record(
             new StreamsGroupTargetAssignmentMetadataKey()
                 .setGroupId(groupId),
@@ -274,6 +296,8 @@ public class StreamsCoordinatorRecordHelpers {
     public static CoordinatorRecord newStreamsGroupTargetAssignmentEpochTombstoneRecord(
         String groupId
     ) {
+        Objects.requireNonNull(groupId, "groupId should not be null here");
+
         return CoordinatorRecord.tombstone(
             new StreamsGroupTargetAssignmentMetadataKey()
                 .setGroupId(groupId)
@@ -284,6 +308,9 @@ public class StreamsCoordinatorRecordHelpers {
         String groupId,
         StreamsGroupMember member
     ) {
+        Objects.requireNonNull(groupId, "groupId should not be null here");
+        Objects.requireNonNull(member, "member should not be null here");
+
         return CoordinatorRecord.record(
             new StreamsGroupCurrentMemberAssignmentKey()
                 .setGroupId(groupId)
@@ -315,6 +342,9 @@ public class StreamsCoordinatorRecordHelpers {
         String groupId,
         String memberId
     ) {
+        Objects.requireNonNull(groupId, "groupId should not be null here");
+        Objects.requireNonNull(memberId, "memberId should not be null here");
+
         return CoordinatorRecord.tombstone(
             new StreamsGroupCurrentMemberAssignmentKey()
                 .setGroupId(groupId)
@@ -344,6 +374,9 @@ public class StreamsCoordinatorRecordHelpers {
      */
     public static CoordinatorRecord newStreamsGroupTopologyRecord(String groupId,
                                                                   StreamsGroupHeartbeatRequestData.Topology topology) {
+        Objects.requireNonNull(groupId, "groupId should not be null here");
+        Objects.requireNonNull(topology, "topology should not be null here");
+
         return newStreamsGroupTopologyRecord(groupId, convertToStreamsGroupTopologyRecord(topology));
     }
 
@@ -355,6 +388,9 @@ public class StreamsCoordinatorRecordHelpers {
      * @return The record.
      */
     public static CoordinatorRecord newStreamsGroupTopologyRecord(String groupId, StreamsGroupTopologyValue value) {
+        Objects.requireNonNull(groupId, "groupId should not be null here");
+        Objects.requireNonNull(value, "value should not be null here");
+
         return CoordinatorRecord.record(
             new StreamsGroupTopologyKey()
                 .setGroupId(groupId),
@@ -369,6 +405,8 @@ public class StreamsCoordinatorRecordHelpers {
      * @return The record value.
      */
     public static StreamsGroupTopologyValue convertToStreamsGroupTopologyRecord(StreamsGroupHeartbeatRequestData.Topology topology) {
+        Objects.requireNonNull(topology, "topology should not be null here");
+
         StreamsGroupTopologyValue value = new StreamsGroupTopologyValue();
         value.setEpoch(topology.epoch());
         topology.subtopologies().forEach(subtopology -> {
@@ -425,6 +463,8 @@ public class StreamsCoordinatorRecordHelpers {
     public static CoordinatorRecord newStreamsGroupTopologyRecordTombstone(
         String groupId
     ) {
+        Objects.requireNonNull(groupId, "groupId should not be null here");
+
         return CoordinatorRecord.tombstone(
             new StreamsGroupTopologyKey()
                 .setGroupId(groupId)

@@ -49,6 +49,8 @@ import java.util.Set;
 import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasks;
 import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasksTuple;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.mock;
 
 class StreamsCoordinatorRecordHelpersTest {
 
@@ -694,5 +696,187 @@ class StreamsCoordinatorRecordHelpersTest {
         );
 
         assertEquals(expectedRecord, StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecordTombstone(GROUP_ID));
+    }
+
+    @Test
+    public void testNewStreamsGroupMemberRecordNullGroupId() {
+        NullPointerException exception = assertThrows(NullPointerException.class, () ->
+            StreamsCoordinatorRecordHelpers.newStreamsGroupMemberRecord(null, mock(StreamsGroupMember.class)));
+        assertEquals("groupId should not be null here", exception.getMessage());
+    }
+
+    @Test
+    public void testNewStreamsGroupMemberRecordNullMember() {
+        NullPointerException exception = assertThrows(NullPointerException.class, () ->
+            StreamsCoordinatorRecordHelpers.newStreamsGroupMemberRecord("groupId", null));
+        assertEquals("member should not be null here", exception.getMessage());
+    }
+
+    @Test
+    public void testNewStreamsGroupMemberTombstoneRecordNullGroupId() {
+        NullPointerException exception = assertThrows(NullPointerException.class, () ->
+            StreamsCoordinatorRecordHelpers.newStreamsGroupMemberTombstoneRecord(null, "memberId"));
+        assertEquals("groupId should not be null here", exception.getMessage());
+    }
+
+    @Test
+    public void testNewStreamsGroupMemberTombstoneRecordNullMemberId() {
+        NullPointerException exception = assertThrows(NullPointerException.class, () ->
+            StreamsCoordinatorRecordHelpers.newStreamsGroupMemberTombstoneRecord("groupId", null));
+        assertEquals("memberId should not be null here", exception.getMessage());
+    }
+
+    @Test
+    public void testNewStreamsGroupPartitionMetadataRecordNullGroupId() {
+        NullPointerException exception = assertThrows(NullPointerException.class, () ->
+            StreamsCoordinatorRecordHelpers.newStreamsGroupPartitionMetadataRecord(null, Map.of()));
+        assertEquals("groupId should not be null here", exception.getMessage());
+    }
+
+    @Test
+    public void testNewStreamsGroupPartitionMetadataRecordNullNewPartitionMetadata() {
+        NullPointerException exception = assertThrows(NullPointerException.class, () ->
+            StreamsCoordinatorRecordHelpers.newStreamsGroupPartitionMetadataRecord("groupId", null));
+        assertEquals("newPartitionMetadata should not be null here", exception.getMessage());
+    }
+
+    @Test
+    public void testNewStreamsGroupPartitionMetadataTombstoneRecordNullGroupId() {
+        NullPointerException exception = assertThrows(NullPointerException.class, () ->
+            StreamsCoordinatorRecordHelpers.newStreamsGroupPartitionMetadataTombstoneRecord(null));
+        assertEquals("groupId should not be null here", exception.getMessage());
+    }
+
+    @Test
+    public void testNewStreamsGroupEpochRecordNullGroupId() {
+        NullPointerException exception = assertThrows(NullPointerException.class, () ->
+            StreamsCoordinatorRecordHelpers.newStreamsGroupEpochRecord(null, 1));
+        assertEquals("groupId should not be null here", exception.getMessage());
+    }
+
+    @Test
+    public void testNewStreamsGroupEpochTombstoneRecordNullGroupId() {
+        NullPointerException exception = assertThrows(NullPointerException.class, () ->
+            StreamsCoordinatorRecordHelpers.newStreamsGroupEpochTombstoneRecord(null));
+        assertEquals("groupId should not be null here", exception.getMessage());
+    }
+
+    @Test
+    public void testNewStreamsGroupTargetAssignmentRecordNullGroupId() {
+        NullPointerException exception = assertThrows(NullPointerException.class, () ->
+            StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(null, "memberId", mock(TasksTuple.class)));
+        assertEquals("groupId should not be null here", exception.getMessage());
+    }
+
+    @Test
+    public void testNewStreamsGroupTargetAssignmentRecordNullMemberId() {
+        NullPointerException exception = assertThrows(NullPointerException.class, () ->
+            StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord("groupId", null, mock(TasksTuple.class)));
+        assertEquals("memberId should not be null here", exception.getMessage());
+    }
+
+    @Test
+    public void testNewStreamsGroupTargetAssignmentRecordNullAssignment() {
+        NullPointerException exception = assertThrows(NullPointerException.class, () ->
+            StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord("groupId", "memberId", null));
+        assertEquals("assignment should not be null here", exception.getMessage());
+    }
+
+    @Test
+    public void testNewStreamsGroupTargetAssignmentTombstoneRecordNullGroupId() {
+        NullPointerException exception = assertThrows(NullPointerException.class, () ->
+            StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentTombstoneRecord(null, "memberId"));
+        assertEquals("groupId should not be null here", exception.getMessage());
+    }
+
+    @Test
+    public void testNewStreamsGroupTargetAssignmentTombstoneRecordNullMemberId() {
+        NullPointerException exception = assertThrows(NullPointerException.class, () ->
+            StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentTombstoneRecord("groupId", null));
+        assertEquals("memberId should not be null here", exception.getMessage());
+    }
+
+    @Test
+    public void testNewStreamsGroupTargetAssignmentEpochRecordNullGroupId() {
+        NullPointerException exception = assertThrows(NullPointerException.class, () ->
+            StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentEpochRecord(null, 1));
+        assertEquals("groupId should not be null here", exception.getMessage());
+    }
+
+    @Test
+    public void testNewStreamsGroupTargetAssignmentEpochTombstoneRecordNullGroupId() {
+        NullPointerException exception = assertThrows(NullPointerException.class, () ->
+            StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentEpochTombstoneRecord(null));
+        assertEquals("groupId should not be null here", exception.getMessage());
+    }
+
+    @Test
+    public void testNewStreamsGroupCurrentAssignmentRecordNullGroupId() {
+        NullPointerException exception = assertThrows(NullPointerException.class, () ->
+            StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(null, mock(StreamsGroupMember.class)));
+        assertEquals("groupId should not be null here", exception.getMessage());
+    }
+
+    @Test
+    public void testNewStreamsGroupCurrentAssignmentRecordNullMember() {
+        NullPointerException exception = assertThrows(NullPointerException.class, () ->
+            StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord("groupId", null));
+        assertEquals("member should not be null here", exception.getMessage());
+    }
+
+    @Test
+    public void testNewStreamsGroupCurrentAssignmentTombstoneRecordNullGroupId() {
+        NullPointerException exception = assertThrows(NullPointerException.class, () ->
+            StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentTombstoneRecord(null, "memberId"));
+        assertEquals("groupId should not be null here", exception.getMessage());
+    }
+
+    @Test
+    public void testNewStreamsGroupCurrentAssignmentTombstoneRecordNullMemberId() {
+        NullPointerException exception = assertThrows(NullPointerException.class, () ->
+            StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentTombstoneRecord("groupId", null));
+        assertEquals("memberId should not be null here", exception.getMessage());
+    }
+
+    @Test
+    public void testNewStreamsGroupTopologyRecordWithValueNullGroupId() {
+        NullPointerException exception = assertThrows(NullPointerException.class, () ->
+            StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecord(null, mock(StreamsGroupTopologyValue.class)));
+        assertEquals("groupId should not be null here", exception.getMessage());
+    }
+
+    @Test
+    public void testNewStreamsGroupTopologyRecordWithTopologyNullGroupId() {
+        NullPointerException exception = assertThrows(NullPointerException.class, () ->
+            StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecord(null, mock(StreamsGroupHeartbeatRequestData.Topology.class)));
+        assertEquals("groupId should not be null here", exception.getMessage());
+    }
+
+    @Test
+    public void testNewStreamsGroupTopologyRecordNullTopology() {
+        NullPointerException exception = assertThrows(NullPointerException.class, () ->
+            StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecord("groupId", (StreamsGroupHeartbeatRequestData.Topology) null));
+        assertEquals("topology should not be null here", exception.getMessage());
+    }
+
+    @Test
+    public void testNewStreamsGroupTopologyRecordNullValue() {
+        NullPointerException exception = assertThrows(NullPointerException.class, () ->
+            StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecord("groupId", (StreamsGroupTopologyValue) null));
+        assertEquals("value should not be null here", exception.getMessage());
+    }
+
+    @Test
+    public void testNewStreamsGroupTopologyRecordTombstoneNullGroupId() {
+        NullPointerException exception = assertThrows(NullPointerException.class, () ->
+            StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecordTombstone(null));
+        assertEquals("groupId should not be null here", exception.getMessage());
+    }
+
+    @Test
+    public void testConvertToStreamsGroupTopologyRecordNullTopology() {
+        NullPointerException exception = assertThrows(NullPointerException.class, () ->
+            StreamsCoordinatorRecordHelpers.convertToStreamsGroupTopologyRecord(null));
+        assertEquals("topology should not be null here", exception.getMessage());
     }
 }
