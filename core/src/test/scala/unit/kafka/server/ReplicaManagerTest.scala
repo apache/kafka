@@ -49,7 +49,6 @@ import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.KafkaPrincipal
-import org.apache.kafka.common.utils.Utils.{mkEntry, mkMap}
 import org.apache.kafka.common.utils.{LogContext, Time, Utils}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.image._
@@ -5997,7 +5996,8 @@ class ReplicaManagerTest {
 
     val groupId = "grp"
     val tp1 = new TopicIdPartition(Uuid.randomUuid, new TopicPartition("foo1", 0))
-    val partitionMaxBytes: util.Map[TopicIdPartition, Integer] = mkMap(mkEntry(tp1, 1000))
+    val partitionMaxBytes = new util.LinkedHashMap[TopicIdPartition, Integer]
+    partitionMaxBytes.put(tp1, 1000)
 
     val sp1 = mock(classOf[SharePartition])
     val sharePartitions = new util.LinkedHashMap[TopicIdPartition, SharePartition]
@@ -6014,11 +6014,11 @@ class ReplicaManagerTest {
       100,
       brokerTopicStats)
 
-    val delayedShareFetch = new DelayedShareFetch(
+    val delayedShareFetch = spy(new DelayedShareFetch(
       shareFetch,
       rm,
       mock(classOf[BiConsumer[SharePartitionKey, Throwable]]),
-      sharePartitions)
+      sharePartitions))
 
     val delayedShareFetchWatchKeys : util.List[DelayedShareFetchKey] = new util.ArrayList[DelayedShareFetchKey]
     partitionMaxBytes.keySet.forEach((topicIdPartition: TopicIdPartition) => delayedShareFetchWatchKeys.add(new DelayedShareFetchGroupKey(groupId, topicIdPartition.topicId, topicIdPartition.partition)))
@@ -6027,12 +6027,15 @@ class ReplicaManagerTest {
     when(sp1.maybeAcquireFetchLock).thenReturn(false)
 
     rm.addDelayedShareFetchRequest(delayedShareFetch = delayedShareFetch, delayedShareFetchKeys = delayedShareFetchWatchKeys)
+    verify(delayedShareFetch, times(0)).onComplete()
     assertEquals(1, rm.delayedShareFetchPurgatory.watched)
 
     // Future is not complete initially.
     assertFalse(future.isDone)
-    // Post timeout, share fetch request will timeout and the future should complete.
+    // Post timeout, share fetch request will timeout and the future should complete. The timeout is set at 500ms but
+    // kept a buffer of additional 500ms so the task can always timeout.
     waitUntilTrue(() => future.isDone, "Processing in delayed share fetch purgatory never ended.", 1000)
+    verify(delayedShareFetch, times(1)).onComplete()
     assertFalse(future.isCompletedExceptionally)
     // Since no partition could be acquired, the future should be empty.
     assertEquals(0, future.join.size)
