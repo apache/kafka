@@ -238,7 +238,6 @@ import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.resource.ResourceType;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetrySender;
-import org.apache.kafka.common.test.api.Flaky;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -1783,12 +1782,14 @@ public class KafkaAdminClientTest {
         }
     }
 
-    @Flaky("KAFKA-18441")
     @Test
     public void testAdminClientApisAuthenticationFailure() {
         Cluster cluster = mockBootstrapCluster();
         try (final AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(Time.SYSTEM, cluster,
-                newStrMap(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "1000"))) {
+                newStrMap(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "1000",
+                    // The default "retry.backoff.ms" is 100. if following assertion can't finish in 100L,
+                    // the test will fail. Set it to 5000 to make sure the test can finish in time.
+                    AdminClientConfig.RETRY_BACKOFF_MS_CONFIG, "5000"))) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
             env.kafkaClient().createPendingAuthenticationError(cluster.nodes().get(0),
                     TimeUnit.DAYS.toMillis(1));
