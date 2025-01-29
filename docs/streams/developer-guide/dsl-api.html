@@ -3899,9 +3899,11 @@ grouped
                     <li><strong>Future-Proof:</strong> Ensures compatibility with the latest Kafka Streams releases.</li>
                 </ul>
                 <h4>Removal of Old <code>process</code> Method</h4>
-                <p>It is worth mentioning that, in addition to the methods mentioned above, the <code>process</code> method (which is
-                    not part of the Processor API) has also been removed. The following example shows how to migrate to the new
-                    <code>process</code>.</p>
+                <p>It is worth mentioning that, in addition to the methods mentioned above, the <code>process</code> method, which
+                    integrated the &#39;old&#39; Processor API (i.e., <code>Processor</code> as opposed to the new
+                    <code>api.Processor</code>) into the DSL, has also been removed. The following example shows how to migrate to the
+                    new <code>process</code>.
+                </p>
                 <h5>Example</h5>
                 <ul>
                     <li>
