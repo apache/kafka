@@ -6027,7 +6027,7 @@ class ReplicaManagerTest {
     when(sp1.maybeAcquireFetchLock).thenReturn(false)
 
     rm.addDelayedShareFetchRequest(delayedShareFetch = delayedShareFetch, delayedShareFetchKeys = delayedShareFetchWatchKeys)
-    verify(delayedShareFetch, times(0)).onComplete()
+    verify(delayedShareFetch, times(0)).forceComplete()
     assertEquals(1, rm.delayedShareFetchPurgatory.watched)
 
     // Future is not complete initially.
@@ -6035,7 +6035,7 @@ class ReplicaManagerTest {
     // Post timeout, share fetch request will timeout and the future should complete. The timeout is set at 500ms but
     // kept a buffer of additional 500ms so the task can always timeout.
     waitUntilTrue(() => future.isDone, "Processing in delayed share fetch purgatory never ended.", 1000)
-    verify(delayedShareFetch, times(1)).onComplete()
+    verify(delayedShareFetch, times(1)).forceComplete()
     assertFalse(future.isCompletedExceptionally)
     // Since no partition could be acquired, the future should be empty.
     assertEquals(0, future.join.size)
