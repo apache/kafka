@@ -62,6 +62,7 @@ import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData.OngoingPartitionReassignment;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData.OngoingTopicReassignment;
 import org.apache.kafka.common.metadata.BrokerRegistrationChangeRecord;
+import org.apache.kafka.common.metadata.ClearElrRecord;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
@@ -131,6 +132,7 @@ import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.config.TopicConfig.SEGMENT_BYTES_CONFIG;
+import static org.apache.kafka.common.metadata.MetadataRecordType.CLEAR_ELR_RECORD;
 import static org.apache.kafka.common.protocol.Errors.ELECTION_NOT_NEEDED;
 import static org.apache.kafka.common.protocol.Errors.ELIGIBLE_LEADERS_NOT_AVAILABLE;
 import static org.apache.kafka.common.protocol.Errors.FENCED_LEADER_EPOCH;
@@ -3286,5 +3288,20 @@ public class ReplicationControlManagerTest {
         } else {
             assertArrayEquals(new int[]{1}, ctx.replicationControl.getPartition(barId, 0).elr);
         }
+    }
+
+    @Test
+    void testElrsRemovedShouldNotBumpPartitionEpochIfNoChange() {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().
+            setIsElrEnabled(true).
+            setStaticConfig(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2").
+            build();
+        ctx.registerBrokers(1, 2, 3, 4);
+        ctx.unfenceBrokers(1, 2, 3, 4);
+        Uuid fooId = ctx.createTestTopic("foo", new int[][]{
+            new int[]{1, 2, 4}, new int[]{1, 3, 4}}).topicId();
+        int partitionEpoch = ctx.replicationControl.getPartition(fooId, 0).partitionEpoch;
+        ctx.replay(Arrays.asList(new ApiMessageAndVersion(new ClearElrRecord(), CLEAR_ELR_RECORD.highestSupportedVersion())));
+        assertEquals(partitionEpoch, ctx.replicationControl.getPartition(fooId, 0).partitionEpoch);
     }
 }
