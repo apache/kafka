@@ -105,6 +105,9 @@ ext {
     throw new GradleException("Unexpected value for keepAliveMode property. Expected one of $keepAliveValues, but received: $userKeepAliveModeString")
   }
 
+  // Used by :test and :quarantinedTest tasks
+  isGithubActions = System.getenv('GITHUB_ACTIONS') != null
+
   // See README.md for details on this option and the reasoning for the default
   userScalaOptimizerMode = project.hasProperty("scalaOptimizerMode") ? scalaOptimizerMode : "inline-kafka"
   def scalaOptimizerValues = ["none", "method", "inline-kafka", "inline-scala"]
@@ -160,6 +163,7 @@ ext {
     libs.log4j2Api,
     libs.log4j2Core
   ]
+  
 }
 
 allprojects {
@@ -497,56 +501,48 @@ subprojects {
   // a top-level build/junit-xml directory. This is necessary to avoid reporting on tests which
   // were not run, but instead were restored via FROM-CACHE. See KAFKA-17479 for more details.
   def copyTestXml = tasks.register('copyTestXml') {
-    // Skip this is module has no sources
+    onlyIf("Environment GITHUB_ACTIONS is set") { isGithubActions }
     onlyIf("Project '${project.name}:test' has sources") { ! test.state.noSource }
-    onlyIf("Task '${project.name}:test' did not run") { test.state.didWork }
+    onlyIf("Task '${project.name}:test' did work") { test.state.didWork }
 
     // Never cache this task
     outputs.cacheIf { false }
     outputs.upToDateWhen { false }
 
     doLast {
-      if (test.ext.isGithubActions) {
-        def moduleDirPath = projectToJUnitXmlPath(project)
-        def dest = rootProject.layout.buildDirectory.dir("junit-xml/${moduleDirPath}/test").get().asFile
-        println "Copy JUnit XML for ${project.name} to $dest"
-        ant.copy(todir: "$dest") {
-          ant.fileset(dir: "${test.reports.junitXml.entryPoint}") {
-            ant.include(name: "**/*.xml")
-          }
-        }
+      def moduleDirPath = projectToJUnitXmlPath(project)
+      def dest = rootProject.layout.buildDirectory.dir("junit-xml/${moduleDirPath}/test").get().asFile
+      println "Copy JUnit XML for ${project.name} to $dest"
+      ant.copy(todir: "$dest") {
+	ant.fileset(dir: "${test.reports.junitXml.entryPoint}") {
+	  ant.include(name: "**/*.xml")
+	}
       }
     }
   }
 
   def copyQuarantinedTestXml = tasks.register('copyQuarantinedTestXml') {
-    // Skip this is module has no sources
+    onlyIf("Environment GITHUB_ACTIONS is set") { isGithubActions }
     onlyIf("Project '${project.name}:quarantinedTest' has sources") { ! quarantinedTest.state.noSource }
-    onlyIf("Task '${project.name}:quarantinedTest' did not run") { quarantinedTest.state.didWork }
+    onlyIf("Task '${project.name}:quarantinedTest' did work") { quarantinedTest.state.didWork }
 
     // Never cache this task
     outputs.cacheIf { false }
     outputs.upToDateWhen { false }
 
     doLast {
-      if (quarantinedTest.ext.isGithubActions) {
-        def moduleDirPath = projectToJUnitXmlPath(project)
-        def dest = rootProject.layout.buildDirectory.dir("junit-xml/${moduleDirPath}/quarantinedTest").get().asFile
-        println "Copy JUnit XML for ${project.name} to $dest"
-        ant.copy(todir: "$dest") {
-          ant.fileset(dir: "${quarantinedTest.reports.junitXml.entryPoint}") {
-            ant.include(name: "**/*.xml")
-          }
-        }
+      def moduleDirPath = projectToJUnitXmlPath(project)
+      def dest = rootProject.layout.buildDirectory.dir("junit-xml/${moduleDirPath}/quarantinedTest").get().asFile
+      println "Copy JUnit XML for ${project.name} to $dest"
+      ant.copy(todir: "$dest") {
+	ant.fileset(dir: "${quarantinedTest.reports.junitXml.entryPoint}") {
+	  ant.include(name: "**/*.xml")
+	}
       }
     }
   }
 
   test {
-    ext {
-      isGithubActions = System.getenv('GITHUB_ACTIONS') != null
-    }
-
     maxParallelForks = maxTestForks
     ignoreFailures = userIgnoreFailures
 
@@ -584,10 +580,6 @@ subprojects {
   }
 
   task quarantinedTest(type: Test, dependsOn: compileJava) {
-    ext {
-      isGithubActions = System.getenv('GITHUB_ACTIONS') != null
-    }
-
     // Disable caching and up-to-date for this task. We always want quarantined tests
     // to run and never want to cache their results.
     outputs.upToDateWhen { false }
