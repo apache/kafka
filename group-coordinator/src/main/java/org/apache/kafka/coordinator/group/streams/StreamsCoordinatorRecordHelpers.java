@@ -110,7 +110,6 @@ public class StreamsCoordinatorRecordHelpers {
         StreamsGroupPartitionMetadataValue value = new StreamsGroupPartitionMetadataValue();
         newPartitionMetadata.forEach((topicName, topicMetadata) -> {
             List<StreamsGroupPartitionMetadataValue.PartitionMetadata> partitionMetadata = new ArrayList<>();
-            // If the partition rack information map is empty, store an empty list in the record.
             if (!topicMetadata.partitionRacks().isEmpty()) {
                 topicMetadata.partitionRacks().forEach((partition, racks) ->
                     partitionMetadata.add(new StreamsGroupPartitionMetadataValue.PartitionMetadata()
