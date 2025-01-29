@@ -3197,18 +3197,7 @@ grouped
                         dynamic rewards, such as issuing a discount when a customer's total purchases exceed a predefined limit.
                     </li>
                 </ul>
-                <pre class="line-numbers"><code class="language-java">package org.apache.kafka.streams.kstream;
-
-import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.processor.api.Processor;
-import org.apache.kafka.streams.processor.api.ProcessorContext;
-import org.apache.kafka.streams.processor.api.Record;
-import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.Stores;
-
-public class CumulativeDiscountsForALoyaltyProgramExample {
+                <pre class="line-numbers"><code class="language-java">public class CumulativeDiscountsForALoyaltyProgramExample {
     private static final double DISCOUNT_THRESHOLD = 100.0;
     private static final String CUSTOMER_SPENDING_STORE = &quot;customer-spending-store&quot;;
     private static final String DISCOUNT_NOTIFICATION_MESSAGE =
@@ -3281,17 +3270,7 @@ public class CumulativeDiscountsForALoyaltyProgramExample {
                         and
                         INFO logs are stored for basic reporting purposes.</li>
                 </ul>
-                <pre class="line-numbers"><code class="language-java">package org.apache.kafka.streams.kstream;
-
-import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.processor.api.ContextualProcessor;
-import org.apache.kafka.streams.processor.api.Record;
-
-import java.util.Collections;
-import java.util.List;
-
-public class CategorizingLogsBySeverityExample {
+                <pre class="line-numbers"><code class="language-java">public class CategorizingLogsBySeverityExample {
     private static final String ERROR_LOGS_TOPIC = &quot;error-logs-topic&quot;;
     private static final String INPUT_LOGS_TOPIC = &quot;input-logs-topic&quot;;
     private static final String UNKNOWN_LOGS_TOPIC = &quot;unknown-logs-topic&quot;;
@@ -3348,21 +3327,7 @@ public class CategorizingLogsBySeverityExample {
                         widening
                         or controlling traffic depending on the number of cars passing through the monitored stretch.</li>
                 </ul>
-                <pre class="line-numbers"><code class="language-java">package org.apache.kafka.streams.kstream;
-
-import org.apache.kafka.common.serialization;
-import org.apache.kafka.streams.processor.api.FixedKeyProcessor;
-import org.apache.kafka.streams.processor.api.FixedKeyProcessorContext;
-import org.apache.kafka.streams.processor.api.FixedKeyRecord;
-import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.state.Stores;
-
-import java.time.Instant;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
-
-public class TrafficRadarMonitoringCarCountExample {
+                <pre class="line-numbers"><code class="language-java">public class TrafficRadarMonitoringCarCountExample {
     private static final String DAILY_COUNT_STORE = &quot;price-state-store&quot;;
     private static final String DAILY_COUNT_TOPIC = &quot;price-state-topic&quot;;
     private static final String RADAR_COUNT_TOPIC = &quot;car-radar-topic&quot;;
@@ -3428,17 +3393,7 @@ public class TrafficRadarMonitoringCarCountExample {
                         formal equivalents ensures that automated sentiment analysis tools work accurately and provide reliable
                         insights.</li>
                 </ul>
-                <pre class="line-numbers"><code class="language-java">package org.apache.kafka.streams.kstream;
-
-import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.processor.api.ContextualFixedKeyProcessor;
-import org.apache.kafka.streams.processor.api.FixedKeyRecord;
-
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.Map;
-
-public class ReplacingSlangTextInMessagesExample {
+                <pre class="line-numbers"><code class="language-java">public class ReplacingSlangTextInMessagesExample {
     private static final Map&lt;String, String&gt; SLANG_DICTIONARY = Map.of(
             &quot;u&quot;, &quot;you&quot;,
             &quot;brb&quot;, &quot;be right back&quot;,
@@ -3548,18 +3503,7 @@ public class ReplacingSlangTextInMessagesExample {
                     </tbody>
                 </table>
                 <h5 id="cumulative-discounts-for-a-loyalty-program-removal">Cumulative Discounts for a Loyalty Program</h5>
-                <pre class="line-numbers"><code class="language-java">package org.apache.kafka.streams.kstream;
-
-import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.processor.api.Processor;
-import org.apache.kafka.streams.processor.api.ProcessorContext;
-import org.apache.kafka.streams.processor.api.Record;
-import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.Stores;
-
-public class CumulativeDiscountsForALoyaltyProgramExample {
+                <pre class="line-numbers"><code class="language-java">public class CumulativeDiscountsForALoyaltyProgramExample {
     private static final double DISCOUNT_THRESHOLD = 100.0;
     private static final String CUSTOMER_SPENDING_STORE = &quot;customer-spending-store&quot;;
     private static final String DISCOUNT_NOTIFICATION_MESSAGE =
@@ -3679,17 +3623,7 @@ public class CumulativeDiscountsForALoyaltyProgramExample {
                 <h5 id="categorizing-logs-by-severity-removal">Categorizing Logs by Severity</h5>
                 <p>Below, methods <code>categorizeWithFlatTransform</code> and <code>categorizeWithProcess</code> show how you can
                     migrate from <code>flatTransform</code> to <code>process</code>.</p>
-                <pre class="line-numbers"><code class="language-java">package org.apache.kafka.streams.kstream;
-
-import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.processor.api.ContextualProcessor;
-import org.apache.kafka.streams.processor.api.Record;
-
-import java.util.Collections;
-import java.util.List;
-
-public class CategorizingLogsBySeverityExample {
+                <pre class="line-numbers"><code class="language-java">public class CategorizingLogsBySeverityExample {
     private static final String ERROR_LOGS_TOPIC = &quot;error-logs-topic&quot;;
     private static final String INPUT_LOGS_TOPIC = &quot;input-logs-topic&quot;;
     private static final String UNKNOWN_LOGS_TOPIC = &quot;unknown-logs-topic&quot;;
@@ -3780,20 +3714,7 @@ public class CategorizingLogsBySeverityExample {
                 <h5 id="traffic-radar-monitoring-car-count-removal">Traffic Radar Monitoring Car Count</h5>
                 <p>Below, methods <code>countWithTransformValues</code> and <code>countWithProcessValues</code> show how you can migrate
                     from <code>transformValues</code> to <code>processValues</code>.</p>
-                <pre class="line-numbers"><code class="language-java">package org.apache.kafka.streams.kstream;
-
-import org.apache.kafka.streams.processor.api.FixedKeyProcessor;
-import org.apache.kafka.streams.processor.api.FixedKeyProcessorContext;
-import org.apache.kafka.streams.processor.api.FixedKeyRecord;
-import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.state.Stores;
-
-import java.time.Instant;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
-
-public class TrafficRadarMonitoringCarCountExample {
+                <pre class="line-numbers"><code class="language-java">public class TrafficRadarMonitoringCarCountExample {
     private static final String DAILY_COUNT_STORE = &quot;price-state-store&quot;;
     private static final String DAILY_COUNT_TOPIC = &quot;price-state-topic&quot;;
     private static final String RADAR_COUNT_TOPIC = &quot;car-radar-topic&quot;;
@@ -3904,17 +3825,7 @@ public class TrafficRadarMonitoringCarCountExample {
                 <h5 id="replacing-slang-in-text-messages-removal">Replacing Slang in Text Messages</h5>
                 <p>Below, methods <code>replaceWithFlatTransformValues</code> and <code>replaceWithProcessValues</code> show how you can
                     migrate from <code>flatTransformValues</code> to <code>processValues</code>.</p>
-                <pre class="line-numbers"><code class="language-java">package org.apache.kafka.streams.kstream;
-
-import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.processor.api.ContextualFixedKeyProcessor;
-import org.apache.kafka.streams.processor.api.FixedKeyRecord;
-
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.Map;
-
-public class ReplacingSlangTextInMessagesExample {
+                <pre class="line-numbers"><code class="language-java">public class ReplacingSlangTextInMessagesExample {
     private static final Map&lt;String, String&gt; SLANG_DICTIONARY = Map.of(
             &quot;u&quot;, &quot;you&quot;,
             &quot;brb&quot;, &quot;be right back&quot;,
@@ -4014,15 +3925,7 @@ public class ReplacingSlangTextInMessagesExample {
                             ensures timely actions to capitalize on the content&#39;s performance.</p>
                     </li>
                 </ul>
-                <pre class="line-numbers"><code class="language-java">package org.apache.kafka.streams.kstream;
-
-import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.api.Processor;
-import org.apache.kafka.streams.processor.api.ProcessorContext;
-import org.apache.kafka.streams.processor.api.Record;
-
-public class PopularPageEmailAlertExample {
+                <pre class="line-numbers"><code class="language-java">public class PopularPageEmailAlertExample {
     private static final String ALERTS_EMAIL = &quot;alerts@yourcompany.com&quot;;
     private static final String PAGE_VIEWS_TOPIC = &quot;page-views-topic&quot;;
 
