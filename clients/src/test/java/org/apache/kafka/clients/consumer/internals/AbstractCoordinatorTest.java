@@ -51,7 +51,6 @@ import org.apache.kafka.common.requests.LeaveGroupResponse;
 import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.requests.SyncGroupRequest;
 import org.apache.kafka.common.requests.SyncGroupResponse;
-import org.apache.kafka.common.test.api.Flaky;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
@@ -1435,7 +1434,6 @@ public class AbstractCoordinatorTest {
         awaitFirstHeartbeat(heartbeatReceived);
     }
 
-    @Flaky("KAFKA-18310")
     @Test
     public void testWakeupAfterSyncGroupSentExternalCompletion() throws Exception {
         setupCoordinator();
@@ -1456,14 +1454,34 @@ public class AbstractCoordinatorTest {
         }, syncGroupResponse(Errors.NONE));
         AtomicBoolean heartbeatReceived = prepareFirstHeartbeat();
 
-        assertThrows(WakeupException.class, () -> coordinator.ensureActiveGroup(), "Should have woken up from ensureActiveGroup()");
+        // If joinFuture finishes too fast, coordinator#ensureActiveGroup doesn't throw WakeupException,
+        // because there is no next ConsumerNetworkClient#poll to trigger RequestMatcher from SyncGroupRequest.
+        boolean exceptionCaught = false;
+        try {
+            coordinator.ensureActiveGroup();
+        } catch (WakeupException ignored) {
+            exceptionCaught = true;
+        }
 
         assertEquals(1, coordinator.onJoinPrepareInvokes);
-        assertEquals(0, coordinator.onJoinCompleteInvokes);
-        assertFalse(heartbeatReceived.get());
+        if (exceptionCaught) {
+            assertEquals(0, coordinator.onJoinCompleteInvokes);
+            assertFalse(heartbeatReceived.get());
+        } else {
+            // Although the first ensureActiveGroup() doesn't throw WakeupException,
+            // heartbeat thread in the background triggers KafkaClient#pollNoWakeup to complete SyncGroupRequest.
+            // The ConsumerNetworkClient#wakeup is true, so there should have WakeupException from KafkaClient#poll.
+            TestUtils.waitForCondition(() -> {
+                try {
+                    consumerClient.poll(mockTime.timer(0));
+                    return false;
+                } catch (WakeupException e) {
+                    return true;
+                }
+            }, "Should have WakeupException from poll");
+        }
 
-        // the join group completes in this poll()
-        consumerClient.poll(mockTime.timer(0));
+        // the join group completes in this ensureActiveGroup() or it's already completed if exceptionCaught is false
         coordinator.ensureActiveGroup();
 
         assertEquals(1, coordinator.onJoinPrepareInvokes);
@@ -1472,7 +1490,6 @@ public class AbstractCoordinatorTest {
         awaitFirstHeartbeat(heartbeatReceived);
     }
 
-    @Flaky("KAFKA-18310")
     @Test
     public void testWakeupAfterSyncGroupReceived() throws Exception {
         setupCoordinator();
@@ -1488,15 +1505,32 @@ public class AbstractCoordinatorTest {
         }, syncGroupResponse(Errors.NONE));
         AtomicBoolean heartbeatReceived = prepareFirstHeartbeat();
 
+        // If joinFuture finishes too fast, coordinator#ensureActiveGroup doesn't throw WakeupException,
+        // because there is no next ConsumerNetworkClient#poll to trigger RequestMatcher from SyncGroupRequest.
+        boolean exceptionCaught = false;
         try {
             coordinator.ensureActiveGroup();
-            fail("Should have woken up from ensureActiveGroup()");
         } catch (WakeupException ignored) {
+            exceptionCaught = true;
         }
 
         assertEquals(1, coordinator.onJoinPrepareInvokes);
-        assertEquals(0, coordinator.onJoinCompleteInvokes);
-        assertFalse(heartbeatReceived.get());
+        if (exceptionCaught) {
+            assertEquals(0, coordinator.onJoinCompleteInvokes);
+            assertFalse(heartbeatReceived.get());
+        } else {
+            // Although the first ensureActiveGroup() doesn't throw WakeupException,
+            // heartbeat thread in the background triggers KafkaClient#pollNoWakeup to complete SyncGroupRequest.
+            // The ConsumerNetworkClient#wakeup is true, so there should have WakeupException from KafkaClient#poll.
+            TestUtils.waitForCondition(() -> {
+                try {
+                    consumerClient.poll(mockTime.timer(0));
+                    return false;
+                } catch (WakeupException e) {
+                    return true;
+                }
+            }, "Should have WakeupException from poll");
+        }
 
         coordinator.ensureActiveGroup();
 
@@ -1506,7 +1540,6 @@ public class AbstractCoordinatorTest {
         awaitFirstHeartbeat(heartbeatReceived);
     }
 
-    @Flaky("KAFKA-15474,KAFKA-18310")
     @Test
     public void testWakeupAfterSyncGroupReceivedExternalCompletion() throws Exception {
         setupCoordinator();
@@ -1522,11 +1555,32 @@ public class AbstractCoordinatorTest {
         }, syncGroupResponse(Errors.NONE));
         AtomicBoolean heartbeatReceived = prepareFirstHeartbeat();
 
-        assertThrows(WakeupException.class, () -> coordinator.ensureActiveGroup(), "Should have woken up from ensureActiveGroup()");
+        // If joinFuture finishes too fast, coordinator#ensureActiveGroup doesn't throw WakeupException,
+        // because there is no next ConsumerNetworkClient#poll to trigger RequestMatcher from SyncGroupRequest.
+        boolean exceptionCaught = false;
+        try {
+            coordinator.ensureActiveGroup();
+        } catch (WakeupException ignored) {
+            exceptionCaught = true;
+        }
 
         assertEquals(1, coordinator.onJoinPrepareInvokes);
-        assertEquals(0, coordinator.onJoinCompleteInvokes);
-        assertFalse(heartbeatReceived.get());
+        if (exceptionCaught) {
+            assertEquals(0, coordinator.onJoinCompleteInvokes);
+            assertFalse(heartbeatReceived.get());
+        } else {
+            // Although the first ensureActiveGroup() doesn't throw WakeupException,
+            // heartbeat thread in the background triggers KafkaClient#pollNoWakeup to complete SyncGroupRequest.
+            // The ConsumerNetworkClient#wakeup is true, so there should have WakeupException from KafkaClient#poll.
+            TestUtils.waitForCondition(() -> {
+                try {
+                    consumerClient.poll(mockTime.timer(0));
+                    return false;
+                } catch (WakeupException e) {
+                    return true;
+                }
+            }, "Should have WakeupException from poll");
+        }
 
         coordinator.ensureActiveGroup();
 
