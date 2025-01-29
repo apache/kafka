@@ -18,7 +18,9 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.internals.events.StreamsOnAllTasksLostCallbackCompletedEvent;
 import org.apache.kafka.clients.consumer.internals.events.StreamsOnTasksAssignedCallbackCompletedEvent;
+import org.apache.kafka.clients.consumer.internals.events.StreamsOnTasksRevokedCallbackCompletedEvent;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
 import org.apache.kafka.common.metrics.Metrics;
@@ -41,10 +43,15 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.SortedSet;
+import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP_PREFIX;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.COORDINATOR_METRICS_SUFFIX;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -73,8 +80,8 @@ public class StreamsMembershipManagerTest {
     private static final int PARTITION_0 = 0;
     private static final int PARTITION_1 = 1;
 
-    private Time time = new MockTime(0);
-    private Metrics metrics = new Metrics(time);
+    private final Time time = new MockTime(0);
+    private final Metrics metrics = new Metrics(time);
 
     private StreamsMembershipManager membershipManager;
 
@@ -1076,6 +1083,54 @@ public class StreamsMembershipManagerTest {
     }
 
     @Test
+    public void testOnHeartbeatFailureAfterLeaveRequestGenerated() {
+        final CompletableFuture<Void> onAllTasksLostCallbackExecuted = new CompletableFuture<>();
+        when(streamsRebalanceEventsProcessor.requestOnAllTasksLostCallbackInvocation())
+            .thenReturn(onAllTasksLostCallbackExecuted);
+        joining();
+        final CompletableFuture<Void> groupLeft = leaving(onAllTasksLostCallbackExecuted);
+        membershipManager.onHeartbeatRequestGenerated();
+        assertFalse(groupLeft.isDone());
+
+        membershipManager.onHeartbeatFailure(true);
+
+        assertTrue(groupLeft.isDone());
+    }
+
+    @Test
+    public void testOnHeartbeatFatalFailure() {
+        testOnHeartbeatFailure(false);
+    }
+
+    @Test
+    public void testOnHeartbeatRetriableFailure() {
+        testOnHeartbeatFailure(true);
+    }
+
+    private void testOnHeartbeatFailure(boolean retriable) {
+        final MetricName failedRebalanceTotalMetricName = metrics.metricName(
+            "failed-rebalance-total",
+            CONSUMER_METRIC_GROUP_PREFIX + COORDINATOR_METRICS_SUFFIX
+        );
+        setupStreamsAssignmentInterfaceWithOneSubtopologyOneSourceTopic(SUB_TOPOLOGY_ID_0, TOPIC_0);
+        final Set<StreamsRebalanceData.TaskId> activeTasks =
+            Set.of(new StreamsRebalanceData.TaskId(SUB_TOPOLOGY_ID_0, PARTITION_0));
+        final CompletableFuture<Void> onTasksAssignedCallbackExecuted = new CompletableFuture<>();
+        when(streamsRebalanceEventsProcessor.requestOnTasksAssignedCallbackInvocation(makeTaskAssignment(activeTasks, Collections.emptySet(), Collections.emptySet())))
+            .thenReturn(onTasksAssignedCallbackExecuted);
+        joining();
+        time.sleep(1);
+        reconcile(makeHeartbeatResponseWithActiveTasks(SUB_TOPOLOGY_ID_0, List.of(PARTITION_0)));
+        final double failedRebalancesTotalBefore = (double) metrics.metric(failedRebalanceTotalMetricName).metricValue();
+        assertEquals(0L, failedRebalancesTotalBefore);
+
+        membershipManager.onHeartbeatFailure(retriable);
+
+        final double failedRebalancesTotalAfter = (double) metrics.metric(failedRebalanceTotalMetricName).metricValue();
+        assertEquals(retriable ? 0L : 1L, failedRebalancesTotalAfter);
+    }
+
+    @Test
     public void testOnFencedWhenInJoining() {
         joining();
 
@@ -1293,6 +1348,65 @@ public class StreamsMembershipManagerTest {
     }
 
     @Test
+    public void testOnTasksAssignedCallbackCompletedWhenCallbackFails() {
+        final String errorMessage = "KABOOM!";
+        final CompletableFuture<Void> future = new CompletableFuture<>();
+        final StreamsOnTasksAssignedCallbackCompletedEvent event = new StreamsOnTasksAssignedCallbackCompletedEvent(
+            future,
+            Optional.of(new KafkaException(errorMessage))
+        );
+
+        membershipManager.onTasksAssignedCallbackCompleted(event);
+
+        assertTrue(future.isDone());
+        assertFalse(future.isCancelled());
+        assertTrue(future.isCompletedExceptionally());
+        final ExecutionException executionException = assertThrows(ExecutionException.class, future::get);
+        assertInstanceOf(KafkaException.class, executionException.getCause());
+        assertEquals(errorMessage, executionException.getCause().getMessage());
+
+        final SortedSet<StreamsRebalanceData.TaskId> activeTasksToAssign = new TreeSet<>();
+        activeTasksToAssign.add(new StreamsRebalanceData.TaskId(SUB_TOPOLOGY_ID_0, PARTITION_0));
+        System.out.println(activeTasksToAssign.stream()
+            .map(StreamsRebalanceData.TaskId::toString)
+            .collect(Collectors.joining(", ")));
+    }
+
+    @Test
+    public void testOnTasksRevokedCallbackCompleted() {
+        final CompletableFuture<Void> future = new CompletableFuture<>();
+        final StreamsOnTasksRevokedCallbackCompletedEvent event = new StreamsOnTasksRevokedCallbackCompletedEvent(
+            future,
+            Optional.empty()
+        );
+
+        membershipManager.onTasksRevokedCallbackCompleted(event);
+
+        assertTrue(future.isDone());
+        assertFalse(future.isCancelled());
+        assertFalse(future.isCompletedExceptionally());
+    }
+
+    @Test
+    public void testOnTasksRevokedCallbackCompletedWhenCallbackFails() {
+        final String errorMessage = "KABOOM!";
+        final CompletableFuture<Void> future = new CompletableFuture<>();
+        final StreamsOnTasksRevokedCallbackCompletedEvent event = new StreamsOnTasksRevokedCallbackCompletedEvent(
+            future,
+            Optional.of(new KafkaException(errorMessage))
+        );
+
+        membershipManager.onTasksRevokedCallbackCompleted(event);
+
+        assertTrue(future.isDone());
+        assertFalse(future.isCancelled());
+        assertTrue(future.isCompletedExceptionally());
+        final ExecutionException executionException = assertThrows(ExecutionException.class, future::get);
+        assertInstanceOf(KafkaException.class, executionException.getCause());
+        assertEquals(errorMessage, executionException.getCause().getMessage());
+    }
+
+    @Test
     public void testOnAllTasksLostCallbackCompleted() {
         final CompletableFuture<Void> future = new CompletableFuture<>();
         final StreamsOnAllTasksLostCallbackCompletedEvent event = new StreamsOnAllTasksLostCallbackCompletedEvent(
@@ -1308,7 +1422,7 @@ public class StreamsMembershipManagerTest {
     }
 
     @Test
-    public void testOnTasksAssignedCallbackCompletedWhenCallbackFails() {
+    public void testOnAllTasksLostCallbackCompletedWhenCallbackFails() {
         final String errorMessage = "KABOOM!";
         final CompletableFuture<Void> future = new CompletableFuture<>();
         final StreamsOnAllTasksLostCallbackCompletedEvent event = new StreamsOnAllTasksLostCallbackCompletedEvent(
@@ -1324,6 +1438,24 @@ public class StreamsMembershipManagerTest {
         final ExecutionException executionException = assertThrows(ExecutionException.class, future::get);
         assertInstanceOf(KafkaException.class, executionException.getCause());
         assertEquals(errorMessage, executionException.getCause().getMessage());
+    }
+
+    @Test
+    public void testMaybeRejoinStaleMember() {
+        final CompletableFuture<Void> onAllTasksLostCallbackExecuted = new CompletableFuture<>();
+        when(streamsRebalanceEventsProcessor.requestOnAllTasksLostCallbackInvocation())
+            .thenReturn(onAllTasksLostCallbackExecuted);
+        joining();
+        membershipManager.onPollTimerExpired();
+        membershipManager.onHeartbeatRequestGenerated();
+        verifyInStateStale(membershipManager);
+
+        membershipManager.maybeRejoinStaleMember();
+
+        verifyInStateStale(membershipManager);
+        onAllTasksLostCallbackExecuted.complete(null);
+        verifyInStateJoining(membershipManager);
+        assertEquals(StreamsGroupHeartbeatRequest.JOIN_GROUP_MEMBER_EPOCH, membershipManager.memberEpoch());
     }
 
     private void verifyThatNoTasksHaveBeenRevoked() {

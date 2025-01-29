@@ -90,7 +90,7 @@ public class StreamsMembershipManager implements RequestManager {
             this.standbyTasks = standbyTasks;
             this.warmupTasks = warmupTasks;
             if (localEpoch == NONE_EPOCH &&
-                (!activeTasks.isEmpty() || !standbyTasks.isEmpty() || !warmupTasks.isEmpty())) {
+                    (!activeTasks.isEmpty() || !standbyTasks.isEmpty() || !warmupTasks.isEmpty())) {
                 throw new IllegalArgumentException("Local epoch must be set if tasks are assigned.");
             }
         }
@@ -98,13 +98,11 @@ public class StreamsMembershipManager implements RequestManager {
         Optional<LocalAssignment> updateWith(final Map<String, SortedSet<Integer>> activeTasks,
                                              final Map<String, SortedSet<Integer>> standbyTasks,
                                              final Map<String, SortedSet<Integer>> warmupTasks) {
-            if (localEpoch != NONE_EPOCH) {
-                if (activeTasks.equals(this.activeTasks) &&
+            if (localEpoch != NONE_EPOCH &&
+                    activeTasks.equals(this.activeTasks) &&
                     standbyTasks.equals(this.standbyTasks) &&
                     warmupTasks.equals(this.warmupTasks)) {
-
-                    return Optional.empty();
-                }
+                return Optional.empty();
             }
 
             long nextLocalEpoch = localEpoch + 1;
@@ -230,12 +228,10 @@ public class StreamsMembershipManager implements RequestManager {
     }
 
     public boolean isLeavingGroup() {
-        MemberState state = state();
         return state == MemberState.PREPARE_LEAVING || state == MemberState.LEAVING;
     }
 
     private boolean isNotInGroup() {
-        MemberState state = state();
         return state == MemberState.UNSUBSCRIBED ||
             state == MemberState.FENCED ||
             state == MemberState.FATAL ||
@@ -280,7 +276,7 @@ public class StreamsMembershipManager implements RequestManager {
             isPollTimerExpired = true;
             // Briefly transition through prepare leaving. The member does not have to release
             // any assignment before sending the leave group given that is stale. It will invoke
-            // onTaskAssignment with empty assignment after sending the leave group on the STALE state.
+            // onAllTasksLost after sending the leave group on the STALE state.
             transitionTo(MemberState.PREPARE_LEAVING);
         }
         finalizeLeaving();
@@ -317,7 +313,7 @@ public class StreamsMembershipManager implements RequestManager {
 
         if (previousState == MemberState.UNSUBSCRIBED) {
             log.debug("Member {} with epoch {} got fatal error from the broker but it already " +
-                "left the group, so onTaskAssignment callback won't be triggered.", memberId, memberEpoch);
+                "left the group, so onAllTasksLost callback won't be triggered.", memberId, memberEpoch);
             return;
         }
 
@@ -332,7 +328,7 @@ public class StreamsMembershipManager implements RequestManager {
         CompletableFuture<Void> onAllTasksLostCallbackExecuted = streamsRebalanceEventsProcessor.requestOnAllTasksLostCallbackInvocation();
         onAllTasksLostCallbackExecuted.whenComplete((result, error) -> {
             if (error != null) {
-                log.error("onTaskAssignment callback invocation failed while releasing assignment" +
+                log.error("onAllTasksLost callback invocation failed while releasing assignment " +
                     "after member failed with fatal error.", error);
             }
             clearTaskAndPartitionAssignment();
@@ -406,7 +402,6 @@ public class StreamsMembershipManager implements RequestManager {
     }
 
     public boolean shouldHeartbeatNow() {
-        MemberState state = state();
         return state == MemberState.ACKNOWLEDGING || state == MemberState.LEAVING || state == MemberState.JOINING;
     }
 
@@ -421,7 +416,6 @@ public class StreamsMembershipManager implements RequestManager {
     }
 
     public void onHeartbeatRequestGenerated() {
-        MemberState state = state();
         if (state == MemberState.ACKNOWLEDGING) {
             if (targetAssignmentReconciled()) {
                 transitionTo(MemberState.STABLE);
@@ -857,11 +851,7 @@ public class StreamsMembershipManager implements RequestManager {
                                                 final SortedSet<StreamsRebalanceData.TaskId> ownedActiveTasks,
                                                 final SortedSet<StreamsRebalanceData.TaskId> standbyTasksToAssign,
                                                 final SortedSet<StreamsRebalanceData.TaskId> warmupTasksToAssign) {
-        log.info("Assigning " +
-                (activeTasksToAssign.isEmpty() ? "no active tasks, " : "active tasks {}, ") +
-                (standbyTasksToAssign.isEmpty() ? "no standby tasks, " : "standby tasks {}, and ") +
-                (warmupTasksToAssign.isEmpty() ? "no warm-up tasks. " : "warm-up tasks {}.") +
-                "to the member.",
+        log.info("Assigning active tasks {{}}, standby tasks {{}}, and warm-up tasks {{}} to the member.",
             activeTasksToAssign.stream()
                 .map(StreamsRebalanceData.TaskId::toString)
                 .collect(Collectors.joining(", ")),
