@@ -3490,9 +3490,9 @@ public class ReplacingSlangTextInMessagesExample {
                     </h3>
                 </a>
                 <p>As of Kafka 4.0, several deprecated methods in the Kafka Streams API, such as <code>transform</code>,
-                    <code>flatTransform</code>,<br><code>transformValues</code>, <code>flatTransformValues</code>, and
-                    <code>process</code> have been removed. These methods have been replaced with the<br>more versatile Processor API.
-                    This guide provides detailed steps for migrating existing code to use the new Processor<br>API and explains the
+                    <code>flatTransform</code>, <code>transformValues</code>, <code>flatTransformValues</code>, and
+                    <code>process</code> have been removed. These methods have been replaced with the more versatile Processor API.
+                    This guide provides detailed steps for migrating existing code to use the new Processor API and explains the
                     benefits of the changes.</p>
                 <p>The following deprecated methods are no longer available in Kafka Streams:</p>
                 <ul>
@@ -3503,13 +3503,13 @@ public class ReplacingSlangTextInMessagesExample {
                     <li><code>KStream#process</code></li>
                 </ul>
                 <p>The Processor API now serves as a unified replacement for all these methods. It simplifies the API surface
-                    while<br>maintaining support for both stateless and stateful operations.</p>
+                    while maintaining support for both stateless and stateful operations.</p>
                 <h4>Migration Examples</h4>
                 <p>To migrate from the deprecated <code>transform</code>, <code>transformValues</code>, <code>flatTransform</code>, and
-                    <code>flatTransformValues</code> methods to the<br>Processor API (PAPI) in Kafka Streams, let&#39;s resume the
-                    previouss examples. The new <code>process</code> and <code>processValues</code><br>methods enable a more flexible
+                    <code>flatTransformValues</code> methods to the Processor API (PAPI) in Kafka Streams, let&#39;s resume the
+                    previouss examples. The new <code>process</code> and <code>processValues</code> methods enable a more flexible
                     and reusable approach by requiring implementations of the <code>Processor</code>
-                    or<br><code>FixedKeyProcessor</code> interfaces.</p>
+                    or <code>FixedKeyProcessor</code> interfaces.</p>
                 <table>
                     <thead>
                         <tr>
@@ -3678,7 +3678,7 @@ public class CumulativeDiscountsForALoyaltyProgramExample {
 }</code></pre>
                 <h5 id="categorizing-logs-by-severity-removal">Categorizing Logs by Severity</h5>
                 <p>Below, methods <code>categorizeWithFlatTransform</code> and <code>categorizeWithProcess</code> show how you can
-                    migrate from <code>flatTransform</code><br>to <code>process</code>.</p>
+                    migrate from <code>flatTransform</code> to <code>process</code>.</p>
                 <pre class="line-numbers"><code class="language-java">package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.streams.KeyValue;
@@ -3779,7 +3779,7 @@ public class CategorizingLogsBySeverityExample {
 }</code></pre>
                 <h5 id="traffic-radar-monitoring-car-count-removal">Traffic Radar Monitoring Car Count</h5>
                 <p>Below, methods <code>countWithTransformValues</code> and <code>countWithProcessValues</code> show how you can migrate
-                    from <code>transformValues</code><br>to <code>processValues</code>.</p>
+                    from <code>transformValues</code> to <code>processValues</code>.</p>
                 <pre class="line-numbers"><code class="language-java">package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.streams.processor.api.FixedKeyProcessor;
@@ -3903,7 +3903,7 @@ public class TrafficRadarMonitoringCarCountExample {
 }</code></pre>
                 <h5 id="replacing-slang-in-text-messages-removal">Replacing Slang in Text Messages</h5>
                 <p>Below, methods <code>replaceWithFlatTransformValues</code> and <code>replaceWithProcessValues</code> show how you can
-                    migrate from<br><code>flatTransformValues</code> to <code>processValues</code>.</p>
+                    migrate from <code>flatTransformValues</code> to <code>processValues</code>.</p>
                 <pre class="line-numbers"><code class="language-java">package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.streams.StreamsBuilder;
@@ -3979,30 +3979,30 @@ public class ReplacingSlangTextInMessagesExample {
                 <h4>Keynotes</h4>
                 <ul>
                     <li><strong>Type Safety and Flexibility:</strong> The process and processValues APIs utilize
-                        <code>ProcessorContext</code> and <code>Record</code> or<br><code>FixedKeyRecord</code> objects for better type
+                        <code>ProcessorContext</code> and <code>Record</code> or <code>FixedKeyRecord</code> objects for better type
                         safety and flexibility of custom processing logic.</li>
                     <li><strong>Clear State and Logic Management:</strong> Implementations for <code>Processor</code> or
-                        <code>FixedKeyProcessor</code> should manage state and<br>logic clearly. Use <code>context().forward()</code>
+                        <code>FixedKeyProcessor</code> should manage state and logic clearly. Use <code>context().forward()</code>
                         for emitting records downstream.</li>
                     <li><strong>Unified API:</strong> Consolidates multiple methods into a single, versatile API.</li>
                     <li><strong>Future-Proof:</strong> Ensures compatibility with the latest Kafka Streams releases.</li>
                 </ul>
                 <h4>Removal of Old <code>process</code> Method</h4>
                 <p>It is worth mentioning that, in addition to the methods mentioned above, the <code>process</code> method (which is
-                    not part of the<br>Processor API) has also been removed. The following example shows how to migrate to the new
+                    not part of the Processor API) has also been removed. The following example shows how to migrate to the new
                     <code>process</code>.</p>
                 <h5>Example</h5>
                 <ul>
                     <li>
                         <p><strong>Idea:</strong> The system monitors page views for a website in real-time. When a page reaches a
-                            predefined popularity<br>threshold (e.g., 1000 views), the system automatically sends an email alert to the
-                            site administrator or marketing<br>team to notify them of the page&#39;s success. This helps teams quickly
-                            identify high-performing content and act on it,<br>such as promoting the page further or analyzing the
+                            predefined popularity threshold (e.g., 1000 views), the system automatically sends an email alert to the
+                            site administrator or marketing team to notify them of the page&#39;s success. This helps teams quickly
+                            identify high-performing content and act on it, such as promoting the page further or analyzing the
                             traffic source.</p>
                     </li>
                     <li>
                         <p><strong>Real-World Context:</strong> In a content management system (CMS) for a news or blogging platform,
-                            it’s crucial to track<br>the popularity of articles or posts. For example:</p>
+                            it&#39;s crucial to track the popularity of articles or posts. For example:</p>
                         <ul>
                             <li><strong>Marketing Teams:</strong> Use the notification to highlight trending content on social media or
                                 email newsletters.</li>
@@ -4011,7 +4011,7 @@ public class ReplacingSlangTextInMessagesExample {
                             <li><strong>Ad Managers:</strong> Identify pages where additional ad placements might maximize revenue.</li>
                         </ul>
                         <p>By automating the detection of popular pages, the system eliminates the need for manual monitoring and
-                            ensures timely<br>actions to capitalize on the content&#39;s performance.</p>
+                            ensures timely actions to capitalize on the content&#39;s performance.</p>
                     </li>
                 </ul>
                 <pre class="line-numbers"><code class="language-java">package org.apache.kafka.streams.kstream;
