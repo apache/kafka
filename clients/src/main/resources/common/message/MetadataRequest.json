@@ -19,7 +19,6 @@
   "listeners": ["zkBroker", "broker"],
   "name": "MetadataRequest",
   "validVersions": "0-12",
-  "deprecatedVersions": "0-3",
   "flexibleVersions": "9+",
   "fields": [
     // In version 0, an empty array indicates "request metadata for all topics."  In version 1 and
