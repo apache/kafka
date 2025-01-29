@@ -39,6 +39,7 @@ public class Acknowledgements {
     // When the broker responds to the acknowledgements, this is the exception thrown.
     private KafkaException acknowledgeException;
 
+    // Set when the broker has responded to the acknowledgements.
     private boolean completed;
 
     public static Acknowledgements empty() {
@@ -124,13 +125,13 @@ public class Acknowledgements {
     }
 
     /**
-     * Set the acknowledgement exception when the response has been received from the broker.
+     * Completes the acknowledgements when the response has been received from the broker.
      *
      * @param acknowledgeException the exception (will be null if successful)
      */
-    public void setAcknowledgeException(KafkaException acknowledgeException) {
-        completed = true;
+    public void complete(KafkaException acknowledgeException) {
         this.acknowledgeException = acknowledgeException;
+        completed = true;
     }
 
     /**

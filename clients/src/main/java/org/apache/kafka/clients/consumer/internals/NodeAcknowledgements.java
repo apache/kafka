@@ -28,11 +28,11 @@ public class NodeAcknowledgements {
         this.acknowledgements = acknowledgements;
     }
 
-    public int getNodeId() {
+    public int nodeId() {
         return nodeId;
     }
 
-    public Acknowledgements getAcknowledgements() {
+    public Acknowledgements acknowledgements() {
         return acknowledgements;
     }
 }

@@ -471,7 +471,7 @@ public class ShareConsumeRequestManagerTest {
         assertEquals(1, completedAcknowledgements.size());
 
         Acknowledgements mergedAcks = acknowledgements.merge(acknowledgements2);
-        mergedAcks.setAcknowledgeException(null);
+        mergedAcks.complete(null);
         // Verifying that all 3 offsets were acknowledged as part of the final ShareAcknowledge on close.
         assertEquals(mergedAcks.getAcknowledgementsTypeMap(), completedAcknowledgements.get(0).get(tip0).getAcknowledgementsTypeMap());
         assertTrue(shareConsumeRequestManager.hasCompletedFetches());
