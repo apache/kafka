@@ -106,7 +106,7 @@
         ]},
         { "name": "PreferredReadReplica", "type": "int32", "versions": "11+", "default": "-1", "ignorable": false, "entityType": "brokerId",
           "about": "The preferred read replica for the consumer to use on its next fetch request."},
-        { "name": "Records", "type": "records", "versions": "0+", "nullableVersions": "0+", "about": "The record data."}
+        { "name": "Records", "type": "records", "versions": "0+", "about": "The record data."}
       ]}
     ]},
     { "name": "NodeEndpoints", "type": "[]NodeEndpoint", "versions": "16+", "taggedVersions": "16+", "tag": 0,
