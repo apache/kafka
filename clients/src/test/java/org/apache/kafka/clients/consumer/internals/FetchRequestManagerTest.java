@@ -3595,7 +3595,7 @@ public class FetchRequestManagerTest {
             node1Partition2
         ));
 
-        // node0Partition1 (the collected partition) should have a retrievable position, but the node0Partition2
+        // node0Partition1 (the collected partition) should have a retrievable position, but node0Partition2
         // (the unassigned position) should throw an error when attempting to retrieve its position.
         assertDoesNotThrow(() -> subscriptions.position(node0Partition1));
         assertThrows(IllegalStateException.class, () -> subscriptions.position(node0Partition2));
