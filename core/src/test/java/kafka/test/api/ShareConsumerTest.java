@@ -1844,65 +1844,71 @@ public class ShareConsumerTest {
         alterShareAutoOffsetReset(groupId, "earliest");
         ScheduledExecutorService service = Executors.newScheduledThreadPool(5);
 
-        try (Admin admin = createAdminClient()) {
-            TopicPartition tpMulti = new TopicPartition(topicName, 0);
+        TopicPartition tpMulti = new TopicPartition(topicName, 0);
 
-            // produce some messages
-            ClientState prodState = new ClientState();
-            final Set<String> produced = new HashSet<>();
-            service.execute(() -> {
-                    int i = 0;
-                    try (Producer<String, String> producer = createProducer(Map.of(
-                        ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName(),
-                        ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName()
-                    ))) {
-                        while (!prodState.done().get()) {
-                            String key = "key-" + (i++);
-                            ProducerRecord<String, String> record = new ProducerRecord<>(
-                                tpMulti.topic(),
-                                tpMulti.partition(),
-                                null,
-                                key,
-                                "value"
-                            );
-                            try {
-                                producer.send(record);
-                                producer.flush();
-                                // count only correctly produced records
-                                prodState.count().incrementAndGet();
-                                produced.add(key);
-                            } catch (Exception e) {
-                                // ignore
-                            }
+        // produce some messages
+        ClientState prodState = new ClientState();
+        final Set<String> produced = new HashSet<>();
+        service.execute(() -> {
+                int i = 0;
+                try (Producer<String, String> producer = createProducer(Map.of(
+                    ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName(),
+                    ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName()
+                ))) {
+                    while (!prodState.done().get()) {
+                        String key = "key-" + (i++);
+                        ProducerRecord<String, String> record = new ProducerRecord<>(
+                            tpMulti.topic(),
+                            tpMulti.partition(),
+                            null,
+                            key,
+                            "value"
+                        );
+                        try {
+                            producer.send(record);
+                            producer.flush();
+                            // count only correctly produced records
+                            prodState.count().incrementAndGet();
+                            produced.add(key);
+                        } catch (Exception e) {
+                            // ignore
                         }
                     }
                 }
-            );
+            }
+        );
 
-            // consume messages - start after small delay
-            ClientState consState = new ClientState();
-            // using map here if we want to debug specific keys
-            Map<String, Integer> consumed = new HashMap<>();
-            service.schedule(() -> {
-                    try (ShareConsumer<String, String> shareConsumer = createShareConsumer(groupId, Map.of(
-                        ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName(),
-                        ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName()
-                    ))) {
-                        shareConsumer.subscribe(List.of(topicName));
-                        while (!consState.done().get()) {
-                            ConsumerRecords<String, String> records = shareConsumer.poll(Duration.ofMillis(2000L));
-                            consState.count().addAndGet(records.count());
-                            records.forEach(rec -> consumed.compute(rec.key(), (k, v) -> v == null ? 1 : v + 1));
-                            if (prodState.done().get() && records.count() == 0) {
-                                consState.done().set(true);
-                            }
+        // consume messages - start after small delay
+        ClientState consState = new ClientState();
+        // using map here if we want to debug specific keys
+        Map<String, Integer> consumed = new HashMap<>();
+        service.schedule(() -> {
+                try (ShareConsumer<String, String> shareConsumer = createShareConsumer(groupId, Map.of(
+                    ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName(),
+                    ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName()
+                ))) {
+                    shareConsumer.subscribe(List.of(topicName));
+                    while (!consState.done().get()) {
+                        ConsumerRecords<String, String> records = shareConsumer.poll(Duration.ofMillis(2000L));
+                        consState.count().addAndGet(records.count());
+                        records.forEach(rec -> consumed.compute(rec.key(), (k, v) -> v == null ? 1 : v + 1));
+                        if (prodState.done().get() && records.count() == 0) {
+                            consState.done().set(true);
                         }
                     }
-                }, 100L, TimeUnit.MILLISECONDS
-            );
+                }
+            }, 100L, TimeUnit.MILLISECONDS
+        );
 
-            service.schedule(() -> {
-                    // get current share coordinator node
+        // To be closer to real world scenarios, we will execute after
+        // some time has elapsed since the producer and consumer started
+        // working.
+        service.schedule(() -> {
+                // Get the current node hosting the __share_group_state partition
+                // on which tpMulti is hosted. Then shut down this node and wait
+                // for it to be gracefully shutdown. Then fetch the coordinator again
+                // and verify that it has moved to some other broker.
+                try (Admin admin = createAdminClient()) {
                     SharePartitionKey key = SharePartitionKey.getInstance(groupId, new TopicIdPartition(topicId, tpMulti));
                     int shareGroupStateTp = Utils.abs(key.asCoordinatorKey().hashCode()) % 3;
                     List<Integer> curShareCoordNodeId = null;
@@ -1921,7 +1927,7 @@ public class ShareConsumerTest {
                     KafkaBroker broker = cluster.brokers().get(curShareCoordNodeId.get(0));
                     cluster.shutdownBroker(curShareCoordNodeId.get(0));
 
-                    // give some breathing time
+                    // wait for it to be completely shutdown
                     broker.awaitShutdown();
 
                     List<Integer> newShareCoordNodeId = null;
@@ -1937,30 +1943,34 @@ public class ShareConsumerTest {
 
                     assertEquals(1, newShareCoordNodeId.size());
                     assertNotEquals(curShareCoordNodeId.get(0), newShareCoordNodeId.get(0));
-                }, 5L, TimeUnit.SECONDS
-            );
+                }
+            }, 5L, TimeUnit.SECONDS
+        );
 
-            service.schedule(() -> {
-                    // stop the produce
-                    prodState.done().set(true);
-                }, 10L, TimeUnit.SECONDS
-            );
+        // top the producer after some time (but after coordinator shutdown)
+        service.schedule(() -> {
+                prodState.done().set(true);
+            }, 10L, TimeUnit.SECONDS
+        );
 
-            TestUtils.waitForCondition(
-                () -> prodState.done().get() && consState.done().get(),
-                45_000L,
-                500L,
-                () -> "prod/cons not done yet"
-            );
+        // wait for both producer and consumer to finish
+        TestUtils.waitForCondition(
+            () -> prodState.done().get() && consState.done().get(),
+            45_000L,
+            500L,
+            () -> "prod/cons not done yet"
+        );
 
-            assertTrue(prodState.count().get() <= consState.count().get());
-            Set<String> consumedKeys = consumed.keySet();
-            assertTrue(produced.containsAll(consumedKeys) && consumedKeys.containsAll(produced));
+        // Make sure we consumed all records. Consumed records could be higher
+        // due to re-delivery but that is expected since we are only guaranteeing
+        // at least once semantics.
+        assertTrue(prodState.count().get() <= consState.count().get());
+        Set<String> consumedKeys = consumed.keySet();
+        assertTrue(produced.containsAll(consumedKeys) && consumedKeys.containsAll(produced));
 
-            shutdownExecutorService(service);
+        shutdownExecutorService(service);
 
-            verifyShareGroupStateTopicRecordsProduced();
-        }
+        verifyShareGroupStateTopicRecordsProduced();
     }
 
     @ClusterTest(
