@@ -115,7 +115,6 @@ class ReplicaManagerTest {
   private var mockRemoteLogManager: RemoteLogManager = _
   private var addPartitionsToTxnManager: AddPartitionsToTxnManager = _
   private var brokerTopicStats: BrokerTopicStats = _
-  private var transactionSupportedOperation: TransactionSupportedOperation = genericErrorSupported
   private val quotaExceededThrottleTime = 1000
   private val quotaAvailableThrottleTime = 0
 
@@ -2541,8 +2540,7 @@ class ReplicaManagerTest {
 
       // Start verification and return the coordinator related errors.
       val expectedMessage = s"Unable to verify the partition has been added to the transaction. Underlying error: ${error.toString}"
-      transactionSupportedOperation = addPartition
-      val result = handleProduceAppend(replicaManager, tp0, transactionalRecords, transactionalId = transactionalId)
+      val result = handleProduceAppend(replicaManager, tp0, transactionalRecords, transactionalId = transactionalId, transactionSupportedOperation = addPartition)
       val appendCallback = ArgumentCaptor.forClass(classOf[AddPartitionsToTxnManager.AppendCallback])
       verify(addPartitionsToTxnManager, times(1)).addOrVerifyTransaction(
         ArgumentMatchers.eq(transactionalId),
@@ -2592,7 +2590,6 @@ class ReplicaManagerTest {
 
       // Start verification and return the coordinator related errors.
       val expectedMessage = s"Unable to verify the partition has been added to the transaction. Underlying error: ${error.toString}"
-      transactionSupportedOperation = genericErrorSupported
       val result = handleProduceAppend(replicaManager, tp0, transactionalRecords, transactionalId = transactionalId)
       val appendCallback = ArgumentCaptor.forClass(classOf[AddPartitionsToTxnManager.AppendCallback])
       verify(addPartitionsToTxnManager, times(1)).addOrVerifyTransaction(
@@ -2917,7 +2914,9 @@ class ReplicaManagerTest {
                                                   entriesToAppend: Map[TopicPartition, MemoryRecords],
                                                   transactionalId: String,
                                                   origin: AppendOrigin = AppendOrigin.CLIENT,
-                                                  requiredAcks: Short = -1): CallbackResult[Map[TopicPartition, PartitionResponse]] = {
+                                                  requiredAcks: Short = -1,
+                                                  transactionSupportedOperation: TransactionSupportedOperation = genericErrorSupported
+                                                 ): CallbackResult[Map[TopicPartition, PartitionResponse]] = {
     val result = new CallbackResult[Map[TopicPartition, PartitionResponse]]()
     def appendCallback(responses: Map[TopicPartition, PartitionResponse]): Unit = {
       responses.foreach( response => assertTrue(responses.get(response._1).isDefined))
@@ -2942,7 +2941,9 @@ class ReplicaManagerTest {
                                   records: MemoryRecords,
                                   origin: AppendOrigin = AppendOrigin.CLIENT,
                                   requiredAcks: Short = -1,
-                                  transactionalId: String): CallbackResult[PartitionResponse] = {
+                                  transactionalId: String,
+                                  transactionSupportedOperation: TransactionSupportedOperation = genericErrorSupported
+                                 ): CallbackResult[PartitionResponse] = {
     val result = new CallbackResult[PartitionResponse]()
 
     def appendCallback(responses: Map[TopicPartition, PartitionResponse]): Unit = {
@@ -2970,7 +2971,9 @@ class ReplicaManagerTest {
                                                             transactionalId: String,
                                                             producerId: Long,
                                                             producerEpoch: Short,
-                                                            baseSequence: Int = 0): CallbackResult[Either[Errors, VerificationGuard]] = {
+                                                            baseSequence: Int = 0,
+                                                            transactionSupportedOperation: TransactionSupportedOperation = genericErrorSupported
+                                                           ): CallbackResult[Either[Errors, VerificationGuard]] = {
     val result = new CallbackResult[Either[Errors, VerificationGuard]]()
     def postVerificationCallback(errorAndGuard: (Errors, VerificationGuard)): Unit = {
       val (error, verificationGuard) = errorAndGuard
