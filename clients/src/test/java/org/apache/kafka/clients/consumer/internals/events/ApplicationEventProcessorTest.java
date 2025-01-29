@@ -63,6 +63,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
@@ -446,13 +447,16 @@ public class ApplicationEventProcessorTest {
     @MethodSource("offsetsGenerator")
     public void testSyncCommitEvent(Optional<Map<TopicPartition, OffsetAndMetadata>> offsets) {
         SyncCommitEvent event = new SyncCommitEvent(offsets, 12345);
+        Optional<Map<TopicPartition, OffsetAndMetadata>> actualOffsets = offsets.isEmpty() ? Optional.of(Collections.emptyMap()) : offsets;
 
         setupProcessor(true);
-        doReturn(CompletableFuture.completedFuture(offsets.orElse(Map.of()))).when(commitRequestManager).commitSync(offsets, 12345);
+        doReturn(CompletableFuture.completedFuture(offsets.orElse(Map.of()))).when(commitRequestManager).commitSync(actualOffsets, 12345);
+        doReturn(Collections.emptyMap()).when(subscriptionState).allConsumed();
 
         processor.process(event);
-        verify(commitRequestManager).commitSync(offsets, 12345);
+        verify(commitRequestManager).commitSync(actualOffsets, 12345);
         Map<TopicPartition, OffsetAndMetadata> committedOffsets = assertDoesNotThrow(() -> event.future().get());
+        assertTrue(event.offsetsReady.isDone());
         assertEquals(offsets.orElse(Map.of()), committedOffsets);
     }
 
@@ -476,6 +480,7 @@ public class ApplicationEventProcessorTest {
         processor.process(event);
 
         verify(commitRequestManager).commitSync(Optional.empty(), 12345);
+        assertTrue(event.offsetsReady.isDone());
         assertFutureThrows(IllegalStateException.class, event.future());
     }
 
@@ -483,13 +488,16 @@ public class ApplicationEventProcessorTest {
     @MethodSource("offsetsGenerator")
     public void testAsyncCommitEventWithOffsets(Optional<Map<TopicPartition, OffsetAndMetadata>> offsets) {
         AsyncCommitEvent event = new AsyncCommitEvent(offsets);
+        Optional<Map<TopicPartition, OffsetAndMetadata>> actualOffsets = offsets.isEmpty() ? Optional.of(Collections.emptyMap()) : offsets;
 
         setupProcessor(true);
-        doReturn(CompletableFuture.completedFuture(offsets.orElse(Map.of()))).when(commitRequestManager).commitAsync(offsets);
+        doReturn(CompletableFuture.completedFuture(offsets.orElse(Map.of()))).when(commitRequestManager).commitAsync(actualOffsets);
+        doReturn(Collections.emptyMap()).when(subscriptionState).allConsumed();
 
         processor.process(event);
-        verify(commitRequestManager).commitAsync(offsets);
+        verify(commitRequestManager).commitAsync(actualOffsets);
         Map<TopicPartition, OffsetAndMetadata> committedOffsets = assertDoesNotThrow(() -> event.future().get());
+        assertTrue(event.offsetsReady.isDone());
         assertEquals(offsets.orElse(Map.of()), committedOffsets);
     }
 
@@ -507,12 +515,15 @@ public class ApplicationEventProcessorTest {
         AsyncCommitEvent event = new AsyncCommitEvent(Optional.empty());
 
         setupProcessor(true);
+        doReturn(Collections.emptyMap()).when(subscriptionState).allConsumed();
+
         CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = new CompletableFuture<>();
         future.completeExceptionally(new IllegalStateException());
         doReturn(future).when(commitRequestManager).commitAsync(any());
         processor.process(event);
 
         verify(commitRequestManager).commitAsync(Optional.empty());
+        assertTrue(event.offsetsReady.isDone());
         assertFutureThrows(IllegalStateException.class, event.future());
     }
 

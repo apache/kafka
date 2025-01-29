@@ -186,7 +186,6 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             return drainPendingOffsetCommitRequests();
         }
 
-        maybeAutoCommitAsync();
         if (!pendingRequests.hasUnsentRequests())
             return EMPTY;
 

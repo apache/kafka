@@ -22,17 +22,28 @@ import org.apache.kafka.common.TopicPartition;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 
 public abstract class CommitEvent extends CompletableApplicationEvent<Map<TopicPartition, OffsetAndMetadata>> {
-
     /**
      * Offsets to commit per partition.
      */
     private final Optional<Map<TopicPartition, OffsetAndMetadata>> offsets;
 
-    protected CommitEvent(final Type type, final Optional<Map<TopicPartition, OffsetAndMetadata>> offsets, final long deadlineMs) {
+    /**
+     * Future that completes when allConsumed offsets have been calculated.
+     * The app thread waits for this future before returning control to ensure
+     * the offsets to be committed are up-to-date.
+     */
+    protected final CompletableFuture<Void> offsetsReady;
+
+    protected CommitEvent(final Type type,
+                          final Optional<Map<TopicPartition, OffsetAndMetadata>> offsets,
+                          final long deadlineMs,
+                          CompletableFuture<Void> offsetsReady) {
         super(type, deadlineMs);
         this.offsets = validate(offsets);
+        this.offsetsReady = offsetsReady;
     }
 
     /**
@@ -55,6 +66,14 @@ public abstract class CommitEvent extends CompletableApplicationEvent<Map<TopicP
 
     public Optional<Map<TopicPartition, OffsetAndMetadata>> offsets() {
         return offsets;
+    }
+
+    public CompletableFuture<Void> offsetsReady() {
+        return offsetsReady;
+    }
+
+    public void markOffsetsReady() {
+        offsetsReady.complete(null);
     }
 
     @Override

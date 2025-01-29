@@ -21,6 +21,7 @@ import org.apache.kafka.common.TopicPartition;
 
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Event to commit offsets waiting for a response and retrying on expected retriable errors until
@@ -29,6 +30,6 @@ import java.util.Optional;
 public class SyncCommitEvent extends CommitEvent {
 
     public SyncCommitEvent(final Optional<Map<TopicPartition, OffsetAndMetadata>> offsets, final long deadlineMs) {
-        super(Type.COMMIT_SYNC, offsets, deadlineMs);
+        super(Type.COMMIT_SYNC, offsets, deadlineMs, new CompletableFuture<>());
     }
 }

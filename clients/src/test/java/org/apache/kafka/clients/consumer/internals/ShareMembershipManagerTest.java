@@ -112,14 +112,14 @@ public class ShareMembershipManagerTest {
 
     private ShareMembershipManager createMembershipManager() {
         ShareMembershipManager manager = spy(new ShareMembershipManager(
-            logContext, GROUP_ID, RACK_ID, subscriptionState, metadata, time, rebalanceMetricsManager));
+            logContext, GROUP_ID, RACK_ID, subscriptionState, metadata, time, rebalanceMetricsManager, true));
         assertMemberIdIsGenerated(manager.memberId());
         return manager;
     }
 
     private ShareMembershipManager createMembershipManagerJoiningGroup() {
         ShareMembershipManager manager = spy(new ShareMembershipManager(
-                logContext, GROUP_ID, RACK_ID, subscriptionState, metadata, time, rebalanceMetricsManager));
+                logContext, GROUP_ID, RACK_ID, subscriptionState, metadata, time, rebalanceMetricsManager, true));
         assertMemberIdIsGenerated(manager.memberId());
         manager.transitionToJoining();
         return manager;
@@ -129,7 +129,7 @@ public class ShareMembershipManagerTest {
     public void testMembershipManagerRegistersForClusterMetadataUpdatesOnFirstJoin() {
         // First join should register to get metadata updates
         ShareMembershipManager manager = new ShareMembershipManager(
-                logContext, GROUP_ID, RACK_ID, subscriptionState, metadata, time, rebalanceMetricsManager);
+                logContext, GROUP_ID, RACK_ID, subscriptionState, metadata, time, rebalanceMetricsManager, true);
         manager.transitionToJoining();
         clearInvocations(metadata);
 
@@ -197,7 +197,7 @@ public class ShareMembershipManagerTest {
     @Test
     public void testTransitionToFailedWhenTryingToJoin() {
         ShareMembershipManager membershipManager = new ShareMembershipManager(
-                logContext, GROUP_ID, RACK_ID, subscriptionState, metadata, time, rebalanceMetricsManager);
+                logContext, GROUP_ID, RACK_ID, subscriptionState, metadata, time, rebalanceMetricsManager, true);
         assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
         membershipManager.transitionToJoining();
 

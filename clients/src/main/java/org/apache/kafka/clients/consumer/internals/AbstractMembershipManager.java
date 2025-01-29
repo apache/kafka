@@ -144,7 +144,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
 
     /**
      * If there is a reconciliation running (triggering commit, callbacks) for the
-     * assignmentReadyToReconcile. This will be true if {@link #maybeReconcile()} has been triggered
+     * assignmentReadyToReconcile. This will be true if {@link #maybeReconcile(boolean)} has been triggered
      * after receiving a heartbeat response, or a metadata update.
      */
     private boolean reconciliationInProgress;
@@ -199,12 +199,15 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
      */
     private boolean isPollTimerExpired;
 
+    private final boolean autoCommitEnabled;
+
     AbstractMembershipManager(String groupId,
                               SubscriptionState subscriptions,
                               ConsumerMetadata metadata,
                               Logger log,
                               Time time,
-                              RebalanceMetricsManager metricsManager) {
+                              RebalanceMetricsManager metricsManager,
+                              boolean autoCommitEnabled) {
         this.groupId = groupId;
         this.state = MemberState.UNSUBSCRIBED;
         this.subscriptions = subscriptions;
@@ -216,6 +219,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
         this.stateUpdatesListeners = new ArrayList<>();
         this.time = time;
         this.metricsManager = metricsManager;
+        this.autoCommitEnabled = autoCommitEnabled;
     }
 
     /**
@@ -792,7 +796,11 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
      *  - There are topics that haven't been added to the current assignment yet, but all their topic IDs
      *    are missing from the target assignment.
      */
-    void maybeReconcile() {
+    public void maybeReconcile(boolean canCommit) {
+        if (state != MemberState.RECONCILING) {
+            return;
+        }
+
         if (targetAssignmentReconciled()) {
             log.trace("Ignoring reconciliation attempt. Target assignment is equal to the " +
                     "current assignment.");
@@ -817,6 +825,8 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
             transitionTo(MemberState.ACKNOWLEDGING);
             return;
         }
+
+        if (autoCommitEnabled && !canCommit) return;
 
         markReconciliationInProgress();
 
@@ -1347,7 +1357,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
 
     /**
      * @return If there is a reconciliation in process now. Note that reconciliation is triggered
-     * by a call to {@link #maybeReconcile()}. Visible for testing.
+     * by a call to {@link #maybeReconcile(boolean)}. Visible for testing.
      */
     boolean reconciliationInProgress() {
         return reconciliationInProgress;
@@ -1383,9 +1393,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
      *                      time-sensitive operations should be performed
      */
     public NetworkClientDelegate.PollResult poll(final long currentTimeMs) {
-        if (state == MemberState.RECONCILING) {
-            maybeReconcile();
-        }
+        maybeReconcile(false);
         return NetworkClientDelegate.PollResult.EMPTY;
     }
 

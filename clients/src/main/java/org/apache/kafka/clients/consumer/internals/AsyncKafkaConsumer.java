@@ -818,7 +818,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         try {
             AsyncCommitEvent asyncCommitEvent = new AsyncCommitEvent(offsets);
             lastPendingAsyncCommit = commit(asyncCommitEvent).whenComplete((committedOffsets, throwable) -> {
-
                 if (throwable == null) {
                     offsetCommitCallbackInvoker.enqueueInterceptorInvocation(committedOffsets);
                 }
@@ -846,6 +845,11 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         }
 
         applicationEventHandler.add(commitEvent);
+
+        // Wait for offsets to be ready if none were explicitly specified
+        // This blocks until the background thread retrieves allConsumed positions to commit
+        // This operation will ensure that the offsets to commit are not affected by fetches which may start after this
+        ConsumerUtils.getResult(commitEvent.offsetsReady());
         return commitEvent.future();
     }
 
