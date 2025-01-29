@@ -52,8 +52,8 @@ public interface AcknowledgementCommitCallback {
      * <li> {@link InterruptException} if the calling thread is interrupted before or while this function is called
      * <li> {@link KafkaException} for any other unrecoverable errors
      * </ul>
-     * <p>Note that if the exception is a retriable exception, the acknowledgement could not be completed and the
-     * records need to be fetched again.
+     * <p>Note that even if the exception is a retriable exception, the acknowledgement could not be completed and the
+     * records need to be fetched again. The callback is called after any retries have been performed.
      */
     void onComplete(Map<TopicIdPartition, Set<Long>> offsets, Exception exception);
 }
