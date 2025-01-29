@@ -2297,7 +2297,8 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
   def testMetadataClusterAuthorizedOperationsWithoutDescribeCluster(quorum: String): Unit = {
     removeAllClientAcls()
 
-    for (version <- ApiKeys.METADATA.oldestVersion to ApiKeys.METADATA.latestVersion) {
+    // MetadataRequest versions older than 1 are not supported.
+    for (version <- 1 to ApiKeys.METADATA.latestVersion) {
       testMetadataClusterClusterAuthorizedOperations(version.toShort, 0)
     }
   }
@@ -2317,7 +2318,8 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     val expectedClusterAuthorizedOperations = Utils.to32BitField(
       acls.map(_.operation.code.asInstanceOf[JByte]).asJava)
 
-    for (version <- ApiKeys.METADATA.oldestVersion to ApiKeys.METADATA.latestVersion) {
+    // MetadataRequest versions older than 1 are not supported.
+    for (version <- 1 to ApiKeys.METADATA.latestVersion) {
       testMetadataClusterClusterAuthorizedOperations(version.toShort, expectedClusterAuthorizedOperations)
     }
   }
