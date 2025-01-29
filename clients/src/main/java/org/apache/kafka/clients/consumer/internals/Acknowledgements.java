@@ -308,10 +308,8 @@ public class Acknowledgements {
     public String toString() {
         StringBuilder sb = new StringBuilder("Acknowledgements(");
         sb.append(acknowledgements);
-        if (acknowledgeException != null) {
-            sb.append(", acknowledgeException=");
-            sb.append(Errors.forException(acknowledgeException));
-        }
+        sb.append(", acknowledgeException=");
+        sb.append(acknowledgeException != null ? Errors.forException(acknowledgeException) : "null");
         sb.append(", completed=");
         sb.append(completed);
         sb.append(")");
