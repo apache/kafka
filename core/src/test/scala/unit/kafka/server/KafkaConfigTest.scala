@@ -1165,8 +1165,6 @@ class KafkaConfigTest {
     defaults.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker")
     defaults.setProperty(QuorumConfig.QUORUM_BOOTSTRAP_SERVERS_CONFIG, "CONTROLLER://localhost:9092")
     defaults.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
-    defaults.setProperty(ServerConfigs.BROKER_ID_GENERATION_ENABLE_CONFIG, "false")
-    defaults.setProperty(ServerConfigs.RESERVED_BROKER_MAX_ID_CONFIG, "1")
     defaults.setProperty(ServerConfigs.BROKER_ID_CONFIG, "1")
     defaults.setProperty(SocketServerConfigs.LISTENERS_CONFIG, "PLAINTEXT://127.0.0.1:1122")
     defaults.setProperty(SocketServerConfigs.MAX_CONNECTIONS_PER_IP_OVERRIDES_CONFIG, "127.0.0.1:2, 127.0.0.2:3")
@@ -1181,8 +1179,6 @@ class KafkaConfigTest {
     defaults.setProperty(MetricConfigs.METRIC_RECORDING_LEVEL_CONFIG, Sensor.RecordingLevel.DEBUG.toString)
 
     val config = KafkaConfig.fromProps(defaults)
-    assertEquals(false, config.brokerIdGenerationEnable)
-    assertEquals(1, config.maxReservedBrokerId)
     assertEquals(1, config.brokerId)
     assertEquals(Seq("PLAINTEXT://127.0.0.1:1122"), config.effectiveAdvertisedBrokerListeners.map(_.connectionString))
     assertEquals(Map("127.0.0.1" -> 2, "127.0.0.2" -> 3), config.maxConnectionsPerIpOverrides)
@@ -1410,21 +1406,6 @@ class KafkaConfigTest {
   }
 
   @Test
-  def testAcceptsLargeNodeIdForRaftBasedCase(): Unit = {
-    // Generation of Broker IDs is not supported when using Raft-based controller quorums,
-    // so pick a broker ID greater than reserved.broker.max.id, which defaults to 1000,
-    // and make sure it is allowed despite broker.id.generation.enable=true (true is the default)
-    val largeBrokerId = 2000
-    val props = new Properties()
-    props.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker")
-    props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, "PLAINTEXT://localhost:9092")
-    props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL")
-    props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "2@localhost:9093")
-    props.setProperty(KRaftConfigs.NODE_ID_CONFIG, largeBrokerId.toString)
-    KafkaConfig.fromProps(props)
-  }
-
-  @Test
   def testRejectsNegativeNodeIdForRaftBasedBrokerCaseWithAutoGenEnabled(): Unit = {
     // -1 is the default for both node.id and broker.id
     val props = new Properties()
@@ -1441,11 +1422,10 @@ class KafkaConfigTest {
   }
 
   @Test
-  def testRejectsNegativeNodeIdForRaftBasedCaseWithAutoGenDisabled(): Unit = {
+  def testRejectsNegativeNodeId(): Unit = {
     // -1 is the default for both node.id and broker.id
     val props = new Properties()
     props.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker")
-    props.setProperty(ServerConfigs.BROKER_ID_GENERATION_ENABLE_CONFIG, "false")
     props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "2@localhost:9093")
     assertFalse(isValidKafkaConfig(props))
   }
