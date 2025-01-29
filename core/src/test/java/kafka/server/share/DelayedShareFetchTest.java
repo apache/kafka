@@ -45,6 +45,7 @@ import org.apache.kafka.server.util.timer.Timer;
 import org.apache.kafka.storage.internals.log.FetchDataInfo;
 import org.apache.kafka.storage.internals.log.LogOffsetMetadata;
 import org.apache.kafka.storage.internals.log.LogOffsetSnapshot;
+import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -53,7 +54,6 @@ import org.mockito.Mockito;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -71,6 +71,7 @@ import static kafka.server.share.SharePartitionManagerTest.DELAYED_SHARE_FETCH_P
 import static kafka.server.share.SharePartitionManagerTest.PARTITION_MAX_BYTES;
 import static kafka.server.share.SharePartitionManagerTest.buildLogReadResult;
 import static kafka.server.share.SharePartitionManagerTest.mockReplicaManagerDelayedShareFetch;
+import static org.apache.kafka.server.share.fetch.ShareFetchTestUtils.orderedMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -93,6 +94,7 @@ public class DelayedShareFetchTest {
     private static final FetchParams FETCH_PARAMS = new FetchParams(ApiKeys.SHARE_FETCH.latestVersion(),
         FetchRequest.ORDINARY_CONSUMER_ID, -1, MAX_WAIT_MS, 1, 1024 * 1024, FetchIsolation.HIGH_WATERMARK,
         Optional.empty(), true);
+    private static final BrokerTopicStats BROKER_TOPIC_STATS = new BrokerTopicStats();
 
     private Timer mockTimer;
 
@@ -113,9 +115,7 @@ public class DelayedShareFetchTest {
         Uuid topicId = Uuid.randomUuid();
         TopicIdPartition tp0 = new TopicIdPartition(topicId, new TopicPartition("foo", 0));
         TopicIdPartition tp1 = new TopicIdPartition(topicId, new TopicPartition("foo", 1));
-        Map<TopicIdPartition, Integer> partitionMaxBytes = new HashMap<>();
-        partitionMaxBytes.put(tp0, PARTITION_MAX_BYTES);
-        partitionMaxBytes.put(tp1, PARTITION_MAX_BYTES);
+        LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes = orderedMap(PARTITION_MAX_BYTES, tp0, tp1);
 
         SharePartition sp0 = mock(SharePartition.class);
         SharePartition sp1 = mock(SharePartition.class);
@@ -128,7 +128,8 @@ public class DelayedShareFetchTest {
         sharePartitions.put(tp1, sp1);
 
         ShareFetch shareFetch = new ShareFetch(FETCH_PARAMS, groupId, Uuid.randomUuid().toString(),
-            new CompletableFuture<>(), partitionMaxBytes, BATCH_SIZE, MAX_FETCH_RECORDS);
+            new CompletableFuture<>(), partitionMaxBytes, BATCH_SIZE, MAX_FETCH_RECORDS,
+            BROKER_TOPIC_STATS);
 
         when(sp0.canAcquireRecords()).thenReturn(false);
         when(sp1.canAcquireRecords()).thenReturn(false);
@@ -152,9 +153,7 @@ public class DelayedShareFetchTest {
         ReplicaManager replicaManager = mock(ReplicaManager.class);
         TopicIdPartition tp0 = new TopicIdPartition(topicId, new TopicPartition("foo", 0));
         TopicIdPartition tp1 = new TopicIdPartition(topicId, new TopicPartition("foo", 1));
-        Map<TopicIdPartition, Integer> partitionMaxBytes = new HashMap<>();
-        partitionMaxBytes.put(tp0, PARTITION_MAX_BYTES);
-        partitionMaxBytes.put(tp1, PARTITION_MAX_BYTES);
+        LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes = orderedMap(PARTITION_MAX_BYTES, tp0, tp1);
 
         SharePartition sp0 = mock(SharePartition.class);
         SharePartition sp1 = mock(SharePartition.class);
@@ -169,7 +168,8 @@ public class DelayedShareFetchTest {
         ShareFetch shareFetch = new ShareFetch(
             new FetchParams(ApiKeys.SHARE_FETCH.latestVersion(), FetchRequest.ORDINARY_CONSUMER_ID, -1, MAX_WAIT_MS,
                 2, 1024 * 1024, FetchIsolation.HIGH_WATERMARK, Optional.empty()), groupId, Uuid.randomUuid().toString(),
-            new CompletableFuture<>(), partitionMaxBytes, BATCH_SIZE, MAX_FETCH_RECORDS);
+            new CompletableFuture<>(), partitionMaxBytes, BATCH_SIZE, MAX_FETCH_RECORDS,
+            BROKER_TOPIC_STATS);
 
         when(sp0.canAcquireRecords()).thenReturn(true);
         when(sp1.canAcquireRecords()).thenReturn(false);
@@ -213,9 +213,7 @@ public class DelayedShareFetchTest {
         ReplicaManager replicaManager = mock(ReplicaManager.class);
         TopicIdPartition tp0 = new TopicIdPartition(topicId, new TopicPartition("foo", 0));
         TopicIdPartition tp1 = new TopicIdPartition(topicId, new TopicPartition("foo", 1));
-        Map<TopicIdPartition, Integer> partitionMaxBytes = new HashMap<>();
-        partitionMaxBytes.put(tp0, PARTITION_MAX_BYTES);
-        partitionMaxBytes.put(tp1, PARTITION_MAX_BYTES);
+        LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes = orderedMap(PARTITION_MAX_BYTES, tp0, tp1);
 
         SharePartition sp0 = mock(SharePartition.class);
         SharePartition sp1 = mock(SharePartition.class);
@@ -230,7 +228,8 @@ public class DelayedShareFetchTest {
         ShareFetch shareFetch = new ShareFetch(
             new FetchParams(ApiKeys.SHARE_FETCH.latestVersion(), FetchRequest.ORDINARY_CONSUMER_ID, -1, MAX_WAIT_MS,
                 2, 1024 * 1024, FetchIsolation.HIGH_WATERMARK, Optional.empty()), groupId, Uuid.randomUuid().toString(),
-            new CompletableFuture<>(), partitionMaxBytes, BATCH_SIZE, MAX_FETCH_RECORDS);
+            new CompletableFuture<>(), partitionMaxBytes, BATCH_SIZE, MAX_FETCH_RECORDS,
+            BROKER_TOPIC_STATS);
 
         when(sp0.canAcquireRecords()).thenReturn(true);
         when(sp1.canAcquireRecords()).thenReturn(false);
@@ -269,9 +268,7 @@ public class DelayedShareFetchTest {
         ReplicaManager replicaManager = mock(ReplicaManager.class);
         TopicIdPartition tp0 = new TopicIdPartition(topicId, new TopicPartition("foo", 0));
         TopicIdPartition tp1 = new TopicIdPartition(topicId, new TopicPartition("foo", 1));
-        Map<TopicIdPartition, Integer> partitionMaxBytes = new HashMap<>();
-        partitionMaxBytes.put(tp0, PARTITION_MAX_BYTES);
-        partitionMaxBytes.put(tp1, PARTITION_MAX_BYTES);
+        LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes = orderedMap(PARTITION_MAX_BYTES, tp0, tp1);
 
         SharePartition sp0 = mock(SharePartition.class);
         SharePartition sp1 = mock(SharePartition.class);
@@ -284,7 +281,8 @@ public class DelayedShareFetchTest {
         sharePartitions.put(tp1, sp1);
 
         ShareFetch shareFetch = new ShareFetch(FETCH_PARAMS, groupId, Uuid.randomUuid().toString(),
-            new CompletableFuture<>(), partitionMaxBytes, BATCH_SIZE, MAX_FETCH_RECORDS);
+            new CompletableFuture<>(), partitionMaxBytes, BATCH_SIZE, MAX_FETCH_RECORDS,
+            BROKER_TOPIC_STATS);
 
         when(sp0.canAcquireRecords()).thenReturn(true);
         when(sp1.canAcquireRecords()).thenReturn(false);
@@ -317,9 +315,7 @@ public class DelayedShareFetchTest {
         ReplicaManager replicaManager = mock(ReplicaManager.class);
         TopicIdPartition tp0 = new TopicIdPartition(topicId, new TopicPartition("foo", 0));
         TopicIdPartition tp1 = new TopicIdPartition(topicId, new TopicPartition("foo", 1));
-        Map<TopicIdPartition, Integer> partitionMaxBytes = new HashMap<>();
-        partitionMaxBytes.put(tp0, PARTITION_MAX_BYTES);
-        partitionMaxBytes.put(tp1, PARTITION_MAX_BYTES);
+        LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes = orderedMap(PARTITION_MAX_BYTES, tp0, tp1);
 
         SharePartition sp0 = mock(SharePartition.class);
         SharePartition sp1 = mock(SharePartition.class);
@@ -333,7 +329,7 @@ public class DelayedShareFetchTest {
 
         CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future = new CompletableFuture<>();
         ShareFetch shareFetch = new ShareFetch(FETCH_PARAMS, groupId, Uuid.randomUuid().toString(),
-            future, partitionMaxBytes, BATCH_SIZE, MAX_FETCH_RECORDS);
+            future, partitionMaxBytes, BATCH_SIZE, MAX_FETCH_RECORDS, BROKER_TOPIC_STATS);
 
         when(sp0.canAcquireRecords()).thenReturn(false);
         when(sp1.canAcquireRecords()).thenReturn(false);
@@ -363,9 +359,7 @@ public class DelayedShareFetchTest {
         ReplicaManager replicaManager = mock(ReplicaManager.class);
         TopicIdPartition tp0 = new TopicIdPartition(topicId, new TopicPartition("foo", 0));
         TopicIdPartition tp1 = new TopicIdPartition(topicId, new TopicPartition("foo", 1));
-        Map<TopicIdPartition, Integer> partitionMaxBytes = new HashMap<>();
-        partitionMaxBytes.put(tp0, PARTITION_MAX_BYTES);
-        partitionMaxBytes.put(tp1, PARTITION_MAX_BYTES);
+        LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes = orderedMap(PARTITION_MAX_BYTES, tp0, tp1);
 
         SharePartition sp0 = mock(SharePartition.class);
         SharePartition sp1 = mock(SharePartition.class);
@@ -378,7 +372,8 @@ public class DelayedShareFetchTest {
         sharePartitions.put(tp1, sp1);
 
         ShareFetch shareFetch = new ShareFetch(FETCH_PARAMS, groupId, Uuid.randomUuid().toString(),
-            new CompletableFuture<>(), partitionMaxBytes, BATCH_SIZE, MAX_FETCH_RECORDS);
+            new CompletableFuture<>(), partitionMaxBytes, BATCH_SIZE, MAX_FETCH_RECORDS,
+            BROKER_TOPIC_STATS);
 
         when(sp0.canAcquireRecords()).thenReturn(true);
         when(sp1.canAcquireRecords()).thenReturn(false);
@@ -412,8 +407,7 @@ public class DelayedShareFetchTest {
         Uuid topicId = Uuid.randomUuid();
         ReplicaManager replicaManager = mock(ReplicaManager.class);
         TopicIdPartition tp0 = new TopicIdPartition(topicId, new TopicPartition("foo", 0));
-        Map<TopicIdPartition, Integer> partitionMaxBytes = new HashMap<>();
-        partitionMaxBytes.put(tp0, PARTITION_MAX_BYTES);
+        LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes = orderedMap(PARTITION_MAX_BYTES, tp0);
 
         SharePartition sp0 = mock(SharePartition.class);
 
@@ -422,7 +416,7 @@ public class DelayedShareFetchTest {
 
         CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future = new CompletableFuture<>();
         ShareFetch shareFetch = new ShareFetch(FETCH_PARAMS, groupId, Uuid.randomUuid().toString(),
-            future, partitionMaxBytes, BATCH_SIZE, MAX_FETCH_RECORDS);
+            future, partitionMaxBytes, BATCH_SIZE, MAX_FETCH_RECORDS, BROKER_TOPIC_STATS);
 
         when(sp0.maybeAcquireFetchLock()).thenReturn(true);
         when(sp0.canAcquireRecords()).thenReturn(false);
@@ -462,9 +456,7 @@ public class DelayedShareFetchTest {
         TopicIdPartition tp0 = new TopicIdPartition(topicId, new TopicPartition("foo", 0));
         TopicIdPartition tp1 = new TopicIdPartition(topicId, new TopicPartition("foo", 1));
         TopicIdPartition tp2 = new TopicIdPartition(topicId, new TopicPartition("foo", 2));
-        Map<TopicIdPartition, Integer> partitionMaxBytes1 = new HashMap<>();
-        partitionMaxBytes1.put(tp0, PARTITION_MAX_BYTES);
-        partitionMaxBytes1.put(tp1, PARTITION_MAX_BYTES);
+        LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes1 = orderedMap(PARTITION_MAX_BYTES, tp0, tp1);
 
         SharePartition sp0 = mock(SharePartition.class);
         SharePartition sp1 = mock(SharePartition.class);
@@ -480,7 +472,8 @@ public class DelayedShareFetchTest {
         sharePartitions1.put(tp2, sp2);
 
         ShareFetch shareFetch1 = new ShareFetch(FETCH_PARAMS, groupId, Uuid.randomUuid().toString(),
-            new CompletableFuture<>(), partitionMaxBytes1, BATCH_SIZE, MAX_FETCH_RECORDS);
+            new CompletableFuture<>(), partitionMaxBytes1, BATCH_SIZE, MAX_FETCH_RECORDS,
+            BROKER_TOPIC_STATS);
 
         DelayedOperationPurgatory<DelayedShareFetch> delayedShareFetchPurgatory = new DelayedOperationPurgatory<>(
             "TestShareFetch", mockTimer, replicaManager.localBrokerId(),
@@ -505,11 +498,10 @@ public class DelayedShareFetchTest {
         assertTrue(delayedShareFetch1.lock().tryLock());
         delayedShareFetch1.lock().unlock();
 
-        Map<TopicIdPartition, Integer> partitionMaxBytes2 = new HashMap<>();
-        partitionMaxBytes2.put(tp1, PARTITION_MAX_BYTES);
-        partitionMaxBytes2.put(tp2, PARTITION_MAX_BYTES);
+        LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes2 = orderedMap(PARTITION_MAX_BYTES, tp0, tp1);
         ShareFetch shareFetch2 = new ShareFetch(FETCH_PARAMS, groupId, Uuid.randomUuid().toString(),
-            new CompletableFuture<>(), partitionMaxBytes2, BATCH_SIZE, MAX_FETCH_RECORDS);
+            new CompletableFuture<>(), partitionMaxBytes2, BATCH_SIZE, MAX_FETCH_RECORDS,
+            BROKER_TOPIC_STATS);
 
         doAnswer(invocation -> buildLogReadResult(Collections.singleton(tp1))).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
 
@@ -552,9 +544,7 @@ public class DelayedShareFetchTest {
         ReplicaManager replicaManager = mock(ReplicaManager.class);
         TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
         TopicIdPartition tp1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 1));
-        Map<TopicIdPartition, Integer> partitionMaxBytes = new HashMap<>();
-        partitionMaxBytes.put(tp0, PARTITION_MAX_BYTES);
-        partitionMaxBytes.put(tp1, PARTITION_MAX_BYTES);
+        LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes = orderedMap(PARTITION_MAX_BYTES, tp0, tp1);
 
         SharePartition sp0 = mock(SharePartition.class);
         SharePartition sp1 = mock(SharePartition.class);
@@ -567,7 +557,7 @@ public class DelayedShareFetchTest {
         ShareFetch shareFetch = new ShareFetch(
             new FetchParams(ApiKeys.SHARE_FETCH.latestVersion(), FetchRequest.ORDINARY_CONSUMER_ID, -1, MAX_WAIT_MS,
                 1, 1024 * 1024, FetchIsolation.HIGH_WATERMARK, Optional.empty()), groupId, Uuid.randomUuid().toString(),
-            future, partitionMaxBytes, BATCH_SIZE, MAX_FETCH_RECORDS);
+            future, partitionMaxBytes, BATCH_SIZE, MAX_FETCH_RECORDS, BROKER_TOPIC_STATS);
 
         DelayedShareFetch delayedShareFetch = DelayedShareFetchBuilder.builder()
             .withShareFetchData(shareFetch)
@@ -610,8 +600,7 @@ public class DelayedShareFetchTest {
         Uuid topicId = Uuid.randomUuid();
         ReplicaManager replicaManager = mock(ReplicaManager.class);
         TopicIdPartition tp0 = new TopicIdPartition(topicId, new TopicPartition("foo", 0));
-        Map<TopicIdPartition, Integer> partitionMaxBytes = new HashMap<>();
-        partitionMaxBytes.put(tp0, PARTITION_MAX_BYTES);
+        LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes = orderedMap(PARTITION_MAX_BYTES, tp0);
 
         SharePartition sp0 = mock(SharePartition.class);
 
@@ -623,7 +612,8 @@ public class DelayedShareFetchTest {
         ShareFetch shareFetch = new ShareFetch(
             new FetchParams(ApiKeys.SHARE_FETCH.latestVersion(), FetchRequest.ORDINARY_CONSUMER_ID, -1, MAX_WAIT_MS,
                 1, 1024 * 1024, FetchIsolation.HIGH_WATERMARK, Optional.empty()), groupId, Uuid.randomUuid().toString(),
-            new CompletableFuture<>(), partitionMaxBytes, BATCH_SIZE, MAX_FETCH_RECORDS);
+            new CompletableFuture<>(), partitionMaxBytes, BATCH_SIZE, MAX_FETCH_RECORDS,
+            BROKER_TOPIC_STATS);
 
         when(sp0.canAcquireRecords()).thenReturn(true);
         when(sp0.acquire(any(), anyInt(), anyInt(), any())).thenReturn(
@@ -687,7 +677,8 @@ public class DelayedShareFetchTest {
         mockTopicIdPartitionToReturnDataEqualToMinBytes(replicaManager, tp0, 1);
 
         ShareFetch shareFetch = new ShareFetch(FETCH_PARAMS, groupId, Uuid.randomUuid().toString(),
-            new CompletableFuture<>(), Map.of(tp0, PARTITION_MAX_BYTES), BATCH_SIZE, MAX_FETCH_RECORDS);
+            new CompletableFuture<>(), orderedMap(PARTITION_MAX_BYTES, tp0), BATCH_SIZE, MAX_FETCH_RECORDS,
+            BROKER_TOPIC_STATS);
 
         DelayedShareFetch delayedShareFetch = DelayedShareFetchTest.DelayedShareFetchBuilder.builder()
             .withShareFetchData(shareFetch)
@@ -717,7 +708,8 @@ public class DelayedShareFetchTest {
         sharePartitions.put(tp0, sp0);
 
         ShareFetch shareFetch = new ShareFetch(FETCH_PARAMS, groupId, Uuid.randomUuid().toString(),
-            new CompletableFuture<>(), Map.of(tp0, PARTITION_MAX_BYTES), BATCH_SIZE, MAX_FETCH_RECORDS);
+            new CompletableFuture<>(), orderedMap(PARTITION_MAX_BYTES, tp0), BATCH_SIZE, MAX_FETCH_RECORDS,
+            BROKER_TOPIC_STATS);
 
         DelayedShareFetch delayedShareFetch = DelayedShareFetchTest.DelayedShareFetchBuilder.builder()
             .withShareFetchData(shareFetch)
@@ -735,8 +727,7 @@ public class DelayedShareFetchTest {
         String groupId = "grp";
         TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
         SharePartition sp0 = mock(SharePartition.class);
-        Map<TopicIdPartition, Integer> partitionMaxBytes = new HashMap<>();
-        partitionMaxBytes.put(tp0, PARTITION_MAX_BYTES);
+        LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes = orderedMap(PARTITION_MAX_BYTES, tp0);
 
         when(sp0.maybeAcquireFetchLock()).thenReturn(true);
         when(sp0.canAcquireRecords()).thenReturn(true);
@@ -747,7 +738,7 @@ public class DelayedShareFetchTest {
         ShareFetch shareFetch = new ShareFetch(
             new FetchParams(ApiKeys.SHARE_FETCH.latestVersion(), FetchRequest.ORDINARY_CONSUMER_ID, -1, MAX_WAIT_MS,
                 2, 1024 * 1024, FetchIsolation.HIGH_WATERMARK, Optional.empty()), groupId, Uuid.randomUuid().toString(),
-            future, partitionMaxBytes, BATCH_SIZE, MAX_FETCH_RECORDS);
+            future, partitionMaxBytes, BATCH_SIZE, MAX_FETCH_RECORDS, BROKER_TOPIC_STATS);
 
         // partitionMaxBytesStrategy.maxBytes() function throws an exception
         PartitionMaxBytesStrategy partitionMaxBytesStrategy = mock(PartitionMaxBytesStrategy.class);
@@ -792,12 +783,7 @@ public class DelayedShareFetchTest {
         SharePartition sp3 = mock(SharePartition.class);
         SharePartition sp4 = mock(SharePartition.class);
 
-        Map<TopicIdPartition, Integer> partitionMaxBytes = new HashMap<>();
-        partitionMaxBytes.put(tp0, PARTITION_MAX_BYTES);
-        partitionMaxBytes.put(tp1, PARTITION_MAX_BYTES);
-        partitionMaxBytes.put(tp2, PARTITION_MAX_BYTES);
-        partitionMaxBytes.put(tp3, PARTITION_MAX_BYTES);
-        partitionMaxBytes.put(tp4, PARTITION_MAX_BYTES);
+        LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes = orderedMap(PARTITION_MAX_BYTES, tp0, tp1, tp2, tp3, tp4);
 
         when(sp0.maybeAcquireFetchLock()).thenReturn(true);
         when(sp1.maybeAcquireFetchLock()).thenReturn(true);
@@ -818,7 +804,8 @@ public class DelayedShareFetchTest {
         sharePartitions.put(tp4, sp4);
 
         ShareFetch shareFetch = new ShareFetch(FETCH_PARAMS, groupId, Uuid.randomUuid().toString(),
-            new CompletableFuture<>(), partitionMaxBytes, BATCH_SIZE, MAX_FETCH_RECORDS);
+            new CompletableFuture<>(), partitionMaxBytes, BATCH_SIZE, MAX_FETCH_RECORDS,
+            BROKER_TOPIC_STATS);
 
         when(sp0.acquire(anyString(), anyInt(), anyInt(), any(FetchPartitionData.class))).thenReturn(
             ShareAcquiredRecords.fromAcquiredRecords(new ShareFetchResponseData.AcquiredRecords().setFirstOffset(0).setLastOffset(3).setDeliveryCount((short) 1)));
@@ -894,12 +881,7 @@ public class DelayedShareFetchTest {
         SharePartition sp3 = mock(SharePartition.class);
         SharePartition sp4 = mock(SharePartition.class);
 
-        Map<TopicIdPartition, Integer> partitionMaxBytes = new HashMap<>();
-        partitionMaxBytes.put(tp0, PARTITION_MAX_BYTES);
-        partitionMaxBytes.put(tp1, PARTITION_MAX_BYTES);
-        partitionMaxBytes.put(tp2, PARTITION_MAX_BYTES);
-        partitionMaxBytes.put(tp3, PARTITION_MAX_BYTES);
-        partitionMaxBytes.put(tp4, PARTITION_MAX_BYTES);
+        LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes = orderedMap(PARTITION_MAX_BYTES, tp0, tp1, tp2, tp3, tp4);
 
         when(sp0.maybeAcquireFetchLock()).thenReturn(true);
         when(sp1.maybeAcquireFetchLock()).thenReturn(true);
@@ -920,7 +902,8 @@ public class DelayedShareFetchTest {
         sharePartitions.put(tp4, sp4);
 
         ShareFetch shareFetch = new ShareFetch(FETCH_PARAMS, groupId, Uuid.randomUuid().toString(),
-            new CompletableFuture<>(), partitionMaxBytes, BATCH_SIZE, MAX_FETCH_RECORDS);
+            new CompletableFuture<>(), partitionMaxBytes, BATCH_SIZE, MAX_FETCH_RECORDS,
+            BROKER_TOPIC_STATS);
 
         when(sp0.acquire(anyString(), anyInt(), anyInt(), any(FetchPartitionData.class))).thenReturn(
             ShareAcquiredRecords.fromAcquiredRecords(new ShareFetchResponseData.AcquiredRecords().setFirstOffset(0).setLastOffset(3).setDeliveryCount((short) 1)));
@@ -978,10 +961,7 @@ public class DelayedShareFetchTest {
         TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
         TopicIdPartition tp1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 1));
         TopicIdPartition tp2 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 2));
-        Map<TopicIdPartition, Integer> partitionMaxBytes = new HashMap<>();
-        partitionMaxBytes.put(tp0, PARTITION_MAX_BYTES);
-        partitionMaxBytes.put(tp1, PARTITION_MAX_BYTES);
-        partitionMaxBytes.put(tp2, PARTITION_MAX_BYTES);
+        LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes = orderedMap(PARTITION_MAX_BYTES, tp0, tp1, tp2);
 
         SharePartition sp0 = mock(SharePartition.class);
         SharePartition sp1 = mock(SharePartition.class);
@@ -995,7 +975,8 @@ public class DelayedShareFetchTest {
         ShareFetch shareFetch = new ShareFetch(
             new FetchParams(ApiKeys.SHARE_FETCH.latestVersion(), FetchRequest.ORDINARY_CONSUMER_ID, -1, MAX_WAIT_MS,
                 1, 1024 * 1024, FetchIsolation.HIGH_WATERMARK, Optional.empty()), groupId, Uuid.randomUuid().toString(),
-            new CompletableFuture<>(), partitionMaxBytes, BATCH_SIZE, MAX_FETCH_RECORDS);
+            new CompletableFuture<>(), partitionMaxBytes, BATCH_SIZE, MAX_FETCH_RECORDS,
+            BROKER_TOPIC_STATS);
 
         DelayedShareFetch delayedShareFetch = DelayedShareFetchBuilder.builder()
             .withShareFetchData(shareFetch)

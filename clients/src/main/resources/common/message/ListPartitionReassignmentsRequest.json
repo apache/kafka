@@ -16,7 +16,7 @@
 {
   "apiKey": 46,
   "type": "request",
-  "listeners": ["broker", "controller", "zkBroker"],
+  "listeners": ["broker", "controller"],
   "name": "ListPartitionReassignmentsRequest",
   "validVersions": "0",
   "flexibleVersions": "0+",
