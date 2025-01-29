@@ -285,7 +285,7 @@ public class StateDirectory implements AutoCloseable {
             // "drain" Tasks first to ensure that we don't try to close Tasks that another thread is attempting to close
             final Set<Task> drainedTasks = new HashSet<>(tasksForLocalState.size());
             for (final Map.Entry<TaskId, Task> entry : tasksForLocalState.entrySet()) {
-                if (predicate.test(entry.getValue()) && tasksForLocalState.remove(entry.getKey()) != null) {
+                if (predicate.test(entry.getValue()) && removeStartupTask(entry.getKey()) != null) {
                     // only add to our list of drained Tasks if we exclusively "claimed" a Task from tasksForLocalState
                     // to ensure we don't accidentally try to drain the same Task multiple times from concurrent threads
                     drainedTasks.add(entry.getValue());
@@ -294,9 +294,6 @@ public class StateDirectory implements AutoCloseable {
 
             // now that we have exclusive ownership of the drained tasks, close them
             for (final Task task : drainedTasks) {
-                // main thread locked the task initially on startup, but has moved on and will not unlock
-                // so we need to explicitly swap lock ownership here as this method is called by a StreamThread
-                lockedTasksToOwner.replace(task.id(), Thread.currentThread());
                 task.suspend();
                 task.closeClean();
             }
