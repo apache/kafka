@@ -1989,6 +1989,7 @@ public class ShareConsumerTest {
         }
     )
     @Timeout(150)
+    @Flaky("KAFKA-18665")
     public void testComplexShareConsumer() throws Exception {
         setup();
         String topicName = "multipart";
