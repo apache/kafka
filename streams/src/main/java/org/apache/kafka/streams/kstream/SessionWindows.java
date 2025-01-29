@@ -79,12 +79,12 @@ public final class SessionWindows {
         this.gapMs = gapMs;
         this.graceMs = graceMs;
 
-        if (gapMs <= 0) {
-            throw new IllegalArgumentException("Gap time cannot be zero or negative.");
+        if (gapMs < 0) {
+            throw new IllegalArgumentException("Gap time cannot be negative.");
         }
 
         if (graceMs < 0) {
-            throw new IllegalArgumentException("Grace period must not be negative.");
+            throw new IllegalArgumentException("Grace period cannot be negative.");
         }
     }
 
