@@ -589,8 +589,7 @@ subprojects {
     }
 
     // Disable caching and up-to-date for this task. We always want quarantined tests
-    // to run and never want to cache their results. Since we do this, we can avoid
-    // explicitly failing the build like we do in "test" with ext.hadFailure.
+    // to run and never want to cache their results.
     outputs.upToDateWhen { false }
     outputs.cacheIf { false }
 
