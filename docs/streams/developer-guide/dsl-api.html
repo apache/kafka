@@ -3164,28 +3164,129 @@ grouped
                     </thead>
                     <tbody>
                         <tr>
-                            <td><a href="#cumulative-discounts-for-a-loyalty-program">Cumulative Discounts for a Loyalty Program</a>
-                            </td>
-                            <td><code>process</code></td>
-                            <td>Stateful</td>
-                        </tr>
-                        <tr>
                             <td><a href="#categorizing-logs-by-severity">Categorizing Logs by Severity</a></td>
                             <td><code>process</code></td>
                             <td>Stateless</td>
-                        </tr>
-                        <tr>
-                            <td><a href="#traffic-radar-monitoring-car-count">Traffic Radar Monitoring Car Count</a></td>
-                            <td><code>processValues</code></td>
-                            <td>Stateful</td>
                         </tr>
                         <tr>
                             <td><a href="#replacing-slang-in-text-messages">Replacing Slang in Text Messages</a></td>
                             <td><code>processValues</code></td>
                             <td>Stateless</td>
                         </tr>
+                        <tr>
+                            <td><a href="#cumulative-discounts-for-a-loyalty-program">Cumulative Discounts for a Loyalty Program</a>
+                            </td>
+                            <td><code>process</code></td>
+                            <td>Stateful</td>
+                        </tr>
+                        <tr>
+                            <td><a href="#traffic-radar-monitoring-car-count">Traffic Radar Monitoring Car Count</a></td>
+                            <td><code>processValues</code></td>
+                            <td>Stateful</td>
+                        </tr>
                     </tbody>
                 </table>
+                <h5 id="categorizing-logs-by-severity">Categorizing Logs by Severity</h5>
+                <ul>
+                    <li><strong>Idea:</strong> You have a stream of log messages. Each message contains a severity level (e.g.,
+                        INFO,
+                        WARN, ERROR) in the value. The processor filters messages, routing ERROR messages to a dedicated topic and
+                        discarding INFO messages. The rest (WARN) are forwarded to a dedicated topic too.</li>
+                    <li><strong>Real-World Context:</strong> In a production monitoring system, categorizing logs by severity
+                        ensures
+                        ERROR logs are sent to a critical incident management system, WARN logs are analyzed for potential risks,
+                        and
+                        INFO logs are stored for basic reporting purposes.</li>
+                </ul>
+                <pre class="line-numbers"><code class="language-java">public class CategorizingLogsBySeverityExample {
+    private static final String ERROR_LOGS_TOPIC = &quot;error-logs-topic&quot;;
+    private static final String INPUT_LOGS_TOPIC = &quot;input-logs-topic&quot;;
+    private static final String UNKNOWN_LOGS_TOPIC = &quot;unknown-logs-topic&quot;;
+    private static final String WARN_LOGS_TOPIC = &quot;warn-logs-topic&quot;;
+
+    public static void categorizeWithProcess(final StreamsBuilder builder) {
+        final KStream&lt;String, String&gt; logStream = builder.stream(INPUT_LOGS_TOPIC);
+        logStream.process(LogSeverityProcessor::new)
+                .to((key, value, recordContext) -&gt; {
+                    // Determine the target topic dynamically
+                    if (&quot;ERROR&quot;.equals(key)) return ERROR_LOGS_TOPIC;
+                    if (&quot;WARN&quot;.equals(key)) return WARN_LOGS_TOPIC;
+                    return UNKNOWN_LOGS_TOPIC;
+                });
+    }
+
+    private static class LogSeverityProcessor extends ContextualProcessor&lt;String, String, String, String&gt; {
+        @Override
+        public void process(final Record&lt;String, String&gt; record) {
+            if (record.value() == null) {
+                return; // Skip null values
+            }
+
+            // Assume the severity is the first word in the log message
+            // For example: &quot;ERROR: Disk not found&quot; -&gt; &quot;ERROR&quot;
+            final int colonIndex = record.value().indexOf(&#39;:&#39;);
+            final String severity = colonIndex &gt; 0 ? record.value().substring(0, colonIndex).trim() : &quot;UNKNOWN&quot;;
+
+            // Route logs based on severity
+            switch (severity) {
+                case &quot;ERROR&quot;:
+                    context().forward(record.withKey(ERROR_LOGS_TOPIC));
+                    break;
+                case &quot;WARN&quot;:
+                    context().forward(record.withKey(WARN_LOGS_TOPIC));
+                    break;
+                case &quot;INFO&quot;:
+                    // INFO logs are ignored
+                    break;
+                default:
+                    // Forward to an &quot;unknown&quot; topic for logs with unrecognized severities
+                    context().forward(record.withKey(UNKNOWN_LOGS_TOPIC));
+            }
+        }
+    }
+}</code></pre>
+                <h5 id="replacing-slang-in-text-messages">Replacing Slang in Text Messages</h5>
+                <ul>
+                    <li><strong>Idea:</strong> A messaging stream contains user-generated content, and you want to replace slang
+                        words
+                        with their formal equivalents (e.g., &quot;u&quot; becomes &quot;you&quot;, &quot;brb&quot; becomes &quot;be
+                        right back&quot;). The operation only modifies the message value and keeps the key intact.</li>
+                    <li><strong>Real-World Context:</strong> In customer support chat systems, normalizing text by replacing slang
+                        with
+                        formal equivalents ensures that automated sentiment analysis tools work accurately and provide reliable
+                        insights.</li>
+                </ul>
+                <pre class="line-numbers"><code class="language-java">public class ReplacingSlangTextInMessagesExample {
+    private static final Map&lt;String, String&gt; SLANG_DICTIONARY = Map.of(
+            &quot;u&quot;, &quot;you&quot;,
+            &quot;brb&quot;, &quot;be right back&quot;,
+            &quot;omg&quot;, &quot;oh my god&quot;,
+            &quot;btw&quot;, &quot;by the way&quot;
+    );
+    private static final String INPUT_MESSAGES_TOPIC = &quot;input-messages-topic&quot;;
+    private static final String OUTPUT_MESSAGES_TOPIC = &quot;output-messages-topic&quot;;
+
+    public static void replaceWithProcessValues(final StreamsBuilder builder) {
+        KStream&lt;String, String&gt; messageStream = builder.stream(INPUT_MESSAGES_TOPIC);
+        messageStream.processValues(SlangReplacementProcessor::new).to(OUTPUT_MESSAGES_TOPIC);
+    }
+
+    private static class SlangReplacementProcessor extends ContextualFixedKeyProcessor&lt;String, String, String&gt; {
+        @Override
+        public void process(final FixedKeyRecord&lt;String, String&gt; record) {
+            if (record.value() == null) {
+                return; // Skip null values
+            }
+
+            // Replace slang words in the message
+            final String[] words = record.value().split(&quot;\\s+&quot;);
+            for (final String word : words) {
+                String replacedWord = SLANG_DICTIONARY.getOrDefault(word, word);
+                context().forward(record.withValue(replacedWord));
+            }
+        }
+    }
+}</code></pre>
                 <h5 id="cumulative-discounts-for-a-loyalty-program">Cumulative Discounts for a Loyalty Program</h5>
                 <ul>
                     <li><strong>Idea:</strong> A stream of purchase events contains user IDs and transaction amounts. Use a state
@@ -3258,65 +3359,6 @@ grouped
         }
     }
 }</code></pre>
-                <h5 id="categorizing-logs-by-severity">Categorizing Logs by Severity</h5>
-                <ul>
-                    <li><strong>Idea:</strong> You have a stream of log messages. Each message contains a severity level (e.g.,
-                        INFO,
-                        WARN, ERROR) in the value. The processor filters messages, routing ERROR messages to a dedicated topic and
-                        discarding INFO messages. The rest (WARN) are forwarded to a dedicated topic too.</li>
-                    <li><strong>Real-World Context:</strong> In a production monitoring system, categorizing logs by severity
-                        ensures
-                        ERROR logs are sent to a critical incident management system, WARN logs are analyzed for potential risks,
-                        and
-                        INFO logs are stored for basic reporting purposes.</li>
-                </ul>
-                <pre class="line-numbers"><code class="language-java">public class CategorizingLogsBySeverityExample {
-    private static final String ERROR_LOGS_TOPIC = &quot;error-logs-topic&quot;;
-    private static final String INPUT_LOGS_TOPIC = &quot;input-logs-topic&quot;;
-    private static final String UNKNOWN_LOGS_TOPIC = &quot;unknown-logs-topic&quot;;
-    private static final String WARN_LOGS_TOPIC = &quot;warn-logs-topic&quot;;
-
-    public static void categorizeWithProcess(final StreamsBuilder builder) {
-        final KStream&lt;String, String&gt; logStream = builder.stream(INPUT_LOGS_TOPIC);
-        logStream.process(LogSeverityProcessor::new)
-                .to((key, value, recordContext) -&gt; {
-                    // Determine the target topic dynamically
-                    if (&quot;ERROR&quot;.equals(key)) return ERROR_LOGS_TOPIC;
-                    if (&quot;WARN&quot;.equals(key)) return WARN_LOGS_TOPIC;
-                    return UNKNOWN_LOGS_TOPIC;
-                });
-    }
-
-    private static class LogSeverityProcessor extends ContextualProcessor&lt;String, String, String, String&gt; {
-        @Override
-        public void process(final Record&lt;String, String&gt; record) {
-            if (record.value() == null) {
-                return; // Skip null values
-            }
-
-            // Assume the severity is the first word in the log message
-            // For example: &quot;ERROR: Disk not found&quot; -&gt; &quot;ERROR&quot;
-            final int colonIndex = record.value().indexOf(&#39;:&#39;);
-            final String severity = colonIndex &gt; 0 ? record.value().substring(0, colonIndex).trim() : &quot;UNKNOWN&quot;;
-
-            // Route logs based on severity
-            switch (severity) {
-                case &quot;ERROR&quot;:
-                    context().forward(record.withKey(ERROR_LOGS_TOPIC));
-                    break;
-                case &quot;WARN&quot;:
-                    context().forward(record.withKey(WARN_LOGS_TOPIC));
-                    break;
-                case &quot;INFO&quot;:
-                    // INFO logs are ignored
-                    break;
-                default:
-                    // Forward to an &quot;unknown&quot; topic for logs with unrecognized severities
-                    context().forward(record.withKey(UNKNOWN_LOGS_TOPIC));
-            }
-        }
-    }
-}</code></pre>
                 <h5 id="traffic-radar-monitoring-car-count">Traffic Radar Monitoring Car Count</h5>
                 <ul>
                     <li><strong>Idea:</strong> A radar monitors cars passing along a road stretch. A system counts the cars for each
@@ -3382,48 +3424,7 @@ grouped
         }
     }
 }</code></pre>
-                <h5 id="replacing-slang-in-text-messages">Replacing Slang in Text Messages</h5>
-                <ul>
-                    <li><strong>Idea:</strong> A messaging stream contains user-generated content, and you want to replace slang
-                        words
-                        with their formal equivalents (e.g., &quot;u&quot; becomes &quot;you&quot;, &quot;brb&quot; becomes &quot;be
-                        right back&quot;). The operation only modifies the message value and keeps the key intact.</li>
-                    <li><strong>Real-World Context:</strong> In customer support chat systems, normalizing text by replacing slang
-                        with
-                        formal equivalents ensures that automated sentiment analysis tools work accurately and provide reliable
-                        insights.</li>
-                </ul>
-                <pre class="line-numbers"><code class="language-java">public class ReplacingSlangTextInMessagesExample {
-    private static final Map&lt;String, String&gt; SLANG_DICTIONARY = Map.of(
-            &quot;u&quot;, &quot;you&quot;,
-            &quot;brb&quot;, &quot;be right back&quot;,
-            &quot;omg&quot;, &quot;oh my god&quot;,
-            &quot;btw&quot;, &quot;by the way&quot;
-    );
-    private static final String INPUT_MESSAGES_TOPIC = &quot;input-messages-topic&quot;;
-    private static final String OUTPUT_MESSAGES_TOPIC = &quot;output-messages-topic&quot;;
-
-    public static void replaceWithProcessValues(final StreamsBuilder builder) {
-        KStream&lt;String, String&gt; messageStream = builder.stream(INPUT_MESSAGES_TOPIC);
-        messageStream.processValues(SlangReplacementProcessor::new).to(OUTPUT_MESSAGES_TOPIC);
-    }
-
-    private static class SlangReplacementProcessor extends ContextualFixedKeyProcessor&lt;String, String, String&gt; {
-        @Override
-        public void process(final FixedKeyRecord&lt;String, String&gt; record) {
-            if (record.value() == null) {
-                return; // Skip null values
-            }
-
-            // Replace slang words in the message
-            final String[] words = record.value().split(&quot;\\s+&quot;);
-            for (final String word : words) {
-                String replacedWord = SLANG_DICTIONARY.getOrDefault(word, word);
-                context().forward(record.withValue(replacedWord));
-            }
-        }
-    }
-}</code></pre>
+                
                 <h4>Keynotes</h4>
                 <ul>
                     <li><strong>Type Safety and Flexibility:</strong> The process and processValues APIs utilize
@@ -3476,23 +3477,10 @@ grouped
                     </thead>
                     <tbody>
                         <tr>
-                            <td><a href="#cumulative-discounts-for-a-loyalty-program-removal">Cumulative Discounts for a Loyalty Program</a>
-                            </td>
-                            <td><code>transform</code></td>
-                            <td><code>process</code></td>
-                            <td>Stateful</td>
-                        </tr>
-                        <tr>
                             <td><a href="#categorizing-logs-by-severity-removal">Categorizing Logs by Severity</a></td>
                             <td><code>flatTransform</code></td>
                             <td><code>process</code></td>
                             <td>Stateless</td>
-                        </tr>
-                        <tr>
-                            <td><a href="#traffic-radar-monitoring-car-count-removal">Traffic Radar Monitoring Car Count</a></td>
-                            <td><code>transformValues</code></td>
-                            <td><code>processValues</code></td>
-                            <td>Stateful</td>
                         </tr>
                         <tr>
                             <td><a href="#replacing-slang-in-text-messages-removal">Replacing Slang in Text Messages</a></td>
@@ -3500,8 +3488,177 @@ grouped
                             <td><code>processValues</code></td>
                             <td>Stateless</td>
                         </tr>
+                        <tr>
+                            <td><a href="#cumulative-discounts-for-a-loyalty-program-removal">Cumulative Discounts for a Loyalty Program</a>
+                            </td>
+                            <td><code>transform</code></td>
+                            <td><code>process</code></td>
+                            <td>Stateful</td>
+                        </tr>
+                        <tr>
+                            <td><a href="#traffic-radar-monitoring-car-count-removal">Traffic Radar Monitoring Car Count</a></td>
+                            <td><code>transformValues</code></td>
+                            <td><code>processValues</code></td>
+                            <td>Stateful</td>
+                        </tr>
                     </tbody>
                 </table>
+                <h5 id="categorizing-logs-by-severity-removal">Categorizing Logs by Severity</h5>
+                <p>Below, methods <code>categorizeWithFlatTransform</code> and <code>categorizeWithProcess</code> show how you can
+                    migrate from <code>flatTransform</code> to <code>process</code>.</p>
+                <pre class="line-numbers"><code class="language-java">public class CategorizingLogsBySeverityExample {
+    private static final String ERROR_LOGS_TOPIC = &quot;error-logs-topic&quot;;
+    private static final String INPUT_LOGS_TOPIC = &quot;input-logs-topic&quot;;
+    private static final String UNKNOWN_LOGS_TOPIC = &quot;unknown-logs-topic&quot;;
+    private static final String WARN_LOGS_TOPIC = &quot;warn-logs-topic&quot;;
+
+    public static void categorizeWithFlatTransform(final StreamsBuilder builder) {
+        final KStream&lt;String, String&gt; logStream = builder.stream(INPUT_LOGS_TOPIC);
+        logStream.flatTransform(LogSeverityTransformer::new)
+                .to((key, value, recordContext) -&gt; {
+                    // Determine the target topic dynamically
+                    if (&quot;ERROR&quot;.equals(key)) return ERROR_LOGS_TOPIC;
+                    if (&quot;WARN&quot;.equals(key)) return WARN_LOGS_TOPIC;
+                    return UNKNOWN_LOGS_TOPIC;
+                });
+    }
+
+    public static void categorizeWithProcess(final StreamsBuilder builder) {
+        final KStream&lt;String, String&gt; logStream = builder.stream(INPUT_LOGS_TOPIC);
+        logStream.process(LogSeverityProcessor::new)
+                .to((key, value, recordContext) -&gt; {
+                    // Determine the target topic dynamically
+                    if (&quot;ERROR&quot;.equals(key)) return ERROR_LOGS_TOPIC;
+                    if (&quot;WARN&quot;.equals(key)) return WARN_LOGS_TOPIC;
+                    return UNKNOWN_LOGS_TOPIC;
+                });
+    }
+
+    private static class LogSeverityTransformer implements Transformer&lt;String, String, Iterable&lt;KeyValue&lt;String, String&gt;&gt;&gt; {
+        @Override
+        public void init(org.apache.kafka.streams.processor.ProcessorContext context) {
+        }
+
+        @Override
+        public Iterable&lt;KeyValue&lt;String, String&gt;&gt; transform(String key, String value) {
+            if (value == null) {
+                return Collections.emptyList(); // Skip null values
+            }
+
+            // Assume the severity is the first word in the log message
+            // For example: &quot;ERROR: Disk not found&quot; -&gt; &quot;ERROR&quot;
+            int colonIndex = value.indexOf(&#39;:&#39;);
+            String severity = colonIndex &gt; 0 ? value.substring(0, colonIndex).trim() : &quot;UNKNOWN&quot;;
+
+            // Create appropriate KeyValue pair based on severity
+            return switch (severity) {
+                case &quot;ERROR&quot; -&gt; List.of(new KeyValue&lt;&gt;(&quot;ERROR&quot;, value));
+                case &quot;WARN&quot; -&gt; List.of(new KeyValue&lt;&gt;(&quot;WARN&quot;, value));
+                case &quot;INFO&quot; -&gt; Collections.emptyList(); // INFO logs are ignored
+                default -&gt; List.of(new KeyValue&lt;&gt;(&quot;UNKNOWN&quot;, value));
+            };
+        }
+
+        @Override
+        public void close() {
+        }
+    }
+
+    private static class LogSeverityProcessor extends ContextualProcessor&lt;String, String, String, String&gt; {
+        @Override
+        public void process(final Record&lt;String, String&gt; record) {
+            if (record.value() == null) {
+                return; // Skip null values
+            }
+
+            // Assume the severity is the first word in the log message
+            // For example: &quot;ERROR: Disk not found&quot; -&gt; &quot;ERROR&quot;
+            final int colonIndex = record.value().indexOf(&#39;:&#39;);
+            final String severity = colonIndex &gt; 0 ? record.value().substring(0, colonIndex).trim() : &quot;UNKNOWN&quot;;
+
+            // Route logs based on severity
+            switch (severity) {
+                case &quot;ERROR&quot;:
+                    context().forward(record.withKey(ERROR_LOGS_TOPIC));
+                    break;
+                case &quot;WARN&quot;:
+                    context().forward(record.withKey(WARN_LOGS_TOPIC));
+                    break;
+                case &quot;INFO&quot;:
+                    // INFO logs are ignored
+                    break;
+                default:
+                    // Forward to an &quot;unknown&quot; topic for logs with unrecognized severities
+                    context().forward(record.withKey(UNKNOWN_LOGS_TOPIC));
+            }
+        }
+    }
+}</code></pre>
+                <h5 id="replacing-slang-in-text-messages-removal">Replacing Slang in Text Messages</h5>
+                <p>Below, methods <code>replaceWithFlatTransformValues</code> and <code>replaceWithProcessValues</code> show how you can
+                    migrate from <code>flatTransformValues</code> to <code>processValues</code>.</p>
+                <pre class="line-numbers"><code class="language-java">public class ReplacingSlangTextInMessagesExample {
+    private static final Map&lt;String, String&gt; SLANG_DICTIONARY = Map.of(
+            &quot;u&quot;, &quot;you&quot;,
+            &quot;brb&quot;, &quot;be right back&quot;,
+            &quot;omg&quot;, &quot;oh my god&quot;,
+            &quot;btw&quot;, &quot;by the way&quot;
+    );
+    private static final String INPUT_MESSAGES_TOPIC = &quot;input-messages-topic&quot;;
+    private static final String OUTPUT_MESSAGES_TOPIC = &quot;output-messages-topic&quot;;
+
+    public static void replaceWithFlatTransformValues(final StreamsBuilder builder) {
+        KStream&lt;String, String&gt; messageStream = builder.stream(INPUT_MESSAGES_TOPIC);
+        messageStream.flatTransformValues(SlangReplacementTransformer::new).to(OUTPUT_MESSAGES_TOPIC);
+    }
+
+    public static void replaceWithProcessValues(final StreamsBuilder builder) {
+        KStream&lt;String, String&gt; messageStream = builder.stream(INPUT_MESSAGES_TOPIC);
+        messageStream.processValues(SlangReplacementProcessor::new).to(OUTPUT_MESSAGES_TOPIC);
+    }
+
+    private static class SlangReplacementTransformer implements ValueTransformer&lt;String, Iterable&lt;String&gt;&gt; {
+
+        @Override
+        public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
+        }
+
+        @Override
+        public Iterable&lt;String&gt; transform(final String value) {
+            if (value == null) {
+                return Collections.emptyList(); // Skip null values
+            }
+
+            // Replace slang words in the message
+            final String[] words = value.split(&quot;\\s+&quot;);
+            return Arrays.asList(
+                    Arrays.stream(words)
+                            .map(word -&gt; SLANG_DICTIONARY.getOrDefault(word, word))
+                            .toArray(String[]::new)
+            );
+        }
+
+        @Override
+        public void close() {
+        }
+    }
+
+    private static class SlangReplacementProcessor extends ContextualFixedKeyProcessor&lt;String, String, String&gt; {
+        @Override
+        public void process(final FixedKeyRecord&lt;String, String&gt; record) {
+            if (record.value() == null) {
+                return; // Skip null values
+            }
+
+            // Replace slang words in the message
+            final String[] words = record.value().split(&quot;\\s+&quot;);
+            for (final String word : words) {
+                String replacedWord = SLANG_DICTIONARY.getOrDefault(word, word);
+                context().forward(record.withValue(replacedWord));
+            }
+        }
+    }
+}</code></pre>
                 <h5 id="cumulative-discounts-for-a-loyalty-program-removal">Cumulative Discounts for a Loyalty Program</h5>
                 <pre class="line-numbers"><code class="language-java">public class CumulativeDiscountsForALoyaltyProgramExample {
     private static final double DISCOUNT_THRESHOLD = 100.0;
@@ -3620,97 +3777,6 @@ grouped
         }
     }
 }</code></pre>
-                <h5 id="categorizing-logs-by-severity-removal">Categorizing Logs by Severity</h5>
-                <p>Below, methods <code>categorizeWithFlatTransform</code> and <code>categorizeWithProcess</code> show how you can
-                    migrate from <code>flatTransform</code> to <code>process</code>.</p>
-                <pre class="line-numbers"><code class="language-java">public class CategorizingLogsBySeverityExample {
-    private static final String ERROR_LOGS_TOPIC = &quot;error-logs-topic&quot;;
-    private static final String INPUT_LOGS_TOPIC = &quot;input-logs-topic&quot;;
-    private static final String UNKNOWN_LOGS_TOPIC = &quot;unknown-logs-topic&quot;;
-    private static final String WARN_LOGS_TOPIC = &quot;warn-logs-topic&quot;;
-
-    public static void categorizeWithFlatTransform(final StreamsBuilder builder) {
-        final KStream&lt;String, String&gt; logStream = builder.stream(INPUT_LOGS_TOPIC);
-        logStream.flatTransform(LogSeverityTransformer::new)
-                .to((key, value, recordContext) -&gt; {
-                    // Determine the target topic dynamically
-                    if (&quot;ERROR&quot;.equals(key)) return ERROR_LOGS_TOPIC;
-                    if (&quot;WARN&quot;.equals(key)) return WARN_LOGS_TOPIC;
-                    return UNKNOWN_LOGS_TOPIC;
-                });
-    }
-
-    public static void categorizeWithProcess(final StreamsBuilder builder) {
-        final KStream&lt;String, String&gt; logStream = builder.stream(INPUT_LOGS_TOPIC);
-        logStream.process(LogSeverityProcessor::new)
-                .to((key, value, recordContext) -&gt; {
-                    // Determine the target topic dynamically
-                    if (&quot;ERROR&quot;.equals(key)) return ERROR_LOGS_TOPIC;
-                    if (&quot;WARN&quot;.equals(key)) return WARN_LOGS_TOPIC;
-                    return UNKNOWN_LOGS_TOPIC;
-                });
-    }
-
-    private static class LogSeverityTransformer implements Transformer&lt;String, String, Iterable&lt;KeyValue&lt;String, String&gt;&gt;&gt; {
-        @Override
-        public void init(org.apache.kafka.streams.processor.ProcessorContext context) {
-        }
-
-        @Override
-        public Iterable&lt;KeyValue&lt;String, String&gt;&gt; transform(String key, String value) {
-            if (value == null) {
-                return Collections.emptyList(); // Skip null values
-            }
-
-            // Assume the severity is the first word in the log message
-            // For example: &quot;ERROR: Disk not found&quot; -&gt; &quot;ERROR&quot;
-            int colonIndex = value.indexOf(&#39;:&#39;);
-            String severity = colonIndex &gt; 0 ? value.substring(0, colonIndex).trim() : &quot;UNKNOWN&quot;;
-
-            // Create appropriate KeyValue pair based on severity
-            return switch (severity) {
-                case &quot;ERROR&quot; -&gt; List.of(new KeyValue&lt;&gt;(&quot;ERROR&quot;, value));
-                case &quot;WARN&quot; -&gt; List.of(new KeyValue&lt;&gt;(&quot;WARN&quot;, value));
-                case &quot;INFO&quot; -&gt; Collections.emptyList(); // INFO logs are ignored
-                default -&gt; List.of(new KeyValue&lt;&gt;(&quot;UNKNOWN&quot;, value));
-            };
-        }
-
-        @Override
-        public void close() {
-        }
-    }
-
-    private static class LogSeverityProcessor extends ContextualProcessor&lt;String, String, String, String&gt; {
-        @Override
-        public void process(final Record&lt;String, String&gt; record) {
-            if (record.value() == null) {
-                return; // Skip null values
-            }
-
-            // Assume the severity is the first word in the log message
-            // For example: &quot;ERROR: Disk not found&quot; -&gt; &quot;ERROR&quot;
-            final int colonIndex = record.value().indexOf(&#39;:&#39;);
-            final String severity = colonIndex &gt; 0 ? record.value().substring(0, colonIndex).trim() : &quot;UNKNOWN&quot;;
-
-            // Route logs based on severity
-            switch (severity) {
-                case &quot;ERROR&quot;:
-                    context().forward(record.withKey(ERROR_LOGS_TOPIC));
-                    break;
-                case &quot;WARN&quot;:
-                    context().forward(record.withKey(WARN_LOGS_TOPIC));
-                    break;
-                case &quot;INFO&quot;:
-                    // INFO logs are ignored
-                    break;
-                default:
-                    // Forward to an &quot;unknown&quot; topic for logs with unrecognized severities
-                    context().forward(record.withKey(UNKNOWN_LOGS_TOPIC));
-            }
-        }
-    }
-}</code></pre>
                 <h5 id="traffic-radar-monitoring-car-count-removal">Traffic Radar Monitoring Car Count</h5>
                 <p>Below, methods <code>countWithTransformValues</code> and <code>countWithProcessValues</code> show how you can migrate
                     from <code>transformValues</code> to <code>processValues</code>.</p>
@@ -3819,71 +3885,6 @@ grouped
 
             // Emit the current day&#39;s count
             context.forward(record.withValue(String.format(&quot;Day: %s, Car Count: %s&quot;, currentDay, dailyCount)));
-        }
-    }
-}</code></pre>
-                <h5 id="replacing-slang-in-text-messages-removal">Replacing Slang in Text Messages</h5>
-                <p>Below, methods <code>replaceWithFlatTransformValues</code> and <code>replaceWithProcessValues</code> show how you can
-                    migrate from <code>flatTransformValues</code> to <code>processValues</code>.</p>
-                <pre class="line-numbers"><code class="language-java">public class ReplacingSlangTextInMessagesExample {
-    private static final Map&lt;String, String&gt; SLANG_DICTIONARY = Map.of(
-            &quot;u&quot;, &quot;you&quot;,
-            &quot;brb&quot;, &quot;be right back&quot;,
-            &quot;omg&quot;, &quot;oh my god&quot;,
-            &quot;btw&quot;, &quot;by the way&quot;
-    );
-    private static final String INPUT_MESSAGES_TOPIC = &quot;input-messages-topic&quot;;
-    private static final String OUTPUT_MESSAGES_TOPIC = &quot;output-messages-topic&quot;;
-
-    public static void replaceWithFlatTransformValues(final StreamsBuilder builder) {
-        KStream&lt;String, String&gt; messageStream = builder.stream(INPUT_MESSAGES_TOPIC);
-        messageStream.flatTransformValues(SlangReplacementTransformer::new).to(OUTPUT_MESSAGES_TOPIC);
-    }
-
-    public static void replaceWithProcessValues(final StreamsBuilder builder) {
-        KStream&lt;String, String&gt; messageStream = builder.stream(INPUT_MESSAGES_TOPIC);
-        messageStream.processValues(SlangReplacementProcessor::new).to(OUTPUT_MESSAGES_TOPIC);
-    }
-
-    private static class SlangReplacementTransformer implements ValueTransformer&lt;String, Iterable&lt;String&gt;&gt; {
-
-        @Override
-        public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
-        }
-
-        @Override
-        public Iterable&lt;String&gt; transform(final String value) {
-            if (value == null) {
-                return Collections.emptyList(); // Skip null values
-            }
-
-            // Replace slang words in the message
-            final String[] words = value.split(&quot;\\s+&quot;);
-            return Arrays.asList(
-                    Arrays.stream(words)
-                            .map(word -&gt; SLANG_DICTIONARY.getOrDefault(word, word))
-                            .toArray(String[]::new)
-            );
-        }
-
-        @Override
-        public void close() {
-        }
-    }
-
-    private static class SlangReplacementProcessor extends ContextualFixedKeyProcessor&lt;String, String, String&gt; {
-        @Override
-        public void process(final FixedKeyRecord&lt;String, String&gt; record) {
-            if (record.value() == null) {
-                return; // Skip null values
-            }
-
-            // Replace slang words in the message
-            final String[] words = record.value().split(&quot;\\s+&quot;);
-            for (final String word : words) {
-                String replacedWord = SLANG_DICTIONARY.getOrDefault(word, word);
-                context().forward(record.withValue(replacedWord));
-            }
         }
     }
 }</code></pre>
