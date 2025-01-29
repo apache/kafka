@@ -29,11 +29,6 @@ public interface GroupSpec {
     Map<String, AssignmentMemberSpec> members();
 
     /**
-     * @return The list of subtopologies.
-     */
-//    List<String> subtopologies();
-
-    /**
      * @return Any configurations passed to the assignor.
      */
     Map<String, String> assignmentConfigs();
