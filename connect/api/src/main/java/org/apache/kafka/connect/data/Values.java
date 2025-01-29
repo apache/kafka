@@ -26,7 +26,6 @@ import org.slf4j.LoggerFactory;
 import java.io.Serializable;
 import java.math.BigDecimal;
 import java.math.BigInteger;
-import java.math.RoundingMode;
 import java.nio.ByteBuffer;
 import java.text.CharacterIterator;
 import java.text.DateFormat;
@@ -1012,6 +1011,7 @@ public class Values {
             return parseAsTemporal(token);
         }
 
+
         private static SchemaAndValue parseAsNumber(String token) {
             // Try to parse as a number ...
             BigDecimal decimal = new BigDecimal(token);
@@ -1032,12 +1032,20 @@ public class Values {
             }
         }
 
+        private static boolean isWholeNumber(BigDecimal bd) {
+            return bd.signum() == 0 || bd.scale() <= 0 || bd.stripTrailingZeros().scale() <= 0;
+        }
+
+        private static final BigDecimal BIGGER_THAN_LONG = new BigDecimal("1e19");
+
         private static SchemaAndValue parseAsExactDecimal(BigDecimal decimal) {
-            BigDecimal ceil = decimal.setScale(0, RoundingMode.CEILING);
-            BigDecimal floor = decimal.setScale(0, RoundingMode.FLOOR);
-            if (ceil.equals(floor)) {
-                BigInteger num = ceil.toBigIntegerExact();
-                if (ceil.precision() >= 19 && (num.compareTo(LONG_MIN) < 0 || num.compareTo(LONG_MAX) > 0)) {
+            BigDecimal abs = decimal.abs();
+            if (abs.compareTo(BIGGER_THAN_LONG) > 0 || (abs.compareTo(BigDecimal.ONE) < 0 && abs.compareTo(BigDecimal.ZERO) != 0)) {
+                return null;
+            }
+            if (isWholeNumber(decimal)) {
+                BigInteger num = decimal.toBigIntegerExact();
+                if (num.compareTo(LONG_MIN) < 0 || num.compareTo(LONG_MAX) > 0) {
                     return null;
                 }
                 long integral = num.longValue();
