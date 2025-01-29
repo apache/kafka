@@ -995,7 +995,7 @@ public class StreamsMembershipManagerTest {
         acknowledging(onTasksAssignedCallbackExecutedSetup);
         CompletableFuture<Void> future = leaving(onAllTasksRevokedCallbackExecuted);
 
-        membershipManager.transitionToUnsubscribeIfLeaving();
+        membershipManager.onHeartbeatRequestSkipped();
 
         verifyInStateUnsubscribed(membershipManager);
         assertTrue(future.isDone());
