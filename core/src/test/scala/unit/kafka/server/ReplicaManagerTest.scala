@@ -49,6 +49,7 @@ import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.KafkaPrincipal
+import org.apache.kafka.common.utils.Utils.{mkEntry, mkMap}
 import org.apache.kafka.common.utils.{LogContext, Time, Utils}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.image._
@@ -5996,8 +5997,7 @@ class ReplicaManagerTest {
 
     val groupId = "grp"
     val tp1 = new TopicIdPartition(Uuid.randomUuid, new TopicPartition("foo1", 0))
-    val partitionMaxBytes = new util.LinkedHashMap[TopicIdPartition, Integer]
-    partitionMaxBytes.put(tp1, 1000)
+    val partitionMaxBytes: util.Map[TopicIdPartition, Integer] = mkMap(mkEntry(tp1, 1000))
 
     val sp1 = mock(classOf[SharePartition])
     val sharePartitions = new util.LinkedHashMap[TopicIdPartition, SharePartition]
