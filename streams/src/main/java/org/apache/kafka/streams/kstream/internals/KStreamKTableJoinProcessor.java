@@ -53,7 +53,7 @@ class KStreamKTableJoinProcessor<K1, K2, V1, V2, VOut> extends ContextualProcess
     private final Optional<Duration> gracePeriod;
     private TimeOrderedKeyValueBuffer<K1, V1, V1> buffer;
     protected long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
-    private InternalProcessorContext internalProcessorContext;
+    private InternalProcessorContext<K1, VOut> internalProcessorContext;
     private final boolean useBuffer;
     private final String storeName;
 
@@ -78,7 +78,7 @@ class KStreamKTableJoinProcessor<K1, K2, V1, V2, VOut> extends ContextualProcess
         final StreamsMetricsImpl metrics = (StreamsMetricsImpl) context.metrics();
         droppedRecordsSensor = droppedRecordsSensor(Thread.currentThread().getName(), context.taskId().toString(), metrics);
         valueGetter.init(context);
-        internalProcessorContext = asInternalProcessorContext((org.apache.kafka.streams.processor.ProcessorContext) context);
+        internalProcessorContext = asInternalProcessorContext(context);
         if (useBuffer) {
             if (!valueGetter.isVersioned() && gracePeriod.isPresent()) {
                 throw new IllegalArgumentException("KTable must be versioned to use a grace period in a stream table join.");
@@ -90,7 +90,6 @@ class KStreamKTableJoinProcessor<K1, K2, V1, V2, VOut> extends ContextualProcess
 
     @Override
     public void process(final Record<K1, V1> record) {
-        internalProcessorContext = asInternalProcessorContext((org.apache.kafka.streams.processor.ProcessorContext) context());
         updateObservedStreamTime(record.timestamp());
         if (maybeDropRecord(record)) {
             return;
@@ -123,7 +122,6 @@ class KStreamKTableJoinProcessor<K1, K2, V1, V2, VOut> extends ContextualProcess
         observedStreamTime = Math.max(observedStreamTime, timestamp);
     }
 
-    @SuppressWarnings("unchecked")
     private void doJoin(final Record<K1, V1> record) {
         final K2 mappedKey = keyMapper.apply(record.key(), record.value());
         final V2 value2 = getValue2(record, mappedKey);

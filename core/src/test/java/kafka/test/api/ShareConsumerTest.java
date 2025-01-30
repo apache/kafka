@@ -17,11 +17,13 @@
 package kafka.test.api;
 
 import kafka.api.BaseConsumerTest;
+import kafka.server.KafkaBroker;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.AlterConfigsOptions;
 import org.apache.kafka.clients.admin.ConfigEntry;
+import org.apache.kafka.clients.admin.CreateTopicsResult;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.RecordsToDelete;
 import org.apache.kafka.clients.consumer.AcknowledgeType;
@@ -30,6 +32,7 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaShareConsumer;
 import org.apache.kafka.clients.consumer.ShareConsumer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -38,6 +41,7 @@ import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
@@ -48,15 +52,21 @@ import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Flaky;
 import org.apache.kafka.common.test.api.Type;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.GroupConfig;
+import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig;
+import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Tag;
@@ -72,16 +82,23 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BiConsumer;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
@@ -1803,6 +1820,246 @@ public class ShareConsumerTest {
         }
     }
 
+    @ClusterTest(
+        brokers = 3,
+        serverProperties = {
+            @ClusterConfigProperty(key = "auto.create.topics.enable", value = "false"),
+            @ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer,share"),
+            @ClusterConfigProperty(key = "group.share.enable", value = "true"),
+            @ClusterConfigProperty(key = "group.share.partition.max.record.locks", value = "10000"),
+            @ClusterConfigProperty(key = "group.share.record.lock.duration.ms", value = "15000"),
+            @ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "3"),
+            @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "3"),
+            @ClusterConfigProperty(key = "share.coordinator.state.topic.num.partitions", value = "3"),
+            @ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "3"),
+            @ClusterConfigProperty(key = "unstable.api.versions.enable", value = "true")
+        }
+    )
+    @Timeout(90)
+    public void testShareConsumerAfterCoordinatorMovement() throws Exception {
+        setup();
+        String topicName = "multipart";
+        String groupId = "multipartGrp";
+        Uuid topicId = createTopic(topicName, 3, 3);
+        alterShareAutoOffsetReset(groupId, "earliest");
+        ScheduledExecutorService service = Executors.newScheduledThreadPool(5);
+
+        TopicPartition tpMulti = new TopicPartition(topicName, 0);
+
+        // produce some messages
+        ClientState prodState = new ClientState();
+        final Set<String> produced = new HashSet<>();
+        service.execute(() -> {
+                int i = 0;
+                try (Producer<String, String> producer = createProducer(Map.of(
+                    ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName(),
+                    ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName()
+                ))) {
+                    while (!prodState.done().get()) {
+                        String key = "key-" + (i++);
+                        ProducerRecord<String, String> record = new ProducerRecord<>(
+                            tpMulti.topic(),
+                            tpMulti.partition(),
+                            null,
+                            key,
+                            "value"
+                        );
+                        try {
+                            producer.send(record);
+                            producer.flush();
+                            // count only correctly produced records
+                            prodState.count().incrementAndGet();
+                            produced.add(key);
+                        } catch (Exception e) {
+                            // ignore
+                        }
+                    }
+                }
+            }
+        );
+
+        // consume messages - start after small delay
+        ClientState consState = new ClientState();
+        // using map here if we want to debug specific keys
+        Map<String, Integer> consumed = new HashMap<>();
+        service.schedule(() -> {
+                try (ShareConsumer<String, String> shareConsumer = createShareConsumer(groupId, Map.of(
+                    ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName(),
+                    ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName()
+                ))) {
+                    shareConsumer.subscribe(List.of(topicName));
+                    while (!consState.done().get()) {
+                        ConsumerRecords<String, String> records = shareConsumer.poll(Duration.ofMillis(2000L));
+                        consState.count().addAndGet(records.count());
+                        records.forEach(rec -> consumed.compute(rec.key(), (k, v) -> v == null ? 1 : v + 1));
+                        if (prodState.done().get() && records.count() == 0) {
+                            consState.done().set(true);
+                        }
+                    }
+                }
+            }, 100L, TimeUnit.MILLISECONDS
+        );
+
+        // To be closer to real world scenarios, we will execute after
+        // some time has elapsed since the producer and consumer started
+        // working.
+        service.schedule(() -> {
+                // Get the current node hosting the __share_group_state partition
+                // on which tpMulti is hosted. Then shut down this node and wait
+                // for it to be gracefully shutdown. Then fetch the coordinator again
+                // and verify that it has moved to some other broker.
+                try (Admin admin = createAdminClient()) {
+                    SharePartitionKey key = SharePartitionKey.getInstance(groupId, new TopicIdPartition(topicId, tpMulti));
+                    int shareGroupStateTp = Utils.abs(key.asCoordinatorKey().hashCode()) % 3;
+                    List<Integer> curShareCoordNodeId = null;
+                    try {
+                        curShareCoordNodeId = admin.describeTopics(List.of(Topic.SHARE_GROUP_STATE_TOPIC_NAME)).allTopicNames().get().get(Topic.SHARE_GROUP_STATE_TOPIC_NAME)
+                            .partitions().stream()
+                            .filter(info -> info.partition() == shareGroupStateTp)
+                            .map(info -> info.leader().id())
+                            .toList();
+                    } catch (Exception e) {
+                        fail(e);
+                    }
+                    assertEquals(1, curShareCoordNodeId.size());
+
+                    // shutdown the coordinator
+                    KafkaBroker broker = cluster.brokers().get(curShareCoordNodeId.get(0));
+                    cluster.shutdownBroker(curShareCoordNodeId.get(0));
+
+                    // wait for it to be completely shutdown
+                    broker.awaitShutdown();
+
+                    List<Integer> newShareCoordNodeId = null;
+                    try {
+                        newShareCoordNodeId = admin.describeTopics(List.of(Topic.SHARE_GROUP_STATE_TOPIC_NAME)).allTopicNames().get().get(Topic.SHARE_GROUP_STATE_TOPIC_NAME)
+                            .partitions().stream()
+                            .filter(info -> info.partition() == shareGroupStateTp)
+                            .map(info -> info.leader().id())
+                            .toList();
+                    } catch (Exception e) {
+                        fail(e);
+                    }
+
+                    assertEquals(1, newShareCoordNodeId.size());
+                    assertNotEquals(curShareCoordNodeId.get(0), newShareCoordNodeId.get(0));
+                }
+            }, 5L, TimeUnit.SECONDS
+        );
+
+        // top the producer after some time (but after coordinator shutdown)
+        service.schedule(() -> {
+                prodState.done().set(true);
+            }, 10L, TimeUnit.SECONDS
+        );
+
+        // wait for both producer and consumer to finish
+        TestUtils.waitForCondition(
+            () -> prodState.done().get() && consState.done().get(),
+            45_000L,
+            500L,
+            () -> "prod/cons not done yet"
+        );
+
+        // Make sure we consumed all records. Consumed records could be higher
+        // due to re-delivery but that is expected since we are only guaranteeing
+        // at least once semantics.
+        assertTrue(prodState.count().get() <= consState.count().get());
+        Set<String> consumedKeys = consumed.keySet();
+        assertTrue(produced.containsAll(consumedKeys) && consumedKeys.containsAll(produced));
+
+        shutdownExecutorService(service);
+
+        verifyShareGroupStateTopicRecordsProduced();
+    }
+
+    @ClusterTest(
+        brokers = 3,
+        serverProperties = {
+            @ClusterConfigProperty(key = "auto.create.topics.enable", value = "false"),
+            @ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer,share"),
+            @ClusterConfigProperty(key = "group.share.enable", value = "true"),
+            @ClusterConfigProperty(key = "group.share.partition.max.record.locks", value = "10000"),
+            @ClusterConfigProperty(key = "group.share.record.lock.duration.ms", value = "15000"),
+            @ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "3"),
+            @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "3"),
+            @ClusterConfigProperty(key = "share.coordinator.state.topic.num.partitions", value = "3"),
+            @ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "3"),
+            @ClusterConfigProperty(key = "unstable.api.versions.enable", value = "true")
+        }
+    )
+    @Timeout(150)
+    @Flaky("KAFKA-18665")
+    public void testComplexShareConsumer() throws Exception {
+        setup();
+        String topicName = "multipart";
+        String groupId = "multipartGrp";
+        createTopic(topicName, 3, 3);
+        TopicPartition multiTp = new TopicPartition(topicName, 0);
+
+        ScheduledExecutorService service = Executors.newScheduledThreadPool(5);
+
+        ClientState prodState = new ClientState();
+
+        // produce messages until we want
+        service.execute(() -> {
+            try (Producer<byte[], byte[]> producer = createProducer()) {
+                while (!prodState.done().get()) {
+                    ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(multiTp.topic(), multiTp.partition(), null, "key".getBytes(), "value".getBytes());
+                    producer.send(record);
+                    producer.flush();
+                    prodState.count().incrementAndGet();
+                }
+            }
+        });
+
+        // init a complex share consumer
+        ComplexShareConsumer<byte[], byte[]> complexCons1 = new ComplexShareConsumer<>(
+            cluster.bootstrapServers(),
+            topicName,
+            groupId,
+            Map.of()
+        );
+
+        service.schedule(
+            complexCons1,
+            100L,
+            TimeUnit.MILLISECONDS
+        );
+
+        // let the complex consumer read the messages
+        service.schedule(() -> {
+                prodState.done().set(true);
+            }, 10L, TimeUnit.SECONDS
+        );
+
+        // all messages which can be read are read, some would be redelivered
+        TestUtils.waitForCondition(complexCons1::isDone, 45_000L, () -> "did not close!");
+
+        assertTrue(prodState.count().get() < complexCons1.recordsRead());
+
+        shutdownExecutorService(service);
+
+        verifyShareGroupStateTopicRecordsProduced();
+    }
+
+    /**
+     * Util class to encapsulate state for a consumer/producer
+     * being executed by an {@link ExecutorService}.
+     */
+    private static class ClientState {
+        private final AtomicBoolean done = new AtomicBoolean(false);
+        private final AtomicInteger count = new AtomicInteger(0);
+
+        AtomicBoolean done() {
+            return done;
+        }
+
+        AtomicInteger count() {
+            return count;
+        }
+    }
+
     private int produceMessages(int messageCount) {
         try (Producer<byte[], byte[]> producer = createProducer()) {
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
@@ -1901,12 +2158,21 @@ public class ShareConsumerTest {
         return accumulatedRecords;
     }
 
-    private void createTopic(String topicName) {
+    private Uuid createTopic(String topicName) {
+        return createTopic(topicName, 1, 1);
+    }
+
+    private Uuid createTopic(String topicName, int numPartitions, int replicationFactor) {
+        AtomicReference<Uuid> topicId = new AtomicReference<>(null);
         assertDoesNotThrow(() -> {
             try (Admin admin = createAdminClient()) {
-                admin.createTopics(Collections.singleton(new NewTopic(topicName, 1, (short) 1))).all().get();
+                CreateTopicsResult result = admin.createTopics(Collections.singleton(new NewTopic(topicName, numPartitions, (short) replicationFactor)));
+                result.all().get();
+                topicId.set(result.topicId(topicName).get());
             }
         }, "Failed to create topic");
+
+        return topicId.get();
     }
 
     private void deleteTopic(String topicName) {
@@ -2010,6 +2276,108 @@ public class ShareConsumerTest {
             assertDoesNotThrow(() -> adminClient.incrementalAlterConfigs(alterEntries, alterOptions)
                 .all()
                 .get(60, TimeUnit.SECONDS), "Failed to alter configs");
+        }
+    }
+
+    /**
+     * Test utility which encapsulates a {@link ShareConsumer} whose record processing
+     * behavior can be supplied as a function argument.
+     * <p></p>
+     * This can be used to create different consume patterns on the broker and study
+     * the status of broker side share group abstractions.
+     * @param <K> - key type of the records consumed
+     * @param <V> - value type of the records consumed
+     */
+    private static class ComplexShareConsumer<K, V> implements Runnable {
+        public static final int POLL_TIMEOUT_MS = 15000;
+        public static final int MAX_DELIVERY_COUNT = ShareGroupConfig.SHARE_GROUP_DELIVERY_COUNT_LIMIT_DEFAULT;
+
+        private final String topicName;
+        private final Map<String, Object> configs = new HashMap<>();
+        private final ClientState state = new ClientState();
+        private final Predicate<ConsumerRecords<K, V>> exitCriteria;
+        private final BiConsumer<ShareConsumer<K, V>, ConsumerRecord<K, V>> processFunc;
+
+        ComplexShareConsumer(
+            String bootstrapServers,
+            String topicName,
+            String groupId,
+            Map<String, Object> additionalProperties
+        ) {
+            this(
+                bootstrapServers,
+                topicName,
+                groupId,
+                additionalProperties,
+                records -> records.count() == 0,
+                (consumer, record) -> {
+                    short deliveryCountBeforeAccept = (short) ((record.offset() + record.offset() / (MAX_DELIVERY_COUNT + 2)) % (MAX_DELIVERY_COUNT + 2));
+                    if (deliveryCountBeforeAccept == 0) {
+                        consumer.acknowledge(record, AcknowledgeType.REJECT);
+                    } else if (record.deliveryCount().get() == deliveryCountBeforeAccept) {
+                        consumer.acknowledge(record, AcknowledgeType.ACCEPT);
+                    } else {
+                        consumer.acknowledge(record, AcknowledgeType.RELEASE);
+                    }
+                }
+            );
+        }
+
+        ComplexShareConsumer(
+            String bootstrapServers,
+            String topicName,
+            String groupId,
+            Map<String, Object> additionalProperties,
+            Predicate<ConsumerRecords<K, V>> exitCriteria,
+            BiConsumer<ShareConsumer<K, V>, ConsumerRecord<K, V>> processFunc
+        ) {
+            this.exitCriteria = Objects.requireNonNull(exitCriteria);
+            this.processFunc = Objects.requireNonNull(processFunc);
+            this.topicName = topicName;
+            this.configs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+            this.configs.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
+            this.configs.putAll(additionalProperties);
+            this.configs.putIfAbsent(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
+            this.configs.putIfAbsent(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
+        }
+
+        void stop() {
+            state.done().set(true);
+        }
+
+        @Override
+        public void run() {
+            try (ShareConsumer<K, V> consumer = new KafkaShareConsumer<>(configs)) {
+                consumer.subscribe(Set.of(this.topicName));
+                while (!state.done().get()) {
+                    ConsumerRecords<K, V> records = consumer.poll(Duration.ofMillis(POLL_TIMEOUT_MS));
+                    state.count().addAndGet(records.count());
+                    if (exitCriteria.test(records)) {
+                        state.done().set(true);
+                    }
+                    records.forEach(record -> processFunc.accept(consumer, record));
+                }
+            }
+        }
+
+        boolean isDone() {
+            return state.done().get();
+        }
+
+        int recordsRead() {
+            return state.count().get();
+        }
+    }
+
+    private void shutdownExecutorService(ExecutorService service) {
+        service.shutdown();
+        try {
+            if (!service.awaitTermination(5L, TimeUnit.SECONDS)) {
+                service.shutdownNow();
+            }
+        } catch (Exception e) {
+            service.shutdownNow();
+            Thread.currentThread().interrupt();
         }
     }
 }

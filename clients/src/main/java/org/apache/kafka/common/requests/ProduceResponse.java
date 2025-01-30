@@ -55,6 +55,7 @@ import java.util.stream.Collectors;
  * {@link Errors#INVALID_RECORD}
  * {@link Errors#INVALID_TXN_STATE}
  * {@link Errors#INVALID_PRODUCER_ID_MAPPING}
+ * {@link Errors#CONCURRENT_TRANSACTIONS}
  */
 public class ProduceResponse extends AbstractResponse {
     public static final long INVALID_OFFSET = -1L;
