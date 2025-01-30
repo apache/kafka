@@ -157,12 +157,12 @@ public class ConfigurationUtils {
     /**
      * Validates that the configured URL that:
      *
-     * <li>
-     *     <ul>is in the allow-list</ul>
-     *     <ul>is well-formed</ul>
-     *     <ul>contains a scheme</ul>
-     *     <ul>uses either HTTP, HTTPS, or file protocols</ul>
-     * </li>
+     * <ul>
+     *     <li>is well-formed</li>
+     *     <li>contains a scheme</li>
+     *     <li>uses either HTTP, HTTPS, or file protocols</li>
+     *     <li>is in the allow-list</li>
+     * </ul>
      *
      * No effort is made to connect to the URL in the validation step.
      */
