@@ -1785,7 +1785,7 @@ public class KafkaAdminClientTest {
 
     @Flaky("KAFKA-18441")
     @Test
-    public void testAdminClientApisAuthenticationFailure() throws InterruptedException {
+    public void testAdminClientApisAuthenticationFailure() {
         Cluster cluster = mockBootstrapCluster();
         try (final AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(Time.SYSTEM, cluster,
                 newStrMap(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "1000",
