@@ -19,6 +19,7 @@ package org.apache.kafka.image;
 
 import org.apache.kafka.common.metadata.AccessControlEntryRecord;
 import org.apache.kafka.common.metadata.BrokerRegistrationChangeRecord;
+import org.apache.kafka.common.metadata.ClearElrRecord;
 import org.apache.kafka.common.metadata.ClientQuotaRecord;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.DelegationTokenRecord;
@@ -231,6 +232,9 @@ public final class MetadataDelta {
             case ACCESS_CONTROL_ENTRY_RECORD:
                 replay((AccessControlEntryRecord) record);
                 break;
+            case CLEAR_ELR_RECORD:
+                replay((ClearElrRecord) record);
+                break;
             case REMOVE_ACCESS_CONTROL_ENTRY_RECORD:
                 replay((RemoveAccessControlEntryRecord) record);
                 break;
@@ -276,6 +280,10 @@ public final class MetadataDelta {
 
     public void replay(ConfigRecord record) {
         getOrCreateConfigsDelta().replay(record);
+    }
+
+    public void replay(ClearElrRecord record) {
+        getOrCreateTopicsDelta().replay(record);
     }
 
     public void replay(PartitionChangeRecord record) {

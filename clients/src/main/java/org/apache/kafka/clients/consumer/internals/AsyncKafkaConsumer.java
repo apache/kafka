@@ -62,6 +62,7 @@ import org.apache.kafka.clients.consumer.internals.events.PollEvent;
 import org.apache.kafka.clients.consumer.internals.events.ResetOffsetEvent;
 import org.apache.kafka.clients.consumer.internals.events.ResumePartitionsEvent;
 import org.apache.kafka.clients.consumer.internals.events.SeekUnvalidatedEvent;
+import org.apache.kafka.clients.consumer.internals.events.StopFindCoordinatorOnCloseEvent;
 import org.apache.kafka.clients.consumer.internals.events.SyncCommitEvent;
 import org.apache.kafka.clients.consumer.internals.events.TopicMetadataEvent;
 import org.apache.kafka.clients.consumer.internals.events.TopicPatternSubscriptionChangeEvent;
@@ -1333,6 +1334,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         // sequence...
         swallow(log, Level.ERROR, "Failed to auto-commit offsets",
             () -> autoCommitOnClose(closeTimer), firstException);
+        swallow(log, Level.ERROR, "Failed to stop finding coordinator",
+            this::stopFindCoordinatorOnClose, firstException);
         swallow(log, Level.ERROR, "Failed to release group assignment",
             () -> runRebalanceCallbacksOnClose(closeTimer), firstException);
         swallow(log, Level.ERROR, "Failed to leave group while closing consumer",
@@ -1419,6 +1422,13 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         } finally {
             timer.update();
         }
+    }
+
+    private void stopFindCoordinatorOnClose() {
+        if (groupMetadata.get().isEmpty())
+            return;
+        log.debug("Stop finding coordinator during consumer close");
+        applicationEventHandler.add(new StopFindCoordinatorOnCloseEvent());
     }
 
     // Visible for testing

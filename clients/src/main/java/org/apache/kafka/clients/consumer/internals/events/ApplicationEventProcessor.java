@@ -148,6 +148,10 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
                 process((LeaveGroupOnCloseEvent) event);
                 return;
 
+            case STOP_FIND_COORDINATOR_ON_CLOSE:
+                process((StopFindCoordinatorOnCloseEvent) event);
+                return;
+
             case CREATE_FETCH_REQUESTS:
                 process((CreateFetchRequestsEvent) event);
                 return;
@@ -450,6 +454,13 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         log.debug("Signal the ConsumerMembershipManager to leave the consumer group since the consumer is closing");
         CompletableFuture<Void> future = requestManagers.consumerMembershipManager.get().leaveGroupOnClose();
         future.whenComplete(complete(event.future()));
+    }
+
+    private void process(@SuppressWarnings("unused") final StopFindCoordinatorOnCloseEvent event) {
+        requestManagers.coordinatorRequestManager.ifPresent(manager -> {
+            log.debug("Signal CoordinatorRequestManager closing");
+            manager.signalClose();
+        });
     }
 
     /**

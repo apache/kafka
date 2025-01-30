@@ -20,11 +20,13 @@ package org.apache.kafka.image;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.metadata.ClearElrRecord;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.Replicas;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -81,6 +83,31 @@ public final class TopicDelta {
             }
         }
         partitionChanges.put(record.partitionId(), partition.merge(record));
+    }
+
+    public void replay(ClearElrRecord record) {
+        // Some partitions are not added to the image yet, let's check the partitionChanges first.
+        partitionChanges.forEach((partitionId, partition) -> {
+            maybeClearElr(partitionId, partition);
+        });
+
+        image.partitions().forEach((partitionId, partition) -> {
+            if (!partitionChanges.containsKey(partitionId)) {
+                maybeClearElr(partitionId, partition);
+            }
+        });
+    }
+
+    void maybeClearElr(int partitionId, PartitionRegistration partition) {
+        if (partition.elr.length != 0 || partition.lastKnownElr.length != 0) {
+            partitionChanges.put(partitionId, partition.merge(
+                new PartitionChangeRecord().
+                    setPartitionId(partitionId).
+                    setTopicId(image.id()).
+                    setEligibleLeaderReplicas(Collections.emptyList()).
+                    setLastKnownElr(Collections.emptyList())
+            ));
+        }
     }
 
     public TopicImage apply() {
