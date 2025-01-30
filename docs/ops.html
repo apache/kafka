@@ -1770,6 +1770,21 @@ NodeId	DirectoryId           	LogEndOffset	Lag	LastFetchTimestamp	LastCaughtUpTi
         <td>kafka.log:type=Log,name=LogEndOffset,topic=([-.\w]+),partition=([0-9]+)</td>
         <td>The last offset in a partition.</td>
       </tr>
+      <tr>
+        <td>Remaining logs to recover</td>
+        <td>kafka.log:type=LogManager,name=remainingLogsToRecover</td>
+        <td>The number of remaining logs for each log.dir to be recovered.This metric provides an overview of the recovery progress for a given log directory.</td>
+      </tr>
+      <tr>
+        <td>Remaining segments to recover for the current recovery thread</td>
+        <td>kafka.log:type=LogManager,name=remainingSegmentsToRecover</td>
+        <td>The number of remaining segments assigned to the currently active recovery thread.</td>
+      </tr>
+      <tr>
+        <td>Log directory offline status</td>
+        <td>kafka.log:type=LogManager,name=LogDirectoryOffline</td>
+        <td>Indicates if a log directory is offline (1) or online (0).</td>
+      </tr>
   </tbody></table>
 
 <h4 class="anchor-heading"><a id="tiered_storage_monitoring" class="anchor-link"></a><a href="#tiered_storage_monitoring">Tiered Storage Monitoring</a></h4>
