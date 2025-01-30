@@ -110,7 +110,7 @@ public class ShareCoordinatorMetadataCacheHelperImpl implements ShareCoordinator
         try {
             return CollectionConverters.asJava(metadataCache.getAliveBrokerNodes(interBrokerListenerName).toSeq());
         } catch (Exception e) {
-            log.warn("Exception while getting cluste nodes", e);
+            log.warn("Exception while getting cluster nodes", e);
         }
         return List.of();
     }
