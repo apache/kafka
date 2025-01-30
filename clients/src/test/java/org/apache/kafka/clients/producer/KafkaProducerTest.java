@@ -1445,7 +1445,7 @@ public class KafkaProducerTest {
         ApiVersions apiVersions = new ApiVersions();
         apiVersions.update(NODE.idString(), nodeApiVersions);
 
-        ProducerInterceptors<String, String> interceptor = new ProducerInterceptors<>(Collections.emptyList());
+        ProducerInterceptors<String, String> interceptor = new ProducerInterceptors<>(Collections.emptyList(), null);
 
         client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some-txn", NODE));
         client.prepareResponse(initProducerIdResponse(1L, (short) 5, Errors.NONE));
