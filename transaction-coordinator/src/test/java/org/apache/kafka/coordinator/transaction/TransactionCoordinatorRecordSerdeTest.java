@@ -18,8 +18,8 @@ package org.apache.kafka.coordinator.transaction;
 
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.MessageUtil;
-import org.apache.kafka.coordinator.common.runtime.CoordinatorLoader;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorRecordSerde;
 import org.apache.kafka.coordinator.transaction.generated.TransactionLogKey;
 import org.apache.kafka.coordinator.transaction.generated.TransactionLogValue;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
@@ -120,8 +120,9 @@ public class TransactionCoordinatorRecordSerdeTest {
 
         ByteBuffer valueBuffer = ByteBuffer.allocate(64);
 
-        CoordinatorLoader.UnknownRecordTypeException ex =
-                assertThrows(CoordinatorLoader.UnknownRecordTypeException.class,
+        CoordinatorRecordSerde.UnknownRecordTypeException ex =
+                assertThrows(
+                    CoordinatorRecordSerde.UnknownRecordTypeException.class,
                         () -> serde.deserialize(keyBuffer, valueBuffer));
         assertEquals((short) 255, ex.unknownType());
     }

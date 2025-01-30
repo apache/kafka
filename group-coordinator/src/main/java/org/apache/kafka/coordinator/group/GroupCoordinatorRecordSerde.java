@@ -18,7 +18,6 @@ package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiMessage;
-import org.apache.kafka.coordinator.common.runtime.CoordinatorLoader;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecordSerde;
 import org.apache.kafka.coordinator.group.generated.CoordinatorRecordType;
 
@@ -31,7 +30,7 @@ public class GroupCoordinatorRecordSerde extends CoordinatorRecordSerde {
         try {
             return CoordinatorRecordType.fromId(recordType).newRecordKey();
         } catch (UnsupportedVersionException ex) {
-            throw new CoordinatorLoader.UnknownRecordTypeException(recordType);
+            throw new UnknownRecordTypeException(recordType);
         }
     }
 
@@ -40,7 +39,7 @@ public class GroupCoordinatorRecordSerde extends CoordinatorRecordSerde {
         try {
             return CoordinatorRecordType.fromId(recordType).newRecordValue();
         } catch (UnsupportedVersionException ex) {
-            throw new CoordinatorLoader.UnknownRecordTypeException(recordType);
+            throw new UnknownRecordTypeException(recordType);
         }
     }
 }
