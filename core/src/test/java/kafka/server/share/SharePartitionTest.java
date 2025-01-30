@@ -6176,7 +6176,7 @@ public class SharePartitionTest {
                 new ShareAcknowledgementBatch(10, 14, Collections.singletonList((byte) 1)),
                 new ShareAcknowledgementBatch(15, 19, Collections.singletonList((byte) 1))));
 
-//        assertTrue(ackResult.isCompletedExceptionally());
+        assertTrue(ackResult.isCompletedExceptionally());
         assertFutureThrows(ackResult, InvalidRecordStateException.class);
 
         // State should be rolled back to the previous state for any changes.
