@@ -122,8 +122,7 @@ public class GroupCoordinatorRecordSerdeTest {
         ByteBuffer valueBuffer = ByteBuffer.allocate(64);
 
         Deserializer.UnknownRecordTypeException ex =
-            assertThrows(
-                Deserializer.UnknownRecordTypeException.class,
+            assertThrows(Deserializer.UnknownRecordTypeException.class,
                 () -> serde.deserialize(keyBuffer, valueBuffer));
         assertEquals((short) 255, ex.unknownType());
     }

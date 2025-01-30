@@ -123,5 +123,4 @@ public abstract class CoordinatorRecordSerde implements Serializer<CoordinatorRe
      * @return ApiMessage object
      */
     protected abstract ApiMessage apiMessageValueFor(short recordType);
-
 }
