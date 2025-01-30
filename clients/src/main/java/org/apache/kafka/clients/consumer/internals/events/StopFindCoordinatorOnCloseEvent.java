@@ -14,15 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.state.internals;
+package org.apache.kafka.clients.consumer.internals.events;
 
-public class RocksDBTimestampedSegmentedBytesStore extends AbstractRocksDBSegmentedBytesStore<TimestampedSegment> {
-
-    RocksDBTimestampedSegmentedBytesStore(final String name,
-                                          final String metricsScope,
-                                          final long retention,
-                                          final long segmentInterval,
-                                          final KeySchema keySchema) {
-        super(name, retention, keySchema, new TimestampedSegments(name, metricsScope, retention, segmentInterval));
+/**
+ * This event is raised when the consumer is closing to prevent the CoordinatorRequestManager from
+ * generating FindCoordinator requests. This event ensures that no new coordinator requests
+ * are initiated once the consumer has completed all coordinator-dependent operations and
+ * is in the process of shutting down.
+ */
+public class StopFindCoordinatorOnCloseEvent extends ApplicationEvent {
+    public StopFindCoordinatorOnCloseEvent() {
+        super(Type.STOP_FIND_COORDINATOR_ON_CLOSE);
     }
 }

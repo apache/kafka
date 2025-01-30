@@ -20,12 +20,16 @@ package kafka.server.metadata;
 import kafka.server.MetadataCache;
 
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
 import org.apache.kafka.common.message.MetadataResponseData;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.share.persister.ShareCoordinatorMetadataCacheHelper;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.HashSet;
 import java.util.List;
@@ -41,6 +45,7 @@ public class ShareCoordinatorMetadataCacheHelperImpl implements ShareCoordinator
     private final MetadataCache metadataCache;
     private final Function<SharePartitionKey, Integer> keyToPartitionMapper;
     private final ListenerName interBrokerListenerName;
+    private final Logger log = LoggerFactory.getLogger(ShareCoordinatorMetadataCacheHelperImpl.class);
 
     public ShareCoordinatorMetadataCacheHelperImpl(
         MetadataCache metadataCache,
@@ -63,35 +68,39 @@ public class ShareCoordinatorMetadataCacheHelperImpl implements ShareCoordinator
 
     @Override
     public Node getShareCoordinator(SharePartitionKey key, String internalTopicName) {
-        if (metadataCache.contains(internalTopicName)) {
-            Set<String> topicSet = new HashSet<>();
-            topicSet.add(internalTopicName);
+        try {
+            if (metadataCache.contains(internalTopicName)) {
+                Set<String> topicSet = new HashSet<>();
+                topicSet.add(internalTopicName);
 
-            List<MetadataResponseData.MetadataResponseTopic> topicMetadata = CollectionConverters.asJava(
-                metadataCache.getTopicMetadata(
-                    CollectionConverters.asScala(topicSet),
-                    interBrokerListenerName,
-                    false,
-                    false
-                )
-            );
+                List<MetadataResponseData.MetadataResponseTopic> topicMetadata = CollectionConverters.asJava(
+                    metadataCache.getTopicMetadata(
+                        CollectionConverters.asScala(topicSet),
+                        interBrokerListenerName,
+                        false,
+                        false
+                    )
+                );
 
-            if (topicMetadata == null || topicMetadata.isEmpty() || topicMetadata.get(0).errorCode() != Errors.NONE.code()) {
-                return Node.noNode();
-            } else {
-                int partition = keyToPartitionMapper.apply(key);
-                Optional<MetadataResponseData.MetadataResponsePartition> response = topicMetadata.get(0).partitions().stream()
-                    .filter(responsePart -> responsePart.partitionIndex() == partition
-                        && responsePart.leaderId() != MetadataResponse.NO_LEADER_ID)
-                    .findFirst();
-
-                if (response.isPresent()) {
-                    return OptionConverters.toJava(metadataCache.getAliveBrokerNode(response.get().leaderId(), interBrokerListenerName))
-                        .orElse(Node.noNode());
-                } else {
+                if (topicMetadata == null || topicMetadata.isEmpty() || topicMetadata.get(0).errorCode() != Errors.NONE.code()) {
                     return Node.noNode();
+                } else {
+                    int partition = keyToPartitionMapper.apply(key);
+                    Optional<MetadataResponseData.MetadataResponsePartition> response = topicMetadata.get(0).partitions().stream()
+                        .filter(responsePart -> responsePart.partitionIndex() == partition
+                            && responsePart.leaderId() != MetadataResponse.NO_LEADER_ID)
+                        .findFirst();
+
+                    if (response.isPresent()) {
+                        return OptionConverters.toJava(metadataCache.getAliveBrokerNode(response.get().leaderId(), interBrokerListenerName))
+                            .orElse(Node.noNode());
+                    } else {
+                        return Node.noNode();
+                    }
                 }
             }
+        } catch (CoordinatorNotAvailableException e) {
+            log.warn("Coordinator not available", e);
         }
         return Node.noNode();
     }
