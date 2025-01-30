@@ -744,7 +744,7 @@ class ReplicaManager(val config: KafkaConfig,
                    Errors.NOT_COORDINATOR => Some(new NotEnoughReplicasException(
                 s"Unable to verify the partition has been added to the transaction. Underlying error: ${error.toString}"))
               case Errors.CONCURRENT_TRANSACTIONS =>
-                if (transactionSupportedOperation != addPartition) {
+                if (!transactionSupportedOperation.supportsEpochBump) {
                   Some(new NotEnoughReplicasException(
                     s"Unable to verify the partition has been added to the transaction. Underlying error: ${error.toString}"))
                 } else {
@@ -966,7 +966,7 @@ class ReplicaManager(val config: KafkaConfig,
   ): Unit = {
     // Skip verification if the request is not transactional or transaction verification is disabled.
     if (transactionalId == null ||
-      (!config.transactionLogConfig.transactionPartitionVerificationEnable && transactionSupportedOperation != addPartition)
+      (!config.transactionLogConfig.transactionPartitionVerificationEnable && !transactionSupportedOperation.supportsEpochBump)
       || addPartitionsToTxnManager.isEmpty
     ) {
       callback((Map.empty[TopicPartition, Errors], Map.empty[TopicPartition, VerificationGuard]))
@@ -982,7 +982,7 @@ class ReplicaManager(val config: KafkaConfig,
         producerId,
         producerEpoch,
         baseSequence,
-        transactionSupportedOperation.isTV2
+        transactionSupportedOperation.supportsEpochBump
       )
 
       errorOrGuard match {

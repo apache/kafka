@@ -68,12 +68,12 @@ object AddPartitionsToTxnManager {
  *    addPartition:          This allows the partition to be added to the transactions inflight with the Produce and TxnOffsetCommit requests. Plus the behaviors in genericErrorSupported.
  */
 sealed trait TransactionSupportedOperation {
-  val isTV2 = false;
+  val supportsEpochBump = false;
 }
 case object defaultError extends TransactionSupportedOperation
 case object genericErrorSupported extends TransactionSupportedOperation
 case object addPartition extends TransactionSupportedOperation {
-  override val isTV2 = true
+  override val supportsEpochBump = true
 }
 
 /*
@@ -132,7 +132,7 @@ class AddPartitionsToTxnManager(
         .setTransactionalId(transactionalId)
         .setProducerId(producerId)
         .setProducerEpoch(producerEpoch)
-        .setVerifyOnly(transactionSupportedOperation != addPartition)
+        .setVerifyOnly(!transactionSupportedOperation.supportsEpochBump)
         .setTopics(topicCollection)
 
       addTxnData(coordinatorNode.get, transactionData, callback, transactionSupportedOperation)
