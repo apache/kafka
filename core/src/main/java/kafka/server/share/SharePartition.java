@@ -557,7 +557,7 @@ public class SharePartition {
             }
 
             long nextFetchOffset = -1;
-            long gapStartOffset = initialReadGapOffset != null ? initialReadGapOffset.gapStartOffset() : -1;
+            long gapStartOffset = isInitialReadGapOffsetWindowActive() ? initialReadGapOffset.gapStartOffset() : -1;
             for (Map.Entry<Long, InFlightBatch> entry : cachedState.entrySet()) {
                 // Check if there exists any gap in the in-flight batch which needs to be fetched. If
                 // initialReadGapOffset's endOffset is equal to the share partition's endOffset, then
@@ -669,10 +669,12 @@ public class SharePartition {
             List<AcquiredRecords> result = new ArrayList<>();
             // The acquired count is used to track the number of records acquired for the request.
             int acquiredCount = 0;
+            // This tracks whether there is a gap between the subMap entries. If a gap is found, we will acquire
+            // the corresponding offsets in a separate batch.
+            long maybeGapStartOffset = baseOffset;
             // The fetched records are already part of the in-flight records. The records might
             // be available for re-delivery hence try acquiring same. The request batches could
             // be an exact match, subset or span over multiple already fetched batches.
-            long nextBatchStartOffset = baseOffset;
             for (Map.Entry<Long, InFlightBatch> entry : subMap.entrySet()) {
                 // If the acquired count is equal to the max fetch records then break the loop.
                 if (acquiredCount >= maxFetchRecords) {
@@ -683,19 +685,18 @@ public class SharePartition {
 
                 // If the initialReadGapOffset window is active, we need to treat the gaps in between the window as
                 // acquirable. Once the window is inactive (when we have acquired all the gaps inside the window),
-                // the remaining gaps are natural (data does not exist at those offsets) and we need nto acquire them.
+                // the remaining gaps are natural (data does not exist at those offsets) and we need not acquire them.
                 if (isInitialReadGapOffsetWindowActive()) {
                     // If nextBatchStartOffset is less than the key of the entry, this means the fetch happened for a gap in the cachedState.
                     // Thus, a new batch needs to be acquired for the gap.
-                    if (nextBatchStartOffset < entry.getKey()) {
+                    if (maybeGapStartOffset < entry.getKey()) {
                         ShareAcquiredRecords shareAcquiredRecords = acquireNewBatchRecords(memberId, fetchPartitionData.records.batches(),
-                            nextBatchStartOffset, entry.getKey() - 1, batchSize, maxFetchRecords);
+                            maybeGapStartOffset, entry.getKey() - 1, batchSize, maxFetchRecords);
                         result.addAll(shareAcquiredRecords.acquiredRecords());
                         acquiredCount += shareAcquiredRecords.count();
                     }
                     // Set nextBatchStartOffset as the last offset of the current in-flight batch + 1
-                    nextBatchStartOffset = inFlightBatch.lastOffset() + 1;
-
+                    maybeGapStartOffset = inFlightBatch.lastOffset() + 1;
                     // If the acquired count is equal to the max fetch records then break the loop.
                     if (acquiredCount >= maxFetchRecords) {
                         break;
@@ -1947,6 +1948,43 @@ public class SharePartition {
         return recordState == RecordState.ACKNOWLEDGED || recordState == RecordState.ARCHIVED;
     }
 
+    // Visible for testing
+    long findLastOffsetAcknowledged() {
+        long lastOffsetAcknowledged = -1;
+        lock.readLock().lock();
+        try {
+            for (NavigableMap.Entry<Long, InFlightBatch> entry : cachedState.entrySet()) {
+                InFlightBatch inFlightBatch = entry.getValue();
+                if (inFlightBatch.offsetState() == null) {
+                    if (!isRecordStateAcknowledged(inFlightBatch.batchState())) {
+                        return lastOffsetAcknowledged;
+                    }
+                    // If initialReadGapOffset.gapStartOffset is less than or equal to the last offset of the batch
+                    // then we cannot identify the current inFlightBatch as acknowledged. All the offsets between
+                    // initialReadGapOffset.gapStartOffset and initialReadGapOffset.endOffset should always be present
+                    // in the cachedState
+                    if (initialReadGapOffset != null && inFlightBatch.lastOffset() >= initialReadGapOffset.gapStartOffset()) {
+                        return lastOffsetAcknowledged;
+                    }
+                    lastOffsetAcknowledged = inFlightBatch.lastOffset();
+                } else {
+                    for (Map.Entry<Long, InFlightState> offsetState : inFlightBatch.offsetState.entrySet()) {
+                        if (initialReadGapOffset != null && offsetState.getKey() >= initialReadGapOffset.gapStartOffset()) {
+                            return lastOffsetAcknowledged;
+                        }
+                        if (!isRecordStateAcknowledged(offsetState.getValue().state())) {
+                            return lastOffsetAcknowledged;
+                        }
+                        lastOffsetAcknowledged = offsetState.getKey();
+                    }
+                }
+            }
+        } finally {
+            lock.readLock().unlock();
+        }
+        return lastOffsetAcknowledged;
+    }
+
     /**
      * Find the last offset from the batch which contains the request offset. If found, return the last offset
      * of the batch, otherwise return the request offset.
@@ -2232,43 +2270,6 @@ public class SharePartition {
             // offsetResetStrategy type is BY_DURATION
             return offsetForTimestamp(topicIdPartition, replicaManager, offsetResetStrategy.timestamp(), leaderEpoch);
         }
-    }
-
-    // Visible for testing
-    long findLastOffsetAcknowledged() {
-        lock.readLock().lock();
-        long lastOffsetAcknowledged = -1;
-        try {
-            for (NavigableMap.Entry<Long, InFlightBatch> entry : cachedState.entrySet()) {
-                InFlightBatch inFlightBatch = entry.getValue();
-                if (inFlightBatch.offsetState() == null) {
-                    if (!isRecordStateAcknowledged(inFlightBatch.batchState())) {
-                        return lastOffsetAcknowledged;
-                    }
-                    // If initialReadGapOffset.gapStartOffset is less than or equal to the last offset of the batch
-                    // then we cannot identify the current inFlightBatch as acknowledged. All the offsets between
-                    // initialReadGapOffset.gapStartOffset and initialReadGapOffset.endOffset should always be present
-                    // in the cachedState
-                    if (initialReadGapOffset != null && inFlightBatch.lastOffset() >= initialReadGapOffset.gapStartOffset()) {
-                        return lastOffsetAcknowledged;
-                    }
-                    lastOffsetAcknowledged = inFlightBatch.lastOffset();
-                } else {
-                    for (Map.Entry<Long, InFlightState> offsetState : inFlightBatch.offsetState.entrySet()) {
-                        if (initialReadGapOffset != null && offsetState.getKey() >= initialReadGapOffset.gapStartOffset()) {
-                            return lastOffsetAcknowledged;
-                        }
-                        if (!isRecordStateAcknowledged(offsetState.getValue().state())) {
-                            return lastOffsetAcknowledged;
-                        }
-                        lastOffsetAcknowledged = offsetState.getKey();
-                    }
-                }
-            }
-        } finally {
-            lock.readLock().unlock();
-        }
-        return lastOffsetAcknowledged;
     }
 
     // Visible for testing. Should only be used for testing purposes.
