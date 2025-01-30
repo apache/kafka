@@ -713,7 +713,7 @@ public class StreamsMembershipManager implements RequestManager {
      */
     public void onFenced() {
         if (state == MemberState.PREPARE_LEAVING) {
-            log.info("Member {} with epoch {} got fenced but it is already preparing to leave " +
+            log.debug("Member {} with epoch {} got fenced but it is already preparing to leave " +
                 "the group, so it will stop sending heartbeat and won't attempt to send the " +
                 "leave request or rejoin.", memberId, memberEpoch);
             finalizeLeaving();
