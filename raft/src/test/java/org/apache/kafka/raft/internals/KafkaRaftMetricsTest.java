@@ -45,6 +45,7 @@ import java.util.Random;
 import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 public class KafkaRaftMetricsTest {
 
@@ -92,7 +93,8 @@ public class KafkaRaftMetricsTest {
             new MockQuorumStateStore(),
             time,
             new LogContext("kafka-raft-metrics-test"),
-            random
+            random,
+            raftMetrics
         );
     }
 
@@ -127,10 +129,11 @@ public class KafkaRaftMetricsTest {
             )
         );
         VoterSet voters = VoterSetTest.voterSet(voterMap);
+        raftMetrics = new KafkaRaftMetrics(metrics, "raft");
         QuorumState state = buildQuorumState(voters, kraftVersion);
 
+        raftMetrics.initialize(state);
         state.initialize(new OffsetAndEpoch(0L, 0));
-        raftMetrics = new KafkaRaftMetrics(metrics, "raft", state);
 
         // unattached
         assertEquals("unattached", getMetric(metrics, "current-state").metricValue());
@@ -274,9 +277,10 @@ public class KafkaRaftMetricsTest {
         VoterSet voters = VoterSetTest.voterSet(
             VoterSetTest.voterMap(IntStream.of(1, 2, 3), withDirectoryId)
         );
+        raftMetrics = new KafkaRaftMetrics(metrics, "raft");
         QuorumState state = buildQuorumState(voters, kraftVersion);
+        raftMetrics.initialize(state);
         state.initialize(new OffsetAndEpoch(0L, 0));
-        raftMetrics = new KafkaRaftMetrics(metrics, "raft", state);
 
         assertEquals("unattached", getMetric(metrics, "current-state").metricValue());
         assertEquals((double) -1L, getMetric(metrics, "current-leader").metricValue());
@@ -317,9 +321,10 @@ public class KafkaRaftMetricsTest {
     @ParameterizedTest
     @EnumSource(value = KRaftVersion.class)
     public void shouldRecordLogEnd(KRaftVersion kraftVersion) {
+        raftMetrics = new KafkaRaftMetrics(metrics, "raft");
         QuorumState state = buildQuorumState(localStandaloneVoterSet(kraftVersion), kraftVersion);
+        raftMetrics.initialize(state);
         state.initialize(new OffsetAndEpoch(0L, 0));
-        raftMetrics = new KafkaRaftMetrics(metrics, "raft", state);
 
         assertEquals((double) 0L, getMetric(metrics, "log-end-offset").metricValue());
         assertEquals((double) 0, getMetric(metrics, "log-end-epoch").metricValue());
@@ -333,9 +338,10 @@ public class KafkaRaftMetricsTest {
     @ParameterizedTest
     @EnumSource(value = KRaftVersion.class)
     public void shouldRecordNumUnknownVoterConnections(KRaftVersion kraftVersion) {
+        raftMetrics = new KafkaRaftMetrics(metrics, "raft");
         QuorumState state = buildQuorumState(localStandaloneVoterSet(kraftVersion), kraftVersion);
+        raftMetrics.initialize(state);
         state.initialize(new OffsetAndEpoch(0L, 0));
-        raftMetrics = new KafkaRaftMetrics(metrics, "raft", state);
 
         assertEquals((double) 0, getMetric(metrics, "number-unknown-voter-connections").metricValue());
 
@@ -347,9 +353,10 @@ public class KafkaRaftMetricsTest {
     @ParameterizedTest
     @EnumSource(value = KRaftVersion.class)
     public void shouldRecordPollIdleRatio(KRaftVersion kraftVersion) {
+        raftMetrics = new KafkaRaftMetrics(metrics, "raft");
         QuorumState state = buildQuorumState(localStandaloneVoterSet(kraftVersion), kraftVersion);
+        raftMetrics.initialize(state);
         state.initialize(new OffsetAndEpoch(0L, 0));
-        raftMetrics = new KafkaRaftMetrics(metrics, "raft", state);
 
         // First recording is discarded (in order to align the interval of measurement)
         raftMetrics.updatePollStart(time.milliseconds());
@@ -420,9 +427,10 @@ public class KafkaRaftMetricsTest {
     @ParameterizedTest
     @EnumSource(value = KRaftVersion.class)
     public void shouldRecordLatency(KRaftVersion kraftVersion) {
+        raftMetrics = new KafkaRaftMetrics(metrics, "raft");
         QuorumState state = buildQuorumState(localStandaloneVoterSet(kraftVersion), kraftVersion);
+        raftMetrics.initialize(state);
         state.initialize(new OffsetAndEpoch(0L, 0));
-        raftMetrics = new KafkaRaftMetrics(metrics, "raft", state);
 
         raftMetrics.updateElectionStartMs(time.milliseconds());
         time.sleep(1000L);
@@ -452,9 +460,10 @@ public class KafkaRaftMetricsTest {
     @ParameterizedTest
     @EnumSource(value = KRaftVersion.class)
     public void shouldRecordRate(KRaftVersion kraftVersion) {
+        raftMetrics = new KafkaRaftMetrics(metrics, "raft");
         QuorumState state = buildQuorumState(localStandaloneVoterSet(kraftVersion), kraftVersion);
+        raftMetrics.initialize(state);
         state.initialize(new OffsetAndEpoch(0L, 0));
-        raftMetrics = new KafkaRaftMetrics(metrics, "raft", state);
 
         raftMetrics.updateAppendRecords(12);
         assertEquals(0.4, getMetric(metrics, "append-records-rate").metricValue());
@@ -467,6 +476,54 @@ public class KafkaRaftMetricsTest {
 
         raftMetrics.updateFetchedRecords(48);
         assertEquals(2.4, getMetric(metrics, "fetch-records-rate").metricValue());
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = KRaftVersion.class)
+    public void testNumberOfVoters(KRaftVersion kraftVersion) {
+        raftMetrics = new KafkaRaftMetrics(metrics, "raft");
+        QuorumState state = buildQuorumState(localStandaloneVoterSet(kraftVersion), kraftVersion);
+        raftMetrics.initialize(state);
+        state.initialize(new OffsetAndEpoch(0L, 0));
+
+        assertEquals(0, getMetric(metrics, "number-of-voters").metricValue());
+
+        raftMetrics.updateNumVoters(3);
+        assertEquals(3, getMetric(metrics, "number-of-voters").metricValue());
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = KRaftVersion.class)
+    public void testLeaderMetrics(KRaftVersion kraftVersion) {
+        raftMetrics = new KafkaRaftMetrics(metrics, "raft");
+        QuorumState state = buildQuorumState(localStandaloneVoterSet(kraftVersion), kraftVersion);
+        raftMetrics.initialize(state);
+        state.initialize(new OffsetAndEpoch(0L, 0));
+
+        assertNull(getMetric(metrics, "number-of-observers"));
+        assertNull(getMetric(metrics, "uncommitted-voter-change"));
+
+        raftMetrics.addLeaderMetrics();
+
+        assertEquals(0, getMetric(metrics, "number-of-observers").metricValue());
+        assertEquals(0, getMetric(metrics, "uncommitted-voter-change").metricValue());
+
+        raftMetrics.updateNumObservers(1);
+        raftMetrics.updateUncommittedVoterChange(true);
+
+        assertEquals(1, getMetric(metrics, "number-of-observers").metricValue());
+        assertEquals(1, getMetric(metrics, "uncommitted-voter-change").metricValue());
+
+        raftMetrics.removeLeaderMetrics();
+
+        assertNull(getMetric(metrics, "number-of-observers"));
+        assertNull(getMetric(metrics, "uncommitted-voter-change"));
+
+        // Check that these metrics are reset to default values when added back
+        raftMetrics.addLeaderMetrics();
+
+        assertEquals(0, getMetric(metrics, "number-of-observers").metricValue());
+        assertEquals(0, getMetric(metrics, "uncommitted-voter-change").metricValue());
     }
 
     private KafkaMetric getMetric(final Metrics metrics, final String name) {
