@@ -506,13 +506,13 @@ public class KafkaRaftMetricsTest {
         raftMetrics.addLeaderMetrics();
 
         assertEquals(0, getMetric(metrics, "number-of-observers").metricValue());
-        assertEquals(false, getMetric(metrics, "uncommitted-voter-change").metricValue());
+        assertEquals(0, getMetric(metrics, "uncommitted-voter-change").metricValue());
 
         raftMetrics.updateNumObservers(1);
         raftMetrics.updateUncommittedVoterChange(true);
 
         assertEquals(1, getMetric(metrics, "number-of-observers").metricValue());
-        assertEquals(true, getMetric(metrics, "uncommitted-voter-change").metricValue());
+        assertEquals(1, getMetric(metrics, "uncommitted-voter-change").metricValue());
 
         raftMetrics.removeLeaderMetrics();
 
@@ -523,7 +523,7 @@ public class KafkaRaftMetricsTest {
         raftMetrics.addLeaderMetrics();
 
         assertEquals(0, getMetric(metrics, "number-of-observers").metricValue());
-        assertEquals(false, getMetric(metrics, "uncommitted-voter-change").metricValue());
+        assertEquals(0, getMetric(metrics, "uncommitted-voter-change").metricValue());
     }
 
     private KafkaMetric getMetric(final Metrics metrics, final String name) {

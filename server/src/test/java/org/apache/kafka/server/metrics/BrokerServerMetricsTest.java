@@ -139,4 +139,21 @@ public final class BrokerServerMetricsTest {
             assertEquals((double) errorCount, metadataApplyErrorCountMetric.metricValue());
         }
     }
+
+    @Test
+    public void testIgnoredStaticVoters() throws Exception {
+        MockTime time = new MockTime();
+        Metrics metrics = new Metrics(time);
+        try (BrokerServerMetrics brokerMetrics = new BrokerServerMetrics(metrics)) {
+            KafkaMetric ignoredStaticVotersMetric = metrics.metrics().get(brokerMetrics.ignoredStaticVotersName());
+
+            assertEquals(0, ignoredStaticVotersMetric.metricValue());
+
+            brokerMetrics.setIgnoredStaticVoters(true);
+            assertEquals(1, ignoredStaticVotersMetric.metricValue());
+
+            brokerMetrics.setIgnoredStaticVoters(false);
+            assertEquals(0, ignoredStaticVotersMetric.metricValue());
+        }
+    }
 }

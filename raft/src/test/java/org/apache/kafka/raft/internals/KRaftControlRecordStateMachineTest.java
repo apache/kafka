@@ -24,7 +24,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.raft.MockExternalKRaftMetrics;
+import org.apache.kafka.raft.ExternalKRaftMetrics;
 import org.apache.kafka.raft.MockLog;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.VoterSet;
@@ -33,8 +33,8 @@ import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 import org.apache.kafka.snapshot.RecordsSnapshotWriter;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 import java.util.Optional;
 import java.util.stream.IntStream;
@@ -42,16 +42,18 @@ import java.util.stream.IntStream;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 final class KRaftControlRecordStateMachineTest {
-    private static Metrics metrics = new Metrics();
-    private static KafkaRaftMetrics kafkaRaftMetrics = new KafkaRaftMetrics(metrics, "raft");
-    private static MockExternalKRaftMetrics externalMetrics = new MockExternalKRaftMetrics();
     private static final RecordSerde<String> STRING_SERDE = new StringSerde();
 
     private static MockLog buildLog() {
         return new MockLog(new TopicPartition("partition", 0), Uuid.randomUuid(), new LogContext());
     }
 
-    private static KRaftControlRecordStateMachine buildPartitionListener(MockLog log, VoterSet staticVoterSet) {
+    private static KRaftControlRecordStateMachine buildPartitionListener(
+        MockLog log,
+        VoterSet staticVoterSet,
+        KafkaRaftMetrics raftMetrics,
+        ExternalKRaftMetrics externalMetrics
+    ) {
         return new KRaftControlRecordStateMachine(
             staticVoterSet,
             log,
@@ -59,64 +61,63 @@ final class KRaftControlRecordStateMachineTest {
             BufferSupplier.NO_CACHING,
             1024,
             new LogContext(),
-            kafkaRaftMetrics,
+            raftMetrics,
             externalMetrics
         );
-    }
-
-    private static void checkMetricValues(int expectedNumberOfVoters, boolean expectedIgnoredStaticVoters) {
-        assertEquals(expectedNumberOfVoters, getNumberOfVoters(metrics).metricValue());
-        assertEquals(expectedIgnoredStaticVoters, externalMetrics.getIgnoredStaticVoters());
     }
 
     private static KafkaMetric getNumberOfVoters(final Metrics metrics) {
         return metrics.metrics().get(metrics.metricName("number-of-voters", "raft-metrics"));
     }
 
-    @BeforeEach
-    public void resetMetrics() {
-        metrics = new Metrics();
-        kafkaRaftMetrics = new KafkaRaftMetrics(metrics, "raft");
-        externalMetrics = new MockExternalKRaftMetrics();
-    }
-
     @Test
     void testEmptyPartition() {
+        Metrics metrics = new Metrics();
+        KafkaRaftMetrics raftMetrics = new KafkaRaftMetrics(metrics, "raft");
+        ExternalKRaftMetrics externalMetrics = Mockito.mock(ExternalKRaftMetrics.class);
         MockLog log = buildLog();
         VoterSet voterSet = VoterSetTest.voterSet(VoterSetTest.voterMap(IntStream.of(1, 2, 3), true));
 
-        KRaftControlRecordStateMachine partitionState = buildPartitionListener(log, voterSet);
+        KRaftControlRecordStateMachine partitionState = buildPartitionListener(log, voterSet, raftMetrics, externalMetrics);
 
         // This should be a no-op operation
         partitionState.updateState();
+        Mockito.verifyNoInteractions(externalMetrics);
 
         assertEquals(voterSet, partitionState.lastVoterSet());
-        checkMetricValues(3, false);
+        assertEquals(3, getNumberOfVoters(metrics).metricValue());
     }
 
     @Test
     void testEmptyPartitionWithNoStaticVoters() {
+        Metrics metrics = new Metrics();
+        KafkaRaftMetrics raftMetrics = new KafkaRaftMetrics(metrics, "raft");
+        ExternalKRaftMetrics externalMetrics = Mockito.mock(ExternalKRaftMetrics.class);
         MockLog log = buildLog();
 
-        KRaftControlRecordStateMachine partitionState = buildPartitionListener(log, VoterSet.empty());
+        KRaftControlRecordStateMachine partitionState = buildPartitionListener(log, VoterSet.empty(), raftMetrics, externalMetrics);
 
         // This should be a no-op operation
         partitionState.updateState();
+        Mockito.verifyNoInteractions(externalMetrics);
 
         assertEquals(VoterSet.empty(), partitionState.lastVoterSet());
-        checkMetricValues(0, false);
+        assertEquals(0, getNumberOfVoters(metrics).metricValue());
     }
 
     @Test
     void testUpdateWithoutSnapshot() {
+        Metrics metrics = new Metrics();
+        KafkaRaftMetrics raftMetrics = new KafkaRaftMetrics(metrics, "raft");
+        ExternalKRaftMetrics externalMetrics = Mockito.mock(ExternalKRaftMetrics.class);
         MockLog log = buildLog();
         VoterSet staticVoterSet = VoterSetTest.voterSet(VoterSetTest.voterMap(IntStream.of(1, 2, 3), true));
         BufferSupplier bufferSupplier = BufferSupplier.NO_CACHING;
         int epoch = 1;
 
-        KRaftControlRecordStateMachine partitionState = buildPartitionListener(log, staticVoterSet);
+        KRaftControlRecordStateMachine partitionState = buildPartitionListener(log, staticVoterSet, raftMetrics, externalMetrics);
 
-        checkMetricValues(3, false);
+        assertEquals(3, getNumberOfVoters(metrics).metricValue());
 
         // Append the kraft.version control record
         KRaftVersion kraftVersion = KRaftVersion.KRAFT_VERSION_1;
@@ -146,23 +147,27 @@ final class KRaftControlRecordStateMachineTest {
 
         // Read the entire partition
         partitionState.updateState();
+        Mockito.verify(externalMetrics, Mockito.times(1)).setIgnoredStaticVoters(true);
 
         assertEquals(voterSet, partitionState.lastVoterSet());
         assertEquals(Optional.of(voterSet), partitionState.voterSetAtOffset(log.endOffset().offset() - 1));
         assertEquals(kraftVersion, partitionState.kraftVersionAtOffset(log.endOffset().offset() - 1));
-        checkMetricValues(3, true);
+        assertEquals(3, getNumberOfVoters(metrics).metricValue());
     }
 
     @Test
     void testUpdateWithEmptySnapshot() {
+        Metrics metrics = new Metrics();
+        KafkaRaftMetrics raftMetrics = new KafkaRaftMetrics(metrics, "raft");
+        ExternalKRaftMetrics externalMetrics = Mockito.mock(ExternalKRaftMetrics.class);
         MockLog log = buildLog();
         VoterSet staticVoterSet = VoterSetTest.voterSet(VoterSetTest.voterMap(IntStream.of(1, 2, 3), true));
         BufferSupplier bufferSupplier = BufferSupplier.NO_CACHING;
         int epoch = 1;
 
-        KRaftControlRecordStateMachine partitionState = buildPartitionListener(log, staticVoterSet);
+        KRaftControlRecordStateMachine partitionState = buildPartitionListener(log, staticVoterSet, raftMetrics, externalMetrics);
 
-        checkMetricValues(3, false);
+        assertEquals(3, getNumberOfVoters(metrics).metricValue());
 
         // Create a snapshot that doesn't have any kraft.version or voter set control records
         RecordsSnapshotWriter.Builder builder = new RecordsSnapshotWriter.Builder()
@@ -200,22 +205,26 @@ final class KRaftControlRecordStateMachineTest {
 
         // Read the entire partition
         partitionState.updateState();
+        Mockito.verify(externalMetrics, Mockito.times(1)).setIgnoredStaticVoters(true);
 
         assertEquals(voterSet, partitionState.lastVoterSet());
         assertEquals(Optional.of(voterSet), partitionState.voterSetAtOffset(log.endOffset().offset() - 1));
         assertEquals(kraftVersion, partitionState.kraftVersionAtOffset(log.endOffset().offset() - 1));
-        checkMetricValues(3, true);
+        assertEquals(3, getNumberOfVoters(metrics).metricValue());
     }
 
     @Test
     void testUpdateWithSnapshot() {
+        Metrics metrics = new Metrics();
+        KafkaRaftMetrics raftMetrics = new KafkaRaftMetrics(metrics, "raft");
+        ExternalKRaftMetrics externalMetrics = Mockito.mock(ExternalKRaftMetrics.class);
         MockLog log = buildLog();
         VoterSet staticVoterSet = VoterSetTest.voterSet(VoterSetTest.voterMap(IntStream.of(1, 2, 3), true));
         int epoch = 1;
 
-        KRaftControlRecordStateMachine partitionState = buildPartitionListener(log, staticVoterSet);
+        KRaftControlRecordStateMachine partitionState = buildPartitionListener(log, staticVoterSet, raftMetrics, externalMetrics);
 
-        checkMetricValues(3, false);
+        assertEquals(3, getNumberOfVoters(metrics).metricValue());
 
         // Create a snapshot that has kraft.version and voter set control records
         KRaftVersion kraftVersion = KRaftVersion.KRAFT_VERSION_1;
@@ -232,23 +241,27 @@ final class KRaftControlRecordStateMachineTest {
 
         // Read the entire partition
         partitionState.updateState();
+        Mockito.verify(externalMetrics, Mockito.times(1)).setIgnoredStaticVoters(true);
 
         assertEquals(voterSet, partitionState.lastVoterSet());
         assertEquals(Optional.of(voterSet), partitionState.voterSetAtOffset(log.endOffset().offset() - 1));
         assertEquals(kraftVersion, partitionState.kraftVersionAtOffset(log.endOffset().offset() - 1));
-        checkMetricValues(3, true);
+        assertEquals(3, getNumberOfVoters(metrics).metricValue());
     }
 
     @Test
     void testUpdateWithSnapshotAndLogOverride() {
+        Metrics metrics = new Metrics();
+        KafkaRaftMetrics raftMetrics = new KafkaRaftMetrics(metrics, "raft");
+        ExternalKRaftMetrics externalMetrics = Mockito.mock(ExternalKRaftMetrics.class);
         MockLog log = buildLog();
         VoterSet staticVoterSet = VoterSetTest.voterSet(VoterSetTest.voterMap(IntStream.of(1, 2, 3), true));
         BufferSupplier bufferSupplier = BufferSupplier.NO_CACHING;
         int epoch = 1;
 
-        KRaftControlRecordStateMachine partitionState = buildPartitionListener(log, staticVoterSet);
+        KRaftControlRecordStateMachine partitionState = buildPartitionListener(log, staticVoterSet, raftMetrics, externalMetrics);
 
-        checkMetricValues(3, false);
+        assertEquals(3, getNumberOfVoters(metrics).metricValue());
 
         // Create a snapshot that has kraft.version and voter set control records
         KRaftVersion kraftVersion = KRaftVersion.KRAFT_VERSION_1;
@@ -279,11 +292,12 @@ final class KRaftControlRecordStateMachineTest {
 
         // Read the entire partition
         partitionState.updateState();
+        Mockito.verify(externalMetrics, Mockito.times(2)).setIgnoredStaticVoters(true);
 
         assertEquals(voterSet, partitionState.lastVoterSet());
         assertEquals(Optional.of(voterSet), partitionState.voterSetAtOffset(log.endOffset().offset() - 1));
         assertEquals(kraftVersion, partitionState.kraftVersionAtOffset(log.endOffset().offset() - 1));
-        checkMetricValues(4, true);
+        assertEquals(4, getNumberOfVoters(metrics).metricValue());
 
         // Check the voter set at the snapshot
         assertEquals(Optional.of(snapshotVoterSet), partitionState.voterSetAtOffset(snapshotId.offset() - 1));
@@ -291,14 +305,17 @@ final class KRaftControlRecordStateMachineTest {
 
     @Test
     void testTruncateTo() {
+        Metrics metrics = new Metrics();
+        KafkaRaftMetrics raftMetrics = new KafkaRaftMetrics(metrics, "raft");
+        ExternalKRaftMetrics externalMetrics = Mockito.mock(ExternalKRaftMetrics.class);
         MockLog log = buildLog();
         VoterSet staticVoterSet = VoterSetTest.voterSet(VoterSetTest.voterMap(IntStream.of(1, 2, 3), true));
         BufferSupplier bufferSupplier = BufferSupplier.NO_CACHING;
         int epoch = 1;
 
-        KRaftControlRecordStateMachine partitionState = buildPartitionListener(log, staticVoterSet);
+        KRaftControlRecordStateMachine partitionState = buildPartitionListener(log, staticVoterSet, raftMetrics, externalMetrics);
 
-        checkMetricValues(3, false);
+        assertEquals(3, getNumberOfVoters(metrics).metricValue());
 
         // Append the kraft.version control record
         KRaftVersion kraftVersion = KRaftVersion.KRAFT_VERSION_1;
@@ -343,35 +360,40 @@ final class KRaftControlRecordStateMachineTest {
 
         // Read the entire partition
         partitionState.updateState();
+        Mockito.verify(externalMetrics, Mockito.times(2)).setIgnoredStaticVoters(true);
 
         assertEquals(voterSet, partitionState.lastVoterSet());
-        checkMetricValues(4, true);
+        assertEquals(4, getNumberOfVoters(metrics).metricValue());
 
         // Truncate log and listener
         log.truncateTo(voterSetOffset);
         partitionState.truncateNewEntries(voterSetOffset);
 
         assertEquals(firstVoterSet, partitionState.lastVoterSet());
-        checkMetricValues(3, true);
+        assertEquals(3, getNumberOfVoters(metrics).metricValue());
 
         // Truncate the entire log
         log.truncateTo(0);
         partitionState.truncateNewEntries(0);
+        Mockito.verify(externalMetrics, Mockito.times(1)).setIgnoredStaticVoters(false);
 
         assertEquals(staticVoterSet, partitionState.lastVoterSet());
-        checkMetricValues(3, false);
+        assertEquals(3, getNumberOfVoters(metrics).metricValue());
     }
 
     @Test
     void testTrimPrefixTo() {
+        Metrics metrics = new Metrics();
+        KafkaRaftMetrics raftMetrics = new KafkaRaftMetrics(metrics, "raft");
+        ExternalKRaftMetrics externalMetrics = Mockito.mock(ExternalKRaftMetrics.class);
         MockLog log = buildLog();
         VoterSet staticVoterSet = VoterSetTest.voterSet(VoterSetTest.voterMap(IntStream.of(1, 2, 3), true));
         BufferSupplier bufferSupplier = BufferSupplier.NO_CACHING;
         int epoch = 1;
 
-        KRaftControlRecordStateMachine partitionState = buildPartitionListener(log, staticVoterSet);
+        KRaftControlRecordStateMachine partitionState = buildPartitionListener(log, staticVoterSet, raftMetrics, externalMetrics);
 
-        checkMetricValues(3, false);
+        assertEquals(3, getNumberOfVoters(metrics).metricValue());
 
         // Append the kraft.version control record
         long kraftVersionOffset = log.endOffset().offset();
@@ -417,10 +439,11 @@ final class KRaftControlRecordStateMachineTest {
 
         // Read the entire partition
         partitionState.updateState();
+        Mockito.verify(externalMetrics, Mockito.times(2)).setIgnoredStaticVoters(true);
 
         assertEquals(voterSet, partitionState.lastVoterSet());
         assertEquals(kraftVersion, partitionState.kraftVersionAtOffset(kraftVersionOffset));
-        checkMetricValues(4, true);
+        assertEquals(4, getNumberOfVoters(metrics).metricValue());
 
         // Trim the prefix for the partition listener up to the kraft.version
         partitionState.truncateOldEntries(kraftVersionOffset);
@@ -436,6 +459,6 @@ final class KRaftControlRecordStateMachineTest {
         assertEquals(kraftVersion, partitionState.kraftVersionAtOffset(kraftVersionOffset));
         assertEquals(Optional.empty(), partitionState.voterSetAtOffset(firstVoterSetOffset));
         assertEquals(Optional.of(voterSet), partitionState.voterSetAtOffset(voterSetOffset));
-        checkMetricValues(4, true);
+        assertEquals(4, getNumberOfVoters(metrics).metricValue());
     }
 }

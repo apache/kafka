@@ -121,10 +121,10 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
         registry.ifPresent(r -> uncleanLeaderElectionMeter =
                 Optional.of(registry.get().newMeter(UNCLEAN_LEADER_ELECTIONS_PER_SEC, "elections", TimeUnit.SECONDS)));
 
-        registry.ifPresent(r -> r.newGauge(IGNORED_STATIC_VOTERS, new Gauge<Boolean>() {
+        registry.ifPresent(r -> r.newGauge(IGNORED_STATIC_VOTERS, new Gauge<Integer>() {
             @Override
-            public Boolean value() {
-                return ignoredStaticVoters();
+            public Integer value() {
+                return ignoredStaticVoters() ? 1 : 0;
             }
         }));
     }

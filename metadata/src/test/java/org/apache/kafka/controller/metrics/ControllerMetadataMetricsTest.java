@@ -191,4 +191,22 @@ public class ControllerMetadataMetricsTest {
             registry.shutdown();
         }
     }
+
+    @Test
+    public void testIgnoredStaticVoters() {
+        MetricsRegistry registry = new MetricsRegistry();
+        try (ControllerMetadataMetrics metrics = new ControllerMetadataMetrics(Optional.of(registry))) {
+            @SuppressWarnings("unchecked")
+            Gauge<Integer> ignoredStaticVoters = (Gauge<Integer>) registry
+                .allMetrics()
+                .get(metricName("KafkaController", "IgnoredStaticVoters"));
+            assertEquals(0, ignoredStaticVoters.value());
+            metrics.setIgnoredStaticVoters(true);
+            assertEquals(1, ignoredStaticVoters.value());
+            metrics.setIgnoredStaticVoters(false);
+            assertEquals(0, ignoredStaticVoters.value());
+        } finally {
+            registry.shutdown();
+        }
+    }
 }

@@ -46,6 +46,7 @@ import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.SnapshotWriterReaderTest;
 
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
@@ -340,7 +341,7 @@ public class KafkaRaftClientReconfigTest {
         context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
-        checkLeaderMetricValues(2, 0, false, false, context);
+        checkLeaderMetricValues(2, 0, 0, context);
 
         ReplicaKey newVoter = replicaKey(local.id() + 2, true);
         InetSocketAddress newAddress = InetSocketAddress.createUnresolved(
@@ -367,7 +368,7 @@ public class KafkaRaftClientReconfigTest {
         );
         context.pollUntilResponse();
         context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(local.id()));
-        checkLeaderMetricValues(2, 1, false, false, context);
+        checkLeaderMetricValues(2, 1, 0, context);
 
         // Attempt to add new voter to the quorum
         context.deliverRequest(context.addVoterRequest(Integer.MAX_VALUE, newVoter, newListeners));
@@ -393,7 +394,7 @@ public class KafkaRaftClientReconfigTest {
         context.client.poll();
         // The new voter is now a voter after writing the VotersRecord to the log
         assertTrue(context.client.quorum().isVoter(newVoter));
-        checkLeaderMetricValues(3, 0, true, false, context);
+        checkLeaderMetricValues(3, 0, 1, context);
 
         // Send a FETCH to increase the HWM and commit the new voter set
         context.deliverRequest(
@@ -401,7 +402,7 @@ public class KafkaRaftClientReconfigTest {
         );
         context.pollUntilResponse();
         context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(local.id()));
-        checkLeaderMetricValues(3, 0, false, false, context);
+        checkLeaderMetricValues(3, 0, 0, context);
 
         // Expect reply for AddVoter request
         context.pollUntilResponse();
@@ -948,7 +949,7 @@ public class KafkaRaftClientReconfigTest {
         context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
-        checkLeaderMetricValues(2, 0, false, false, context);
+        checkLeaderMetricValues(2, 0, 0, context);
 
         ReplicaKey newVoter = replicaKey(local.id() + 2, true);
         InetSocketAddress newAddress = InetSocketAddress.createUnresolved(
@@ -1044,7 +1045,7 @@ public class KafkaRaftClientReconfigTest {
 
         assertTrue(context.client.quorum().isVoter(follower2));
 
-        checkLeaderMetricValues(3, 0, false, false, context);
+        checkLeaderMetricValues(3, 0, 0, context);
 
         // Establish a HWM and fence previous leaders
         context.deliverRequest(
@@ -1063,7 +1064,7 @@ public class KafkaRaftClientReconfigTest {
 
         // follower2 should not be a voter in the latest voter set
         assertFalse(context.client.quorum().isVoter(follower2));
-        checkLeaderMetricValues(2, 1, true, false, context);
+        checkLeaderMetricValues(2, 1, 1, context);
 
         // Send a FETCH to increase the HWM and commit the new voter set
         context.deliverRequest(
@@ -1071,7 +1072,7 @@ public class KafkaRaftClientReconfigTest {
         );
         context.pollUntilResponse();
         context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(local.id()));
-        checkLeaderMetricValues(2, 1, false, false, context);
+        checkLeaderMetricValues(2, 1, 0, context);
 
         // Expect reply for RemoveVoter request
         context.pollUntilResponse();
@@ -1095,7 +1096,7 @@ public class KafkaRaftClientReconfigTest {
         context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
-        checkLeaderMetricValues(3, 0, false, false, context);
+        checkLeaderMetricValues(3, 0, 0, context);
 
         // Establish a HWM and fence previous leaders
         context.deliverRequest(
@@ -1114,7 +1115,7 @@ public class KafkaRaftClientReconfigTest {
 
         // local should not be a voter in the latest voter set
         assertFalse(context.client.quorum().isVoter(local));
-        checkLeaderMetricValues(2, 1, true, false, context);
+        checkLeaderMetricValues(2, 1, 1, context);
 
         // Send a FETCH request for follower1
         context.deliverRequest(
@@ -1129,7 +1130,7 @@ public class KafkaRaftClientReconfigTest {
         );
         context.pollUntilResponse();
         context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(local.id()));
-        checkLeaderMetricValues(2, 1, false, false, context);
+        checkLeaderMetricValues(2, 1, 0, context);
 
         // Expect reply for RemoveVoter request
         context.pollUntilResponse();
@@ -2344,7 +2345,7 @@ public class KafkaRaftClientReconfigTest {
         context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
-        checkLeaderMetricValues(2, 0, false, false, context);
+        checkLeaderMetricValues(2, 0, 0, context);
 
         ReplicaKey newVoter = replicaKey(local.id() + 2, true);
         InetSocketAddress newAddress = InetSocketAddress.createUnresolved(
@@ -2374,7 +2375,7 @@ public class KafkaRaftClientReconfigTest {
 
         // Leader should send an API_VERSIONS request to the new voter's endpoint
         context.pollUntilRequest();
-        checkLeaderMetricValues(2, 1, true, false, context);
+        checkLeaderMetricValues(2, 1, 1, context);
         RaftRequest.Outbound apiVersionRequest = context.assertSentApiVersionsRequest();
         assertEquals(
             new Node(newVoter.id(), newAddress.getHostString(), newAddress.getPort()),
@@ -2408,7 +2409,7 @@ public class KafkaRaftClientReconfigTest {
 
         // Become leader again and verify metrics values have been reset
         context.unattachedToLeader();
-        checkLeaderMetricValues(2, 0, false, false, context);
+        checkLeaderMetricValues(2, 0, 0, context);
     }
 
     private static void verifyVotersRecord(
@@ -2467,13 +2468,15 @@ public class KafkaRaftClientReconfigTest {
     private static void checkLeaderMetricValues(
         final int expectedVoters,
         final int expectedObservers,
-        final boolean expectedUncommittedVoterChange,
-        final boolean expectedIgnoredStaticVoters,
+        final int expectedUncommittedVoterChange,
         final RaftClientTestContext context
     ) {
         assertEquals(expectedVoters, getMetric(context.metrics, "number-of-voters").metricValue());
         assertEquals(expectedObservers, getMetric(context.metrics, "number-of-observers").metricValue());
         assertEquals(expectedUncommittedVoterChange, getMetric(context.metrics, "uncommitted-voter-change").metricValue());
-        assertEquals(expectedIgnoredStaticVoters, context.externalKRaftMetrics.getIgnoredStaticVoters());
+
+        // This metric should not be updated in these tests because the context is set up with
+        // bootstrap records that initialize the voter set
+        Mockito.verifyNoInteractions(context.externalKRaftMetrics);
     }
 }

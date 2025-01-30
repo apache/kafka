@@ -104,7 +104,7 @@ public final class BrokerServerMetrics implements AutoCloseable {
         metrics.addMetric(lastAppliedRecordLagMsName, (config, now) -> now - lastAppliedImageProvenance.get().lastContainedLogTimeMs());
         metrics.addMetric(metadataLoadErrorCountName, (config, now) -> metadataLoadErrorCount.get());
         metrics.addMetric(metadataApplyErrorCountName, (config, now) -> metadataApplyErrorCount.get());
-        metrics.addMetric(ignoredStaticVotersName, (Gauge<Boolean>) (config, now) -> ignoredStaticVoters.get());
+        metrics.addMetric(ignoredStaticVotersName, (Gauge<Integer>) (config, now) -> ignoredStaticVoters.get() ? 1 : 0);
     }
 
     @Override
@@ -139,6 +139,10 @@ public final class BrokerServerMetrics implements AutoCloseable {
 
     public MetricName metadataApplyErrorCountName() {
         return metadataApplyErrorCountName;
+    }
+
+    public MetricName ignoredStaticVotersName() {
+        return ignoredStaticVotersName;
     }
 
     public AtomicReference<MetadataProvenance> lastAppliedImageProvenance() {

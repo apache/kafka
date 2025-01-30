@@ -250,7 +250,7 @@ public class KafkaRaftMetrics implements AutoCloseable {
 
     public void addLeaderMetrics() {
         metrics.addMetric(numObserversMetricName, (Gauge<Integer>) (config, now) -> numObservers);
-        metrics.addMetric(uncommittedVoterChangeMetricName, (Gauge<Boolean>) (config, now) -> uncommittedVoterChange);
+        metrics.addMetric(uncommittedVoterChangeMetricName, (Gauge<Integer>) (config, now) -> uncommittedVoterChange ? 1 : 0);
     }
 
     public void removeLeaderMetrics() {

@@ -73,6 +73,7 @@ import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.Snapshots;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
+import org.mockito.Mockito;
 
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
@@ -130,7 +131,7 @@ public final class RaftClientTestContext {
     public final KRaftVersion kraftVersion;
     public final KafkaRaftClient<String> client;
     final Metrics metrics;
-    public final MockExternalKRaftMetrics externalKRaftMetrics;
+    public final ExternalKRaftMetrics externalKRaftMetrics;
     public final MockLog log;
     final MockNetworkChannel channel;
     final MockMessageQueue messageQueue;
@@ -444,7 +445,7 @@ public final class RaftClientTestContext {
                 quorumConfig
             );
 
-            MockExternalKRaftMetrics externalKRaftMetrics = new MockExternalKRaftMetrics();
+            ExternalKRaftMetrics externalKRaftMetrics = Mockito.mock(ExternalKRaftMetrics.class);
 
             client.register(listener);
             client.initialize(
@@ -503,7 +504,7 @@ public final class RaftClientTestContext {
         RaftProtocol raftProtocol,
         boolean alwaysFlush,
         Metrics metrics,
-        MockExternalKRaftMetrics externalKRaftMetrics,
+        ExternalKRaftMetrics externalKRaftMetrics,
         MockListener listener
     ) {
         this.clusterId = clusterId;

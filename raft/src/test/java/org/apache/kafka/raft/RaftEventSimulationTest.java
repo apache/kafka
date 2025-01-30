@@ -45,6 +45,7 @@ import net.jqwik.api.ForAll;
 import net.jqwik.api.Property;
 import net.jqwik.api.Tag;
 import net.jqwik.api.constraints.IntRange;
+import org.mockito.Mockito;
 
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
@@ -963,7 +964,7 @@ public class RaftEventSimulationTest {
                 voterAddresses,
                 store,
                 metrics,
-                new MockExternalKRaftMetrics()
+                Mockito.mock(ExternalKRaftMetrics.class)
             );
         }
 
