@@ -23,9 +23,6 @@ import kafka.utils._
 import org.apache.directory.api.util.FileUtils
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.OffsetOutOfRangeException
-import org.apache.kafka.common.message.LeaderAndIsrRequestData
-import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrTopicState
-import org.apache.kafka.common.requests.{AbstractControlRequest, LeaderAndIsrRequest}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{DirectoryId, KafkaException, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
@@ -1295,47 +1292,6 @@ class LogManagerTest {
     assertTrue(LogManager.isStrayKraftReplica(0, topicsImage(Seq()), log))
   }
 
-  @Test
-  def testFindStrayReplicasInEmptyLAIR(): Unit = {
-    val onDisk = Seq(foo0, foo1, bar0, bar1, baz0, baz1, baz2, quux0)
-    val expected = onDisk.map(_.topicPartition()).toSet
-    assertEquals(expected,
-      LogManager.findStrayReplicas(0,
-        createLeaderAndIsrRequestForStrayDetection(Seq()),
-          onDisk.map(mockLog)).toSet)
-  }
-
-  @Test
-  def testFindNoStrayReplicasInFullLAIR(): Unit = {
-    val onDisk = Seq(foo0, foo1, bar0, bar1, baz0, baz1, baz2, quux0)
-    assertEquals(Set(),
-      LogManager.findStrayReplicas(0,
-      createLeaderAndIsrRequestForStrayDetection(onDisk),
-        onDisk.map(mockLog)).toSet)
-  }
-
-  @Test
-  def testFindSomeStrayReplicasInFullLAIR(): Unit = {
-    val onDisk = Seq(foo0, foo1, bar0, bar1, baz0, baz1, baz2, quux0)
-    val present = Seq(foo0, bar0, bar1, quux0)
-    val expected = Seq(foo1, baz0, baz1, baz2).map(_.topicPartition()).toSet
-    assertEquals(expected,
-      LogManager.findStrayReplicas(0,
-        createLeaderAndIsrRequestForStrayDetection(present),
-        onDisk.map(mockLog)).toSet)
-  }
-
-  @Test
-  def testTopicRecreationInFullLAIR(): Unit = {
-    val onDisk = Seq(foo0, foo1, bar0, bar1, baz0, baz1, baz2, quux0)
-    val present = Seq(recreatedFoo0, recreatedFoo1, bar0, baz0, baz1, baz2, quux0)
-    val expected = Seq(foo0, foo1, bar1).map(_.topicPartition()).toSet
-    assertEquals(expected,
-      LogManager.findStrayReplicas(0,
-        createLeaderAndIsrRequestForStrayDetection(present),
-        onDisk.map(mockLog)).toSet)
-  }
-
   /**
    * Test LogManager takes file lock by default and the lock is released after shutdown.
    */
@@ -1472,41 +1428,5 @@ object LogManagerTest {
     var retval = TopicsImage.EMPTY
     topics.foreach { t => retval = retval.including(t) }
     retval
-  }
-
-  def createLeaderAndIsrRequestForStrayDetection(
-    partitions: Iterable[TopicIdPartition],
-    leaders: Iterable[Int] = Seq(),
-  ): LeaderAndIsrRequest = {
-    val nextLeaderIter = leaders.iterator
-    def nextLeader(): Int = {
-      if (nextLeaderIter.hasNext) {
-        nextLeaderIter.next()
-      } else {
-        3
-      }
-    }
-    val data = new LeaderAndIsrRequestData().
-      setControllerId(1000).
-      setIsKRaftController(true).
-      setType(AbstractControlRequest.Type.FULL.toByte)
-    val topics = new java.util.LinkedHashMap[String, LeaderAndIsrTopicState]
-    partitions.foreach(partition => {
-      val topicState = topics.computeIfAbsent(partition.topic(),
-        _ => new LeaderAndIsrTopicState().
-          setTopicId(partition.topicId()).
-          setTopicName(partition.topic()))
-      topicState.partitionStates().add(new LeaderAndIsrRequestData.LeaderAndIsrPartitionState().
-        setTopicName(partition.topic()).
-        setPartitionIndex(partition.partition()).
-        setControllerEpoch(123).
-        setLeader(nextLeader()).
-        setLeaderEpoch(456).
-        setIsr(java.util.Arrays.asList(3, 4, 5)).
-        setReplicas(java.util.Arrays.asList(3, 4, 5)).
-        setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value()))
-    })
-    data.topicStates().addAll(topics.values())
-    new LeaderAndIsrRequest(data, 7.toShort)
   }
 }

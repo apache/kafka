@@ -42,8 +42,6 @@ class UserQuotaTest extends BaseQuotaTest with SaslSetup {
     quotaTestClients.waitForQuotaUpdate(defaultProducerQuota, defaultConsumerQuota, defaultRequestQuota)
   }
 
-  // @Flaky("KAFKA-8073") -> testThrottledProducerConsumer (in super class)
-
   @AfterEach
   override def tearDown(): Unit = {
     super.tearDown()

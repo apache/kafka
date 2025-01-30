@@ -26,13 +26,12 @@ import org.apache.kafka.common.errors.InvalidTopicException
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.DescribeTopicPartitionsResponseData.{Cursor, DescribeTopicPartitionsResponsePartition, DescribeTopicPartitionsResponseTopic}
 import org.apache.kafka.common.message.MetadataResponseData.{MetadataResponsePartition, MetadataResponseTopic}
-import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState
 import org.apache.kafka.common.message._
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.MetadataResponse
 import org.apache.kafka.image.MetadataImage
-import org.apache.kafka.metadata.{BrokerRegistration, PartitionRegistration, Replicas}
+import org.apache.kafka.metadata.{BrokerRegistration, LeaderAndIsr, PartitionRegistration, Replicas}
 import org.apache.kafka.server.common.{FinalizedFeatures, KRaftVersion, MetadataVersion}
 
 import java.util
@@ -257,23 +256,7 @@ class KRaftMetadataCache(
     }
   }
 
-  /**
-   * Get the topic metadata for the given topics.
-   *
-   * The quota is used to limit the number of partitions to return. The NextTopicPartition field points to the first
-   * partition can't be returned due the limit.
-   * If a topic can't return any partition due to quota limit reached, this topic will not be included in the response.
-   *
-   * Note, the topics should be sorted in alphabetical order. The topics in the DescribeTopicPartitionsResponseData
-   * will also be sorted in alphabetical order.
-   *
-   * @param topics                        The iterator of topics and their corresponding first partition id to fetch.
-   * @param listenerName                  The listener name.
-   * @param topicPartitionStartIndex      The start partition index for the first topic
-   * @param maximumNumberOfPartitions     The max number of partitions to return.
-   * @param ignoreTopicsWithExceptions    Whether ignore the topics with exception.
-   */
-  def getTopicMetadataForDescribeTopicResponse(
+  override def describeTopicResponse(
     topics: Iterator[String],
     listenerName: ListenerName,
     topicPartitionStartIndex: String => Int,
@@ -354,11 +337,11 @@ class KRaftMetadataCache(
     Option(_currentImage.cluster.broker(brokerId)).count(!_.fenced()) == 1
   }
 
-  def isBrokerFenced(brokerId: Int): Boolean = {
+  override def isBrokerFenced(brokerId: Int): Boolean = {
     Option(_currentImage.cluster.broker(brokerId)).count(_.fenced) == 1
   }
 
-  def isBrokerShuttingDown(brokerId: Int): Boolean = {
+  override def isBrokerShuttingDown(brokerId: Int): Boolean = {
     Option(_currentImage.cluster.broker(brokerId)).count(_.inControlledShutdown) == 1
   }
 
@@ -383,19 +366,11 @@ class KRaftMetadataCache(
     _currentImage.cluster().brokers().values().asScala.flatMap(_.node(listenerName.value()).toScala).toSeq
   }
 
-  // Does NOT include offline replica metadata
-  override def getPartitionInfo(topicName: String, partitionId: Int): Option[UpdateMetadataPartitionState] = {
+  override def getLeaderAndIsr(topicName: String, partitionId: Int): Option[LeaderAndIsr] = {
     Option(_currentImage.topics().getTopic(topicName)).
       flatMap(topic => Option(topic.partitions().get(partitionId))).
-      flatMap(partition => Some(new UpdateMetadataPartitionState().
-        setTopicName(topicName).
-        setPartitionIndex(partitionId).
-        setControllerEpoch(-1). // Controller epoch is not stored in the cache.
-        setLeader(partition.leader).
-        setLeaderEpoch(partition.leaderEpoch).
-        setIsr(Replicas.toList(partition.isr)).
-        setZkVersion(partition.partitionEpoch).
-        setReplicas(Replicas.toList(partition.replicas))))
+      flatMap(partition => Some(new LeaderAndIsr(partition.leader, partition.leaderEpoch,
+        util.Arrays.asList(partition.isr.map(i => i: java.lang.Integer): _*), partition.leaderRecoveryState, partition.partitionEpoch)))
   }
 
   override def numPartitions(topicName: String): Option[Int] = {
@@ -433,7 +408,7 @@ class KRaftMetadataCache(
     val image = _currentImage
     val result = new mutable.HashMap[Int, Node]()
     Option(image.topics().getTopic(tp.topic())).foreach { topic =>
-      topic.partitions().values().forEach { partition =>
+      Option(topic.partitions().get(tp.partition())).foreach { partition =>
         partition.replicas.foreach { replicaId =>
           val broker = image.cluster().broker(replicaId)
           if (broker != null && !broker.fenced()) {
@@ -461,7 +436,7 @@ class KRaftMetadataCache(
     }
   }
 
-  def getAliveBrokerEpoch(brokerId: Int): Option[Long] = {
+  override def getAliveBrokerEpoch(brokerId: Int): Option[Long] = {
     Option(_currentImage.cluster().broker(brokerId)).filterNot(_.fenced()).
       map(brokerRegistration => brokerRegistration.epoch())
   }
@@ -549,8 +524,7 @@ class KRaftMetadataCache(
     }
     new FinalizedFeatures(image.features().metadataVersion(),
       finalizedFeatures,
-      image.highestOffsetAndEpoch().offset,
-      true)
+      image.highestOffsetAndEpoch().offset)
   }
 }
 

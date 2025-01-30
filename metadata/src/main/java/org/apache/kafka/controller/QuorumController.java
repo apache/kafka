@@ -61,6 +61,7 @@ import org.apache.kafka.common.metadata.AbortTransactionRecord;
 import org.apache.kafka.common.metadata.AccessControlEntryRecord;
 import org.apache.kafka.common.metadata.BeginTransactionRecord;
 import org.apache.kafka.common.metadata.BrokerRegistrationChangeRecord;
+import org.apache.kafka.common.metadata.ClearElrRecord;
 import org.apache.kafka.common.metadata.ClientQuotaRecord;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.DelegationTokenRecord;
@@ -1293,6 +1294,9 @@ public final class QuorumController implements Controller {
                 break;
             case REGISTER_CONTROLLER_RECORD:
                 clusterControl.replay((RegisterControllerRecord) message);
+                break;
+            case CLEAR_ELR_RECORD:
+                replicationControl.replay((ClearElrRecord) message);
                 break;
             default:
                 throw new RuntimeException("Unhandled record type " + type);

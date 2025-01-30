@@ -50,7 +50,7 @@ jobs:
         with:
           java-version: ${{ inputs.java-version }}
           gradle-cache-read-only: true
-          develocity-access-key: ${{ secrets.GE_ACCESS_TOKEN }}
+          develocity-access-key: ${{ secrets.DEVELOCITY_ACCESS_KEY }}
       - name: Test
         timeout-minutes: 60
         id: junit-test
