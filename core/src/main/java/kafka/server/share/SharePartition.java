@@ -563,7 +563,7 @@ public class SharePartition {
                 // initialReadGapOffset's endOffset is equal to the share partition's endOffset, then
                 // only the initial gaps should be considered. Once share partition's endOffset is past
                 // initial read end offset then all gaps are anyway fetched.
-                if (initialReadGapOffset != null && initialReadGapOffset.endOffset() == endOffset) {
+                if (isInitialReadGapOffsetWindowActive()) {
                     if (entry.getKey() > gapStartOffset) {
                         nextFetchOffset = gapStartOffset;
                         break;
@@ -681,20 +681,25 @@ public class SharePartition {
 
                 InFlightBatch inFlightBatch = entry.getValue();
 
-                // If nextBatchStartOffset is less than the key of the entry, this means the fetch happened for a gap in the cachedState.
-                // Thus, a new batch needs to be acquired for the gap.
-                if (nextBatchStartOffset < entry.getKey()) {
-                    ShareAcquiredRecords shareAcquiredRecords = acquireNewBatchRecords(memberId, fetchPartitionData.records.batches(),
-                        nextBatchStartOffset, entry.getKey() - 1, batchSize, maxFetchRecords);
-                    result.addAll(shareAcquiredRecords.acquiredRecords());
-                    acquiredCount += shareAcquiredRecords.count();
-                }
-                // Set nextBatchStartOffset as the last offset of the current in-flight batch + 1
-                nextBatchStartOffset = inFlightBatch.lastOffset() + 1;
+                // If the initialReadGapOffset window is active, we need to treat the gaps in between the window as
+                // acquirable. Once the window is inactive (when we have acquired all the gaps inside the window),
+                // the remaining gaps are natural (data does not exist at those offsets) and we need nto acquire them.
+                if (isInitialReadGapOffsetWindowActive()) {
+                    // If nextBatchStartOffset is less than the key of the entry, this means the fetch happened for a gap in the cachedState.
+                    // Thus, a new batch needs to be acquired for the gap.
+                    if (nextBatchStartOffset < entry.getKey()) {
+                        ShareAcquiredRecords shareAcquiredRecords = acquireNewBatchRecords(memberId, fetchPartitionData.records.batches(),
+                            nextBatchStartOffset, entry.getKey() - 1, batchSize, maxFetchRecords);
+                        result.addAll(shareAcquiredRecords.acquiredRecords());
+                        acquiredCount += shareAcquiredRecords.count();
+                    }
+                    // Set nextBatchStartOffset as the last offset of the current in-flight batch + 1
+                    nextBatchStartOffset = inFlightBatch.lastOffset() + 1;
 
-                // If the acquired count is equal to the max fetch records then break the loop.
-                if (acquiredCount >= maxFetchRecords) {
-                    break;
+                    // If the acquired count is equal to the max fetch records then break the loop.
+                    if (acquiredCount >= maxFetchRecords) {
+                        break;
+                    }
                 }
 
                 // Compute if the batch is a full match.
@@ -1924,6 +1929,10 @@ public class SharePartition {
             entry.getValue().batchState() :
             entry.getValue().offsetState().get(startOffset).state();
         return isRecordStateAcknowledged(startOffsetState);
+    }
+
+    private boolean isInitialReadGapOffsetWindowActive() {
+        return initialReadGapOffset != null && initialReadGapOffset.endOffset() == endOffset;
     }
 
     /**
