@@ -156,7 +156,10 @@ public class LeaderState<T> implements EpochState {
                 "Current fetched voters are {}, and voters are {}",
                 checkQuorumTimeoutMs,
                 fetchedVoters,
-                voterStates.values().stream().map(voter -> voter.replicaKey)
+                voterStates.values()
+                    .stream()
+                    .map(voter -> voter.replicaKey)
+                    .collect(Collectors.toUnmodifiableSet())
             );
         }
         return remainingMs;
@@ -406,7 +409,7 @@ public class LeaderState<T> implements EpochState {
 
     @Override
     public ElectionState election() {
-        return ElectionState.withElectedLeader(epoch, localReplicaKey.id(), voterStates.keySet());
+        return ElectionState.withElectedLeader(epoch, localReplicaKey.id(), Optional.empty(), voterStates.keySet());
     }
 
     @Override

@@ -97,8 +97,7 @@ public class BootstrapMetadata {
     }
 
     public static Optional<MetadataVersion> recordToMetadataVersion(ApiMessage record) {
-        if (record instanceof FeatureLevelRecord) {
-            FeatureLevelRecord featureLevel = (FeatureLevelRecord) record;
+        if (record instanceof FeatureLevelRecord featureLevel) {
             if (featureLevel.name().equals(MetadataVersion.FEATURE_NAME)) {
                 return Optional.of(MetadataVersion.fromFeatureLevel(featureLevel.featureLevel()));
             }
@@ -137,8 +136,7 @@ public class BootstrapMetadata {
     public short featureLevel(String featureName) {
         short result = 0;
         for (ApiMessageAndVersion record : records) {
-            if (record.message() instanceof FeatureLevelRecord) {
-                FeatureLevelRecord message = (FeatureLevelRecord) record.message();
+            if (record.message() instanceof FeatureLevelRecord message) {
                 if (message.name().equals(featureName)) {
                     result = message.featureLevel();
                 }
@@ -151,8 +149,7 @@ public class BootstrapMetadata {
         List<ApiMessageAndVersion> newRecords = new ArrayList<>();
         int i = 0;
         while (i < records.size()) {
-            if (records.get(i).message() instanceof FeatureLevelRecord) {
-                FeatureLevelRecord record = (FeatureLevelRecord) records.get(i).message();
+            if (records.get(i).message() instanceof FeatureLevelRecord record) {
                 if (record.name().equals(featureName)) {
                     FeatureLevelRecord newRecord = record.duplicate();
                     newRecord.setFeatureLevel(level);

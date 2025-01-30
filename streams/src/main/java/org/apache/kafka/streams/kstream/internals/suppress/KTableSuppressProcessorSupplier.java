@@ -71,12 +71,12 @@ public class KTableSuppressProcessorSupplier<K, V> implements
     @Override
     public KTableValueGetterSupplier<K, V> view() {
         final KTableValueGetterSupplier<K, V> parentValueGetterSupplier = parentKTable.valueGetterSupplier();
-        return new KTableValueGetterSupplier<K, V>() {
+        return new KTableValueGetterSupplier<>() {
 
             @Override
             public KTableValueGetter<K, V> get() {
                 final KTableValueGetter<K, V> parentGetter = parentValueGetterSupplier.get();
-                return new KTableValueGetter<K, V>() {
+                return new KTableValueGetter<>() {
                     private TimeOrderedKeyValueBuffer<K, V, Change<V>> buffer;
 
                     @Override
@@ -174,7 +174,7 @@ public class KTableSuppressProcessorSupplier<K, V> implements
         }
 
         private void buffer(final Record<K, Change<V>> record) {
-            final long bufferTime = bufferTimeDefinition.time(internalProcessorContext, record.key());
+            final long bufferTime = bufferTimeDefinition.time(internalProcessorContext.recordContext(), record.key());
 
             buffer.put(bufferTime, record, internalProcessorContext.recordContext());
         }

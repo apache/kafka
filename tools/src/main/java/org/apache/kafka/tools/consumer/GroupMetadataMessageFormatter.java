@@ -16,7 +16,9 @@
  */
 package org.apache.kafka.tools.consumer;
 
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
+import org.apache.kafka.coordinator.group.generated.CoordinatorRecordType;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataKeyJsonConverter;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
@@ -31,11 +33,20 @@ import java.nio.ByteBuffer;
 public class GroupMetadataMessageFormatter extends ApiMessageFormatter {
     @Override
     protected JsonNode readToKeyJson(ByteBuffer byteBuffer) {
-        short version = byteBuffer.getShort();
-        if (version >= GroupMetadataKey.LOWEST_SUPPORTED_VERSION && version <= GroupMetadataKey.HIGHEST_SUPPORTED_VERSION) {
-            return GroupMetadataKeyJsonConverter.write(new GroupMetadataKey(new ByteBufferAccessor(byteBuffer), version), version);
+        try {
+            switch (CoordinatorRecordType.fromId(byteBuffer.getShort())) {
+                case GROUP_METADATA:
+                    return GroupMetadataKeyJsonConverter.write(
+                        new GroupMetadataKey(new ByteBufferAccessor(byteBuffer), (short) 0),
+                        (short) 0
+                    );
+
+                default:
+                    return NullNode.getInstance();
+            }
+        } catch (UnsupportedVersionException ex) {
+            return NullNode.getInstance();
         }
-        return NullNode.getInstance();
     }
 
     @Override

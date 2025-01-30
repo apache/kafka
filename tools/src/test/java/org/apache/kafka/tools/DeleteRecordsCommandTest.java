@@ -24,16 +24,14 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.common.test.api.ClusterInstance;
+import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTest;
-import org.apache.kafka.common.test.api.ClusterTestExtensions;
 import org.apache.kafka.server.common.AdminCommandFailedException;
 import org.apache.kafka.server.common.AdminOperationException;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.io.IOException;
 import java.nio.file.NoSuchFileException;
@@ -48,7 +46,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@ExtendWith(value = ClusterTestExtensions.class)
 public class DeleteRecordsCommandTest {
 
     @ClusterTest

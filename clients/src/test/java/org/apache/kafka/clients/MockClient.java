@@ -71,6 +71,7 @@ public class MockClient implements KafkaClient {
 
     private int correlation;
     private Runnable wakeupHook;
+    private boolean advanceTimeDuringPoll;
     private final Time time;
     private final MockMetadataUpdater metadataUpdater;
     private final Map<String, ConnectionState> connections = new HashMap<>();
@@ -138,7 +139,11 @@ public class MockClient implements KafkaClient {
 
     @Override
     public long pollDelayMs(Node node, long now) {
-        return connectionDelay(node, now);
+        return connectionState(node.idString()).pollDelayMs(now);
+    }
+
+    public void advanceTimeDuringPoll(boolean advanceTimeDuringPoll) {
+        this.advanceTimeDuringPoll = advanceTimeDuringPoll;
     }
 
     public void backoff(Node node, long durationMs) {
@@ -334,6 +339,12 @@ public class MockClient implements KafkaClient {
         while ((response = this.responses.poll()) != null) {
             response.onComplete();
             copy.add(response);
+        }
+
+        // In real life, if poll() is called and we get to the end with no responses,
+        // time equal to timeoutMs would have passed.
+        if (advanceTimeDuringPoll) {
+            time.sleep(timeoutMs);
         }
 
         return copy;
@@ -793,6 +804,13 @@ public class MockClient implements KafkaClient {
                 return backingOffUntilMs - now;
 
             return 0;
+        }
+
+        long pollDelayMs(long now) {
+            if (notThrottled(now))
+                return connectionDelay(now);
+
+            return throttledUntilMs - now;
         }
 
         boolean ready(long now) {

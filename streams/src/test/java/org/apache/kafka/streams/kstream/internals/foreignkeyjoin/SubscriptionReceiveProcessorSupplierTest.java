@@ -23,7 +23,6 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapper.Instruction;
-import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.api.MockProcessorContext.CapturedForward;
 import org.apache.kafka.streams.processor.api.Processor;
@@ -33,7 +32,7 @@ import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
-import org.apache.kafka.test.MockInternalNewProcessorContext;
+import org.apache.kafka.test.MockInternalProcessorContext;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 
@@ -54,7 +53,7 @@ public class SubscriptionReceiveProcessorSupplierTest {
 
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
     private File stateDir;
-    private MockInternalNewProcessorContext<CombinedKey<String, String>, Change<ValueAndTimestamp<SubscriptionWrapper<String>>>> context;
+    private MockInternalProcessorContext<CombinedKey<String, String>, Change<ValueAndTimestamp<SubscriptionWrapper<String>>>> context;
     private TimestampedKeyValueStore<Bytes, SubscriptionWrapper<String>> stateStore = null;
 
     private static final String FK = "fk1";
@@ -72,7 +71,7 @@ public class SubscriptionReceiveProcessorSupplierTest {
     @BeforeEach
     public void before() {
         stateDir = TestUtils.tempDirectory();
-        context = new MockInternalNewProcessorContext<>(props, new TaskId(0, 0), stateDir);
+        context = new MockInternalProcessorContext<>(props, new TaskId(0, 0), stateDir);
     }
 
     @AfterEach
@@ -99,7 +98,7 @@ public class SubscriptionReceiveProcessorSupplierTest {
                         Change<ValueAndTimestamp<SubscriptionWrapper<String>>>> processor = supplier.get();
         stateStore = storeBuilder.build();
         context.addStateStore(stateStore);
-        stateStore.init((StateStoreContext) context, stateStore);
+        stateStore.init(context, stateStore);
 
         final SubscriptionWrapper<String> oldWrapper = new SubscriptionWrapper<>(
             new long[]{1L, 2L},
@@ -151,7 +150,7 @@ public class SubscriptionReceiveProcessorSupplierTest {
             Change<ValueAndTimestamp<SubscriptionWrapper<String>>>> processor = supplier.get();
         stateStore = storeBuilder.build();
         context.addStateStore(stateStore);
-        stateStore.init((StateStoreContext) context, stateStore);
+        stateStore.init(context, stateStore);
         final SubscriptionWrapper<String> oldWrapper = new SubscriptionWrapper<>(
             new long[]{1L, 2L},
             Instruction.DELETE_KEY_AND_PROPAGATE,
@@ -202,7 +201,7 @@ public class SubscriptionReceiveProcessorSupplierTest {
             Change<ValueAndTimestamp<SubscriptionWrapper<String>>>> processor = supplier.get();
         stateStore = storeBuilder.build();
         context.addStateStore(stateStore);
-        stateStore.init((StateStoreContext) context, stateStore);
+        stateStore.init(context, stateStore);
 
         final SubscriptionWrapper<String> oldWrapper = new SubscriptionWrapper<>(
             new long[]{1L, 2L},
@@ -254,7 +253,7 @@ public class SubscriptionReceiveProcessorSupplierTest {
             Change<ValueAndTimestamp<SubscriptionWrapper<String>>>> processor = supplier.get();
         stateStore = storeBuilder.build();
         context.addStateStore(stateStore);
-        stateStore.init((StateStoreContext) context, stateStore);
+        stateStore.init(context, stateStore);
 
         final SubscriptionWrapper<String> oldWrapper = new SubscriptionWrapper<>(
             new long[]{1L, 2L},
@@ -306,7 +305,7 @@ public class SubscriptionReceiveProcessorSupplierTest {
             Change<ValueAndTimestamp<SubscriptionWrapper<String>>>> processor = supplier.get();
         stateStore = storeBuilder.build();
         context.addStateStore(stateStore);
-        stateStore.init((StateStoreContext) context, stateStore);
+        stateStore.init(context, stateStore);
 
         final SubscriptionWrapper<String> oldWrapper = new SubscriptionWrapper<>(
             new long[]{1L, 2L},
@@ -358,7 +357,7 @@ public class SubscriptionReceiveProcessorSupplierTest {
             Change<ValueAndTimestamp<SubscriptionWrapper<String>>>> processor = supplier.get();
         stateStore = storeBuilder.build();
         context.addStateStore(stateStore);
-        stateStore.init((StateStoreContext) context, stateStore);
+        stateStore.init(context, stateStore);
 
         final SubscriptionWrapper<String> oldWrapper = new SubscriptionWrapper<>(
             new long[]{1L, 2L},
@@ -410,7 +409,7 @@ public class SubscriptionReceiveProcessorSupplierTest {
             Change<ValueAndTimestamp<SubscriptionWrapper<String>>>> processor = supplier.get();
         stateStore = storeBuilder.build();
         context.addStateStore(stateStore);
-        stateStore.init((StateStoreContext) context, stateStore);
+        stateStore.init(context, stateStore);
 
         final SubscriptionWrapper<String> oldWrapper = new SubscriptionWrapper<>(
             new long[]{1L, 2L},
@@ -462,7 +461,7 @@ public class SubscriptionReceiveProcessorSupplierTest {
             Change<ValueAndTimestamp<SubscriptionWrapper<String>>>> processor = supplier.get();
         stateStore = storeBuilder.build();
         context.addStateStore(stateStore);
-        stateStore.init((StateStoreContext) context, stateStore);
+        stateStore.init(context, stateStore);
 
         final SubscriptionWrapper<String> oldWrapper = new SubscriptionWrapper<>(
             new long[]{1L, 2L},

@@ -29,7 +29,7 @@ import kafka.server.metadata.MockConfigRepository;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState;
+import org.apache.kafka.common.requests.LeaderAndIsrRequest;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.util.KafkaScheduler;
@@ -106,7 +106,6 @@ public class UpdateFollowerFetchStateBenchmark {
             setBrokerTopicStats(brokerTopicStats).
             setLogDirFailureChannel(logDirFailureChannel).
             setTime(Time.SYSTEM).
-            setKeepPartitionMetadataFile(true).
             build();
         OffsetCheckpoints offsetCheckpoints = Mockito.mock(OffsetCheckpoints.class);
         Mockito.when(offsetCheckpoints.fetch(logDir.getAbsolutePath(), topicPartition)).thenReturn(Optional.of(0L));
@@ -117,7 +116,7 @@ public class UpdateFollowerFetchStateBenchmark {
         replicas.add(0);
         replicas.add(1);
         replicas.add(2);
-        LeaderAndIsrPartitionState partitionState = new LeaderAndIsrPartitionState()
+        LeaderAndIsrRequest.PartitionState partitionState = new LeaderAndIsrRequest.PartitionState()
             .setControllerEpoch(0)
             .setLeader(0)
             .setLeaderEpoch(0)
@@ -128,7 +127,7 @@ public class UpdateFollowerFetchStateBenchmark {
         AlterPartitionListener alterPartitionListener = Mockito.mock(AlterPartitionListener.class);
         AlterPartitionManager alterPartitionManager = Mockito.mock(AlterPartitionManager.class);
         partition = new Partition(topicPartition, 100,
-                MetadataVersion.latestTesting(), 0, () -> -1, Time.SYSTEM,
+                0, () -> -1, Time.SYSTEM,
                 alterPartitionListener, delayedOperations,
                 Mockito.mock(MetadataCache.class), logManager, alterPartitionManager, topicId);
         partition.makeLeader(partitionState, offsetCheckpoints, topicId, Option.empty());

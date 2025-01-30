@@ -95,7 +95,7 @@ public class ClusterControlManagerTest {
         FeatureControlManager featureControl = new FeatureControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
             setQuorumFeatures(new QuorumFeatures(0,
-                QuorumFeatures.defaultFeatureMap(true),
+                QuorumFeatures.defaultSupportedFeatureMap(true),
                 Collections.singletonList(0))).
             build();
         ClusterControlManager clusterControl = new ClusterControlManager.Builder().
@@ -156,7 +156,7 @@ public class ClusterControlManagerTest {
         FeatureControlManager featureControl = new FeatureControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
             setQuorumFeatures(new QuorumFeatures(0,
-                QuorumFeatures.defaultFeatureMap(true),
+                QuorumFeatures.defaultSupportedFeatureMap(true),
                 Collections.singletonList(0))).
             build();
         ClusterControlManager clusterControl = new ClusterControlManager.Builder().
@@ -209,7 +209,7 @@ public class ClusterControlManagerTest {
         FeatureControlManager featureControl = new FeatureControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
             setQuorumFeatures(new QuorumFeatures(0,
-                QuorumFeatures.defaultFeatureMap(true),
+                QuorumFeatures.defaultSupportedFeatureMap(true),
                 Collections.singletonList(0))).
             build();
         ClusterControlManager clusterControl = new ClusterControlManager.Builder().
@@ -264,7 +264,7 @@ public class ClusterControlManagerTest {
         FeatureControlManager featureControl = new FeatureControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
             setQuorumFeatures(new QuorumFeatures(0,
-                QuorumFeatures.defaultFeatureMap(true),
+                QuorumFeatures.defaultSupportedFeatureMap(true),
                 Collections.singletonList(0))).
             build();
         ClusterControlManager clusterControl = new ClusterControlManager.Builder().
@@ -303,7 +303,7 @@ public class ClusterControlManagerTest {
         FeatureControlManager featureControl = new FeatureControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
             setQuorumFeatures(new QuorumFeatures(0,
-                QuorumFeatures.defaultFeatureMap(true),
+                QuorumFeatures.defaultSupportedFeatureMap(true),
                 Collections.singletonList(0))).
             setMetadataVersion(metadataVersion).
             build();
@@ -367,7 +367,7 @@ public class ClusterControlManagerTest {
         FeatureControlManager featureControl = new FeatureControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
             setQuorumFeatures(new QuorumFeatures(0,
-                QuorumFeatures.defaultFeatureMap(true),
+                QuorumFeatures.defaultSupportedFeatureMap(true),
                 Collections.singletonList(0))).
             build();
         ClusterControlManager clusterControl = new ClusterControlManager.Builder().
@@ -406,7 +406,7 @@ public class ClusterControlManagerTest {
         FeatureControlManager featureControl = new FeatureControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
             setQuorumFeatures(new QuorumFeatures(0,
-                QuorumFeatures.defaultFeatureMap(true),
+                QuorumFeatures.defaultSupportedFeatureMap(true),
                 Collections.singletonList(0))).
             build();
         ClusterControlManager clusterControl = new ClusterControlManager.Builder().
@@ -469,7 +469,7 @@ public class ClusterControlManagerTest {
         FeatureControlManager featureControl = new FeatureControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
             setQuorumFeatures(new QuorumFeatures(0,
-                QuorumFeatures.defaultFeatureMap(true),
+                QuorumFeatures.defaultSupportedFeatureMap(true),
                 Collections.singletonList(0))).
             setMetadataVersion(metadataVersion).
             build();

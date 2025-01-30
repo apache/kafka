@@ -17,21 +17,17 @@
 package kafka.api
 
 import kafka.utils.TestInfoUtils
-import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.config.TopicConfig
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNull, assertThrows}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 
 import java.util
-import java.util.{Collections, Optional, Properties}
-import scala.annotation.nowarn
+import java.util.{Collections, Optional}
 import scala.jdk.CollectionConverters._
 
 class ConsumerWithLegacyMessageFormatIntegrationTest extends AbstractConsumerTest {
 
-  @nowarn("cat=deprecation")
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testOffsetsForTimes(quorum: String, groupProtocol: String): Unit = {
@@ -39,11 +35,8 @@ class ConsumerWithLegacyMessageFormatIntegrationTest extends AbstractConsumerTes
     val topic1 = "part-test-topic-1"
     val topic2 = "part-test-topic-2"
     val topic3 = "part-test-topic-3"
-    val props = new Properties()
-    props.setProperty(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG, "0.9.0")
     createTopic(topic1, numParts)
-    // Topic2 is in old message format.
-    createTopic(topic2, numParts, 1, props)
+    createTopic(topic2, numParts)
     createTopic(topic3, numParts)
 
     val consumer = createConsumer()
@@ -102,20 +95,14 @@ class ConsumerWithLegacyMessageFormatIntegrationTest extends AbstractConsumerTes
     assertNull(timestampOffsets.get(new TopicPartition(topic3, 1)))
   }
 
-  @nowarn("cat=deprecation")
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testEarliestOrLatestOffsets(quorum: String, groupProtocol: String): Unit = {
-    val topic0 = "topicWithNewMessageFormat"
-    val topic1 = "topicWithOldMessageFormat"
-    val prop = new Properties()
-    // idempotence producer doesn't support old version of messages
-    prop.setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false")
-    val producer = createProducer(configOverrides = prop)
+    val topic0 = "topic0"
+    val topic1 = "topic1"
+    val producer = createProducer()
     createTopicAndSendRecords(producer, topicName = topic0, numPartitions = 2, recordsPerPartition = 100)
-    val props = new Properties()
-    props.setProperty(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG, "0.9.0")
-    createTopic(topic1, numPartitions = 1, replicationFactor = 1, props)
+    createTopic(topic1)
     sendRecords(producer, numRecords = 100, new TopicPartition(topic1, 0))
 
     val t0p0 = new TopicPartition(topic0, 0)

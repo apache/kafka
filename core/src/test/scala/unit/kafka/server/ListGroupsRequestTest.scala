@@ -16,18 +16,15 @@
  */
 package kafka.server
 
-import org.apache.kafka.common.test.api.ClusterInstance
 import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
-import org.apache.kafka.common.test.api.ClusterTestExtensions
 import org.apache.kafka.common.message.ListGroupsResponseData
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup.ConsumerGroupState
 import org.apache.kafka.coordinator.group.{Group, GroupCoordinatorConfig}
 import org.junit.jupiter.api.Assertions.{assertEquals, fail}
-import org.junit.jupiter.api.extension.ExtendWith
 
-@ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 @ClusterTestDefaults(types = Array(Type.KRAFT))
 class ListGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
   @ClusterTest(

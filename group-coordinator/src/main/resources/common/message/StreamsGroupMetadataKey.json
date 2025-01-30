@@ -15,12 +15,13 @@
 
 // The streams rebalance protocol is in development. This schema is subject to non-backwards-compatible changes.
 {
-  "type": "data",
+  "apiKey": 17,
+  "type": "coordinator-key",
   "name": "StreamsGroupMetadataKey",
-  "validVersions": "17",
+  "validVersions": "0",
   "flexibleVersions": "none",
   "fields": [
-    { "name": "GroupId", "type": "string", "versions": "17",
+    { "name": "GroupId", "type": "string", "versions": "0",
       "about": "The group ID." }
   ]
 }

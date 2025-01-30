@@ -19,9 +19,32 @@
 
 <script id="upgrade-template" type="text/x-handlebars-template">
 
+<h4><a id="upgrade_4_1_0" href="#upgrade_4_1_0">Upgrading to 4.1.0 from any version 0.8.x through 4.0.x</a></h4>
+    <h5><a id="upgrade_410_notable" href="#upgrade_410_notable">Notable changes in 4.1.0</a></h5>
+        <ul>
+            <li><b>Producer</b>
+                <ul>
+                    <li>The <code>flush</code> method now detects potential deadlocks and prohibits its use inside a callback. This change prevents unintended blocking behavior, which was a known risk in earlier versions.
+                    </li>
+                </ul>
+            </li>
+        </ul>
 <h4><a id="upgrade_4_0_0" href="#upgrade_4_0_0">Upgrading to 4.0.0 from any version 0.8.x through 3.9.x</a></h4>
     <h5><a id="upgrade_400_notable" href="#upgrade_400_notable">Notable changes in 4.0.0</a></h5>
     <ul>
+        <li>
+            Old protocol API versions have been removed. Users should ensure brokers are version 2.1 or higher before upgrading the Java clients
+	    (including Connect and Kafka Streams which use the clients internally) to 4.0.
+            Similarly, users should ensure their Java clients (including Connect and Kafka Streams) version is 2.1 or higher before upgrading the brokers to 4.0.
+	    Finally, care also needs to be taken when it comes to kafka clients that are not part of Apache Kafka, please see
+            <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-896%3A+Remove+old+client+protocol+API+versions+in+Kafka+4.0">KIP-896</a> for the details.
+        </li>
+        <li>
+            Before updating your Kafka cluster which build on Zookeeper to Kafka 4.0, you must understand what the updates and changes 
+            are between Zookeeper mode and Kraft mode. See the following page to learn about some of the significant changes in 
+            latest Kafka releases.
+            <!--#include virtual="zk2kraft.html" -->
+        </li>
         <li>A number of deprecated classes, methods, configurations and tools have been removed.
             <ul>
                 <li><b>Common</b>
@@ -53,6 +76,15 @@
                         <li>The <code>org.apache.kafka.common.errors.NotLeaderForPartitionException</code> class was removed. The <code>org.apache.kafka.common.errors.NotLeaderOrFollowerException</code> is returned
                             if a request could not be processed because the broker is not the leader or follower for a topic partition.
                         </li>
+                        <li>The <code>org.apache.kafka.clients.producer.internals.DefaultPartitioner</code> and <code>org.apache.kafka.clients.producer.UniformStickyPartitioner</code> class was removed.
+                        </li>
+                        <li>The <code>log.message.format.version</code> and <code>message.format.version</code> configs were removed.
+                        </li>
+                        <li>The function <code>onNewBatch</code> in <code>org.apache.kafka.clients.producer.Partitioner</code> class was removed.
+                        </li>
+                        <li>The default properties files for KRaft mode are no longer stored in the separate <code>config/kraft</code> directory since Zookeeper has been removed. These files have been consolidated with other configuration files.
+                            Now all configuration files are in <code>config</code> directory.
+                        </li>
                     </ul>
                 </li>
                 <li><b>Broker</b>
@@ -80,6 +112,10 @@
                         </li>
                         <li>
                             The <code>remote.log.manager.thread.pool.size</code> configuration default value was changed to 2 from 10.
+                            See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-1030%3A+Change+constraints+and+default+values+for+various+configurations">KIP-1030</a> 
+                        </li>
+                        <li>
+                            The minimum <code>segment.bytes/log.segment.bytes</code> has changed from 14 bytes to 1MB.
                             See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-1030%3A+Change+constraints+and+default+values+for+various+configurations">KIP-1030</a> 
                         </li>
                     </ul>
@@ -178,6 +214,10 @@
                         <li>The <code>committed(TopicPartition)</code> and <code>committed(TopicPartition, Duration)</code> methods were removed from the consumer.
                             Please use <code>committed(Set&ltTopicPartition&gt)</code> and <code>committed(Set&ltTopicPartition&gt, Duration)</code> instead.
                         </li>
+                        <li>
+                            The <code>setException(KafkaException)</code> method was removed from the <code>org.apache.kafka.clients.consumer.MockConsumer</code>.
+                            Please use <code>setPollException(KafkaException)</code> instead.
+                        </li>
                     </ul>
                 </li>
                 <li><b>Producer</b>
@@ -185,6 +225,9 @@
                         <li>The <code>enable.idempotence</code> configuration will no longer automatically fall back when the <code>max.in.flight.requests.per.connection</code> value exceeds 5.
                         </li>
                         <li>The deprecated <code>sendOffsetsToTransaction(Map&lt;TopicPartition, OffsetAndMetadata&gt;, String)</code> method has been removed from the Producer API.
+                        </li>
+                        <li>The default <code>linger.ms</code> changed from 0 to 5 in Apache Kafka 4.0 as the efficiency gains from larger batches typically result in 
+                            similar or lower producer latency despite the increased linger.
                         </li>
                     </ul>
                 </li>
@@ -201,8 +244,48 @@
                             <code>DEAD</code> if the group ID was not found. In Apache Kafka 4.0, the <code>GroupIdNotFoundException</code>
                             is thrown instead as part of the support for new types of group.
                         </li>
-                        <li>The <code>org.apache.kafka.clients.admin.TopicListing.TopicListing(String, boolean)</code> method were removed.
+                        <li>The <code>org.apache.kafka.clients.admin.DeleteTopicsResult.values()</code> method was removed.
+                            Please use <code>org.apache.kafka.clients.admin.DeleteTopicsResult.topicNameValues()</code> instead.
+                        <li>The <code>org.apache.kafka.clients.admin.TopicListing.TopicListing(String, boolean)</code> method was removed.
                             Please use <code>org.apache.kafka.clients.admin.TopicListing.TopicListing(String, Uuid, boolean)</code> instead.
+                        </li>
+                        <li>The <code>org.apache.kafka.clients.admin.ListConsumerGroupOffsetsOptions.topicPartitions(List&lt;TopicPartition&gt;)</code> method was removed.
+                            Please use <code>org.apache.kafka.clients.admin.Admin.listConsumerGroupOffsets(Map&lt;String, ListConsumerGroupOffsetsSpec&gt;, ListConsumerGroupOffsetsOptions)</code> instead.
+                        </li>
+                        <li>
+                            The deprecated <code>dryRun</code> methods were removed from the <code>org.apache.kafka.clients.admin.UpdateFeaturesOptions</code>.
+                            Please use <code>validateOnly</code> instead.
+                        </li>
+                        <li>The constructor <code>org.apache.kafka.clients.admin.FeatureUpdate</code> with short and boolean arguments was removed.
+                            Please use the constructor that accepts short and the specified UpgradeType enum instead.
+                        </li>
+                        <li>
+                            The <code>allowDowngrade</code> method was removed from the <code>org.apache.kafka.clients.admin.FeatureUpdate</code>.
+                        </li>
+                        <li>The <code>org.apache.kafka.clients.admin.DescribeTopicsResult.DescribeTopicsResult(Map&lt;String, KafkaFuture&lt;TopicDescription&gt;&gt;)</code> method was removed.
+                            Please use <code>org.apache.kafka.clients.admin.DescribeTopicsResult.DescribeTopicsResult(Map&lt;Uuid, KafkaFuture&lt;TopicDescription&gt;&gt;, Map&lt;String, KafkaFuture&lt;TopicDescription&gt;&gt;)</code> instead.
+                        </li>
+                        <li>
+                            The <code>values()</code> method was removed from the <code>org.apache.kafka.clients.admin.DescribeTopicsResult</code>.
+                            Please use <code>topicNameValues()</code> instead.
+                        </li>
+                        <li>
+                            The <code>all()</code> method was removed from the <code>org.apache.kafka.clients.admin.DescribeTopicsResult</code>.
+                            Please use <code>allTopicNames()</code> instead.
+                        </li>
+                    </ul>
+                </li>
+                <li><b>Kafka Streams</b>
+                    <ul>
+                        <li>
+			    All public API, deprecated in Apache Kafka 3.6 or an earlier release, have been removed, with the exception of <code>JoinWindows.of()</code> and <code>JoinWindows#grace()</code>.
+			    See <a href="https://issues.apache.org/jira/browse/KAFKA-17531">KAFKA-17531</a> for details.
+                        </li>
+                        <li>
+			    The most important changes are highlighted in the <a href=""/{{version}}/documentation/streams/upgrade-guide.html#streams_api_changes_400">Kafka Streams upgrade guide</a>.
+                        </li>
+                        <li>
+			    For a full list of changes, see <a href="https://issues.apache.org/jira/browse/KAFKA-12822">KAFKA-12822</a>.
                         </li>
                     </ul>
                 </li>
@@ -211,6 +294,12 @@
         <li>Other changes:
             <ul>
                 <li>
+                    The minimum Java version required by clients and Kafka Streams applications has been increased from Java 8 to Java 11
+                    while brokers, connect and tools now require Java 17.
+                    See <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=181308223">KIP-750</a> and
+                    <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=284789510">KIP-1013</a> for more details.
+                </li>
+                <li>
                     Java 23 support has been added in Apache Kafka 4.0
                 </li>
                 <li>
@@ -218,8 +307,11 @@
                     See <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=181308218">KIP-751</a> for more details
                 </li>
                 <li>
-                    Java 8 support has been removed in Apache Kafka 4.0
-                    See <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=181308223">KIP-750</a> for more details
+                    Logging framework has been migrated from Log4j to Log4j2.
+                    Users can use the log4j-transform-cli tool to automatically convert their existing Log4j configuration files to Log4j2 format.
+                    See <a href="https://logging.staged.apache.org/log4j/transform/cli.html#log4j-transform-cli">log4j-transform-cli</a> for more details.
+                    Log4j2 provides limited compatibility for Log4j configurations.
+                    See <a href="https://logging.apache.org/log4j/2.x/migrate-from-log4j1.html#ConfigurationCompatibility">Use Log4j 1 to Log4j 2 bridge</a> for more information,
                 </li>
                 <li>
                     KafkaLog4jAppender has been removed, users should migrate to the log4j2 appender
@@ -238,6 +330,20 @@
                     The criteria for identifying internal topics in ReplicationPolicy and DefaultReplicationPolicy have
                     been updated to enable the replication of topics that appear to be internal but aren't truly internal to Kafka and Mirror Maker 2.
                     See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-1074%3A+Allow+the+replication+of+user+internal+topics">KIP-1074</a> for more details.
+                </li>
+                <li>
+                    KIP-714 is now enabled for Kafka Streams via <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-1076%3A++Metrics+for+client+applications+KIP-714+extension">KIP-1076</a>.
+		    This allows to not only collect the metric of the internally used clients of a Kafka Streams appliction via a broker-side plugin,
+		    but also to collect the <a href="/{{version}}/documentation/#kafka_streams_monitoring">metrics</a> of the Kafka Streams runtime itself.
+            </li>
+                    The default value of 'num.recovery.threads.per.data.dir' has been changed from 1 to 2. The impact of this is faster
+                    recovery post unclean shutdown at the expense of extra IO cycles.
+                    See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-1030%3A+Change+constraints+and+default+values+for+various+configurations">KIP-1030</a> 
+                </li>
+                <li>
+                    The default value of 'message.timestamp.after.max.ms' has been changed from Long.Max to 1 hour. The impact of this messages with a 
+                    timestamp of more than 1 hour in the future will be rejected when message.timestamp.type=CreateTime is set.
+                    See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-1030%3A+Change+constraints+and+default+values+for+various+configurations">KIP-1030</a> 
                 </li>
             </ul>
         </li>
@@ -595,9 +701,9 @@
         <li>The Apache Zookeeper dependency has been upgraded to 3.8.1 due to 3.6 reaching end-of-life. To bring both your
             Kafka and Zookeeper clusters to the latest versions:
             <ul>
-                <li><b>>=2.4</b> Kafka clusters can be updated directly.
+                <li><b>&gt;=2.4</b> Kafka clusters can be updated directly.
                     Zookeeper clusters which are running binaries bundled with Kafka versions 2.4 or above can be updated directly.</li>
-                <li><b><2.4</b> Kafka clusters first need to be updated to a version greater than 2.4 and smaller than 3.6.
+                <li><b>&lt;2.4</b> Kafka clusters first need to be updated to a version greater than 2.4 and smaller than 3.6.
                 Zookeeper clusters which are running binaries bundled with Kafka versions below 2.4 need to be updated to any
                 binaries bundled with Kafka versions greater than 2.4 and smaller than 3.6. You can then follow the first bullet-point.</li>
             </ul>
@@ -626,6 +732,10 @@
             has been added to data partitions to prevent hanging transactions. This feature is enabled by default and can be disabled by setting <code>transaction.partition.verification.enable</code> to false.
             The configuration can also be updated dynamically and is applied to the broker. Workloads running on version 3.6.0 with compression can experience
             InvalidRecordExceptions and UnknownServerExceptions. Upgrading to 3.6.1 or newer or disabling the feature fixes the issue.
+        </li>
+	<li>The <code>ByteBufferDeserializer</code> (<a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=225152035">KIP-863</a>)
+	    was changed to avoid unnecessary deep-copies of data. This changes the behavior of the deserializer as user code cannot make any assumptions
+	    about buffer position, limit, capacity any longer.
         </li>
     </ul>
 

@@ -105,9 +105,10 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
         final String aggregateName = new NamedInternal(named).orElseGenerateWithPrefix(builder, AGGREGATE_NAME);
         final StoreFactory storeFactory = new WindowStoreMaterializer<>(materializedInternal, windows, emitStrategy);
 
-        return aggregateBuilder.build(
+        return aggregateBuilder.buildWindowed(
             new NamedInternal(aggregateName),
-            storeFactory,
+            storeFactory.storeName(),
+            windows.gracePeriodMs(),
             new KStreamWindowAggregate<>(
                 windows,
                 storeFactory,
@@ -158,9 +159,10 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
         final String aggregateName = new NamedInternal(named).orElseGenerateWithPrefix(builder, AGGREGATE_NAME);
         final StoreFactory storeFactory = new WindowStoreMaterializer<>(materializedInternal, windows, emitStrategy);
 
-        return aggregateBuilder.build(
+        return aggregateBuilder.buildWindowed(
             new NamedInternal(aggregateName),
-            storeFactory,
+            storeFactory.storeName(),
+            windows.gracePeriodMs(),
             new KStreamWindowAggregate<>(
                 windows,
                 storeFactory,
@@ -210,9 +212,10 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
         final String reduceName = new NamedInternal(named).orElseGenerateWithPrefix(builder, REDUCE_NAME);
         final StoreFactory storeFactory = new WindowStoreMaterializer<>(materializedInternal, windows, emitStrategy);
 
-        return aggregateBuilder.build(
+        return aggregateBuilder.buildWindowed(
             new NamedInternal(reduceName),
-            storeFactory,
+            storeFactory.storeName(),
+            windows.gracePeriodMs(),
             new KStreamWindowAggregate<>(
                 windows,
                 storeFactory,

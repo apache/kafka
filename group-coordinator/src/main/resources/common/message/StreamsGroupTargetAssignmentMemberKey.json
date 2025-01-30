@@ -15,14 +15,15 @@
 
 // The streams rebalance protocol is in development. This schema is subject to non-backwards-compatible changes.
 {
-  "type": "data",
+  "apiKey": 21,
+  "type": "coordinator-key",
   "name": "StreamsGroupTargetAssignmentMemberKey",
-  "validVersions": "21",
+  "validVersions": "0",
   "flexibleVersions": "none",
   "fields": [
-    { "name": "GroupId", "type": "string", "versions": "21",
+    { "name": "GroupId", "type": "string", "versions": "0",
       "about": "The group ID." },
-    { "name": "MemberId", "type": "string", "versions": "21",
+    { "name": "MemberId", "type": "string", "versions": "0",
       "about": "The member ID." }
   ]
 }

@@ -97,6 +97,9 @@ class KafkaVersion(LooseVersion):
         # -> https://issues.apache.org/jira/browse/KAFKA-14646
         return hasattr(self, "version") and self >= V_3_4_0
 
+    def supports_feature_command(self):
+        return self >= V_3_8_0
+
 def get_version(node=None):
     """Return the version attached to the given node.
     Default to DEV_BRANCH if node or node.version is undefined (aka None)
@@ -109,6 +112,7 @@ def get_version(node=None):
 DEV_BRANCH = KafkaVersion("dev")
 DEV_VERSION = KafkaVersion("4.1.0-SNAPSHOT")
 
+LATEST_STABLE_TRANSACTION_VERSION = 2
 # This should match the LATEST_PRODUCTION version defined in MetadataVersion.java
 LATEST_STABLE_METADATA_VERSION = "4.0-IV0"
 

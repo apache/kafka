@@ -16,7 +16,7 @@
 {
   "apiKey": 65,
   "type": "request",
-  "listeners": ["zkBroker", "broker"],
+  "listeners": ["broker"],
   "name": "DescribeTransactionsRequest",
   "validVersions": "0",
   "flexibleVersions": "0+",

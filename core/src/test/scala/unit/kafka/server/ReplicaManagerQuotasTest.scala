@@ -30,6 +30,7 @@ import org.apache.kafka.common.requests.FetchRequest
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.metadata.LeaderRecoveryState
+import org.apache.kafka.server.common.KRaftVersion
 import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams}
 import org.apache.kafka.server.util.{KafkaScheduler, MockTime}
 import org.apache.kafka.storage.internals.log.{FetchDataInfo, LogConfig, LogDirFailureChannel, LogOffsetMetadata, LogOffsetSnapshot}
@@ -42,7 +43,7 @@ import org.mockito.{AdditionalMatchers, ArgumentMatchers}
 import scala.jdk.CollectionConverters._
 
 class ReplicaManagerQuotasTest {
-  val configs = TestUtils.createBrokerConfigs(2, TestUtils.MockZkConnect).map(KafkaConfig.fromProps(_, new Properties()))
+  val configs = TestUtils.createBrokerConfigs(2).map(KafkaConfig.fromProps(_, new Properties()))
   val time = new MockTime
   val metrics = new Metrics
   val record = new SimpleRecord("some-data-in-a-message".getBytes())
@@ -307,7 +308,7 @@ class ReplicaManagerQuotasTest {
       scheduler = scheduler,
       logManager = logManager,
       quotaManagers = quotaManager,
-      metadataCache = MetadataCache.zkMetadataCache(leaderBrokerId, configs.head.interBrokerProtocolVersion),
+      metadataCache = MetadataCache.kRaftMetadataCache(leaderBrokerId, () => KRaftVersion.KRAFT_VERSION_0),
       logDirFailureChannel = new LogDirFailureChannel(configs.head.logDirs.size),
       alterPartitionManager = alterIsrManager)
 

@@ -22,13 +22,6 @@ IF [%1] EQU [] (
 SetLocal
 IF ["%KAFKA_LOG4J_OPTS%"] EQU [""] (
     set KAFKA_LOG4J_OPTS=-Dlog4j2.configurationFile=%~dp0../../config/log4j2.yaml
-) ELSE (
-    echo %KAFKA_LOG4J_OPTS% | findstr /r /c:"log4j\.[^ ]*$" >nul
-    IF %ERRORLEVEL% == 0 (
-        echo DEPRECATED: A Log4j 1.x configuration file has been detected, which is no longer recommended.
-        echo To use a Log4j 2.x configuration, please see https://logging.apache.org/log4j/2.x/migrate-from-log4j1.html#Log4j2ConfigurationFormat for details about Log4j configuration file migration.
-        echo You can also use the %~dp0../../config/log4j2.yaml file as a starting point. Make sure to remove the Log4j 1.x configuration after completing the migration.
-    )
 )
 IF ["%KAFKA_HEAP_OPTS%"] EQU [""] (
     rem detect OS architecture
