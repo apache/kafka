@@ -67,16 +67,10 @@ public class ProduceRequest extends AbstractRequest {
 
         @Override
         public ProduceRequest build(short version) {
-            return build(version, true);
-        }
-
-        private ProduceRequest build(short version, boolean validate) {
-            if (validate) {
-                // Validate the given records first
-                data.topicData().forEach(tpd ->
-                        tpd.partitionData().forEach(partitionProduceData ->
-                                ProduceRequest.validateRecords(version, partitionProduceData.records())));
-            }
+            // Validate the given records first
+            data.topicData().forEach(tpd ->
+                tpd.partitionData().forEach(partitionProduceData ->
+                    ProduceRequest.validateRecords(version, partitionProduceData.records())));
             return new ProduceRequest(data, version);
         }
 
