@@ -145,8 +145,12 @@ class ControllerMutationQuotaManagerTest extends BaseClientQuotaManagerTest {
   @Test
   def testControllerMutationQuotaViolation(): Unit = {
     withQuotaManager { quotaManager =>
-      quotaManager.updateQuota(Some(User), Some(ClientId), Some(ClientId),
-        Some(Quota.upperBound(10)))
+      quotaManager.updateQuota(
+        Some(User).map(s => ClientQuotaManager.UserEntity(s)), 
+        Some(ClientId), 
+        Some(ClientId),
+        Some(Quota.upperBound(10))
+      )
       val queueSizeMetric = metrics.metrics().get(
         metrics.metricName("queue-size", QuotaType.CONTROLLER_MUTATION.toString, ""))
 
@@ -204,8 +208,12 @@ class ControllerMutationQuotaManagerTest extends BaseClientQuotaManagerTest {
   @Test
   def testNewStrictQuotaForReturnsStrictQuotaWhenQuotaIsEnabled(): Unit = {
     withQuotaManager { quotaManager =>
-      quotaManager.updateQuota(Some(User), Some(ClientId), Some(ClientId),
-        Some(Quota.upperBound(10)))
+      quotaManager.updateQuota(
+        Some(User).map(s => ClientQuotaManager.UserEntity(s)), 
+        Some(ClientId), 
+        Some(ClientId),
+        Some(Quota.upperBound(10))
+      )
       val quota = quotaManager.newStrictQuotaFor(buildSession(User), ClientId)
       assertTrue(quota.isInstanceOf[StrictControllerMutationQuota])
 
@@ -223,8 +231,12 @@ class ControllerMutationQuotaManagerTest extends BaseClientQuotaManagerTest {
   @Test
   def testNewPermissiveQuotaForReturnsStrictQuotaWhenQuotaIsEnabled(): Unit = {
     withQuotaManager { quotaManager =>
-      quotaManager.updateQuota(Some(User), Some(ClientId), Some(ClientId),
-        Some(Quota.upperBound(10)))
+      quotaManager.updateQuota(
+        Some(User).map(s => ClientQuotaManager.UserEntity(s)), 
+        Some(ClientId), 
+        Some(ClientId),
+        Some(Quota.upperBound(10))
+      )
       val quota = quotaManager.newPermissiveQuotaFor(buildSession(User), ClientId)
       assertTrue(quota.isInstanceOf[PermissiveControllerMutationQuota])
     }

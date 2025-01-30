@@ -29,7 +29,7 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.metrics.stats.{Avg, CumulativeSum, Rate}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{Sanitizer, Time}
-import org.apache.kafka.server.config.{ClientQuotaManagerConfig, ZooKeeperInternals}
+import org.apache.kafka.server.config.ClientQuotaManagerConfig
 import org.apache.kafka.server.quota.{ClientQuotaCallback, ClientQuotaEntity, ClientQuotaType, QuotaType, QuotaUtils, SensorAccess, ThrottleCallback, ThrottledChannel}
 import org.apache.kafka.server.util.ShutdownableThread
 import org.apache.kafka.network.Session
@@ -55,7 +55,7 @@ object QuotaTypes {
 object ClientQuotaManager {
   // Purge sensors after 1 hour of inactivity
   val InactiveSensorExpirationTimeSeconds = 3600
-
+  val DefaultString = "<default>"
   val DefaultClientIdQuotaEntity: KafkaQuotaEntity = KafkaQuotaEntity(None, Some(DefaultClientIdEntity))
   val DefaultUserQuotaEntity: KafkaQuotaEntity = KafkaQuotaEntity(Some(DefaultUserEntity), None)
   val DefaultUserClientIdQuotaEntity: KafkaQuotaEntity = KafkaQuotaEntity(Some(DefaultUserEntity), Some(DefaultClientIdEntity))
@@ -76,13 +76,13 @@ object ClientQuotaManager {
 
   case object DefaultUserEntity extends BaseUserEntity {
     override def entityType: ClientQuotaEntity.ConfigEntityType = ClientQuotaEntity.ConfigEntityType.DEFAULT_USER
-    override def name: String = ZooKeeperInternals.DEFAULT_STRING
+    override def name: String = DefaultString
     override def toString: String = "default user"
   }
 
   case object DefaultClientIdEntity extends ClientQuotaEntity.ConfigEntity {
     override def entityType: ClientQuotaEntity.ConfigEntityType = ClientQuotaEntity.ConfigEntityType.DEFAULT_CLIENT_ID
-    override def name: String = ZooKeeperInternals.DEFAULT_STRING
+    override def name: String = DefaultString
     override def toString: String = "default client-id"
   }
 
@@ -93,7 +93,7 @@ object ClientQuotaManager {
 
     def sanitizedUser: String = userEntity.map {
       case entity: UserEntity => entity.sanitizedUser
-      case DefaultUserEntity => ZooKeeperInternals.DEFAULT_STRING
+      case DefaultUserEntity => DefaultString
     }.getOrElse("")
 
     def clientId: String = clientIdEntity.map(_.name).getOrElse("")
@@ -408,7 +408,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
    * @param sanitizedClientId sanitized client ID to override if quota applies to <client-id> or <user, client-id>
    * @param quota             custom quota to apply or None if quota override is being removed
    */
-  def updateQuota(sanitizedUser: Option[String], clientId: Option[String], sanitizedClientId: Option[String], quota: Option[Quota]): Unit = {
+  def updateQuota(sanitizedUser: Option[BaseUserEntity], clientId: Option[String], sanitizedClientId: Option[String], quota: Option[Quota]): Unit = {
     /*
      * Acquire the write lock to apply changes in the quota objects.
      * This method changes the quota in the overriddenQuota map and applies the update on the actual KafkaMetric object (if it exists).
@@ -418,12 +418,10 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
      */
     lock.writeLock().lock()
     try {
-      val userEntity = sanitizedUser.map {
-        case ZooKeeperInternals.DEFAULT_STRING => DefaultUserEntity
-        case user => UserEntity(user)
-      }
+      val userEntity = getOrDefaultUser(sanitizedUser)
+      
       val clientIdEntity = sanitizedClientId.map {
-        case ZooKeeperInternals.DEFAULT_STRING => DefaultClientIdEntity
+        case DefaultString => DefaultClientIdEntity
         case _ => ClientIdEntity(clientId.getOrElse(throw new IllegalStateException("Client-id not provided")))
       }
       val quotaEntity = KafkaQuotaEntity(userEntity, clientIdEntity)
@@ -449,6 +447,13 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
     } finally {
       lock.writeLock().unlock()
     }
+  }
+
+  private def getOrDefaultUser(sanitizedUser: Option[BaseUserEntity]): Option[BaseUserEntity] = {
+    if (sanitizedUser.nonEmpty && sanitizedUser.get.name() == DefaultString)
+      Some(DefaultUserEntity)
+    else
+      sanitizedUser
   }
 
   /**

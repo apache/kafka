@@ -28,7 +28,7 @@ import org.apache.kafka.common.internals.KafkaFutureImpl
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter, ClientQuotaFilterComponent}
 import org.apache.kafka.common.requests.{AlterClientQuotasRequest, AlterClientQuotasResponse, DescribeClientQuotasRequest, DescribeClientQuotasResponse}
 import org.apache.kafka.common.test.ClusterInstance
-import org.apache.kafka.server.config.{QuotaConfig, ZooKeeperInternals}
+import org.apache.kafka.server.config.QuotaConfig
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Disabled
 
@@ -521,7 +521,7 @@ class ClientQuotasRequestTest(cluster: ClusterInstance) {
   def testClientQuotasWithDefaultName(): Unit = {
     // An entity using the name associated with the default entity name. The entity's name should be sanitized so
     // that it does not conflict with the default entity name.
-    val entity = new ClientQuotaEntity(Map(ClientQuotaEntity.CLIENT_ID -> ZooKeeperInternals.DEFAULT_STRING).asJava)
+    val entity = new ClientQuotaEntity(Map(ClientQuotaEntity.CLIENT_ID -> ClientQuotaManager.DefaultString).asJava)
     alterEntityQuotas(entity, Map(QuotaConfig.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG -> Some(20000.0)), validateOnly = false)
     verifyDescribeEntityQuotas(entity, Map(QuotaConfig.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG -> 20000.0))
 
