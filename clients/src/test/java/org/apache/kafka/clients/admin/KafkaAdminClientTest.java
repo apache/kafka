@@ -1788,7 +1788,10 @@ public class KafkaAdminClientTest {
     public void testAdminClientApisAuthenticationFailure() {
         Cluster cluster = mockBootstrapCluster();
         try (final AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(Time.SYSTEM, cluster,
-                newStrMap(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "1000"))) {
+                newStrMap(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "1000",
+                    // Default "metadata.recovery.strategy" is rebootstrap. If it meets "retry.backoff.ms" (default is 100L),
+                    // following assertion will fail. Set it to none to avoid authentication error cleanup.
+                    AdminClientConfig.METADATA_RECOVERY_STRATEGY_CONFIG, "none"))) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
             env.kafkaClient().createPendingAuthenticationError(cluster.nodes().get(0),
                     TimeUnit.DAYS.toMillis(1));
