@@ -16,9 +16,11 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TestInputTopic;
@@ -45,7 +47,13 @@ import java.util.Properties;
 import java.util.Random;
 import java.util.Set;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.hamcrest.CoreMatchers.hasItem;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class KStreamKTableLeftJoinTest {
     private static final KeyValueTimestamp[] EMPTY = new KeyValueTimestamp[0];
@@ -199,4 +207,65 @@ public class KStreamKTableLeftJoinTest {
                 new KeyValueTimestamp<>(3, "XX3+Y3", 3));
     }
 
+    @Test
+    public void shouldNotDropLeftNullKey() {
+        // push all four items to the table. this should not produce any item.
+        pushToTable(1, "Y");
+        processor.checkAndClearProcessResult(EMPTY);
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KStreamKTableJoin.class)) {
+            final TestInputTopic<Integer, String> inputTopic =
+                driver.createInputTopic(streamTopic, new IntegerSerializer(), new StringSerializer());
+            inputTopic.pipeInput(null, "A", 0);
+
+            processor.checkAndClearProcessResult(new KeyValueTimestamp<>(null, "A+null", 0));
+
+            assertTrue(appender.getMessages().isEmpty());
+        }
+
+        assertThat(
+            driver.metrics().get(
+                    new MetricName(
+                        "dropped-records-total",
+                        "stream-task-metrics",
+                        "",
+                        mkMap(
+                            mkEntry("thread-id", "main"),
+                            mkEntry("task-id", "0_0")
+                        )
+                    ))
+                .metricValue(),
+            is(0.0)
+        );
+    }
+
+    @Test
+    public void shouldLogAndMeterWhenSkippingNullLeftValue() {
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KStreamKTableJoin.class)) {
+            final TestInputTopic<Integer, String> inputTopic =
+                driver.createInputTopic(streamTopic, new IntegerSerializer(), new StringSerializer());
+            inputTopic.pipeInput(1, null);
+
+            assertThat(
+                appender.getMessages(),
+                hasItem("Skipping record due to null join key or value. topic=[streamTopic] partition=[0] "
+                    + "offset=[0]")
+            );
+        }
+
+        assertThat(
+            driver.metrics().get(
+                    new MetricName(
+                        "dropped-records-total",
+                        "stream-task-metrics",
+                        "",
+                        mkMap(
+                            mkEntry("thread-id", "main"),
+                            mkEntry("task-id", "0_0")
+                        )
+                    ))
+                .metricValue(),
+            is(1.0)
+        );
+    }
 }
