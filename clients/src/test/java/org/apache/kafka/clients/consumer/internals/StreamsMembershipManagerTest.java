@@ -1458,6 +1458,28 @@ public class StreamsMembershipManagerTest {
         assertEquals(StreamsGroupHeartbeatRequest.JOIN_GROUP_MEMBER_EPOCH, membershipManager.memberEpoch());
     }
 
+    @Test
+    public void testForDuplicateRegistrationOfSameStateListener() {
+        final MemberStateListener listener1 = new MemberStateListener() {
+
+            @Override
+            public void onMemberEpochUpdated(Optional<Integer> memberEpoch, String memberId) {
+            }
+        };
+        final MemberStateListener listener2 = new MemberStateListener() {
+
+            @Override
+            public void onMemberEpochUpdated(Optional<Integer> memberEpoch, String memberId) {
+            }
+        };
+
+        membershipManager.registerStateListener(listener1);
+        membershipManager.registerStateListener(listener2);
+        final Exception exception =
+            assertThrows(IllegalArgumentException.class, () -> membershipManager.registerStateListener(listener1));
+        assertEquals("Listener is already registered.", exception.getMessage());
+    }
+
     private void verifyThatNoTasksHaveBeenRevoked() {
         verify(streamsRebalanceEventsProcessor, never()).requestOnTasksRevokedCallbackInvocation(any());
         verify(subscriptionState, never()).markPendingRevocation(any());

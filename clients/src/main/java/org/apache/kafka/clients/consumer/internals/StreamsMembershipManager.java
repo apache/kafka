@@ -354,7 +354,13 @@ public class StreamsMembershipManager implements RequestManager {
      * @param listener Listener to invoke.
      */
     public void registerStateListener(MemberStateListener listener) {
-        stateUpdatesListeners.add(Objects.requireNonNull(listener, "State updates listener cannot be null"));
+        Objects.requireNonNull(listener, "State updates listener cannot be null");
+        for (MemberStateListener registeredListener : stateUpdatesListeners) {
+            if (registeredListener == listener) {
+                throw new IllegalArgumentException("Listener is already registered.");
+            }
+        }
+        stateUpdatesListeners.add(listener);
     }
 
     /**
