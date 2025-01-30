@@ -347,8 +347,9 @@ public class KafkaStreams implements AutoCloseable {
             } else if (state == State.REBALANCING && newState == State.REBALANCING) {
                 // when the state is already in REBALANCING, it should not transit to REBALANCING again
                 return false;
-            } else if (state == State.ERROR && (newState == State.PENDING_ERROR || newState == State.ERROR)) {
-                // when the state is already in ERROR, its transition to PENDING_ERROR or ERROR (due to consecutive close calls)
+            } else if (state == State.ERROR && (newState == State.PENDING_ERROR || newState == State.ERROR || newState == State.PENDING_SHUTDOWN)) {
+                // when the state is already in ERROR, its transition attempts to PENDING_SHUTDOWN, PENDING_ERROR or ERROR will
+                // not throw an exception.
                 return false;
             } else if (state == State.PENDING_ERROR && newState != State.ERROR) {
                 // when the state is already in PENDING_ERROR, all other transitions than ERROR (due to thread dying) will be
@@ -1543,26 +1544,28 @@ public class KafkaStreams implements AutoCloseable {
             timeoutMs = Long.MAX_VALUE;
         }
 
-        if (state.hasCompletedShutdown()) {
-            log.info("Streams client is already in the terminal {} state, all resources are closed and the client has stopped.", state);
-            return true;
-        }
-        if (state.isShuttingDown()) {
-            log.info("Streams client is in {}, all resources are being closed and the client will be stopped.", state);
-            if (state == State.PENDING_ERROR && waitOnState(State.ERROR, timeoutMs)) {
-                log.info("Streams client stopped to ERROR completely");
-                return true;
-            } else if (state == State.PENDING_SHUTDOWN && waitOnState(State.NOT_RUNNING, timeoutMs)) {
-                log.info("Streams client stopped to NOT_RUNNING completely");
-                return true;
-            } else {
-                log.warn("Streams client cannot transition to {} completely within the timeout",
-                         state == State.PENDING_SHUTDOWN ? State.NOT_RUNNING : State.ERROR);
-                return false;
-            }
-        }
-
         if (!setState(State.PENDING_SHUTDOWN)) {
+
+            if (state.isShuttingDown()) {
+                log.info("Streams client is in {}, all resources are being closed and the client will be stopped.", state);
+                if (state == State.PENDING_ERROR && waitOnState(State.ERROR, timeoutMs)) {
+                    log.info("Streams client stopped to ERROR completely");
+                    return true;
+                } else if (state == State.PENDING_SHUTDOWN && waitOnState(State.NOT_RUNNING, timeoutMs)) {
+                    log.info("Streams client stopped to NOT_RUNNING completely");
+                    return true;
+                } else {
+                    log.warn("Streams client cannot transition to {} completely within the timeout",
+                        state == State.PENDING_SHUTDOWN ? State.NOT_RUNNING : State.ERROR);
+                    return false;
+                }
+            }
+
+            if (state.hasCompletedShutdown()) {
+                log.info("Streams client is already in the terminal {} state, all resources are closed and the client has stopped.", state);
+                return true;
+            }
+
             // if we can't transition to PENDING_SHUTDOWN but not because we're already shutting down, then it must be fatal
             log.error("Failed to transition to PENDING_SHUTDOWN, current state is {}", state);
             throw new StreamsException("Failed to shut down while in state " + state);
