@@ -51,13 +51,11 @@ public class ShareCoordinatorRecordHelpersTest {
                 .build()
         );
 
-        CoordinatorRecord expectedRecord = new CoordinatorRecord(
-            new ApiMessageAndVersion(
-                new ShareSnapshotKey()
-                    .setGroupId(groupId)
-                    .setTopicId(topicId)
-                    .setPartition(partitionId),
-                (short) 0),
+        CoordinatorRecord expectedRecord = CoordinatorRecord.record(
+            new ShareSnapshotKey()
+                .setGroupId(groupId)
+                .setTopicId(topicId)
+                .setPartition(partitionId),
             new ApiMessageAndVersion(
                 new ShareSnapshotValue()
                     .setSnapshotEpoch(0)
@@ -94,13 +92,11 @@ public class ShareCoordinatorRecordHelpersTest {
                 .build()
         );
 
-        CoordinatorRecord expectedRecord = new CoordinatorRecord(
-            new ApiMessageAndVersion(
-                new ShareUpdateKey()
-                    .setGroupId(groupId)
-                    .setTopicId(topicId)
-                    .setPartition(partitionId),
-                (short) 1),
+        CoordinatorRecord expectedRecord = CoordinatorRecord.record(
+            new ShareUpdateKey()
+                .setGroupId(groupId)
+                .setTopicId(topicId)
+                .setPartition(partitionId),
             new ApiMessageAndVersion(
                 new ShareUpdateValue()
                     .setSnapshotEpoch(0)
@@ -113,6 +109,27 @@ public class ShareCoordinatorRecordHelpersTest {
                             .setDeliveryState((byte) 0)
                             .setDeliveryCount((short) 1))),
                 (short) 0));
+
+        assertEquals(expectedRecord, record);
+    }
+
+    @Test
+    public void testNewShareStateTombstoneRecord() {
+        String groupId = "test-group";
+        Uuid topicId = Uuid.randomUuid();
+        int partitionId = 1;
+        CoordinatorRecord record = ShareCoordinatorRecordHelpers.newShareStateTombstoneRecord(
+            groupId,
+            topicId,
+            partitionId
+        );
+
+        CoordinatorRecord expectedRecord = CoordinatorRecord.tombstone(
+            new ShareSnapshotKey()
+                .setGroupId(groupId)
+                .setTopicId(topicId)
+                .setPartition(partitionId)
+        );
 
         assertEquals(expectedRecord, record);
     }

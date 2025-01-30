@@ -21,14 +21,16 @@ import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.message.ShareFetchResponseData.PartitionData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.server.storage.log.FetchParams;
+import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.stream.Collectors;
 
 /**
  * The ShareFetch class is used to store the fetch parameters for a share fetch request.
@@ -55,7 +57,7 @@ public class ShareFetch {
     /**
      * The maximum number of bytes that can be fetched for each partition.
      */
-    private final Map<TopicIdPartition, Integer> partitionMaxBytes;
+    private final LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes;
     /**
      * The batch size of the fetch request.
      */
@@ -64,6 +66,11 @@ public class ShareFetch {
      * The maximum number of records that can be fetched for the request.
      */
     private final int maxFetchRecords;
+    /**
+     * The handler to update the failed share fetch metrics.
+     */
+    private final BrokerTopicStats brokerTopicStats;
+
     /**
      * The partitions that had an error during the fetch.
      */
@@ -74,9 +81,10 @@ public class ShareFetch {
         String groupId,
         String memberId,
         CompletableFuture<Map<TopicIdPartition, PartitionData>> future,
-        Map<TopicIdPartition, Integer> partitionMaxBytes,
+        LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes,
         int batchSize,
-        int maxFetchRecords
+        int maxFetchRecords,
+        BrokerTopicStats brokerTopicStats
     ) {
         this.fetchParams = fetchParams;
         this.groupId = groupId;
@@ -85,6 +93,7 @@ public class ShareFetch {
         this.partitionMaxBytes = partitionMaxBytes;
         this.batchSize = batchSize;
         this.maxFetchRecords = maxFetchRecords;
+        this.brokerTopicStats = brokerTopicStats;
     }
 
     public String groupId() {
@@ -95,7 +104,7 @@ public class ShareFetch {
         return memberId;
     }
 
-    public Map<TopicIdPartition, Integer> partitionMaxBytes() {
+    public LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes() {
         return partitionMaxBytes;
     }
 
@@ -174,10 +183,9 @@ public class ShareFetch {
         if (isCompleted()) {
             return;
         }
-        Map<TopicIdPartition, PartitionData> response = topicIdPartitions.stream().collect(
-            Collectors.toMap(tp -> tp, tp -> new PartitionData()
-                .setErrorCode(Errors.forException(throwable).code())
-                .setErrorMessage(throwable.getMessage())));
+        Map<TopicIdPartition, PartitionData> response = new HashMap<>();
+        // Add the exception to erroneous partitions to track the error.
+        topicIdPartitions.forEach(tp -> addErroneous(tp, throwable));
         // Add any erroneous partitions to the response.
         addErroneousToResponse(response);
         future.complete(response);
@@ -202,10 +210,18 @@ public class ShareFetch {
 
     private synchronized void addErroneousToResponse(Map<TopicIdPartition, PartitionData> response) {
         if (erroneous != null) {
+            // Track the failed topics for metrics.
+            Set<String> erroneousTopics = new HashSet<>();
             erroneous.forEach((topicIdPartition, throwable) -> {
+                erroneousTopics.add(topicIdPartition.topic());
                 response.put(topicIdPartition, new PartitionData()
+                    .setPartitionIndex(topicIdPartition.partition())
                     .setErrorCode(Errors.forException(throwable).code())
                     .setErrorMessage(throwable.getMessage()));
+            });
+            erroneousTopics.forEach(topic -> {
+                brokerTopicStats.allTopicsStats().failedShareFetchRequestRate().mark();
+                brokerTopicStats.topicStats(topic).failedShareFetchRequestRate().mark();
             });
         }
     }
