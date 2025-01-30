@@ -724,7 +724,7 @@ public interface KStream<K, V> {
      * accepting the record. Branching is a stateless record-by-record operation.
      * See {@link BranchedKStream} for a detailed description and usage example.
      *
-     * <p>Splitting a {@code KStream} guarantees, that each input record is sent to at most one result {@code KStream}.
+     * <p>Splitting a {@code KStream} guarantees that each input record is sent to at most one result {@code KStream}.
      * There is no operator for broadcasting/multicasting records into multiple result {@code KStream}.
      * If you want to broadcast records, you can apply multiple downstream operators to the same {@code KStream}
      * instance:
