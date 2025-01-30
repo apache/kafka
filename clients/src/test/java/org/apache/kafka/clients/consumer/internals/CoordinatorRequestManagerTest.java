@@ -18,9 +18,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
-import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.common.Node;
-import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -35,6 +33,8 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.util.Collections;
 import java.util.List;
@@ -49,9 +49,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 public class CoordinatorRequestManagerTest {
@@ -191,22 +189,9 @@ public class CoordinatorRequestManagerTest {
     }
 
     @Test
-    public void testPropagateAndBackoffAfterFatalError() {
+    public void testBackoffAfterFatalError() {
         CoordinatorRequestManager coordinatorManager = setupCoordinatorManager(GROUP_ID);
         expectFindCoordinatorRequest(coordinatorManager, Errors.GROUP_AUTHORIZATION_FAILED);
-
-        verify(backgroundEventHandler).add(argThat(backgroundEvent -> {
-            if (!(backgroundEvent instanceof ErrorEvent))
-                return false;
-
-            RuntimeException exception = ((ErrorEvent) backgroundEvent).error();
-
-            if (!(exception instanceof GroupAuthorizationException))
-                return false;
-
-            GroupAuthorizationException groupAuthException = (GroupAuthorizationException) exception;
-            return groupAuthException.groupId().equals(GROUP_ID);
-        }));
 
         time.sleep(RETRY_BACKOFF_MS - 1);
         assertEquals(Collections.emptyList(), coordinatorManager.poll(time.milliseconds()).unsentRequests);
@@ -254,19 +239,20 @@ public class CoordinatorRequestManagerTest {
         assertEquals(1, res2.unsentRequests.size());
     }
 
-    @Test
-    public void testSignalOnClose() {
+    @ParameterizedTest
+    @EnumSource(value = Errors.class, names = {"NONE", "COORDINATOR_NOT_AVAILABLE"})
+    public void testClearFatalErrorWhenReceivingSuccessfulResponse(Errors error) {
         CoordinatorRequestManager coordinatorManager = setupCoordinatorManager(GROUP_ID);
-        expectFindCoordinatorRequest(coordinatorManager, Errors.NONE);
-        assertTrue(coordinatorManager.coordinator().isPresent());
-        coordinatorManager.markCoordinatorUnknown("coordinator changed", time.milliseconds());
-        assertEquals(Collections.emptyList(), coordinatorManager.poll(time.milliseconds()).unsentRequests);
-        coordinatorManager.signalClose();
-        time.sleep(RETRY_BACKOFF_MS - 1);
-        assertEquals(Collections.emptyList(), coordinatorManager.poll(time.milliseconds()).unsentRequests);
+        expectFindCoordinatorRequest(coordinatorManager, Errors.GROUP_AUTHORIZATION_FAILED);
+        assertTrue(coordinatorManager.fatalError().isPresent());
+
         time.sleep(RETRY_BACKOFF_MS);
-        assertEquals(Collections.emptyList(), coordinatorManager.poll(time.milliseconds()).unsentRequests,
-            "Should not generate find coordinator request during close");
+        // there are no successful responses, so the fatal error should persist
+        assertTrue(coordinatorManager.fatalError().isPresent());
+
+        // receiving a successful response should clear the fatal error
+        expectFindCoordinatorRequest(coordinatorManager, error);
+        assertTrue(coordinatorManager.fatalError().isEmpty());
     }
 
     private void expectFindCoordinatorRequest(
@@ -288,7 +274,6 @@ public class CoordinatorRequestManagerTest {
             new LogContext(),
             RETRY_BACKOFF_MS,
             RETRY_BACKOFF_MS,
-            this.backgroundEventHandler,
             groupId
         );
     }
