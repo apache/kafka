@@ -73,6 +73,7 @@ import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.Snapshots;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
+
 import org.mockito.Mockito;
 
 import java.io.ByteArrayOutputStream;
