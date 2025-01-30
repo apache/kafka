@@ -636,7 +636,7 @@ public interface KStream<K, V> {
                                       final Named named);
 
     /**
-     * Print the records of this KStream using the options provided by {@link Printed}
+     * Print the records of this {@code KStream} using the options provided by {@link Printed}.
      * Note that this is mainly for debugging/testing purposes, and it will try to flush on each record print.
      * It <em>SHOULD NOT</em> be used for production usage if performance requirements are concerned.
      *
@@ -645,107 +645,114 @@ public interface KStream<K, V> {
     void print(final Printed<K, V> printed);
 
     /**
-     * Perform an action on each record of {@code KStream}.
-     * This is a stateless record-by-record operation (cf. {@link #process(ProcessorSupplier, String...)}).
-     * Note that this is a terminal operation that returns void.
+     * Perform an action on each record of this {@code KStream}.
+     * This is a stateless record-by-record operation (cf. {@link #process(ProcessorSupplier, String...)} for
+     * stateful record processing).
      *
-     * @param action an action to perform on each record
-     * @see #process(ProcessorSupplier, String...)
+     * <p>{@code Foreach} is a terminal operation that may triggers side effects (such as logging or statistics
+     * collection) and returns {@code void} (cf. {@link #peek(ForeachAction)}).
+     *
+     * <p>Note that this operation may execute multiple times for a single record in failure cases,
+     * and it is <em>not</em> guarded by "exactly-once processing guarantees".
+     *
+     * @param action
+     *        an action to perform on each record
      */
     void foreach(final ForeachAction<? super K, ? super V> action);
 
     /**
-     * Perform an action on each record of {@code KStream}.
-     * This is a stateless record-by-record operation (cf. {@link #process(ProcessorSupplier, String...)}).
-     * Note that this is a terminal operation that returns void.
+     * See {@link #foreach(ForeachAction)}.
      *
-     * @param action an action to perform on each record
-     * @param named  a {@link Named} config used to name the processor in the topology
-     * @see #process(ProcessorSupplier, String...)
+     * <p>Takes an additional {@link Named} parameter that is used to name the processor in the topology.
      */
     void foreach(final ForeachAction<? super K, ? super V> action, final Named named);
 
     /**
-     * Perform an action on each record of {@code KStream}.
-     * This is a stateless record-by-record operation (cf. {@link #process(ProcessorSupplier, String...)}).
-     * <p>
-     * Peek is a non-terminal operation that triggers a side effect (such as logging or statistics collection)
-     * and returns an unchanged stream.
-     * <p>
-     * Note that since this operation is stateless, it may execute multiple times for a single record in failure cases.
+     * Perform an action on each record of this {@code KStream}.
+     * This is a stateless record-by-record operation (cf. {@link #process(ProcessorSupplier, String...)} for
+     * stateful record processing).
      *
-     * @param action an action to perform on each record
-     * @see #process(ProcessorSupplier, String...)
-     * @return itself
+     * <p>{@code Peek} is a non-terminal operation that may triggers side effects (such as logging or statistics
+     * collection) and returns an unchanged {@code KStream} (cf. {@link #foreach(ForeachAction)}).
+     *
+     * <p>Note that this operation may execute multiple times for a single record in failure cases,
+     * and it is <em>not</em> guarded by "exactly-once processing guarantees".
+     *
+     * @param action
+     *        an action to perform on each record
+     *
+     * @return An unmodified {@code KStream}.
      */
     KStream<K, V> peek(final ForeachAction<? super K, ? super V> action);
 
     /**
-     * Perform an action on each record of {@code KStream}.
-     * This is a stateless record-by-record operation (cf. {@link #process(ProcessorSupplier, String...)}).
-     * <p>
-     * Peek is a non-terminal operation that triggers a side effect (such as logging or statistics collection)
-     * and returns an unchanged stream.
-     * <p>
-     * Note that since this operation is stateless, it may execute multiple times for a single record in failure cases.
+     * See {@link #peek(ForeachAction)}.
      *
-     * @param action an action to perform on each record
-     * @param named  a {@link Named} config used to name the processor in the topology
-     * @see #process(ProcessorSupplier, String...)
-     * @return itself
+     * <p>Takes an additional {@link Named} parameter that is used to name the processor in the topology.
      */
     KStream<K, V> peek(final ForeachAction<? super K, ? super V> action, final Named named);
 
     /**
-     * Split this stream into different branches. The returned {@link BranchedKStream} instance can be used for routing
-     * the records to different branches depending on evaluation against the supplied predicates. Records are evaluated against the
-     * predicates in the order they are provided with the first matching predicate accepting the record.
-     * <p>
-     *     Note: Stream branching is a stateless record-by-record operation.
-     *     Please check {@link BranchedKStream} for detailed description and usage example
+     * Split this {@code KStream} into different branches. The returned {@link BranchedKStream} instance can be used
+     * for routing the records to different branches depending on evaluation against the supplied predicates.
+     * Records are evaluated against the predicates in the order they are provided with the first matching predicate
+     * accepting the record. Branching is a stateless record-by-record operation.
+     * See {@link BranchedKStream} for a detailed description and usage example.
      *
-     * @return {@link BranchedKStream} that provides methods for routing the records to different branches.
+     * <p>Splitting a {@code KStream} guarantees that each input record is sent to at most one result {@code KStream}.
+     * There is no operator for broadcasting/multicasting records into multiple result {@code KStream}.
+     * If you want to broadcast records, you can apply multiple downstream operators to the same {@code KStream}
+     * instance:
+     * <pre>{@code
+     * // Broadcasting: every record of `stream` is sent to all three operators for processing
+     * KStream<...> stream1 = stream.map(...);
+     * KStream<...> stream2 = stream.mapValue(...);
+     * KStream<...> stream3 = stream.flatMap(...);
+     * }</pre>
+     *
+     * Multicasting can be achieved with broadcasting into multiple filter operations:
+     * <pre>{@code
+     * // Multicasting: every record of `stream` is sent to all three filters, and thus, may be part of
+     * // multiple result streams, `stream1`, `stream2`, and/or `stream3`
+     * KStream<...> stream1 = stream.filter(predicate1);
+     * KStream<...> stream2 = stream.filter(predicate2);
+     * KStream<...> stream3 = stream.filter(predicate3);
+     * }</pre>
+     *
+     * @return A {@link BranchedKStream} that provides methods for routing the records to different branches.
+     *
+     * @see #merge(KStream)
      */
     BranchedKStream<K, V> split();
 
     /**
-     * Split this stream into different branches. The returned {@link BranchedKStream} instance can be used for routing
-     * the records to different branches depending on evaluation against the supplied predicates. Records are evaluated against the
-     * predicates in the order they are provided with the first matching predicate accepting the record.
-     * <p>
-     *     Note: Stream branching is a stateless record-by-record operation.
-     *     Please check {@link BranchedKStream} for detailed description and usage example
+     * See {@link #split()}.
      *
-     * @param named  a {@link Named} config used to name the processor in the topology and also to set the name prefix
-     *               for the resulting branches (see {@link BranchedKStream})
-     * @return {@link BranchedKStream} that provides methods for routing the records to different branches.
+     * <p>Takes an additional {@link Named} parameter that is used to name the processor in the topology.
      */
     BranchedKStream<K, V> split(final Named named);
 
     /**
-     * Merge this stream and the given stream into one larger stream.
-     * <p>
-     * There is no ordering guarantee between records from this {@code KStream} and records from
+     * Merge this {@code KStream} and the given {@code KStream}.
+     *
+     * <p>There is no ordering guarantee between records from this {@code KStream} and records from
      * the provided {@code KStream} in the merged stream.
-     * Relative order is preserved within each input stream though (ie, records within one input
+     * Relative order is preserved within each input stream though (i.e., records within one input
      * stream are processed in order).
      *
-     * @param stream a stream which is to be merged into this stream
-     * @return a merged stream containing all records from this and the provided {@code KStream}
+     * @param stream
+     *        a stream which is to be merged into this stream
+     *
+     * @return A merged stream containing all records from this and the provided {@code KStream}
+     *
+     * @see #split()
      */
     KStream<K, V> merge(final KStream<K, V> stream);
 
     /**
-     * Merge this stream and the given stream into one larger stream.
-     * <p>
-     * There is no ordering guarantee between records from this {@code KStream} and records from
-     * the provided {@code KStream} in the merged stream.
-     * Relative order is preserved within each input stream though (ie, records within one input
-     * stream are processed in order).
+     * See {@link #merge(KStream)}.
      *
-     * @param stream a stream which is to be merged into this stream
-     * @param named  a {@link Named} config used to name the processor in the topology
-     * @return a merged stream containing all records from this and the provided {@code KStream}
+     * <p>Takes an additional {@link Named} parameter that is used to name the processor in the topology.
      */
     KStream<K, V> merge(final KStream<K, V> stream, final Named named);
 
