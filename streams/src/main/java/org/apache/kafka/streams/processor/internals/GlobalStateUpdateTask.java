@@ -96,6 +96,7 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
         }
         initTopology();
         processorContext.initialize();
+        this.flushState();
         lastFlush = time.milliseconds();
         return stateMgr.changelogOffsets();
     }
@@ -138,6 +139,7 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
     }
 
     public void close(final boolean wipeStateStore) throws IOException {
+        this.flushState();
         stateMgr.close();
         if (wipeStateStore) {
             try {
