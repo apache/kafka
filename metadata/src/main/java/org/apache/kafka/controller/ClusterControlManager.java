@@ -90,7 +90,7 @@ public class ClusterControlManager {
         private long sessionTimeoutNs = DEFAULT_SESSION_TIMEOUT_NS;
         private ReplicaPlacer replicaPlacer = null;
         private FeatureControlManager featureControl = null;
-        private BrokerUncleanShutdownHandler brokerUncleanShutdownHandler = null;
+        private BrokerShutdownHandler brokerShutdownHandler = null;
         private String interBrokerListenerName = "PLAINTEXT";
 
         Builder setLogContext(LogContext logContext) {
@@ -128,8 +128,8 @@ public class ClusterControlManager {
             return this;
         }
 
-        Builder setBrokerUncleanShutdownHandler(BrokerUncleanShutdownHandler brokerUncleanShutdownHandler) {
-            this.brokerUncleanShutdownHandler = brokerUncleanShutdownHandler;
+        Builder setBrokerShutdownHandler(BrokerShutdownHandler brokerShutdownHandler) {
+            this.brokerShutdownHandler = brokerShutdownHandler;
             return this;
         }
 
@@ -154,8 +154,8 @@ public class ClusterControlManager {
             if (featureControl == null) {
                 throw new RuntimeException("You must specify FeatureControlManager");
             }
-            if (brokerUncleanShutdownHandler == null) {
-                throw new RuntimeException("You must specify BrokerUncleanShutdownHandler");
+            if (brokerShutdownHandler == null) {
+                throw new RuntimeException("You must specify BrokerShutdownHandler");
             }
             return new ClusterControlManager(logContext,
                 clusterId,
@@ -164,7 +164,7 @@ public class ClusterControlManager {
                 sessionTimeoutNs,
                 replicaPlacer,
                 featureControl,
-                brokerUncleanShutdownHandler,
+                brokerShutdownHandler,
                 interBrokerListenerName
             );
         }
@@ -252,7 +252,7 @@ public class ClusterControlManager {
      */
     private final FeatureControlManager featureControl;
 
-    private final BrokerUncleanShutdownHandler brokerUncleanShutdownHandler;
+    private final BrokerShutdownHandler brokerShutdownHandler;
 
     /**
      * The statically configured inter-broker listener name.
@@ -277,7 +277,7 @@ public class ClusterControlManager {
         long sessionTimeoutNs,
         ReplicaPlacer replicaPlacer,
         FeatureControlManager featureControl,
-        BrokerUncleanShutdownHandler brokerUncleanShutdownHandler,
+        BrokerShutdownHandler brokerShutdownHandler,
         String interBrokerListenerName
     ) {
         this.logContext = logContext;
@@ -293,7 +293,7 @@ public class ClusterControlManager {
         this.featureControl = featureControl;
         this.controllerRegistrations = new TimelineHashMap<>(snapshotRegistry, 0);
         this.directoryToBroker = new TimelineHashMap<>(snapshotRegistry, 0);
-        this.brokerUncleanShutdownHandler = brokerUncleanShutdownHandler;
+        this.brokerShutdownHandler = brokerShutdownHandler;
         this.interBrokerListenerName = interBrokerListenerName;
     }
 
@@ -425,17 +425,11 @@ public class ClusterControlManager {
             record.setLogDirs(request.logDirs());
         }
 
-        boolean isUncleanShutdownRegistration;
-        if (uncleanShutdownDetectionEnabled) {
-            isUncleanShutdownRegistration = storedBrokerEpoch != request.previousBrokerEpoch();
-        } else {
-            isUncleanShutdownRegistration = !request.incarnationId().equals(prevIncarnationId);
-        }
-        boolean isBrokerStartUp = !request.incarnationId().equals(prevIncarnationId);
-
-        if (isUncleanShutdownRegistration) {
+        if (!request.incarnationId().equals(prevIncarnationId)) {
             int prevNumRecords = records.size();
-            brokerUncleanShutdownHandler.addRecordsForShutdown(request.brokerId(), records);
+            boolean isCleanShutdown = uncleanShutdownDetectionEnabled ?
+                storedBrokerEpoch == request.previousBrokerEpoch() : false;
+            brokerShutdownHandler.addRecordsForShutdown(request.brokerId(), isCleanShutdown, records);
             int numRecordsAdded = records.size() - prevNumRecords;
             if (existing == null) {
                 log.info("No previous registration found for broker {}. New incarnation ID is " +
@@ -443,14 +437,9 @@ public class ClusterControlManager {
                         "epoch is {}.", brokerId, request.incarnationId(), numRecordsAdded, newBrokerEpoch);
             } else {
                 log.info("Registering a new incarnation of broker {}. Previous incarnation ID " +
-                        "was {}; new incarnation ID is {}. {}Generated {} record(s) to clean up " +
+                        "was {}; new incarnation ID is {}. Generated {} record(s) to clean up " +
                         "previous incarnations. Broker epoch will become {}.", brokerId,
-                        existing.incarnationId(), request.incarnationId(),
-                        uncleanShutdownDetectionEnabled ?
-                            "Using unclean shutdown detection. Stored broker epoch=" + storedBrokerEpoch +
-                                " vs request broker epoch=" + request.previousBrokerEpoch() + ". "
-                            : "",
-                        numRecordsAdded,
+                        existing.incarnationId(), request.incarnationId(), numRecordsAdded,
                         newBrokerEpoch);
             }
             record.setBrokerEpoch(newBrokerEpoch);
@@ -458,14 +447,13 @@ public class ClusterControlManager {
             log.info("Amending registration of broker {}, incarnation ID {}. Broker epoch remains {}.",
                     request.brokerId(), request.incarnationId(), existing.epoch());
             record.setFenced(existing.fenced());
-            record.setInControlledShutdown(isBrokerStartUp ? false : existing.inControlledShutdown());
+            record.setInControlledShutdown(existing.inControlledShutdown());
             record.setBrokerEpoch(existing.epoch());
-            record.setIncarnationId(request.incarnationId());
         }
         records.add(new ApiMessageAndVersion(record, featureControl.metadataVersion().
             registerBrokerRecordVersion()));
 
-        if (isUncleanShutdownRegistration) {
+        if (!request.incarnationId().equals(prevIncarnationId)) {
             // Remove any existing session for the old broker incarnation.
             heartbeatManager.remove(brokerId);
         }
@@ -864,7 +852,7 @@ public class ClusterControlManager {
     }
 
     @FunctionalInterface
-    interface BrokerUncleanShutdownHandler {
-        void addRecordsForShutdown(int brokerId, List<ApiMessageAndVersion> records);
+    interface BrokerShutdownHandler {
+        void addRecordsForShutdown(int brokerId, boolean isCleanShutdown, List<ApiMessageAndVersion> records);
     }
 }

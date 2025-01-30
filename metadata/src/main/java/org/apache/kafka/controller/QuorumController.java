@@ -1531,7 +1531,7 @@ public final class QuorumController implements Controller {
             setSessionTimeoutNs(sessionTimeoutNs).
             setReplicaPlacer(replicaPlacer).
             setFeatureControlManager(featureControl).
-            setBrokerUncleanShutdownHandler(this::handleUncleanBrokerShutdown).
+            setBrokerShutdownHandler(this::handleBrokerShutdown).
             setInterBrokerListenerName(interBrokerListenerName).
             build();
         this.producerIdControlManager = new ProducerIdControlManager.Builder().
@@ -2150,7 +2150,7 @@ public final class QuorumController implements Controller {
         return controllerMetrics;
     }
 
-    void handleUncleanBrokerShutdown(int brokerId, List<ApiMessageAndVersion> records) {
-        replicationControl.handleBrokerUncleanShutdown(brokerId, records);
+    void handleBrokerShutdown(int brokerId, boolean isUncleanShutdown, List<ApiMessageAndVersion> records) {
+        replicationControl.handleBrokerShutdown(brokerId, isUncleanShutdown, records);
     }
 }
