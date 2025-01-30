@@ -1963,13 +1963,13 @@ public class SharePartition {
                     // then we cannot identify the current inFlightBatch as acknowledged. All the offsets between
                     // initialReadGapOffset.gapStartOffset and initialReadGapOffset.endOffset should always be present
                     // in the cachedState
-                    if (initialReadGapOffset != null && inFlightBatch.lastOffset() >= initialReadGapOffset.gapStartOffset()) {
+                    if (isInitialReadGapOffsetWindowActive() && inFlightBatch.lastOffset() >= initialReadGapOffset.gapStartOffset()) {
                         return lastOffsetAcknowledged;
                     }
                     lastOffsetAcknowledged = inFlightBatch.lastOffset();
                 } else {
                     for (Map.Entry<Long, InFlightState> offsetState : inFlightBatch.offsetState.entrySet()) {
-                        if (initialReadGapOffset != null && offsetState.getKey() >= initialReadGapOffset.gapStartOffset()) {
+                        if (isInitialReadGapOffsetWindowActive() && offsetState.getKey() >= initialReadGapOffset.gapStartOffset()) {
                             return lastOffsetAcknowledged;
                         }
                         if (!isRecordStateAcknowledged(offsetState.getValue().state())) {
