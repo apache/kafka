@@ -149,6 +149,12 @@ public enum ApiKeys {
     private static final Map<Integer, ApiKeys> ID_TO_TYPE = Arrays.stream(ApiKeys.values())
         .collect(Collectors.toMap(key -> (int) key.id, Function.identity()));
 
+    // Versions 0-2 were removed in Apache Kafka 4.0, version 3 is the new baseline. Due to a bug in librdkafka,
+    // these versions have to be included in the api versions response (see KAFKA-18659), which means we cannot exclude
+    // them from the protocol definition. Instead, we reject requests with such versions in `KafkaApis` by returning
+    // `UnsupportedVersion` errors. We also special case the generated protocol html to exclude versions 0-2.
+    public static final short PRODUCE_OLDEST_VERSION = 3;
+
     /** the permanent and immutable id of an API - this can't change ever */
     public final short id;
 
@@ -227,6 +233,9 @@ public enum ApiKeys {
     }
 
     public short oldestVersion() {
+        // See #PRODUCE_OLDEST_VERSION for details of why we do this
+        if (this == PRODUCE)
+            return PRODUCE_OLDEST_VERSION;
         return messageType.lowestSupportedVersion();
     }
 
@@ -264,8 +273,11 @@ public enum ApiKeys {
         return oldestVersion() <= latestVersion();
     }
 
-    public Optional<ApiVersionsResponseData.ApiVersion> toApiVersion(boolean enableUnstableLastVersion) {
-        short oldestVersion = oldestVersion();
+    public Optional<ApiVersionsResponseData.ApiVersion> toApiVersion(boolean enableUnstableLastVersion,
+                                                                     Optional<ApiMessageType.ListenerType> listenerType) {
+        // see `PRODUCE_MIN_VERSION` for details on why we do this
+        short oldestVersion = (this == PRODUCE && listenerType.map(l -> l == ApiMessageType.ListenerType.BROKER).orElse(false)) ?
+            messageType.lowestSupportedVersion() : oldestVersion();
         short latestVersion = latestVersion(enableUnstableLastVersion);
 
         // API is entirely disabled if latestStableVersion is smaller than oldestVersion.
@@ -299,7 +311,7 @@ public enum ApiKeys {
         b.append("<th>Key</th>\n");
         b.append("</tr>");
         clientApis().stream()
-            .filter(apiKey -> apiKey.toApiVersion(false).isPresent())
+            .filter(apiKey -> apiKey.toApiVersion(false, Optional.empty()).isPresent())
             .forEach(apiKey -> {
                 b.append("<tr>\n");
                 b.append("<td>");
@@ -341,10 +353,7 @@ public enum ApiKeys {
     }
 
     public static EnumSet<ApiKeys> clientApis() {
-        List<ApiKeys> apis = Arrays.stream(ApiKeys.values())
-            .filter(apiKey -> apiKey.inScope(ApiMessageType.ListenerType.BROKER))
-            .collect(Collectors.toList());
-        return EnumSet.copyOf(apis);
+        return brokerApis();
     }
 
     public static EnumSet<ApiKeys> apisForListener(ApiMessageType.ListenerType listener) {

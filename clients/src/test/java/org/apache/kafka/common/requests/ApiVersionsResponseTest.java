@@ -58,8 +58,11 @@ public class ApiVersionsResponseTest {
         for (ApiKeys key : ApiKeys.apisForListener(scope)) {
             ApiVersion version = defaultResponse.apiVersion(key.id);
             assertNotNull(version, "Could not find ApiVersion for API " + key.name);
-            assertEquals(version.minVersion(), key.oldestVersion(), "Incorrect min version for Api " + key.name);
-            assertEquals(version.maxVersion(), key.latestVersion(), "Incorrect max version for Api " + key.name);
+            if (key == ApiKeys.PRODUCE)
+                assertEquals(key.messageType.lowestSupportedVersion(), version.minVersion(), "Incorrect min version for Api " + key.name);
+            else
+                assertEquals(key.oldestVersion(), version.minVersion(), "Incorrect min version for Api " + key.name);
+            assertEquals(key.latestVersion(), version.maxVersion(), "Incorrect max version for Api " + key.name);
 
             // Check if versions less than min version are indeed set as null, i.e., deprecated.
             for (int i = 0; i < version.minVersion(); ++i) {

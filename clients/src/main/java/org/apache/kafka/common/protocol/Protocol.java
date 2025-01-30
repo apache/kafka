@@ -22,7 +22,6 @@ import org.apache.kafka.common.protocol.types.BoundField;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.TaggedFields;
 import org.apache.kafka.common.protocol.types.Type;
-import org.apache.kafka.common.requests.ProduceRequest;
 
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -179,9 +178,7 @@ public class Protocol {
             // Requests
             b.append("<b>Requests:</b><br>\n");
             Schema[] requests = key.messageType.requestSchemas();
-            // See `ProduceRequest.MIN_VERSION` for details on why we need to do this
-            short oldestVersion = key == ApiKeys.PRODUCE ? ProduceRequest.MIN_VERSION : key.oldestVersion();
-            for (short version = oldestVersion; version <= key.latestVersion(); version++) {
+            for (short version = key.oldestVersion(); version <= key.latestVersion(); version++) {
                 Schema schema = requests[version];
                 if (schema == null)
                     throw new IllegalStateException("Unexpected null schema for " + key + " with version " + version);
@@ -211,26 +208,26 @@ public class Protocol {
             // Responses
             b.append("<b>Responses:</b><br>\n");
             Schema[] responses = key.messageType.responseSchemas();
-            for (int i = oldestVersion; i < responses.length; i++) {
-                Schema schema = responses[i];
+            for (int version = key.oldestVersion(); version < key.latestVersion(); version++) {
+                Schema schema = responses[version];
+                if (schema == null)
+                    throw new IllegalStateException("Unexpected null schema for " + key + " with version " + version);
                 // Schema
-                if (schema != null) {
-                    b.append("<div>");
-                    // Version header
-                    b.append("<pre>");
-                    b.append(key.name);
-                    b.append(" Response (Version: ");
-                    b.append(i);
-                    b.append(") => ");
-                    schemaToBnfHtml(responses[i], b, 2);
-                    b.append("</pre>");
+                b.append("<div>");
+                // Version header
+                b.append("<pre>");
+                b.append(key.name);
+                b.append(" Response (Version: ");
+                b.append(version);
+                b.append(") => ");
+                schemaToBnfHtml(responses[version], b, 2);
+                b.append("</pre>");
 
-                    b.append("<p><b>Response header version:</b> ");
-                    b.append(key.responseHeaderVersion((short) i));
-                    b.append("</p>\n");
+                b.append("<p><b>Response header version:</b> ");
+                b.append(key.responseHeaderVersion((short) version));
+                b.append("</p>\n");
 
-                    schemaToFieldTableHtml(responses[i], b);
-                }
+                schemaToFieldTableHtml(responses[version], b);
                 b.append("</div>\n");
             }
         }

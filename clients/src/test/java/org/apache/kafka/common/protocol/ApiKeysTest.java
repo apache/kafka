@@ -24,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashSet;
+import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -104,7 +105,7 @@ public class ApiKeysTest {
     public void testHtmlOnlyHaveStableApi() {
         String html = ApiKeys.toHtml();
         for (ApiKeys apiKeys : ApiKeys.clientApis()) {
-            if (apiKeys.toApiVersion(false).isPresent()) {
+            if (apiKeys.toApiVersion(false, Optional.empty()).isPresent()) {
                 assertTrue(html.contains("The_Messages_" + apiKeys.name), "Html should contain stable api: " + apiKeys.name);
             } else {
                 assertFalse(html.contains("The_Messages_" + apiKeys.name), "Html should not contain unstable api: " + apiKeys.name);
