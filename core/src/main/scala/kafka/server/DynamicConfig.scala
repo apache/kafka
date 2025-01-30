@@ -23,7 +23,7 @@ import java.net.{InetAddress, UnknownHostException}
 import java.util.Properties
 import org.apache.kafka.common.config.ConfigDef
 import org.apache.kafka.coordinator.group.GroupConfig
-import org.apache.kafka.server.config.{QuotaConfig, ZooKeeperInternals}
+import org.apache.kafka.server.config.QuotaConfig 
 
 import java.util
 import scala.jdk.CollectionConverters._
@@ -85,12 +85,10 @@ object DynamicConfig {
     def validate(props: Properties): util.Map[String, AnyRef] = DynamicConfig.validate(ipConfigs, props, customPropsAllowed = false)
 
     def isValidIpEntity(ip: String): Boolean = {
-      if (ip != ZooKeeperInternals.DEFAULT_STRING) {
-        try {
-          InetAddress.getByName(ip)
-        } catch {
-          case _: UnknownHostException => return false
-        }
+      try {
+        InetAddress.getByName(ip)
+      } catch {
+        case _: UnknownHostException => return false
       }
       true
     }
