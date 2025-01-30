@@ -964,7 +964,9 @@ public interface KStream<K, V> {
      * {@link KGroupedStream} can be further grouped with other streams to form a {@link CogroupedKStream}.
      * (Co-)Grouping a stream on the record key is required before a windowing or aggregation operator can be applied
      * to the data (cf. {@link KGroupedStream}).
-     * If the grouping key is {@code null} the record will be dropped.
+     * By default, the current key is used as grouping key, but a new grouping key can be set via
+     * {@link #groupBy(KeyValueMapper)}.
+     * In either case, if the grouping key is {@code null}, the record will be dropped.
      *
      * <p>If a key changing operator was used before this operation (e.g., {@link #selectKey(KeyValueMapper)},
      * {@link #map(KeyValueMapper)}, {@link #flatMap(KeyValueMapper)} or
