@@ -150,9 +150,12 @@ public enum ApiKeys {
         .collect(Collectors.toMap(key -> (int) key.id, Function.identity()));
 
     // Versions 0-2 were removed in Apache Kafka 4.0, version 3 is the new baseline. Due to a bug in librdkafka,
-    // these versions have to be included in the api versions response (see KAFKA-18659), which means we cannot exclude
-    // them from the protocol definition. Instead, we reject requests with such versions in `KafkaApis` by returning
-    // `UnsupportedVersion` errors. We also special case the generated protocol html to exclude versions 0-2.
+    // these versions have to be included in the api versions response (see KAFKA-18659). In order to achieve that,
+    // we keep such versions in the protocol definition files, but override `oldestVersion` to return the correct value.
+    // We also adjust `toApiVersion` to return `0` for produce in the broker listener.
+    // An alternative approach would be to remove versions `0-2` from the protocol definition files and only override the
+    // behavior in this file - the main downside is that it would no longer be possible to send requests with produce v0-v2,
+    // which would make testing significantly harder (it would probably have to be a ducktape test).
     public static final short PRODUCE_OLDEST_VERSION = 3;
 
     /** the permanent and immutable id of an API - this can't change ever */
@@ -275,7 +278,7 @@ public enum ApiKeys {
 
     public Optional<ApiVersionsResponseData.ApiVersion> toApiVersion(boolean enableUnstableLastVersion,
                                                                      Optional<ApiMessageType.ListenerType> listenerType) {
-        // see `PRODUCE_MIN_VERSION` for details on why we do this
+        // see `PRODUCE_OLDEST_VERSION` for details on why we do this
         short oldestVersion = (this == PRODUCE && listenerType.map(l -> l == ApiMessageType.ListenerType.BROKER).orElse(false)) ?
             messageType.lowestSupportedVersion() : oldestVersion();
         short latestVersion = latestVersion(enableUnstableLastVersion);

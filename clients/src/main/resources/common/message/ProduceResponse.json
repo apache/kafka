@@ -18,9 +18,8 @@
   "type": "response",
   "name": "ProduceResponse",
   // Versions 0-2 were removed in Apache Kafka 4.0, version 3 is the new baseline. Due to a bug in librdkafka,
-  // these versions have to be included in the api versions response (see KAFKA-18659), which means we cannot exclude
-  // them from `validVersions`. Instead, we reject requests with such versions in `KafkaApis` by returning
-  // `UnsupportedVersion` errors.
+  // these versions have to be included in the api versions response (see KAFKA-18659) and are included in `validVersion`.
+  // See `ApiKeys.PRODUCE_OLDEST_VERSION` for more details.
   //
   // Version 1 added the throttle time.
   // Version 2 added the log append time.
