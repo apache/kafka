@@ -2175,7 +2175,7 @@ public interface KStream<K, V> {
      * {@link ValueJoinerWithKey} will be called to compute a value (with arbitrary type) for the result record.
      * The key of the result record is the same as for both joining input records.
      * Note that the key is read-only and should not be modified, as this can lead to undefined behaviour.
-     *
+     * 
      * If an {@code KStream} input record key or value is {@code null} the record will not be included in the join
      * operation and thus no output record will be added to the resulting {@code KStream}.
      * <p>
