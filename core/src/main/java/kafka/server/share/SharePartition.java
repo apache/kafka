@@ -451,7 +451,10 @@ public class SharePartition {
 
                 List<PersisterStateBatch> stateBatches = partitionData.stateBatches();
                 boolean isGapPresentInStateBatches = false;
-                long nextBatchFirstOffset = startOffset;
+                // The previousBatchLastOffset is used to track the last offset of the previous batch.
+                // For the first batch that should ideally start from startOffset if there are no gaps,
+                // we assume the previousBatchLastOffset to be startOffset - 1.
+                long previousBatchLastOffset = startOffset - 1;
                 for (PersisterStateBatch stateBatch : stateBatches) {
                     if (stateBatch.firstOffset() < startOffset) {
                         log.error("Invalid state batch found for the share partition: {}-{}. The base offset: {}"
@@ -460,10 +463,10 @@ public class SharePartition {
                         throwable = new IllegalStateException(String.format("Failed to initialize the share partition %s-%s", groupId, topicIdPartition));
                         return;
                     }
-                    if (stateBatch.firstOffset() > nextBatchFirstOffset) {
+                    if (stateBatch.firstOffset() > previousBatchLastOffset + 1) {
                         isGapPresentInStateBatches = true;
                     }
-                    nextBatchFirstOffset = stateBatch.lastOffset() + 1;
+                    previousBatchLastOffset = stateBatch.lastOffset();
                     InFlightBatch inFlightBatch = new InFlightBatch(EMPTY_MEMBER_ID, stateBatch.firstOffset(),
                         stateBatch.lastOffset(), RecordState.forId(stateBatch.deliveryState()), stateBatch.deliveryCount(), null);
                     cachedState.put(stateBatch.firstOffset(), inFlightBatch);
@@ -688,6 +691,11 @@ public class SharePartition {
                 }
                 // Set nextBatchStartOffset as the last offset of the current in-flight batch + 1
                 nextBatchStartOffset = inFlightBatch.lastOffset() + 1;
+
+                // If the acquired count is equal to the max fetch records then break the loop.
+                if (acquiredCount >= maxFetchRecords) {
+                    break;
+                }
 
                 // Compute if the batch is a full match.
                 boolean fullMatch = checkForFullMatch(inFlightBatch, firstBatch.baseOffset(), lastBatch.lastOffset());
