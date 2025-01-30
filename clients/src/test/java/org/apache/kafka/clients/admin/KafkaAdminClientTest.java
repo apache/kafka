@@ -1785,13 +1785,13 @@ public class KafkaAdminClientTest {
 
     @Flaky("KAFKA-18441")
     @Test
-    public void testAdminClientApisAuthenticationFailure() {
+    public void testAdminClientApisAuthenticationFailure() throws InterruptedException {
         Cluster cluster = mockBootstrapCluster();
         try (final AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(Time.SYSTEM, cluster,
                 newStrMap(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "1000",
-                    // The default "retry.backoff.ms" is 100. if following assertion can't finish in 100L,
-                    // the test will fail. Set it to 5000 to make sure the test can finish in time.
-                    AdminClientConfig.RETRY_BACKOFF_MS_CONFIG, "5000"))) {
+                    // Default "metadata.recovery.strategy" is rebootstrap. If it meets "retry.backoff.ms" (default is 100L),
+                    // following assertion will fail. Set it to none to avoid authentication error cleanup.
+                    AdminClientConfig.METADATA_RECOVERY_STRATEGY_CONFIG, "none"))) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
             env.kafkaClient().createPendingAuthenticationError(cluster.nodes().get(0),
                     TimeUnit.DAYS.toMillis(1));
