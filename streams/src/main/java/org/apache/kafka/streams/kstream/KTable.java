@@ -1054,7 +1054,7 @@ public interface KTable<K, V> {
      * {@link  StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt;" is
      * an internally generated name, and "-repartition" is a fixed suffix.
      *
-     * You can retrieve all generated internal topic names via {@link Topology#describe()}.
+     * <p>You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
      * <p>
      * All data of this {@code KTable} will be redistributed through the repartitioning topic by writing all update
