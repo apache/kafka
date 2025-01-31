@@ -175,8 +175,13 @@ jobs:
       fail-fast: false
       matrix:
         java: [ 23, 17 ]  # If we change these, make sure to adjust ci-complete.yml
+        run-flaky: [ true, false ]
+        run-new-tests: [ true, false ]
+        exclude:
+          - run-flaky: true
+            run-new-tests: true
     outputs:
-      timed-out: ${{ (steps.junit-test.outputs.gradle-exitcode == '124' || steps.junit-quarantined-test.outputs.gradle-exitcode == '124') }}
+      timed-out: ${{ steps.junit-test.outputs.gradle-exitcode == '124' }}
     name: JUnit tests Java ${{ matrix.java }}
     steps:
       - name: Checkout code
@@ -202,23 +207,17 @@ jobs:
         with:
           name: combined-test-catalog
 
-      - name: JUnit Quarantined Tests
-        id: junit-quarantined-test
-        uses: ./.github/actions/run-gradle
-        with:
-          test-task: quarantinedTest
-          timeout-minutes: 180
-          test-catalog-path: ${{ steps.load-test-catalog.outputs.download-path }}/combined-test-catalog.txt
-          build-scan-artifact-name: build-scan-quarantined-test-${{ matrix.java }}
-
       - name: JUnit Tests
         id: junit-test
         uses: ./.github/actions/run-gradle
         with:
-          test-task: test
+          test-task: :metadata:test
           timeout-minutes: 180  # 3 hours
           test-catalog-path: ${{ steps.load-test-catalog.outputs.download-path }}/combined-test-catalog.txt
           build-scan-artifact-name: build-scan-test-${{ matrix.java }}
+          run-new-tests: false
+          run-flaky-tests: false
+          test-retries: ${{ matrix.run-flaky && "3" || "1 }}
 
       - name: Archive JUnit HTML reports
         uses: actions/upload-artifact@v4
@@ -233,7 +232,7 @@ jobs:
       - name: Archive JUnit XML
         uses: actions/upload-artifact@v4
         with:
-          name: junit-xml-${{ matrix.java }}
+          name: junit-xml-${{ matrix.java }}-${{ matrix.run-flaky && 'flaky' || 'noflaky' }}-${{ matrix.run-new && 'new' || 'nonew' }}
           path: |
             build/junit-xml/**/*.xml
           compression-level: 9
@@ -241,7 +240,7 @@ jobs:
 
       - name: Archive Thread Dumps
         id: thread-dump-upload-artifact
-        if: always() && (steps.junit-test.outputs.gradle-exitcode == '124' || steps.junit-quarantined-test.outputs.gradle-exitcode == '124')
+        if: always() && steps.junit-test.outputs.gradle-exitcode == '124'
         uses: actions/upload-artifact@v4
         with:
           name: junit-thread-dumps-${{ matrix.java }}
@@ -250,27 +249,20 @@ jobs:
           compression-level: 9
           if-no-files-found: ignore
 
-      - name: Parse JUnit tests
-        run: python .github/scripts/junit.py --export-test-catalog ./test-catalog >> $GITHUB_STEP_SUMMARY
-        env:
-          GITHUB_WORKSPACE: ${{ github.workspace }}
-          JUNIT_REPORT_URL: ${{ steps.junit-upload-artifact.outputs.artifact-url }}
-          THREAD_DUMP_URL: ${{ steps.thread-dump-upload-artifact.outputs.artifact-url }}
-          GRADLE_TEST_EXIT_CODE: ${{ steps.junit-test.outputs.gradle-exitcode }}
-          GRADLE_QUARANTINED_TEST_EXIT_CODE: ${{ steps.junit-quarantined-test.outputs.gradle-exitcode }}
-
-      - name: Archive Test Catalog
-        if: ${{ always() && matrix.java == '23' }}
-        uses: actions/upload-artifact@v4
+  report:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download JUnit XMLs
+        uses: actions/download-artifact@v4
         with:
-          name: test-catalog
-          path: test-catalog
-          compression-level: 9
-          if-no-files-found: ignore
+          pattern: junit-xml-*
+      - name: Display structure of downloaded files
+        run: ls -R
 
   update-test-catalog:
     name: Update Test Catalog
-    needs: test
+    needs: report
     if: ${{ always() && inputs.is-trunk && needs.test.outputs.timed-out == 'false' }}
     runs-on: ubuntu-latest
     permissions:

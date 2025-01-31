@@ -552,7 +552,8 @@ subprojects {
     // KAFKA-17433 Used by deflake.yml github action to repeat individual tests
     systemProperty("kafka.cluster.test.repeat", project.findProperty("kafka.cluster.test.repeat"))
     systemProperty("kafka.test.catalog.file", project.findProperty("kafka.test.catalog.file"))
-    systemProperty("kafka.test.run.quarantined", "false")
+    systemProperty("kafka.test.run.quarantined", project.findProperty("kafka.test.run.quarantined"))
+    systemProperty("kafka.test.run.flaky", project.findProperty("kafka.test.run.flaky"))
 
     testLogging {
       events = userTestLoggingEvents ?: testLoggingEvents
@@ -566,7 +567,6 @@ subprojects {
 
     useJUnitPlatform {
       includeEngines 'junit-jupiter'
-      excludeTags 'flaky'
     }
 
     develocity {
@@ -594,7 +594,8 @@ subprojects {
     // KAFKA-17433 Used by deflake.yml github action to repeat individual tests
     systemProperty("kafka.cluster.test.repeat", project.findProperty("kafka.cluster.test.repeat"))
     systemProperty("kafka.test.catalog.file", project.findProperty("kafka.test.catalog.file"))
-    systemProperty("kafka.test.run.quarantined", "true")
+    systemProperty("kafka.test.run.quarantined", project.findProperty("kafka.test.run.quarantined"))
+    systemProperty("kafka.test.run.flaky", project.findProperty("kafka.test.run.flaky"))
 
     testLogging {
       events = userTestLoggingEvents ?: testLoggingEvents

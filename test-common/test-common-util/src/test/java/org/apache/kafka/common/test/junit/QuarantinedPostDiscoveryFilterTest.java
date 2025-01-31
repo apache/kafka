@@ -105,19 +105,19 @@ public class QuarantinedPostDiscoveryFilterTest {
         }
     }
 
-    QuarantinedPostDiscoveryFilter setupFilter(boolean runQuarantined) {
+    QuarantinedPostDiscoveryFilter setupFilter(boolean runQuarantined, boolean runFlaky) {
         Set<AutoQuarantinedTestFilter.TestAndMethod> testCatalog = new HashSet<>();
         testCatalog.add(new AutoQuarantinedTestFilter.TestAndMethod("o.a.k.Foo", "testBar1"));
         testCatalog.add(new AutoQuarantinedTestFilter.TestAndMethod("o.a.k.Foo", "testBar2"));
         testCatalog.add(new AutoQuarantinedTestFilter.TestAndMethod("o.a.k.Spam", "testEggs"));
 
         AutoQuarantinedTestFilter autoQuarantinedTestFilter = new AutoQuarantinedTestFilter(testCatalog, runQuarantined);
-        return new QuarantinedPostDiscoveryFilter(autoQuarantinedTestFilter, runQuarantined);
+        return new QuarantinedPostDiscoveryFilter(autoQuarantinedTestFilter, runQuarantined, runFlaky);
     }
 
     @Test
     public void testQuarantinedExistingTestNonFlaky() {
-        QuarantinedPostDiscoveryFilter filter = setupFilter(true);
+        QuarantinedPostDiscoveryFilter filter = setupFilter(true, true);
         assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Foo", "testBar1")).excluded());
         assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Foo", "testBar2")).excluded());
         assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Spam", "testEggs")).excluded());
@@ -125,7 +125,7 @@ public class QuarantinedPostDiscoveryFilterTest {
 
     @Test
     public void testQuarantinedExistingTestFlaky() {
-        QuarantinedPostDiscoveryFilter filter = setupFilter(true);
+        QuarantinedPostDiscoveryFilter filter = setupFilter(true, true);
         assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Foo", "testBar1", "flaky")).included());
         assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Foo", "testBar2", "flaky")).included());
         assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Spam", "testEggs", "flaky", "integration")).included());
@@ -133,14 +133,14 @@ public class QuarantinedPostDiscoveryFilterTest {
 
     @Test
     public void testQuarantinedNewTest() {
-        QuarantinedPostDiscoveryFilter filter = setupFilter(true);
+        QuarantinedPostDiscoveryFilter filter = setupFilter(true, true);
         assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Foo", "testBar3")).included());
         assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Spam", "testEggz", "flaky")).included());
     }
 
     @Test
     public void testExistingTestNonFlaky() {
-        QuarantinedPostDiscoveryFilter filter = setupFilter(false);
+        QuarantinedPostDiscoveryFilter filter = setupFilter(false, false);
         assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Foo", "testBar1")).included());
         assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Foo", "testBar2")).included());
         assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Spam", "testEggs")).included());
@@ -149,7 +149,7 @@ public class QuarantinedPostDiscoveryFilterTest {
 
     @Test
     public void testExistingTestFlaky() {
-        QuarantinedPostDiscoveryFilter filter = setupFilter(false);
+        QuarantinedPostDiscoveryFilter filter = setupFilter(false, false);
         assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Foo", "testBar1", "flaky")).excluded());
         assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Foo", "testBar2", "flaky")).excluded());
         assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Spam", "testEggs", "flaky", "integration")).excluded());
@@ -157,7 +157,7 @@ public class QuarantinedPostDiscoveryFilterTest {
 
     @Test
     public void testNewTest() {
-        QuarantinedPostDiscoveryFilter filter = setupFilter(false);
+        QuarantinedPostDiscoveryFilter filter = setupFilter(false, false);
         assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Foo", "testBar3")).excluded());
         assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Spam", "testEggz", "flaky")).excluded());
     }
@@ -166,7 +166,7 @@ public class QuarantinedPostDiscoveryFilterTest {
     public void testNoCatalogQuarantinedTest() {
         QuarantinedPostDiscoveryFilter filter = new QuarantinedPostDiscoveryFilter(
             AutoQuarantinedTestFilter.create(null, true),
-            true
+            true, true
         );
         assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Foo", "testBar1", "flaky")).included());
         assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Foo", "testBar2", "flaky")).included());
