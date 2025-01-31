@@ -17,12 +17,14 @@
 package org.apache.kafka.server.metrics;
 
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.metrics.Gauge;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.image.MetadataProvenance;
 
 import com.yammer.metrics.core.Histogram;
 
 import java.util.Collections;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
@@ -54,6 +56,7 @@ public final class BrokerServerMetrics implements AutoCloseable {
     private final AtomicReference<MetadataProvenance> lastAppliedImageProvenance = new AtomicReference<>(MetadataProvenance.EMPTY);
     private final AtomicLong metadataLoadErrorCount = new AtomicLong(0);
     private final AtomicLong metadataApplyErrorCount = new AtomicLong(0);
+    private final AtomicBoolean ignoredStaticVoters = new AtomicBoolean(false);
 
     private final Metrics metrics;
     private final MetricName lastAppliedRecordOffsetName;
@@ -61,6 +64,7 @@ public final class BrokerServerMetrics implements AutoCloseable {
     private final MetricName lastAppliedRecordLagMsName;
     private final MetricName metadataLoadErrorCountName;
     private final MetricName metadataApplyErrorCountName;
+    private final MetricName ignoredStaticVotersName;
 
     public BrokerServerMetrics(Metrics metrics) {
         this.metrics = metrics;
@@ -89,12 +93,18 @@ public final class BrokerServerMetrics implements AutoCloseable {
                 METRIC_GROUP_NAME,
                 "The number of errors encountered by the BrokerMetadataPublisher while applying a new MetadataImage based on the latest MetadataDelta."
         );
+        ignoredStaticVotersName = metrics.metricName(
+            "ignored-static-voters",
+            METRIC_GROUP_NAME,
+            "1 if controller.quorum.voters is set but was not used by the broker, 0 otherwise."
+        );
 
         metrics.addMetric(lastAppliedRecordOffsetName, (config, now) -> lastAppliedImageProvenance.get().lastContainedOffset());
         metrics.addMetric(lastAppliedRecordTimestampName, (config, now) -> lastAppliedImageProvenance.get().lastContainedLogTimeMs());
         metrics.addMetric(lastAppliedRecordLagMsName, (config, now) -> now - lastAppliedImageProvenance.get().lastContainedLogTimeMs());
         metrics.addMetric(metadataLoadErrorCountName, (config, now) -> metadataLoadErrorCount.get());
         metrics.addMetric(metadataApplyErrorCountName, (config, now) -> metadataApplyErrorCount.get());
+        metrics.addMetric(ignoredStaticVotersName, (Gauge<Integer>) (config, now) -> ignoredStaticVoters.get() ? 1 : 0);
     }
 
     @Override
@@ -106,7 +116,8 @@ public final class BrokerServerMetrics implements AutoCloseable {
                 lastAppliedRecordTimestampName,
                 lastAppliedRecordLagMsName,
                 metadataLoadErrorCountName,
-                metadataApplyErrorCountName
+                metadataApplyErrorCountName,
+                ignoredStaticVotersName
         ).forEach(metrics::removeMetric);
     }
 
@@ -128,6 +139,10 @@ public final class BrokerServerMetrics implements AutoCloseable {
 
     public MetricName metadataApplyErrorCountName() {
         return metadataApplyErrorCountName;
+    }
+
+    public MetricName ignoredStaticVotersName() {
+        return ignoredStaticVotersName;
     }
 
     public AtomicReference<MetadataProvenance> lastAppliedImageProvenance() {
@@ -160,5 +175,13 @@ public final class BrokerServerMetrics implements AutoCloseable {
 
     long lastAppliedTimestamp() {
         return lastAppliedImageProvenance.get().lastContainedLogTimeMs();
+    }
+
+    public void setIgnoredStaticVoters(boolean ignored) {
+        ignoredStaticVoters.set(ignored);
+    }
+
+    public boolean ignoredStaticVoters() {
+        return ignoredStaticVoters.get();
     }
 }
