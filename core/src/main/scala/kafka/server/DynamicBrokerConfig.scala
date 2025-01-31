@@ -30,7 +30,6 @@ import org.apache.kafka.common.Reconfigurable
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, SaslConfigs, SslConfigs}
 import org.apache.kafka.common.metrics.{Metrics, MetricsReporter}
-import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.network.{ListenerName, ListenerReconfigurable}
 import org.apache.kafka.common.security.authenticator.LoginManager
 import org.apache.kafka.common.utils.{ConfigUtils, Utils}
@@ -250,7 +249,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     addReconfigurable(new DynamicClientQuotaCallback(kafkaServer.quotaManagers, kafkaServer.config))
 
     addBrokerReconfigurable(new BrokerDynamicThreadPool(kafkaServer))
-    addBrokerReconfigurable(new DynamicLogConfig(kafkaServer.logManager, kafkaServer))
+    addBrokerReconfigurable(new DynamicLogConfig(kafkaServer.logManager))
     addBrokerReconfigurable(new DynamicListenerConfig(kafkaServer))
     addBrokerReconfigurable(kafkaServer.socketServer)
     addBrokerReconfigurable(new DynamicProducerStateManagerConfig(kafkaServer.logManager.producerStateManagerConfig))
@@ -360,23 +359,6 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
 
   private def passwordEncoder: PasswordEncoder = {
     dynamicConfigPasswordEncoder.getOrElse(throw new ConfigException("Password encoder secret not configured"))
-  }
-
-  private[server] def toPersistentProps(configProps: Properties, perBrokerConfig: Boolean): Properties = {
-    val props = configProps.clone().asInstanceOf[Properties]
-
-    def encodePassword(configName: String, value: String): Unit = {
-      if (value != null) {
-        if (!perBrokerConfig)
-          throw new ConfigException("Password config can be defined only at broker level")
-        props.setProperty(configName, passwordEncoder.encode(new Password(value)))
-      }
-    }
-    configProps.asScala.foreachEntry { (name, value) =>
-      if (isPasswordConfig(name))
-        encodePassword(name, value)
-    }
-    props
   }
 
   private[server] def fromPersistentProps(persistentProps: Properties,
@@ -620,7 +602,7 @@ object DynamicLogConfig {
     ServerTopicConfigSynonyms.TOPIC_CONFIG_SYNONYMS.asScala.values.toSet
 }
 
-class DynamicLogConfig(logManager: LogManager, server: KafkaBroker) extends BrokerReconfigurable with Logging {
+class DynamicLogConfig(logManager: LogManager) extends BrokerReconfigurable with Logging {
 
   override def reconfigurableConfigs: Set[String] = {
     DynamicLogConfig.ReconfigurableConfigs
