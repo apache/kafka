@@ -260,7 +260,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
    */
   def unrecordQuotaSensor(request: RequestChannel.Request, value: Double, timeMs: Long): Unit = {
     val clientSensors = getOrCreateQuotaSensors(request.session, request.header.clientId)
-    clientSensors.quotaSensor.record(value * (-1), timeMs, false)
+    clientSensors.quotaSensor.record(value * -1, timeMs, false)
   }
 
   /**
@@ -404,11 +404,14 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
    * for any of these levels.
    *
    * @param sanitizedUser     user to override if quota applies to <user> or <user, client-id>
-   * @param clientId          client to override if quota applies to <client-id> or <user, client-id>
    * @param sanitizedClientId sanitized client ID to override if quota applies to <client-id> or <user, client-id>
    * @param quota             custom quota to apply or None if quota override is being removed
    */
-  def updateQuota(sanitizedUser: Option[BaseUserEntity], clientId: Option[String], sanitizedClientId: Option[String], quota: Option[Quota]): Unit = {
+  def updateQuota(
+    sanitizedUser: Option[BaseUserEntity], 
+    sanitizedClientId: Option[ClientQuotaEntity.ConfigEntity], 
+    quota: Option[Quota]
+   ): Unit = {
     /*
      * Acquire the write lock to apply changes in the quota objects.
      * This method changes the quota in the overriddenQuota map and applies the update on the actual KafkaMetric object (if it exists).
@@ -419,11 +422,8 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
     lock.writeLock().lock()
     try {
       val userEntity = getOrDefaultUser(sanitizedUser)
+      val clientIdEntity = getOrDefaultClient(sanitizedClientId)
       
-      val clientIdEntity = sanitizedClientId.map {
-        case DefaultString => DefaultClientIdEntity
-        case _ => ClientIdEntity(clientId.getOrElse(throw new IllegalStateException("Client-id not provided")))
-      }
       val quotaEntity = KafkaQuotaEntity(userEntity, clientIdEntity)
 
       if (userEntity.nonEmpty) {
@@ -447,6 +447,15 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
     } finally {
       lock.writeLock().unlock()
     }
+  }
+
+  private def getOrDefaultClient(
+    sanitizedClientId: Option[ClientQuotaEntity.ConfigEntity]
+  ): Option[ClientQuotaEntity.ConfigEntity] = {
+    if (sanitizedClientId.nonEmpty && sanitizedClientId.get.name() == DefaultString)
+      Some(DefaultClientIdEntity)
+    else
+      sanitizedClientId
   }
 
   private def getOrDefaultUser(sanitizedUser: Option[BaseUserEntity]): Option[BaseUserEntity] = {

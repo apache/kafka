@@ -31,9 +31,8 @@ class ClientRequestQuotaManagerTest extends BaseClientQuotaManagerTest {
   def testRequestPercentageQuotaViolation(): Unit = {
     val clientRequestQuotaManager = new ClientRequestQuotaManager(config, metrics, time, "", Optional.empty())
     clientRequestQuotaManager.updateQuota(
-      Some(ClientQuotaManager.UserEntity("ANONYMOUS")), 
-      Some("test-client"), 
-      Some("test-client"), 
+      Some(ClientQuotaManager.UserEntity("ANONYMOUS")),
+      Some(ClientQuotaManager.ClientIdEntity("test-client")),
       Some(Quota.upperBound(1))
     )
     val queueSizeMetric = metrics.metrics().get(metrics.metricName("queue-size", QuotaType.REQUEST.toString, ""))

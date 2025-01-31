@@ -147,14 +147,22 @@ class ClientQuotaMetadataManager(private[metadata] val quotaManagers: QuotaManag
 
     // Convert entity into Options with sanitized values for QuotaManagers
     val (sanitizedUser, sanitizedClientId) = quotaEntity match {
-      case UserEntity(user) => (Some(ClientQuotaManager.UserEntity(Sanitizer.sanitize(user))), None)
-      case DefaultUserEntity => (Some(ClientQuotaManager.DefaultUserEntity), None)
-      case ClientIdEntity(clientId) => (None, Some(Sanitizer.sanitize(clientId)))
-      case DefaultClientIdEntity => (None, Some(ClientQuotaManager.DefaultString))
-      case ExplicitUserExplicitClientIdEntity(user, clientId) => (Some(ClientQuotaManager.UserEntity(Sanitizer.sanitize(user))), Some(Sanitizer.sanitize(clientId)))
-      case ExplicitUserDefaultClientIdEntity(user) => (Some(ClientQuotaManager.UserEntity(Sanitizer.sanitize(user))), Some(ClientQuotaManager.DefaultString))
-      case DefaultUserExplicitClientIdEntity(clientId) => (Some(ClientQuotaManager.DefaultUserEntity), Some(Sanitizer.sanitize(clientId)))
-      case DefaultUserDefaultClientIdEntity => (Some(ClientQuotaManager.DefaultUserEntity), Some(ClientQuotaManager.DefaultString))
+      case UserEntity(user) => 
+        (Some(ClientQuotaManager.UserEntity(Sanitizer.sanitize(user))), None)
+      case DefaultUserEntity => 
+        (Some(ClientQuotaManager.DefaultUserEntity), None)
+      case ClientIdEntity(clientId) => 
+        (None, Some(ClientQuotaManager.ClientIdEntity(Sanitizer.sanitize(clientId))))
+      case DefaultClientIdEntity => 
+        (None, Some(ClientQuotaManager.DefaultClientIdEntity))
+      case ExplicitUserExplicitClientIdEntity(user, clientId) => 
+        (Some(ClientQuotaManager.UserEntity(Sanitizer.sanitize(user))), Some(ClientQuotaManager.ClientIdEntity(Sanitizer.sanitize(clientId))))
+      case ExplicitUserDefaultClientIdEntity(user) => 
+        (Some(ClientQuotaManager.UserEntity(Sanitizer.sanitize(user))), Some(ClientQuotaManager.DefaultClientIdEntity))
+      case DefaultUserExplicitClientIdEntity(clientId) => 
+        (Some(ClientQuotaManager.DefaultUserEntity), Some(ClientQuotaManager.ClientIdEntity(Sanitizer.sanitize(clientId))))
+      case DefaultUserDefaultClientIdEntity => 
+        (Some(ClientQuotaManager.DefaultUserEntity), Some(ClientQuotaManager.DefaultClientIdEntity))
       case IpEntity(_) | DefaultIpEntity => throw new IllegalStateException("Should not see IP quota entities here")
     }
 
@@ -162,9 +170,9 @@ class ClientQuotaMetadataManager(private[metadata] val quotaManagers: QuotaManag
     try {
       manager.updateQuota(
         sanitizedUser = sanitizedUser,
-        clientId = sanitizedClientId.map(Sanitizer.desanitize),
         sanitizedClientId = sanitizedClientId,
-        quota = quotaValue)
+        quota = quotaValue
+      )
     } catch {
       case t: Throwable => error(s"Failed to update user-client quota $quotaEntity", t)
     }
