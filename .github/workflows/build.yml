@@ -217,7 +217,7 @@ jobs:
           build-scan-artifact-name: build-scan-test-${{ matrix.java }}
           run-new-tests: false
           run-flaky-tests: false
-          test-retries: ${{ matrix.run-flaky && "3" || "1 }}
+          test-retries: ${{ matrix.run-flaky == true && "3" || "1 }}
 
       - name: Archive JUnit HTML reports
         uses: actions/upload-artifact@v4
