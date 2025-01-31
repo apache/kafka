@@ -179,6 +179,8 @@ public class KafkaClusterTestKit implements AutoCloseable {
             }
             props.put(QuorumConfig.QUORUM_VOTERS_CONFIG, quorumVoterStringBuilder.toString());
 
+            System.err.println("LLL " + props.get(QuorumConfig.QUORUM_VOTERS_CONFIG));
+
             // reduce log cleaner offset map memory usage
             props.putIfAbsent(CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP, "2097152");
 
@@ -195,7 +197,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
             return new KafkaConfig(props, false);
         }
 
-        private void setSecurityProtocolProps(Map<String, Object> props, String securityProtocol) {
+        static private void setSecurityProtocolProps(Map<String, Object> props, String securityProtocol) {
             if (securityProtocol.equals(SecurityProtocol.SASL_PLAINTEXT.name)) {
                 props.putIfAbsent(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG, "PLAIN");
                 props.putIfAbsent(BrokerSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG, "PLAIN");
@@ -404,6 +406,41 @@ public class KafkaClusterTestKit implements AutoCloseable {
             }
             throw e;
         }
+    }
+
+    public ControllerServer createController(Map<String, String> props) {
+        KafkaConfig config = new KafkaConfig(props);
+        props.put(KRaftConfigs.SERVER_MAX_STARTUP_TIME_MS_CONFIG,
+                Long.toString(TimeUnit.MINUTES.toMillis(10)));
+        props.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller");
+
+        TestKitNode node = nodes.createController(props);
+        System.err.println("WWW " + props);
+        SharedServer sharedServer = new SharedServer(
+                new KafkaConfig(props),
+                node.initialMetaPropertiesEnsemble(),
+                Time.SYSTEM,
+                new Metrics(),
+                CompletableFuture.completedFuture(QuorumConfig.parseVoterConnections(new ArrayList<>())),
+                QuorumConfig.parseBootstrapServers(config.quorumConfig().bootstrapServers()),
+                faultHandlerFactory,
+                socketFactoryManager.getOrCreateSocketFactory(node.id())
+        );
+        ControllerServer controller = null;
+        try {
+            controller = new ControllerServer(
+                    sharedServer,
+                    KafkaRaftServer.configSchema(),
+                    nodes.bootstrapMetadata());
+        } catch (Throwable e) {
+            log.error("Error creating controller {}", node.id(), e);
+            Utils.swallow(log, Level.WARN, "sharedServer.stopForController error", sharedServer::stopForController);
+            throw e;
+        }
+//        sharedServer.startForController();
+        controller.startup();
+        controllers.put(node.id(), controller);
+        return controller;
     }
 
     private void formatNode(

@@ -17,6 +17,7 @@
 
 package org.apache.kafka.common.test;
 
+
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
@@ -239,7 +240,7 @@ public class TestKitNodes {
         this.baseDirectory = Objects.requireNonNull(baseDirectory);
         this.clusterId = Objects.requireNonNull(clusterId);
         this.bootstrapMetadata = Objects.requireNonNull(bootstrapMetadata);
-        this.controllerNodes = Collections.unmodifiableSortedMap(new TreeMap<>(Objects.requireNonNull(controllerNodes)));
+        this.controllerNodes = new TreeMap<>(Objects.requireNonNull(controllerNodes));
         this.brokerNodes = Collections.unmodifiableSortedMap(new TreeMap<>(Objects.requireNonNull(brokerNodes)));
         this.brokerListenerName = Objects.requireNonNull(brokerListenerName);
         this.controllerListenerName = Objects.requireNonNull(controllerListenerName);
@@ -285,6 +286,23 @@ public class TestKitNodes {
 
     public SecurityProtocol controllerListenerProtocol() {
         return controllerSecurityProtocol;
+    }
+
+    public TestKitNode createController(Map<String, String> config) {
+        Optional<Integer> maxNodeId = controllerNodes.keySet().stream().max(Integer::compareTo);
+        // TODO: check node id is not repeat
+        System.err.println("KKK " + maxNodeId.get());
+        Integer newNodeId = maxNodeId.get() + 1;
+
+        TestKitNode controller = TestKitNodes.buildControllerNode(
+                newNodeId,
+                new File(baseDirectory, String.format("controller-%d", newNodeId)).getAbsolutePath(),
+                clusterId,
+                false,
+                config
+        );
+        controllerNodes.put(newNodeId, controller);
+        return controller;
     }
 
     private static TestKitNode buildBrokerNode(int id,

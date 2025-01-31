@@ -2512,7 +2512,9 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         } else if (error == Errors.INVALID_REQUEST) {
             throw new IllegalStateException("Received unexpected invalid request error");
         }
-
+        logger.info("LLLL maybeHandleCommonResponse");
+//        throw IllegalStateException("should not here");
+        maybeTransition(leaderId, epoch, leaderEndpoints, currentTimeMs);
         return Optional.empty();
     }
 
@@ -2562,6 +2564,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         // The response epoch matches the local epoch, so we can handle the response
         ApiKeys apiKey = ApiKeys.forId(response.data().apiKey());
         final boolean handledSuccessfully;
+        System.err.println(String.format("NodeId:%d KKK RaftClient handleResponse ", nodeId.getAsInt()) + response);
 
         switch (apiKey) {
             case FETCH:
@@ -2658,6 +2661,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     private void handleRequest(RaftRequest.Inbound request, long currentTimeMs) {
         ApiKeys apiKey = ApiKeys.forId(request.data().apiKey());
         final CompletableFuture<? extends ApiMessage> responseFuture;
+        System.err.println(String.format("NodeId:%d KKK RaftClient handleRequest ", nodeId.getAsInt()) + request);
 
         switch (apiKey) {
             case FETCH:
@@ -3620,6 +3624,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
 
     @Override
     public OptionalLong highWatermark() {
+        logger.info("KKKK " + quorum.highWatermark());
         if (isInitialized() && quorum.highWatermark().isPresent()) {
             return OptionalLong.of(quorum.highWatermark().get().offset());
         } else {
