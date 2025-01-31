@@ -48,13 +48,6 @@ import scala.collection._
 import scala.jdk.CollectionConverters._
 
 /**
-  * Dynamic broker configurations are stored in ZooKeeper and may be defined at two levels:
-  * <ul>
-  *   <li>Per-broker configs persisted at <tt>/configs/brokers/{brokerId}</tt>: These can be described/altered
-  *       using AdminClient using the resource name brokerId.</li>
-  *   <li>Cluster-wide defaults persisted at <tt>/configs/brokers/&lt;default&gt;</tt>: These can be described/altered
-  *       using AdminClient using an empty resource name.</li>
-  * </ul>
   * The order of precedence for broker configs is:
   * <ol>
   *   <li>STATIC_BROKER_CONFIG: properties that broker is started up with, typically from server.properties file</li>
@@ -391,7 +384,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
         error(s"$errorMessage: $invalidPropNames")
       }
     }
-    removeInvalidProps(nonDynamicConfigs(props), "Non-dynamic configs configured in ZooKeeper will be ignored")
+    removeInvalidProps(nonDynamicConfigs(props), "Non-dynamic configs will be ignored")
     removeInvalidProps(securityConfigsWithoutListenerPrefix(props),
       "Security configs can be dynamically updated only using listener prefix, base configs will be ignored")
     if (!perBrokerConfig)
