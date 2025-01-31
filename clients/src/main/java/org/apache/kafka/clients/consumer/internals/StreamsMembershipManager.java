@@ -54,14 +54,14 @@ import java.util.stream.Stream;
  * <ul>
  *   <li>Keeping member state</li>
  *   <li>Keeping assignment for the member</li>
- *   <li>Reconciling assignment, for example if tasks need to be revoked before other tasks can be assigned</li>
+ *   <li>Reconciling assignment, for example, if tasks need to be revoked before other tasks can be assigned</li>
  *   <li>Calling the assignment and revocation callbacks on the Streams client</li>
  * </ul>
  */
 public class StreamsMembershipManager implements RequestManager {
 
     /**
-     * A data structure to represent the current task assignment, and current target task assignment of a member in a
+     * A data structure to represent the current task assignment, and target task assignment of a member in a
      * streams group.
      * <p/>
      * Besides the assigned tasks, it contains a local epoch that is bumped whenever the assignment changes, to ensure
@@ -590,7 +590,7 @@ public class StreamsMembershipManager implements RequestManager {
      * If the member is already part of the group, this will only ensure that the updated subscription
      * is included in the next heartbeat request.
      * <p/>
-     * Note that list of topics of the subscription is taken from the shared subscription state.
+     * Note that the list of topics in the subscription is taken from the shared subscription state.
      */
     public void onSubscriptionUpdated() {
         subscriptionUpdated.compareAndSet(false, true);
@@ -875,12 +875,12 @@ public class StreamsMembershipManager implements RequestManager {
         transitionTo(MemberState.PREPARE_LEAVING);
         CompletableFuture<Void> onGroupLeft = new CompletableFuture<>();
         leaveGroupInProgress = Optional.of(onGroupLeft);
-        if (!isOnClose) {
+        if (isOnClose) {
+            leaving();
+        } else {
             CompletableFuture<Void> onAllActiveTasksReleasedCallbackExecuted = releaseActiveTasks();
             onAllActiveTasksReleasedCallbackExecuted
                 .whenComplete((__, callbackError) -> leavingAfterReleasingActiveTasks(callbackError));
-        } else {
-            leaving();
         }
 
         return onGroupLeft;
@@ -933,9 +933,6 @@ public class StreamsMembershipManager implements RequestManager {
             log.debug("Target assignment {} received from the broker is equals to the member " +
                     "current assignment {}. Nothing to reconcile.",
                 targetAssignment, currentAssignment);
-            // Make sure we transition the member back to STABLE if it was RECONCILING (ex.
-            // member was RECONCILING unresolved assignments that were just removed by the
-            // broker), or JOINING (member joining received empty assignment).
             if (state == MemberState.RECONCILING || state == MemberState.JOINING) {
                 transitionTo(MemberState.STABLE);
             }
