@@ -87,6 +87,11 @@
       <allow class="org.apache.kafka.common.record.RecordBatch" exact-match="true" />
     </subpackage>
 
+    <subpackage name="internals">
+      <allow pkg="org.apache.kafka.common.metrics" />
+      <allow pkg="org.apache.kafka.common.metrics.internals" />
+    </subpackage>
+
     <subpackage name="message">
       <allow pkg="com.fasterxml.jackson" />
       <allow pkg="org.apache.kafka.common.protocol" />
