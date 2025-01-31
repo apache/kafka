@@ -1877,12 +1877,13 @@ public class SharePartition {
             NavigableMap.Entry<Long, InFlightBatch> entry = cachedState.floorEntry(lastOffsetAcknowledged);
             // If the lastOffsetAcknowledged is equal to the last offset of entry, then the entire batch can potentially be removed.
             if (lastOffsetAcknowledged == entry.getValue().lastOffset()) {
-                if (initialReadGapOffset != null) {
+                startOffset = cachedState.higherKey(lastOffsetAcknowledged);
+                if (isInitialReadGapOffsetWindowActive()) {
                     // This case will arise if we have a situation where there is an acquirable gap after the lastOffsetAcknowledged.
-                    // Ex, the cachedState has following state batches -> {(0, 10), (11, 20), (31,40)} and al these batches are acked.
+                    // Ex, the cachedState has following state batches -> {(0, 10), (11, 20), (31,40)} and all these batches are acked.
                     // In this case, lastOffsetAcknowledged will be 20, but we cannot simply move the start offset to the first offset
                     // of next cachedState batch. The startOffset should be at 21, because we have an acquirable gap there.
-                    startOffset = Math.min(initialReadGapOffset.gapStartOffset(), cachedState.higherKey(lastOffsetAcknowledged));
+                    startOffset = Math.min(initialReadGapOffset.gapStartOffset(), startOffset);
                 } else {
                     // If initialReadGapOffset is null, that means the cachedState does not have any acquirable gaps.
                     // We can simply move the start offset to the first offset of the next cachedState batch.
