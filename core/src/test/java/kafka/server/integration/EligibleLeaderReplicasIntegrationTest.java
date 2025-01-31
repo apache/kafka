@@ -144,7 +144,6 @@ public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarnes
         Producer producer = null;
         Consumer consumer = null;
         try {
-            // check the partition is on broker 0 which we'll kill
             TopicDescription testTopicDescription = adminClient.describeTopics(Collections.singletonList(testTopicName))
                 .allTopicNames().get().get(testTopicName);
             TopicPartitionInfo topicPartitionInfo = testTopicDescription.partitions().get(0);
@@ -231,7 +230,6 @@ public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarnes
         adminClient.incrementalAlterConfigs(configOps).all().get();
 
         try {
-            // check the partition is on broker 0 which we'll kill
             TopicDescription testTopicDescription = adminClient.describeTopics(Collections.singletonList(testTopicName))
                 .allTopicNames().get().get(testTopicName);
             TopicPartitionInfo topicPartitionInfo = testTopicDescription.partitions().get(0);
@@ -308,7 +306,6 @@ public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarnes
         adminClient.incrementalAlterConfigs(configOps).all().get();
 
         try {
-            // check the partition is on broker 0 which we'll kill
             TopicDescription testTopicDescription = adminClient.describeTopics(Collections.singletonList(testTopicName))
                 .allTopicNames().get().get(testTopicName);
             TopicPartitionInfo topicPartitionInfo = testTopicDescription.partitions().get(0);
@@ -370,7 +367,6 @@ public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarnes
         adminClient.incrementalAlterConfigs(configOps).all().get();
 
         try {
-            // check the partition is on broker 0 which we'll kill
             TopicDescription testTopicDescription = adminClient.describeTopics(Collections.singletonList(testTopicName))
                 .allTopicNames().get().get(testTopicName);
             TopicPartitionInfo topicPartitionInfo = testTopicDescription.partitions().get(0);
@@ -390,6 +386,7 @@ public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarnes
             topicPartitionInfo = adminClient.describeTopics(Collections.singletonList(testTopicName))
                 .allTopicNames().get().get(testTopicName).partitions().get(0);
             int lastKnownLeader = topicPartitionInfo.lastKnownElr().get(0).id();
+            System.out.println(lastKnownLeader + "--" + topicPartitionInfo.elr());
 
             brokers().foreach(broker -> {
                 Seq<File> dirs = broker.logManager().liveLogDirs();
