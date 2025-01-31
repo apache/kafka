@@ -472,9 +472,8 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
   }
 
   /**
-   * Updates metrics configs. This is invoked when quota configs are updated in ZooKeeper
-   * or when partitions leaders change and custom callbacks that implement partition-based quotas
-   * have updated quotas.
+   * Updates metrics configs. This is invoked when quota configs are updated when partitions leaders change 
+   * and custom callbacks that implement partition-based quotas have updated quotas.
    *
    * @param updatedQuotaEntity If set to one entity and quotas have only been enabled at one
    *    level, then an optimized update is performed with a single metric update. If None is provided,
