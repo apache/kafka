@@ -840,8 +840,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         final ValueJoinerWithKey<? super K, ? super V, ? super VRight, ? extends VOut> joiner,
         final JoinWindows windows,
         final StreamJoined<K, V, VRight> streamJoined,
-        final KStreamImplJoin join)
-    {
+        final KStreamImplJoin join
+    ) {
         Objects.requireNonNull(otherStream, "otherStream can't be null");
         Objects.requireNonNull(joiner, "joiner can't be null");
         Objects.requireNonNull(windows, "windows can't be null");
