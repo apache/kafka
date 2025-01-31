@@ -26,7 +26,6 @@ import kafka.log.{LogCleaner, LogManager}
 import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.server.DynamicBrokerConfig._
 import kafka.utils.{CoreUtils, Logging}
-import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.common.Reconfigurable
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, SaslConfigs, SslConfigs}
@@ -39,7 +38,7 @@ import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.security.PasswordEncoder
 import org.apache.kafka.server.ProcessRole
-import org.apache.kafka.server.config.{ConfigType, ReplicationConfigs, ServerConfigs, ServerLogConfigs, ServerTopicConfigSynonyms, ZooKeeperInternals}
+import org.apache.kafka.server.config.{ReplicationConfigs, ServerConfigs, ServerLogConfigs, ServerTopicConfigSynonyms}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.{ClientMetricsReceiverPlugin, MetricConfigs}
 import org.apache.kafka.server.telemetry.ClientTelemetry
@@ -58,8 +57,6 @@ import scala.jdk.CollectionConverters._
   * </ul>
   * The order of precedence for broker configs is:
   * <ol>
-  *   <li>DYNAMIC_BROKER_CONFIG: stored in ZK at /configs/brokers/{brokerId}</li>
-  *   <li>DYNAMIC_DEFAULT_BROKER_CONFIG: stored in ZK at /configs/brokers/&lt;default&gt;</li>
   *   <li>STATIC_BROKER_CONFIG: properties that broker is started up with, typically from server.properties file</li>
   *   <li>DEFAULT_CONFIG: Default configs defined in KafkaConfig</li>
   * </ol>
@@ -215,17 +212,9 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
   private var currentConfig: KafkaConfig = _
   private val dynamicConfigPasswordEncoder = Some(PasswordEncoder.NOOP)
 
-  private[server] def initialize(zkClientOpt: Option[KafkaZkClient], clientMetricsReceiverPluginOpt: Option[ClientMetricsReceiverPlugin]): Unit = {
+  private[server] def initialize(clientMetricsReceiverPluginOpt: Option[ClientMetricsReceiverPlugin]): Unit = {
     currentConfig = new KafkaConfig(kafkaConfig.props, false)
     metricsReceiverPluginOpt = clientMetricsReceiverPluginOpt
-
-    zkClientOpt.foreach { zkClient =>
-      val adminZkClient = new AdminZkClient(zkClient)
-      updateDefaultConfig(adminZkClient.fetchEntityConfig(ConfigType.BROKER, ZooKeeperInternals.DEFAULT_STRING), false)
-      val props = adminZkClient.fetchEntityConfig(ConfigType.BROKER, kafkaConfig.brokerId.toString)
-      val brokerConfig = maybeReEncodePasswords(props, adminZkClient)
-      updateBrokerConfig(kafkaConfig.brokerId, brokerConfig)
-    }
   }
 
   /**
@@ -347,12 +336,12 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
   }
 
   /**
-   * All config updates through ZooKeeper are triggered through actual changes in values stored in ZooKeeper.
+   * Config updates are triggered through actual changes in stored values.
    * For some configs like SSL keystores and truststores, we also want to reload the store if it was modified
-   * in-place, even though the actual value of the file path and password haven't changed. This scenario alone
-   * is handled here when a config update request using admin client is processed by ZkAdminManager. If any of
-   * the SSL configs have changed, then the update will not be done here, but will be handled later when ZK
-   * changes are processed. At the moment, only listener configs are considered for reloading.
+   * in-place, even though the actual value of the file path and password haven't changed. This scenario is
+   * handled when a config update request using admin client is processed by the AdminManager. If any of
+   * the SSL configs have changed, then the update will be handled when configuration changes are processed.
+   * At the moment, only listener configs are considered for reloading.
    */
   private[server] def reloadUpdatedFilesWithoutConfigChange(newProps: Properties): Unit = CoreUtils.inWriteLock(lock) {
     reconfigurables.forEach(r => {
@@ -425,14 +414,6 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
         decodePassword(name, value)
     }
     props
-  }
-
-  // If the secret has changed, password.encoder.old.secret contains the old secret that was used
-  // to encode the configs in ZK. Decode passwords using the old secret and update ZK with values
-  // encoded using the current secret. Ignore any errors during decoding since old secret may not
-  // have been removed during broker restart.
-  private def maybeReEncodePasswords(persistentProps: Properties, adminZkClient: AdminZkClient): Properties = {
-    persistentProps.clone().asInstanceOf[Properties]
   }
 
   /**
@@ -900,7 +881,6 @@ object DynamicListenerConfig {
    */
   val ReconfigurableConfigs = Set(
     // Listener configs
-    SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG,
     SocketServerConfigs.LISTENERS_CONFIG,
     SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG,
 
@@ -986,40 +966,16 @@ class DynamicListenerConfig(server: KafkaBroker) extends BrokerReconfigurable wi
     DynamicListenerConfig.ReconfigurableConfigs
   }
 
-  private def listenerRegistrationsAltered(
-    oldAdvertisedListeners: Map[ListenerName, EndPoint],
-    newAdvertisedListeners: Map[ListenerName, EndPoint]
-  ): Boolean = {
-    if (oldAdvertisedListeners.size != newAdvertisedListeners.size) return true
-    oldAdvertisedListeners.foreachEntry {
-      case (oldListenerName, oldEndpoint) =>
-        newAdvertisedListeners.get(oldListenerName) match {
-          case None => return true
-          case Some(newEndpoint) => if (!newEndpoint.equals(oldEndpoint)) {
-            return true
-          }
-        }
-    }
-    false
-  }
-
-  private def verifyListenerRegistrationAlterationSupported(): Unit = {
-    if (!server.config.requiresZookeeper) {
-      throw new ConfigException("Advertised listeners cannot be altered when using a " +
-        "Raft-based metadata quorum.")
-    }
-  }
-
   def validateReconfiguration(newConfig: KafkaConfig): Unit = {
     val oldConfig = server.config
-    val newListeners = listenersToMap(newConfig.listeners)
-    val newAdvertisedListeners = listenersToMap(newConfig.effectiveAdvertisedBrokerListeners)
-    val oldListeners = listenersToMap(oldConfig.listeners)
-    if (!newAdvertisedListeners.keySet.subsetOf(newListeners.keySet))
-      throw new ConfigException(s"Advertised listeners '$newAdvertisedListeners' must be a subset of listeners '$newListeners'")
-    if (!newListeners.keySet.subsetOf(newConfig.effectiveListenerSecurityProtocolMap.keySet))
+    val newListeners = newConfig.listeners.map(_.listenerName).toSet
+    val oldAdvertisedListeners = oldConfig.effectiveAdvertisedBrokerListeners.map(_.listenerName).toSet
+    val oldListeners = oldConfig.listeners.map(_.listenerName).toSet
+    if (!oldAdvertisedListeners.subsetOf(newListeners))
+      throw new ConfigException(s"Advertised listeners '$oldAdvertisedListeners' must be a subset of listeners '$newListeners'")
+    if (!newListeners.subsetOf(newConfig.effectiveListenerSecurityProtocolMap.keySet))
       throw new ConfigException(s"Listeners '$newListeners' must be subset of listener map '${newConfig.effectiveListenerSecurityProtocolMap}'")
-    newListeners.keySet.intersect(oldListeners.keySet).foreach { listenerName =>
+    newListeners.intersect(oldListeners).foreach { listenerName =>
       def immutableListenerConfigs(kafkaConfig: KafkaConfig, prefix: String): Map[String, AnyRef] = {
         kafkaConfig.originalsWithPrefix(prefix, true).asScala.filter { case (key, _) =>
           // skip the reconfigurable configs
@@ -1031,15 +987,6 @@ class DynamicListenerConfig(server: KafkaBroker) extends BrokerReconfigurable wi
           "restart broker or create a new listener for update")
       if (oldConfig.effectiveListenerSecurityProtocolMap(listenerName) != newConfig.effectiveListenerSecurityProtocolMap(listenerName))
         throw new ConfigException(s"Security protocol cannot be updated for existing listener $listenerName")
-    }
-    if (!newAdvertisedListeners.contains(newConfig.interBrokerListenerName))
-      throw new ConfigException(s"Advertised listener must be specified for inter-broker listener ${newConfig.interBrokerListenerName}")
-
-    // Currently, we do not support adding or removing listeners when in KRaft mode.
-    // However, we support changing other listener configurations (max connections, etc.)
-    if (listenerRegistrationsAltered(listenersToMap(oldConfig.effectiveAdvertisedBrokerListeners),
-        listenersToMap(newConfig.effectiveAdvertisedBrokerListeners))) {
-      verifyListenerRegistrationAlterationSupported()
     }
   }
 
@@ -1054,13 +1001,6 @@ class DynamicListenerConfig(server: KafkaBroker) extends BrokerReconfigurable wi
       LoginManager.closeAll() // Clear SASL login cache to force re-login
       if (listenersRemoved.nonEmpty) server.socketServer.removeListeners(listenersRemoved)
       if (listenersAdded.nonEmpty) server.socketServer.addListeners(listenersAdded)
-    }
-    if (listenerRegistrationsAltered(listenersToMap(oldConfig.effectiveAdvertisedBrokerListeners),
-        listenersToMap(newConfig.effectiveAdvertisedBrokerListeners))) {
-      verifyListenerRegistrationAlterationSupported()
-      server match {
-        case _ => throw new RuntimeException("Unable to handle reconfigure")
-      }
     }
   }
 

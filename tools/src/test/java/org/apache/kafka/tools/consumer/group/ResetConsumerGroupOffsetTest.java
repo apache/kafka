@@ -29,13 +29,10 @@ import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfig;
-import org.apache.kafka.common.test.api.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTemplate;
-import org.apache.kafka.common.test.api.ClusterTestExtensions;
 import org.apache.kafka.test.TestUtils;
-
-import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.io.BufferedWriter;
 import java.io.File;
@@ -92,7 +89,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * - scope=topics+partitions, scenario=to-earliest
  * - export/import
  */
-@ExtendWith(value = ClusterTestExtensions.class)
 public class ResetConsumerGroupOffsetTest {
 
     private static final String TOPIC_PREFIX = "foo-";

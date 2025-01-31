@@ -29,9 +29,9 @@ import kafka.server.metadata.MockConfigRepository;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
-import org.apache.kafka.common.message.LeaderAndIsrRequestData;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.SimpleRecord;
+import org.apache.kafka.common.requests.LeaderAndIsrRequest;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.common.MetadataVersion;
@@ -115,7 +115,7 @@ public class PartitionMakeFollowerBenchmark {
             setScheduler(scheduler).
             setBrokerTopicStats(brokerTopicStats).
             setLogDirFailureChannel(logDirFailureChannel).
-            setTime(Time.SYSTEM).setKeepPartitionMetadataFile(true).
+            setTime(Time.SYSTEM).
             build();
 
         TopicPartition tp = new TopicPartition("topic", 0);
@@ -152,7 +152,7 @@ public class PartitionMakeFollowerBenchmark {
 
     @Benchmark
     public boolean testMakeFollower() {
-        LeaderAndIsrRequestData.LeaderAndIsrPartitionState partitionState = new LeaderAndIsrRequestData.LeaderAndIsrPartitionState()
+        LeaderAndIsrRequest.PartitionState partitionState = new LeaderAndIsrRequest.PartitionState()
             .setControllerEpoch(0)
             .setLeader(0)
             .setLeaderEpoch(0)

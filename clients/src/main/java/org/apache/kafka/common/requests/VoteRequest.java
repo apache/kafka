@@ -74,7 +74,8 @@ public class VoteRequest extends AbstractRequest {
                                                    int replicaEpoch,
                                                    int replicaId,
                                                    int lastEpoch,
-                                                   long lastEpochEndOffset) {
+                                                   long lastEpochEndOffset,
+                                                   boolean preVote) {
         return new VoteRequestData()
                    .setClusterId(clusterId)
                    .setTopics(Collections.singletonList(
@@ -86,7 +87,8 @@ public class VoteRequest extends AbstractRequest {
                                    .setReplicaEpoch(replicaEpoch)
                                    .setReplicaId(replicaId)
                                    .setLastOffsetEpoch(lastEpoch)
-                                   .setLastOffset(lastEpochEndOffset))
+                                   .setLastOffset(lastEpochEndOffset)
+                                   .setPreVote(preVote))
                            )));
     }
 }

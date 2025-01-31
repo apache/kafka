@@ -133,7 +133,7 @@ class LogCleanerManagerTest extends Logging {
     // the exception should be caught and the partition that caused it marked as uncleanable
     class LogMock extends UnifiedLog(offsets.logStartOffset, localLog, new BrokerTopicStats,
         producerIdExpirationCheckIntervalMs, leaderEpochCache,
-        producerStateManager, _topicId = None, keepPartitionMetadataFile = true) {
+        producerStateManager, _topicId = None) {
       // Throw an error in getFirstBatchTimestampForSegments since it is called in grabFilthiestLog()
       override def getFirstBatchTimestampForSegments(segments: util.Collection[LogSegment]): util.Collection[java.lang.Long] =
         throw new IllegalStateException("Error!")
@@ -358,7 +358,7 @@ class LogCleanerManagerTest extends Logging {
 
     log.appendAsLeader(records, leaderEpoch = 0)
     log.roll()
-    log.appendAsLeader(records, leaderEpoch = 0)
+    log.appendAsLeader(TestUtils.singletonRecords("test2".getBytes, key="test2".getBytes), leaderEpoch = 0)
     log.updateHighWatermark(2L)
 
     // simulate cleanup thread working on the log partition
@@ -821,8 +821,7 @@ class LogCleanerManagerTest extends Logging {
       producerStateManagerConfig = producerStateManagerConfig,
       producerIdExpirationCheckIntervalMs = TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
       logDirFailureChannel = new LogDirFailureChannel(10),
-      topicId = None,
-      keepPartitionMetadataFile = true)
+      topicId = None)
   }
 
   private def createLowRetentionLogConfig(segmentSize: Int, cleanupPolicy: String): LogConfig = {
@@ -875,8 +874,7 @@ class LogCleanerManagerTest extends Logging {
       producerStateManagerConfig = producerStateManagerConfig,
       producerIdExpirationCheckIntervalMs = TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
       logDirFailureChannel = new LogDirFailureChannel(10),
-      topicId = None,
-      keepPartitionMetadataFile = true
+      topicId = None
     )
   }
 

@@ -103,7 +103,7 @@ jobs:
           java-version: 23
           gradle-cache-read-only: ${{ !inputs.is-trunk }}
           gradle-cache-write-only: ${{ inputs.is-trunk }}
-          develocity-access-key: ${{ secrets.GE_ACCESS_TOKEN }}
+          develocity-access-key: ${{ secrets.DEVELOCITY_ACCESS_KEY }}
       - name: Compile and validate
         env:
           SCAN_ARG: ${{ inputs.is-public-fork && '--no-scan' || '--scan' }}
@@ -168,7 +168,7 @@ jobs:
           java-version: ${{ matrix.java }}
           gradle-cache-read-only: ${{ !inputs.is-trunk }}
           gradle-cache-write-only: ${{ inputs.is-trunk }}
-          develocity-access-key: ${{ secrets.GE_ACCESS_TOKEN }}
+          develocity-access-key: ${{ secrets.DEVELOCITY_ACCESS_KEY }}
 
       # If the load-catalog job failed, we won't be able to download the artifact. Since we don't want this to fail
       # the overall workflow, so we'll continue here without a test catalog.

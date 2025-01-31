@@ -182,7 +182,6 @@ public class TransactionManagerTest {
                 .setName("transaction.version")
                 .setMaxVersion(transactionV2Enabled ? (short) 2 : (short) 1)
                 .setMinVersion((short) 0)),
-            false,
             Arrays.asList(new ApiVersionsResponseData.FinalizedFeatureKey()
                 .setName("transaction.version")
                 .setMaxVersionLevel(transactionV2Enabled ? (short) 2 : (short) 1)
@@ -930,7 +929,6 @@ public class TransactionManagerTest {
                 .setName("transaction.version")
                 .setMaxVersion((short) 2)
                 .setMinVersion((short) 0)),
-            false,
             Arrays.asList(new ApiVersionsResponseData.FinalizedFeatureKey()
                 .setName("transaction.version")
                 .setMaxVersionLevel((short) 2)
@@ -1035,7 +1033,6 @@ public class TransactionManagerTest {
                 .setName("transaction.version")
                 .setMaxVersion((short) 1)
                 .setMinVersion((short) 0)),
-            false,
             Arrays.asList(new ApiVersionsResponseData.FinalizedFeatureKey()
                 .setName("transaction.version")
                 .setMaxVersionLevel((short) 1)
@@ -2972,7 +2969,6 @@ public class TransactionManagerTest {
                     .setMinVersion((short) 0)
                     .setMaxVersion((short) 7)),
                 Collections.emptyList(),
-                false,
                 Collections.emptyList(),
                 0));
 
@@ -3267,7 +3263,6 @@ public class TransactionManagerTest {
                         .setMinVersion((short) 0)
                         .setMaxVersion((short) 7)),
                 Collections.emptyList(),
-                false,
                 Collections.emptyList(),
                 0));
 
@@ -3328,7 +3323,6 @@ public class TransactionManagerTest {
                      .setMinVersion((short) 0)
                      .setMaxVersion((short) 4)),
                 Collections.emptyList(),
-                false,
                 Collections.emptyList(),
                 0));
 

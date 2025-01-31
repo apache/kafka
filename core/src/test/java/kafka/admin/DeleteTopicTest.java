@@ -30,12 +30,11 @@ import org.apache.kafka.common.errors.TopicDeletionDisabledException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.SimpleRecord;
+import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.TestUtils;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
-import org.apache.kafka.common.test.api.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
-import org.apache.kafka.common.test.api.ClusterTestExtensions;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.metadata.BrokerState;
@@ -43,8 +42,6 @@ import org.apache.kafka.server.common.RequestLocal;
 import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.storage.internals.log.AppendOrigin;
 import org.apache.kafka.storage.internals.log.VerificationGuard;
-
-import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -56,6 +53,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
+import scala.Option;
 import scala.jdk.javaapi.OptionConverters;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -63,7 +61,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.fail;
 
 
-@ExtendWith(value = ClusterTestExtensions.class)
 @ClusterTestDefaults(types = {Type.KRAFT},
     brokers = 3,
     serverProperties = {
@@ -238,7 +235,6 @@ public class DeleteTopicTest {
     @ClusterTest(serverProperties = {
         @ClusterConfigProperty(key = "log.cleaner.enable", value = "true"),
         @ClusterConfigProperty(key = "log.cleanup.policy", value = "compact"),
-        @ClusterConfigProperty(key = "log.segment.bytes", value = "100"),
         @ClusterConfigProperty(key = "log.cleaner.dedupe.buffer.size", value = "1048577")
     })
     public void testDeleteTopicWithCleaner(ClusterInstance cluster) throws Exception {
@@ -251,6 +247,8 @@ public class DeleteTopicTest {
                 "Replicas for topic test not created.");
             UnifiedLog log = server.logManager().getLog(topicPartition, false).get();
             writeDups(100, 3, log);
+            // force roll the segment so that cleaner can work on it
+            server.logManager().getLog(topicPartition, false).get().roll(Option.empty());
             // wait for cleaner to clean
             server.logManager().cleaner().awaitCleaned(topicPartition, 0, 60000);
             admin.deleteTopics(List.of(DEFAULT_TOPIC)).all().get();

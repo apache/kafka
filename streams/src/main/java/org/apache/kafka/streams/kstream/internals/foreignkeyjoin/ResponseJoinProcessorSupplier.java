@@ -53,13 +53,13 @@ public class ResponseJoinProcessorSupplier<K, V, VO, VR> implements ProcessorSup
     private final KTableValueGetterSupplier<K, V> valueGetterSupplier;
     private final Serializer<V> constructionTimeValueSerializer;
     private final Supplier<String> valueHashSerdePseudoTopicSupplier;
-    private final ValueJoiner<V, VO, VR> joiner;
+    private final ValueJoiner<? super V, ? super VO, ? extends VR> joiner;
     private final boolean leftJoin;
 
     public ResponseJoinProcessorSupplier(final KTableValueGetterSupplier<K, V> valueGetterSupplier,
                                          final Serializer<V> valueSerializer,
                                          final Supplier<String> valueHashSerdePseudoTopicSupplier,
-                                         final ValueJoiner<V, VO, VR> joiner,
+                                         final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
                                          final boolean leftJoin) {
         this.valueGetterSupplier = valueGetterSupplier;
         constructionTimeValueSerializer = valueSerializer;
@@ -70,7 +70,7 @@ public class ResponseJoinProcessorSupplier<K, V, VO, VR> implements ProcessorSup
 
     @Override
     public Processor<K, SubscriptionResponseWrapper<VO>, K, VR> get() {
-        return new ContextualProcessor<K, SubscriptionResponseWrapper<VO>, K, VR>() {
+        return new ContextualProcessor<>() {
             private String valueHashSerdePseudoTopic;
             private Serializer<V> runtimeValueSerializer = constructionTimeValueSerializer;
 
@@ -78,7 +78,7 @@ public class ResponseJoinProcessorSupplier<K, V, VO, VR> implements ProcessorSup
             private Sensor droppedRecordsSensor;
 
 
-            @SuppressWarnings("unchecked")
+            @SuppressWarnings({"unchecked", "resource"})
             @Override
             public void init(final ProcessorContext<K, VR> context) {
                 super.init(context);
