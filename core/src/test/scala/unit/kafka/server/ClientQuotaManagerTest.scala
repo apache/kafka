@@ -16,13 +16,14 @@
  */
 package kafka.server
 
+import kafka.server.ClientQuotaManager.BaseUserEntity
+
 import java.net.InetAddress
 import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.common.security.auth.KafkaPrincipal
-import org.apache.kafka.common.utils.Sanitizer
 import org.apache.kafka.server.config.ClientQuotaManagerConfig
 import org.apache.kafka.network.Session
-import org.apache.kafka.server.quota.QuotaType
+import org.apache.kafka.server.quota.{ClientQuotaEntity, QuotaType}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
@@ -35,13 +36,13 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
     try {
       // Case 1: Update the quota. Assert that the new quota value is returned
       clientQuotaManager.updateQuota(
-        client1.configUser.map(s => ClientQuotaManager.UserEntity(s)), 
-        client1.sanitizedConfigClientId.map(s => ClientQuotaManager.ClientIdEntity(s)), 
+        client1.configUser, 
+        client1.sanitizedClientId, 
         Some(new Quota(2000, true))
       )
       clientQuotaManager.updateQuota(
-        client2.configUser.map(s => ClientQuotaManager.UserEntity(s)), 
-        client2.sanitizedConfigClientId.map(s => ClientQuotaManager.ClientIdEntity(s)), 
+        client2.configUser, 
+        client2.sanitizedClientId,
         Some(new Quota(4000, true))
       )
 
@@ -59,8 +60,8 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
       // Case 2: Change quota again. The quota should be updated within KafkaMetrics as well since the sensor was created.
       // p1 should not longer be throttled after the quota change
       clientQuotaManager.updateQuota(
-        client1.configUser.map(s => ClientQuotaManager.UserEntity(s)), 
-        client1.sanitizedConfigClientId.map(s => ClientQuotaManager.ClientIdEntity(s)), 
+        client1.configUser, 
+        client1.sanitizedClientId, 
         Some(new Quota(3000, true))
       )
       assertEquals(3000, clientQuotaManager.quota(client1.user, client1.clientId).bound, 0.0, "Should return the newly overridden value (3000)")
@@ -70,8 +71,8 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
 
       // Case 3: Change quota back to default. Should be throttled again
       clientQuotaManager.updateQuota(
-        client1.configUser.map(s => ClientQuotaManager.UserEntity(s)), 
-        client1.sanitizedConfigClientId.map(s => ClientQuotaManager.ClientIdEntity(s)), 
+        client1.configUser, 
+        client1.sanitizedClientId, 
         Some(new Quota(500, true))
       )
       assertEquals(500, clientQuotaManager.quota(client1.user, client1.clientId).bound, 0.0, "Should return the default value (500)")
@@ -81,13 +82,13 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
 
       // Case 4: Set high default quota, remove p1 quota. p1 should no longer be throttled
       clientQuotaManager.updateQuota(
-        client1.configUser.map(s => ClientQuotaManager.UserEntity(s)), 
-        client1.sanitizedConfigClientId.map(s => ClientQuotaManager.ClientIdEntity(s)), 
+        client1.configUser, 
+        client1.sanitizedClientId, 
         None
       )
       clientQuotaManager.updateQuota(
-        defaultConfigClient.configUser.map(s => ClientQuotaManager.UserEntity(s)), 
-        defaultConfigClient.sanitizedConfigClientId.map(s => ClientQuotaManager.ClientIdEntity(s)), 
+        defaultConfigClient.configUser, 
+        defaultConfigClient.sanitizedClientId, 
         Some(new Quota(4000, true))
       )
       assertEquals(4000, clientQuotaManager.quota(client1.user, client1.clientId).bound, 0.0, "Should return the newly overridden value (4000)")
@@ -106,10 +107,10 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
    */
   @Test
   def testClientIdQuotaParsing(): Unit = {
-    val client1 = UserClient("ANONYMOUS", "p1", None, Some("p1"))
-    val client2 = UserClient("ANONYMOUS", "p2", None, Some("p2"))
+    val client1 = UserClient("ANONYMOUS", "p1", None, Some(ClientQuotaManager.ClientIdEntity("p1")))
+    val client2 = UserClient("ANONYMOUS", "p2", None, Some(ClientQuotaManager.ClientIdEntity("p2")))
     val randomClient = UserClient("ANONYMOUS", "random-client-id", None, None)
-    val defaultConfigClient = UserClient("", "", None, Some(ClientQuotaManager.DefaultString))
+    val defaultConfigClient = UserClient("", "", None, Some(ClientQuotaManager.DefaultClientIdEntity))
     testQuotaParsing(config, client1, client2, randomClient, defaultConfigClient)
   }
 
@@ -119,10 +120,10 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
    */
   @Test
   def testUserQuotaParsing(): Unit = {
-    val client1 = UserClient("User1", "p1", Some("User1"), None)
-    val client2 = UserClient("User2", "p2", Some("User2"), None)
+    val client1 = UserClient("User1", "p1", Some(ClientQuotaManager.UserEntity("User1")), None)
+    val client2 = UserClient("User2", "p2", Some(ClientQuotaManager.UserEntity("User2")), None)
     val randomClient = UserClient("RandomUser", "random-client-id", None, None)
-    val defaultConfigClient = UserClient("", "", Some(ClientQuotaManager.DefaultString), None)
+    val defaultConfigClient = UserClient("", "", Some(ClientQuotaManager.DefaultUserEntity), None)
     val config = new ClientQuotaManagerConfig()
     testQuotaParsing(config, client1, client2, randomClient, defaultConfigClient)
   }
@@ -133,10 +134,15 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
    */
   @Test
   def testUserClientIdQuotaParsing(): Unit = {
-    val client1 = UserClient("User1", "p1", Some("User1"), Some("p1"))
-    val client2 = UserClient("User2", "p2", Some("User2"), Some("p2"))
+    val client1 = UserClient("User1", "p1", Some(ClientQuotaManager.UserEntity("User1")), Some(ClientQuotaManager.ClientIdEntity("p1")))
+    val client2 = UserClient("User2", "p2", Some(ClientQuotaManager.UserEntity("User2")), Some(ClientQuotaManager.ClientIdEntity("p2")))
     val randomClient = UserClient("RandomUser", "random-client-id", None, None)
-    val defaultConfigClient = UserClient("", "", Some(ClientQuotaManager.DefaultString), Some(ClientQuotaManager.DefaultString))
+    val defaultConfigClient = UserClient(
+      "", 
+      "",
+      Some(ClientQuotaManager.DefaultUserEntity),
+      Some(ClientQuotaManager.DefaultClientIdEntity)
+    )
     val config = new ClientQuotaManagerConfig()
     testQuotaParsing(config, client1, client2, randomClient, defaultConfigClient)
   }
@@ -146,10 +152,10 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
    */
   @Test
   def testUserQuotaParsingWithDefaultClientIdQuota(): Unit = {
-    val client1 = UserClient("User1", "p1", Some("User1"), None)
-    val client2 = UserClient("User2", "p2", Some("User2"), None)
+    val client1 = UserClient("User1", "p1", Some(ClientQuotaManager.UserEntity("User1")), None)
+    val client2 = UserClient("User2", "p2", Some(ClientQuotaManager.UserEntity("User2")), None)
     val randomClient = UserClient("RandomUser", "random-client-id", None, None)
-    val defaultConfigClient = UserClient("", "", Some(ClientQuotaManager.DefaultString), None)
+    val defaultConfigClient = UserClient("", "", Some(ClientQuotaManager.DefaultUserEntity), None)
     testQuotaParsing(config, client1, client2, randomClient, defaultConfigClient)
   }
 
@@ -158,10 +164,15 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
    */
   @Test
   def testUserClientQuotaParsingIdWithDefaultClientIdQuota(): Unit = {
-    val client1 = UserClient("User1", "p1", Some("User1"), Some("p1"))
-    val client2 = UserClient("User2", "p2", Some("User2"), Some("p2"))
+    val client1 = UserClient("User1", "p1", Some(ClientQuotaManager.UserEntity("User1")), Some(ClientQuotaManager.ClientIdEntity("p1")))
+    val client2 = UserClient("User2", "p2", Some(ClientQuotaManager.UserEntity("User2")), Some(ClientQuotaManager.ClientIdEntity("p2")))
     val randomClient = UserClient("RandomUser", "random-client-id", None, None)
-    val defaultConfigClient = UserClient("", "", Some(ClientQuotaManager.DefaultString), Some(ClientQuotaManager.DefaultString))
+    val defaultConfigClient = UserClient(
+      "", 
+      "",
+      Some(ClientQuotaManager.DefaultUserEntity),
+      Some(ClientQuotaManager.DefaultClientIdEntity)
+    )
     testQuotaParsing(config, client1, client2, randomClient, defaultConfigClient)
   }
 
@@ -193,7 +204,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
 
       // Set default <user> quota config
       clientQuotaManager.updateQuota(
-        Some(ClientQuotaManager.UserEntity(ClientQuotaManager.DefaultString)), 
+        Some(ClientQuotaManager.DefaultUserEntity), 
         None, 
         Some(new Quota(10, true))
       )
@@ -215,7 +226,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
 
       // Set default <user> quota config
       clientQuotaManager.updateQuota(
-        Some(ClientQuotaManager.UserEntity(ClientQuotaManager.DefaultString)), 
+        Some(ClientQuotaManager.DefaultUserEntity),
         None, 
         Some(new Quota(10, true))
       )
@@ -223,7 +234,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
 
       // Remove default <user> quota config, back to no quotas
       clientQuotaManager.updateQuota(
-        Some(ClientQuotaManager.UserEntity(ClientQuotaManager.DefaultString)), 
+        Some(ClientQuotaManager.DefaultUserEntity),
         None, 
         None
       )
@@ -294,18 +305,18 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
 
     try {
       clientQuotaManager.updateQuota(
-        Some(ClientQuotaManager.UserEntity(ClientQuotaManager.DefaultString)), 
+        Some(ClientQuotaManager.DefaultUserEntity), 
         None, 
         Some(new Quota(1000, true))
       )
       clientQuotaManager.updateQuota(
         None,
-        Some(ClientQuotaManager.ClientIdEntity(ClientQuotaManager.DefaultString)),
+        Some(ClientQuotaManager.DefaultClientIdEntity),
         Some(new Quota(2000, true))
       )
       clientQuotaManager.updateQuota(
-        Some(ClientQuotaManager.UserEntity(ClientQuotaManager.DefaultString)),
-        Some(ClientQuotaManager.ClientIdEntity(ClientQuotaManager.DefaultString)), 
+        Some(ClientQuotaManager.DefaultUserEntity),
+        Some(ClientQuotaManager.DefaultClientIdEntity), 
         Some(new Quota(3000, true))
       )
       clientQuotaManager.updateQuota(
@@ -330,7 +341,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
       )
       clientQuotaManager.updateQuota(
         Some(ClientQuotaManager.UserEntity("userB")),
-        Some(ClientQuotaManager.ClientIdEntity(ClientQuotaManager.DefaultString)), 
+        Some(ClientQuotaManager.DefaultClientIdEntity), 
         Some(new Quota(8000, true))
       )
       clientQuotaManager.updateQuota(
@@ -359,8 +370,8 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
 
       // Remove default <user, client> quota config, revert to <user> default
       clientQuotaManager.updateQuota(
-        Some(ClientQuotaManager.UserEntity(ClientQuotaManager.DefaultString)),
-        Some(ClientQuotaManager.ClientIdEntity(ClientQuotaManager.DefaultString)),
+        Some(ClientQuotaManager.DefaultUserEntity),
+        Some(ClientQuotaManager.DefaultClientIdEntity),
         None
       )
       checkQuota(clientQuotaManager, "userD", "client1", 1000, 0, expectThrottle = false)    // Metrics tags changed, restart counter
@@ -370,7 +381,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
 
       // Remove default <user> quota config, revert to <client-id> default
       clientQuotaManager.updateQuota(
-        Some(ClientQuotaManager.UserEntity(ClientQuotaManager.DefaultString)), 
+        Some(ClientQuotaManager.DefaultUserEntity),
         None, 
         None
       )
@@ -408,7 +419,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
       checkQuota(clientQuotaManager, "userA", "client6", 11000, 8500, expectThrottle = false)
       clientQuotaManager.updateQuota(
         Some(ClientQuotaManager.UserEntity("userA")),
-        Some(ClientQuotaManager.ClientIdEntity(ClientQuotaManager.DefaultString)),
+        Some(ClientQuotaManager.DefaultClientIdEntity),
         Some(new Quota(12000, true))
       )
       clientQuotaManager.updateQuota(
@@ -430,7 +441,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
     try {
       clientQuotaManager.updateQuota(
         None,
-        Some(ClientQuotaManager.ClientIdEntity(ClientQuotaManager.DefaultString)),
+        Some(ClientQuotaManager.DefaultClientIdEntity),
         Some(new Quota(500, true))
       )
 
@@ -481,7 +492,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
     try {
       clientQuotaManager.updateQuota(
         None,
-        Some(ClientQuotaManager.ClientIdEntity(ClientQuotaManager.DefaultString)),
+        Some(ClientQuotaManager.DefaultClientIdEntity),
         Some(new Quota(500, true))
       )
 
@@ -506,7 +517,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
     try {
       clientQuotaManager.updateQuota(
         None,
-        Some(ClientQuotaManager.ClientIdEntity(ClientQuotaManager.DefaultString)),
+        Some(ClientQuotaManager.DefaultClientIdEntity),
         Some(new Quota(500, true))
       )
 
@@ -536,7 +547,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
     try {
       clientQuotaManager.updateQuota(
         None,
-        Some(ClientQuotaManager.ClientIdEntity(ClientQuotaManager.DefaultString)),
+        Some(ClientQuotaManager.DefaultClientIdEntity),
         Some(new Quota(500, true))
       )
 
@@ -553,10 +564,11 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
     }
   }
 
-  private case class UserClient(user: String, clientId: String, configUser: Option[String] = None, configClientId: Option[String] = None) {
-    // The class under test expects only sanitized client configs. We pass both the default value (which should not be
-    // sanitized to ensure it remains unique) and non-default values, so we need to take care in generating the sanitized
-    // client ID
-    def sanitizedConfigClientId = configClientId.map(x => if (x == ClientQuotaManager.DefaultString) ClientQuotaManager.DefaultString else Sanitizer.sanitize(x))
+  private case class UserClient(
+    user: String, 
+    clientId: String, 
+    configUser: Option[BaseUserEntity] = None, 
+    sanitizedClientId: Option[ClientQuotaEntity.ConfigEntity] = None
+    ) {
   }
 }
