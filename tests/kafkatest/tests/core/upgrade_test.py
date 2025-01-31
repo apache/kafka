@@ -32,10 +32,10 @@ from kafkatest.version import LATEST_3_1, LATEST_3_2, LATEST_3_3, LATEST_3_4, LA
 # ZK mode. The upgrade process is also somewhat different for KRaft because we
 # use metadata.version instead of inter.broker.protocol.
 #
-class TestKRaftUpgrade(ProduceConsumeValidateTest):
+class TestUpgrade(ProduceConsumeValidateTest):
 
     def __init__(self, test_context):
-        super(TestKRaftUpgrade, self).__init__(test_context=test_context)
+        super(TestUpgrade, self).__init__(test_context=test_context)
         self.may_truncate_acked_records = False
 
     def setUp(self):

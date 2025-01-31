@@ -2824,7 +2824,7 @@ public class FetcherTest {
                 isolationLevel,
                 apiVersions);
 
-        Deserializers<byte[], byte[]> deserializers = new Deserializers<>(new ByteArrayDeserializer(), new ByteArrayDeserializer());
+        Deserializers<byte[], byte[]> deserializers = new Deserializers<>(new ByteArrayDeserializer(), new ByteArrayDeserializer(), metrics);
         FetchConfig fetchConfig = new FetchConfig(
                 minBytes,
                 maxBytes,
@@ -3858,7 +3858,7 @@ public class FetcherTest {
                 metadata,
                 subscriptionState,
                 fetchConfig,
-                new Deserializers<>(keyDeserializer, valueDeserializer),
+                new Deserializers<>(keyDeserializer, valueDeserializer, metrics),
                 metricsManager,
                 time,
                 apiVersions));
