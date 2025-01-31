@@ -484,7 +484,7 @@ public class QuorumControllerTest {
             assertArrayEquals(lastKnownElr, partition.lastKnownElr, partition.toString());
 
             // Unclean shutdown should not remove the last known ELR members.
-            reply = active.registerBroker(
+            active.registerBroker(
                 anonymousContextFor(ApiKeys.BROKER_REGISTRATION),
                 new BrokerRegistrationRequestData().
                     setBrokerId(brokerToBeTheLeader).

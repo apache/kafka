@@ -144,7 +144,7 @@ public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarnes
         Producer producer = null;
         Consumer consumer = null;
         try {
-            // check which partition is on broker 0 which we'll kill
+            // check the partition is on broker 0 which we'll kill
             TopicDescription testTopicDescription = adminClient.describeTopics(Collections.singletonList(testTopicName))
                 .allTopicNames().get().get(testTopicName);
             TopicPartitionInfo topicPartitionInfo = testTopicDescription.partitions().get(0);
@@ -172,9 +172,7 @@ public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarnes
             consumer.subscribe(Collections.singleton(testTopicName));
 
             producer.send(new ProducerRecord<>(testTopicName, "0", "0")).get();
-            Thread.sleep(1000);
-            ConsumerRecords records = consumer.poll(Duration.ofSeconds(1L));
-            assertEquals(1, records.count());
+            waitUntilOneMessageIsConsumed(consumer);
 
             killBroker(initialReplicas.get(0).id());
             killBroker(initialReplicas.get(1).id());
@@ -185,9 +183,8 @@ public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarnes
 
             // Now the partition is under min ISR. HWM should not advance.
             producer.send(new ProducerRecord<>(testTopicName, "1", "1")).get();
-            Thread.sleep(1000);
-            records = consumer.poll(Duration.ofSeconds(1L));
-            assertEquals(0, records.count());
+            Thread.sleep(100);
+            assertEquals(0, consumer.poll(Duration.ofSeconds(1L)).count());
 
             // Restore the min ISR and the previous log should be visible.
             startBroker(initialReplicas.get(1).id());
@@ -196,24 +193,27 @@ public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarnes
                 return isrSize == 4 && elrSize == 0;
             });
 
-            Consumer finalConsumer = consumer;
-            kafka.utils.TestUtils.waitUntilTrue(
-                () -> {
-                    try {
-                        ConsumerRecords record = finalConsumer.poll(Duration.ofMillis(100L));
-                        return record.count() == 1;
-                    } catch (Exception e) {
-                        return false;
-                    }
-                },
-                () -> "fail to consume messages",
-                org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS, 100L
-            );
+            waitUntilOneMessageIsConsumed(consumer);
         } finally {
             restartDeadBrokers(false);
             if (consumer != null) consumer.close();
             if (producer != null) producer.close();
         }
+    }
+
+    void waitUntilOneMessageIsConsumed(Consumer consumer) {
+        kafka.utils.TestUtils.waitUntilTrue(
+            () -> {
+                try {
+                    ConsumerRecords record = consumer.poll(Duration.ofMillis(100L));
+                    return record.count() >= 1;
+                } catch (Exception e) {
+                    return false;
+                }
+            },
+            () -> "fail to consume messages",
+            org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS, 100L
+        );
     }
 
     @ParameterizedTest
@@ -231,7 +231,7 @@ public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarnes
         adminClient.incrementalAlterConfigs(configOps).all().get();
 
         try {
-            // check which partition is on broker 0 which we'll kill
+            // check the partition is on broker 0 which we'll kill
             TopicDescription testTopicDescription = adminClient.describeTopics(Collections.singletonList(testTopicName))
                 .allTopicNames().get().get(testTopicName);
             TopicPartitionInfo topicPartitionInfo = testTopicDescription.partitions().get(0);
@@ -247,10 +247,6 @@ public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarnes
             waitForIsrAndElr((isrSize, elrSize) -> {
                 return isrSize == 1 && elrSize == 2;
             });
-
-            topicPartitionInfo = adminClient.describeTopics(Collections.singletonList(testTopicName))
-                .allTopicNames().get().get(testTopicName).partitions().get(0);
-            assertEquals(2, topicPartitionInfo.elr().size());
 
             killBroker(initialReplicas.get(3).id());
 
@@ -312,7 +308,7 @@ public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarnes
         adminClient.incrementalAlterConfigs(configOps).all().get();
 
         try {
-            // check which partition is on broker 0 which we'll kill
+            // check the partition is on broker 0 which we'll kill
             TopicDescription testTopicDescription = adminClient.describeTopics(Collections.singletonList(testTopicName))
                 .allTopicNames().get().get(testTopicName);
             TopicPartitionInfo topicPartitionInfo = testTopicDescription.partitions().get(0);
@@ -374,7 +370,7 @@ public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarnes
         adminClient.incrementalAlterConfigs(configOps).all().get();
 
         try {
-            // check which partition is on broker 0 which we'll kill
+            // check the partition is on broker 0 which we'll kill
             TopicDescription testTopicDescription = adminClient.describeTopics(Collections.singletonList(testTopicName))
                 .allTopicNames().get().get(testTopicName);
             TopicPartitionInfo topicPartitionInfo = testTopicDescription.partitions().get(0);

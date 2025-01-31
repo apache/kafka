@@ -1463,7 +1463,7 @@ public class ReplicationControlManager {
     /**
      * Create partition change records to remove replicas from any ISR or ELR for brokers when the shutdown is detected.
      *
-     * @param brokerId           The broker id.
+     * @param brokerId           The broker id to be shut down.
      * @param isCleanShutdown    Whether the broker has a clean shutdown.
      * @param records            The record list to append to.
      */

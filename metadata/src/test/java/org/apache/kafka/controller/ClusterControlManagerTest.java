@@ -868,7 +868,7 @@ public class ClusterControlManagerTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
-    public void testReRegistrationWithUncleanShutdownDetection(boolean isCleanShutdown) {
+    public void testReRegistrationWithCleanShutdownDetection(boolean isCleanShutdown) {
         ClusterControlManager clusterControl = new ClusterControlManager.Builder().
             setClusterId("pjvUwj3ZTEeSVQmUiH3IJw").
             setFeatureControlManager(new FeatureControlManager.Builder().build()).
@@ -909,11 +909,10 @@ public class ClusterControlManagerTest {
         assertEquals(Uuid.fromString("07OOcU7MQFeSmGAFPP2Zww"),
             clusterControl.brokerRegistrations().get(1).incarnationId());
         assertFalse(clusterControl.brokerRegistrations().get(1).inControlledShutdown());
+        assertEquals(111, clusterControl.brokerRegistrations().get(1).epoch());
         if (isCleanShutdown) {
-            assertEquals(100, clusterControl.brokerRegistrations().get(1).epoch());
             assertEquals(1, records.size());
         } else {
-            assertEquals(111, clusterControl.brokerRegistrations().get(1).epoch());
             assertEquals(2, records.size());
         }
     }

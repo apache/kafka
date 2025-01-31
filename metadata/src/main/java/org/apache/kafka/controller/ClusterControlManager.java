@@ -336,7 +336,7 @@ public class ClusterControlManager {
         BrokerRegistrationRequestData request,
         long newBrokerEpoch,
         FinalizedControllerFeatures finalizedFeatures,
-        boolean uncleanShutdownDetectionEnabled
+        boolean cleanShutdownDetectionEnabled
     ) {
         if (heartbeatManager == null) {
             throw new RuntimeException("ClusterControlManager is not active.");
@@ -427,7 +427,7 @@ public class ClusterControlManager {
 
         if (!request.incarnationId().equals(prevIncarnationId)) {
             int prevNumRecords = records.size();
-            boolean isCleanShutdown = uncleanShutdownDetectionEnabled ?
+            boolean isCleanShutdown = cleanShutdownDetectionEnabled ?
                 storedBrokerEpoch == request.previousBrokerEpoch() : false;
             brokerShutdownHandler.addRecordsForShutdown(request.brokerId(), isCleanShutdown, records);
             int numRecordsAdded = records.size() - prevNumRecords;
