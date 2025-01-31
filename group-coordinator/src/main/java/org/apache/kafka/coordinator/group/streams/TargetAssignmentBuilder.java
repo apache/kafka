@@ -34,8 +34,9 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
- * Build a new Target TasksTuple based on the provided parameters. As a result, it yields the records that must be persisted to the log and
- * the new member assignments as a map.
+ * Build the new target member assignments based on the provided parameters by calling the task assignor.
+ * As a result,
+ * it yields the records that must be persisted to the log and the new member assignments as a map from member ID to tasks tuple.
  * <p>
  * Records are only created for members which have a new target assignment. If their assignment did not change, no new record is needed.
  * <p>
@@ -45,34 +46,38 @@ import java.util.stream.Collectors;
 public class TargetAssignmentBuilder {
 
     /**
-     * The group id.
+     * The group ID.
      */
     private final String groupId;
     /**
      * The group epoch.
      */
     private final int groupEpoch;
+
     /**
      * The partition assignor used to compute the assignment.
      */
     private final TaskAssignor assignor;
+
     /**
      * The assignment configs.
      */
     private final Map<String, String> assignmentConfigs;
+
     /**
-     * The members which have been updated or deleted. Deleted members are signaled by a null value.
+     * The members which have been updated or deleted. A null value signals deleted members.
      */
     private final Map<String, StreamsGroupMember> updatedMembers = new HashMap<>();
+
     /**
      * The members in the group.
      */
     private Map<String, StreamsGroupMember> members = Map.of();
 
     /**
-     * The subscription metadata.
+     * The partition metadata.
      */
-    private Map<String, org.apache.kafka.coordinator.group.streams.TopicMetadata> subscriptionMetadata = Map.of();
+    private Map<String, org.apache.kafka.coordinator.group.streams.TopicMetadata> partitionMetadata = Map.of();
 
     /**
      * The existing target assignment.
@@ -83,6 +88,7 @@ public class TargetAssignmentBuilder {
      * The topology.
      */
     private ConfiguredTopology topology;
+
     /**
      * The static members in the group.
      */
@@ -91,7 +97,7 @@ public class TargetAssignmentBuilder {
     /**
      * Constructs the object.
      *
-     * @param groupId    The group id.
+     * @param groupId    The group ID.
      * @param groupEpoch The group epoch to compute a target assignment for.
      * @param assignor   The assignor to use to compute the target assignment.
      */
@@ -151,15 +157,15 @@ public class TargetAssignmentBuilder {
     }
 
     /**
-     * Adds the subscription metadata to use.
+     * Adds the partition metadata to use.
      *
-     * @param partitionMetadata The subscription metadata.
+     * @param partitionMetadata The partition metadata.
      * @return This object.
      */
     public TargetAssignmentBuilder withPartitionMetadata(
         Map<String, org.apache.kafka.coordinator.group.streams.TopicMetadata> partitionMetadata
     ) {
-        this.subscriptionMetadata = partitionMetadata;
+        this.partitionMetadata = partitionMetadata;
         return this;
     }
 
@@ -193,7 +199,7 @@ public class TargetAssignmentBuilder {
     /**
      * Adds or updates a member. This is useful when the updated member is not yet materialized in memory.
      *
-     * @param memberId The member id.
+     * @param memberId The member ID.
      * @param member   The member to add or update.
      * @return This object.
      */
@@ -208,7 +214,7 @@ public class TargetAssignmentBuilder {
     /**
      * Removes a member. This is useful when the removed member is not yet materialized in memory.
      *
-     * @param memberId The member id.
+     * @param memberId The member ID.
      * @return This object.
      */
     public TargetAssignmentBuilder removeMember(
@@ -264,7 +270,7 @@ public class TargetAssignmentBuilder {
                     Collections.unmodifiableMap(memberSpecs),
                     assignmentConfigs
                 ),
-                new TopologyMetadata(subscriptionMetadata, topology)
+                new TopologyMetadata(partitionMetadata, topology)
             );
         } else {
             newGroupAssignment = new GroupAssignment(
@@ -308,59 +314,35 @@ public class TargetAssignmentBuilder {
         return new TargetAssignmentResult(records, newTargetAssignment);
     }
 
-    private org.apache.kafka.coordinator.group.streams.TasksTuple newMemberAssignment(
+    private TasksTuple newMemberAssignment(
         GroupAssignment newGroupAssignment,
         String memberId
     ) {
         MemberAssignment newMemberAssignment = newGroupAssignment.members().get(memberId);
         if (newMemberAssignment != null) {
-            return new org.apache.kafka.coordinator.group.streams.TasksTuple(
+            return new TasksTuple(
                 newMemberAssignment.activeTasks(),
                 newMemberAssignment.standbyTasks(),
                 newMemberAssignment.warmupTasks()
             );
         } else {
-            return org.apache.kafka.coordinator.group.streams.TasksTuple.EMPTY;
+            return TasksTuple.EMPTY;
         }
     }
 
     /**
      * The assignment result returned by {{@link TargetAssignmentBuilder#build()}}.
+     *
+     * @param records          The records that must be applied to the __consumer_offsets topics to persist the new target assignment.
+     * @param targetAssignment The new target assignment for the group.
      */
-    public static class TargetAssignmentResult {
-
-        /**
-         * The records that must be applied to the __streams_offsets topics to persist the new target assignment.
-         */
-        private final List<CoordinatorRecord> records;
-
-        /**
-         * The new target assignment for the group.
-         */
-        private final Map<String, org.apache.kafka.coordinator.group.streams.TasksTuple> targetAssignment;
-
-        TargetAssignmentResult(
-            List<CoordinatorRecord> records,
-            Map<String, org.apache.kafka.coordinator.group.streams.TasksTuple> targetAssignment
-        ) {
+    public record TargetAssignmentResult(
+        List<CoordinatorRecord> records,
+        Map<String, TasksTuple> targetAssignment
+    ) {
+        public TargetAssignmentResult {
             Objects.requireNonNull(records);
             Objects.requireNonNull(targetAssignment);
-            this.records = records;
-            this.targetAssignment = targetAssignment;
-        }
-
-        /**
-         * @return The records.
-         */
-        public List<CoordinatorRecord> records() {
-            return records;
-        }
-
-        /**
-         * @return The target assignment.
-         */
-        public Map<String, org.apache.kafka.coordinator.group.streams.TasksTuple> targetAssignment() {
-            return targetAssignment;
         }
     }
 }

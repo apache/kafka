@@ -20,23 +20,26 @@ import org.apache.kafka.coordinator.group.streams.assignor.TopologyDescriber;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.SortedMap;
 import java.util.stream.Stream;
 
 /**
- * The topology metadata class is used by the {@link org.apache.kafka.coordinator.group.streams.assignor.TaskAssignor} to obtain topic and
+ * The topology metadata class is used by the {@link org.apache.kafka.coordinator.group.streams.assignor.TaskAssignor} to get topic and
  * partition metadata for the topology that the streams group using.
  *
  * @param topicMetadata The topic Ids mapped to their corresponding {@link TopicMetadata} object, which contains topic and partition
  *                      metadata.
+ * @param topology      The configured topology, containing subtopologies and internal topics.
  */
 public record TopologyMetadata(Map<String, TopicMetadata> topicMetadata, ConfiguredTopology topology) implements TopologyDescriber {
 
     public TopologyMetadata {
-        Objects.requireNonNull(topicMetadata);
+        topicMetadata = Objects.requireNonNull(Collections.unmodifiableMap(topicMetadata));
         Objects.requireNonNull(topology);
     }
 
@@ -50,30 +53,48 @@ public record TopologyMetadata(Map<String, TopicMetadata> topicMetadata, Configu
         return this.topicMetadata;
     }
 
+    /**
+     * Checks whether the given subtopology is associated with a changelog topic.
+     *
+     * @param subtopologyId String identifying the subtopology.
+     * @throws IllegalStateException if the subtopology ID does not exist, or the topology is not configured.
+     * @return true if the subtopology is associated with a changelog topic, false otherwise.
+     */
     @Override
     public boolean isStateful(String subtopologyId) {
         final ConfiguredSubtopology subtopology = getSubtopologyOrFail(subtopologyId);
         return !subtopology.stateChangelogTopics().isEmpty();
     }
 
+    /**
+     * The list of subtopologies in the topology.
+     *
+     * @throws IllegalStateException if the topology is not configured.
+     * @return a list of subtopology IDs.
+     */
     @Override
     public List<String> subtopologies() {
         return getSubtopologiesOrFail().keySet().stream().toList();
     }
 
     /**
-     * The number of partitions for the given subtopology ID.
+     * The maximal number of input partitions among all source topics for the given subtopology.
      *
-     * @param subtopologyId ID of the corresponding subtopology
-     * @return The number of partitions corresponding to the given subtopology ID, or -1 if the subtopology ID does not exist.
+     * @param subtopologyId String identifying the subtopology.
+     *
+     * @throws IllegalStateException if the subtopology ID does not exist, or the topology is not configured, or the subtopology
+     *                               contains no source topics.
+     * @return The maximal number of input partitions among all source topics for the given subtopology.
      */
     @Override
-    public int numTasks(String subtopologyId) {
+    public int maxNumInputPartitions(String subtopologyId) {
         final ConfiguredSubtopology subtopology = getSubtopologyOrFail(subtopologyId);
         return Stream.concat(
             subtopology.sourceTopics().stream(),
             subtopology.repartitionSourceTopics().keySet().stream()
-        ).map(topic -> this.topicMetadata.get(topic).numPartitions()).max(Integer::compareTo).orElse(-1);
+        ).map(topic -> this.topicMetadata.get(topic).numPartitions()).max(Integer::compareTo).orElseThrow(
+            () -> new IllegalStateException("Subtopology does not contain any source topics")
+        );
     }
 
     private ConfiguredSubtopology getSubtopologyOrFail(String subtopologyId) {
@@ -85,7 +106,7 @@ public record TopologyMetadata(Map<String, TopicMetadata> topicMetadata, Configu
     }
 
     private Map<String, ConfiguredSubtopology> getSubtopologiesOrFail() {
-        final Optional<Map<String, ConfiguredSubtopology>> subtopologies = topology.subtopologies();
+        final Optional<SortedMap<String, ConfiguredSubtopology>> subtopologies = topology.subtopologies();
         if (subtopologies.isEmpty()) {
             throw new IllegalStateException("Topology is not configured");
         }

@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group.streams;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.TaskRole;
@@ -32,11 +33,14 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.SortedMap;
+import java.util.TreeMap;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -55,6 +59,29 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class TargetAssignmentBuilderTest {
+
+    @Test
+    public void testBuildEmptyAssignmentWhenTopologyNotReady() {
+        String groupId = "test-group";
+        int groupEpoch = 1;
+        TaskAssignor assignor = mock(TaskAssignor.class);
+        ConfiguredTopology topology = mock(ConfiguredTopology.class);
+        Map<String, String> assignmentConfigs = new HashMap<>();
+
+        when(topology.isReady()).thenReturn(false);
+
+        TargetAssignmentBuilder builder = new TargetAssignmentBuilder(groupId, groupEpoch, assignor, assignmentConfigs)
+            .withTopology(topology);
+
+        TargetAssignmentBuilder.TargetAssignmentResult result = builder.build();
+
+        List<CoordinatorRecord> expectedRecords = Collections.singletonList(
+            StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentEpochRecord(groupId, groupEpoch)
+        );
+
+        assertEquals(expectedRecords, result.records());
+        assertEquals(Collections.emptyMap(), result.targetAssignment());
+    }
 
     @ParameterizedTest
     @EnumSource(TaskRole.class)
@@ -247,7 +274,7 @@ public class TargetAssignmentBuilderTest {
             mkTasks(barSubtopologyId, 4, 5, 6)
         ));
 
-        context.updateMemberSubscription("member-3");
+        context.updateMemberMetadata("member-3");
 
         context.prepareMemberAssignment("member-1", mkTasksTuple(taskRole,
             mkTasks(fooSubtopologyId, 1, 2),
@@ -331,7 +358,7 @@ public class TargetAssignmentBuilderTest {
             mkTasks(barSubtopologyId, 5, 6)
         ));
 
-        context.updateMemberSubscription(
+        context.updateMemberMetadata(
             "member-3",
             Optional.of("instance-id-3"),
             Optional.of("rack-0")
@@ -500,7 +527,7 @@ public class TargetAssignmentBuilderTest {
             mkTasks(barSubtopologyId, 5, 6)
         ));
 
-        context.removeMemberSubscription("member-3");
+        context.removeMember("member-3");
 
         context.prepareMemberAssignment("member-1", mkTasksTuple(taskRole,
             mkTasks(fooSubtopologyId, 1, 2, 3),
@@ -573,10 +600,10 @@ public class TargetAssignmentBuilderTest {
         ));
 
         // Static member 3 leaves
-        context.removeMemberSubscription("member-3");
+        context.removeMember("member-3");
 
         // Another static member joins with the same instance id as the departed one
-        context.updateMemberSubscription("member-3-a", Optional.of("instance-member-3"),
+        context.updateMemberMetadata("member-3-a", Optional.of("instance-member-3"),
             Optional.empty());
 
         context.prepareMemberAssignment("member-1", mkTasksTuple(taskRole,
@@ -633,7 +660,7 @@ public class TargetAssignmentBuilderTest {
         private final String groupId;
         private final int groupEpoch;
         private final TaskAssignor assignor = mock(TaskAssignor.class);
-        private final Map<String, ConfiguredSubtopology> subtopologies = new HashMap<>();
+        private final SortedMap<String, ConfiguredSubtopology> subtopologies = new TreeMap<>();
         private final ConfiguredTopology topology = new ConfiguredTopology(0, Optional.of(subtopologies), new HashMap<>(),
             Optional.empty());
         private final Map<String, StreamsGroupMember> members = new HashMap<>();
@@ -699,17 +726,17 @@ public class TargetAssignmentBuilderTest {
             return subtopologyId;
         }
 
-        public void updateMemberSubscription(
+        public void updateMemberMetadata(
             String memberId
         ) {
-            updateMemberSubscription(
+            updateMemberMetadata(
                 memberId,
                 Optional.empty(),
                 Optional.empty()
             );
         }
 
-        public void updateMemberSubscription(
+        public void updateMemberMetadata(
             String memberId,
             Optional<String> instanceId,
             Optional<String> rackId
@@ -732,7 +759,7 @@ public class TargetAssignmentBuilderTest {
                 .build());
         }
 
-        public void removeMemberSubscription(
+        public void removeMember(
             String memberId
         ) {
             this.updatedMembers.put(memberId, null);
