@@ -217,13 +217,13 @@ public class GroupCoordinatorRecordSerdeTest {
 
         keyBuffer.rewind();
         ByteBuffer valueBuffer2 = ByteBuffer.allocate(2);
-        valueBuffer2.putShort((short) (ConsumerGroupMetadataValue.HIGHEST_SUPPORTED_VERSION - 1));
+        valueBuffer2.putShort((short) (ConsumerGroupMetadataValue.LOWEST_SUPPORTED_VERSION - 1));
         valueBuffer2.rewind();
 
         ex = assertThrows(Deserializer.UnknownRecordVersionException.class,
             () -> serde.deserialize(keyBuffer, valueBuffer2));
         assertEquals(key.apiKey(), ex.type());
-        assertEquals(ConsumerGroupMetadataValue.HIGHEST_SUPPORTED_VERSION - 1, ex.unknownVersion());
+        assertEquals(ConsumerGroupMetadataValue.LOWEST_SUPPORTED_VERSION - 1, ex.unknownVersion());
     }
 
     @Test
