@@ -29,7 +29,6 @@ import static org.apache.kafka.common.utils.Utils.union;
  * Represents the state of a process in the group coordinator.
  * This includes the capacity of the process, the load on the process, and the tasks assigned to the process.
  */
-
 public class ProcessState {
     private final String processId;
     // number of members
