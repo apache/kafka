@@ -452,14 +452,18 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
   private def getOrDefaultClient(
     sanitizedClientId: Option[ClientQuotaEntity.ConfigEntity]
   ): Option[ClientQuotaEntity.ConfigEntity] = {
-    if (sanitizedClientId.nonEmpty && sanitizedClientId.get.name() == DefaultString)
+    if (sanitizedClientId.isEmpty)
+      None
+    else if (sanitizedClientId.get.name() == DefaultString)
       Some(DefaultClientIdEntity)
     else
       sanitizedClientId
   }
 
   private def getOrDefaultUser(sanitizedUser: Option[BaseUserEntity]): Option[BaseUserEntity] = {
-    if (sanitizedUser.nonEmpty && sanitizedUser.get.name() == DefaultString)
+    if (sanitizedUser.isEmpty)
+      None
+    else if (sanitizedUser.get.name() == DefaultString)
       Some(DefaultUserEntity)
     else
       sanitizedUser
