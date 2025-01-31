@@ -19,6 +19,8 @@ package org.apache.kafka.clients;
 import org.apache.kafka.common.config.ConfigException;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.MockedConstruction;
 import org.mockito.MockedStatic;
 
@@ -27,8 +29,10 @@ import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
 import java.util.Collections;
 import java.util.List;
+import java.util.stream.Stream;
 
 import static java.util.Arrays.asList;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -96,9 +100,25 @@ public class ClientUtilsTest {
     }
 
     @Test
-    public void testInvalidConfig() {
+    public void testValidBrokerAddress() {
+        List<String> addresses = List.of("localhost:9997", "localhost:9998", "localhost:9999");
+        assertDoesNotThrow(() -> ClientUtils.parseAndValidateAddresses(addresses, ClientDnsLookup.USE_ALL_DNS_IPS));
+    }
+
+    static Stream<List<String>> provideInvalidBrokerAddressTestCases() {
+        return Stream.of(
+            List.of("localhost:10000"),
+            // Intentionally provide a single string, as users may provide space-separated brokers, which will be parsed as a single string.
+            List.of("localhost:9997\nlocalhost:9998\nlocalhost:9999"),
+            List.of("localhost:9997 localhost:9998 localhost:9999")
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("provideInvalidBrokerAddressTestCases")
+    public void testInvalidBrokerAddress(List<String> addresses) {
         assertThrows(IllegalArgumentException.class,
-            () -> ClientUtils.parseAndValidateAddresses(Collections.singletonList("localhost:10000"), "random.value"));
+            () -> ClientUtils.parseAndValidateAddresses(addresses, "random.value"));
     }
 
     @Test
