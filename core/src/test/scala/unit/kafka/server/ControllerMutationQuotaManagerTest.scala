@@ -147,6 +147,7 @@ class ControllerMutationQuotaManagerTest extends BaseClientQuotaManagerTest {
     withQuotaManager { quotaManager =>
       quotaManager.updateQuota(
         Some(User).map(s => ClientQuotaManager.UserEntity(s)),
+        Some(ClientId),
         Some(ClientQuotaManager.ClientIdEntity(ClientId)),
         Some(Quota.upperBound(10))
       )
@@ -209,6 +210,7 @@ class ControllerMutationQuotaManagerTest extends BaseClientQuotaManagerTest {
     withQuotaManager { quotaManager =>
       quotaManager.updateQuota(
         Some(User).map(s => ClientQuotaManager.UserEntity(s)),
+        Some(ClientId),
         Some(ClientQuotaManager.ClientIdEntity(ClientId)),
         Some(Quota.upperBound(10))
       )
@@ -231,6 +233,7 @@ class ControllerMutationQuotaManagerTest extends BaseClientQuotaManagerTest {
     withQuotaManager { quotaManager =>
       quotaManager.updateQuota(
         Some(User).map(s => ClientQuotaManager.UserEntity(s)),
+        Some(ClientId),
         Some(ClientQuotaManager.ClientIdEntity(ClientId)),
         Some(Quota.upperBound(10))
       )

@@ -155,6 +155,7 @@ class ClientQuotaMetadataManager(private[metadata] val quotaManagers: QuotaManag
     try {
       manager.updateQuota(
         sanitizedUser = sanitizedUser,
+        clientId = sanitizedClientId.map(s => Sanitizer.desanitize(s.name())),
         sanitizedClientId = sanitizedClientId,
         quota = quotaValue
       )

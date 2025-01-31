@@ -404,11 +404,13 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
    * for any of these levels.
    *
    * @param sanitizedUser     user to override if quota applies to <user> or <user, client-id>
+   * @param clientId          client to override if quota applies to <client-id> or <user, client-id>             
    * @param sanitizedClientId sanitized client ID to override if quota applies to <client-id> or <user, client-id>
    * @param quota             custom quota to apply or None if quota override is being removed
    */
   def updateQuota(
-    sanitizedUser: Option[BaseUserEntity], 
+    sanitizedUser: Option[BaseUserEntity],
+    clientId: Option[String],
     sanitizedClientId: Option[ClientQuotaEntity.ConfigEntity], 
     quota: Option[Quota]
    ): Unit = {
@@ -422,7 +424,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
     lock.writeLock().lock()
     try {
       val userEntity = getOrDefaultUser(sanitizedUser)
-      val clientIdEntity = getOrDefaultClient(sanitizedClientId)
+      val clientIdEntity = getOrDefaultClient(clientId, sanitizedClientId)
       
       val quotaEntity = KafkaQuotaEntity(userEntity, clientIdEntity)
 
@@ -450,14 +452,15 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
   }
 
   private def getOrDefaultClient(
+    clientId: Option[String],
     sanitizedClientId: Option[ClientQuotaEntity.ConfigEntity]
   ): Option[ClientQuotaEntity.ConfigEntity] = {
     if (sanitizedClientId.isEmpty)
-      None
-    else if (sanitizedClientId.get.name() == DefaultString)
+      None  
+    else if (sanitizedClientId.nonEmpty && sanitizedClientId.get.name() == DefaultString)
       Some(DefaultClientIdEntity)
     else
-      sanitizedClientId
+      Some(ClientIdEntity(clientId.getOrElse(throw new IllegalStateException("Client-id not provided"))))
   }
 
   private def getOrDefaultUser(sanitizedUser: Option[BaseUserEntity]): Option[BaseUserEntity] = {

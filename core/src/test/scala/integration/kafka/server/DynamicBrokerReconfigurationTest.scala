@@ -936,6 +936,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     servers.foreach { server =>
       server.quotaManagers.produce.updateQuota(
         None,
+        Some(clientId),
         Some(ClientQuotaManager.ClientIdEntity(clientId)),
         Some(Quota.upperBound(10000000))
       )
