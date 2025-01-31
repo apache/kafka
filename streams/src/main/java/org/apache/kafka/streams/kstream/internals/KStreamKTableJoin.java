@@ -32,14 +32,14 @@ class KStreamKTableJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K, 
 
     private final KeyValueMapper<K, V1, K> keyValueMapper = (key, value) -> key;
     private final KTableValueGetterSupplier<K, V2> valueGetterSupplier;
-    private final ValueJoinerWithKey<? super K, ? super V1, ? super V2, VOut> joiner;
+    private final ValueJoinerWithKey<? super K, ? super V1, ? super V2, ? extends VOut> joiner;
     private final boolean leftJoin;
     private final Optional<Duration> gracePeriod;
     private final Optional<String> storeName;
     private final Set<StoreBuilder<?>> stores;
 
     KStreamKTableJoin(final KTableValueGetterSupplier<K, V2> valueGetterSupplier,
-                      final ValueJoinerWithKey<? super K, ? super V1, ? super V2, VOut> joiner,
+                      final ValueJoinerWithKey<? super K, ? super V1, ? super V2, ? extends VOut> joiner,
                       final boolean leftJoin,
                       final Optional<Duration> gracePeriod,
                       final Optional<StoreBuilder<?>> bufferStoreBuilder) {
