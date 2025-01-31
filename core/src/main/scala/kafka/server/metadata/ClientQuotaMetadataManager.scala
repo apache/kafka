@@ -19,11 +19,14 @@ package kafka.server.metadata
 
 import kafka.network.ConnectionQuotas
 import kafka.server.ClientQuotaManager
+import kafka.server.ClientQuotaManager.BaseUserEntity
 import kafka.server.QuotaFactory.QuotaManagers
+import kafka.server.metadata.ClientQuotaMetadataManager.transferToClientQuotaEntity
 import kafka.utils.Logging
 import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.common.quota.ClientQuotaEntity
 import org.apache.kafka.common.utils.Sanitizer
+import org.apache.kafka.server.quota.ClientQuotaEntity.{ConfigEntity => ClientQuotaConfigEntity} 
 
 import java.net.{InetAddress, UnknownHostException}
 import org.apache.kafka.image.{ClientQuotaDelta, ClientQuotasDelta}
@@ -146,25 +149,7 @@ class ClientQuotaMetadataManager(private[metadata] val quotaManagers: QuotaManag
     }
 
     // Convert entity into Options with sanitized values for QuotaManagers
-    val (sanitizedUser, sanitizedClientId) = quotaEntity match {
-      case UserEntity(user) => 
-        (Some(ClientQuotaManager.UserEntity(Sanitizer.sanitize(user))), None)
-      case DefaultUserEntity => 
-        (Some(ClientQuotaManager.DefaultUserEntity), None)
-      case ClientIdEntity(clientId) => 
-        (None, Some(ClientQuotaManager.ClientIdEntity(Sanitizer.sanitize(clientId))))
-      case DefaultClientIdEntity => 
-        (None, Some(ClientQuotaManager.DefaultClientIdEntity))
-      case ExplicitUserExplicitClientIdEntity(user, clientId) => 
-        (Some(ClientQuotaManager.UserEntity(Sanitizer.sanitize(user))), Some(ClientQuotaManager.ClientIdEntity(Sanitizer.sanitize(clientId))))
-      case ExplicitUserDefaultClientIdEntity(user) => 
-        (Some(ClientQuotaManager.UserEntity(Sanitizer.sanitize(user))), Some(ClientQuotaManager.DefaultClientIdEntity))
-      case DefaultUserExplicitClientIdEntity(clientId) => 
-        (Some(ClientQuotaManager.DefaultUserEntity), Some(ClientQuotaManager.ClientIdEntity(Sanitizer.sanitize(clientId))))
-      case DefaultUserDefaultClientIdEntity => 
-        (Some(ClientQuotaManager.DefaultUserEntity), Some(ClientQuotaManager.DefaultClientIdEntity))
-      case IpEntity(_) | DefaultIpEntity => throw new IllegalStateException("Should not see IP quota entities here")
-    }
+    val (sanitizedUser, sanitizedClientId) = transferToClientQuotaEntity(quotaEntity)
 
     val quotaValue = newValue.map(new Quota(_, true))
     try {
@@ -176,5 +161,31 @@ class ClientQuotaMetadataManager(private[metadata] val quotaManagers: QuotaManag
     } catch {
       case t: Throwable => error(s"Failed to update user-client quota $quotaEntity", t)
     }
+  }
+}
+
+object ClientQuotaMetadataManager {
+
+  def transferToClientQuotaEntity(quotaEntity: QuotaEntity): (Option[BaseUserEntity], Option[ClientQuotaConfigEntity]) = {
+    val (sanitizedUser, sanitizedClientId) = quotaEntity match {
+      case UserEntity(user) =>
+        (Some(ClientQuotaManager.UserEntity(Sanitizer.sanitize(user))), None)
+      case DefaultUserEntity =>
+        (Some(ClientQuotaManager.DefaultUserEntity), None)
+      case ClientIdEntity(clientId) =>
+        (None, Some(ClientQuotaManager.ClientIdEntity(Sanitizer.sanitize(clientId))))
+      case DefaultClientIdEntity =>
+        (None, Some(ClientQuotaManager.DefaultClientIdEntity))
+      case ExplicitUserExplicitClientIdEntity(user, clientId) =>
+        (Some(ClientQuotaManager.UserEntity(Sanitizer.sanitize(user))), Some(ClientQuotaManager.ClientIdEntity(Sanitizer.sanitize(clientId))))
+      case ExplicitUserDefaultClientIdEntity(user) =>
+        (Some(ClientQuotaManager.UserEntity(Sanitizer.sanitize(user))), Some(ClientQuotaManager.DefaultClientIdEntity))
+      case DefaultUserExplicitClientIdEntity(clientId) =>
+        (Some(ClientQuotaManager.DefaultUserEntity), Some(ClientQuotaManager.ClientIdEntity(Sanitizer.sanitize(clientId))))
+      case DefaultUserDefaultClientIdEntity =>
+        (Some(ClientQuotaManager.DefaultUserEntity), Some(ClientQuotaManager.DefaultClientIdEntity))
+      case IpEntity(_) | DefaultIpEntity => throw new IllegalStateException("Should not see IP quota entities here")
+    }
+    (sanitizedUser, sanitizedClientId)
   }
 }
