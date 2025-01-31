@@ -76,7 +76,7 @@ jobs:
           path: test-catalog
 
       - name: Checkout catalog at earlier date
-        if: ${{ needs.configure.outputs.test-catalog-days > 0 }}
+        if: ${{ needs.configure.outputs.test-catalog-days != '0' }}
         env:
           DAYS: ${{ needs.configure.outputs.test-catalog-days }}
         run: |
