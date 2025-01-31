@@ -42,7 +42,9 @@ import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils
 import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensor;
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
-class KStreamKTableJoinProcessor<StreamKey, StreamValue, TableKey, TableValue, VOut> extends ContextualProcessor<StreamKey, StreamValue, StreamKey, VOut> {
+class KStreamKTableJoinProcessor<StreamKey, StreamValue, TableKey, TableValue, VOut>
+    extends ContextualProcessor<StreamKey, StreamValue, StreamKey, VOut> {
+
     private static final Logger LOG = LoggerFactory.getLogger(KStreamKTableJoin.class);
 
     private final KTableValueGetter<TableKey, TableValue> valueGetter;

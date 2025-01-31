@@ -2068,7 +2068,7 @@ public interface KStream<K, V> {
      * @param joiner
      *        a {@link ValueJoiner} that computes the join result for a pair of matching records
      *
-     * @param <VTable> the value type of the table
+     * @param <TableValue> the value type of the table
      * @param <VOut> the value type of the result stream
      *
      * @return A {@code KStream} that contains join-records, one for each matched stream record, with the corresponding
@@ -2076,16 +2076,16 @@ public interface KStream<K, V> {
      *
      * @see #leftJoin(KTable, ValueJoiner)
      */
-    <VTable, VOut> KStream<K, VOut> join(final KTable<K, VTable> table,
-                                         final ValueJoiner<? super V, ? super VTable, ? extends VOut> joiner);
+    <TableValue, VOut> KStream<K, VOut> join(final KTable<K, TableValue> table,
+                                             final ValueJoiner<? super V, ? super TableValue, ? extends VOut> joiner);
 
     /**
      * See {@link #join(KTable, ValueJoiner)}.
      *
      * <p>Note that the key is read-only and must not be modified, as this can lead to corrupt partitioning.
      */
-    <VTable, VOut> KStream<K, VOut> join(final KTable<K, VTable> table,
-                                         final ValueJoinerWithKey<? super K, ? super V, ? super VTable, ? extends VOut> joiner);
+    <TableValue, VOut> KStream<K, VOut> join(final KTable<K, TableValue> table,
+                                             final ValueJoinerWithKey<? super K, ? super V, ? super TableValue, ? extends VOut> joiner);
 
     /**
      * Join records of this stream with {@link KTable}'s records using non-windowed inner equi-join.
@@ -2123,18 +2123,18 @@ public interface KStream<K, V> {
      * <p>You can retrieve all generated internal topic names via {@link Topology#describe()}.
      * To customize the name of the changelog topic, use {@link Joined} input parameter.
      */
-    <VTable, VOut> KStream<K, VOut> join(final KTable<K, VTable> table,
-                                         final ValueJoiner<? super V, ? super VTable, ? extends VOut> joiner,
-                                         final Joined<K, V, VTable> joined);
+    <TableValue, VOut> KStream<K, VOut> join(final KTable<K, TableValue> table,
+                                             final ValueJoiner<? super V, ? super TableValue, ? extends VOut> joiner,
+                                             final Joined<K, V, TableValue> joined);
 
     /**
      * See {@link #join(KTable, ValueJoiner, Joined)}.
      *
      * <p>Note that the key is read-only and must not be modified, as this can lead to corrupt partitioning.
      */
-    <VTable, VOut> KStream<K, VOut> join(final KTable<K, VTable> table,
-                                         final ValueJoinerWithKey<? super K, ? super V, ? super VTable, ? extends VOut> joiner,
-                                         final Joined<K, V, VTable> joined);
+    <TableValue, VOut> KStream<K, VOut> join(final KTable<K, TableValue> table,
+                                             final ValueJoinerWithKey<? super K, ? super V, ? super TableValue, ? extends VOut> joiner,
+                                             final Joined<K, V, TableValue> joined);
 
     /**
      * Join records of this stream with {@link KTable}'s records using non-windowed left equi join with default

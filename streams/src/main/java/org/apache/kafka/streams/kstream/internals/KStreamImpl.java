@@ -961,21 +961,27 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
     @Override
-    public <VTable, VOut> KStream<K, VOut> join(final KTable<K, VTable> table,
-                                                final ValueJoiner<? super V, ? super VTable, ? extends VOut> joiner) {
+    public <TableValue, VOut> KStream<K, VOut> join(
+        final KTable<K, TableValue> table,
+        final ValueJoiner<? super V, ? super TableValue, ? extends VOut> joiner)
+    {
         return join(table, toValueJoinerWithKey(joiner));
     }
 
     @Override
-    public <VTable, VOut> KStream<K, VOut> join(final KTable<K, VTable> table,
-                                                final ValueJoinerWithKey<? super K, ? super V, ? super VTable, ? extends VOut> joiner) {
+    public <TableValue, VOut> KStream<K, VOut> join(
+        final KTable<K, TableValue> table,
+        final ValueJoinerWithKey<? super K, ? super V, ? super TableValue, ? extends VOut> joiner)
+    {
         return join(table, joiner, Joined.with(null, null, null));
     }
 
     @Override
-    public <VTable, VOut> KStream<K, VOut> join(final KTable<K, VTable> table,
-                                                final ValueJoiner<? super V, ? super VTable, ? extends VOut> joiner,
-                                                final Joined<K, V, VTable> joined) {
+    public <TableValue, VOut> KStream<K, VOut> join(
+        final KTable<K, TableValue> table,
+        final ValueJoiner<? super V, ? super TableValue, ? extends VOut> joiner,
+        final Joined<K, V, TableValue> joined)
+    {
         Objects.requireNonNull(table, "table can't be null");
         Objects.requireNonNull(joiner, "joiner can't be null");
         Objects.requireNonNull(joined, "joined can't be null");
@@ -983,14 +989,16 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
     @Override
-    public <VTable, VOut> KStream<K, VOut> join(final KTable<K, VTable> table,
-                                                final ValueJoinerWithKey<? super K, ? super V, ? super VTable, ? extends VOut> joiner,
-                                                final Joined<K, V, VTable> joined) {
+    public <TableValue, VOut> KStream<K, VOut> join(
+        final KTable<K, TableValue> table,
+        final ValueJoinerWithKey<? super K, ? super V, ? super TableValue, ? extends VOut> joiner,
+        final Joined<K, V, TableValue> joined)
+    {
         Objects.requireNonNull(table, "table can't be null");
         Objects.requireNonNull(joiner, "joiner can't be null");
         Objects.requireNonNull(joined, "joined can't be null");
 
-        final JoinedInternal<K, V, VTable> joinedInternal = new JoinedInternal<>(joined);
+        final JoinedInternal<K, V, TableValue> joinedInternal = new JoinedInternal<>(joined);
         final String name = joinedInternal.name();
 
         if (repartitionRequired) {
@@ -1187,7 +1195,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         );
 
         final ProcessorParameters<K, V, K, VOut> processorParameters = new ProcessorParameters<>(processorSupplier, name);
-        final StreamTableJoinNode<K, V> streamTableJoinNode = new StreamTableJoinNode<>(
+        final StreamTableJoinNode<K, V, VOut> streamTableJoinNode = new StreamTableJoinNode<>(
             name,
             processorParameters,
             ((KTableImpl<K, ?, VTable>) table).valueGetterSupplier().storeNames(),
