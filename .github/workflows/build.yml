@@ -31,7 +31,34 @@ on:
         type: boolean
 
 jobs:
+  configure:
+    runs-on: ubuntu-latest
+    name: Configure
+    outputs:
+      is-draft: ${{ steps.check-draft-pr.outputs.is-draft }}
+      test-catalog-days: ${{ steps.test-catalog.outputs.days }}
+    steps:
+      - name: Env
+        run: printenv
+        env:
+          GITHUB_CONTEXT: ${{ toJson(github) }}
+      - name: Check for Draft PR
+        id: check-draft-pr
+        if: |
+          github.event_name == 'pull_request' && 
+          github.event.pull_request.draft
+        run: echo "is-draft=true" >> "$GITHUB_OUTPUT"
+      - name: Test Catalog age
+        id: test-catalog
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "days=0" >> "$GITHUB_OUTPUT"
+          else
+            echo "days=7" >> "$GITHUB_OUTPUT"
+          fi
+
   load-catalog:
+    needs: [configure]
     runs-on: ubuntu-latest
     name: Load Test Catalog
     steps:
@@ -49,9 +76,12 @@ jobs:
           path: test-catalog
 
       - name: Checkout catalog at earlier date
+        if: ${{ needs.configure.outputs.test-catalog-days > 0 }}
+        env:
+          DAYS: ${{ needs.configure.outputs.test-catalog-days }}
         run: |
           cd test-catalog
-          SHA=$(git rev-list -1 --before 7.days.ago origin/test-catalog)
+          SHA=$(git rev-list -1 --before $DAYS.days.ago origin/test-catalog)
           echo $SHA
           git switch --detach $SHA
           git show --no-patch
@@ -76,21 +106,14 @@ jobs:
           compression-level: 9
 
   validate:
+    needs: [configure]
     runs-on: ubuntu-latest
     name: Compile and Check Java
-    outputs:
-      is-draft: ${{ steps.check-draft-pr.outputs.is-draft }}
     steps:
       - name: Env
         run: printenv
         env:
           GITHUB_CONTEXT: ${{ toJson(github) }}
-      - name: Check for Draft PR
-        id: check-draft-pr
-        if: |
-          github.event_name == 'pull_request' && 
-          github.event.pull_request.draft
-        run: echo "is-draft=true" >> "$GITHUB_OUTPUT"
       - name: Checkout code
         uses: actions/checkout@v4
         with:
@@ -145,8 +168,8 @@ jobs:
           fi
 
   test:
-    needs: [validate, load-catalog]
-    if: ${{ ! needs.validate.outputs.is-draft }}
+    needs: [configure, load-catalog]
+    if: ${{ ! needs.configure.outputs.is-draft }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
