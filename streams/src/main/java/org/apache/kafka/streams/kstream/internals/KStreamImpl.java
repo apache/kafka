@@ -682,32 +682,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
     @Override
-    public <KR> KGroupedStream<KR, V> groupBy(final KeyValueMapper<? super K, ? super V, KR> keySelector) {
-        return groupBy(keySelector, Grouped.with(null, valueSerde));
-    }
-
-    @Override
-    public <KR> KGroupedStream<KR, V> groupBy(final KeyValueMapper<? super K, ? super V, KR> keySelector,
-                                              final Grouped<KR, V> grouped) {
-        Objects.requireNonNull(keySelector, "keySelector can't be null");
-        Objects.requireNonNull(grouped, "grouped can't be null");
-
-        final GroupedInternal<KR, V> groupedInternal = new GroupedInternal<>(grouped);
-        final ProcessorGraphNode<K, V> selectKeyMapNode = internalSelectKey(keySelector, new NamedInternal(groupedInternal.name()));
-        selectKeyMapNode.keyChangingOperation(true);
-
-        builder.addGraphNode(graphNode, selectKeyMapNode);
-
-        return new KGroupedStreamImpl<>(
-            selectKeyMapNode.nodeName(),
-            subTopologySourceNodes,
-            groupedInternal,
-            true,
-            selectKeyMapNode,
-            builder);
-    }
-
-    @Override
     public KGroupedStream<K, V> groupByKey() {
         return groupByKey(Grouped.with(keySerde, valueSerde));
     }
@@ -724,6 +698,32 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             groupedInternal,
             repartitionRequired,
             graphNode,
+            builder);
+    }
+
+    @Override
+    public <KOUT> KGroupedStream<KOUT, V> groupBy(final KeyValueMapper<? super K, ? super V, KOUT> keySelector) {
+        return groupBy(keySelector, Grouped.with(null, valueSerde));
+    }
+
+    @Override
+    public <KOut> KGroupedStream<KOut, V> groupBy(final KeyValueMapper<? super K, ? super V, KOut> keySelector,
+                                                  final Grouped<KOut, V> grouped) {
+        Objects.requireNonNull(keySelector, "keySelector can't be null");
+        Objects.requireNonNull(grouped, "grouped can't be null");
+
+        final GroupedInternal<KOut, V> groupedInternal = new GroupedInternal<>(grouped);
+        final ProcessorGraphNode<K, V> selectKeyMapNode = internalSelectKey(keySelector, new NamedInternal(groupedInternal.name()));
+        selectKeyMapNode.keyChangingOperation(true);
+
+        builder.addGraphNode(graphNode, selectKeyMapNode);
+
+        return new KGroupedStreamImpl<>(
+            selectKeyMapNode.nodeName(),
+            subTopologySourceNodes,
+            groupedInternal,
+            true,
+            selectKeyMapNode,
             builder);
     }
 
