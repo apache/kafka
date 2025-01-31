@@ -32,7 +32,6 @@ class ClientRequestQuotaManagerTest extends BaseClientQuotaManagerTest {
     val clientRequestQuotaManager = new ClientRequestQuotaManager(config, metrics, time, "", Optional.empty())
     clientRequestQuotaManager.updateQuota(
       Some(ClientQuotaManager.UserEntity("ANONYMOUS")),
-      Some("test-client"),
       Some(ClientQuotaManager.ClientIdEntity("test-client")),
       Some(Quota.upperBound(1))
     )

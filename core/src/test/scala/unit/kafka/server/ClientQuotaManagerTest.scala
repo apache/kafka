@@ -38,13 +38,11 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
       // Case 1: Update the quota. Assert that the new quota value is returned
       clientQuotaManager.updateQuota(
         client1.configUser,
-        client1.configClientId, 
         client1.sanitizedConfigClientId,
         Some(new Quota(2000, true))
       )
       clientQuotaManager.updateQuota(
         client2.configUser,
-        client2.configClientId, 
         client2.sanitizedConfigClientId,
         Some(new Quota(4000, true))
       )
@@ -64,7 +62,6 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
       // p1 should not longer be throttled after the quota change
       clientQuotaManager.updateQuota(
         client1.configUser,
-        client1.configClientId,
         client1.sanitizedConfigClientId,
         Some(new Quota(3000, true))
       )
@@ -76,7 +73,6 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
       // Case 3: Change quota back to default. Should be throttled again
       clientQuotaManager.updateQuota(
         client1.configUser,
-        client1.configClientId,
         client1.sanitizedConfigClientId,
         Some(new Quota(500, true))
       )
@@ -88,13 +84,11 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
       // Case 4: Set high default quota, remove p1 quota. p1 should no longer be throttled
       clientQuotaManager.updateQuota(
         client1.configUser,
-        client1.configClientId,
         client1.sanitizedConfigClientId,
         None
       )
       clientQuotaManager.updateQuota(
         defaultConfigClient.configUser,
-        defaultConfigClient.configClientId,
         defaultConfigClient.sanitizedConfigClientId,
         Some(new Quota(4000, true))
       )
@@ -213,7 +207,6 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
       clientQuotaManager.updateQuota(
         Some(ClientQuotaManager.DefaultUserEntity), 
         None, 
-        None, 
         Some(new Quota(10, true))
       )
       assertEquals(10 * numFullQuotaWindows, clientQuotaManager.getMaxValueInQuotaWindow(userSession, "client1"), 0.01)
@@ -236,7 +229,6 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
       clientQuotaManager.updateQuota(
         Some(ClientQuotaManager.DefaultUserEntity),
         None, 
-        None, 
         Some(new Quota(10, true))
       )
       checkQuota(clientQuotaManager, "userA", "client1", 10, 1000, expectThrottle = true)
@@ -244,7 +236,6 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
       // Remove default <user> quota config, back to no quotas
       clientQuotaManager.updateQuota(
         Some(ClientQuotaManager.DefaultUserEntity),
-        None, 
         None, 
         None
       )
@@ -265,7 +256,6 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
       clientQuotaManager.updateQuota(
         Some(ClientQuotaManager.UserEntity("userA")), 
         None, 
-        None, 
         Some(new Quota(10, true))
       )
       checkQuota(clientQuotaManager, "userA", "client1", 10, 1000, expectThrottle = true)
@@ -273,7 +263,6 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
       // Remove <user> quota config, back to no quotas
       clientQuotaManager.updateQuota(
         Some(ClientQuotaManager.UserEntity("userA")), 
-        None, 
         None, 
         None
       )
@@ -293,7 +282,6 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
       // Set <user, client-id> quota config
       clientQuotaManager.updateQuota(
         Some(ClientQuotaManager.UserEntity("userA")),
-        Some("client1"),
         Some(ClientQuotaManager.ClientIdEntity("client1")), 
         Some(new Quota(10, true))
       )
@@ -302,7 +290,6 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
       // Remove <user, client-id> quota config, back to no quotas
       clientQuotaManager.updateQuota(
         Some(ClientQuotaManager.UserEntity("userA")),
-        Some("client1"),
         Some(ClientQuotaManager.ClientIdEntity("client1")), 
         None
       )
@@ -321,60 +308,50 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
       clientQuotaManager.updateQuota(
         Some(ClientQuotaManager.DefaultUserEntity), 
         None, 
-        None, 
         Some(new Quota(1000, true))
       )
       clientQuotaManager.updateQuota(
         None,
-        Some(ClientQuotaManager.DefaultString),
         Some(ClientQuotaManager.DefaultClientIdEntity),
         Some(new Quota(2000, true))
       )
       clientQuotaManager.updateQuota(
         Some(ClientQuotaManager.DefaultUserEntity),
-        Some(ClientQuotaManager.DefaultString),
         Some(ClientQuotaManager.DefaultClientIdEntity), 
         Some(new Quota(3000, true))
       )
       clientQuotaManager.updateQuota(
         Some(ClientQuotaManager.UserEntity("userA")), 
         None, 
-        None, 
         Some(new Quota(4000, true))
       )
       clientQuotaManager.updateQuota(
         Some(ClientQuotaManager.UserEntity("userA")), 
-        Some("client1"),
         Some(ClientQuotaManager.ClientIdEntity("client1")),
         Some(new Quota(5000, true))
       )
       clientQuotaManager.updateQuota(
         Some(ClientQuotaManager.UserEntity("userB")), 
         None, 
-        None, 
         Some(new Quota(6000, true))
       )
       clientQuotaManager.updateQuota(
         Some(ClientQuotaManager.UserEntity("userB")),
-        Some("client1"),
         Some(ClientQuotaManager.ClientIdEntity("client1")),
         Some(new Quota(7000, true))
       )
       clientQuotaManager.updateQuota(
         Some(ClientQuotaManager.UserEntity("userB")),
-        Some(ClientQuotaManager.DefaultString),
         Some(ClientQuotaManager.DefaultClientIdEntity), 
         Some(new Quota(8000, true))
       )
       clientQuotaManager.updateQuota(
         Some(ClientQuotaManager.UserEntity("userC")), 
         None, 
-        None, 
         Some(new Quota(10000, true))
       )
       clientQuotaManager.updateQuota(
         None,
-        Some("client1"),
         Some(ClientQuotaManager.ClientIdEntity("client1")),
         Some(new Quota(9000, true))
       )
@@ -395,7 +372,6 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
       // Remove default <user, client> quota config, revert to <user> default
       clientQuotaManager.updateQuota(
         Some(ClientQuotaManager.DefaultUserEntity),
-        Some(ClientQuotaManager.DefaultString),
         Some(ClientQuotaManager.DefaultClientIdEntity),
         None
       )
@@ -408,7 +384,6 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
       clientQuotaManager.updateQuota(
         Some(ClientQuotaManager.DefaultUserEntity),
         None, 
-        None, 
         None
       )
       checkQuota(clientQuotaManager, "userF", "client4", 2000, 0, expectThrottle = false)  // Default <client-id> quota shared across client-id of all users
@@ -420,12 +395,10 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
       clientQuotaManager.updateQuota(
         Some(ClientQuotaManager.UserEntity("userA")), 
         None, 
-        None, 
         Some(new Quota(8000, true))
       )
       clientQuotaManager.updateQuota(
         Some(ClientQuotaManager.UserEntity("userA")),
-        Some("client1"),
         Some(ClientQuotaManager.ClientIdEntity("client1")),
         Some(new Quota(10000, true))
       )
@@ -435,27 +408,23 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
       checkQuota(clientQuotaManager, "userA", "client1", 10000, 6000, expectThrottle = true)
       clientQuotaManager.updateQuota(
         Some(ClientQuotaManager.UserEntity("userA")),
-        Some("client1"),
         Some(ClientQuotaManager.ClientIdEntity("client1")),
         None
       )
       checkQuota(clientQuotaManager, "userA", "client6", 8000, 0, expectThrottle = true)    // Throttled due to shared user quota
       clientQuotaManager.updateQuota(
         Some(ClientQuotaManager.UserEntity("userA")),
-        Some("client6"),
         Some(ClientQuotaManager.ClientIdEntity("client6")),
         Some(new Quota(11000, true))
       )
       checkQuota(clientQuotaManager, "userA", "client6", 11000, 8500, expectThrottle = false)
       clientQuotaManager.updateQuota(
         Some(ClientQuotaManager.UserEntity("userA")),
-        Some(ClientQuotaManager.DefaultString),
         Some(ClientQuotaManager.DefaultClientIdEntity),
         Some(new Quota(12000, true))
       )
       clientQuotaManager.updateQuota(
         Some(ClientQuotaManager.UserEntity("userA")),
-        Some("client6"),
         Some(ClientQuotaManager.ClientIdEntity("client6")),
         None
       )
@@ -473,7 +442,6 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
     try {
       clientQuotaManager.updateQuota(
         None,
-        Some(ClientQuotaManager.DefaultString),
         Some(ClientQuotaManager.DefaultClientIdEntity),
         Some(new Quota(500, true))
       )
@@ -525,7 +493,6 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
     try {
       clientQuotaManager.updateQuota(
         None,
-        Some(ClientQuotaManager.DefaultString),
         Some(ClientQuotaManager.DefaultClientIdEntity),
         Some(new Quota(500, true))
       )
@@ -551,7 +518,6 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
     try {
       clientQuotaManager.updateQuota(
         None,
-        Some(ClientQuotaManager.DefaultString),
         Some(ClientQuotaManager.DefaultClientIdEntity),
         Some(new Quota(500, true))
       )
@@ -582,7 +548,6 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
     try {
       clientQuotaManager.updateQuota(
         None,
-        Some(ClientQuotaManager.DefaultString),
         Some(ClientQuotaManager.DefaultClientIdEntity),
         Some(new Quota(500, true))
       )
