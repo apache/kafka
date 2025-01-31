@@ -3913,7 +3913,7 @@ class UnifiedLogTest {
 
   @ParameterizedTest
   @ValueSource(booleans = Array(true, false))
-  def testEmptyTransactionStillClearsVerificationGuard(isTV2: Boolean): Unit = {
+  def testEmptyTransactionStillClearsVerificationGuard(supportsEpochBump: Boolean): Unit = {
     val producerStateManagerConfig = new ProducerStateManagerConfig(86400000, true)
 
     val producerId = 23L
@@ -3921,10 +3921,10 @@ class UnifiedLogTest {
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 2048 * 5)
     val log = createLog(logDir, logConfig, producerStateManagerConfig = producerStateManagerConfig)
 
-    val verificationGuard = log.maybeStartTransactionVerification(producerId, 0, producerEpoch, isTV2)
+    val verificationGuard = log.maybeStartTransactionVerification(producerId, 0, producerEpoch, supportsEpochBump)
     assertNotEquals(VerificationGuard.SENTINEL, verificationGuard)
 
-    val endMarkerProducerEpoch = if (isTV2) (producerEpoch + 1).toShort else producerEpoch
+    val endMarkerProducerEpoch = if (supportsEpochBump) (producerEpoch + 1).toShort else producerEpoch
     val endTransactionMarkerRecord = MemoryRecords.withEndTransactionMarker(
       producerId,
       endMarkerProducerEpoch,
@@ -3961,7 +3961,7 @@ class UnifiedLogTest {
 
   @ParameterizedTest
   @ValueSource(booleans = Array(true, false))
-  def testDisabledVerificationClearsVerificationGuard(isTV2: Boolean): Unit = {
+  def testDisabledVerificationClearsVerificationGuard(supportsEpochBump: Boolean): Unit = {
     val producerStateManagerConfig = new ProducerStateManagerConfig(86400000, true)
 
     val producerId = 23L
@@ -3969,7 +3969,7 @@ class UnifiedLogTest {
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 2048 * 5)
     val log = createLog(logDir, logConfig, producerStateManagerConfig = producerStateManagerConfig)
 
-    val verificationGuard = log.maybeStartTransactionVerification(producerId, 0, producerEpoch, isTV2)
+    val verificationGuard = log.maybeStartTransactionVerification(producerId, 0, producerEpoch, supportsEpochBump)
     assertNotEquals(VerificationGuard.SENTINEL, verificationGuard)
 
     producerStateManagerConfig.setTransactionVerificationEnabled(false)

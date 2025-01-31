@@ -200,7 +200,7 @@ public class UnifiedLog {
             VerificationStateEntry entry = producerStateManager.verificationStateEntry(producerId);
             // The only case we should not remove the verification guard is if the marker was a control marker, we are using TV2 and the epochs match.
             // This is safe because we always bump epoch upon upgrading to TV2.
-            boolean isV2NextTransactionStarted = entry != null && entry.isTransactionsV2() && batch.isControlBatch() && batch.producerEpoch() == entry.epoch();
+            boolean isV2NextTransactionStarted = entry != null && entry.supportsEpochBump() && batch.isControlBatch() && batch.producerEpoch() == entry.epoch();
             if (!isV2NextTransactionStarted)
                 producerStateManager.clearVerificationStateEntry(producerId);
         }
