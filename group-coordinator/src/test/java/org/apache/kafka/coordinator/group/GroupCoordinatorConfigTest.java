@@ -46,7 +46,7 @@ public class GroupCoordinatorConfigTest {
 
     @Test
     public void testConsumerGroupAssignorsDefault() {
-        // The full class name of the assignors if part of our public api. Hence,
+        // The full class name of the assignors is part of our public api. Hence,
         // we should ensure that they are not changed by mistake.
         assertEquals(
             List.of(
