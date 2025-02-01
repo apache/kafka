@@ -283,11 +283,12 @@ public class ProduceRequestTest {
                 new ProduceRequestData.TopicProduceData()
                     .setName("topic")
                     .setPartitionData(Collections.singletonList(new ProduceRequestData.PartitionProduceData()
-                    .setIndex(1)
-                    .setRecords(MemoryRecords.withRecords(Compression.NONE, simpleRecord))))).iterator()))
+                        .setIndex(1)
+                        .setRecords(MemoryRecords.withRecords(Compression.NONE, simpleRecord))))
+            ).iterator()))
             .setAcks((short) -1)
             .setTimeoutMs(10));
-        assertEquals(ApiKeys.PRODUCE_API_VERSIONS_RESPONSE_MIN_VERSION, builder.oldestAllowedVersion());
+        assertEquals(ApiKeys.PRODUCE.oldestVersion(), builder.oldestAllowedVersion());
         assertEquals(ApiKeys.PRODUCE.latestVersion(), builder.latestAllowedVersion());
     }
 
