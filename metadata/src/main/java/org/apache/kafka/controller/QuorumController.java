@@ -2204,7 +2204,7 @@ public final class QuorumController implements Controller {
         return controllerMetrics;
     }
 
-    void handleBrokerShutdown(int brokerId, boolean isUncleanShutdown, List<ApiMessageAndVersion> records) {
-        replicationControl.handleBrokerShutdown(brokerId, isUncleanShutdown, records);
+    void handleBrokerShutdown(int brokerId, boolean isCleanShutdown, List<ApiMessageAndVersion> records) {
+        replicationControl.handleBrokerShutdown(brokerId, isCleanShutdown, records);
     }
 }

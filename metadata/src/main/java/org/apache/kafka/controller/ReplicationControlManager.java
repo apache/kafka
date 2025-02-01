@@ -1476,7 +1476,7 @@ public class ReplicationControlManager {
                 brokersToElrs.partitionsWithBrokerInElr(brokerId));
         } else {
             // ELR is not enabled or if it is a clean shutdown, handle the shutdown as if the broker was fenced
-            generateLeaderAndIsrUpdates("handleBrokerUncleanShutdown", brokerId, NO_LEADER, NO_LEADER, records,
+            generateLeaderAndIsrUpdates("handleBrokerShutdown", brokerId, NO_LEADER, NO_LEADER, records,
                 brokersToIsrs.partitionsWithBrokerInIsr(brokerId));
         }
     }

@@ -81,7 +81,7 @@ public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarnes
     public Seq<KafkaConfig> generateConfigs() {
         List<Properties> brokerConfigs = new ArrayList<>();
         brokerConfigs.addAll(scala.collection.JavaConverters.seqAsJavaList(TestUtils.createBrokerConfigs(
-            5,
+            5, // The tests require 4 brokers to host the partition. However, we need the 5th broker to handle the admin client requests.
             true,
             true,
             scala.Option.<SecurityProtocol>empty(),
@@ -388,10 +388,12 @@ public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarnes
             int lastKnownLeader = topicPartitionInfo.lastKnownElr().get(0).id();
 
             brokers().foreach(broker -> {
-                Seq<File> dirs = broker.logManager().liveLogDirs();
-                assertEquals(1, dirs.size());
-                CleanShutdownFileHandler handler = new CleanShutdownFileHandler(dirs.apply(0).toString());
-                assertDoesNotThrow(() -> handler.delete());
+                if (broker.config().brokerId() != 4) {
+                    Seq<File> dirs = broker.logManager().liveLogDirs();
+                    assertEquals(1, dirs.size());
+                    CleanShutdownFileHandler handler = new CleanShutdownFileHandler(dirs.apply(0).toString());
+                    assertDoesNotThrow(() -> handler.delete());
+                }
                 return true;
             });
 
