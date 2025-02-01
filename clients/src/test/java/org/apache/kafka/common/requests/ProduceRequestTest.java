@@ -287,7 +287,7 @@ public class ProduceRequestTest {
                     .setRecords(MemoryRecords.withRecords(Compression.NONE, simpleRecord))))).iterator()))
             .setAcks((short) -1)
             .setTimeoutMs(10));
-        assertEquals(ApiKeys.PRODUCE_OLDEST_VERSION, builder.oldestAllowedVersion());
+        assertEquals(ApiKeys.PRODUCE_API_VERSIONS_RESPONSE_MIN_VERSION, builder.oldestAllowedVersion());
         assertEquals(ApiKeys.PRODUCE.latestVersion(), builder.latestAllowedVersion());
     }
 

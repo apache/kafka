@@ -27,18 +27,15 @@ import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.message.ProduceRequestData
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record._
-import org.apache.kafka.common.requests.{ProduceRequest, ProduceResponse, RequestUtils}
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.requests.{ProduceRequest, ProduceResponse}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.storage.log.metrics.BrokerTopicMetrics
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 import org.junit.jupiter.params.provider.ValueSource
 
-import java.io.EOFException
 import java.util.concurrent.TimeUnit
 import scala.jdk.CollectionConverters._
 
@@ -284,48 +281,6 @@ class ProduceRequestTest extends BaseRequestTest {
     assertEquals(Errors.NONE, Errors.forCode(partitionProduceResponse1.errorCode))
     assertEquals(0, partitionProduceResponse1.baseOffset)
     assertEquals(-1, partitionProduceResponse1.logAppendTimeMs)
-  }
-
-  /**
-   * See `ApiKeys.PRODUCE_OLDEST_VERSION` for the details of why we need special handling for produce request v0-v2 (inclusive).
-   */
-  @Test
-  def testProduceRequestV0ToV2IsRejectedByBroker(): Unit = {
-    val topic = "topic"
-    val partition = 0
-    val partitionToLeader = createTopic(topic)
-    val leader = partitionToLeader(partition)
-    val memoryRecords = MemoryRecords.withRecords(Compression.none().build(),
-      new SimpleRecord(System.currentTimeMillis(), "key".getBytes, "value".getBytes))
-    val produceRequestData = new ProduceRequestData()
-      .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
-        new ProduceRequestData.TopicProduceData()
-          .setName("topic").setPartitionData(Collections.singletonList(
-            new ProduceRequestData.PartitionProduceData()
-              .setIndex(partition)
-              .setRecords(memoryRecords))))
-        .iterator))
-      .setAcks((-1).toShort)
-      .setTimeoutMs(3000)
-      .setTransactionalId(null)
-
-    for (i <- 0 to 2) {
-      val version = i.toShort
-      // Broker disconnects when it receives a request with an unsupported version
-      assertThrows(classOf[EOFException], () => sendProduceRequestData(leader, version, produceRequestData))
-    }
-  }
-
-  // This method avoids some of the version validation performed by the wrapper request classes, which is useful
-  // to be able to send produce requests with versions 0-2
-  private def sendProduceRequestData(leaderId: Int, version: Short, request: ProduceRequestData): ProduceResponse = {
-    val socket = connect(brokerSocketServer(leaderId), listenerName)
-    try {
-      val header = nextRequestHeader(ApiKeys.PRODUCE, version)
-      val serializedBytes = Utils.toArray(RequestUtils.serialize(header.data, header.headerVersion, request, version))
-      sendRequest(socket, serializedBytes)
-      receive[ProduceResponse](socket, ApiKeys.PRODUCE, version)
-    } finally socket.close()
   }
 
   private def sendProduceRequest(leaderId: Int, request: ProduceRequest): ProduceResponse = {

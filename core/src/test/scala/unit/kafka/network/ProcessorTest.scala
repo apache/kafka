@@ -65,13 +65,31 @@ class ProcessorTest {
   @Test
   def testParseRequestHeaderWithUnsupportedApiVersion(): Unit = {
     val requestHeader = RequestTestUtils.serializeRequestHeader(
-      new RequestHeader(ApiKeys.PRODUCE, 0, "clientid", 0))
+      new RequestHeader(ApiKeys.FETCH, 0, "clientid", 0))
     val apiVersionManager = new SimpleApiVersionManager(ListenerType.BROKER, true,
       () => new FinalizedFeatures(MetadataVersion.latestTesting(), Collections.emptyMap[String, java.lang.Short], 0))
     val e = assertThrows(classOf[UnsupportedVersionException],
       (() => Processor.parseRequestHeader(apiVersionManager, requestHeader)): Executable,
-      "PRODUCE v0 should throw UnsupportedVersionException exception")
+      "FETCH v0 should throw UnsupportedVersionException exception")
     assertTrue(e.toString.contains("unsupported version"));
+  }
+
+  /**
+   * We do something unusual with these versions of produce, and we want to make sure we don't regress.
+   * See `ApiKeys.PRODUCE_API_VERSIONS_RESPONSE_MIN_VERSION` for details.
+   */
+  @Test
+  def testParseRequestHeaderForProduceV0ToV2(): Unit = {
+    for (version <- 0 to 2) {
+      val requestHeader = RequestTestUtils.serializeRequestHeader(
+        new RequestHeader(ApiKeys.PRODUCE, version.toShort, "clientid", 0))
+      val apiVersionManager = new SimpleApiVersionManager(ListenerType.BROKER, true,
+        () => new FinalizedFeatures(MetadataVersion.latestTesting(), Collections.emptyMap[String, java.lang.Short], 0))
+      val e = assertThrows(classOf[UnsupportedVersionException],
+        (() => Processor.parseRequestHeader(apiVersionManager, requestHeader)): Executable,
+        s"PRODUCE $version should throw UnsupportedVersionException exception")
+      assertTrue(e.toString.contains("unsupported version"));
+    }
   }
 
 }

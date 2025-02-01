@@ -59,12 +59,12 @@ public class ApiVersionsResponseTest {
             ApiVersion version = defaultResponse.apiVersion(key.id);
             assertNotNull(version, "Could not find ApiVersion for API " + key.name);
             if (key == ApiKeys.PRODUCE)
-                assertEquals(key.messageType.lowestSupportedVersion(), version.minVersion(), "Incorrect min version for Api " + key.name);
+                assertEquals(ApiKeys.PRODUCE_API_VERSIONS_RESPONSE_MIN_VERSION, version.minVersion(), "Incorrect min version for Api " + key.name);
             else
                 assertEquals(key.oldestVersion(), version.minVersion(), "Incorrect min version for Api " + key.name);
             assertEquals(key.latestVersion(), version.maxVersion(), "Incorrect max version for Api " + key.name);
 
-            // Check if versions less than min version are indeed set as null, i.e., deprecated.
+            // Check if versions less than min version are indeed set as null, i.e., removed.
             for (int i = 0; i < version.minVersion(); ++i) {
                 assertNull(key.messageType.requestSchemas()[i],
                     "Request version " + i + " for API " + version.apiKey() + " must be null");
@@ -72,8 +72,11 @@ public class ApiVersionsResponseTest {
                     "Response version " + i + " for API " + version.apiKey() + " must be null");
             }
 
+            // The min version returned in ApiResponse for Produce is not the actual min version, so adjust it
+            var minVersion = (key == ApiKeys.PRODUCE && scope == ListenerType.BROKER) ?
+                ApiKeys.PRODUCE.oldestVersion() : version.minVersion();
             // Check if versions between min and max versions are non null, i.e., valid.
-            for (int i = version.minVersion(); i <= version.maxVersion(); ++i) {
+            for (int i = minVersion; i <= version.maxVersion(); ++i) {
                 assertNotNull(key.messageType.requestSchemas()[i],
                     "Request version " + i + " for API " + version.apiKey() + " must not be null");
                 assertNotNull(key.messageType.responseSchemas()[i],

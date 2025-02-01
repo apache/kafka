@@ -117,9 +117,7 @@ abstract class AbstractApiVersionsRequestTest(cluster: ClusterInstance) {
       assertEquals(expectedApiVersion.maxVersion, actualApiVersion.maxVersion, s"Received unexpected max version for API key ${actualApiVersion.apiKey}.")
     }
 
-    if (listenerName.equals(cluster.clientListener)) {
-      // See ApiKeys.PRODUCE_OLDEST_VERSION for details on why this is `0` (instead of `3`)
-      assertEquals(0, apiVersionsResponse.apiVersion(ApiKeys.PRODUCE.id).minVersion)
-    }
+    if (listenerName.equals(cluster.clientListener))
+      assertEquals(ApiKeys.PRODUCE_API_VERSIONS_RESPONSE_MIN_VERSION, apiVersionsResponse.apiVersion(ApiKeys.PRODUCE.id).minVersion)
   }
 }

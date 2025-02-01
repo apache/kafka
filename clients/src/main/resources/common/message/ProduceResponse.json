@@ -18,8 +18,8 @@
   "type": "response",
   "name": "ProduceResponse",
   // Versions 0-2 were removed in Apache Kafka 4.0, version 3 is the new baseline. Due to a bug in librdkafka,
-  // these versions have to be included in the api versions response (see KAFKA-18659) and are included in `validVersion`.
-  // See `ApiKeys.PRODUCE_OLDEST_VERSION` for more details.
+  // these versions have to be included in the api versions response (see KAFKA-18659), but are rejected otherwise.
+  // See `ApiKeys.PRODUCE_API_VERSIONS_RESPONSE_MIN_VERSION` for more details.
   //
   // Version 1 added the throttle time.
   // Version 2 added the log append time.
@@ -40,7 +40,7 @@
   // Version 11 adds support for new error code TRANSACTION_ABORTABLE (KIP-890).
   //
   // Version 12 is the same as version 10 (KIP-890).
-  "validVersions": "0-12",
+  "validVersions": "3-12",
   "flexibleVersions": "9+",
   "fields": [
     { "name": "Responses", "type": "[]TopicProduceResponse", "versions": "0+",

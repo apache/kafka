@@ -19,8 +19,8 @@
   "listeners": ["broker"],
   "name": "ProduceRequest",
   // Versions 0-2 were removed in Apache Kafka 4.0, version 3 is the new baseline. Due to a bug in librdkafka,
-  // these versions have to be included in the api versions response (see KAFKA-18659) and are included in `validVersion`.
-  // See `ApiKeys.PRODUCE_OLDEST_VERSION` for more details.
+  // these versions have to be included in the api versions response (see KAFKA-18659), but are rejected otherwise.
+  // See `ApiKeys.PRODUCE_API_VERSIONS_RESPONSE_MIN_VERSION` for more details.
   //
   // Version 1 and 2 are the same as version 0.
   //
@@ -46,7 +46,7 @@
   // transaction V2 (KIP_890 part 2) is enabled, the produce request will also include the function for a
   // AddPartitionsToTxn call. If V2 is disabled, the client can't use produce request version higher than 11 within
   // a transaction.
-  "validVersions": "0-12",
+  "validVersions": "3-12",
   "flexibleVersions": "9+",
   "fields": [
     { "name": "TransactionalId", "type": "string", "versions": "3+", "nullableVersions": "3+", "default": "null", "entityType": "transactionalId",
