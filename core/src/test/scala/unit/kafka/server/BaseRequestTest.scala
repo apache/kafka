@@ -78,7 +78,7 @@ abstract class BaseRequestTest extends IntegrationTestHarness {
     new Socket("localhost", socketServer.boundPort(listenerName))
   }
 
-  private[server] def sendRequest(socket: Socket, request: Array[Byte]): Unit = {
+  private def sendRequest(socket: Socket, request: Array[Byte]): Unit = {
     val outgoing = new DataOutputStream(socket.getOutputStream)
     outgoing.writeInt(request.length)
     outgoing.write(request)
