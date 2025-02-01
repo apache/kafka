@@ -184,7 +184,7 @@ jobs:
       timed-out: ${{ steps.junit-test.outputs.gradle-exitcode == '124' }}
     env:
       job-variation: ${{ matrix.java }}-${{ matrix.run-flaky == true && 'flaky' || 'noflaky' }}-${{ matrix.run-new == true && 'new' || 'nonew' }}
-    name: JUnit tests Java ${{ env.job-variation }}
+    name: JUnit tests Java ${{ matrix.java }} ${{ matrix.run-flaky == true && 'flaky' || '' }}${{ matrix.run-new == true && 'new' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
