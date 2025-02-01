@@ -223,7 +223,7 @@ jobs:
         uses: actions/upload-artifact@v4
         id: junit-upload-artifact
         with:
-          name: junit-reports-${{ matrix.java }}
+          name: junit-reports-${{ matrix.java }}-${{ matrix.run-flaky == true && 'flaky' || 'noflaky' }}-${{ matrix.run-new == true && 'new' || 'nonew' }}
           path: |
             **/build/reports/tests/*
           compression-level: 9
@@ -243,7 +243,7 @@ jobs:
         if: always() && steps.junit-test.outputs.gradle-exitcode == '124'
         uses: actions/upload-artifact@v4
         with:
-          name: junit-thread-dumps-${{ matrix.java }}
+          name: junit-thread-dumps-${{ matrix.java }}-${{ matrix.run-flaky == true && 'flaky' || 'noflaky' }}-${{ matrix.run-new == true && 'new' || 'nonew' }}
           path: |
             thread-dumps/*
           compression-level: 9
