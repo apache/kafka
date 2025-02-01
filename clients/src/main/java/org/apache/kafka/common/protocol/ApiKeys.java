@@ -269,7 +269,26 @@ public enum ApiKeys {
         return oldestVersion() <= latestVersion();
     }
 
-    public Optional<ApiVersionsResponseData.ApiVersion> toApiVersion(boolean enableUnstableLastVersion,
+    /**
+     * To workaround a critical bug in librdkafka, the api versions response is inconsistent with the actual versions
+     * supported by `produce` - this method handles that. It should be called in the context of the api response protocol
+     * handling.
+     *
+     * It should not be used by code generating protocol documentation - we keep that consistent with the actual versions
+     * supported by `produce`.
+     *
+     * See `PRODUCE_API_VERSIONS_RESPONSE_MIN_VERSION` for details.
+     */
+    public Optional<ApiVersionsResponseData.ApiVersion> toApiVersionForApiResponse(boolean enableUnstableLastVersion,
+                                                                                   ApiMessageType.ListenerType listenerType) {
+        return toApiVersion(enableUnstableLastVersion, Optional.of(listenerType));
+    }
+
+    public Optional<ApiVersionsResponseData.ApiVersion> toApiVersion(boolean enableUnstableLastVersion) {
+        return toApiVersion(enableUnstableLastVersion, Optional.empty());
+    }
+
+    private Optional<ApiVersionsResponseData.ApiVersion> toApiVersion(boolean enableUnstableLastVersion,
                                                                      Optional<ApiMessageType.ListenerType> listenerType) {
         // see `PRODUCE_API_VERSIONS_RESPONSE_MIN_VERSION` for details on why we do this
         short oldestVersion = (this == PRODUCE && listenerType.map(l -> l == ApiMessageType.ListenerType.BROKER).orElse(false)) ?

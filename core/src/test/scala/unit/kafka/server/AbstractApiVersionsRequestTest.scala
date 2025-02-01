@@ -88,6 +88,7 @@ abstract class AbstractApiVersionsRequestTest(cluster: ClusterInstance) {
     }
     val expectedApis = if (cluster.controllerListenerName().toScala.contains(listenerName)) {
       ApiVersionsResponse.collectApis(
+        ApiMessageType.ListenerType.CONTROLLER,
         ApiKeys.apisForListener(ApiMessageType.ListenerType.CONTROLLER),
         enableUnstableLastVersion
       )
