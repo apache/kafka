@@ -963,16 +963,16 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     @Override
     public <TableValue, VOut> KStream<K, VOut> join(
         final KTable<K, TableValue> table,
-        final ValueJoiner<? super V, ? super TableValue, ? extends VOut> joiner)
-    {
+        final ValueJoiner<? super V, ? super TableValue, ? extends VOut> joiner
+    ) {
         return join(table, toValueJoinerWithKey(joiner));
     }
 
     @Override
     public <TableValue, VOut> KStream<K, VOut> join(
         final KTable<K, TableValue> table,
-        final ValueJoinerWithKey<? super K, ? super V, ? super TableValue, ? extends VOut> joiner)
-    {
+        final ValueJoinerWithKey<? super K, ? super V, ? super TableValue, ? extends VOut> joiner
+    ) {
         return join(table, joiner, Joined.with(null, null, null));
     }
 
@@ -980,8 +980,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     public <TableValue, VOut> KStream<K, VOut> join(
         final KTable<K, TableValue> table,
         final ValueJoiner<? super V, ? super TableValue, ? extends VOut> joiner,
-        final Joined<K, V, TableValue> joined)
-    {
+        final Joined<K, V, TableValue> joined
+    ) {
         Objects.requireNonNull(table, "table can't be null");
         Objects.requireNonNull(joiner, "joiner can't be null");
         Objects.requireNonNull(joined, "joined can't be null");
@@ -992,8 +992,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     public <TableValue, VOut> KStream<K, VOut> join(
         final KTable<K, TableValue> table,
         final ValueJoinerWithKey<? super K, ? super V, ? super TableValue, ? extends VOut> joiner,
-        final Joined<K, V, TableValue> joined)
-    {
+        final Joined<K, V, TableValue> joined
+    ) {
         Objects.requireNonNull(table, "table can't be null");
         Objects.requireNonNull(joiner, "joiner can't be null");
         Objects.requireNonNull(joined, "joined can't be null");
