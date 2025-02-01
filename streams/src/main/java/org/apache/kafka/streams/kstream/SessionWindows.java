@@ -31,7 +31,7 @@ import static org.apache.kafka.streams.kstream.Windows.NO_GRACE_PERIOD;
  * <p>
  * Sessions represent a period of activity separated by a defined gap of inactivity.
  * Any events processed that fall within the inactivity gap of any existing sessions are merged into the existing sessions.
- * If the event falls outside of the session gap then a new session will be created.
+ * If the event falls outside the session gap then a new session will be created.
  * <p>
  * For example, if we have a session gap of 5 and the following data arrives:
  * <pre>
@@ -100,7 +100,8 @@ public final class SessionWindows {
      *
      * @param inactivityGap the gap of inactivity between sessions
      * @return a window definition with the window size and no grace period. Note that this means out-of-order records arriving after the window end will be dropped
-     * @throws IllegalArgumentException if {@code inactivityGap} is zero or negative or can't be represented as {@code long milliseconds}
+     * @throws IllegalArgumentException
+     *         if {@code inactivityGap} is negative or can't be represented as {@code long milliseconds}
      */
     public static SessionWindows ofInactivityGapWithNoGrace(final Duration inactivityGap) {
         return ofInactivityGapAndGrace(inactivityGap, ofMillis(NO_GRACE_PERIOD));
@@ -121,8 +122,8 @@ public final class SessionWindows {
      * @param inactivityGap the gap of inactivity between sessions
      * @param afterWindowEnd The grace period to admit out-of-order events to a window.
      * @return A SessionWindows object with the specified inactivity gap and grace period
-     * @throws IllegalArgumentException if {@code inactivityGap} is zero or negative or can't be represented as {@code long milliseconds}
-     *                                  if {@code afterWindowEnd} is negative or can't be represented as {@code long milliseconds}
+     * @throws IllegalArgumentException
+     *         if {@code inactivityGap} or {@code afterWindowEnd} is negative or can't be represented as {@code long milliseconds}
      */
     public static SessionWindows ofInactivityGapAndGrace(final Duration inactivityGap, final Duration afterWindowEnd) {
         final String inactivityGapMsgPrefix = prepareMillisCheckFailMsgPrefix(inactivityGap, "inactivityGap");
