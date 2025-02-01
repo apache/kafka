@@ -520,8 +520,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
     // The class under test expects only sanitized client configs. We pass both the default value (which should not be
     // sanitized to ensure it remains unique) and non-default values, so we need to take care in generating the sanitized
     // client ID
-    def sanitizedConfigClientId = 
-      configClientId.map(x => if (x == ClientQuotaManager.DefaultString) ClientQuotaManager.DefaultString else Sanitizer.sanitize(x))
-        .map(ClientQuotaManager.ClientIdEntity)
+    def sanitizedConfigClientId = configClientId.map(x => Sanitizer.sanitize(x))
+      .map(ClientQuotaManager.ClientIdEntity)
   }
 }

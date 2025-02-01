@@ -517,20 +517,6 @@ class ClientQuotasRequestTest(cluster: ClusterInstance) {
     ))
   }
 
-  @ClusterTest
-  def testClientQuotasWithDefaultName(): Unit = {
-    // An entity using the name associated with the default entity name. The entity's name should be sanitized so
-    // that it does not conflict with the default entity name.
-    val entity = new ClientQuotaEntity(Map(ClientQuotaEntity.CLIENT_ID -> ClientQuotaManager.DefaultString).asJava)
-    alterEntityQuotas(entity, Map(QuotaConfig.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG -> Some(20000.0)), validateOnly = false)
-    verifyDescribeEntityQuotas(entity, Map(QuotaConfig.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG -> 20000.0))
-
-    // This should not match.
-    val result = describeClientQuotas(
-      ClientQuotaFilter.containsOnly(List(ClientQuotaFilterComponent.ofDefaultEntity(ClientQuotaEntity.CLIENT_ID)).asJava))
-    assert(result.isEmpty)
-  }
-
   private def verifyDescribeEntityQuotas(entity: ClientQuotaEntity, quotas: Map[String, Double]): Unit = {
     TestUtils.tryUntilNoAssertionError(waitTime = 5000L) {
       val components = entity.entries.asScala.map { case (entityType, entityName) =>

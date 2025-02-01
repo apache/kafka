@@ -422,9 +422,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
     lock.writeLock().lock()
     try {
       val clientIdEntity = sanitizedClientId match {
-        case Some(sanitizedClientId: ClientIdEntity) =>
-          val clientId = Some(sanitizedClientId).map(s => Sanitizer.desanitize(s.name))
-          Some(ClientIdEntity(clientId.getOrElse(throw new IllegalStateException("Client-id not provided"))))
+        case Some(client: ClientIdEntity) => Some(ClientIdEntity(Sanitizer.desanitize(client.name)))
         case _ => sanitizedClientId
       }
         
