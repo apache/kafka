@@ -403,15 +403,15 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
    * Overrides quotas for <user>, <client-id> or <user, client-id> or the dynamic defaults
    * for any of these levels.
    *
-   * @param sanitizedUser     user to override if quota applies to <user> or <user, client-id>
+   * @param userEntity     user to override if quota applies to <user> or <user, client-id>
    * @param sanitizedClientId sanitized client ID to override if quota applies to <client-id> or <user, client-id>
    * @param quota             custom quota to apply or None if quota override is being removed
    */
   def updateQuota(
-    sanitizedUser: Option[BaseUserEntity],
-    sanitizedClientId: Option[ClientQuotaEntity.ConfigEntity], 
+    userEntity: Option[BaseUserEntity],
+    sanitizedClientId: Option[ClientQuotaEntity.ConfigEntity],
     quota: Option[Quota]
-   ): Unit = {
+  ): Unit = {
     /*
      * Acquire the write lock to apply changes in the quota objects.
      * This method changes the quota in the overriddenQuota map and applies the update on the actual KafkaMetric object (if it exists).
@@ -421,9 +421,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
      */
     lock.writeLock().lock()
     try {
-      val userEntity = getOrDefaultUser(sanitizedUser)
       val clientIdEntity = getOrDefaultClient(sanitizedClientId)
-      
       val quotaEntity = KafkaQuotaEntity(userEntity, clientIdEntity)
 
       if (userEntity.nonEmpty) {
@@ -460,15 +458,6 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
       val clientId = sanitizedClientId.map(s => Sanitizer.desanitize(s.name()))
       Some(ClientIdEntity(clientId.getOrElse(throw new IllegalStateException("Client-id not provided"))))
     }
-  }
-
-  private def getOrDefaultUser(sanitizedUser: Option[BaseUserEntity]): Option[BaseUserEntity] = {
-    if (sanitizedUser.isEmpty)
-      None
-    else if (sanitizedUser.get.name() == DefaultString)
-      Some(DefaultUserEntity)
-    else
-      sanitizedUser
   }
 
   /**
