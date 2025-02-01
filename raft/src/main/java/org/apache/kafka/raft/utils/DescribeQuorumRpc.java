@@ -72,7 +72,12 @@ public class DescribeQuorumRpc {
                                     .setLeaderEpoch(leaderEpoch)
                                     .setHighWatermark(highWatermark)
                                     .setCurrentVoters(toReplicaStates(apiVersion, leaderId, voters, currentTimeMs))
-                                    .setObservers(toReplicaStates(apiVersion, leaderId, observers, currentTimeMs))))));
+                                    .setObservers(toReplicaStates(apiVersion, leaderId, observers, currentTimeMs))
+                            )
+                        )
+                )
+            );
+
         if (apiVersion >= 2) {
             DescribeQuorumResponseData.NodeCollection nodes = new DescribeQuorumResponseData.NodeCollection(voters.size());
             for (LeaderState.ReplicaState voter : voters) {

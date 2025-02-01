@@ -91,7 +91,8 @@ public class EndQuorumEpochRpc {
                             .setErrorCode(partitionLevelError.code())
                             .setLeaderId(leaderId)
                             .setLeaderEpoch(leaderEpoch)
-                    )))
+                    ))
+                )
             );
 
         if (apiVersion >= 1) {

@@ -29,23 +29,15 @@ import org.apache.kafka.common.protocol.Errors;
 
 public class ApiMessageUtils {
     public static ApiMessage parseErrorResponse(ApiKeys apiKey, Errors error) {
-        switch (apiKey) {
-            case VOTE:
-                return new VoteResponseData().setErrorCode(error.code());
-            case BEGIN_QUORUM_EPOCH:
-                return new BeginQuorumEpochResponseData().setErrorCode(error.code());
-            case END_QUORUM_EPOCH:
-                return new EndQuorumEpochResponseData().setErrorCode(error.code());
-            case FETCH:
-                return new FetchResponseData().setErrorCode(error.code());
-            case FETCH_SNAPSHOT:
-                return new FetchSnapshotResponseData().setErrorCode(error.code());
-            case API_VERSIONS:
-                return new ApiVersionsResponseData().setErrorCode(error.code());
-            case UPDATE_RAFT_VOTER:
-                return new UpdateRaftVoterResponseData().setErrorCode(error.code());
-            default:
-                throw new IllegalArgumentException("Received response for unexpected request type: " + apiKey);
-        }
+        return switch (apiKey) {
+            case VOTE -> new VoteResponseData().setErrorCode(error.code());
+            case BEGIN_QUORUM_EPOCH -> new BeginQuorumEpochResponseData().setErrorCode(error.code());
+            case END_QUORUM_EPOCH -> new EndQuorumEpochResponseData().setErrorCode(error.code());
+            case FETCH -> new FetchResponseData().setErrorCode(error.code());
+            case FETCH_SNAPSHOT -> new FetchSnapshotResponseData().setErrorCode(error.code());
+            case API_VERSIONS -> new ApiVersionsResponseData().setErrorCode(error.code());
+            case UPDATE_RAFT_VOTER -> new UpdateRaftVoterResponseData().setErrorCode(error.code());
+            default -> throw new IllegalArgumentException("Received response for unexpected request type: " + apiKey);
+        };
     }
 }

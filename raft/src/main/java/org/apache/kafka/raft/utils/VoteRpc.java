@@ -92,7 +92,10 @@ public class VoteRpc {
                             .setErrorCode(partitionLevelError.code())
                             .setLeaderId(leaderId)
                             .setLeaderEpoch(leaderEpoch)
-                            .setVoteGranted(voteGranted)))));
+                            .setVoteGranted(voteGranted))
+                    )
+                )
+            );
 
         if (apiVersion >= 1) {
             Optional<InetSocketAddress> address = endpoints.address(listenerName);
