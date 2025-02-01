@@ -114,6 +114,8 @@ public enum MetadataVersion {
     IBP_4_0_IV0(22, "4.0", "IV0", false),
 
     // Add ELR related supports (KIP-966).
+    // PartitionRecord and PartitionChangeRecord are updated.
+    // ClearElrRecord is added.
     IBP_4_0_IV1(23, "4.0", "IV1", true),
 
     //
