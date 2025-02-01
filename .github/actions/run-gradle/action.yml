@@ -76,7 +76,7 @@ runs:
         -PmaxTestRetries=$TEST_RETRIES -PmaxTestRetryFailures=0 \
         -Pkafka.test.catalog.file=$TEST_CATALOG \
         -Pkafka.test.run.quarantined=$RUN_NEW_TESTS \
-        -Pkafka.test.run.flaky=$RUN_NEW_TESTS \
+        -Pkafka.test.run.flaky=$RUN_FLAKY_TESTS \
         -PcommitId=xxxxxxxxxxxxxxxx \
         $TEST_TASK
         exitcode="$?"
