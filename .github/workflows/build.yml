@@ -182,7 +182,9 @@ jobs:
             run-new: true
     outputs:
       timed-out: ${{ steps.junit-test.outputs.gradle-exitcode == '124' }}
-    name: JUnit tests Java ${{ matrix.java }}
+    env:
+      job-variation: ${{ matrix.java }}-${{ matrix.run-flaky == true && 'flaky' || 'noflaky' }}-${{ matrix.run-new == true && 'new' || 'nonew' }}
+    name: JUnit tests Java ${{ env.job-variation }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -214,7 +216,7 @@ jobs:
           test-task: :metadata:test
           timeout-minutes: 180  # 3 hours
           test-catalog-path: ${{ steps.load-test-catalog.outputs.download-path }}/combined-test-catalog.txt
-          build-scan-artifact-name: build-scan-${{ matrix.java }}-${{ matrix.run-flaky == true && 'flaky' || 'noflaky' }}-${{ matrix.run-new == true && 'new' || 'nonew' }}
+          build-scan-artifact-name: build-scan-${{ env.job-variation }}
           run-new-tests: false
           run-flaky-tests: false
           test-retries: ${{ matrix.run-flaky == true && '3' || '1' }}
@@ -223,7 +225,7 @@ jobs:
         uses: actions/upload-artifact@v4
         id: junit-upload-artifact
         with:
-          name: junit-reports-${{ matrix.java }}-${{ matrix.run-flaky == true && 'flaky' || 'noflaky' }}-${{ matrix.run-new == true && 'new' || 'nonew' }}
+          name: junit-reports-${{ env.job-variation }}
           path: |
             **/build/reports/tests/*
           compression-level: 9
@@ -232,7 +234,7 @@ jobs:
       - name: Archive JUnit XML
         uses: actions/upload-artifact@v4
         with:
-          name: junit-xml-${{ matrix.java }}-${{ matrix.run-flaky == true && 'flaky' || 'noflaky' }}-${{ matrix.run-new == true && 'new' || 'nonew' }}
+          name: junit-xml-${{ env.job-variation }}
           path: |
             build/junit-xml/**/*.xml
           compression-level: 9
@@ -243,7 +245,7 @@ jobs:
         if: always() && steps.junit-test.outputs.gradle-exitcode == '124'
         uses: actions/upload-artifact@v4
         with:
-          name: junit-thread-dumps-${{ matrix.java }}-${{ matrix.run-flaky == true && 'flaky' || 'noflaky' }}-${{ matrix.run-new == true && 'new' || 'nonew' }}
+          name: junit-thread-dumps-${{ env.job-variation }}
           path: |
             thread-dumps/*
           compression-level: 9
