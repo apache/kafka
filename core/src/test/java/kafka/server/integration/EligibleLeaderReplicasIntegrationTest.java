@@ -61,6 +61,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
@@ -387,8 +388,9 @@ public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarnes
                 .allTopicNames().get().get(testTopicName).partitions().get(0);
             int lastKnownLeader = topicPartitionInfo.lastKnownElr().get(0).id();
 
+            Set<Integer> initialReplicaSet = initialReplicas.stream().map(node -> node.id()).collect(Collectors.toSet());
             brokers().foreach(broker -> {
-                if (broker.config().brokerId() != 4) {
+                if (initialReplicaSet.contains(broker.config().brokerId())) {
                     Seq<File> dirs = broker.logManager().liveLogDirs();
                     assertEquals(1, dirs.size());
                     CleanShutdownFileHandler handler = new CleanShutdownFileHandler(dirs.apply(0).toString());
