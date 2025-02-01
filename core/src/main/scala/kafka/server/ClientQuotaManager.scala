@@ -421,7 +421,13 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
      */
     lock.writeLock().lock()
     try {
-      val clientIdEntity = getOrDefaultClient(sanitizedClientId)
+      val clientIdEntity = sanitizedClientId match {
+        case Some(sanitizedClientId: ClientIdEntity) =>
+          val clientId = Some(sanitizedClientId).map(s => Sanitizer.desanitize(s.name))
+          Some(ClientIdEntity(clientId.getOrElse(throw new IllegalStateException("Client-id not provided"))))
+        case _ => sanitizedClientId
+      }
+        
       val quotaEntity = KafkaQuotaEntity(userEntity, clientIdEntity)
 
       if (userEntity.nonEmpty) {
@@ -444,19 +450,6 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
 
     } finally {
       lock.writeLock().unlock()
-    }
-  }
-
-  private def getOrDefaultClient(
-    sanitizedClientId: Option[ClientQuotaEntity.ConfigEntity]
-  ): Option[ClientQuotaEntity.ConfigEntity] = {
-    if (sanitizedClientId.isEmpty)
-      None  
-    else if (sanitizedClientId.get.name() == DefaultString)
-      Some(DefaultClientIdEntity)
-    else {
-      val clientId = sanitizedClientId.map(s => Sanitizer.desanitize(s.name()))
-      Some(ClientIdEntity(clientId.getOrElse(throw new IllegalStateException("Client-id not provided"))))
     }
   }
 

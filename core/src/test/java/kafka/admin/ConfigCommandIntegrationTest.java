@@ -21,10 +21,14 @@ import org.apache.kafka.clients.admin.AdminClientTestUtils;
 import org.apache.kafka.clients.admin.AlterConfigsOptions;
 import org.apache.kafka.clients.admin.AlterConfigsResult;
 import org.apache.kafka.clients.admin.ConfigEntry;
+import org.apache.kafka.clients.admin.DescribeClientQuotasResult;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.quota.ClientQuotaAlteration;
+import org.apache.kafka.common.quota.ClientQuotaEntity;
+import org.apache.kafka.common.quota.ClientQuotaFilter;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
@@ -37,6 +41,7 @@ import org.mockito.Mockito;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -89,6 +94,27 @@ public class ConfigCommandIntegrationTest {
 
     public ConfigCommandIntegrationTest(ClusterInstance cluster) {
         this.cluster = cluster;
+    }
+
+    @ClusterTest(types = {Type.KRAFT})
+    public void test() throws ExecutionException, InterruptedException {
+        try (Admin admin = cluster.admin()) {
+            Map<String, String> map = new HashMap<>();
+            map.put("user", "<default>");
+            ClientQuotaEntity entity = new ClientQuotaEntity(map);
+            ClientQuotaFilter filter = ClientQuotaFilter.all();
+
+            ArrayList<ClientQuotaAlteration> quotas = new ArrayList<>();
+            quotas.add(new ClientQuotaAlteration(entity, Collections.singleton(new ClientQuotaAlteration.Op("producer_byte_rate", 1000.0))));
+            admin.alterClientQuotas(quotas);
+            Thread.sleep(5000);
+            DescribeClientQuotasResult describeClientQuotasResult = admin.describeClientQuotas(filter);
+            describeClientQuotasResult.entities().get().forEach(
+                    (entity1, quotas1) -> quotas1.forEach(
+                            (quotaType, value) -> System.out.println(entity1 + " " + quotaType + " " + value)
+                    )
+            );
+        }
     }
 
     @ClusterTest

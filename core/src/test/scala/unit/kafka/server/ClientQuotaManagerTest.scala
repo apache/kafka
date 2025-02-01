@@ -103,19 +103,6 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
   }
 
   /**
-   * Tests parsing for <client-id> quotas.
-   * Quota overrides persisted in ZooKeeper in /config/clients/<client-id>, default persisted in /config/clients/<default>
-   */
-  @Test
-  def testClientIdQuotaParsing(): Unit = {
-    val client1 = UserClient("ANONYMOUS", "p1", None, Some("p1"))
-    val client2 = UserClient("ANONYMOUS", "p2", None, Some("p2"))
-    val randomClient = UserClient("ANONYMOUS", "random-client-id", None, None)
-    val defaultConfigClient = UserClient("", "", None, Some(ClientQuotaManager.DefaultClientIdEntity.name))
-    testQuotaParsing(config, client1, client2, randomClient, defaultConfigClient)
-  }
-
-  /**
    * Tests parsing for <user> quotas.
    * Quota overrides persisted in ZooKeeper in /config/users/<user>, default persisted in /config/users/<default>
    */
@@ -130,25 +117,6 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
   }
 
   /**
-   * Tests parsing for <user, client-id> quotas.
-   * Quotas persisted in ZooKeeper in /config/users/<user>/clients/<client-id>, default in /config/users/<default>/clients/<default>
-   */
-  @Test
-  def testUserClientIdQuotaParsing(): Unit = {
-    val client1 = UserClient("User1", "p1", Some(ClientQuotaManager.UserEntity("User1")), Some("p1"))
-    val client2 = UserClient("User2", "p2", Some(ClientQuotaManager.UserEntity("User2")), Some("p2"))
-    val randomClient = UserClient("RandomUser", "random-client-id", None, None)
-    val defaultConfigClient = UserClient(
-      "", 
-      "",
-      Some(ClientQuotaManager.DefaultUserEntity),
-      Some(ClientQuotaManager.DefaultClientIdEntity.name)
-    )
-    val config = new ClientQuotaManagerConfig()
-    testQuotaParsing(config, client1, client2, randomClient, defaultConfigClient)
-  }
-
-  /**
    * Tests parsing for <user> quotas when client-id default quota properties are set.
    */
   @Test
@@ -157,23 +125,6 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
     val client2 = UserClient("User2", "p2", Some(ClientQuotaManager.UserEntity("User2")), None)
     val randomClient = UserClient("RandomUser", "random-client-id", None, None)
     val defaultConfigClient = UserClient("", "", Some(ClientQuotaManager.DefaultUserEntity), None)
-    testQuotaParsing(config, client1, client2, randomClient, defaultConfigClient)
-  }
-
-  /**
-   * Tests parsing for <user, client-id> quotas when client-id default quota properties are set.
-   */
-  @Test
-  def testUserClientQuotaParsingIdWithDefaultClientIdQuota(): Unit = {
-    val client1 = UserClient("User1", "p1", Some(ClientQuotaManager.UserEntity("User1")), Some("p1"))
-    val client2 = UserClient("User2", "p2", Some(ClientQuotaManager.UserEntity("User2")), Some("p2"))
-    val randomClient = UserClient("RandomUser", "random-client-id", None, None)
-    val defaultConfigClient = UserClient(
-      "", 
-      "",
-      Some(ClientQuotaManager.DefaultUserEntity),
-      Some(ClientQuotaManager.DefaultClientIdEntity.name)
-    )
     testQuotaParsing(config, client1, client2, randomClient, defaultConfigClient)
   }
 
