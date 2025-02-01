@@ -81,8 +81,8 @@ public class BootstrapDirectoryTest {
     @Test
     public void testReadFromConfigurationWithAncientVersion() throws Exception {
         try (BootstrapTestDirectory testDirectory = new BootstrapTestDirectory().createDirectory()) {
-            assertEquals(BootstrapMetadata.fromVersion(MetadataVersion.MINIMUM_BOOTSTRAP_VERSION,
-                    "the minimum version bootstrap with metadata.version 3.3-IV0"),
+            assertEquals(BootstrapMetadata.fromVersion(MetadataVersion.MINIMUM_VERSION,
+                    "the minimum version bootstrap with metadata.version 3.3-IV3"),
                 new BootstrapDirectory(testDirectory.path(), Optional.of("3.0")).read());
         }
     }
@@ -90,9 +90,9 @@ public class BootstrapDirectoryTest {
     @Test
     public void testReadFromConfiguration() throws Exception {
         try (BootstrapTestDirectory testDirectory = new BootstrapTestDirectory().createDirectory()) {
-            assertEquals(BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_3_IV2,
-                    "the configured bootstrap with metadata.version 3.3-IV2"),
-                new BootstrapDirectory(testDirectory.path(), Optional.of("3.3-IV2")).read());
+            assertEquals(BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_3_IV3,
+                    "the configured bootstrap with metadata.version 3.3-IV3"),
+                new BootstrapDirectory(testDirectory.path(), Optional.of("3.3-IV3")).read());
         }
     }
 

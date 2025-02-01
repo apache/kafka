@@ -1597,7 +1597,7 @@ class KafkaConfigTest {
     val props = new Properties()
     props.putAll(kraftProps())
     val config = KafkaConfig.fromProps(props)
-    assertEquals(config.interBrokerProtocolVersion, MetadataVersion.MINIMUM_KRAFT_VERSION)
+    assertEquals(config.interBrokerProtocolVersion, MetadataVersion.MINIMUM_VERSION)
   }
 
   @Test

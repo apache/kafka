@@ -437,18 +437,6 @@ class KRaftClusterTest {
     }
   }
 
-  @Test
-  def testCreateClusterInvalidMetadataVersion(): Unit = {
-    assertEquals("Bootstrap metadata.version before 3.3-IV0 are not supported. Can't load " +
-      "metadata from testkit", assertThrows(classOf[RuntimeException], () => {
-        new KafkaClusterTestKit.Builder(
-          new TestKitNodes.Builder().
-            setBootstrapMetadataVersion(MetadataVersion.IBP_3_0_IV1).
-            setNumBrokerNodes(1).
-            setNumControllerNodes(1).build()).build()
-    }).getMessage)
-  }
-
   private def doOnStartedKafkaCluster(nodes: TestKitNodes)
                                      (action: KafkaClusterTestKit => Unit): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(nodes).build()
@@ -985,7 +973,7 @@ class KRaftClusterTest {
   def testUpdateMetadataVersion(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
-        setBootstrapMetadataVersion(MetadataVersion.MINIMUM_BOOTSTRAP_VERSION).
+        setBootstrapMetadataVersion(MetadataVersion.MINIMUM_VERSION).
         setNumBrokerNodes(4).
         setNumControllerNodes(3).build()).build()
     try {
@@ -1138,7 +1126,7 @@ class KRaftClusterTest {
   def testSingleControllerSingleBrokerCluster(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
-        setBootstrapMetadataVersion(MetadataVersion.MINIMUM_BOOTSTRAP_VERSION).
+        setBootstrapMetadataVersion(MetadataVersion.MINIMUM_VERSION).
         setNumBrokerNodes(1).
         setNumControllerNodes(1).build()).build()
     try {

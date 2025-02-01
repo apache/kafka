@@ -1544,7 +1544,7 @@ public final class QuorumController implements Controller {
             // the log, such as one of the pre-production 3.0, 3.1, or 3.2 versions. Those versions
             // are all treated as 3.0IV1. In newer versions the metadata.version will be specified
             // by the log.
-            setMetadataVersion(MetadataVersion.MINIMUM_KRAFT_VERSION).
+            setMetadataVersion(MetadataVersion.MINIMUM_VERSION).
             setClusterFeatureSupportDescriber(clusterSupportDescriber).
             build();
         this.clusterControl = new ClusterControlManager.Builder().
@@ -1652,9 +1652,7 @@ public final class QuorumController implements Controller {
         periodicControl.registerTask(new PeriodicTask("writeNoOpRecord",
             () -> {
                 ArrayList<ApiMessageAndVersion> records = new ArrayList<>(1);
-                if (featureControl.metadataVersion().isNoOpRecordSupported()) {
-                    records.add(new ApiMessageAndVersion(new NoOpRecord(), (short) 0));
-                }
+                records.add(new ApiMessageAndVersion(new NoOpRecord(), (short) 0));
                 return ControllerResult.of(records, false);
             },
             maxIdleIntervalNs,

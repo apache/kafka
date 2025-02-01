@@ -293,11 +293,7 @@ public class BrokerRegistration {
             setFenced(fenced);
 
         if (inControlledShutdown) {
-            if (options.metadataVersion().isInControlledShutdownStateSupported()) {
-                registrationRecord.setInControlledShutdown(true);
-            } else {
-                options.handleLoss("the inControlledShutdown state of one or more brokers");
-            }
+            registrationRecord.setInControlledShutdown(true);
         }
 
         if (isMigratingZkBroker) {

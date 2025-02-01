@@ -87,7 +87,7 @@ class ControllerRegistrationManager(
   /**
    * The current metadata version that is in effect. Only read or written from the event queue thread.
    */
-  private var metadataVersion: MetadataVersion = MetadataVersion.MINIMUM_KRAFT_VERSION
+  private var metadataVersion: MetadataVersion = MetadataVersion.MINIMUM_VERSION
 
   /**
    * True if we're registered. Only read or written from the event queue thread.

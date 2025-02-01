@@ -284,10 +284,6 @@ public class Formatter {
     }
 
     MetadataVersion verifyReleaseVersion(MetadataVersion metadataVersion) {
-        if (!metadataVersion.isKRaftSupported()) {
-            throw new FormatterException(MetadataVersion.FEATURE_NAME + " " + metadataVersion +
-                " is too old to be supported.");
-        }
         if (!unstableFeatureVersionsEnabled) {
             if (!metadataVersion.isProduction()) {
                 throw new FormatterException(MetadataVersion.FEATURE_NAME + " " + metadataVersion +

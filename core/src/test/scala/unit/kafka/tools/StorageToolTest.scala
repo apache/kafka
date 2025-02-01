@@ -589,7 +589,7 @@ Found problem:
     })
 
     assertEquals("Unknown release version '2.9-IV2'." +
-      " Supported versions are: " + MetadataVersion.MINIMUM_BOOTSTRAP_VERSION.version +
+      " Supported versions are: " + MetadataVersion.MINIMUM_VERSION.version +
       " to " + MetadataVersion.LATEST_PRODUCTION.version, exception.getMessage
     )
 
@@ -598,7 +598,7 @@ Found problem:
     })
 
     assertEquals("Unknown release version 'invalid'." +
-      " Supported versions are: " + MetadataVersion.MINIMUM_BOOTSTRAP_VERSION.version +
+      " Supported versions are: " + MetadataVersion.MINIMUM_VERSION.version +
       " to " + MetadataVersion.LATEST_PRODUCTION.version, exception2.getMessage
     )
   }

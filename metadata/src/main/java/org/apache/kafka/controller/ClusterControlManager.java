@@ -407,8 +407,8 @@ public class ClusterControlManager {
             record.features().add(processRegistrationFeature(brokerId, finalizedFeatures,
                 new BrokerRegistrationRequestData.Feature().
                     setName(MetadataVersion.FEATURE_NAME).
-                    setMinSupportedVersion(MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel()).
-                    setMaxSupportedVersion(MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel())));
+                    setMinSupportedVersion(MetadataVersion.MINIMUM_VERSION.featureLevel()).
+                    setMaxSupportedVersion(MetadataVersion.MINIMUM_VERSION.featureLevel())));
             unverifiedFeatures.remove(MetadataVersion.FEATURE_NAME);
         }
         // We also need to check every controller feature is supported by the broker.
@@ -495,7 +495,9 @@ public class ClusterControlManager {
         FinalizedControllerFeatures finalizedFeatures,
         BrokerRegistrationRequestData.Feature feature
     ) {
-        int defaultVersion = feature.name().equals(MetadataVersion.FEATURE_NAME) ? 1 : 0; // The default value for MetadataVersion is 1 not 0.
+        // The default value for MetadataVersion changes over time while other features start at `0`
+        int defaultVersion = feature.name().equals(MetadataVersion.FEATURE_NAME) ?
+            MetadataVersion.MINIMUM_VERSION.featureLevel() : 0;
         short finalized = finalizedFeatures.versionOrDefault(feature.name(), (short) defaultVersion);
         if (!VersionRange.of(feature.minSupportedVersion(), feature.maxSupportedVersion()).contains(finalized)) {
             throw new UnsupportedVersionException("Unable to register because the broker " +

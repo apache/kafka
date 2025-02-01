@@ -44,25 +44,6 @@ import java.util.regex.Pattern;
  */
 public enum MetadataVersion {
 
-    // Introduce ListOffsets V7 which supports listing offsets by max timestamp (KIP-734)
-    // Assume message format version is 3.0 (KIP-724)
-    IBP_3_0_IV1(1, "3.0", "IV1", true),
-
-    // Adds topic IDs to Fetch requests/responses (KIP-516)
-    IBP_3_1_IV0(2, "3.1", "IV0", false),
-
-    // Support for leader recovery for unclean leader election (KIP-704)
-    IBP_3_2_IV0(3, "3.2", "IV0", true),
-
-    // Support for metadata.version feature flag and Removes min_version_level from the finalized version range that is written to ZooKeeper (KIP-778)
-    IBP_3_3_IV0(4, "3.3", "IV0", false),
-
-    // Support NoopRecord for the cluster metadata log (KIP-835)
-    IBP_3_3_IV1(5, "3.3", "IV1", true),
-
-    // In KRaft mode, use BrokerRegistrationChangeRecord instead of UnfenceBrokerRecord and FenceBrokerRecord.
-    IBP_3_3_IV2(6, "3.3", "IV2", true),
-
     // Adds InControlledShutdown state to RegisterBrokerRecord and BrokerRegistrationChangeRecord (KIP-841).
     IBP_3_3_IV3(7, "3.3", "IV3", true),
 
@@ -134,15 +115,9 @@ public enum MetadataVersion {
     public static final String FEATURE_NAME = "metadata.version";
 
     /**
-     * The first version we currently support in KRaft.
+     * Minimum supported version.
      */
-    public static final MetadataVersion MINIMUM_KRAFT_VERSION = IBP_3_0_IV1;
-
-    /**
-     * The first version we currently support in the bootstrap metadata. We chose 3.3IV0 since it
-     * is the first version that supports storing the metadata.version in the log.
-     */
-    public static final MetadataVersion MINIMUM_BOOTSTRAP_VERSION = IBP_3_3_IV0;
+    public static final MetadataVersion MINIMUM_VERSION = IBP_3_3_IV3;
 
     /**
      * The latest production-ready MetadataVersion. This is the latest version that is stable
@@ -188,14 +163,6 @@ public enum MetadataVersion {
         return featureLevel;
     }
 
-    public boolean isLeaderRecoverySupported() {
-        return this.isAtLeast(IBP_3_2_IV0);
-    }
-
-    public boolean isNoOpRecordSupported() {
-        return this.isAtLeast(IBP_3_3_IV1);
-    }
-
     public boolean isScramSupported() {
         return this.isAtLeast(IBP_3_5_IV2);
     }
@@ -220,18 +187,6 @@ public enum MetadataVersion {
         return this.isAtLeast(IBP_4_0_IV1);
     }
 
-    public boolean isKRaftSupported() {
-        return this.featureLevel > 0;
-    }
-
-    public boolean isBrokerRegistrationChangeRecordSupported() {
-        return this.isAtLeast(IBP_3_3_IV2);
-    }
-
-    public boolean isInControlledShutdownStateSupported() {
-        return this.isAtLeast(IBP_3_3_IV3);
-    }
-
     public boolean isMigrationSupported() {
         return this.isAtLeast(MetadataVersion.IBP_3_4_IV0);
     }
@@ -243,10 +198,8 @@ public enum MetadataVersion {
         } else if (isMigrationSupported()) {
             // new isMigrationZkBroker field
             return (short) 2;
-        } else if (isInControlledShutdownStateSupported()) {
-            return (short) 1;
         } else {
-            return (short) 0;
+            return (short) 1;
         }
     }
 
@@ -292,10 +245,9 @@ public enum MetadataVersion {
             return 15;
         } else if (this.isAtLeast(IBP_3_5_IV0)) {
             return 14;
-        } else if (this.isAtLeast(IBP_3_1_IV0)) {
+        } else {
             return 13;
         }
-        return 12;
     }
 
     public short listOffsetRequestVersion() {
@@ -368,7 +320,8 @@ public enum MetadataVersion {
             key = String.join(".", Arrays.copyOfRange(versionSegments, 0, numSegments));
         }
         return Optional.ofNullable(IBP_VERSIONS.get(key)).orElseThrow(() ->
-            new IllegalArgumentException("Version " + versionString + " is not a valid version")
+            new IllegalArgumentException("Version " + versionString + " is not a valid version. Note that " + MINIMUM_VERSION
+                + " is the minimum supported version.")
         );
     }
 

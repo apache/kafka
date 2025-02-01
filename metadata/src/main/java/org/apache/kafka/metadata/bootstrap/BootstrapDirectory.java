@@ -35,8 +35,6 @@ import java.util.Optional;
 
 import static java.nio.file.StandardCopyOption.ATOMIC_MOVE;
 import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
-import static org.apache.kafka.server.common.MetadataVersion.MINIMUM_BOOTSTRAP_VERSION;
-
 
 /**
  * A read-only class that holds the controller bootstrap metadata. A file named "bootstrap.checkpoint" is used and the
@@ -86,12 +84,7 @@ public class BootstrapDirectory {
             return BootstrapMetadata.fromVersion(MetadataVersion.latestProduction(), "the default bootstrap");
         }
         MetadataVersion version = MetadataVersion.fromVersionString(ibp.get());
-        if (version.isLessThan(MINIMUM_BOOTSTRAP_VERSION)) {
-            return BootstrapMetadata.fromVersion(MINIMUM_BOOTSTRAP_VERSION,
-                "the minimum version bootstrap with metadata.version " + MINIMUM_BOOTSTRAP_VERSION);
-        }
-        return BootstrapMetadata.fromVersion(version,
-            "the configured bootstrap with metadata.version " + version);
+        return BootstrapMetadata.fromVersion(version, "the configured bootstrap with metadata.version " + version);
     }
 
     BootstrapMetadata readFromBinaryFile(String binaryPath) throws Exception {

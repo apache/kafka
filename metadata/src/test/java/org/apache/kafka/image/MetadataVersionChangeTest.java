@@ -20,8 +20,8 @@ package org.apache.kafka.image;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-import static org.apache.kafka.server.common.MetadataVersion.IBP_3_0_IV1;
-import static org.apache.kafka.server.common.MetadataVersion.IBP_3_3_IV0;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_3_3_IV3;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_3_6_IV0;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -30,31 +30,31 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Timeout(value = 40)
 public class MetadataVersionChangeTest {
 
-    private static final MetadataVersionChange CHANGE_3_0_IV1_TO_3_3_IV0 =
-        new MetadataVersionChange(IBP_3_0_IV1, IBP_3_3_IV0);
+    private static final MetadataVersionChange CHANGE_3_3_IV3_TO_3_6_IV0 =
+        new MetadataVersionChange(IBP_3_3_IV3, IBP_3_6_IV0);
 
-    private static final MetadataVersionChange CHANGE_3_3_IV0_TO_3_0_IV1 =
-        new MetadataVersionChange(IBP_3_3_IV0, IBP_3_0_IV1);
+    private static final MetadataVersionChange CHANGE_3_6_IV0_TO_3_3_IV3 =
+        new MetadataVersionChange(IBP_3_6_IV0, IBP_3_3_IV3);
 
     @Test
     public void testIsUpgrade() {
-        assertTrue(CHANGE_3_0_IV1_TO_3_3_IV0.isUpgrade());
-        assertFalse(CHANGE_3_3_IV0_TO_3_0_IV1.isUpgrade());
+        assertTrue(CHANGE_3_3_IV3_TO_3_6_IV0.isUpgrade());
+        assertFalse(CHANGE_3_6_IV0_TO_3_3_IV3.isUpgrade());
     }
 
     @Test
     public void testIsDowngrade() {
-        assertFalse(CHANGE_3_0_IV1_TO_3_3_IV0.isDowngrade());
-        assertTrue(CHANGE_3_3_IV0_TO_3_0_IV1.isDowngrade());
+        assertFalse(CHANGE_3_3_IV3_TO_3_6_IV0.isDowngrade());
+        assertTrue(CHANGE_3_6_IV0_TO_3_3_IV3.isDowngrade());
     }
 
     @Test
     public void testMetadataVersionChangeExceptionToString() {
         assertEquals("org.apache.kafka.image.MetadataVersionChangeException: The metadata.version " +
-            "is changing from 3.0-IV1 to 3.3-IV0",
-                new MetadataVersionChangeException(CHANGE_3_0_IV1_TO_3_3_IV0).toString());
+            "is changing from 3.3-IV3 to 3.6-IV0",
+                new MetadataVersionChangeException(CHANGE_3_3_IV3_TO_3_6_IV0).toString());
         assertEquals("org.apache.kafka.image.MetadataVersionChangeException: The metadata.version " +
-            "is changing from 3.3-IV0 to 3.0-IV1",
-                new MetadataVersionChangeException(CHANGE_3_3_IV0_TO_3_0_IV1).toString());
+            "is changing from 3.6-IV0 to 3.3-IV3",
+                new MetadataVersionChangeException(CHANGE_3_6_IV0_TO_3_3_IV3).toString());
     }
 }

@@ -137,10 +137,10 @@ public class ActivationRecordsGenerator {
             }
         }
 
-        if (curMetadataVersion.equals(MetadataVersion.MINIMUM_KRAFT_VERSION)) {
+        if (curMetadataVersion.equals(MetadataVersion.MINIMUM_VERSION)) {
             logMessageBuilder.append("No metadata.version feature level record was found in the log. ")
                 .append("Treating the log as version ")
-                .append(MetadataVersion.MINIMUM_KRAFT_VERSION)
+                .append(MetadataVersion.MINIMUM_VERSION)
                 .append(". ");
         }
 

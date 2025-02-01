@@ -24,7 +24,6 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kafka.log._
 import kafka.server._
 import kafka.utils._
-import org.apache.kafka.common.TopicIdPartition
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.record.{MemoryRecords, SimpleRecord}
@@ -33,7 +32,7 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.metadata.{LeaderAndIsr, MockConfigRepository}
-import org.apache.kafka.server.common.RequestLocal
+import org.apache.kafka.server.common.{RequestLocal, TopicIdPartition}
 import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams}
 import org.apache.kafka.server.util.MockTime
@@ -332,7 +331,7 @@ class PartitionLockTest extends Logging {
       }
     }
 
-    val topicIdPartition = new TopicIdPartition(partition.topicId.getOrElse(Uuid.ZERO_UUID), topicPartition)
+    val topicIdPartition = new TopicIdPartition(partition.topicId.getOrElse(Uuid.ZERO_UUID), topicPartition.partition)
     when(offsetCheckpoints.fetch(
       ArgumentMatchers.anyString,
       ArgumentMatchers.eq(topicPartition)

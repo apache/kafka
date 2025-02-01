@@ -30,8 +30,7 @@ import java.util.List;
 
 import static java.util.Collections.emptyList;
 import static org.apache.kafka.server.common.MetadataVersion.FEATURE_NAME;
-import static org.apache.kafka.server.common.MetadataVersion.IBP_3_0_IV1;
-import static org.apache.kafka.server.common.MetadataVersion.IBP_3_3_IV2;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_3_3_IV3;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -41,25 +40,25 @@ public class BootstrapMetadataTest {
     static final List<ApiMessageAndVersion> SAMPLE_RECORDS1 = List.of(
         new ApiMessageAndVersion(new FeatureLevelRecord().
             setName(FEATURE_NAME).
-            setFeatureLevel((short) 7), (short) 0),
+            setFeatureLevel((short) 8), (short) 0),
         new ApiMessageAndVersion(new NoOpRecord(), (short) 0),
         new ApiMessageAndVersion(new FeatureLevelRecord().
             setName(FEATURE_NAME).
-            setFeatureLevel((short) 6), (short) 0));
+            setFeatureLevel((short) 7), (short) 0));
 
     @Test
     public void testFromVersion() {
         assertEquals(new BootstrapMetadata(Collections.singletonList(
             new ApiMessageAndVersion(new FeatureLevelRecord().
                 setName(FEATURE_NAME).
-                setFeatureLevel((short) 6), (short) 0)),
-                    IBP_3_3_IV2, "foo"),
-            BootstrapMetadata.fromVersion(IBP_3_3_IV2, "foo"));
+                setFeatureLevel((short) 7), (short) 0)),
+                    IBP_3_3_IV3, "foo"),
+            BootstrapMetadata.fromVersion(IBP_3_3_IV3, "foo"));
     }
 
     @Test
     public void testFromRecordsList() {
-        assertEquals(new BootstrapMetadata(SAMPLE_RECORDS1, IBP_3_3_IV2, "bar"),
+        assertEquals(new BootstrapMetadata(SAMPLE_RECORDS1, IBP_3_3_IV3, "bar"),
             BootstrapMetadata.fromRecords(SAMPLE_RECORDS1, "bar"));
     }
 
@@ -126,7 +125,7 @@ public class BootstrapMetadataTest {
     static final List<ApiMessageAndVersion> RECORDS_WITH_OLD_METADATA_VERSION = Collections.singletonList(
             new ApiMessageAndVersion(new FeatureLevelRecord().
                 setName(FEATURE_NAME).
-                setFeatureLevel(IBP_3_0_IV1.featureLevel()), (short) 0));
+                setFeatureLevel((short) 1), (short) 0));
 
     @Test
     public void testFromRecordsListWithOldMetadataVersion() {

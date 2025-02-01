@@ -39,18 +39,12 @@ public class ImageWriterOptionsTest {
 
     @Test
     public void testSetMetadataVersion() {
-        for (int i = MetadataVersion.MINIMUM_KRAFT_VERSION.ordinal();
-                 i < MetadataVersion.VERSIONS.length;
-                 i++) {
+        for (int i = MetadataVersion.MINIMUM_VERSION.ordinal();
+             i < MetadataVersion.VERSIONS.length;
+             i++) {
             MetadataVersion version = MetadataVersion.VERSIONS[i];
-            ImageWriterOptions.Builder options = new ImageWriterOptions.Builder().
-                    setMetadataVersion(version);
-            if (i < MetadataVersion.MINIMUM_BOOTSTRAP_VERSION.ordinal()) {
-                assertEquals(MetadataVersion.MINIMUM_KRAFT_VERSION, options.metadataVersion());
-                assertEquals(version, options.requestedMetadataVersion());
-            } else {
-                assertEquals(version, options.metadataVersion());
-            }
+            ImageWriterOptions.Builder options = new ImageWriterOptions.Builder().setMetadataVersion(version);
+            assertEquals(version, options.metadataVersion());
         }
     }
 
@@ -58,7 +52,7 @@ public class ImageWriterOptionsTest {
     public void testHandleLoss() {
         String expectedMessage = "stuff";
 
-        for (int i = MetadataVersion.MINIMUM_KRAFT_VERSION.ordinal();
+        for (int i = MetadataVersion.MINIMUM_VERSION.ordinal();
              i < MetadataVersion.VERSIONS.length;
              i++) {
             MetadataVersion version = MetadataVersion.VERSIONS[i];

@@ -42,7 +42,7 @@ public class FeatureTest {
         "UNIT_TEST_VERSION_7"}, mode = EnumSource.Mode.EXCLUDE)
     public void testV0SupportedInEarliestMV(Feature feature) {
         assertTrue(feature.featureVersions().length >= 1);
-        assertEquals(MetadataVersion.MINIMUM_KRAFT_VERSION,
+        assertEquals(MetadataVersion.MINIMUM_VERSION,
             feature.featureVersions()[0].bootstrapMetadataVersion());
     }
 
@@ -88,7 +88,7 @@ public class FeatureTest {
             Map<String, Short> deps = new HashMap<>();
             deps.putAll(featureImpl.dependencies());
             if (!deps.containsKey(MetadataVersion.FEATURE_NAME)) {
-                deps.put(MetadataVersion.FEATURE_NAME, MetadataVersion.MINIMUM_BOOTSTRAP_VERSION.featureLevel());
+                deps.put(MetadataVersion.FEATURE_NAME, MetadataVersion.MINIMUM_VERSION.featureLevel());
             }
 
             // Ensure that the feature is valid given the typical metadataVersionMapping and the dependencies.
@@ -111,7 +111,7 @@ public class FeatureTest {
         assertThrows(IllegalArgumentException.class,
             () -> Feature.validateVersion(
                 TestFeatureVersion.TEST_1,
-                Collections.singletonMap(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_0_IV1.featureLevel())
+                Collections.singletonMap(MetadataVersion.FEATURE_NAME, MetadataVersionTestUtils.IBP_3_0_IV1_FEATURE_LEVEL)
             )
         );
 

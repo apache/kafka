@@ -62,7 +62,7 @@ class ControllerRegistrationManagerTest {
   ): java.util.Map[String, VersionRange] = {
     val results = new util.HashMap[String, VersionRange]()
     results.put(MetadataVersion.FEATURE_NAME, VersionRange.of(
-      MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel(),
+      MetadataVersion.MINIMUM_VERSION.featureLevel(),
       highestSupportedMetadataVersion.featureLevel()))
     results
   }

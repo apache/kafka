@@ -23,13 +23,10 @@ import org.apache.kafka.image.writer.ImageWriter;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.server.common.MetadataVersion;
 
-import java.util.ArrayList;
 import java.util.Collections;
-import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
-import java.util.Optional;
 
 
 /**
@@ -40,7 +37,7 @@ import java.util.Optional;
 public final class FeaturesImage {
     public static final FeaturesImage EMPTY = new FeaturesImage(
         Collections.emptyMap(),
-        MetadataVersion.MINIMUM_KRAFT_VERSION
+        MetadataVersion.MINIMUM_VERSION
     );
 
     private final Map<String, Short> finalizedVersions;
@@ -56,7 +53,7 @@ public final class FeaturesImage {
 
     public boolean isEmpty() {
         return finalizedVersions.isEmpty() &&
-            metadataVersion.equals(MetadataVersion.MINIMUM_KRAFT_VERSION);
+            metadataVersion.equals(MetadataVersion.MINIMUM_VERSION);
     }
 
     public MetadataVersion metadataVersion() {
@@ -67,26 +64,8 @@ public final class FeaturesImage {
         return finalizedVersions;
     }
 
-    private Optional<Short> finalizedVersion(String feature) {
-        return Optional.ofNullable(finalizedVersions.get(feature));
-    }
-
     public void write(ImageWriter writer, ImageWriterOptions options) {
-        if (options.metadataVersion().isLessThan(MetadataVersion.MINIMUM_BOOTSTRAP_VERSION)) {
-            handleFeatureLevelNotSupported(options);
-        } else {
-            writeFeatureLevels(writer, options);
-        }
-    }
-
-    private void handleFeatureLevelNotSupported(ImageWriterOptions options) {
-        // If the metadata version is older than 3.3-IV0, we can't represent any feature flags,
-        // because the FeatureLevel record is not supported.
-        if (!finalizedVersions.isEmpty()) {
-            List<String> features = new ArrayList<>(finalizedVersions.keySet());
-            features.sort(String::compareTo);
-            options.handleLoss("feature flag(s): " + String.join(", ", features));
-        }
+        writeFeatureLevels(writer, options);
     }
 
     private void writeFeatureLevels(ImageWriter writer, ImageWriterOptions options) {

@@ -163,7 +163,7 @@ public class FeaturesImageTest {
         assertFalse(new FeaturesImage(Collections.singletonMap("foo", (short) 1),
             FeaturesImage.EMPTY.metadataVersion()).isEmpty());
         assertFalse(new FeaturesImage(FeaturesImage.EMPTY.finalizedVersions(),
-            MetadataVersion.IBP_3_3_IV0).isEmpty());
+            MetadataVersion.IBP_3_4_IV0).isEmpty());
         assertTrue(new FeaturesImage(FeaturesImage.EMPTY.finalizedVersions(), FeaturesImage.EMPTY.metadataVersion()).isEmpty());
     }
 }
