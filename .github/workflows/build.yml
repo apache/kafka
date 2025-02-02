@@ -220,6 +220,7 @@ jobs:
           run-new-tests: ${{ matrix.run-new }}
           run-flaky-tests: ${{ matrix.run-flaky }}
           test-retries: ${{ matrix.run-flaky == true && '3' || '1' }}
+          test-xml-output: ${{ env.job-variation }}
 
       - name: Archive JUnit HTML reports
         uses: actions/upload-artifact@v4

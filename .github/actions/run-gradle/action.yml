@@ -24,6 +24,9 @@ inputs:
   test-task:
     description: "The test suite to run. Either 'test' or 'quarantinedTest'."
     required: true
+  test-xml-output:
+    description: "Output directory for JUnit XML results"
+    required: true
   timeout-minutes:
     description: "The timeout for the tests, in minutes."
     required: true
@@ -67,6 +70,7 @@ runs:
         TEST_RETRIES: ${{ inputs.test-retries }}
         RUN_NEW_TESTS: ${{ inputs.run-new-tests }}
         RUN_FLAKY_TESTS: ${{ inputs.run-flaky-tests }}
+        TEST_XML_OUTPUT_DIR: ${{ inputs.test-xml-output }}
       run: |
         set +e
         ./.github/scripts/thread-dump.sh &
@@ -77,6 +81,7 @@ runs:
         -Pkafka.test.catalog.file=$TEST_CATALOG \
         -Pkafka.test.run.quarantined=$RUN_NEW_TESTS \
         -Pkafka.test.run.flaky=$RUN_FLAKY_TESTS \
+        -Pkafka.test.xml.output.dir=$TEST_XML_OUTPUT_DIR \
         -PcommitId=xxxxxxxxxxxxxxxx \
         $TEST_TASK
         exitcode="$?"

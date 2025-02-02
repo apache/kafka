@@ -505,13 +505,17 @@ subprojects {
     onlyIf("Project '${project.name}:test' has sources") { ! test.state.noSource }
     onlyIf("Task '${project.name}:test' did work") { test.state.didWork }
 
+    ext {
+      output = project.findProperty("kafka.test.xml.output.dir")
+    }
+
     // Never cache this task
     outputs.cacheIf { false }
     outputs.upToDateWhen { false }
 
     doLast {
       def moduleDirPath = projectToJUnitXmlPath(project)
-      def dest = rootProject.layout.buildDirectory.dir("junit-xml/${moduleDirPath}/test").get().asFile
+      def dest = rootProject.layout.buildDirectory.dir("junit-xml/${moduleDirPath}/${output}").get().asFile
       println "Copy JUnit XML for ${project.name} to $dest"
       ant.copy(todir: "$dest") {
 	ant.fileset(dir: "${test.reports.junitXml.entryPoint}") {
