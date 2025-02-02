@@ -48,8 +48,7 @@ public class PreboundSocketFactoryManager implements AutoCloseable {
         ) throws IOException {
             ServerSocketChannel socketChannel = getSocketForListenerAndMarkAsUsed(
                 nodeId,
-                listenerName,
-                    false);
+                listenerName);
 
             if (socketChannel != null) {
                 if (socketChannel.isOpen()) {
@@ -104,6 +103,10 @@ public class PreboundSocketFactoryManager implements AutoCloseable {
      */
     private final Map<Integer, Map<String, ServerSocketChannel>> dynamicSockets = new HashMap<>();
 
+    /**
+     * After initial flow, this flag will be set as false forever
+     */
+    private boolean initalizating = true;
 
     /**
      * Maps node IDs to set of the listeners that were used.
@@ -119,14 +122,13 @@ public class PreboundSocketFactoryManager implements AutoCloseable {
      *
      * @return              null if the socket was not found; the socket, otherwise.
      */
-    public synchronized ServerSocketChannel getSocketForListenerAndMarkAsUsed(
+    private synchronized ServerSocketChannel getSocketForListenerAndMarkAsUsed(
         int nodeId,
-        String listener,
-        boolean isDynamic
+        String listener
     ) {
 
         Map<Integer, Map<String, ServerSocketChannel>> checkedsockets = sockets;
-        if (isDynamic) {
+        if (!initalizating) {
             checkedsockets = this.dynamicSockets;
         }
 
@@ -138,7 +140,7 @@ public class PreboundSocketFactoryManager implements AutoCloseable {
         if (socket == null) {
             return null;
         }
-        if (!isDynamic)
+        if (initalizating)
             usedSockets.computeIfAbsent(nodeId, __ -> new HashSet<>()).add(listener);
         return socket;
     }
@@ -194,11 +196,16 @@ public class PreboundSocketFactoryManager implements AutoCloseable {
             socketsForNode.put(listener, socketChannel);
         }
         InetSocketAddress socketAddress = (InetSocketAddress) socketChannel.getLocalAddress();
-        System.err.println("ZZZ get port " + socketAddress);
-//        for (StackTraceElement element : Thread.currentThread().getStackTrace()) {
-//            System.err.println(element);
-//        }
+
         return socketAddress.getPort();
+    }
+
+    /**
+     * If this method is called, we create a new socket after initial flow.
+     * This method should be called after initial flow.
+     */
+    public synchronized void finalInitial() {
+        initalizating = false;
     }
 
     @Override

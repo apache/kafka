@@ -350,7 +350,6 @@ public class KafkaClusterTestKit implements AutoCloseable {
     private final TestKitNodes nodes;
     private final Map<Integer, ControllerServer> controllers;
     private final Map<Integer, BrokerServer> brokers;
-
     private final Map<Integer, BrokerServer> dynamicBrokers = new TreeMap<>();
     private final Map<Integer, ControllerServer> dynamicControllers = new TreeMap<>();
     private final File baseDirectory;
@@ -384,6 +383,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
         this.socketFactoryManager = socketFactoryManager;
         this.controllerListenerName = nodes.controllerListenerName().value();
         this.jaasFile = jaasFile;
+        socketFactoryManager.finalInitial();
     }
 
     public void format() throws Exception {

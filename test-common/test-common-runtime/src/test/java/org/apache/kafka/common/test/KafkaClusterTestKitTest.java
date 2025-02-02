@@ -166,12 +166,24 @@ public class KafkaClusterTestKitTest {
         props.put("node.id", "2");
         props.put("controller.quorum.bootstrap.servers", "localhost:9000");
 
-//        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(nodes).build()) {
+        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(nodes).build()) {
+            assertDoesNotThrow(() -> cluster.createIsolatedController(props));
+        }
+    }
 
-//        }
+    @Test
+    public void testCreateOutOfClusterControllerWithSameId() throws Exception {
+        TestKitNodes nodes = new TestKitNodes.Builder()
+                .setNumBrokerNodes(1)
+                .setNumControllerNodes(1)
+                .build();
 
-        KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(nodes).build();
-        assertDoesNotThrow(() -> cluster.createIsolatedController(props));
-        cluster.close();
+        Map<String, String> props = new HashMap<>();
+        props.put("node.id", "0");
+        props.put("controller.quorum.bootstrap.servers", "localhost:9000");
+
+        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(nodes).build()) {
+            assertDoesNotThrow(() -> cluster.createIsolatedController(props));
+        }
     }
 }
