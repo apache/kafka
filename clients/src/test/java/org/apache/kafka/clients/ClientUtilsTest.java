@@ -100,7 +100,7 @@ public class ClientUtilsTest {
         }
     }
 
-    static Stream<List<String>> provideBrokerListTestCases() {
+    static Stream<List<String>> provideValidBrokerAddressTestCases() {
         return Stream.of(
             List.of("localhost:9997", "localhost:9998", "localhost:9999"),
             // Intentionally provide a single string, as users may provide space-separated brokers, which will be parsed as a single string.
@@ -109,7 +109,7 @@ public class ClientUtilsTest {
     }
 
     @ParameterizedTest
-    @MethodSource("provideBrokerListTestCases")
+    @MethodSource("provideValidBrokerAddressTestCases")
     public void testValidBrokerList(List<String> brokerList) {
         assertDoesNotThrow(() -> ClientUtils.parseAndValidateAddresses(brokerList, ClientDnsLookup.USE_ALL_DNS_IPS));
     }
