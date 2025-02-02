@@ -55,7 +55,7 @@ public class BrokerApiVersionsCommandTest {
         ApiMessageType.ListenerType listenerType = ApiMessageType.ListenerType.BROKER;
 
         NodeApiVersions nodeApiVersions = new NodeApiVersions(
-                ApiVersionsResponse.collectApis(ApiKeys.clientApis(), true),
+                ApiVersionsResponse.filterApis(listenerType, true, true),
                 Collections.emptyList());
         Iterator<ApiKeys> apiKeysIter = ApiKeys.clientApis().iterator();
         while (apiKeysIter.hasNext()) {
@@ -64,7 +64,7 @@ public class BrokerApiVersionsCommandTest {
             StringBuilder lineBuilder = new StringBuilder().append("\t");
             if (apiKey.inScope(listenerType)) {
                 ApiVersion apiVersion = nodeApiVersions.apiVersion(apiKey);
-                assertNotNull(apiVersion);
+                assertNotNull(apiVersion, "No apiVersion found for " + apiKey);
 
                 String versionRangeStr = (apiVersion.minVersion() == apiVersion.maxVersion()) ?
                         String.valueOf(apiVersion.minVersion()) :
