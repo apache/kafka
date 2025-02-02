@@ -17,7 +17,7 @@
 
 package org.apache.kafka.common.test;
 
-
+import kafka.server.KafkaConfig;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
@@ -27,6 +27,7 @@ import org.apache.kafka.metadata.properties.MetaProperties;
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble;
 import org.apache.kafka.metadata.properties.MetaPropertiesVersion;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.server.config.KRaftConfigs;
 
 import java.io.File;
 import java.nio.file.Path;
@@ -221,6 +222,8 @@ public class TestKitNodes {
     private final BootstrapMetadata bootstrapMetadata;
     private final SortedMap<Integer, TestKitNode> controllerNodes;
     private final SortedMap<Integer, TestKitNode> brokerNodes;
+    private final SortedMap<Integer, TestKitNode> dynamicControllerNodes;
+    private final SortedMap<Integer, TestKitNode> dynamicBrokerNodes;
     private final ListenerName brokerListenerName;
     private final ListenerName controllerListenerName;
     private final SecurityProtocol brokerSecurityProtocol;
@@ -240,8 +243,10 @@ public class TestKitNodes {
         this.baseDirectory = Objects.requireNonNull(baseDirectory);
         this.clusterId = Objects.requireNonNull(clusterId);
         this.bootstrapMetadata = Objects.requireNonNull(bootstrapMetadata);
-        this.controllerNodes = new TreeMap<>(Objects.requireNonNull(controllerNodes));
+        this.controllerNodes = Collections.unmodifiableSortedMap(new TreeMap<>(Objects.requireNonNull(controllerNodes)));
         this.brokerNodes = Collections.unmodifiableSortedMap(new TreeMap<>(Objects.requireNonNull(brokerNodes)));
+        this.dynamicControllerNodes = new TreeMap<>();
+        this.dynamicBrokerNodes = new TreeMap<>();
         this.brokerListenerName = Objects.requireNonNull(brokerListenerName);
         this.controllerListenerName = Objects.requireNonNull(controllerListenerName);
         this.brokerSecurityProtocol = Objects.requireNonNull(brokerSecurityProtocol);
@@ -288,20 +293,21 @@ public class TestKitNodes {
         return controllerSecurityProtocol;
     }
 
-    public TestKitNode createController(Map<String, String> config) {
-        Optional<Integer> maxNodeId = controllerNodes.keySet().stream().max(Integer::compareTo);
-        // TODO: check node id is not repeat
-        System.err.println("KKK " + maxNodeId.get());
-        Integer newNodeId = maxNodeId.get() + 1;
+    public TestKitNode createControllerNode(KafkaConfig config, boolean isCombined) {
+        final Integer newNodeId = config.getInt(KRaftConfigs.NODE_ID_CONFIG);
 
         TestKitNode controller = TestKitNodes.buildControllerNode(
                 newNodeId,
                 new File(baseDirectory, String.format("controller-%d", newNodeId)).getAbsolutePath(),
                 clusterId,
-                false,
-                config
+                isCombined,
+                config.originalsStrings()
         );
-        controllerNodes.put(newNodeId, controller);
+        dynamicControllerNodes.put(newNodeId, controller);
+        if (isCombined) {
+            dynamicBrokerNodes.put(newNodeId, controller);
+        }
+
         return controller;
     }
 

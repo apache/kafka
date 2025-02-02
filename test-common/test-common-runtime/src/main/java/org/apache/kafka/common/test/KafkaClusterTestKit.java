@@ -67,6 +67,7 @@ import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -197,7 +198,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
             return new KafkaConfig(props, false);
         }
 
-        static private void setSecurityProtocolProps(Map<String, Object> props, String securityProtocol) {
+        private static void setSecurityProtocolProps(Map<String, Object> props, String securityProtocol) {
             if (securityProtocol.equals(SecurityProtocol.SASL_PLAINTEXT.name)) {
                 props.putIfAbsent(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG, "PLAIN");
                 props.putIfAbsent(BrokerSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG, "PLAIN");
@@ -350,6 +351,9 @@ public class KafkaClusterTestKit implements AutoCloseable {
     private final TestKitNodes nodes;
     private final Map<Integer, ControllerServer> controllers;
     private final Map<Integer, BrokerServer> brokers;
+
+    private final Map<Integer, BrokerServer> dynamicBrokers = new TreeMap<>();
+    private final Map<Integer, ControllerServer> dynamicControllers = new TreeMap<>();
     private final File baseDirectory;
     private final SimpleFaultHandlerFactory faultHandlerFactory;
     private final PreboundSocketFactoryManager socketFactoryManager;
@@ -370,11 +374,12 @@ public class KafkaClusterTestKit implements AutoCloseable {
                             = Total number of brokers + Total number of controllers * 2
                               (Raft Manager per broker/controller)
         */
+        // TODO: can adjust thread size depend on controller and broker number?
         int numOfExecutorThreads = (nodes.brokerNodes().size() + nodes.controllerNodes().size()) * 2;
         this.executorService = Executors.newFixedThreadPool(numOfExecutorThreads, threadFactory);
         this.nodes = nodes;
-        this.controllers = controllers;
-        this.brokers = brokers;
+        this.controllers = Collections.unmodifiableMap(controllers);
+        this.brokers = Collections.unmodifiableMap(brokers);
         this.baseDirectory = baseDirectory;
         this.faultHandlerFactory = faultHandlerFactory;
         this.socketFactoryManager = socketFactoryManager;
@@ -408,17 +413,19 @@ public class KafkaClusterTestKit implements AutoCloseable {
         }
     }
 
-    public ControllerServer createController(Map<String, String> props) {
-        KafkaConfig config = new KafkaConfig(props);
+    public ControllerServer createController(Map<String, String> props, boolean isCombined) {
         props.put(KRaftConfigs.SERVER_MAX_STARTUP_TIME_MS_CONFIG,
                 Long.toString(TimeUnit.MINUTES.toMillis(10)));
         props.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller");
+        KafkaConfig config = new KafkaConfig(props);
 
-        TestKitNode node = nodes.createController(props);
-        System.err.println("WWW " + props);
+        TestKitNode node = nodes.createControllerNode(config, isCombined);
+        MetaPropertiesEnsemble metaPropsEnsemble = node.initialMetaPropertiesEnsemble();
+        formatNode(metaPropsEnsemble, true);
+
         SharedServer sharedServer = new SharedServer(
-                new KafkaConfig(props),
-                node.initialMetaPropertiesEnsemble(),
+                config,
+                metaPropsEnsemble,
                 Time.SYSTEM,
                 new Metrics(),
                 CompletableFuture.completedFuture(QuorumConfig.parseVoterConnections(new ArrayList<>())),
@@ -437,9 +444,10 @@ public class KafkaClusterTestKit implements AutoCloseable {
             Utils.swallow(log, Level.WARN, "sharedServer.stopForController error", sharedServer::stopForController);
             throw e;
         }
-//        sharedServer.startForController();
+
         controller.startup();
-        controllers.put(node.id(), controller);
+        dynamicControllers.put(node.id(), controller);
+
         return controller;
     }
 
@@ -667,6 +675,12 @@ public class KafkaClusterTestKit implements AutoCloseable {
                 futureEntries.add(new SimpleImmutableEntry<>("broker" + brokerId,
                     executorService.submit((Runnable) broker::shutdown)));
             }
+            for (Entry<Integer, BrokerServer> entry : dynamicBrokers.entrySet()) {
+                int brokerId = entry.getKey();
+                BrokerServer broker = entry.getValue();
+                futureEntries.add(new SimpleImmutableEntry<>("broker" + brokerId,
+                        executorService.submit((Runnable) broker::shutdown)));
+            }
             waitForAllFutures(futureEntries);
             futureEntries.clear();
             for (Entry<Integer, ControllerServer> entry : controllers.entrySet()) {
@@ -674,6 +688,12 @@ public class KafkaClusterTestKit implements AutoCloseable {
                 ControllerServer controller = entry.getValue();
                 futureEntries.add(new SimpleImmutableEntry<>("controller" + controllerId,
                     executorService.submit(controller::shutdown)));
+            }
+            for (Entry<Integer, ControllerServer> entry : dynamicControllers.entrySet()) {
+                int controllerId = entry.getKey();
+                ControllerServer controller = entry.getValue();
+                futureEntries.add(new SimpleImmutableEntry<>("controller" + controllerId,
+                        executorService.submit(controller::shutdown)));
             }
             waitForAllFutures(futureEntries);
             futureEntries.clear();

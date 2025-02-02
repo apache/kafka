@@ -87,8 +87,6 @@ public class KraftVoterTest {
             String bootstrapControllers = cluster.bootstrapControllers();
 
             Map<String, String> props = new HashMap<>();
-//            int controllerPort = socketFactoryManager.getOrCreatePortForListener(987, "CONTROLLER");
-//            int plaintextPort = socketFactoryManager.getOrCreatePortForListener(987, "PLAINTEXT");
             props.put("node.id", "3001");
             props.put("process.roles", "controller");
             props.put(QuorumConfig.QUORUM_BOOTSTRAP_SERVERS_CONFIG, bootstrapControllers);
@@ -98,15 +96,12 @@ public class KraftVoterTest {
             props.put("listener.security.protocol.map", "EXTERNAL:PLAINTEXT,INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT");
             System.err.println("KKK listeners " + props.get("listeners") + " advertised.listeners: " + props.get("advertised.listeners"));
             System.err.println("KKK Bootstrap server " + bootstrapControllers);
-            cluster.createController(props);
+            cluster.createController(props, false);
             Collection<Integer> res = new ArrayList<>();
             res.add(0);
             res.add(3000);
             res.add(3001);
             try (Admin admin = Admin.create(cluster.clientProperties())) {
-//                TestUtils.retryOnExceptionWithTimeout(300_000, () -> {
-//                    checkKRaftVersions(admin, (short) 0);
-//                });
                 kafka.utils.TestUtils.waitUntilTrue(() -> {
                     try {
                         return checkKrafrVoter(admin, res);
