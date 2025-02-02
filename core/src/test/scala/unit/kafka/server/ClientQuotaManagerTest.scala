@@ -21,7 +21,6 @@ import kafka.server.ClientQuotaManager.BaseUserEntity
 import java.net.InetAddress
 import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.common.security.auth.KafkaPrincipal
-import org.apache.kafka.common.utils.Sanitizer
 import org.apache.kafka.server.config.ClientQuotaManagerConfig
 import org.apache.kafka.network.Session
 import org.apache.kafka.server.quota.QuotaType
@@ -38,12 +37,12 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
       // Case 1: Update the quota. Assert that the new quota value is returned
       clientQuotaManager.updateQuota(
         client1.configUser,
-        client1.sanitizedConfigClientId,
+        client1.sanitizedConfigClientEntity,
         Some(new Quota(2000, true))
       )
       clientQuotaManager.updateQuota(
         client2.configUser,
-        client2.sanitizedConfigClientId,
+        client2.sanitizedConfigClientEntity,
         Some(new Quota(4000, true))
       )
 
@@ -62,7 +61,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
       // p1 should not longer be throttled after the quota change
       clientQuotaManager.updateQuota(
         client1.configUser,
-        client1.sanitizedConfigClientId,
+        client1.sanitizedConfigClientEntity,
         Some(new Quota(3000, true))
       )
       assertEquals(3000, clientQuotaManager.quota(client1.user, client1.clientId).bound, 0.0, "Should return the newly overridden value (3000)")
@@ -73,7 +72,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
       // Case 3: Change quota back to default. Should be throttled again
       clientQuotaManager.updateQuota(
         client1.configUser,
-        client1.sanitizedConfigClientId,
+        client1.sanitizedConfigClientEntity,
         Some(new Quota(500, true))
       )
       assertEquals(500, clientQuotaManager.quota(client1.user, client1.clientId).bound, 0.0, "Should return the default value (500)")
@@ -84,12 +83,12 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
       // Case 4: Set high default quota, remove p1 quota. p1 should no longer be throttled
       clientQuotaManager.updateQuota(
         client1.configUser,
-        client1.sanitizedConfigClientId,
+        client1.sanitizedConfigClientEntity,
         None
       )
       clientQuotaManager.updateQuota(
         defaultConfigClient.configUser,
-        defaultConfigClient.sanitizedConfigClientId,
+        defaultConfigClient.sanitizedConfigClientEntity,
         Some(new Quota(4000, true))
       )
       assertEquals(4000, clientQuotaManager.quota(client1.user, client1.clientId).bound, 0.0, "Should return the newly overridden value (4000)")
@@ -100,20 +99,6 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
     } finally {
       clientQuotaManager.shutdown()
     }
-  }
-
-  /**
-   * Tests parsing for <user> quotas.
-   * Quota overrides persisted in ZooKeeper in /config/users/<user>, default persisted in /config/users/<default>
-   */
-  @Test
-  def testUserQuotaParsing(): Unit = {
-    val client1 = UserClient("User1", "p1", Some(ClientQuotaManager.UserEntity("User1")), None)
-    val client2 = UserClient("User2", "p2", Some(ClientQuotaManager.UserEntity("User2")), None)
-    val randomClient = UserClient("RandomUser", "random-client-id", None, None)
-    val defaultConfigClient = UserClient("", "", Some(ClientQuotaManager.DefaultUserEntity), None)
-    val config = new ClientQuotaManagerConfig()
-    testQuotaParsing(config, client1, client2, randomClient, defaultConfigClient)
   }
 
   /**
@@ -516,11 +501,9 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
     }
   }
 
-  private case class UserClient(user: String, clientId: String, configUser: Option[BaseUserEntity] = None, configClientId: Option[String] = None) {
-    // The class under test expects only sanitized client configs. We pass both the default value (which should not be
-    // sanitized to ensure it remains unique) and non-default values, so we need to take care in generating the sanitized
-    // client ID
-    def sanitizedConfigClientId = configClientId.map(x => Sanitizer.sanitize(x))
-      .map(ClientQuotaManager.ClientIdEntity)
-  }
+  private case class UserClient(
+    user: String, clientId: String, 
+    configUser: Option[BaseUserEntity] = None,
+    sanitizedConfigClientEntity: Option[ClientQuotaManager.ClientIdEntity] = None
+  )
 }

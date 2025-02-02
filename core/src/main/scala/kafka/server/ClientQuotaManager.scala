@@ -403,13 +403,13 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
    * Overrides quotas for <user>, <client-id> or <user, client-id> or the dynamic defaults
    * for any of these levels.
    *
-   * @param userEntity     user to override if quota applies to <user> or <user, client-id>
-   * @param sanitizedClientId sanitized client ID to override if quota applies to <client-id> or <user, client-id>
-   * @param quota             custom quota to apply or None if quota override is being removed
+   * @param userEntity            user to override if quota applies to <user> or <user, client-id>
+   * @param sanitizedClientEntity sanitized client entity to override if quota applies to <client-id> or <user, client-id>
+   * @param quota                 custom quota to apply or None if quota override is being removed
    */
   def updateQuota(
     userEntity: Option[BaseUserEntity],
-    sanitizedClientId: Option[ClientQuotaEntity.ConfigEntity],
+    sanitizedClientEntity: Option[ClientQuotaEntity.ConfigEntity],
     quota: Option[Quota]
   ): Unit = {
     /*
@@ -421,9 +421,9 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
      */
     lock.writeLock().lock()
     try {
-      val clientIdEntity = sanitizedClientId match {
+      val clientIdEntity = sanitizedClientEntity match {
         case Some(client: ClientIdEntity) => Some(ClientIdEntity(Sanitizer.desanitize(client.name)))
-        case _ => sanitizedClientId
+        case _ => sanitizedClientEntity
       }
         
       val quotaEntity = KafkaQuotaEntity(userEntity, clientIdEntity)

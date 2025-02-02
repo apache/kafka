@@ -149,13 +149,13 @@ class ClientQuotaMetadataManager(private[metadata] val quotaManagers: QuotaManag
     }
 
     // Convert entity into Options with sanitized values for QuotaManagers
-    val (userEntity, sanitizedClientId) = transferToClientQuotaEntity(quotaEntity)
+    val (userEntity, sanitizedClientEntity) = transferToClientQuotaEntity(quotaEntity)
 
     val quotaValue = newValue.map(new Quota(_, true))
     try {
       manager.updateQuota(
         userEntity = userEntity,
-        sanitizedClientId = sanitizedClientId,
+        sanitizedClientEntity = sanitizedClientEntity,
         quota = quotaValue
       )
     } catch {
@@ -167,7 +167,7 @@ class ClientQuotaMetadataManager(private[metadata] val quotaManagers: QuotaManag
 object ClientQuotaMetadataManager {
 
   def transferToClientQuotaEntity(quotaEntity: QuotaEntity): (Option[BaseUserEntity], Option[ClientQuotaConfigEntity]) = {
-    val (userEntity, sanitizedClientId) = quotaEntity match {
+    val (userEntity, sanitizedClientEntity) = quotaEntity match {
       case UserEntity(user) =>
         (Some(ClientQuotaManager.UserEntity(Sanitizer.sanitize(user))), None)
       case DefaultUserEntity =>
@@ -186,6 +186,6 @@ object ClientQuotaMetadataManager {
         (Some(ClientQuotaManager.DefaultUserEntity), Some(ClientQuotaManager.DefaultClientIdEntity))
       case IpEntity(_) | DefaultIpEntity => throw new IllegalStateException("Should not see IP quota entities here")
     }
-    (userEntity, sanitizedClientId)
+    (userEntity, sanitizedClientEntity)
   }
 }
