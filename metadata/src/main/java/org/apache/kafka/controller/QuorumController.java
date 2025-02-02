@@ -1098,7 +1098,7 @@ public final class QuorumController implements Controller {
                         newLeader.epoch(), newNextWriteOffset);
                     claim(newLeader.epoch(), newNextWriteOffset);
                 } else {
-                    log.info("In the new epoch {}, the leader is {} highwaterMark is {}.",
+                    log.info("In the new epoch {}, the leader is {}.",
                         newLeader.epoch(), newLeaderName);
                 }
             });

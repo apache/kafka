@@ -336,7 +336,6 @@ public class QuorumState {
         if (localId.isEmpty()) {
             return false;
         }
-        log.info("kkk lastVoterSet " + partitionState.lastVoterSet());
         return partitionState
             .lastVoterSet()
             .isVoter(ReplicaKey.of(localId.getAsInt(), localDirectoryId));
@@ -769,7 +768,7 @@ public class QuorumState {
     public FollowerState followerStateOrThrow() {
         if (isFollower())
             return (FollowerState) state;
-        throw new IllegalStateException(String.format("node:%d Expected to be Follower, but the current state is ",  localId.getAsInt()) + state);
+        throw new IllegalStateException("Expected to be Follower, but the current state is " + state);
     }
 
     public Optional<UnattachedState> maybeUnattachedState() {
