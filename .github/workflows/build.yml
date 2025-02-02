@@ -260,6 +260,8 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           pattern: junit-xml-*
+          path: junit-xml
+          merge-multiple: true
       - name: Display structure of downloaded files
         run: ls -R
 
