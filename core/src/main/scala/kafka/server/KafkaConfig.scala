@@ -213,8 +213,6 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   def quotaConfig: QuotaConfig = _quotaConfig
 
   /** ********* General Configuration ***********/
-  val brokerIdGenerationEnable: Boolean = getBoolean(ServerConfigs.BROKER_ID_GENERATION_ENABLE_CONFIG)
-  val maxReservedBrokerId: Int = getInt(ServerConfigs.RESERVED_BROKER_MAX_ID_CONFIG)
   var brokerId: Int = getInt(ServerConfigs.BROKER_ID_CONFIG)
   val nodeId: Int = getInt(KRaftConfigs.NODE_ID_CONFIG)
   val initialRegistrationTimeoutMs: Int = getInt(KRaftConfigs.INITIAL_BROKER_REGISTRATION_TIMEOUT_MS_CONFIG)
