@@ -91,11 +91,11 @@ public class KraftVoterTest {
             props.put("process.roles", "controller");
             props.put(QuorumConfig.QUORUM_BOOTSTRAP_SERVERS_CONFIG, bootstrapControllers);
             props.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER");
+            props.put("controller.quorum.bootstrap.servers", "localhost:9000");
+            props.put("controller.listener.names", "CONTROLLER");
             props.put("listeners", "CONTROLLER://localhost:3999");
             props.put("advertised.listeners", "PLAINTEXT://localhost:4000");
-            props.put("listener.security.protocol.map", "EXTERNAL:PLAINTEXT,INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT");
-            System.err.println("KKK listeners " + props.get("listeners") + " advertised.listeners: " + props.get("advertised.listeners"));
-            System.err.println("KKK Bootstrap server " + bootstrapControllers);
+            props.put("listener.security.protocol.map", "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT");
             cluster.createIsolatedController(props);
             Collection<Integer> res = new ArrayList<>();
             res.add(0);

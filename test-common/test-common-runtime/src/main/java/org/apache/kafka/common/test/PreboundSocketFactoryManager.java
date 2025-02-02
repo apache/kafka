@@ -48,7 +48,8 @@ public class PreboundSocketFactoryManager implements AutoCloseable {
         ) throws IOException {
             ServerSocketChannel socketChannel = getSocketForListenerAndMarkAsUsed(
                 nodeId,
-                listenerName);
+                listenerName,
+                    false);
 
             if (socketChannel != null) {
                 if (socketChannel.isOpen()) {
@@ -82,15 +83,27 @@ public class PreboundSocketFactoryManager implements AutoCloseable {
 
     /**
      * Maps node IDs to socket factory objects.
-     * Protected by the object lock.
      */
     private final Map<Integer, PreboundSocketFactory> factories = new HashMap<>();
+
+    /**
+     * Maps node IDs to socket factory objects after initial flow.
+     */
+    private final Map<Integer, PreboundSocketFactory> dynamicFactories = new HashMap<>();
 
     /**
      * Maps node IDs to maps of listener names to ports.
      * Protected by the object lock.
      */
     private final Map<Integer, Map<String, ServerSocketChannel>> sockets = new HashMap<>();
+
+    /**
+     * Maps node IDs to maps of listener names to ports after initialization.
+     * The node id maybe same with sockets.
+     * Protected by the object lock.
+     */
+    private final Map<Integer, Map<String, ServerSocketChannel>> dynamicSockets = new HashMap<>();
+
 
     /**
      * Maps node IDs to set of the listeners that were used.
@@ -108,9 +121,16 @@ public class PreboundSocketFactoryManager implements AutoCloseable {
      */
     public synchronized ServerSocketChannel getSocketForListenerAndMarkAsUsed(
         int nodeId,
-        String listener
+        String listener,
+        boolean isDynamic
     ) {
-        Map<String, ServerSocketChannel> socketsForNode = sockets.get(nodeId);
+
+        Map<Integer, Map<String, ServerSocketChannel>> checkedsockets = sockets;
+        if (isDynamic) {
+            checkedsockets = this.dynamicSockets;
+        }
+
+        Map<String, ServerSocketChannel> socketsForNode = checkedsockets.get(nodeId);
         if (socketsForNode == null) {
             return null;
         }
@@ -118,7 +138,8 @@ public class PreboundSocketFactoryManager implements AutoCloseable {
         if (socket == null) {
             return null;
         }
-        usedSockets.computeIfAbsent(nodeId, __ -> new HashSet<>()).add(listener);
+        if (!isDynamic)
+            usedSockets.computeIfAbsent(nodeId, __ -> new HashSet<>()).add(listener);
         return socket;
     }
 
@@ -129,8 +150,14 @@ public class PreboundSocketFactoryManager implements AutoCloseable {
      *
      * @return              The socket factory.
      */
-    public synchronized ServerSocketFactory getOrCreateSocketFactory(int nodeId) {
-        return factories.computeIfAbsent(nodeId, __ -> new PreboundSocketFactory(nodeId));
+    public synchronized ServerSocketFactory getOrCreateSocketFactory(int nodeId, boolean isDynamic) {
+        Map<Integer, PreboundSocketFactory> checkedFactories = factories;
+
+        if (isDynamic) {
+            checkedFactories = dynamicFactories;
+        }
+
+        return checkedFactories.computeIfAbsent(nodeId, __ -> new PreboundSocketFactory(nodeId));
     }
 
     /**
@@ -143,10 +170,17 @@ public class PreboundSocketFactoryManager implements AutoCloseable {
      */
     public synchronized int getOrCreatePortForListener(
         int nodeId,
-        String listener
+        String listener,
+        boolean isDynamic
     ) throws IOException {
+        Map<Integer, Map<String, ServerSocketChannel>> checkedsockets = sockets;
+
+        if (isDynamic) {
+            checkedsockets = dynamicSockets;
+        }
+
         Map<String, ServerSocketChannel> socketsForNode =
-            sockets.computeIfAbsent(nodeId, __ -> new HashMap<>());
+                checkedsockets.computeIfAbsent(nodeId, __ -> new HashMap<>());
         ServerSocketChannel socketChannel = socketsForNode.get(listener);
         if (socketChannel == null) {
             if (closed) {
@@ -160,6 +194,10 @@ public class PreboundSocketFactoryManager implements AutoCloseable {
             socketsForNode.put(listener, socketChannel);
         }
         InetSocketAddress socketAddress = (InetSocketAddress) socketChannel.getLocalAddress();
+        System.err.println("ZZZ get port " + socketAddress);
+//        for (StackTraceElement element : Thread.currentThread().getStackTrace()) {
+//            System.err.println(element);
+//        }
         return socketAddress.getPort();
     }
 
@@ -172,9 +210,14 @@ public class PreboundSocketFactoryManager implements AutoCloseable {
         // Close all sockets that haven't been used by a SocketServer. (We don't want to close the
         // ones that have been used by a SocketServer because that is the responsibility of that
         // SocketServer.)
+        closeSocket(sockets);
+        closeSocket(dynamicSockets);
+    }
+
+    private void closeSocket(Map<Integer, Map<String, ServerSocketChannel>> sockets) {
         for (Entry<Integer, Map<String, ServerSocketChannel>> socketsEntry : sockets.entrySet()) {
             Set<String> usedListeners = usedSockets.getOrDefault(
-                socketsEntry.getKey(), Collections.emptySet());
+                    socketsEntry.getKey(), Collections.emptySet());
             for (Entry<String, ServerSocketChannel> entry : socketsEntry.getValue().entrySet()) {
                 if (!usedListeners.contains(entry.getKey())) {
                     Utils.closeQuietly(entry.getValue(), "serverSocketChannel");

@@ -31,11 +31,11 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.fail;
 
 public class KafkaClusterTestKitTest {
@@ -161,15 +161,17 @@ public class KafkaClusterTestKitTest {
                 .setNumBrokerNodes(1)
                 .setNumControllerNodes(1)
                 .build();
+
         Map<String, String> props = new HashMap<>();
         props.put("node.id", "2");
         props.put("controller.quorum.bootstrap.servers", "localhost:9000");
-        props.put("controller.listener.names", "CONTROLLER");
-        props.put("listeners", "CONTROLLER://localhost:3999");
-        props.put("advertised.listeners", "PLAINTEXT://localhost:4000");
-        props.put("listener.security.protocol.map", "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT");
-        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(nodes).build()) {
-            assertDoesNotThrow(() -> cluster.createIsolatedController(props));
-        }
+
+//        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(nodes).build()) {
+
+//        }
+
+        KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(nodes).build();
+        assertDoesNotThrow(() -> cluster.createIsolatedController(props));
+        cluster.close();
     }
 }

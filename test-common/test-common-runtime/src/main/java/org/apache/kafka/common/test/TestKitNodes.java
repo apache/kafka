@@ -18,6 +18,7 @@
 package org.apache.kafka.common.test;
 
 import kafka.server.KafkaConfig;
+
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
