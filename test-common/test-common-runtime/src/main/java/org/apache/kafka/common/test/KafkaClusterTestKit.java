@@ -411,13 +411,12 @@ public class KafkaClusterTestKit implements AutoCloseable {
         }
     }
 
-    public ControllerServer createController(Map<String, String> props, boolean isCombined) {
+    public ControllerServer createIsolatedController(Map<String, String> props) {
         props.put(KRaftConfigs.SERVER_MAX_STARTUP_TIME_MS_CONFIG,
                 Long.toString(TimeUnit.MINUTES.toMillis(10)));
         props.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller");
         KafkaConfig config = new KafkaConfig(props);
-
-        TestKitNode node = nodes.createControllerNode(config, isCombined);
+        TestKitNode node = nodes.createControllerNode(config, false);
         MetaPropertiesEnsemble metaPropsEnsemble = node.initialMetaPropertiesEnsemble();
         formatNode(metaPropsEnsemble, true);
 

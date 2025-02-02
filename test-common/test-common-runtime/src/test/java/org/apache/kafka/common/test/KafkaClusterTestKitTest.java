@@ -35,6 +35,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.fail;
 
 public class KafkaClusterTestKitTest {
@@ -151,6 +152,24 @@ public class KafkaClusterTestKitTest {
             assertNotNull(cluster.nonFatalFaultHandler(), "Non-fatal fault handler should not be null");
         } catch (Exception e) {
             fail("Failed to initialize cluster", e);
+        }
+    }
+
+    @Test
+    public void testCreateOutOfClusterController() throws Exception {
+        TestKitNodes nodes = new TestKitNodes.Builder()
+                .setNumBrokerNodes(1)
+                .setNumControllerNodes(1)
+                .build();
+        Map<String, String> props = new HashMap<>();
+        props.put("node.id", "2");
+        props.put("controller.quorum.bootstrap.servers", "localhost:9000");
+        props.put("controller.listener.names", "CONTROLLER");
+        props.put("listeners", "CONTROLLER://localhost:3999");
+        props.put("advertised.listeners", "PLAINTEXT://localhost:4000");
+        props.put("listener.security.protocol.map", "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT");
+        try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(nodes).build()) {
+            assertDoesNotThrow(() -> cluster.createIsolatedController(props));
         }
     }
 }
