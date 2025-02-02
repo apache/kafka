@@ -554,9 +554,9 @@ public class InternalTopologyBuilder {
         nodeGroups = null;
     }
 
-    public final <KIn, VIn, KOut, VOut> void addProcessor(final String name,
-                                                          final ProcessorSupplier<KIn, VIn, KOut, VOut> supplier,
-                                                          final String... predecessorNames) {
+    public final void addProcessor(final String name,
+                                   final ProcessorSupplier<?, ?, ?, ?> supplier,
+                                   final String... predecessorNames) {
         Objects.requireNonNull(name, "name must not be null");
         Objects.requireNonNull(supplier, "supplier must not be null");
         Objects.requireNonNull(predecessorNames, "predecessor names must not be null");
@@ -668,8 +668,7 @@ public class InternalTopologyBuilder {
                                      topic,
                                      processorName,
                                      stateUpdateSupplier,
-                                     storeFactory.storeName(),
-                                     storeFactory.loggingEnabled());
+                                     storeFactory.storeName());
         validateTopicNotAlreadyRegistered(topic);
 
         final String[] topics = {topic};
@@ -701,6 +700,8 @@ public class InternalTopologyBuilder {
         nodeGrouper.add(processorName);
         nodeGrouper.unite(processorName, predecessors);
         globalStateBuilders.put(storeFactory.storeName(), storeFactory);
+        // connect source topic as (read-only) changelog topic for fault-tolerance
+        storeFactory.withLoggingDisabled();
         connectSourceStoreAndTopic(storeFactory.storeName(), topic);
         nodeGroups = null;
     }
@@ -814,8 +815,7 @@ public class InternalTopologyBuilder {
                                               final String topic,
                                               final String processorName,
                                               final ProcessorSupplier<?, ?, Void, Void> stateUpdateSupplier,
-                                              final String storeName,
-                                              final boolean loggingEnabled) {
+                                              final String storeName) {
         Objects.requireNonNull(sourceName, "sourceName must not be null");
         Objects.requireNonNull(topic, "topic must not be null");
         Objects.requireNonNull(stateUpdateSupplier, "supplier must not be null");
@@ -831,9 +831,6 @@ public class InternalTopologyBuilder {
         }
         if (globalStateBuilders.containsKey(storeName)) {
             throw new TopologyException("A different GlobalStateStore has already been added with the name " + storeName);
-        }
-        if (loggingEnabled) {
-            throw new TopologyException("StateStore " + storeName + " for global table must not have logging enabled.");
         }
         if (sourceName.equals(processorName)) {
             throw new TopologyException("sourceName and processorName must be different.");
@@ -878,7 +875,7 @@ public class InternalTopologyBuilder {
             if (nodeFactory instanceof SourceNodeFactory) {
                 sourceNodes.add((SourceNodeFactory<?, ?>) nodeFactory);
             } else if (nodeFactory instanceof ProcessorNodeFactory) {
-                sourceNodes.addAll(findSourcesForProcessorPredecessors(((ProcessorNodeFactory<?, ?, ?, ?>) nodeFactory).predecessors));
+                sourceNodes.addAll(findSourcesForProcessorPredecessors(nodeFactory.predecessors));
             }
         }
         return sourceNodes;
@@ -1346,14 +1343,12 @@ public class InternalTopologyBuilder {
         }
     }
 
-    private <S extends StateStore> InternalTopicConfig createChangelogTopicConfig(final StoreFactory factory,
-                                                                                  final String name) {
+    private InternalTopicConfig createChangelogTopicConfig(final StoreFactory factory,
+                                                           final String name) {
         if (factory.isVersionedStore()) {
-            final VersionedChangelogTopicConfig config = new VersionedChangelogTopicConfig(name, factory.logConfig(), factory.historyRetention());
-            return config;
+            return new VersionedChangelogTopicConfig(name, factory.logConfig(), factory.historyRetention());
         } else if (factory.isWindowStore()) {
-            final WindowedChangelogTopicConfig config = new WindowedChangelogTopicConfig(name, factory.logConfig(), factory.retentionPeriod());
-            return config;
+            return new WindowedChangelogTopicConfig(name, factory.logConfig(), factory.retentionPeriod());
         } else {
             return new UnwindowedUnversionedChangelogTopicConfig(name, factory.logConfig());
         }
