@@ -102,9 +102,9 @@ public class ClientUtilsTest {
 
     static Stream<List<String>> provideBrokerListTestCases() {
         return Stream.of(
-            Arrays.asList("localhost:9997", "localhost:9998", "localhost:9999"),
+            List.of("localhost:9997", "localhost:9998", "localhost:9999"),
             // Intentionally provide a single string, as users may provide space-separated brokers, which will be parsed as a single string.
-            Arrays.asList("localhost:9997 localhost:9998 localhost:9999")
+            List.of("localhost:9997 localhost:9998 localhost:9999")
         );
     }
 
