@@ -71,13 +71,10 @@ public class AdminClientUnitTestEnv implements AutoCloseable {
         this.cluster = cluster;
         AdminClientConfig adminClientConfig = new AdminClientConfig(config);
 
-        boolean usingBootstrapController = false;
-        if (config.containsKey(AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG)) {
-            usingBootstrapController = true;
-        }
         AdminMetadataManager metadataManager = new AdminMetadataManager(new LogContext(),
                 adminClientConfig.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG),
-                adminClientConfig.getLong(AdminClientConfig.METADATA_MAX_AGE_CONFIG), usingBootstrapController);
+                adminClientConfig.getLong(AdminClientConfig.METADATA_MAX_AGE_CONFIG),
+                config.containsKey(AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG));
         this.mockClient = new MockClient(time, new MockClient.MockMetadataUpdater() {
             @Override
             public List<Node> fetchNodes() {

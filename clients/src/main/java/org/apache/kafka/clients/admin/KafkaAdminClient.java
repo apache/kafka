@@ -4085,9 +4085,10 @@ public class KafkaAdminClient extends AdminClient {
 
     private void handleNotControllerError(AbstractResponse response) throws ApiException {
         // When sending requests directly to the follower controller, it might return NOT_LEADER_OR_FOLLOWER error.
-        if (response.errorCounts().containsKey(Errors.NOT_CONTROLLER) ||
-                metadataManager.usingBootstrapControllers() && response.errorCounts().containsKey(Errors.NOT_LEADER_OR_FOLLOWER)) {
+        if (response.errorCounts().containsKey(Errors.NOT_CONTROLLER)) {
             handleNotControllerError(Errors.NOT_CONTROLLER);
+        } else if (metadataManager.usingBootstrapControllers() && response.errorCounts().containsKey(Errors.NOT_LEADER_OR_FOLLOWER)) {
+            handleNotControllerError(Errors.NOT_LEADER_OR_FOLLOWER);
         }
     }
 
