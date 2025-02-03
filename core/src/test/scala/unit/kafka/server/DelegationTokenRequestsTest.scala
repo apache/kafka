@@ -16,7 +16,7 @@
   */
 package kafka.server
 
-import kafka.api.{IntegrationTestHarness, KafkaSasl, SaslSetup}
+import kafka.api.{IntegrationTestHarness, SaslSetup}
 import kafka.security.JaasTestUtils
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, CreateDelegationTokenOptions, DescribeDelegationTokenOptions}
@@ -52,7 +52,7 @@ class DelegationTokenRequestsTest extends IntegrationTestHarness with SaslSetup 
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
-    startSasl(jaasSections(kafkaServerSaslMechanisms, Some(kafkaClientSaslMechanism), KafkaSasl, JaasTestUtils.KAFKA_SERVER_CONTEXT_NAME))
+    startSasl(jaasSections(kafkaServerSaslMechanisms, Some(kafkaClientSaslMechanism), JaasTestUtils.KAFKA_SERVER_CONTEXT_NAME))
     super.setUp(testInfo)
   }
 

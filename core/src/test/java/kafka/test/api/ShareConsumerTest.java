@@ -17,27 +17,31 @@
 package kafka.test.api;
 
 import kafka.api.BaseConsumerTest;
+import kafka.server.KafkaBroker;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.AlterConfigsOptions;
 import org.apache.kafka.clients.admin.ConfigEntry;
+import org.apache.kafka.clients.admin.CreateTopicsResult;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.RecordsToDelete;
 import org.apache.kafka.clients.consumer.AcknowledgeType;
 import org.apache.kafka.clients.consumer.AcknowledgementCommitCallback;
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
-import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.KafkaShareConsumer;
-import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.consumer.ShareConsumer;
+import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
@@ -49,20 +53,23 @@ import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
-import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.common.test.KafkaClusterTestKit;
-import org.apache.kafka.common.test.TestKitNodes;
+import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.api.ClusterConfigProperty;
+import org.apache.kafka.common.test.api.ClusterTest;
+import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Flaky;
+import org.apache.kafka.common.test.api.Type;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.GroupConfig;
+import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig;
+import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.test.TestUtils;
 
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
 
 import java.time.Duration;
@@ -75,16 +82,23 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BiConsumer;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
@@ -101,67 +115,63 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 @Timeout(1200)
 @Tag("integration")
+@ClusterTestDefaults(
+    serverProperties = {
+        @ClusterConfigProperty(key = "auto.create.topics.enable", value = "false"),
+        @ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer,share"),
+        @ClusterConfigProperty(key = "group.share.enable", value = "true"),
+        @ClusterConfigProperty(key = "group.share.partition.max.record.locks", value = "10000"),
+        @ClusterConfigProperty(key = "group.share.record.lock.duration.ms", value = "15000"),
+        @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
+        @ClusterConfigProperty(key = "share.coordinator.state.topic.min.isr", value = "1"),
+        @ClusterConfigProperty(key = "share.coordinator.state.topic.num.partitions", value = "3"),
+        @ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "1"),
+        @ClusterConfigProperty(key = "transaction.state.log.min.isr", value = "1"),
+        @ClusterConfigProperty(key = "transaction.state.log.replication.factor", value = "1"),
+        @ClusterConfigProperty(key = "unstable.api.versions.enable", value = "true")
+    },
+    types = {Type.KRAFT}
+)
 public class ShareConsumerTest {
-    private KafkaClusterTestKit cluster;
+    private final ClusterInstance cluster;
     private final TopicPartition tp = new TopicPartition("topic", 0);
     private final TopicPartition tp2 = new TopicPartition("topic2", 0);
     private final TopicPartition warmupTp = new TopicPartition("warmup", 0);
     private List<TopicPartition> sgsTopicPartitions;
 
-    private Admin adminClient;
-
-    @BeforeEach
-    public void createCluster(TestInfo testInfo) throws Exception {
-        cluster = new KafkaClusterTestKit.Builder(
-            new TestKitNodes.Builder()
-                .setNumBrokerNodes(1)
-                .setNumControllerNodes(1)
-                .build())
-            .setConfigProp("auto.create.topics.enable", "false")
-            .setConfigProp("group.coordinator.rebalance.protocols", "classic,consumer,share")
-            .setConfigProp("group.share.enable", "true")
-            .setConfigProp("group.share.partition.max.record.locks", "10000")
-            .setConfigProp("group.share.record.lock.duration.ms", "15000")
-            .setConfigProp("offsets.topic.replication.factor", "1")
-            .setConfigProp("share.coordinator.state.topic.min.isr", "1")
-            .setConfigProp("share.coordinator.state.topic.num.partitions", "3")
-            .setConfigProp("share.coordinator.state.topic.replication.factor", "1")
-            .setConfigProp("transaction.state.log.min.isr", "1")
-            .setConfigProp("transaction.state.log.replication.factor", "1")
-            .setConfigProp("unstable.api.versions.enable", "true")
-            .build();
-        cluster.format();
-        cluster.startup();
-        cluster.waitForActiveController();
-        cluster.waitForReadyBrokers();
-        createTopic("topic");
-        createTopic("topic2");
-        adminClient = createAdminClient();
-        sgsTopicPartitions = IntStream.range(0, 3)
-            .mapToObj(part -> new TopicPartition(Topic.SHARE_GROUP_STATE_TOPIC_NAME, part))
-            .toList();
-        warmup();
+    public ShareConsumerTest(ClusterInstance cluster) {
+        this.cluster = cluster;
     }
 
-    @AfterEach
-    public void destroyCluster() throws Exception {
-        adminClient.close();
-        cluster.close();
+    private void setup() {
+        try {
+            this.cluster.waitForReadyBrokers();
+            createTopic("topic");
+            createTopic("topic2");
+            sgsTopicPartitions = IntStream.range(0, 3)
+                .mapToObj(part -> new TopicPartition(Topic.SHARE_GROUP_STATE_TOPIC_NAME, part))
+                .toList();
+            this.warmup();
+        } catch (Exception e) {
+            fail(e);
+        }
     }
 
-    @Test
+    @ClusterTest
     public void testPollNoSubscribeFails() {
-        try (KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        setup();
+        try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
             assertEquals(Collections.emptySet(), shareConsumer.subscription());
             // "Consumer is not subscribed to any topics."
             assertThrows(IllegalStateException.class, () -> shareConsumer.poll(Duration.ofMillis(500)));
         }
     }
 
-    @Test
+    @ClusterTest
     public void testSubscribeAndPollNoRecords() {
+        setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
             Set<String> subscription = Collections.singleton(tp.topic());
             shareConsumer.subscribe(subscription);
             assertEquals(subscription, shareConsumer.subscription());
@@ -171,10 +181,11 @@ public class ShareConsumerTest {
         }
     }
 
-    @Test
+    @ClusterTest
     public void testSubscribePollUnsubscribe() {
+        setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
             Set<String> subscription = Collections.singleton(tp.topic());
             shareConsumer.subscribe(subscription);
             assertEquals(subscription, shareConsumer.subscription());
@@ -186,10 +197,11 @@ public class ShareConsumerTest {
         }
     }
 
-    @Test
+    @ClusterTest
     public void testSubscribePollSubscribe() {
+        setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
             Set<String> subscription = Collections.singleton(tp.topic());
             shareConsumer.subscribe(subscription);
             assertEquals(subscription, shareConsumer.subscription());
@@ -203,10 +215,11 @@ public class ShareConsumerTest {
         }
     }
 
-    @Test
+    @ClusterTest
     public void testSubscribeUnsubscribePollFails() {
+        setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
             Set<String> subscription = Collections.singleton(tp.topic());
             shareConsumer.subscribe(subscription);
             assertEquals(subscription, shareConsumer.subscription());
@@ -220,10 +233,11 @@ public class ShareConsumerTest {
         }
     }
 
-    @Test
+    @ClusterTest
     public void testSubscribeSubscribeEmptyPollFails() {
+        setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
             Set<String> subscription = Collections.singleton(tp.topic());
             shareConsumer.subscribe(subscription);
             assertEquals(subscription, shareConsumer.subscription());
@@ -237,11 +251,12 @@ public class ShareConsumerTest {
         }
     }
 
-    @Test
+    @ClusterTest
     public void testSubscriptionAndPoll() {
+        setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
-             KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
 
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
             producer.send(record);
@@ -253,11 +268,12 @@ public class ShareConsumerTest {
         }
     }
 
-    @Test
+    @ClusterTest
     public void testSubscriptionAndPollMultiple() {
+        setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
-             KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
 
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
             producer.send(record);
@@ -275,11 +291,12 @@ public class ShareConsumerTest {
         }
     }
 
-    @Test
+    @ClusterTest
     public void testAcknowledgementSentOnSubscriptionChange() throws ExecutionException, InterruptedException {
+        setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
-             KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
 
             Map<TopicPartition, Set<Long>> partitionOffsetsMap = new HashMap<>();
             Map<TopicPartition, Exception> partitionExceptionMap = new HashMap<>();
@@ -311,11 +328,12 @@ public class ShareConsumerTest {
         }
     }
 
-    @Test
+    @ClusterTest
     public void testAcknowledgementCommitCallbackSuccessfulAcknowledgement() throws Exception {
+        setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
-             KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
 
             Map<TopicPartition, Set<Long>> partitionOffsetsMap = new HashMap<>();
             Map<TopicPartition, Exception> partitionExceptionMap = new HashMap<>();
@@ -341,11 +359,12 @@ public class ShareConsumerTest {
         }
     }
 
-    @Test
+    @ClusterTest
     public void testAcknowledgementCommitCallbackOnClose() {
+        setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
-             KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
 
             Map<TopicPartition, Set<Long>> partitionOffsetsMap = new HashMap<>();
             Map<TopicPartition, Exception> partitionExceptionMap = new HashMap<>();
@@ -372,11 +391,12 @@ public class ShareConsumerTest {
     }
 
     @Flaky("KAFKA-18033")
-    @Test
+    @ClusterTest
     public void testAcknowledgementCommitCallbackInvalidRecordStateException() throws Exception {
+        setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
-             KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
 
             Map<TopicPartition, Set<Long>> partitionOffsetsMap = new HashMap<>();
             Map<TopicPartition, Exception> partitionExceptionMap = new HashMap<>();
@@ -426,11 +446,12 @@ public class ShareConsumerTest {
         }
     }
 
-    @Test
+    @ClusterTest
     public void testHeaders() {
+        setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
-             KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
 
             int numRecords = 1;
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
@@ -454,8 +475,16 @@ public class ShareConsumerTest {
 
     private void testHeadersSerializeDeserialize(Serializer<byte[]> serializer, Deserializer<byte[]> deserializer) {
         alterShareAutoOffsetReset("group1", "earliest");
-        try (KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), serializer);
-             KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(deserializer, new ByteArrayDeserializer(), "group1")) {
+        Map<String, Object> producerConfig = Map.of(
+            ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, serializer.getClass().getName()
+        );
+
+        Map<String, Object> consumerConfig = Map.of(
+            ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, deserializer.getClass().getName()
+        );
+
+        try (Producer<byte[], byte[]> producer = createProducer(producerConfig);
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1", consumerConfig)) {
 
             int numRecords = 1;
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
@@ -469,20 +498,22 @@ public class ShareConsumerTest {
         }
     }
 
-    @Test
+    @ClusterTest
     public void testHeadersSerializerDeserializer() {
+        setup();
         testHeadersSerializeDeserialize(new BaseConsumerTest.SerializerImpl(), new BaseConsumerTest.DeserializerImpl());
         verifyShareGroupStateTopicRecordsProduced();
     }
 
-    @Test
+    @ClusterTest
     public void testMaxPollRecords() {
+        setup();
         int numRecords = 10000;
         int maxPollRecords = 2;
 
         alterShareAutoOffsetReset("group1", "earliest");
-        try (KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(),
-                 "group1", Collections.singletonMap(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, String.valueOf(maxPollRecords)))) {
+        try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1",
+            Collections.singletonMap(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, String.valueOf(maxPollRecords)))) {
 
             long startingTimestamp = System.currentTimeMillis();
             produceMessagesWithTimestamp(numRecords, startingTimestamp);
@@ -508,12 +539,13 @@ public class ShareConsumerTest {
         }
     }
 
-    @Test
+    @ClusterTest
     public void testControlRecordsSkipped() throws Exception {
+        setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (KafkaProducer<byte[], byte[]> transactionalProducer = createProducer(new ByteArraySerializer(), new ByteArraySerializer(), "T1");
-             KafkaProducer<byte[], byte[]> nonTransactionalProducer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
-             KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (Producer<byte[], byte[]> transactionalProducer = createProducer("T1");
+             Producer<byte[], byte[]> nonTransactionalProducer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
 
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
 
@@ -553,11 +585,12 @@ public class ShareConsumerTest {
         }
     }
 
-    @Test
+    @ClusterTest
     public void testExplicitAcknowledgeSuccess() {
+        setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
-             KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
 
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
             producer.send(record);
@@ -574,11 +607,12 @@ public class ShareConsumerTest {
         }
     }
 
-    @Test
+    @ClusterTest
     public void testExplicitAcknowledgeCommitSuccess() {
+        setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
-             KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
 
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
             producer.send(record);
@@ -597,12 +631,13 @@ public class ShareConsumerTest {
         }
     }
 
-    @Test
+    @ClusterTest
     public void testExplicitAcknowledgementCommitAsync() throws InterruptedException {
+        setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
-             KafkaShareConsumer<byte[], byte[]> shareConsumer1 = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1");
-             KafkaShareConsumer<byte[], byte[]> shareConsumer2 = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer1 = createShareConsumer("group1");
+             ShareConsumer<byte[], byte[]> shareConsumer2 = createShareConsumer("group1")) {
 
             ProducerRecord<byte[], byte[]> record1 = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
             ProducerRecord<byte[], byte[]> record2 = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
@@ -653,11 +688,12 @@ public class ShareConsumerTest {
         }
     }
 
-    @Test
+    @ClusterTest
     public void testExplicitAcknowledgementCommitAsyncPartialBatch() {
+        setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
-             KafkaShareConsumer<byte[], byte[]> shareConsumer1 = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer1 = createShareConsumer("group1")) {
 
             ProducerRecord<byte[], byte[]> record1 = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
             ProducerRecord<byte[], byte[]> record2 = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
@@ -716,11 +752,12 @@ public class ShareConsumerTest {
         }
     }
 
-    @Test
+    @ClusterTest
     public void testExplicitAcknowledgeReleasePollAccept() {
+        setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
-             KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
 
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
             producer.send(record);
@@ -739,11 +776,12 @@ public class ShareConsumerTest {
         }
     }
 
-    @Test
+    @ClusterTest
     public void testExplicitAcknowledgeReleaseAccept() {
+        setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
-             KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
 
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
             producer.send(record);
@@ -759,11 +797,12 @@ public class ShareConsumerTest {
         }
     }
 
-    @Test
+    @ClusterTest
     public void testExplicitAcknowledgeReleaseClose() {
+        setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
-             KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
 
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
             producer.send(record);
@@ -777,11 +816,12 @@ public class ShareConsumerTest {
         }
     }
 
-    @Test
+    @ClusterTest
     public void testExplicitAcknowledgeThrowsNotInBatch() {
+        setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
-             KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
 
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
             producer.send(record);
@@ -799,11 +839,12 @@ public class ShareConsumerTest {
         }
     }
 
-    @Test
+    @ClusterTest
     public void testImplicitAcknowledgeFailsExplicit() {
+        setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
-             KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
 
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
             producer.send(record);
@@ -820,11 +861,12 @@ public class ShareConsumerTest {
         }
     }
 
-    @Test
+    @ClusterTest
     public void testImplicitAcknowledgeCommitSync() {
+        setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
-             KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
 
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
             producer.send(record);
@@ -843,11 +885,12 @@ public class ShareConsumerTest {
         }
     }
 
-    @Test
+    @ClusterTest
     public void testImplicitAcknowledgementCommitAsync() throws InterruptedException {
+        setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
-             KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
 
             ProducerRecord<byte[], byte[]> record1 = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
             ProducerRecord<byte[], byte[]> record2 = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
@@ -882,14 +925,19 @@ public class ShareConsumerTest {
         }
     }
 
-    @Test
+    @ClusterTest
     public void testFetchRecordLargerThanMaxPartitionFetchBytes() throws Exception {
+        setup();
         int maxPartitionFetchBytes = 10000;
 
         alterShareAutoOffsetReset("group1", "earliest");
-        try (KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
-             KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(),
-                 "group1", Collections.singletonMap(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, String.valueOf(maxPartitionFetchBytes)))) {
+        try (
+            Producer<byte[], byte[]> producer = createProducer();
+            ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(
+                "group1",
+                Collections.singletonMap(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, String.valueOf(maxPartitionFetchBytes))
+            )
+        ) {
 
             ProducerRecord<byte[], byte[]> smallRecord = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
             ProducerRecord<byte[], byte[]> bigRecord = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), new byte[maxPartitionFetchBytes]);
@@ -904,13 +952,14 @@ public class ShareConsumerTest {
         }
     }
 
-    @Test
+    @ClusterTest
     public void testMultipleConsumersWithDifferentGroupIds() throws InterruptedException {
+        setup();
         alterShareAutoOffsetReset("group1", "earliest");
         alterShareAutoOffsetReset("group2", "earliest");
-        try (KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
-             KafkaShareConsumer<byte[], byte[]> shareConsumer1 = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1");
-             KafkaShareConsumer<byte[], byte[]> shareConsumer2 = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group2")) {
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer1 = createShareConsumer("group1");
+             ShareConsumer<byte[], byte[]> shareConsumer2 = createShareConsumer("group2")) {
 
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
 
@@ -955,12 +1004,13 @@ public class ShareConsumerTest {
         }
     }
 
-    @Test
+    @ClusterTest
     public void testMultipleConsumersInGroupSequentialConsumption() {
+        setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
-             KafkaShareConsumer<byte[], byte[]> shareConsumer1 = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1");
-             KafkaShareConsumer<byte[], byte[]> shareConsumer2 = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer1 = createShareConsumer("group1");
+             ShareConsumer<byte[], byte[]> shareConsumer2 = createShareConsumer("group1")) {
 
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
             shareConsumer1.subscribe(Collections.singleton(tp.topic()));
@@ -992,9 +1042,10 @@ public class ShareConsumerTest {
     }
 
     @Flaky("KAFKA-18033")
-    @Test
+    @ClusterTest
     public void testMultipleConsumersInGroupConcurrentConsumption()
             throws InterruptedException, ExecutionException, TimeoutException {
+        setup();
         AtomicInteger totalMessagesConsumed = new AtomicInteger(0);
 
         int consumerCount = 4;
@@ -1026,9 +1077,10 @@ public class ShareConsumerTest {
         assertEquals(producerCount * messagesPerProducer, totalResult);
     }
 
-    @Test
+    @ClusterTest
     public void testMultipleConsumersInMultipleGroupsConcurrentConsumption()
             throws ExecutionException, InterruptedException, TimeoutException {
+        setup();
         AtomicInteger totalMessagesConsumedGroup1 = new AtomicInteger(0);
         AtomicInteger totalMessagesConsumedGroup2 = new AtomicInteger(0);
         AtomicInteger totalMessagesConsumedGroup3 = new AtomicInteger(0);
@@ -1089,12 +1141,13 @@ public class ShareConsumerTest {
         verifyShareGroupStateTopicRecordsProduced();
     }
 
-    @Test
+    @ClusterTest
     public void testConsumerCloseInGroupSequential() {
+        setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
-             KafkaShareConsumer<byte[], byte[]> shareConsumer1 = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1");
-             KafkaShareConsumer<byte[], byte[]> shareConsumer2 = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer1 = createShareConsumer("group1");
+             ShareConsumer<byte[], byte[]> shareConsumer2 = createShareConsumer("group1")) {
 
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
             shareConsumer1.subscribe(Collections.singleton(tp.topic()));
@@ -1136,9 +1189,10 @@ public class ShareConsumerTest {
         }
     }
 
-    @Test
+    @ClusterTest
     public void testMultipleConsumersInGroupFailureConcurrentConsumption()
             throws InterruptedException, ExecutionException, TimeoutException {
+        setup();
         AtomicInteger totalMessagesConsumed = new AtomicInteger(0);
 
         int consumerCount = 4;
@@ -1181,11 +1235,12 @@ public class ShareConsumerTest {
         verifyShareGroupStateTopicRecordsProduced();
     }
 
-    @Test
+    @ClusterTest
     public void testAcquisitionLockTimeoutOnConsumer() throws InterruptedException {
+        setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
-             KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
 
             ProducerRecord<byte[], byte[]> producerRecord1 = new ProducerRecord<>(tp.topic(), tp.partition(), null,
                 "key_1".getBytes(), "value_1".getBytes());
@@ -1242,14 +1297,15 @@ public class ShareConsumerTest {
     }
 
     /**
-     * Test to verify that the acknowledgement commit callback cannot invoke methods of KafkaShareConsumer.
+     * Test to verify that the acknowledgement commit callback cannot invoke methods of ShareConsumer.
      * The exception thrown is verified in {@link TestableAcknowledgementCommitCallbackWithShareConsumer}
      */
-    @Test
+    @ClusterTest
     public void testAcknowledgementCommitCallbackCallsShareConsumerDisallowed() {
+        setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
-             KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
 
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
             producer.send(record);
@@ -1258,7 +1314,7 @@ public class ShareConsumerTest {
             shareConsumer.setAcknowledgementCommitCallback(new TestableAcknowledgementCommitCallbackWithShareConsumer<>(shareConsumer));
             shareConsumer.subscribe(Collections.singleton(tp.topic()));
 
-            // The acknowledgment commit callback will try to call a method of KafkaShareConsumer
+            // The acknowledgment commit callback will try to call a method of ShareConsumer
             shareConsumer.poll(Duration.ofMillis(5000));
             // The second poll sends the acknowledgements implicitly.
             // The acknowledgement commit callback will be called and the exception is thrown.
@@ -1269,15 +1325,15 @@ public class ShareConsumerTest {
     }
 
     private class TestableAcknowledgementCommitCallbackWithShareConsumer<K, V> implements AcknowledgementCommitCallback {
-        private final KafkaShareConsumer<K, V> shareConsumer;
+        private final ShareConsumer<K, V> shareConsumer;
 
-        TestableAcknowledgementCommitCallbackWithShareConsumer(KafkaShareConsumer<K, V> shareConsumer) {
+        TestableAcknowledgementCommitCallbackWithShareConsumer(ShareConsumer<K, V> shareConsumer) {
             this.shareConsumer = shareConsumer;
         }
 
         @Override
         public void onComplete(Map<TopicIdPartition, Set<Long>> offsetsMap, Exception exception) {
-            // Accessing methods of KafkaShareConsumer should throw an exception.
+            // Accessing methods of ShareConsumer should throw an exception.
             assertThrows(IllegalStateException.class, shareConsumer::close);
             assertThrows(IllegalStateException.class, () -> shareConsumer.subscribe(Collections.singleton(tp.topic())));
             assertThrows(IllegalStateException.class, () -> shareConsumer.poll(Duration.ofMillis(5000)));
@@ -1285,20 +1341,21 @@ public class ShareConsumerTest {
     }
 
     /**
-     * Test to verify that the acknowledgement commit callback can invoke KafkaShareConsumer.wakeup() and it
+     * Test to verify that the acknowledgement commit callback can invoke ShareConsumer.wakeup() and it
      * wakes up the enclosing poll.
      */
-    @Test
+    @ClusterTest
     public void testAcknowledgementCommitCallbackCallsShareConsumerWakeup() throws InterruptedException {
+        setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
-             KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
 
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
             producer.send(record);
             producer.flush();
 
-            // The acknowledgment commit callback will try to call a method of KafkaShareConsumer
+            // The acknowledgment commit callback will try to call a method of ShareConsumer
             shareConsumer.setAcknowledgementCommitCallback(new TestableAcknowledgementCommitCallbackWakeup<>(shareConsumer));
             shareConsumer.subscribe(Collections.singleton(tp.topic()));
 
@@ -1324,9 +1381,9 @@ public class ShareConsumerTest {
     }
 
     private static class TestableAcknowledgementCommitCallbackWakeup<K, V> implements AcknowledgementCommitCallback {
-        private final KafkaShareConsumer<K, V> shareConsumer;
+        private final ShareConsumer<K, V> shareConsumer;
 
-        TestableAcknowledgementCommitCallbackWakeup(KafkaShareConsumer<K, V> shareConsumer) {
+        TestableAcknowledgementCommitCallbackWakeup(ShareConsumer<K, V> shareConsumer) {
             this.shareConsumer = shareConsumer;
         }
 
@@ -1340,11 +1397,12 @@ public class ShareConsumerTest {
      * Test to verify that the acknowledgement commit callback can throw an exception, and it is propagated
      * to the caller of poll().
      */
-    @Test
+    @ClusterTest
     public void testAcknowledgementCommitCallbackThrowsException() throws InterruptedException {
+        setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
-             KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
 
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
             producer.send(record);
@@ -1377,13 +1435,14 @@ public class ShareConsumerTest {
     }
 
     /**
-     * Test to verify that calling Thread.interrupt() before KafkaShareConsumer.poll(Duration)
+     * Test to verify that calling Thread.interrupt() before ShareConsumer.poll(Duration)
      * causes it to throw InterruptException
      */
-    @Test
+    @ClusterTest
     public void testPollThrowsInterruptExceptionIfInterrupted() {
+        setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
 
             shareConsumer.subscribe(Collections.singleton(tp.topic()));
 
@@ -1404,10 +1463,11 @@ public class ShareConsumerTest {
      * Test to verify that InvalidTopicException is thrown if the consumer subscribes
      * to an invalid topic.
      */
-    @Test
+    @ClusterTest
     public void testSubscribeOnInvalidTopicThrowsInvalidTopicException() {
+        setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
 
             shareConsumer.subscribe(Collections.singleton("topic abc"));
 
@@ -1421,11 +1481,12 @@ public class ShareConsumerTest {
      * Test to ensure that a wakeup when records are buffered doesn't prevent the records
      * being returned on the next poll.
      */
-    @Test
+    @ClusterTest
     public void testWakeupWithFetchedRecordsAvailable() {
+        setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
-             KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
 
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
             producer.send(record);
@@ -1442,11 +1503,12 @@ public class ShareConsumerTest {
         }
     }
 
-    @Test
+    @ClusterTest
     public void testSubscriptionFollowedByTopicCreation() throws InterruptedException {
+        setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
-             KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
 
             String topic = "foo";
             shareConsumer.subscribe(Collections.singleton(topic));
@@ -1471,16 +1533,17 @@ public class ShareConsumerTest {
         }
     }
 
-    @Test
+    @ClusterTest
     public void testSubscriptionAndPollFollowedByTopicDeletion() throws InterruptedException, ExecutionException {
+        setup();
         String topic1 = "bar";
         String topic2 = "baz";
         createTopic(topic1);
         createTopic(topic2);
 
         alterShareAutoOffsetReset("group1", "earliest");
-        try (KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
-             KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
 
             ProducerRecord<byte[], byte[]> recordTopic1 = new ProducerRecord<>(topic1, 0, null, "key".getBytes(), "value".getBytes());
             ProducerRecord<byte[], byte[]> recordTopic2 = new ProducerRecord<>(topic2, 0, null, "key".getBytes(), "value".getBytes());
@@ -1513,12 +1576,16 @@ public class ShareConsumerTest {
         }
     }
 
-    @Test
+    @ClusterTest
     public void testLsoMovementByRecordsDeletion() {
+        setup();
         String groupId = "group1";
 
         alterShareAutoOffsetReset(groupId, "earliest");
-        try (KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer())) {
+        try (
+            Producer<byte[], byte[]> producer = createProducer();
+            Admin adminClient = createAdminClient()
+        ) {
 
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), 0, null, "key".getBytes(), "value".getBytes());
 
@@ -1555,10 +1622,11 @@ public class ShareConsumerTest {
         }
     }
 
-    @Test
+    @ClusterTest
     public void testShareAutoOffsetResetDefaultValue() {
-        try (KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1");
-             KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer())) {
+        setup();
+        try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1");
+             Producer<byte[], byte[]> producer = createProducer()) {
 
             shareConsumer.subscribe(Collections.singleton(tp.topic()));
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
@@ -1581,11 +1649,12 @@ public class ShareConsumerTest {
         }
     }
 
-    @Test
+    @ClusterTest
     public void testShareAutoOffsetResetEarliest() {
+        setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1");
-             KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer())) {
+        try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1");
+             Producer<byte[], byte[]> producer = createProducer()) {
 
             shareConsumer.subscribe(Collections.singleton(tp.topic()));
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
@@ -1606,11 +1675,15 @@ public class ShareConsumerTest {
         }
     }
 
-    @Test
+    @ClusterTest
     public void testShareAutoOffsetResetEarliestAfterLsoMovement() {
+        setup();
         alterShareAutoOffsetReset("group1", "earliest");
-        try (KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1");
-             KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer())) {
+        try (
+            ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1");
+            Producer<byte[], byte[]> producer = createProducer();
+            Admin adminClient = createAdminClient()
+        ) {
 
             shareConsumer.subscribe(Collections.singleton(tp.topic()));
 
@@ -1630,13 +1703,14 @@ public class ShareConsumerTest {
         }
     }
 
-    @Test
+    @ClusterTest
     public void testShareAutoOffsetResetMultipleGroupsWithDifferentValue() {
+        setup();
         alterShareAutoOffsetReset("group1", "earliest");
         alterShareAutoOffsetReset("group2", "latest");
-        try (KafkaShareConsumer<byte[], byte[]> shareConsumerEarliest = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1");
-             KafkaShareConsumer<byte[], byte[]> shareConsumerLatest = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group2");
-             KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer())) {
+        try (ShareConsumer<byte[], byte[]> shareConsumerEarliest = createShareConsumer("group1");
+             ShareConsumer<byte[], byte[]> shareConsumerLatest = createShareConsumer("group2");
+             Producer<byte[], byte[]> producer = createProducer()) {
 
             shareConsumerEarliest.subscribe(Collections.singleton(tp.topic()));
 
@@ -1670,13 +1744,14 @@ public class ShareConsumerTest {
         }
     }
 
-    @Test
+    @ClusterTest
     public void testShareAutoOffsetResetByDuration() throws Exception {
+        setup();
         // Set auto offset reset to 1 hour before current time
         alterShareAutoOffsetReset("group1", "by_duration:PT1H");
         
-        try (KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1");
-             KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer())) {
+        try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1");
+             Producer<byte[], byte[]> producer = createProducer()) {
 
             long currentTime = System.currentTimeMillis();
             long twoHoursAgo = currentTime - TimeUnit.HOURS.toMillis(2);
@@ -1711,8 +1786,8 @@ public class ShareConsumerTest {
         // Set the auto offset reset to 3 hours before current time
         // so the consumer should consume all messages (3 records)
         alterShareAutoOffsetReset("group2", "by_duration:PT3H");
-        try (KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group2");
-             KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer())) {
+        try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group2");
+             Producer<byte[], byte[]> producer = createProducer()) {
 
             shareConsumer.subscribe(Collections.singleton(tp.topic()));
             List<ConsumerRecord<byte[], byte[]>> records = consumeRecords(shareConsumer, 3);
@@ -1721,29 +1796,272 @@ public class ShareConsumerTest {
         }
     }
 
-    @Test
+    @ClusterTest
     public void testShareAutoOffsetResetByDurationInvalidFormat() throws Exception {
+        setup();
         // Test invalid duration format
         ConfigResource configResource = new ConfigResource(ConfigResource.Type.GROUP, "group1");
         Map<ConfigResource, Collection<AlterConfigOp>> alterEntries = new HashMap<>();
         
         // Test invalid duration format
-        alterEntries.put(configResource, List.of(new AlterConfigOp(new ConfigEntry(
-            GroupConfig.SHARE_AUTO_OFFSET_RESET_CONFIG, "by_duration:1h"), AlterConfigOp.OpType.SET)));
-        ExecutionException e1 = assertThrows(ExecutionException.class, () -> 
-            adminClient.incrementalAlterConfigs(alterEntries).all().get());
-        assertInstanceOf(InvalidConfigurationException.class, e1.getCause());
+        try (Admin adminClient = createAdminClient()) {
+            alterEntries.put(configResource, List.of(new AlterConfigOp(new ConfigEntry(
+                GroupConfig.SHARE_AUTO_OFFSET_RESET_CONFIG, "by_duration:1h"), AlterConfigOp.OpType.SET)));
+            ExecutionException e1 = assertThrows(ExecutionException.class, () ->
+                adminClient.incrementalAlterConfigs(alterEntries).all().get());
+            assertInstanceOf(InvalidConfigurationException.class, e1.getCause());
 
-        // Test negative duration
-        alterEntries.put(configResource, List.of(new AlterConfigOp(new ConfigEntry(
-            GroupConfig.SHARE_AUTO_OFFSET_RESET_CONFIG, "by_duration:-PT1H"), AlterConfigOp.OpType.SET)));
-        ExecutionException e2 = assertThrows(ExecutionException.class, () -> 
-            adminClient.incrementalAlterConfigs(alterEntries).all().get());
-        assertInstanceOf(InvalidConfigurationException.class, e2.getCause());
+            // Test negative duration
+            alterEntries.put(configResource, List.of(new AlterConfigOp(new ConfigEntry(
+                GroupConfig.SHARE_AUTO_OFFSET_RESET_CONFIG, "by_duration:-PT1H"), AlterConfigOp.OpType.SET)));
+            ExecutionException e2 = assertThrows(ExecutionException.class, () ->
+                adminClient.incrementalAlterConfigs(alterEntries).all().get());
+            assertInstanceOf(InvalidConfigurationException.class, e2.getCause());
+        }
+    }
+
+    @ClusterTest(
+        brokers = 3,
+        serverProperties = {
+            @ClusterConfigProperty(key = "auto.create.topics.enable", value = "false"),
+            @ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer,share"),
+            @ClusterConfigProperty(key = "group.share.enable", value = "true"),
+            @ClusterConfigProperty(key = "group.share.partition.max.record.locks", value = "10000"),
+            @ClusterConfigProperty(key = "group.share.record.lock.duration.ms", value = "15000"),
+            @ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "3"),
+            @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "3"),
+            @ClusterConfigProperty(key = "share.coordinator.state.topic.num.partitions", value = "3"),
+            @ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "3"),
+            @ClusterConfigProperty(key = "unstable.api.versions.enable", value = "true")
+        }
+    )
+    @Timeout(90)
+    public void testShareConsumerAfterCoordinatorMovement() throws Exception {
+        setup();
+        String topicName = "multipart";
+        String groupId = "multipartGrp";
+        Uuid topicId = createTopic(topicName, 3, 3);
+        alterShareAutoOffsetReset(groupId, "earliest");
+        ScheduledExecutorService service = Executors.newScheduledThreadPool(5);
+
+        TopicPartition tpMulti = new TopicPartition(topicName, 0);
+
+        // produce some messages
+        ClientState prodState = new ClientState();
+        final Set<String> produced = new HashSet<>();
+        service.execute(() -> {
+                int i = 0;
+                try (Producer<String, String> producer = createProducer(Map.of(
+                    ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName(),
+                    ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName()
+                ))) {
+                    while (!prodState.done().get()) {
+                        String key = "key-" + (i++);
+                        ProducerRecord<String, String> record = new ProducerRecord<>(
+                            tpMulti.topic(),
+                            tpMulti.partition(),
+                            null,
+                            key,
+                            "value"
+                        );
+                        try {
+                            producer.send(record);
+                            producer.flush();
+                            // count only correctly produced records
+                            prodState.count().incrementAndGet();
+                            produced.add(key);
+                        } catch (Exception e) {
+                            // ignore
+                        }
+                    }
+                }
+            }
+        );
+
+        // consume messages - start after small delay
+        ClientState consState = new ClientState();
+        // using map here if we want to debug specific keys
+        Map<String, Integer> consumed = new HashMap<>();
+        service.schedule(() -> {
+                try (ShareConsumer<String, String> shareConsumer = createShareConsumer(groupId, Map.of(
+                    ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName(),
+                    ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName()
+                ))) {
+                    shareConsumer.subscribe(List.of(topicName));
+                    while (!consState.done().get()) {
+                        ConsumerRecords<String, String> records = shareConsumer.poll(Duration.ofMillis(2000L));
+                        consState.count().addAndGet(records.count());
+                        records.forEach(rec -> consumed.compute(rec.key(), (k, v) -> v == null ? 1 : v + 1));
+                        if (prodState.done().get() && records.count() == 0) {
+                            consState.done().set(true);
+                        }
+                    }
+                }
+            }, 100L, TimeUnit.MILLISECONDS
+        );
+
+        // To be closer to real world scenarios, we will execute after
+        // some time has elapsed since the producer and consumer started
+        // working.
+        service.schedule(() -> {
+                // Get the current node hosting the __share_group_state partition
+                // on which tpMulti is hosted. Then shut down this node and wait
+                // for it to be gracefully shutdown. Then fetch the coordinator again
+                // and verify that it has moved to some other broker.
+                try (Admin admin = createAdminClient()) {
+                    SharePartitionKey key = SharePartitionKey.getInstance(groupId, new TopicIdPartition(topicId, tpMulti));
+                    int shareGroupStateTp = Utils.abs(key.asCoordinatorKey().hashCode()) % 3;
+                    List<Integer> curShareCoordNodeId = null;
+                    try {
+                        curShareCoordNodeId = admin.describeTopics(List.of(Topic.SHARE_GROUP_STATE_TOPIC_NAME)).allTopicNames().get().get(Topic.SHARE_GROUP_STATE_TOPIC_NAME)
+                            .partitions().stream()
+                            .filter(info -> info.partition() == shareGroupStateTp)
+                            .map(info -> info.leader().id())
+                            .toList();
+                    } catch (Exception e) {
+                        fail(e);
+                    }
+                    assertEquals(1, curShareCoordNodeId.size());
+
+                    // shutdown the coordinator
+                    KafkaBroker broker = cluster.brokers().get(curShareCoordNodeId.get(0));
+                    cluster.shutdownBroker(curShareCoordNodeId.get(0));
+
+                    // wait for it to be completely shutdown
+                    broker.awaitShutdown();
+
+                    List<Integer> newShareCoordNodeId = null;
+                    try {
+                        newShareCoordNodeId = admin.describeTopics(List.of(Topic.SHARE_GROUP_STATE_TOPIC_NAME)).allTopicNames().get().get(Topic.SHARE_GROUP_STATE_TOPIC_NAME)
+                            .partitions().stream()
+                            .filter(info -> info.partition() == shareGroupStateTp)
+                            .map(info -> info.leader().id())
+                            .toList();
+                    } catch (Exception e) {
+                        fail(e);
+                    }
+
+                    assertEquals(1, newShareCoordNodeId.size());
+                    assertNotEquals(curShareCoordNodeId.get(0), newShareCoordNodeId.get(0));
+                }
+            }, 5L, TimeUnit.SECONDS
+        );
+
+        // top the producer after some time (but after coordinator shutdown)
+        service.schedule(() -> {
+                prodState.done().set(true);
+            }, 10L, TimeUnit.SECONDS
+        );
+
+        // wait for both producer and consumer to finish
+        TestUtils.waitForCondition(
+            () -> prodState.done().get() && consState.done().get(),
+            45_000L,
+            500L,
+            () -> "prod/cons not done yet"
+        );
+
+        // Make sure we consumed all records. Consumed records could be higher
+        // due to re-delivery but that is expected since we are only guaranteeing
+        // at least once semantics.
+        assertTrue(prodState.count().get() <= consState.count().get());
+        Set<String> consumedKeys = consumed.keySet();
+        assertTrue(produced.containsAll(consumedKeys) && consumedKeys.containsAll(produced));
+
+        shutdownExecutorService(service);
+
+        verifyShareGroupStateTopicRecordsProduced();
+    }
+
+    @ClusterTest(
+        brokers = 3,
+        serverProperties = {
+            @ClusterConfigProperty(key = "auto.create.topics.enable", value = "false"),
+            @ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer,share"),
+            @ClusterConfigProperty(key = "group.share.enable", value = "true"),
+            @ClusterConfigProperty(key = "group.share.partition.max.record.locks", value = "10000"),
+            @ClusterConfigProperty(key = "group.share.record.lock.duration.ms", value = "15000"),
+            @ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "3"),
+            @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "3"),
+            @ClusterConfigProperty(key = "share.coordinator.state.topic.num.partitions", value = "3"),
+            @ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "3"),
+            @ClusterConfigProperty(key = "unstable.api.versions.enable", value = "true")
+        }
+    )
+    @Timeout(150)
+    @Flaky("KAFKA-18665")
+    public void testComplexShareConsumer() throws Exception {
+        setup();
+        String topicName = "multipart";
+        String groupId = "multipartGrp";
+        createTopic(topicName, 3, 3);
+        TopicPartition multiTp = new TopicPartition(topicName, 0);
+
+        ScheduledExecutorService service = Executors.newScheduledThreadPool(5);
+
+        ClientState prodState = new ClientState();
+
+        // produce messages until we want
+        service.execute(() -> {
+            try (Producer<byte[], byte[]> producer = createProducer()) {
+                while (!prodState.done().get()) {
+                    ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(multiTp.topic(), multiTp.partition(), null, "key".getBytes(), "value".getBytes());
+                    producer.send(record);
+                    producer.flush();
+                    prodState.count().incrementAndGet();
+                }
+            }
+        });
+
+        // init a complex share consumer
+        ComplexShareConsumer<byte[], byte[]> complexCons1 = new ComplexShareConsumer<>(
+            cluster.bootstrapServers(),
+            topicName,
+            groupId,
+            Map.of()
+        );
+
+        service.schedule(
+            complexCons1,
+            100L,
+            TimeUnit.MILLISECONDS
+        );
+
+        // let the complex consumer read the messages
+        service.schedule(() -> {
+                prodState.done().set(true);
+            }, 10L, TimeUnit.SECONDS
+        );
+
+        // all messages which can be read are read, some would be redelivered
+        TestUtils.waitForCondition(complexCons1::isDone, 45_000L, () -> "did not close!");
+
+        assertTrue(prodState.count().get() < complexCons1.recordsRead());
+
+        shutdownExecutorService(service);
+
+        verifyShareGroupStateTopicRecordsProduced();
+    }
+
+    /**
+     * Util class to encapsulate state for a consumer/producer
+     * being executed by an {@link ExecutorService}.
+     */
+    private static class ClientState {
+        private final AtomicBoolean done = new AtomicBoolean(false);
+        private final AtomicInteger count = new AtomicInteger(0);
+
+        AtomicBoolean done() {
+            return done;
+        }
+
+        AtomicInteger count() {
+            return count;
+        }
     }
 
     private int produceMessages(int messageCount) {
-        try (KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer())) {
+        try (Producer<byte[], byte[]> producer = createProducer()) {
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
             IntStream.range(0, messageCount).forEach(__ -> producer.send(record));
             producer.flush();
@@ -1752,7 +2070,7 @@ public class ShareConsumerTest {
     }
 
     private void produceMessagesWithTimestamp(int messageCount, long startingTimestamp) {
-        try (KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer())) {
+        try (Producer<byte[], byte[]> producer = createProducer()) {
             for (int i = 0; i < messageCount; i++) {
                 ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), startingTimestamp + i,
                     ("key " + i).getBytes(), ("value " + i).getBytes());
@@ -1769,8 +2087,8 @@ public class ShareConsumerTest {
                                  int maxPolls,
                                  boolean commit) {
         return assertDoesNotThrow(() -> {
-            try (KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(
-                    new ByteArrayDeserializer(), new ByteArrayDeserializer(), groupId)) {
+            try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(
+                    groupId)) {
                 shareConsumer.subscribe(Collections.singleton(tp.topic()));
                 return consumeMessages(shareConsumer, totalMessagesConsumed, totalMessages, consumerNumber, maxPolls, commit);
             }
@@ -1785,8 +2103,8 @@ public class ShareConsumerTest {
                                  boolean commit,
                                  int maxFetchBytes) {
         return assertDoesNotThrow(() -> {
-            try (KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(
-                    new ByteArrayDeserializer(), new ByteArrayDeserializer(), groupId,
+            try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(
+                    groupId,
                     Map.of(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, maxFetchBytes))) {
                 shareConsumer.subscribe(Collections.singleton(tp.topic()));
                 return consumeMessages(shareConsumer, totalMessagesConsumed, totalMessages, consumerNumber, maxPolls, commit);
@@ -1794,7 +2112,7 @@ public class ShareConsumerTest {
         }, "Consumer " + consumerNumber + " failed with exception");
     }
 
-    private int consumeMessages(KafkaShareConsumer<byte[], byte[]> consumer,
+    private int consumeMessages(ShareConsumer<byte[], byte[]> consumer,
                                  AtomicInteger totalMessagesConsumed,
                                  int totalMessages,
                                  int consumerNumber,
@@ -1827,7 +2145,7 @@ public class ShareConsumerTest {
         }, "Consumer " + consumerNumber + " failed with exception");
     }
 
-    private <K, V> List<ConsumerRecord<K, V>> consumeRecords(KafkaShareConsumer<K, V> consumer,
+    private <K, V> List<ConsumerRecord<K, V>> consumeRecords(ShareConsumer<K, V> consumer,
                                                              int numRecords) {
         ArrayList<ConsumerRecord<K, V>> accumulatedRecords = new ArrayList<>();
         long startTimeMs = System.currentTimeMillis();
@@ -1840,59 +2158,65 @@ public class ShareConsumerTest {
         return accumulatedRecords;
     }
 
-    private void createTopic(String topicName) {
-        Properties props = cluster.clientProperties();
+    private Uuid createTopic(String topicName) {
+        return createTopic(topicName, 1, 1);
+    }
+
+    private Uuid createTopic(String topicName, int numPartitions, int replicationFactor) {
+        AtomicReference<Uuid> topicId = new AtomicReference<>(null);
         assertDoesNotThrow(() -> {
-            try (Admin admin = Admin.create(props)) {
-                admin.createTopics(Collections.singleton(new NewTopic(topicName, 1, (short) 1))).all().get();
+            try (Admin admin = createAdminClient()) {
+                CreateTopicsResult result = admin.createTopics(Collections.singleton(new NewTopic(topicName, numPartitions, (short) replicationFactor)));
+                result.all().get();
+                topicId.set(result.topicId(topicName).get());
             }
         }, "Failed to create topic");
+
+        return topicId.get();
     }
 
     private void deleteTopic(String topicName) {
-        Properties props = cluster.clientProperties();
         assertDoesNotThrow(() -> {
-            try (Admin admin = Admin.create(props)) {
+            try (Admin admin = createAdminClient()) {
                 admin.deleteTopics(Collections.singleton(topicName)).all().get();
             }
         }, "Failed to delete topic");
     }
 
     private Admin createAdminClient() {
-        Properties props = cluster.clientProperties();
-        return Admin.create(props);
+        return cluster.admin();
     }
 
-    private <K, V> KafkaProducer<K, V> createProducer(Serializer<K> keySerializer,
-                                                      Serializer<V> valueSerializer) {
-        Properties props = cluster.clientProperties();
-        return new KafkaProducer<>(props, keySerializer, valueSerializer);
+    private <K, V> Producer<K, V> createProducer() {
+        return createProducer(Map.of());
     }
 
-    private <K, V> KafkaProducer<K, V> createProducer(Serializer<K> keySerializer,
-                                                      Serializer<V> valueSerializer,
-                                                      String transactionalId) {
-        Properties props = cluster.clientProperties();
-        props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId);
-        return new KafkaProducer<>(props, keySerializer, valueSerializer);
+    private <K, V> Producer<K, V> createProducer(Map<String, Object> config) {
+        return cluster.producer(config);
     }
 
-    private <K, V> KafkaShareConsumer<K, V> createShareConsumer(Deserializer<K> keyDeserializer,
-                                                                Deserializer<V> valueDeserializer,
-                                                                String groupId) {
-        Properties props = cluster.clientProperties();
-        props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
-        return new KafkaShareConsumer<>(props, keyDeserializer, valueDeserializer);
+    private <K, V> Producer<K, V> createProducer(String transactionalId) {
+        return createProducer(
+            Map.of(
+                ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId
+            )
+        );
     }
 
-    private <K, V> KafkaShareConsumer<K, V> createShareConsumer(Deserializer<K> keyDeserializer,
-                                                                Deserializer<V> valueDeserializer,
-                                                                String groupId,
-                                                                Map<?, ?> additionalProperties) {
-        Properties props = cluster.clientProperties();
-        props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
+    private <K, V> ShareConsumer<K, V> createShareConsumer(String groupId) {
+        return createShareConsumer(groupId, Map.of());
+    }
+
+    private <K, V> ShareConsumer<K, V> createShareConsumer(
+        String groupId,
+        Map<?, ?> additionalProperties
+    ) {
+        Properties props = new Properties();
         props.putAll(additionalProperties);
-        return new KafkaShareConsumer<>(props, keyDeserializer, valueDeserializer);
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
+        Map<String, Object> conf = new HashMap<>();
+        props.forEach((k, v) -> conf.put((String) k, v));
+        return cluster.shareConsumer(conf);
     }
 
     private void warmup() throws InterruptedException {
@@ -1901,8 +2225,8 @@ public class ShareConsumerTest {
         ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(warmupTp.topic(), warmupTp.partition(), null, "key".getBytes(), "value".getBytes());
         Set<String> subscription = Collections.singleton(warmupTp.topic());
         alterShareAutoOffsetReset("warmupgroup1", "earliest");
-        try (KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
-             KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "warmupgroup1")) {
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("warmupgroup1")) {
 
             producer.send(record);
             producer.flush();
@@ -1921,12 +2245,7 @@ public class ShareConsumerTest {
 
     private void verifyShareGroupStateTopicRecordsProduced() {
         try {
-            Map<String, Object> consumerConfigs = new HashMap<>();
-            consumerConfigs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
-            consumerConfigs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
-            consumerConfigs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
-
-            try (KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(consumerConfigs)) {
+            try (Consumer<byte[], byte[]> consumer = cluster.consumer()) {
                 consumer.assign(sgsTopicPartitions);
                 consumer.seekToBeginning(sgsTopicPartitions);
                 Set<ConsumerRecord<byte[], byte[]>> records = new HashSet<>();
@@ -1953,8 +2272,112 @@ public class ShareConsumerTest {
         alterEntries.put(configResource, List.of(new AlterConfigOp(new ConfigEntry(
             GroupConfig.SHARE_AUTO_OFFSET_RESET_CONFIG, newValue), AlterConfigOp.OpType.SET)));
         AlterConfigsOptions alterOptions = new AlterConfigsOptions();
-        assertDoesNotThrow(() -> adminClient.incrementalAlterConfigs(alterEntries, alterOptions)
+        try (Admin adminClient = createAdminClient()) {
+            assertDoesNotThrow(() -> adminClient.incrementalAlterConfigs(alterEntries, alterOptions)
                 .all()
                 .get(60, TimeUnit.SECONDS), "Failed to alter configs");
+        }
+    }
+
+    /**
+     * Test utility which encapsulates a {@link ShareConsumer} whose record processing
+     * behavior can be supplied as a function argument.
+     * <p></p>
+     * This can be used to create different consume patterns on the broker and study
+     * the status of broker side share group abstractions.
+     * @param <K> - key type of the records consumed
+     * @param <V> - value type of the records consumed
+     */
+    private static class ComplexShareConsumer<K, V> implements Runnable {
+        public static final int POLL_TIMEOUT_MS = 15000;
+        public static final int MAX_DELIVERY_COUNT = ShareGroupConfig.SHARE_GROUP_DELIVERY_COUNT_LIMIT_DEFAULT;
+
+        private final String topicName;
+        private final Map<String, Object> configs = new HashMap<>();
+        private final ClientState state = new ClientState();
+        private final Predicate<ConsumerRecords<K, V>> exitCriteria;
+        private final BiConsumer<ShareConsumer<K, V>, ConsumerRecord<K, V>> processFunc;
+
+        ComplexShareConsumer(
+            String bootstrapServers,
+            String topicName,
+            String groupId,
+            Map<String, Object> additionalProperties
+        ) {
+            this(
+                bootstrapServers,
+                topicName,
+                groupId,
+                additionalProperties,
+                records -> records.count() == 0,
+                (consumer, record) -> {
+                    short deliveryCountBeforeAccept = (short) ((record.offset() + record.offset() / (MAX_DELIVERY_COUNT + 2)) % (MAX_DELIVERY_COUNT + 2));
+                    if (deliveryCountBeforeAccept == 0) {
+                        consumer.acknowledge(record, AcknowledgeType.REJECT);
+                    } else if (record.deliveryCount().get() == deliveryCountBeforeAccept) {
+                        consumer.acknowledge(record, AcknowledgeType.ACCEPT);
+                    } else {
+                        consumer.acknowledge(record, AcknowledgeType.RELEASE);
+                    }
+                }
+            );
+        }
+
+        ComplexShareConsumer(
+            String bootstrapServers,
+            String topicName,
+            String groupId,
+            Map<String, Object> additionalProperties,
+            Predicate<ConsumerRecords<K, V>> exitCriteria,
+            BiConsumer<ShareConsumer<K, V>, ConsumerRecord<K, V>> processFunc
+        ) {
+            this.exitCriteria = Objects.requireNonNull(exitCriteria);
+            this.processFunc = Objects.requireNonNull(processFunc);
+            this.topicName = topicName;
+            this.configs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+            this.configs.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
+            this.configs.putAll(additionalProperties);
+            this.configs.putIfAbsent(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
+            this.configs.putIfAbsent(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
+        }
+
+        void stop() {
+            state.done().set(true);
+        }
+
+        @Override
+        public void run() {
+            try (ShareConsumer<K, V> consumer = new KafkaShareConsumer<>(configs)) {
+                consumer.subscribe(Set.of(this.topicName));
+                while (!state.done().get()) {
+                    ConsumerRecords<K, V> records = consumer.poll(Duration.ofMillis(POLL_TIMEOUT_MS));
+                    state.count().addAndGet(records.count());
+                    if (exitCriteria.test(records)) {
+                        state.done().set(true);
+                    }
+                    records.forEach(record -> processFunc.accept(consumer, record));
+                }
+            }
+        }
+
+        boolean isDone() {
+            return state.done().get();
+        }
+
+        int recordsRead() {
+            return state.count().get();
+        }
+    }
+
+    private void shutdownExecutorService(ExecutorService service) {
+        service.shutdown();
+        try {
+            if (!service.awaitTermination(5L, TimeUnit.SECONDS)) {
+                service.shutdownNow();
+            }
+        } catch (Exception e) {
+            service.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
     }
 }

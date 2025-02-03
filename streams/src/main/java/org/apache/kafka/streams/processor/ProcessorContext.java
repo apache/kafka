@@ -41,7 +41,11 @@ import java.util.Map;
  * We need to clean this all up (https://issues.apache.org/jira/browse/KAFKA-17131) and mark the interface
  * deprecated afterward.
  */
-@SuppressWarnings("deprecation")
+@SuppressWarnings("deprecation") // Not deprecating the old context, since it is used by Transformers. See KAFKA-10603.
+/*
+ * When we deprecate `ProcessorContext` can also deprecate `To` class,
+ * as it is only used in the `ProcessorContext#forward` method.
+ */
 public interface ProcessorContext {
 
     /**

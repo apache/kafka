@@ -45,6 +45,19 @@ public class GroupCoordinatorConfigTest {
             GroupCoordinatorConfig.SHARE_GROUP_CONFIG_DEF);
 
     @Test
+    public void testConsumerGroupAssignorsDefault() {
+        // The full class name of the assignors is part of our public api. Hence,
+        // we should ensure that they are not changed by mistake.
+        assertEquals(
+            List.of(
+                "org.apache.kafka.coordinator.group.assignor.UniformAssignor",
+                "org.apache.kafka.coordinator.group.assignor.RangeAssignor"
+            ),
+            GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_DEFAULT
+        );
+    }
+
+    @Test
     public void testConfigs() {
         Map<String, Object> configs = new HashMap<>();
         configs.put(GroupCoordinatorConfig.GROUP_COORDINATOR_NUM_THREADS_CONFIG, 10);

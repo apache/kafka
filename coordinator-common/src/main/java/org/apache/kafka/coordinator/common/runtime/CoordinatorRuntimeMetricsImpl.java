@@ -31,8 +31,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 
-import static org.apache.kafka.coordinator.common.runtime.KafkaMetricHistogram.MAX_LATENCY_MS;
-
 public class CoordinatorRuntimeMetricsImpl implements CoordinatorRuntimeMetrics {
 
     /**
@@ -293,7 +291,7 @@ public class CoordinatorRuntimeMetricsImpl implements CoordinatorRuntimeMetrics 
 
     @Override
     public void recordEventPurgatoryTime(long purgatoryTimeMs) {
-        eventPurgatoryTimeSensor.record(Math.min(MAX_LATENCY_MS, purgatoryTimeMs));
+        eventPurgatoryTimeSensor.record(purgatoryTimeMs);
     }
 
     @Override

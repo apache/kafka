@@ -66,6 +66,8 @@ import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.Monitorable;
+import org.apache.kafka.common.metrics.PluginMetrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.network.Selectable;
@@ -101,6 +103,7 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.MockConsumerInterceptor;
+import org.apache.kafka.test.MockDeserializer;
 import org.apache.kafka.test.MockMetricsReporter;
 import org.apache.kafka.test.TestUtils;
 
@@ -2239,7 +2242,7 @@ public class KafkaConsumerTest {
             // by the background thread, so it can realize there is authentication fail  and then
             // throw the AuthenticationException
             assertPollEventuallyThrows(consumer, AuthenticationException.class,
-                    "he consumer was not able to discover metadata errors during continuous polling.");
+                    "this consumer was not able to discover metadata errors during continuous polling.");
         } else {
             assertThrows(AuthenticationException.class, () -> consumer.poll(Duration.ZERO));
         }
@@ -3683,6 +3686,84 @@ public void testClosingConsumerUnregistersConsumerMetrics(GroupProtocol groupPro
         @Override
         public void configure(Map<String, ?> configs) {
             CLIENT_IDS.add(configs.get(ConsumerConfig.CLIENT_ID_CONFIG).toString());
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class)
+    void testMonitorablePlugins(GroupProtocol groupProtocol) {
+        try {
+            String clientId = "testMonitorablePlugins";
+            Map<String, Object> configs = new HashMap<>();
+            configs.put(ConsumerConfig.CLIENT_ID_CONFIG, clientId);
+            configs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+            configs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, MonitorableDeserializer.class.getName());
+            configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, MonitorableDeserializer.class.getName());
+            configs.put(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, MonitorableInterceptor.class.getName());
+
+            KafkaConsumer<String, String> consumer = new KafkaConsumer<>(configs);
+            Map<MetricName, ? extends Metric> metrics = consumer.metrics();
+
+            MetricName expectedKeyDeserializerMetric = expectedMetricName(
+                    clientId,
+                    ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG,
+                    MonitorableDeserializer.class);
+            assertTrue(metrics.containsKey(expectedKeyDeserializerMetric));
+            assertEquals(VALUE, metrics.get(expectedKeyDeserializerMetric).metricValue());
+
+            MetricName expectedValueDeserializerMetric = expectedMetricName(
+                    clientId,
+                    ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
+                    MonitorableDeserializer.class);
+            assertTrue(metrics.containsKey(expectedValueDeserializerMetric));
+            assertEquals(VALUE, metrics.get(expectedValueDeserializerMetric).metricValue());
+
+            MetricName expectedInterceptorMetric = expectedMetricName(
+                    clientId,
+                    ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG,
+                    MonitorableInterceptor.class);
+            assertTrue(metrics.containsKey(expectedInterceptorMetric));
+            assertEquals(VALUE, metrics.get(expectedInterceptorMetric).metricValue());
+
+            consumer.close(Duration.ZERO);
+            metrics = consumer.metrics();
+            assertFalse(metrics.containsKey(expectedKeyDeserializerMetric));
+            assertFalse(metrics.containsKey(expectedValueDeserializerMetric));
+            assertFalse(metrics.containsKey(expectedInterceptorMetric));
+        } finally {
+            MockConsumerInterceptor.resetCounters();
+        }
+    }
+
+    private MetricName expectedMetricName(String clientId, String config, Class<?> clazz) {
+        Map<String, String> expectedTags = new LinkedHashMap<>();
+        expectedTags.put("client-id", clientId);
+        expectedTags.put("config", config);
+        expectedTags.put("class", clazz.getSimpleName());
+        expectedTags.putAll(TAGS);
+        return new MetricName(NAME, "plugins", DESCRIPTION, expectedTags);
+    }
+
+    private static final String NAME = "name";
+    private static final String DESCRIPTION = "description";
+    private static final Map<String, String> TAGS = Collections.singletonMap("k", "v");
+    private static final double VALUE = 123.0;
+
+    public static class MonitorableDeserializer extends MockDeserializer implements Monitorable {
+
+        @Override
+        public void withPluginMetrics(PluginMetrics metrics) {
+            MetricName name = metrics.metricName(NAME, DESCRIPTION, TAGS);
+            metrics.addMetric(name, (Measurable) (config, now) -> VALUE);
+        }
+    }
+
+    public static class MonitorableInterceptor extends MockConsumerInterceptor implements Monitorable {
+
+        @Override
+        public void withPluginMetrics(PluginMetrics metrics) {
+            MetricName name = metrics.metricName(NAME, DESCRIPTION, TAGS);
+            metrics.addMetric(name, (Measurable) (config, now) -> VALUE);
         }
     }
 }

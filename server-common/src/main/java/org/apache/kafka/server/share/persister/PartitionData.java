@@ -26,7 +26,7 @@ import java.util.Objects;
  */
 public class PartitionData implements
         PartitionIdData, PartitionStateData, PartitionErrorData, PartitionStateErrorData,
-        PartitionStateBatchData, PartitionIdLeaderEpochData, PartitionAllData {
+        PartitionStateBatchData, PartitionIdLeaderEpochData, PartitionAllData, PartitionStateSummaryData {
     private final int partition;
     private final int stateEpoch;
     private final long startOffset;

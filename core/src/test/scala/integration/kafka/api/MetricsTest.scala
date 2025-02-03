@@ -65,7 +65,7 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
     }
     this.consumerConfig.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, "classic")
     verifyNoRequestMetrics("Request metrics not removed in a previous test")
-    startSasl(jaasSections(kafkaServerSaslMechanisms, Some(kafkaClientSaslMechanism), KafkaSasl, kafkaServerJaasEntryName))
+    startSasl(jaasSections(kafkaServerSaslMechanisms, Some(kafkaClientSaslMechanism), kafkaServerJaasEntryName))
     super.setUp(testInfo)
   }
 
