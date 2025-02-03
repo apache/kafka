@@ -224,7 +224,7 @@ jobs:
         env:
           JUNIT_EXIT_FILE: build/junit-xml/${{ env.job-variation }}/junit-exit.txt
         run:
-          echo "${{ steps.junit-test.outputs.gradle-exitcode }}" >> JUNIT_EXIT_FILE
+          echo "${{ steps.junit-test.outputs.gradle-exitcode }}" >> $JUNIT_EXIT_FILE
 
       - name: Archive JUnit HTML reports
         uses: actions/upload-artifact@v4
