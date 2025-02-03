@@ -3995,7 +3995,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
               }
             }
           } catch {
-            case _: InterruptException => // Suppress the output to stderr
+            case _: WakeupException => // ignore
+            case _: InterruptException => // ignore
           } finally {
             consumer.close()
             stopLatch.countDown()
