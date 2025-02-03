@@ -140,8 +140,14 @@ public class PreboundSocketFactoryManager implements AutoCloseable {
         if (socket == null) {
             return null;
         }
+
         if (initalizating)
             usedSockets.computeIfAbsent(nodeId, __ -> new HashSet<>()).add(listener);
+
+
+//        usedSockets.computeIfAbsent(nodeId, __ -> new HashSet<>()).add(listener);
+
+
         return socket;
     }
 
@@ -197,7 +203,13 @@ public class PreboundSocketFactoryManager implements AutoCloseable {
         }
         InetSocketAddress socketAddress = (InetSocketAddress) socketChannel.getLocalAddress();
 
-        return socketAddress.getPort();
+
+        int port = socketAddress.getPort();
+        System.err.println("KKK nodeId " + nodeId + " listener " + listener +  " port " + port);
+
+        return port;
+
+
     }
 
     /**

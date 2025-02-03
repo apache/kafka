@@ -27,9 +27,11 @@ Configuration:
 
   Loggers:
     Root:
-      level: INFO
+      level: WARN
       AppenderRef:
         - ref: STDOUT
     Logger:
       - name: org.apache.kafka
+        level: WARN
+      - name: kafka.server
         level: INFO

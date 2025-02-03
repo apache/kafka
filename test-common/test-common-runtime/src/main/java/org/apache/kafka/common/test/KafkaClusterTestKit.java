@@ -357,6 +357,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
     private final PreboundSocketFactoryManager socketFactoryManager;
     private final String controllerListenerName;
     private final Optional<File> jaasFile;
+    private boolean init = true;
 
     private KafkaClusterTestKit(
         TestKitNodes nodes,
@@ -387,6 +388,10 @@ public class KafkaClusterTestKit implements AutoCloseable {
     }
 
     public void format() throws Exception {
+        if (!init) {
+            throw new RuntimeException("ASDASD");
+        }
+
         List<Future<?>> futures = new ArrayList<>();
         try {
             for (ControllerServer controller : controllers.values()) {
@@ -410,6 +415,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
             }
             throw e;
         }
+        init = false;
     }
 
     public ControllerServer createIsolatedController(Map<String, String> props) throws IOException {
