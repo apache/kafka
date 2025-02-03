@@ -378,7 +378,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     }
     props
   }
-  
+
   private[server] def fromPersistentProps(persistentProps: Properties,
                                           perBrokerConfig: Boolean): Properties = {
     val props = persistentProps.clone().asInstanceOf[Properties]
