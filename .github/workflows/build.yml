@@ -180,8 +180,6 @@ jobs:
         exclude:
           - run-flaky: true
             run-new: true
-    outputs:
-      timed-out: ${{ steps.junit-test.outputs.gradle-exitcode == '124' }}
     env:
       job-variation: ${{ matrix.java }}-${{ matrix.run-flaky == true && 'flaky' || 'noflaky' }}-${{ matrix.run-new == true && 'new' || 'nonew' }}
     name: JUnit tests Java ${{ matrix.java }}${{ matrix.run-flaky == true && ' flaky' || '' }}${{ matrix.run-new == true && ' new' || '' }}
