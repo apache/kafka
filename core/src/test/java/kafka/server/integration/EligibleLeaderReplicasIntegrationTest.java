@@ -48,7 +48,6 @@ import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
 import org.apache.kafka.storage.internals.checkpoint.CleanShutdownFileHandler;
 
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -422,7 +421,7 @@ public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarnes
                 .allTopicNames().get().get(testTopicName).partitions().get(0);
             assertEquals(0, topicPartitionInfo.lastKnownElr().size());
             assertEquals(0, topicPartitionInfo.elr().size());
-            assertEquals(lastKnownLeader, topicPartitionInfo.leader().id(), topicPartitionInfo.toString());
+            assertEquals(lastKnownLeader, topicPartitionInfo.leader().id());
         } finally {
             restartDeadBrokers(false);
         }
