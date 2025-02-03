@@ -256,6 +256,10 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     steps:
+      - name: Env
+        run: printenv
+        env:
+          GITHUB_CONTEXT: ${{ toJson(github) }}
       - name: Download JUnit XMLs
         uses: actions/download-artifact@v4
         with:

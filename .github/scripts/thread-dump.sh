@@ -28,8 +28,7 @@ do
   FILENAME="thread-dumps/GradleWorkerMain-$GRADLE_WORKER_PID.txt"
   jstack $GRADLE_WORKER_PID > $FILENAME
   if ! grep -q "kafka" $FILENAME; then
-    echo "No match for 'kafka' in thread dump file $FILENAME, discarding it."
-    rm $FILENAME;
+    echo "No match for 'kafka' in thread dump file $FILENAME"
   fi;
   sleep 5;
 done;
