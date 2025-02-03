@@ -220,12 +220,13 @@ jobs:
           test-retries: ${{ matrix.run-flaky == true && '3' || '1' }}
           test-xml-output: ${{ env.job-variation }}
 
-      - name: Capture JUnit Exit
+      - name: Capture JUnit Env
         env:
-          JUNIT_EXIT_FILE: build/junit-xml/junit-exit-${{ env.job-variation }}.txt
+          JUNIT_ENV_FILE: build/junit-xml/junit-env-${{ env.job-variation }}.txt
         run:
-          echo "${{ steps.junit-test.outputs.gradle-exitcode }}" >> $JUNIT_EXIT_FILE
-
+          echo "exitcode=${{ steps.junit-test.outputs.gradle-exitcode }}" >> $JUNIT_ENV_FILE
+          echo "junit-report-url=${{ steps.junit-upload-artifact.outputs.artifact-url }}" >> $JUNIT_ENV_FILE
+          echo "thread-dump-url=${{ steps.thread-dump-upload-artifact.outputs.artifact-url }}" >> $JUNIT_ENV_FILE
       - name: Archive JUnit HTML reports
         uses: actions/upload-artifact@v4
         id: junit-upload-artifact
@@ -277,6 +278,10 @@ jobs:
           merge-multiple: true
       - name: Display structure of downloaded files
         run: ls -R
+      - name: Parse JUnit tests
+        run: python .github/scripts/junit.py --export-test-catalog ./test-catalog >> $GITHUB_STEP_SUMMARY
+        env:
+          GITHUB_WORKSPACE: ${{ github.workspace }}
 
   update-test-catalog:
     name: Update Test Catalog

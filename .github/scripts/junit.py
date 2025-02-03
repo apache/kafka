@@ -24,7 +24,7 @@ import os.path
 import pathlib
 import re
 import sys
-from typing import Tuple, Optional, List, Iterable
+from typing import Tuple, Optional, List, Iterable, Dict
 import xml.etree.ElementTree
 import html
 
@@ -52,6 +52,14 @@ def get_env(key: str, fn = str) -> Optional:
     else:
         logger.debug(f"Read env {key}: {value}")
         return fn(value)
+
+
+def load_job_outputs(fp) -> Dict:
+    outputs = {}
+    for line in fp:
+        key, value = line.strip().split("=", 1)
+        outputs[key] = value
+    return outputs
 
 
 @dataclasses.dataclass
@@ -231,14 +239,18 @@ if __name__ == "__main__":
     Exits with status code 0 if no tests failed, 1 otherwise.
     """
     parser = argparse.ArgumentParser(description="Parse JUnit XML results.")
-    parser.add_argument("--path",
+    parser.add_argument("--junit-xml-glob-path",
                         required=False,
-                        default="build/junit-xml",
-                        help="Base path of JUnit XML files. A glob of **/*.xml will be applied on top of this path.")
+                        default="build/junit-xml/**.xml",
+                        help="Glob path of JUnit XML files.")
+    parser.add_argument("--junit-output-file-pattern",
+                        required=False,
+                        default="build/junit-xml/*.txt",
+                        help="Glob path for JUnit exit files.")
     parser.add_argument("--export-test-catalog",
                         required=False,
                         default="",
-                        help="Optional path to dump all tests")
+                        help="Optional path to dump all tests.")
 
     if not os.getenv("GITHUB_WORKSPACE"):
         print("This script is intended to by run by GitHub Actions.")
@@ -246,9 +258,16 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    glob_path = os.path.join(args.path, "**/*.xml")
-    reports = glob(pathname=glob_path, recursive=True)
-    logger.info(f"Found {len(reports)} JUnit results")
+    reports = glob(pathname=args.junit_xml_glob_path, recursive=True)
+    logger.info(f"Found {len(reports)} JUnit XML files")
+
+    output_files = glob(pathname=args.junit_output_file_pattern, recursive=False)
+    logger.info(f"Found {len(output_files)} JUnit output files")
+    for output_file in output_files:
+        with open(output_file, "r") as fp:
+            outputs = load_job_outputs(fp)
+            print(outputs)
+
     workspace_path = get_env("GITHUB_WORKSPACE") # e.g., /home/runner/work/apache/kafka
 
     total_file_count = 0
