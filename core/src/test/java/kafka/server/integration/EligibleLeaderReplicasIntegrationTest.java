@@ -48,6 +48,8 @@ import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
 import org.apache.kafka.storage.internals.checkpoint.CleanShutdownFileHandler;
 
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -106,6 +108,7 @@ public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarnes
         return JavaConverters.asScalaBuffer(configs).toSeq();
     }
 
+    @BeforeEach
     @Override
     public void setUp(TestInfo info) {
         super.setUp(info);
@@ -419,7 +422,7 @@ public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarnes
                 .allTopicNames().get().get(testTopicName).partitions().get(0);
             assertEquals(0, topicPartitionInfo.lastKnownElr().size());
             assertEquals(0, topicPartitionInfo.elr().size());
-            assertEquals(lastKnownLeader, topicPartitionInfo.leader().id());
+            assertEquals(lastKnownLeader, topicPartitionInfo.leader().id(), topicPartitionInfo.toString());
         } finally {
             restartDeadBrokers(false);
         }
