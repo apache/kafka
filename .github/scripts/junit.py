@@ -241,11 +241,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Parse JUnit XML results.")
     parser.add_argument("--junit-xml-glob-path",
                         required=False,
-                        default="build/junit-xml/**.xml",
+                        default="junit-xml/**.xml",
                         help="Glob path of JUnit XML files.")
     parser.add_argument("--junit-output-file-pattern",
                         required=False,
-                        default="build/junit-xml/*.txt",
+                        default="junit-xml/*.txt",
                         help="Glob path for JUnit exit files.")
     parser.add_argument("--export-test-catalog",
                         required=False,
