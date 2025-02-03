@@ -60,6 +60,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -185,8 +186,8 @@ public class StreamsMembershipManagerTest {
 
         reconcile(makeHeartbeatResponseWithActiveTasks(SUBTOPOLOGY_ID_0, List.of(PARTITION_0)));
 
-        final Collection<TopicPartition> expectedFullPartitionsToAssign = Set.of(new TopicPartition(TOPIC_0, PARTITION_0));
-        final Collection<TopicPartition> expectedNewPartitionsToAssign = expectedFullPartitionsToAssign;
+        final Set<TopicPartition> expectedFullPartitionsToAssign = Set.of(new TopicPartition(TOPIC_0, PARTITION_0));
+        final Set<TopicPartition> expectedNewPartitionsToAssign = expectedFullPartitionsToAssign;
         verifyInStateReconcilingBeforeOnTaskAssignedCallbackExecuted(expectedFullPartitionsToAssign, expectedNewPartitionsToAssign);
         onTasksAssignedCallbackExecuted.complete(null);
         verifyInStateAcknowledgingAfterOnTaskAssignedCallbackExecuted(expectedFullPartitionsToAssign);
@@ -221,8 +222,8 @@ public class StreamsMembershipManagerTest {
         reconcile(makeHeartbeatResponseWithActiveTasks(SUBTOPOLOGY_ID_0, List.of(PARTITION_1)));
 
         final Set<TopicPartition> expectedPartitionsToRevoke = Set.of(new TopicPartition(TOPIC_0, PARTITION_0));
-        final Collection<TopicPartition> expectedFullPartitionsToAssign = Set.of(new TopicPartition(TOPIC_0, PARTITION_1));
-        final Collection<TopicPartition> expectedNewPartitionsToAssign = expectedFullPartitionsToAssign;
+        final Set<TopicPartition> expectedFullPartitionsToAssign = Set.of(new TopicPartition(TOPIC_0, PARTITION_1));
+        final Set<TopicPartition> expectedNewPartitionsToAssign = expectedFullPartitionsToAssign;
         verifyInStateReconcilingBeforeOnTaskRevokedCallbackExecuted(
             expectedPartitionsToRevoke,
             expectedFullPartitionsToAssign,
@@ -231,7 +232,7 @@ public class StreamsMembershipManagerTest {
         onTasksRevokedCallbackExecuted.complete(null);
         verifyInStateReconcilingBeforeOnTaskAssignedCallbackExecuted(expectedFullPartitionsToAssign, expectedNewPartitionsToAssign);
         onTasksAssignedCallbackExecuted.complete(null);
-        verifyInStateAcknowledgingAfterOnTaskAssignedCallbackExecuted(expectedNewPartitionsToAssign);
+        verifyInStateAcknowledgingAfterOnTaskAssignedCallbackExecuted(expectedFullPartitionsToAssign);
     }
 
     @Test
@@ -259,14 +260,14 @@ public class StreamsMembershipManagerTest {
 
         reconcile(makeHeartbeatResponseWithActiveTasks(SUBTOPOLOGY_ID_0, List.of(PARTITION_0, PARTITION_1)));
 
-        final Collection<TopicPartition> expectedFullPartitionsToAssign = Set.of(
+        final Set<TopicPartition> expectedFullPartitionsToAssign = Set.of(
             new TopicPartition(TOPIC_0, PARTITION_0),
             new TopicPartition(TOPIC_0, PARTITION_1)
         );
-        final Collection<TopicPartition> expectedNewPartitionsToAssign = Set.of(new TopicPartition(TOPIC_0, PARTITION_1));
+        final Set<TopicPartition> expectedNewPartitionsToAssign = Set.of(new TopicPartition(TOPIC_0, PARTITION_1));
         verifyInStateReconcilingBeforeOnTaskAssignedCallbackExecuted(expectedFullPartitionsToAssign, expectedNewPartitionsToAssign);
         onTasksAssignedCallbackExecuted.complete(null);
-        verifyInStateAcknowledgingAfterOnTaskAssignedCallbackExecuted(expectedNewPartitionsToAssign);
+        verifyInStateAcknowledgingAfterOnTaskAssignedCallbackExecuted(expectedFullPartitionsToAssign);
         verifyThatNoTasksHaveBeenRevoked();
     }
 
@@ -302,8 +303,8 @@ public class StreamsMembershipManagerTest {
         reconcile(makeHeartbeatResponseWithActiveTasks(SUBTOPOLOGY_ID_0, List.of(PARTITION_1)));
 
         final Set<TopicPartition> expectedPartitionsToRevoke = Set.of(new TopicPartition(TOPIC_0, PARTITION_0));
-        final Collection<TopicPartition> expectedFullPartitionsToAssign = Set.of(new TopicPartition(TOPIC_0, PARTITION_1));
-        final Collection<TopicPartition> expectedNewPartitionsToAssign = Collections.emptySet();
+        final Set<TopicPartition> expectedFullPartitionsToAssign = Set.of(new TopicPartition(TOPIC_0, PARTITION_1));
+        final Set<TopicPartition> expectedNewPartitionsToAssign = Collections.emptySet();
         verifyInStateReconcilingBeforeOnTaskRevokedCallbackExecuted(
             expectedPartitionsToRevoke,
             expectedFullPartitionsToAssign,
@@ -312,7 +313,7 @@ public class StreamsMembershipManagerTest {
         onTasksRevokedCallbackExecuted.complete(null);
         verifyInStateReconcilingBeforeOnTaskAssignedCallbackExecuted(expectedFullPartitionsToAssign, expectedNewPartitionsToAssign);
         onTasksAssignedCallbackExecuted.complete(null);
-        verifyInStateAcknowledgingAfterOnTaskAssignedCallbackExecuted(expectedNewPartitionsToAssign);
+        verifyInStateAcknowledgingAfterOnTaskAssignedCallbackExecuted(expectedFullPartitionsToAssign);
     }
 
     @Test
@@ -338,14 +339,14 @@ public class StreamsMembershipManagerTest {
             SUBTOPOLOGY_ID_1, List.of(PARTITION_0))
         );
 
-        final Collection<TopicPartition> expectedFullPartitionsToAssign = Set.of(
+        final Set<TopicPartition> expectedFullPartitionsToAssign = Set.of(
             new TopicPartition(TOPIC_0, PARTITION_0),
             new TopicPartition(TOPIC_1, PARTITION_0)
         );
-        final Collection<TopicPartition> expectedNewPartitionsToAssign = expectedFullPartitionsToAssign;
+        final Set<TopicPartition> expectedNewPartitionsToAssign = expectedFullPartitionsToAssign;
         verifyInStateReconcilingBeforeOnTaskAssignedCallbackExecuted(expectedFullPartitionsToAssign, expectedNewPartitionsToAssign);
         onTasksAssignedCallbackExecuted.complete(null);
-        verifyInStateAcknowledgingAfterOnTaskAssignedCallbackExecuted(expectedNewPartitionsToAssign);
+        verifyInStateAcknowledgingAfterOnTaskAssignedCallbackExecuted(expectedFullPartitionsToAssign);
         verifyThatNoTasksHaveBeenRevoked();
     }
 
@@ -382,8 +383,8 @@ public class StreamsMembershipManagerTest {
         reconcile(makeHeartbeatResponseWithStandbyTasks(SUBTOPOLOGY_ID_0, List.of(PARTITION_1)));
 
         final Set<TopicPartition> expectedPartitionsToRevoke = Set.of(new TopicPartition(TOPIC_0, PARTITION_0));
-        final Collection<TopicPartition> expectedFullPartitionsToAssign = Collections.emptySet();
-        final Collection<TopicPartition> expectedNewPartitionsToAssign = expectedFullPartitionsToAssign;
+        final Set<TopicPartition> expectedFullPartitionsToAssign = Collections.emptySet();
+        final Set<TopicPartition> expectedNewPartitionsToAssign = expectedFullPartitionsToAssign;
         verifyInStateReconcilingBeforeOnTaskRevokedCallbackExecuted(
             expectedPartitionsToRevoke,
             expectedFullPartitionsToAssign,
@@ -392,7 +393,7 @@ public class StreamsMembershipManagerTest {
         onTasksRevokedCallbackExecuted.complete(null);
         verifyInStateReconcilingBeforeOnTaskAssignedCallbackExecuted(expectedFullPartitionsToAssign, expectedNewPartitionsToAssign);
         onTasksAssignedCallbackExecuted.complete(null);
-        verifyInStateAcknowledgingAfterOnTaskAssignedCallbackExecuted(expectedNewPartitionsToAssign);
+        verifyInStateAcknowledgingAfterOnTaskAssignedCallbackExecuted(expectedFullPartitionsToAssign);
     }
 
     @Test
@@ -428,8 +429,8 @@ public class StreamsMembershipManagerTest {
         reconcile(makeHeartbeatResponseWithWarmupTasks(SUBTOPOLOGY_ID_0, List.of(PARTITION_1)));
 
         final Set<TopicPartition> expectedPartitionsToRevoke = Set.of(new TopicPartition(TOPIC_0, PARTITION_0));
-        final Collection<TopicPartition> expectedFullPartitionsToAssign = Collections.emptySet();
-        final Collection<TopicPartition> expectedNewPartitionsToAssign = expectedFullPartitionsToAssign;
+        final Set<TopicPartition> expectedFullPartitionsToAssign = Collections.emptySet();
+        final Set<TopicPartition> expectedNewPartitionsToAssign = expectedFullPartitionsToAssign;
         verifyInStateReconcilingBeforeOnTaskRevokedCallbackExecuted(
             expectedPartitionsToRevoke,
             expectedFullPartitionsToAssign,
@@ -438,7 +439,7 @@ public class StreamsMembershipManagerTest {
         onTasksRevokedCallbackExecuted.complete(null);
         verifyInStateReconcilingBeforeOnTaskAssignedCallbackExecuted(expectedFullPartitionsToAssign, expectedNewPartitionsToAssign);
         onTasksAssignedCallbackExecuted.complete(null);
-        verifyInStateAcknowledgingAfterOnTaskAssignedCallbackExecuted(expectedNewPartitionsToAssign);
+        verifyInStateAcknowledgingAfterOnTaskAssignedCallbackExecuted(expectedFullPartitionsToAssign);
     }
 
     @Test
@@ -455,11 +456,11 @@ public class StreamsMembershipManagerTest {
 
         reconcile(makeHeartbeatResponseWithStandbyTasks(SUBTOPOLOGY_ID_0, List.of(PARTITION_0)));
 
-        final Collection<TopicPartition> expectedFullPartitionsToAssign = Collections.emptySet();
-        final Collection<TopicPartition> expectedNewPartitionsToAssign = expectedFullPartitionsToAssign;
+        final Set<TopicPartition> expectedFullPartitionsToAssign = Collections.emptySet();
+        final Set<TopicPartition> expectedNewPartitionsToAssign = expectedFullPartitionsToAssign;
         verifyInStateReconcilingBeforeOnTaskAssignedCallbackExecuted(expectedFullPartitionsToAssign, expectedNewPartitionsToAssign);
         onTasksAssignedCallbackExecuted.complete(null);
-        verifyInStateAcknowledgingAfterOnTaskAssignedCallbackExecuted(expectedNewPartitionsToAssign);
+        verifyInStateAcknowledgingAfterOnTaskAssignedCallbackExecuted(expectedFullPartitionsToAssign);
         verifyThatNoTasksHaveBeenRevoked();
     }
 
@@ -487,14 +488,15 @@ public class StreamsMembershipManagerTest {
         reconcile(makeHeartbeatResponseWithStandbyTasks(SUBTOPOLOGY_ID_0, List.of(PARTITION_0)));
         acknowledging(onTasksAssignedCallbackExecutedSetup);
         Mockito.reset(subscriptionState);
+        Mockito.reset(memberStateListener);
 
         reconcile(makeHeartbeatResponseWithStandbyTasks(SUBTOPOLOGY_ID_0, List.of(PARTITION_1)));
 
-        final Collection<TopicPartition> expectedFullPartitionsToAssign = Collections.emptySet();
-        final Collection<TopicPartition> expectedNewPartitionsToAssign = expectedFullPartitionsToAssign;
+        final Set<TopicPartition> expectedFullPartitionsToAssign = Collections.emptySet();
+        final Set<TopicPartition> expectedNewPartitionsToAssign = expectedFullPartitionsToAssign;
         verifyInStateReconcilingBeforeOnTaskAssignedCallbackExecuted(expectedFullPartitionsToAssign, expectedNewPartitionsToAssign);
         onTasksAssignedCallbackExecuted.complete(null);
-        verifyInStateAcknowledgingAfterOnTaskAssignedCallbackExecuted(expectedNewPartitionsToAssign);
+        verifyInStateAcknowledgingAfterOnTaskAssignedCallbackExecuted(expectedFullPartitionsToAssign);
         verifyThatNoTasksHaveBeenRevoked();
     }
 
@@ -523,14 +525,15 @@ public class StreamsMembershipManagerTest {
         reconcile(makeHeartbeatResponseWithStandbyTasks(SUBTOPOLOGY_ID_0, List.of(PARTITION_0)));
         acknowledging(onTasksAssignedCallbackExecutedSetup);
         Mockito.reset(subscriptionState);
+        Mockito.reset(memberStateListener);
 
         reconcile(makeHeartbeatResponseWithStandbyTasks(SUBTOPOLOGY_ID_0, List.of(PARTITION_0, PARTITION_1)));
 
-        final Collection<TopicPartition> expectedFullPartitionsToAssign = Collections.emptySet();
-        final Collection<TopicPartition> expectedNewPartitionsToAssign = expectedFullPartitionsToAssign;
+        final Set<TopicPartition> expectedFullPartitionsToAssign = Collections.emptySet();
+        final Set<TopicPartition> expectedNewPartitionsToAssign = expectedFullPartitionsToAssign;
         verifyInStateReconcilingBeforeOnTaskAssignedCallbackExecuted(expectedFullPartitionsToAssign, expectedNewPartitionsToAssign);
         onTasksAssignedCallbackExecuted.complete(null);
-        verifyInStateAcknowledgingAfterOnTaskAssignedCallbackExecuted(expectedNewPartitionsToAssign);
+        verifyInStateAcknowledgingAfterOnTaskAssignedCallbackExecuted(expectedFullPartitionsToAssign);
         verifyThatNoTasksHaveBeenRevoked();
     }
 
@@ -559,14 +562,15 @@ public class StreamsMembershipManagerTest {
         reconcile(makeHeartbeatResponseWithStandbyTasks(SUBTOPOLOGY_ID_0, List.of(PARTITION_0, PARTITION_1)));
         acknowledging(onTasksAssignedCallbackExecutedSetup);
         Mockito.reset(subscriptionState);
+        Mockito.reset(memberStateListener);
 
         reconcile(makeHeartbeatResponseWithStandbyTasks(SUBTOPOLOGY_ID_0, List.of(PARTITION_1)));
 
-        final Collection<TopicPartition> expectedFullPartitionsToAssign = Collections.emptySet();
-        final Collection<TopicPartition> expectedNewPartitionsToAssign = expectedFullPartitionsToAssign;
+        final Set<TopicPartition> expectedFullPartitionsToAssign = Collections.emptySet();
+        final Set<TopicPartition> expectedNewPartitionsToAssign = expectedFullPartitionsToAssign;
         verifyInStateReconcilingBeforeOnTaskAssignedCallbackExecuted(expectedFullPartitionsToAssign, expectedNewPartitionsToAssign);
         onTasksAssignedCallbackExecuted.complete(null);
-        verifyInStateAcknowledgingAfterOnTaskAssignedCallbackExecuted(expectedNewPartitionsToAssign);
+        verifyInStateAcknowledgingAfterOnTaskAssignedCallbackExecuted(expectedFullPartitionsToAssign);
         verifyThatNoTasksHaveBeenRevoked();
     }
 
@@ -601,11 +605,11 @@ public class StreamsMembershipManagerTest {
 
         reconcile(makeHeartbeatResponseWithActiveTasks(SUBTOPOLOGY_ID_0, List.of(PARTITION_1)));
 
-        final Collection<TopicPartition> expectedFullPartitionsToAssign = Set.of(new TopicPartition(TOPIC_0, PARTITION_1));
-        final Collection<TopicPartition> expectedNewPartitionsToAssign = expectedFullPartitionsToAssign;
+        final Set<TopicPartition> expectedFullPartitionsToAssign = Set.of(new TopicPartition(TOPIC_0, PARTITION_1));
+        final Set<TopicPartition> expectedNewPartitionsToAssign = expectedFullPartitionsToAssign;
         verifyInStateReconcilingBeforeOnTaskAssignedCallbackExecuted(expectedFullPartitionsToAssign, expectedNewPartitionsToAssign);
         onTasksAssignedCallbackExecuted.complete(null);
-        verifyInStateAcknowledgingAfterOnTaskAssignedCallbackExecuted(expectedNewPartitionsToAssign);
+        verifyInStateAcknowledgingAfterOnTaskAssignedCallbackExecuted(expectedFullPartitionsToAssign);
         verifyThatNoTasksHaveBeenRevoked();
     }
 
@@ -631,14 +635,15 @@ public class StreamsMembershipManagerTest {
         reconcile(makeHeartbeatResponseWithStandbyTasks(SUBTOPOLOGY_ID_0, List.of(PARTITION_0)));
         acknowledging(onTasksAssignedCallbackExecutedSetup);
         Mockito.reset(subscriptionState);
+        Mockito.reset(memberStateListener);
 
         reconcile(makeHeartbeatResponseWithWarmupTasks(SUBTOPOLOGY_ID_0, List.of(PARTITION_1)));
 
-        final Collection<TopicPartition> expectedFullPartitionsToAssign = Collections.emptySet();
-        final Collection<TopicPartition> expectedNewPartitionsToAssign = expectedFullPartitionsToAssign;
+        final Set<TopicPartition> expectedFullPartitionsToAssign = Collections.emptySet();
+        final Set<TopicPartition> expectedNewPartitionsToAssign = expectedFullPartitionsToAssign;
         verifyInStateReconcilingBeforeOnTaskAssignedCallbackExecuted(expectedFullPartitionsToAssign, expectedNewPartitionsToAssign);
         onTasksAssignedCallbackExecuted.complete(null);
-        verifyInStateAcknowledgingAfterOnTaskAssignedCallbackExecuted(expectedNewPartitionsToAssign);
+        verifyInStateAcknowledgingAfterOnTaskAssignedCallbackExecuted(expectedFullPartitionsToAssign);
         verifyThatNoTasksHaveBeenRevoked();
     }
 
@@ -656,11 +661,11 @@ public class StreamsMembershipManagerTest {
 
         reconcile(makeHeartbeatResponseWithWarmupTasks(SUBTOPOLOGY_ID_0, List.of(PARTITION_0)));
 
-        final Collection<TopicPartition> expectedFullPartitionsToAssign = Collections.emptySet();
-        final Collection<TopicPartition> expectedNewPartitionsToAssign = expectedFullPartitionsToAssign;
+        final Set<TopicPartition> expectedFullPartitionsToAssign = Collections.emptySet();
+        final Set<TopicPartition> expectedNewPartitionsToAssign = expectedFullPartitionsToAssign;
         verifyInStateReconcilingBeforeOnTaskAssignedCallbackExecuted(expectedFullPartitionsToAssign, expectedNewPartitionsToAssign);
         onTasksAssignedCallbackExecuted.complete(null);
-        verifyInStateAcknowledgingAfterOnTaskAssignedCallbackExecuted(expectedNewPartitionsToAssign);
+        verifyInStateAcknowledgingAfterOnTaskAssignedCallbackExecuted(expectedFullPartitionsToAssign);
         verifyThatNoTasksHaveBeenRevoked();
     }
 
@@ -688,14 +693,15 @@ public class StreamsMembershipManagerTest {
         reconcile(makeHeartbeatResponseWithWarmupTasks(SUBTOPOLOGY_ID_0, List.of(PARTITION_0)));
         acknowledging(onTasksAssignedCallbackExecutedSetup);
         Mockito.reset(subscriptionState);
+        Mockito.reset(memberStateListener);
 
         reconcile(makeHeartbeatResponseWithWarmupTasks(SUBTOPOLOGY_ID_0, List.of(PARTITION_1)));
 
-        final Collection<TopicPartition> expectedFullPartitionsToAssign = Collections.emptySet();
-        final Collection<TopicPartition> expectedNewPartitionsToAssign = expectedFullPartitionsToAssign;
+        final Set<TopicPartition> expectedFullPartitionsToAssign = Collections.emptySet();
+        final Set<TopicPartition> expectedNewPartitionsToAssign = expectedFullPartitionsToAssign;
         verifyInStateReconcilingBeforeOnTaskAssignedCallbackExecuted(expectedFullPartitionsToAssign, expectedNewPartitionsToAssign);
         onTasksAssignedCallbackExecuted.complete(null);
-        verifyInStateAcknowledgingAfterOnTaskAssignedCallbackExecuted(expectedNewPartitionsToAssign);
+        verifyInStateAcknowledgingAfterOnTaskAssignedCallbackExecuted(expectedFullPartitionsToAssign);
         verifyThatNoTasksHaveBeenRevoked();
     }
 
@@ -724,14 +730,15 @@ public class StreamsMembershipManagerTest {
         reconcile(makeHeartbeatResponseWithWarmupTasks(SUBTOPOLOGY_ID_0, List.of(PARTITION_0)));
         acknowledging(onTasksAssignedCallbackExecutedSetup);
         Mockito.reset(subscriptionState);
+        Mockito.reset(memberStateListener);
 
         reconcile(makeHeartbeatResponseWithWarmupTasks(SUBTOPOLOGY_ID_0, List.of(PARTITION_0, PARTITION_1)));
 
-        final Collection<TopicPartition> expectedFullPartitionsToAssign = Collections.emptySet();
-        final Collection<TopicPartition> expectedNewPartitionsToAssign = expectedFullPartitionsToAssign;
+        final Set<TopicPartition> expectedFullPartitionsToAssign = Collections.emptySet();
+        final Set<TopicPartition> expectedNewPartitionsToAssign = expectedFullPartitionsToAssign;
         verifyInStateReconcilingBeforeOnTaskAssignedCallbackExecuted(expectedFullPartitionsToAssign, expectedNewPartitionsToAssign);
         onTasksAssignedCallbackExecuted.complete(null);
-        verifyInStateAcknowledgingAfterOnTaskAssignedCallbackExecuted(expectedNewPartitionsToAssign);
+        verifyInStateAcknowledgingAfterOnTaskAssignedCallbackExecuted(expectedFullPartitionsToAssign);
         verifyThatNoTasksHaveBeenRevoked();
     }
 
@@ -760,14 +767,15 @@ public class StreamsMembershipManagerTest {
         reconcile(makeHeartbeatResponseWithWarmupTasks(SUBTOPOLOGY_ID_0, List.of(PARTITION_0, PARTITION_1)));
         acknowledging(onTasksAssignedCallbackExecutedSetup);
         Mockito.reset(subscriptionState);
+        Mockito.reset(memberStateListener);
 
         reconcile(makeHeartbeatResponseWithWarmupTasks(SUBTOPOLOGY_ID_0, List.of(PARTITION_1)));
 
-        final Collection<TopicPartition> expectedFullPartitionsToAssign = Collections.emptySet();
-        final Collection<TopicPartition> expectedNewPartitionsToAssign = expectedFullPartitionsToAssign;
+        final Set<TopicPartition> expectedFullPartitionsToAssign = Collections.emptySet();
+        final Set<TopicPartition> expectedNewPartitionsToAssign = expectedFullPartitionsToAssign;
         verifyInStateReconcilingBeforeOnTaskAssignedCallbackExecuted(expectedFullPartitionsToAssign, expectedNewPartitionsToAssign);
         onTasksAssignedCallbackExecuted.complete(null);
-        verifyInStateAcknowledgingAfterOnTaskAssignedCallbackExecuted(expectedNewPartitionsToAssign);
+        verifyInStateAcknowledgingAfterOnTaskAssignedCallbackExecuted(expectedFullPartitionsToAssign);
         verifyThatNoTasksHaveBeenRevoked();
     }
 
@@ -802,11 +810,11 @@ public class StreamsMembershipManagerTest {
 
         reconcile(makeHeartbeatResponseWithActiveTasks(SUBTOPOLOGY_ID_0, List.of(PARTITION_1)));
 
-        final Collection<TopicPartition> expectedFullPartitionsToAssign = Set.of(new TopicPartition(TOPIC_0, PARTITION_1));
-        final Collection<TopicPartition> expectedNewPartitionsToAssign = expectedFullPartitionsToAssign;
+        final Set<TopicPartition> expectedFullPartitionsToAssign = Set.of(new TopicPartition(TOPIC_0, PARTITION_1));
+        final Set<TopicPartition> expectedNewPartitionsToAssign = expectedFullPartitionsToAssign;
         verifyInStateReconcilingBeforeOnTaskAssignedCallbackExecuted(expectedFullPartitionsToAssign, expectedNewPartitionsToAssign);
         onTasksAssignedCallbackExecuted.complete(null);
-        verifyInStateAcknowledgingAfterOnTaskAssignedCallbackExecuted(expectedNewPartitionsToAssign);
+        verifyInStateAcknowledgingAfterOnTaskAssignedCallbackExecuted(expectedFullPartitionsToAssign);
         verifyThatNoTasksHaveBeenRevoked();
     }
 
@@ -834,14 +842,15 @@ public class StreamsMembershipManagerTest {
         reconcile(makeHeartbeatResponseWithWarmupTasks(SUBTOPOLOGY_ID_0, List.of(PARTITION_0)));
         acknowledging(onTasksAssignedCallbackExecutedSetup);
         Mockito.reset(subscriptionState);
+        Mockito.reset(memberStateListener);
 
         reconcile(makeHeartbeatResponseWithStandbyTasks(SUBTOPOLOGY_ID_0, List.of(PARTITION_1)));
 
-        final Collection<TopicPartition> expectedFullPartitionsToAssign = Collections.emptySet();
-        final Collection<TopicPartition> expectedNewPartitionsToAssign = expectedFullPartitionsToAssign;
+        final Set<TopicPartition> expectedFullPartitionsToAssign = Collections.emptySet();
+        final Set<TopicPartition> expectedNewPartitionsToAssign = expectedFullPartitionsToAssign;
         verifyInStateReconcilingBeforeOnTaskAssignedCallbackExecuted(expectedFullPartitionsToAssign, expectedNewPartitionsToAssign);
         onTasksAssignedCallbackExecuted.complete(null);
-        verifyInStateAcknowledgingAfterOnTaskAssignedCallbackExecuted(expectedNewPartitionsToAssign);
+        verifyInStateAcknowledgingAfterOnTaskAssignedCallbackExecuted(expectedFullPartitionsToAssign);
         verifyThatNoTasksHaveBeenRevoked();
     }
 
@@ -857,14 +866,62 @@ public class StreamsMembershipManagerTest {
 
         reconcile(makeHeartbeatResponseWithActiveTasks(SUBTOPOLOGY_ID_0, List.of(PARTITION_0)));
 
-        final Collection<TopicPartition> expectedFullPartitionsToAssign = Set.of(new TopicPartition(TOPIC_0, PARTITION_0));
-        final Collection<TopicPartition> expectedNewPartitionsToAssign = expectedFullPartitionsToAssign;
+        final Set<TopicPartition> expectedFullPartitionsToAssign = Set.of(new TopicPartition(TOPIC_0, PARTITION_0));
+        final Set<TopicPartition> expectedNewPartitionsToAssign = expectedFullPartitionsToAssign;
         verifyInStateReconcilingBeforeOnTaskAssignedCallbackExecuted(expectedFullPartitionsToAssign, expectedNewPartitionsToAssign);
 
         onTasksAssignedCallbackExecuted.completeExceptionally(new RuntimeException("KABOOM!"));
 
         verifyInStateReconciling(membershipManager);
         verify(subscriptionState, never()).enablePartitionsAwaitingCallback(any());
+    }
+
+    @Test
+    public void testReconcilingAndRevocationCallbackFails() {
+        setupStreamsAssignmentInterfaceWithOneSubtopologyOneSourceTopic(SUBTOPOLOGY_ID_0, TOPIC_0);
+        final CompletableFuture<Void> onTasksAssignedCallbackExecutedSetup = new CompletableFuture<>();
+        final CompletableFuture<Void> onTasksRevokedCallbackExecuted = new CompletableFuture<>();
+        final Set<StreamsRebalanceData.TaskId> activeTasksSetup = Set.of(
+            new StreamsRebalanceData.TaskId(SUBTOPOLOGY_ID_0, PARTITION_0)
+        );
+        final Set<StreamsRebalanceData.TaskId> activeTasks = Set.of(
+            new StreamsRebalanceData.TaskId(SUBTOPOLOGY_ID_0, PARTITION_1)
+        );
+        when(streamsRebalanceEventsProcessor.requestOnTasksAssignedCallbackInvocation(makeTaskAssignment(activeTasksSetup, Collections.emptySet(), Collections.emptySet())))
+            .thenReturn(onTasksAssignedCallbackExecutedSetup);
+        when(streamsRebalanceEventsProcessor.requestOnTasksRevokedCallbackInvocation(activeTasksSetup))
+            .thenReturn(onTasksRevokedCallbackExecuted);
+        when(subscriptionState.assignedPartitions())
+            .thenReturn(Collections.emptySet())
+            .thenReturn(Set.of(new TopicPartition(TOPIC_0, PARTITION_0)));
+        joining();
+        reconcile(makeHeartbeatResponseWithActiveTasks(SUBTOPOLOGY_ID_0, List.of(PARTITION_0)));
+        acknowledging(onTasksAssignedCallbackExecutedSetup);
+
+        reconcile(makeHeartbeatResponseWithActiveTasks(SUBTOPOLOGY_ID_0, List.of(PARTITION_1)));
+
+        final Set<TopicPartition> partitionsToAssignAtSetup = Set.of(new TopicPartition(TOPIC_0, PARTITION_0));
+        final Set<TopicPartition> expectedPartitionsToRevoke = partitionsToAssignAtSetup;
+        final Set<TopicPartition> expectedFullPartitionsToAssign = Set.of(new TopicPartition(TOPIC_0, PARTITION_1));
+        final Set<TopicPartition> expectedNewPartitionsToAssign = expectedFullPartitionsToAssign;
+        verifyInStateReconcilingBeforeOnTaskRevokedCallbackExecuted(
+            expectedPartitionsToRevoke,
+            expectedFullPartitionsToAssign,
+            expectedNewPartitionsToAssign
+        );
+
+        onTasksRevokedCallbackExecuted.completeExceptionally(new RuntimeException("KABOOM!"));
+
+        verify(subscriptionState).markPendingRevocation(expectedPartitionsToRevoke);
+        verify(subscriptionState, never()).assignFromSubscribedAwaitingCallback(expectedFullPartitionsToAssign, expectedNewPartitionsToAssign);
+        verify(memberStateListener, never()).onGroupAssignmentUpdated(expectedFullPartitionsToAssign);
+        verify(subscriptionState, never())
+            .enablePartitionsAwaitingCallback(argThat(a -> !a.equals(partitionsToAssignAtSetup)));
+        verifyInStateReconciling(membershipManager);
+        verify(streamsRebalanceEventsProcessor, never()).requestOnTasksAssignedCallbackInvocation(
+            makeTaskAssignment(activeTasks, Collections.emptySet(), Collections.emptySet())
+        );
+        verifyInStateReconciling(membershipManager);
     }
 
     @Test
@@ -885,6 +942,7 @@ public class StreamsMembershipManagerTest {
         assertFalse(future.isCancelled());
         assertFalse(future.isCompletedExceptionally());
         verify(subscriptionState).unsubscribe();
+        verify(memberStateListener).onGroupAssignmentUpdated(Collections.emptySet());
         verifyInStateUnsubscribed(membershipManager);
     }
 
@@ -912,6 +970,7 @@ public class StreamsMembershipManagerTest {
         assertFalse(future.isCompletedExceptionally());
         verify(subscriptionState).unsubscribe();
         verify(subscriptionState).assignFromSubscribed(Collections.emptySet());
+        verify(memberStateListener, times(2)).onGroupAssignmentUpdated(Collections.emptySet());
         verifyInStateUnsubscribed(membershipManager);
     }
 
@@ -940,6 +999,7 @@ public class StreamsMembershipManagerTest {
         final CompletableFuture<Void> onGroupLeftOnCloseBeforeRevocationCallback = membershipManager.leaveGroupOnClose();
         assertEquals(onGroupLeft, onGroupLeftOnCloseBeforeRevocationCallback);
         onTasksRevokedCallbackExecuted.complete(null);
+        verify(memberStateListener).onGroupAssignmentUpdated(Collections.emptySet());
         verify(subscriptionState).unsubscribe();
         assertFalse(onGroupLeft.isDone());
         verifyInStateLeaving(membershipManager);
@@ -970,6 +1030,7 @@ public class StreamsMembershipManagerTest {
         assertFalse(onGroupLeft.isDone());
         verifyInStateLeaving(membershipManager);
         verify(subscriptionState).unsubscribe();
+        verify(memberStateListener).onGroupAssignmentUpdated(Collections.emptySet());
         verify(streamsRebalanceEventsProcessor, never()).requestOnTasksRevokedCallbackInvocation(any());
         final CompletableFuture<Void> onGroupLeftBeforeHeartbeatRequestGenerated = membershipManager.leaveGroup();
         assertEquals(onGroupLeft, onGroupLeftBeforeHeartbeatRequestGenerated);
@@ -1199,6 +1260,10 @@ public class StreamsMembershipManagerTest {
         membershipManager.onHeartbeatRequestGenerated();
 
         verifyInStateStale(membershipManager);
+        verify(subscriptionState, never()).assignFromSubscribed(Collections.emptySet());
+        onAllTasksLostCallbackExecuted.complete(null);
+        verify(subscriptionState).assignFromSubscribed(Collections.emptySet());
+        verify(memberStateListener).onGroupAssignmentUpdated(Collections.emptySet());
     }
 
     @Test
@@ -1313,6 +1378,7 @@ public class StreamsMembershipManagerTest {
         verify(subscriptionState, never()).assignFromSubscribed(Collections.emptySet());
         onAllTasksLostCallbackExecuted.complete(null);
         verify(subscriptionState).assignFromSubscribed(Collections.emptySet());
+        verify(memberStateListener).onGroupAssignmentUpdated(Collections.emptySet());
         verifyInStateJoining(membershipManager);
     }
 
@@ -1354,6 +1420,7 @@ public class StreamsMembershipManagerTest {
         joining();
 
         testTransitionToFatalWhenInPrepareLeavingOrLeaving(prepareLeaving());
+
         verify(memberStateListener).onMemberEpochUpdated(Optional.empty(), membershipManager.memberId());
     }
 
@@ -1452,6 +1519,7 @@ public class StreamsMembershipManagerTest {
         verify(subscriptionState).assignFromSubscribed(Collections.emptySet());
         verifyInStateFatal(membershipManager);
         verify(memberStateListener).onMemberEpochUpdated(Optional.empty(), membershipManager.memberId());
+        verify(memberStateListener).onGroupAssignmentUpdated(Collections.emptySet());
     }
 
     @Test
@@ -1619,16 +1687,17 @@ public class StreamsMembershipManagerTest {
     }
 
     private void verifyInStateReconcilingBeforeOnTaskRevokedCallbackExecuted(Set<TopicPartition> expectedPartitionsToRevoke,
-                                                                             Collection<TopicPartition> expectedAllPartitionsToAssign,
-                                                                             Collection<TopicPartition> expectedNewPartitionsToAssign) {
+                                                                             Set<TopicPartition> expectedAllPartitionsToAssign,
+                                                                             Set<TopicPartition> expectedNewPartitionsToAssign) {
         verify(subscriptionState).markPendingRevocation(expectedPartitionsToRevoke);
         verify(subscriptionState, never()).assignFromSubscribedAwaitingCallback(expectedAllPartitionsToAssign, expectedNewPartitionsToAssign);
         verifyInStateReconciling(membershipManager);
     }
 
-    private void verifyInStateReconcilingBeforeOnTaskAssignedCallbackExecuted(Collection<TopicPartition> expectedAllPartitionsToAssign,
-                                                                              Collection<TopicPartition> expectedNewPartitionsToAssign) {
+    private void verifyInStateReconcilingBeforeOnTaskAssignedCallbackExecuted(Set<TopicPartition> expectedAllPartitionsToAssign,
+                                                                              Set<TopicPartition> expectedNewPartitionsToAssign) {
         verify(subscriptionState).assignFromSubscribedAwaitingCallback(expectedAllPartitionsToAssign, expectedNewPartitionsToAssign);
+        verify(memberStateListener).onGroupAssignmentUpdated(expectedAllPartitionsToAssign);
         verify(subscriptionState, never()).enablePartitionsAwaitingCallback(expectedNewPartitionsToAssign);
         verifyInStateReconciling(membershipManager);
     }

@@ -40,6 +40,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
@@ -48,7 +49,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
- * Tracks state the state of a single member in relationship to a group:
+ * Tracks the state of a single member in relationship to a group:
  * <p/>
  * Responsible for:
  * <ul>
@@ -161,7 +162,7 @@ public class StreamsMembershipManager implements RequestManager {
     private final SubscriptionState subscriptionState;
 
     /**
-     * Current state of this member as part of the consumer group, as defined in {@link MemberState}
+     * Current state of this member as part of the consumer group, as defined in {@link MemberState}.
      */
     private MemberState state;
 
@@ -373,6 +374,15 @@ public class StreamsMembershipManager implements RequestManager {
     }
 
     /**
+     * Invokes the {@link MemberStateListener#onGroupAssignmentUpdated(java.util.Set)} callback for each listener when the
+     * set of assigned partitions changes. This includes on assignment changes, unsubscribe, and when leaving
+     * the group.
+     */
+    void notifyAssignmentChange(Set<TopicPartition> partitions) {
+        stateUpdatesListeners.forEach(stateListener -> stateListener.onGroupAssignmentUpdated(partitions));
+    }
+
+    /**
      * Transition to the {@link MemberState#JOINING} state, indicating that the member will
      * try to join the group on the next heartbeat request. This is expected to be invoked when
      * the user calls the subscribe API, or when the member wants to rejoin after getting fenced.
@@ -564,6 +574,7 @@ public class StreamsMembershipManager implements RequestManager {
      */
     private void clearTaskAndPartitionAssignment() {
         subscriptionState.assignFromSubscribed(Collections.emptySet());
+        notifyAssignmentChange(Collections.emptySet());
         currentAssignment = LocalAssignment.NONE;
         targetAssignment = LocalAssignment.NONE;
     }
@@ -864,6 +875,7 @@ public class StreamsMembershipManager implements RequestManager {
                 transitionTo(MemberState.UNSUBSCRIBED);
             }
             subscriptionState.unsubscribe();
+            notifyAssignmentChange(Collections.emptySet());
             return CompletableFuture.completedFuture(null);
         }
 
@@ -1032,9 +1044,9 @@ public class StreamsMembershipManager implements RequestManager {
         SortedSet<TopicPartition> partitionsToRevoke = new TreeSet<>(ownedTopicPartitionsFromSubscriptionState);
         partitionsToRevoke.removeAll(assignedTopicPartitions);
 
-        final CompletableFuture<Void> onTasksRevokedCallbackExecuted = revokeActiveTasks(activeTasksToRevoke);
+        final CompletableFuture<Void> tasksRevoked = revokeActiveTasks(activeTasksToRevoke);
 
-        final CompletableFuture<Void> onTasksRevokedAndAssignedCallbacksExecuted = onTasksRevokedCallbackExecuted.thenCompose(__ -> {
+        final CompletableFuture<Void> tasksRevokedAndAssigned = tasksRevoked.thenCompose(__ -> {
             if (!maybeAbortReconciliation()) {
                 return assignTasks(assignedActiveTasks, ownedActiveTasks, assignedStandbyTasks, assignedWarmupTasks);
             }
@@ -1044,14 +1056,13 @@ public class StreamsMembershipManager implements RequestManager {
         // The current target assignment is captured to ensure that acknowledging the current assignment is done with
         // the same target assignment that was used when this reconciliation was initiated.
         LocalAssignment currentTargetAssignment = targetAssignment;
-        onTasksRevokedAndAssignedCallbacksExecuted.whenComplete((__, callbackError) -> {
+        tasksRevokedAndAssigned.whenComplete((__, callbackError) -> {
             if (callbackError != null) {
                 log.error("Reconciliation failed: callback invocation failed for tasks {}",
                     currentTargetAssignment, callbackError);
                 markReconciliationCompleted();
             } else {
                 if (reconciliationInProgress && !maybeAbortReconciliation()) {
-                    subscriptionState.enablePartitionsAwaitingCallback(assignedTopicPartitionsNotPreviouslyOwned);
                     currentAssignment = currentTargetAssignment;
                     transitionTo(MemberState.ACKNOWLEDGING);
                     markReconciliationCompleted();
@@ -1073,7 +1084,19 @@ public class StreamsMembershipManager implements RequestManager {
         log.debug("Marking partitions pending for revocation: {}", partitionsToRevoke);
         subscriptionState.markPendingRevocation(partitionsToRevoke);
 
-        return streamsRebalanceEventsProcessor.requestOnTasksRevokedCallbackInvocation(activeTasksToRevoke);
+        CompletableFuture<Void> tasksRevoked = new CompletableFuture<>();
+        CompletableFuture<Void> onTasksRevokedCallbackExecuted =
+            streamsRebalanceEventsProcessor.requestOnTasksRevokedCallbackInvocation(activeTasksToRevoke);
+        onTasksRevokedCallbackExecuted.whenComplete((__, callbackError) -> {
+            if (callbackError != null) {
+                log.error("onTasksRevoked callback invocation failed for tasks {}",
+                    activeTasksToRevoke, callbackError);
+                tasksRevoked.completeExceptionally(callbackError);
+            } else {
+                tasksRevoked.complete(null);
+            }
+        });
+        return tasksRevoked;
     }
 
     private CompletableFuture<Void> assignTasks(final SortedSet<StreamsRebalanceData.TaskId> activeTasksToAssign,
@@ -1100,14 +1123,29 @@ public class StreamsMembershipManager implements RequestManager {
             partitionsToAssign,
             partitionsToAssigneNotPreviouslyOwned
         );
+        notifyAssignmentChange(partitionsToAssign);
 
-        return streamsRebalanceEventsProcessor.requestOnTasksAssignedCallbackInvocation(
-            new StreamsRebalanceData.Assignment(
-                activeTasksToAssign,
-                standbyTasksToAssign,
-                warmupTasksToAssign
-            )
-        );
+        CompletableFuture<Void> onTasksAssignedCallbackExecuted =
+            streamsRebalanceEventsProcessor.requestOnTasksAssignedCallbackInvocation(
+                new StreamsRebalanceData.Assignment(
+                    activeTasksToAssign,
+                    standbyTasksToAssign,
+                    warmupTasksToAssign
+                )
+            );
+        onTasksAssignedCallbackExecuted.whenComplete((__, callbackError) -> {
+            if (callbackError == null) {
+                subscriptionState.enablePartitionsAwaitingCallback(partitionsToAssign);
+            } else {
+                if (!partitionsToAssigneNotPreviouslyOwned.isEmpty()) {
+                    log.warn("Leaving newly assigned partitions {} marked as non-fetchable and not " +
+                            "requiring initializing positions after onTasksAssigned callback failed.",
+                        partitionsToAssigneNotPreviouslyOwned, callbackError);
+                }
+            }
+        });
+
+        return onTasksAssignedCallbackExecuted;
     }
 
     private CompletableFuture<Void> releaseLostActiveTasks() {
