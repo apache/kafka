@@ -567,15 +567,15 @@ public class ProducerStateManager {
     }
 
     public Optional<File> fetchSnapshot(long offset) {
-        return Optional.ofNullable(snapshots.get(offset)).map(x -> x.file());
+        return Optional.ofNullable(snapshots.get(offset)).map(SnapshotFile::file);
     }
 
     private Optional<SnapshotFile> oldestSnapshotFile() {
-        return Optional.ofNullable(snapshots.firstEntry()).map(x -> x.getValue());
+        return Optional.ofNullable(snapshots.firstEntry()).map(Map.Entry::getValue);
     }
 
     private Optional<SnapshotFile> latestSnapshotFile() {
-        return Optional.ofNullable(snapshots.lastEntry()).map(e -> e.getValue());
+        return Optional.ofNullable(snapshots.lastEntry()).map(Map.Entry::getValue);
     }
 
     /**
