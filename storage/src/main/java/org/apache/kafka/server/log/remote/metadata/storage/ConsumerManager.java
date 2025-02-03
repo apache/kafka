@@ -29,7 +29,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.io.IOException;
-import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeoutException;
 
