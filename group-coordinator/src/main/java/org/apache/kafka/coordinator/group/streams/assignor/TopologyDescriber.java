@@ -27,7 +27,6 @@ public interface TopologyDescriber {
     /**
      * Map of topic names to topic metadata.
      *
-     * @throws IllegalStateException if the topology is not configured.
      * @return The list of subtopologies IDs.
      */
     List<String> subtopologies();
@@ -37,8 +36,8 @@ public interface TopologyDescriber {
      *
      * @param subtopologyId String identifying the subtopology.
      *
-     * @throws IllegalStateException if the subtopology ID does not exist, or the topology is not configured, or the subtopology
-     *                               contains no source topics.
+     * @throws NoSuchElementException if the subtopology ID does not exist.
+     * @throws IllegalStateException if the subtopology contains no source topics.
      * @return The maximal number of input partitions among all source topics for the given subtopology.
      */
     int maxNumInputPartitions(String subtopologyId) throws NoSuchElementException;
@@ -47,7 +46,7 @@ public interface TopologyDescriber {
      * Checks whether the given subtopology is associated with a changelog topic.
      *
      * @param subtopologyId String identifying the subtopology.
-     * @throws IllegalStateException if the subtopology ID does not exist, or the topology is not configured.
+     * @throws NoSuchElementException if the subtopology ID does not exist.
      * @return true if the subtopology is associated with a changelog topic, false otherwise.
      */
     boolean isStateful(String subtopologyId);

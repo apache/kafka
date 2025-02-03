@@ -18,7 +18,6 @@ package org.apache.kafka.coordinator.group.streams;
 
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredInternalTopic;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
-import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -26,8 +25,9 @@ import org.junit.jupiter.api.Test;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
+import java.util.NoSuchElementException;
 import java.util.Set;
+import java.util.SortedMap;
 import java.util.TreeMap;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -41,14 +41,14 @@ import static org.mockito.Mockito.when;
 class TopologyMetadataTest {
 
     private Map<String, TopicMetadata> topicMetadata;
-    private ConfiguredTopology configuredTopology;
+    private SortedMap<String, ConfiguredSubtopology> subtopologyMap;
     private TopologyMetadata topologyMetadata;
 
     @BeforeEach
     void setUp() {
         topicMetadata = new HashMap<>();
-        configuredTopology = mock(ConfiguredTopology.class);
-        topologyMetadata = new TopologyMetadata(topicMetadata, configuredTopology);
+        subtopologyMap = new TreeMap<>();
+        topologyMetadata = new TopologyMetadata(topicMetadata, subtopologyMap);
     }
 
     @Test
@@ -58,7 +58,7 @@ class TopologyMetadataTest {
 
     @Test
     void testTopology() {
-        assertEquals(configuredTopology, topologyMetadata.topology());
+        assertEquals(subtopologyMap, topologyMetadata.subtopologyMap());
     }
 
     @Test
@@ -66,8 +66,8 @@ class TopologyMetadataTest {
         ConfiguredInternalTopic internalTopic = mock(ConfiguredInternalTopic.class);
         ConfiguredSubtopology subtopology1 = mock(ConfiguredSubtopology.class);
         ConfiguredSubtopology subtopology2 = mock(ConfiguredSubtopology.class);
-        when(configuredTopology.subtopologies()).thenReturn(
-            Optional.of(new TreeMap<>(Map.of("subtopology1", subtopology1, "subtopology2", subtopology2))));
+        subtopologyMap.put("subtopology1", subtopology1);
+        subtopologyMap.put("subtopology2", subtopology2);
         when(subtopology1.stateChangelogTopics()).thenReturn(Map.of("state_changelog_topic", internalTopic));
         when(subtopology2.stateChangelogTopics()).thenReturn(Map.of());
 
@@ -79,7 +79,7 @@ class TopologyMetadataTest {
     void testMaxNumInputPartitions() {
         ConfiguredInternalTopic internalTopic = mock(ConfiguredInternalTopic.class);
         ConfiguredSubtopology subtopology = mock(ConfiguredSubtopology.class);
-        when(configuredTopology.subtopologies()).thenReturn(Optional.of(new TreeMap<>(Map.of("subtopology1", subtopology))));
+        subtopologyMap.put("subtopology1", subtopology);
         when(subtopology.sourceTopics()).thenReturn(Set.of("source_topic"));
         when(subtopology.repartitionSourceTopics()).thenReturn(Map.of("repartition_source_topic", internalTopic));
 
@@ -97,8 +97,8 @@ class TopologyMetadataTest {
     void testSubtopologies() {
         ConfiguredSubtopology subtopology1 = mock(ConfiguredSubtopology.class);
         ConfiguredSubtopology subtopology2 = mock(ConfiguredSubtopology.class);
-        when(configuredTopology.subtopologies()).thenReturn(
-            Optional.of(new TreeMap<>(Map.of("subtopology1", subtopology1, "subtopology2", subtopology2))));
+        subtopologyMap.put("subtopology1", subtopology1);
+        subtopologyMap.put("subtopology2", subtopology2);
 
         List<String> expectedSubtopologies = List.of("subtopology1", "subtopology2");
         assertEquals(expectedSubtopologies, topologyMetadata.subtopologies());
@@ -106,34 +106,20 @@ class TopologyMetadataTest {
 
     @Test
     void testIsStatefulThrowsExceptionWhenSubtopologyIdDoesNotExist() {
-        when(configuredTopology.subtopologies()).thenReturn(Optional.of(new TreeMap<>()));
-        assertThrows(IllegalStateException.class, () -> topologyMetadata.isStateful("non_existent_subtopology"));
-    }
-
-    @Test
-    void testIsStatefulThrowsExceptionWhenTopologyNotConfigured() {
-        when(configuredTopology.subtopologies()).thenReturn(Optional.empty());
-        assertThrows(IllegalStateException.class, () -> topologyMetadata.isStateful("any_subtopology"));
+        assertThrows(NoSuchElementException.class, () -> topologyMetadata.isStateful("non_existent_subtopology"));
     }
 
     @Test
     void testMaxNumInputPartitionsThrowsExceptionWhenSubtopologyIdDoesNotExist() {
-        when(configuredTopology.subtopologies()).thenReturn(Optional.of(new TreeMap<>()));
-        assertThrows(IllegalStateException.class, () -> topologyMetadata.maxNumInputPartitions("non_existent_subtopology"));
-    }
-
-    @Test
-    void testNumTasksThrowsExceptionWhenTopologyNotConfigured() {
-        when(configuredTopology.subtopologies()).thenReturn(Optional.empty());
-        assertThrows(IllegalStateException.class, () -> topologyMetadata.maxNumInputPartitions("any_subtopology"));
+        assertThrows(NoSuchElementException.class, () -> topologyMetadata.maxNumInputPartitions("non_existent_subtopology"));
     }
 
     @Test
     void testMaxNumInputPartitionsThrowsExceptionWhenSubtopologyContainsNoSourceTopics() {
         ConfiguredSubtopology subtopology = mock(ConfiguredSubtopology.class);
-        when(configuredTopology.subtopologies()).thenReturn(Optional.of(new TreeMap<>(Map.of("subtopology1", subtopology))));
         when(subtopology.sourceTopics()).thenReturn(Set.of());
         when(subtopology.repartitionSourceTopics()).thenReturn(Map.of());
+        subtopologyMap.put("subtopology1", subtopology);
 
         assertThrows(IllegalStateException.class, () -> topologyMetadata.maxNumInputPartitions("subtopology1"));
     }

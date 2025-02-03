@@ -809,8 +809,8 @@ public class TargetAssignmentBuilderTest {
                 }
             });
 
-            // Prepare the expected subscription topic metadata.
-            TopologyMetadata topologyMetadata = new TopologyMetadata(subscriptionMetadata, topology);
+            // Prepare the expected topology metadata.
+            TopologyMetadata topologyMetadata = new TopologyMetadata(subscriptionMetadata, subtopologies);
 
             // Prepare the expected assignment spec.
             GroupSpecImpl groupSpec = new GroupSpecImpl(memberSpecs, new HashMap<>());

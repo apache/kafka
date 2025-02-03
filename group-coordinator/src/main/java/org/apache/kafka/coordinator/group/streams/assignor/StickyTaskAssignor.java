@@ -72,7 +72,7 @@ public class StickyTaskAssignor implements TaskAssignor {
         Set<TaskId> ret = new HashSet<>();
         for (String subtopology : topologyDescriber.subtopologies()) {
             if (isActive || topologyDescriber.isStateful(subtopology)) {
-                int numberOfPartitions = topologyDescriber.numTasks(subtopology);
+                int numberOfPartitions = topologyDescriber.maxNumInputPartitions(subtopology);
                 for (int i = 0; i < numberOfPartitions; i++) {
                     ret.add(new TaskId(subtopology, i));
                 }
@@ -85,7 +85,7 @@ public class StickyTaskAssignor implements TaskAssignor {
         localState = new LocalState();
         localState.allTasks = 0;
         for (String subtopology : topologyDescriber.subtopologies()) {
-            int numberOfPartitions = topologyDescriber.numTasks(subtopology);
+            int numberOfPartitions = topologyDescriber.maxNumInputPartitions(subtopology);
             localState.allTasks += numberOfPartitions;
         }
         localState.totalCapacity = groupSpec.members().size();

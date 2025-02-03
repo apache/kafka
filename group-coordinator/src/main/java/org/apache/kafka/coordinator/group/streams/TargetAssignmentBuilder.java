@@ -265,12 +265,15 @@ public class TargetAssignmentBuilder {
         // Compute the assignment.
         GroupAssignment newGroupAssignment;
         if (topology.isReady()) {
+            if (topology.subtopologies().isEmpty()) {
+                throw new IllegalStateException("Subtopologies must be present if topology is ready.");
+            }
             newGroupAssignment = assignor.assign(
                 new GroupSpecImpl(
                     Collections.unmodifiableMap(memberSpecs),
                     assignmentConfigs
                 ),
-                new TopologyMetadata(partitionMetadata, topology)
+                new TopologyMetadata(partitionMetadata, topology.subtopologies().get())
             );
         } else {
             newGroupAssignment = new GroupAssignment(
