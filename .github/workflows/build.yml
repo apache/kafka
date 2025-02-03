@@ -222,7 +222,7 @@ jobs:
 
       - name: Capture JUnit Exit
         env:
-          JUNIT_EXIT_FILE: build/junit-xml/${{ env.job-variation }}/junit-exit.txt
+          JUNIT_EXIT_FILE: build/junit-xml/junit-exit-${{ env.job-variation }}.txt
         run:
           echo "${{ steps.junit-test.outputs.gradle-exitcode }}" >> $JUNIT_EXIT_FILE
 
