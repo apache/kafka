@@ -23,7 +23,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import java.util.Map;
 
 /**
- * Quota callback interface for brokers that enables customization of client quota computation.
+ * Quota callback interface for brokers and controllers that enables customization of client quota computation.
  */
 public interface ClientQuotaCallback extends Configurable {
 

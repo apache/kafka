@@ -20,6 +20,7 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AlterClientQuotasOptions;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.TestUtils;
@@ -37,7 +38,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import static org.apache.kafka.common.quota.ClientQuotaEntity.CLIENT_ID;
 
 @ClusterTestDefaults(controllers = 3, 
     types = {Type.KRAFT},
@@ -62,15 +66,24 @@ public class CustomQuotaCallbackTest {
         try (Admin admin = cluster.admin(Map.of())) {
             admin.createTopics(List.of(new NewTopic("topic", 1, (short) 1)));
             TestUtils.waitForCondition(
-                () -> CustomQuotaCallback.dynamicTopicCounter.get() > 0,
-                "The CustomQuotaCallback not triggered. "
+                () -> CustomQuotaCallback.COUNTERS.size() == 3 
+                        && CustomQuotaCallback.COUNTERS.values().stream().allMatch(counter -> counter.get() > 0), 
+                    "The CustomQuotaCallback not triggered in all controllers. "
             );
-            
-            int firstCount = CustomQuotaCallback.dynamicTopicCounter.get();
-            admin.alterClientQuotas(List.of(), new AlterClientQuotasOptions().validateOnly(true));
+
+            List<ClientQuotaAlteration> clientQuotaAlterations = List.of(
+                new ClientQuotaAlteration(new org.apache.kafka.common.quota.ClientQuotaEntity(Map.of(CLIENT_ID, "testClient")), List.of(
+                    new ClientQuotaAlteration.Op(QuotaConfig.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, null),
+                    new ClientQuotaAlteration.Op(QuotaConfig.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG, null))
+                )
+            );
+
+            CustomQuotaCallback.COUNTERS.clear();
+            admin.alterClientQuotas(clientQuotaAlterations, new AlterClientQuotasOptions().validateOnly(true));
             TestUtils.waitForCondition(
-                () -> CustomQuotaCallback.dynamicTopicCounter.get() > firstCount, 
-                "The CustomQuotaCallback not triggered. "
+                () -> CustomQuotaCallback.COUNTERS.size() == 3
+                        && CustomQuotaCallback.COUNTERS.values().stream().allMatch(counter -> counter.get() > 0), 
+                    "The CustomQuotaCallback not triggered in all controllers. "
             );
             
         }
@@ -78,8 +91,9 @@ public class CustomQuotaCallbackTest {
 
 
     public static class CustomQuotaCallback implements ClientQuotaCallback {
-        
-        public static AtomicInteger dynamicTopicCounter = new AtomicInteger(0);
+
+        public static final Map<String, AtomicInteger> COUNTERS = new ConcurrentHashMap<>();
+        private String nodeId;
 
         @Override
         public Map<String, String> quotaMetricTags(ClientQuotaType quotaType, KafkaPrincipal principal, String clientId) {
@@ -108,7 +122,7 @@ public class CustomQuotaCallbackTest {
 
         @Override
         public boolean updateClusterMetadata(Cluster cluster) {
-            dynamicTopicCounter.addAndGet(1);
+            COUNTERS.computeIfAbsent(nodeId, k -> new AtomicInteger()).incrementAndGet();
             return true;
         }
 
@@ -119,7 +133,8 @@ public class CustomQuotaCallbackTest {
 
         @Override
         public void configure(Map<String, ?> configs) {
-
+            nodeId = (String) configs.get("node.id");
         }
+
     }
 }
