@@ -1039,8 +1039,6 @@ public class StreamsMembershipManager implements RequestManager {
                 "Owned partitions from assigned active tasks: " + ownedTopicPartitionsFromAssignedTasks);
         }
         SortedSet<TopicPartition> assignedTopicPartitions = topicPartitionsForActiveTasks(targetAssignment.activeTasks);
-        SortedSet<TopicPartition> assignedTopicPartitionsNotPreviouslyOwned =
-            partitionsToAssignNotPreviouslyOwned(assignedTopicPartitions, ownedTopicPartitionsFromSubscriptionState);
         SortedSet<TopicPartition> partitionsToRevoke = new TreeSet<>(ownedTopicPartitionsFromSubscriptionState);
         partitionsToRevoke.removeAll(assignedTopicPartitions);
 
