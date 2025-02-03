@@ -530,12 +530,25 @@ public final class Utils {
     }
 
     /**
+     * Extracts the protocol from a "protocol://host:port" address string.
+     * @param address address string to parse
+     * @return hostname or null if the given address is incorrect
+     */
+    public static String getProtocol(String address) {
+        Matcher matcher = HOST_PORT_PATTERN.matcher(address);
+        return matcher.matches() ? matcher.group(1) : null;
+    }
+
+    /**
      * Extracts the hostname from a "host:port" address string.
      * @param address address string to parse
      * @return hostname or null if the given address is incorrect
      */
     public static String getHost(String address) {
         Matcher matcher = HOST_PORT_PATTERN.matcher(address);
+        if (matcher.groupCount() > 2) {
+            throw new RuntimeException("KKKK");
+        }
         return matcher.matches() ? matcher.group(1) : null;
     }
 
