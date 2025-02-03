@@ -75,6 +75,7 @@ import static java.util.Collections.emptySet;
 import static org.apache.kafka.common.utils.Utils.diff;
 import static org.apache.kafka.common.utils.Utils.formatAddress;
 import static org.apache.kafka.common.utils.Utils.formatBytes;
+import static org.apache.kafka.common.utils.Utils.getProtocol;
 import static org.apache.kafka.common.utils.Utils.getHost;
 import static org.apache.kafka.common.utils.Utils.getPort;
 import static org.apache.kafka.common.utils.Utils.intersection;
@@ -129,6 +130,18 @@ public class UtilsTest {
         assertEquals("fe80::b1da:69ca:57f7:63d8%3", getHost(protocol + "://[fe80::b1da:69ca:57f7:63d8%3]:5678"));
         assertEquals("127.0.0.1", getHost("127.0.0.1:8000"));
         assertEquals("::1", getHost("[::1]:1234"));
+    }
+
+    @ParameterizedTest
+    @CsvSource(value = {"PLAINTEXT", "SASL_PLAINTEXT", "SSL", "SASL_SSL"})
+    public void testGetProtocol(String protocol) {
+        assertEquals(protocol, getProtocol(protocol + "://mydomain.com:8080"));
+        assertEquals(protocol, getProtocol(protocol + "://MyDomain.com:8080"));
+        assertEquals(protocol, getProtocol(protocol + "://My_Domain.com:8080"));
+        assertEquals(protocol, getProtocol(protocol + "://[::1]:1234"));
+        assertEquals(protocol, getProtocol(protocol + "://[2001:db8:85a3:8d3:1319:8a2e:370:7348]:5678"));
+        assertEquals(protocol, getProtocol(protocol + "://[2001:DB8:85A3:8D3:1319:8A2E:370:7348]:5678"));
+        assertEquals(protocol, getProtocol(protocol + "://[fe80::b1da:69ca:57f7:63d8%3]:5678"));
     }
 
     @ParameterizedTest
