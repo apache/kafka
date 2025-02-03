@@ -123,7 +123,7 @@ public class ClientUtilsTest {
 
     @ParameterizedTest
     @MethodSource("provideInvalidBrokerAddressTestCases")
-    public void testInvalidConfig(List<String> addresses) {
+    public void testInvalidBrokerAddress(List<String> addresses) {
         assertThrows(IllegalArgumentException.class,
             () -> ClientUtils.parseAndValidateAddresses(addresses, "random.value"));
     }
