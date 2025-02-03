@@ -108,7 +108,6 @@ public class ConsumerManager implements Closeable {
         long offset = recordMetadata.offset();
         long startTimeMs = time.milliseconds();
         long consumeCheckIntervalMs = Math.min(CONSUME_RECHECK_INTERVAL_MS, timeoutMs);
-        log.info("Wait until the consumer is caught up with the target partition {} up-to offset {}", partition, offset);
         while (true) {
             long readOffset = consumerTask.readOffsetForMetadataPartition(partition).orElse(-1L);
             if (readOffset >= offset) {
