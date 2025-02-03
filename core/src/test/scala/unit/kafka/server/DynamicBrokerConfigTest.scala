@@ -377,7 +377,7 @@ class DynamicBrokerConfigTest {
 
     def updateConfig(): Unit = {
       if (perBrokerConfig)
-        config.dynamicConfig.updateBrokerConfig(0, props)
+        config.dynamicConfig.updateBrokerConfig(0, config.dynamicConfig.toPersistentProps(props, perBrokerConfig))
       else
         config.dynamicConfig.updateDefaultConfig(props)
     }
