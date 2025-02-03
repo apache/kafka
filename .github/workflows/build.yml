@@ -260,6 +260,7 @@ jobs:
         run: printenv
         env:
           GITHUB_CONTEXT: ${{ toJson(github) }}
+          NEEDS_CONTEXT: ${{ toJson(needs) }}
       - name: Download JUnit XMLs
         uses: actions/download-artifact@v4
         with:
