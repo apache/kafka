@@ -551,7 +551,7 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
         return doesTopicExist;
     }
 
-    public boolean isInitialized() {
+    boolean isInitialized() {
         return initialized.get();
     }
 
@@ -564,11 +564,6 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
             throw new IllegalStateException("This instance is in invalid state, initialized: " + initialized +
                                                     " close: " + closing);
         }
-    }
-
-    // Visible for testing.
-    public TopicBasedRemoteLogMetadataManagerConfig config() {
-        return rlmmConfig;
     }
 
     @Override

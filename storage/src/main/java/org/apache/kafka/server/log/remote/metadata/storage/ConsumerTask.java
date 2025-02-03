@@ -298,11 +298,11 @@ class ConsumerTask implements Runnable, Closeable {
         log.info("Unassigned user-topic-partitions: {}", unassignedPartitions.size());
     }
 
-    public void addAssignmentsForPartitions(final Set<TopicIdPartition> partitions) {
+    void addAssignmentsForPartitions(final Set<TopicIdPartition> partitions) {
         updateAssignments(Objects.requireNonNull(partitions), Collections.emptySet());
     }
 
-    public void removeAssignmentsForPartitions(final Set<TopicIdPartition> partitions) {
+    void removeAssignmentsForPartitions(final Set<TopicIdPartition> partitions) {
         updateAssignments(Collections.emptySet(), Objects.requireNonNull(partitions));
     }
 

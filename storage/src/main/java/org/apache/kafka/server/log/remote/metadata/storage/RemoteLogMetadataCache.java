@@ -108,11 +108,11 @@ public class RemoteLogMetadataCache {
 
     private final CountDownLatch initializedLatch = new CountDownLatch(1);
 
-    public void markInitialized() {
+    void markInitialized() {
         initializedLatch.countDown();
     }
 
-    public boolean isInitialized() {
+    boolean isInitialized() {
         return initializedLatch.getCount() == 0;
     }
 
@@ -124,7 +124,7 @@ public class RemoteLogMetadataCache {
      * @param offset      offset
      * @return the requested remote log segment metadata if it exists.
      */
-    public Optional<RemoteLogSegmentMetadata> remoteLogSegmentMetadata(int leaderEpoch, long offset) {
+    Optional<RemoteLogSegmentMetadata> remoteLogSegmentMetadata(int leaderEpoch, long offset) {
         RemoteLogSegmentMetadata metadata = getSegmentMetadata(leaderEpoch, offset);
         long epochEndOffset = -1L;
         if (metadata != null) {
@@ -139,7 +139,7 @@ public class RemoteLogMetadataCache {
         return offset > epochEndOffset ? Optional.empty() : Optional.ofNullable(metadata);
     }
 
-    public Optional<RemoteLogSegmentMetadata> nextSegmentWithTxnIndex(int leaderEpoch, long offset) {
+    Optional<RemoteLogSegmentMetadata> nextSegmentWithTxnIndex(int leaderEpoch, long offset) {
         boolean txnIdxEmpty = true;
         Optional<RemoteLogSegmentMetadata> metadataOpt = remoteLogSegmentMetadata(leaderEpoch, offset);
         while (metadataOpt.isPresent() && txnIdxEmpty) {
