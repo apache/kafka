@@ -109,6 +109,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.streams.StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG;
 import static org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_CLIENT;
@@ -293,13 +294,14 @@ public class KafkaStreams implements AutoCloseable {
     private final Object stateLock = new Object();
     protected volatile State state = State.CREATED;
 
-    private boolean waitOnState(final State targetState, final long waitMs) {
+    private boolean waitOnStates(final long waitMs, final State... targetStates) {
+        final Set<State> targetStateSet = Set.of(targetStates);
         final long begin = time.milliseconds();
         synchronized (stateLock) {
             boolean interrupted = false;
             long elapsedMs = 0L;
             try {
-                while (state != targetState) {
+                while (!targetStateSet.contains(state)) {
                     if (waitMs > elapsedMs) {
                         final long remainingMs = waitMs - elapsedMs;
                         try {
@@ -308,7 +310,8 @@ public class KafkaStreams implements AutoCloseable {
                             interrupted = true;
                         }
                     } else {
-                        log.debug("Cannot transit to {} within {}ms", targetState, waitMs);
+                        log.debug("Cannot transit to {} within {}ms",
+                            Arrays.stream(targetStates).map(State::toString).collect(Collectors.joining(" or ")), waitMs);
                         return false;
                     }
                     elapsedMs = time.milliseconds() - begin;
@@ -1545,39 +1548,29 @@ public class KafkaStreams implements AutoCloseable {
         }
 
         if (!setState(State.PENDING_SHUTDOWN)) {
-
-            if (state.isShuttingDown()) {
-                log.info("Streams client is in {}, all resources are being closed and the client will be stopped.", state);
-                if (state == State.PENDING_ERROR && waitOnState(State.ERROR, timeoutMs)) {
-                    log.info("Streams client stopped to ERROR completely");
-                    return true;
-                } else if (state == State.PENDING_SHUTDOWN && waitOnState(State.NOT_RUNNING, timeoutMs)) {
-                    log.info("Streams client stopped to NOT_RUNNING completely");
-                    return true;
-                } else {
-                    log.warn("Streams client cannot transition to {} completely within the timeout",
-                        state == State.PENDING_SHUTDOWN ? State.NOT_RUNNING : State.ERROR);
+            final State stateCopy = state;
+            if (stateCopy.isShuttingDown()) {
+                log.info("Skipping shutdown since Streams client is already in {}, waiting for a terminal state", stateCopy);
+                if (!waitOnStates(timeoutMs, State.ERROR, State.NOT_RUNNING)) {
+                    log.warn("Streams client did transition to a terminal state (ERROR or NOT_RUNNING) within the {}ms timeout", timeoutMs);
                     return false;
                 }
+                log.info("Streams client stopped completely and transitioned to the terminal {} state", state);
+            } else if (stateCopy.hasCompletedShutdown()) {
+                log.info("Skipping shutdown since Streams client is already in the terminal {} state", stateCopy);
+            } else {
+                throw new IllegalStateException("If transitioning to PENDING_SHUTDOWN fails, the state should be either in "
+                    + "PENDING_SHUTDOWN, PENDING_ERROR, ERROR, or NOT_RUNNING");
             }
-
-            if (state.hasCompletedShutdown()) {
-                log.info("Streams client is already in the terminal {} state, all resources are closed and the client has stopped.", state);
-                return true;
-            }
-
-            // if we can't transition to PENDING_SHUTDOWN but not because we're already shutting down, then it must be fatal
-            log.error("Failed to transition to PENDING_SHUTDOWN, current state is {}", state);
-            throw new StreamsException("Failed to shut down while in state " + state);
-        } else {
-
-            final Thread shutdownThread = shutdownHelper(false, timeoutMs, leaveGroup);
-
-            shutdownThread.setDaemon(true);
-            shutdownThread.start();
+            return true;
         }
 
-        if (waitOnState(State.NOT_RUNNING, timeoutMs)) {
+        final Thread shutdownThread = shutdownHelper(false, timeoutMs, leaveGroup);
+
+        shutdownThread.setDaemon(true);
+        shutdownThread.start();
+
+        if (waitOnStates(timeoutMs, State.NOT_RUNNING)) {
             log.info("Streams client stopped completely");
             return true;
         } else {
