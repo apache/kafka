@@ -17,7 +17,6 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.protocol.ApiMessage;
-import org.apache.kafka.coordinator.common.runtime.CoordinatorLoader;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecordSerde;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
@@ -93,7 +92,7 @@ public class GroupCoordinatorRecordSerde extends CoordinatorRecordSerde {
             case 16:
                 return new ConsumerGroupRegularExpressionKey();
             default:
-                throw new CoordinatorLoader.UnknownRecordTypeException(recordVersion);
+                throw new UnknownRecordTypeException(recordVersion);
         }
     }
 
@@ -134,7 +133,7 @@ public class GroupCoordinatorRecordSerde extends CoordinatorRecordSerde {
             case 16:
                 return new ConsumerGroupRegularExpressionValue();
             default:
-                throw new CoordinatorLoader.UnknownRecordTypeException(recordVersion);
+                throw new UnknownRecordTypeException(recordVersion);
         }
     }
 }

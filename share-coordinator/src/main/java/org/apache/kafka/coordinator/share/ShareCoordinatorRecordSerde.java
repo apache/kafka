@@ -18,7 +18,6 @@
 package org.apache.kafka.coordinator.share;
 
 import org.apache.kafka.common.protocol.ApiMessage;
-import org.apache.kafka.coordinator.common.runtime.CoordinatorLoader;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecordSerde;
 import org.apache.kafka.coordinator.share.generated.ShareSnapshotKey;
 import org.apache.kafka.coordinator.share.generated.ShareSnapshotValue;
@@ -34,7 +33,7 @@ public class ShareCoordinatorRecordSerde extends CoordinatorRecordSerde {
             case 1:
                 return new ShareUpdateKey();
             default:
-                throw new CoordinatorLoader.UnknownRecordTypeException(recordVersion);
+                throw new UnknownRecordTypeException(recordVersion);
         }
     }
 
@@ -46,7 +45,7 @@ public class ShareCoordinatorRecordSerde extends CoordinatorRecordSerde {
             case 1:
                 return new ShareUpdateValue();
             default:
-                throw new CoordinatorLoader.UnknownRecordTypeException(recordVersion);
+                throw new UnknownRecordTypeException(recordVersion);
         }
     }
 }
