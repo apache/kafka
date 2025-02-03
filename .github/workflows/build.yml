@@ -242,6 +242,7 @@ jobs:
           name: junit-xml-${{ env.job-variation }}
           path: |
             build/junit-xml/**/*.xml
+            build/junit-xml/*.txt
           compression-level: 9
           if-no-files-found: ignore
 
