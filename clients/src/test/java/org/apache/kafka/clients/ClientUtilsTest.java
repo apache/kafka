@@ -104,7 +104,8 @@ public class ClientUtilsTest {
         return Stream.of(
             Arrays.asList("localhost:9997", "localhost:9998", "localhost:9999"),
             // Intentionally provide a single string, as users may provide space-separated brokers, which will be parsed as a single string.
-            Arrays.asList("localhost:9997 localhost:9998 localhost:9999")
+            Arrays.asList("localhost:9997 localhost:9998 localhost:9999"),
+            Arrays.asList("localhost:9997\nlocalhost:9998\nlocalhost:9999")
         );
     }
 
@@ -114,10 +115,18 @@ public class ClientUtilsTest {
         assertDoesNotThrow(() -> ClientUtils.parseAndValidateAddresses(addresses, ClientDnsLookup.USE_ALL_DNS_IPS));
     }
 
-    @Test
-    public void testInvalidConfig() {
+    static Stream<List<String>> provideInvalidBrokerAddressTestCases() {
+        return Stream.of(
+            Collections.singletonList("localhost:9997\nlocalhost:9998\nlocalhost:9999"),
+            Collections.singletonList("localhost:10000")
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("provideInvalidBrokerAddressTestCases")
+    public void testInvalidConfig(List<String> addresses) {
         assertThrows(IllegalArgumentException.class,
-            () -> ClientUtils.parseAndValidateAddresses(Collections.singletonList("localhost:10000"), "random.value"));
+            () -> ClientUtils.parseAndValidateAddresses(addresses, "random.value"));
     }
 
     @Test
