@@ -153,7 +153,7 @@ class ControllerServer(
       val apiVersionManager = new SimpleApiVersionManager(
         ListenerType.CONTROLLER,
         config.unstableApiVersionsEnabled,
-        () => featuresPublisher.features()
+        () => metadataCache.features()
       )
 
       //  metrics will be set to null when closing a controller, so we should recreate it for testing
