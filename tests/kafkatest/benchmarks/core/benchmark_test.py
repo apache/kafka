@@ -62,13 +62,13 @@ class Benchmark(Test):
     @parametrize(acks=1, topic=TOPIC_REP_THREE, metadata_quorum=quorum.isolated_kraft)
     @parametrize(acks=-1, topic=TOPIC_REP_THREE, metadata_quorum=quorum.isolated_kraft)
     @matrix(acks=[1], topic=[TOPIC_REP_THREE], message_size=[10, 100, 1000, 10000, 100000],
-            compression_type=["none", "snappy"], security_protocol=['SSL'], tls_version=['TLSv1.2', 'TLSv1.3'], metadata_quorum=quorum.all_kraft)
+            compression_type=["none", "snappy"], security_protocol=['SSL'], tls_version=['TLSv1.2', 'TLSv1.3'], metadata_quorum=quorum.isolated_kraft)
     @matrix(acks=[1], topic=[TOPIC_REP_THREE], message_size=[10, 100, 1000, 10000, 100000],
-            compression_type=["none", "snappy"], security_protocol=['PLAINTEXT'], metadata_quorum=quorum.all_kraft)
+            compression_type=["none", "snappy"], security_protocol=['PLAINTEXT'], metadata_quorum=quorum.isolated_kraft)
     @parametrize(acks=1, topic=TOPIC_REP_THREE, num_producers=3, metadata_quorum=quorum.isolated_kraft)
     def test_producer_throughput(self, acks, topic, num_producers=1, message_size=DEFAULT_RECORD_SIZE,
                                  compression_type="none", security_protocol='PLAINTEXT', tls_version=None, client_version=str(DEV_BRANCH),
-                                 broker_version=str(DEV_BRANCH), metadata_quorum=quorum.zk):
+                                 broker_version=str(DEV_BRANCH), metadata_quorum=quorum.isolated_kraft):
         """
         Setup: 3 node kafka cluster
         Produce ~128MB worth of messages to a topic with 6 partitions. Required acks, topic replication factor,
@@ -97,12 +97,12 @@ class Benchmark(Test):
 
     @cluster(num_nodes=7)
     @matrix(security_protocol=['SSL'], interbroker_security_protocol=['PLAINTEXT'], tls_version=['TLSv1.2', 'TLSv1.3'],
-            compression_type=["none", "snappy"], metadata_quorum=quorum.all_kraft)
-    @matrix(security_protocol=['PLAINTEXT'], compression_type=["none", "snappy"], metadata_quorum=quorum.all_kraft)
+            compression_type=["none", "snappy"], metadata_quorum=quorum.isolated_kraft)
+    @matrix(security_protocol=['PLAINTEXT'], compression_type=["none", "snappy"], metadata_quorum=quorum.isolated_kraft)
     def test_long_term_producer_throughput(self, compression_type="none",
                                            security_protocol='PLAINTEXT', tls_version=None,
                                            interbroker_security_protocol=None, client_version=str(DEV_BRANCH),
-                                           broker_version=str(DEV_BRANCH), metadata_quorum=quorum.zk):
+                                           broker_version=str(DEV_BRANCH), metadata_quorum=quorum.isolated_kraft):
         """
         Setup: 3 node kafka cluster
         Produce 10e6 100 byte messages to a topic with 6 partitions, replication-factor 3, and acks=1.
@@ -155,12 +155,12 @@ class Benchmark(Test):
 
     @cluster(num_nodes=8)
     @matrix(security_protocol=['SSL'], interbroker_security_protocol=['PLAINTEXT'], tls_version=['TLSv1.2', 'TLSv1.3'],
-            compression_type=["none", "snappy"], metadata_quorum=quorum.all_kraft)
-    @matrix(security_protocol=['PLAINTEXT'], compression_type=["none", "snappy"], metadata_quorum=quorum.all_kraft)
-    @matrix(security_protocol=['SASL_PLAINTEXT', 'SASL_SSL'], compression_type=["none", "snappy"], metadata_quorum=quorum.all_kraft)
+            compression_type=["none", "snappy"], metadata_quorum=quorum.isolated_kraft)
+    @matrix(security_protocol=['PLAINTEXT'], compression_type=["none", "snappy"], metadata_quorum=quorum.isolated_kraft)
+    @matrix(security_protocol=['SASL_PLAINTEXT', 'SASL_SSL'], compression_type=["none", "snappy"], metadata_quorum=quorum.isolated_kraft)
     def test_end_to_end_latency(self, compression_type="none", security_protocol="PLAINTEXT", tls_version=None,
                                 interbroker_security_protocol=None, client_version=str(DEV_BRANCH),
-                                broker_version=str(DEV_BRANCH), metadata_quorum=quorum.zk):
+                                broker_version=str(DEV_BRANCH), metadata_quorum=quorum.isolated_kraft):
         """
         Setup: 3 node kafka cluster
         Produce (acks = 1) and consume 10e3 messages to a topic with 6 partitions and replication-factor 3,
@@ -187,11 +187,11 @@ class Benchmark(Test):
 
     @cluster(num_nodes=8)
     @matrix(security_protocol=['SSL'], interbroker_security_protocol=['PLAINTEXT'], tls_version=['TLSv1.2', 'TLSv1.3'],
-            compression_type=["none", "snappy"], metadata_quorum=quorum.all_kraft)
-    @matrix(security_protocol=['PLAINTEXT'], compression_type=["none", "snappy"], metadata_quorum=quorum.all_kraft)
+            compression_type=["none", "snappy"], metadata_quorum=quorum.isolated_kraft)
+    @matrix(security_protocol=['PLAINTEXT'], compression_type=["none", "snappy"], metadata_quorum=quorum.isolated_kraft)
     def test_producer_and_consumer(self, compression_type="none", security_protocol="PLAINTEXT", tls_version=None,
                                    interbroker_security_protocol=None,
-                                   client_version=str(DEV_BRANCH), broker_version=str(DEV_BRANCH), metadata_quorum=quorum.zk):
+                                   client_version=str(DEV_BRANCH), broker_version=str(DEV_BRANCH), metadata_quorum=quorum.isolated_kraft):
         """
         Setup: 3 node kafka cluster
         Concurrently produce and consume 10e6 messages with a single producer and a single consumer,
@@ -235,11 +235,11 @@ class Benchmark(Test):
 
     @cluster(num_nodes=8)
     @matrix(security_protocol=['SSL'], interbroker_security_protocol=['PLAINTEXT'], tls_version=['TLSv1.2', 'TLSv1.3'],
-            compression_type=["none", "snappy"], metadata_quorum=quorum.all_kraft)
-    @matrix(security_protocol=['PLAINTEXT'], compression_type=["none", "snappy"], metadata_quorum=quorum.all_kraft)
+            compression_type=["none", "snappy"], metadata_quorum=quorum.isolated_kraft)
+    @matrix(security_protocol=['PLAINTEXT'], compression_type=["none", "snappy"], metadata_quorum=quorum.isolated_kraft)
     def test_consumer_throughput(self, compression_type="none", security_protocol="PLAINTEXT", tls_version=None,
                                  interbroker_security_protocol=None, num_consumers=1,
-                                 client_version=str(DEV_BRANCH), broker_version=str(DEV_BRANCH), metadata_quorum=quorum.zk):
+                                 client_version=str(DEV_BRANCH), broker_version=str(DEV_BRANCH), metadata_quorum=quorum.isolated_kraft):
         """
         Consume 10e6 100-byte messages with 1 or more consumers from a topic with 6 partitions
         and report throughput.
