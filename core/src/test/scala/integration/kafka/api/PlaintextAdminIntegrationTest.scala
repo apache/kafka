@@ -1857,7 +1857,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       val backgroundConsumerSet = new BackgroundConsumerSet(testGroupId, defaultConsumerConfig)
       groupInstanceSet.zip(topicSet).foreach { case (groupInstanceId, topic) =>
         val configOverrides = new Properties()
-        if(groupInstanceId != "") {
+        if (groupInstanceId != "") {
           // static member
           configOverrides.setProperty(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, groupInstanceId)
         }
@@ -2191,7 +2191,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       val backgroundConsumerSet = new BackgroundConsumerSet(testGroupId, defaultConsumerConfig)
       groupInstanceSet.zip(topicSet).foreach { case (groupInstanceId, topic) =>
         val configOverrides = new Properties()
-        if(groupInstanceId != "") {
+        if (groupInstanceId != "") {
           // static member
           configOverrides.setProperty(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, groupInstanceId)
         }
@@ -3968,21 +3968,15 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     }
 
     def stop(): Unit = {
+      consumerSet.foreach(_.wakeup())
       consumerThreadRunning.set(false)
       assertTrue(stopLatch.await(30000, TimeUnit.MILLISECONDS), "Failed to stop consumer threads in time")
     }
 
     def close(): Unit = {
-      try {
-        consumerThreads.foreach {
-          consumerThread =>
-            consumerThread.interrupt()
-            consumerThread.join()
-        }
-      }
-      finally{
-        consumerSet.foreach(consumer => Utils.closeQuietly(consumer, "consumer"))
-      }
+      // stop the consumers and wait for consumer threads stopped
+      stop()
+      consumerThreads.foreach(_.join())
     }
 
     private def createConsumerThread[K,V](consumer: Consumer[K,V], topic: String): Thread = {
