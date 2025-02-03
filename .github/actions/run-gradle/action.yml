@@ -86,7 +86,6 @@ runs:
         $TEST_TASK
         exitcode="$?"
         echo "exitcode=$exitcode" >> $GITHUB_OUTPUT
-        touch $TEST_XML_OUTPUT_DIR/
     - name: Archive build scan (${{ inputs.test-task }})
       if: always()
       uses: actions/upload-artifact@v4
