@@ -55,7 +55,7 @@ object QuotaTypes {
 object ClientQuotaManager {
   // Purge sensors after 1 hour of inactivity
   val InactiveSensorExpirationTimeSeconds = 3600
-  private val DefaultString = "<default>"
+  private val DefaultName = "<default>"
   val DefaultClientIdQuotaEntity: KafkaQuotaEntity = KafkaQuotaEntity(None, Some(DefaultClientIdEntity))
   val DefaultUserQuotaEntity: KafkaQuotaEntity = KafkaQuotaEntity(Some(DefaultUserEntity), None)
   val DefaultUserClientIdQuotaEntity: KafkaQuotaEntity = KafkaQuotaEntity(Some(DefaultUserEntity), Some(DefaultClientIdEntity))
@@ -76,13 +76,13 @@ object ClientQuotaManager {
 
   case object DefaultUserEntity extends BaseUserEntity {
     override def entityType: ClientQuotaEntity.ConfigEntityType = ClientQuotaEntity.ConfigEntityType.DEFAULT_USER
-    override def name: String = DefaultString
+    override def name: String = DefaultName
     override def toString: String = "default user"
   }
 
   case object DefaultClientIdEntity extends ClientQuotaEntity.ConfigEntity {
     override def entityType: ClientQuotaEntity.ConfigEntityType = ClientQuotaEntity.ConfigEntityType.DEFAULT_CLIENT_ID
-    override def name: String = DefaultString
+    override def name: String = DefaultName
     override def toString: String = "default client-id"
   }
 
@@ -93,7 +93,7 @@ object ClientQuotaManager {
 
     def sanitizedUser: String = userEntity.map {
       case entity: UserEntity => entity.sanitizedUser
-      case DefaultUserEntity => DefaultString
+      case DefaultUserEntity => DefaultName
     }.getOrElse("")
 
     def clientId: String = clientIdEntity.map(_.name).getOrElse("")

@@ -167,7 +167,7 @@ class ClientQuotaMetadataManager(private[metadata] val quotaManagers: QuotaManag
 object ClientQuotaMetadataManager {
 
   def transferToClientQuotaEntity(quotaEntity: QuotaEntity): (Option[BaseUserEntity], Option[ClientQuotaConfigEntity]) = {
-    val (userEntity, sanitizedClientEntity) = quotaEntity match {
+    quotaEntity match {
       case UserEntity(user) =>
         (Some(ClientQuotaManager.UserEntity(Sanitizer.sanitize(user))), None)
       case DefaultUserEntity =>
@@ -186,6 +186,5 @@ object ClientQuotaMetadataManager {
         (Some(ClientQuotaManager.DefaultUserEntity), Some(ClientQuotaManager.DefaultClientIdEntity))
       case IpEntity(_) | DefaultIpEntity => throw new IllegalStateException("Should not see IP quota entities here")
     }
-    (userEntity, sanitizedClientEntity)
   }
 }

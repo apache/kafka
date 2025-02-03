@@ -83,15 +83,6 @@ object DynamicConfig {
     def names: util.Set[String] = ipConfigs.names
 
     def validate(props: Properties): util.Map[String, AnyRef] = DynamicConfig.validate(ipConfigs, props, customPropsAllowed = false)
-
-    def isValidIpEntity(ip: String): Boolean = {
-      try {
-        InetAddress.getByName(ip)
-      } catch {
-        case _: UnknownHostException => return false
-      }
-      true
-    }
   }
 
   object ClientMetrics {

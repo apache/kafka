@@ -48,6 +48,13 @@ import scala.collection._
 import scala.jdk.CollectionConverters._
 
 /**
+  * Dynamic broker configurations may be defined at two levels:
+  * <ul>
+  *   <li>Per-broker configs persisted at <tt>/configs/brokers/{brokerId}</tt>: These can be described/altered
+  *       using AdminClient using the resource name brokerId.</li>
+  *   <li>Cluster-wide defaults persisted at <tt>/configs/brokers/&lt;default&gt;</tt>: These can be described/altered
+  *       using AdminClient using an empty resource name.</li>
+  * </ul>
   * The order of precedence for broker configs is:
   * <ol>
   *   <li>STATIC_BROKER_CONFIG: properties that broker is started up with, typically from server.properties file</li>
