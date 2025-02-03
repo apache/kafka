@@ -181,7 +181,7 @@ class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
    * is thrown immediately, and is not affected by <code>connection.failed.authentication.delay.ms</code>.
    */
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testServerAuthenticationFailure(quorum: String, groupProtocol: String): Unit = {
     // Setup client with a non-existent service principal, so that server authentication fails on the client
     val clientLoginContext = jaasClientLoginModule(kafkaClientSaslMechanism, Some("another-kafka-service"))
@@ -270,7 +270,7 @@ class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
     val jaasContexts = Collections.singletonMap("GSSAPI", JaasContext.loadClientContext(config.values()))
     val channelBuilder = new SaslChannelBuilder(ConnectionMode.CLIENT, jaasContexts, securityProtocol,
       null, false, kafkaClientSaslMechanism, null, null, null, time, new LogContext(),
-      _ => org.apache.kafka.test.TestUtils.defaultApiVersionsResponse(ListenerType.ZK_BROKER)) {
+      _ => org.apache.kafka.test.TestUtils.defaultApiVersionsResponse(ListenerType.BROKER)) {
       override protected def defaultLoginClass(): Class[_ <: Login] = classOf[TestableKerberosLogin]
     }
     channelBuilder.configure(config.values())

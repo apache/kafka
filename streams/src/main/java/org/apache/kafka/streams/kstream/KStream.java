@@ -62,23 +62,22 @@ public interface KStream<K, V> {
     /**
      * Create a new {@code KStream} that consists of all records of this stream which satisfy the given predicate.
      * All records that do not satisfy the predicate are dropped.
-     * This is a stateless record-by-record operation.
+     * This is a stateless record-by-record operation (cf. {@link #processValues(FixedKeyProcessorSupplier, String...)}
+     * for stateful record processing).
      *
-     * @param predicate a filter {@link Predicate} that is applied to each record
-     * @return a {@code KStream} that contains only those records that satisfy the given predicate
+     * @param predicate
+     *        a filter {@link Predicate} that is applied to each record
+     *
+     * @return A {@code KStream} that contains only those records that satisfy the given predicate.
+     *
      * @see #filterNot(Predicate)
      */
     KStream<K, V> filter(final Predicate<? super K, ? super V> predicate);
 
     /**
-     * Create a new {@code KStream} that consists of all records of this stream which satisfy the given predicate.
-     * All records that do not satisfy the predicate are dropped.
-     * This is a stateless record-by-record operation.
+     * See {@link #filter(Predicate)}.
      *
-     * @param predicate a filter {@link Predicate} that is applied to each record
-     * @param named     a {@link Named} config used to name the processor in the topology
-     * @return a {@code KStream} that contains only those records that satisfy the given predicate
-     * @see #filterNot(Predicate)
+     * <p>Takes an additional {@link Named} parameter that is used to name the processor in the topology.
      */
     KStream<K, V> filter(final Predicate<? super K, ? super V> predicate, final Named named);
 
@@ -86,36 +85,36 @@ public interface KStream<K, V> {
      * Create a new {@code KStream} that consists all records of this stream which do <em>not</em> satisfy the given
      * predicate.
      * All records that <em>do</em> satisfy the predicate are dropped.
-     * This is a stateless record-by-record operation.
+     * This is a stateless record-by-record operation (cf. {@link #processValues(FixedKeyProcessorSupplier, String...)}
+     * for stateful record processing).
      *
-     * @param predicate a filter {@link Predicate} that is applied to each record
-     * @return a {@code KStream} that contains only those records that do <em>not</em> satisfy the given predicate
+     * @param predicate
+     *        a filter {@link Predicate} that is applied to each record
+     *
+     * @return A {@code KStream} that contains only those records that do <em>not</em> satisfy the given predicate.
+     *
      * @see #filter(Predicate)
      */
     KStream<K, V> filterNot(final Predicate<? super K, ? super V> predicate);
 
     /**
-     * Create a new {@code KStream} that consists all records of this stream which do <em>not</em> satisfy the given
-     * predicate.
-     * All records that <em>do</em> satisfy the predicate are dropped.
-     * This is a stateless record-by-record operation.
+     * See {@link #filterNot(Predicate)}.
      *
-     * @param predicate a filter {@link Predicate} that is applied to each record
-     * @param named     a {@link Named} config used to name the processor in the topology
-     * @return a {@code KStream} that contains only those records that do <em>not</em> satisfy the given predicate
-     * @see #filter(Predicate)
+     * <p>Takes an additional {@link Named} parameter that is used to name the processor in the topology.
      */
     KStream<K, V> filterNot(final Predicate<? super K, ? super V> predicate, final Named named);
 
     /**
-     * Set a new key (with possibly new type) for each input record.
-     * The provided {@link KeyValueMapper} is applied to each input record and computes a new key for it.
+     * Create a new {@code KStream} that consists of all records of this stream but with a modified key.
+     * The provided {@link KeyValueMapper} is applied to each input record and computes a new key (possibly of a
+     * different type) for it.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K':V>}.
-     * This is a stateless record-by-record operation.
-     * <p>
-     * For example, you can use this transformation to set a key for a key-less input record {@code <null,V>} by
-     * extracting a key from the value within your {@link KeyValueMapper}. The example below computes the new key as the
-     * length of the value string.
+     * This is a stateless record-by-record operation (cf. {@link #process(ProcessorSupplier, String...)} for
+     * stateful record processing).
+     *
+     * <p>For example, you can use this transformation to set a key for a key-less input record {@code <null,V>}
+     * by extracting a key from the value within your {@link KeyValueMapper}. The example below computes the new key
+     * as the length of the value string.
      * <pre>{@code
      * KStream<Byte[], String> keyLessStream = builder.stream("key-less-topic");
      * KStream<Integer, String> keyedStream = keyLessStream.selectKey(new KeyValueMapper<Byte[], String, Integer> {
@@ -124,130 +123,30 @@ public interface KStream<K, V> {
      *     }
      * });
      * }</pre>
-     * Setting a new key might result in an internal data redistribution if a key based operator (like an aggregation or
-     * join) is applied to the result {@code KStream}.
+     * Setting a new key might result in an internal data redistribution if a key based operator (like an aggregation
+     * or join) is applied to the result {@code KStream}.
      *
-     * @param mapper a {@link KeyValueMapper} that computes a new key for each record
-     * @param <KR>   the new key type of the result stream
-     * @return a {@code KStream} that contains records with new key (possibly of different type) and unmodified value
+     * @param mapper
+     *        a {@link KeyValueMapper} that computes a new key for each input record
+     *
+     * @param <KOut> the new key type of the result {@code KStream}
+     *
+     * @return A {@code KStream} that contains records with new key (possibly of a different type) and unmodified value.
+     *
      * @see #map(KeyValueMapper)
-     * @see #flatMap(KeyValueMapper)
      * @see #mapValues(ValueMapper)
-     * @see #mapValues(ValueMapperWithKey)
+     * @see #flatMap(KeyValueMapper)
      * @see #flatMapValues(ValueMapper)
-     * @see #flatMapValues(ValueMapperWithKey)
      */
-    <KR> KStream<KR, V> selectKey(final KeyValueMapper<? super K, ? super V, ? extends KR> mapper);
+    <KOut> KStream<KOut, V> selectKey(final KeyValueMapper<? super K, ? super V, ? extends KOut> mapper);
 
     /**
-     * Set a new key (with possibly new type) for each input record.
-     * The provided {@link KeyValueMapper} is applied to each input record and computes a new key for it.
-     * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K':V>}.
-     * This is a stateless record-by-record operation.
-     * <p>
-     * For example, you can use this transformation to set a key for a key-less input record {@code <null,V>} by
-     * extracting a key from the value within your {@link KeyValueMapper}. The example below computes the new key as the
-     * length of the value string.
-     * <pre>{@code
-     * KStream<Byte[], String> keyLessStream = builder.stream("key-less-topic");
-     * KStream<Integer, String> keyedStream = keyLessStream.selectKey(new KeyValueMapper<Byte[], String, Integer> {
-     *     Integer apply(Byte[] key, String value) {
-     *         return value.length();
-     *     }
-     * });
-     * }</pre>
-     * Setting a new key might result in an internal data redistribution if a key based operator (like an aggregation or
-     * join) is applied to the result {@code KStream}.
+     * See {@link #selectKey(KeyValueMapper)}.
      *
-     * @param mapper a {@link KeyValueMapper} that computes a new key for each record
-     * @param named  a {@link Named} config used to name the processor in the topology
-     * @param <KR>   the new key type of the result stream
-     * @return a {@code KStream} that contains records with new key (possibly of different type) and unmodified value
-     * @see #map(KeyValueMapper)
-     * @see #flatMap(KeyValueMapper)
-     * @see #mapValues(ValueMapper)
-     * @see #mapValues(ValueMapperWithKey)
-     * @see #flatMapValues(ValueMapper)
-     * @see #flatMapValues(ValueMapperWithKey)
+     * <p>Takes an additional {@link Named} parameter that is used to name the processor in the topology.
      */
-    <KR> KStream<KR, V> selectKey(final KeyValueMapper<? super K, ? super V, ? extends KR> mapper,
-                                  final Named named);
-
-    /**
-     * Transform each record of the input stream into a new record in the output stream (both key and value type can be
-     * altered arbitrarily).
-     * The provided {@link KeyValueMapper} is applied to each input record and computes a new output record.
-     * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K':V'>}.
-     * This is a stateless record-by-record operation (cf. {@link #process(ProcessorSupplier, String...)} for
-     * stateful record processing).
-     * <p>
-     * The example below normalizes the String key to upper-case letters and counts the number of token of the value string.
-     * <pre>{@code
-     * KStream<String, String> inputStream = builder.stream("topic");
-     * KStream<String, Integer> outputStream = inputStream.map(new KeyValueMapper<String, String, KeyValue<String, Integer>> {
-     *     KeyValue<String, Integer> apply(String key, String value) {
-     *         return new KeyValue<>(key.toUpperCase(), value.split(" ").length);
-     *     }
-     * });
-     * }</pre>
-     * The provided {@link KeyValueMapper} must return a {@link KeyValue} type and must not return {@code null}.
-     * <p>
-     * Mapping records might result in an internal data redistribution if a key based operator (like an aggregation or
-     * join) is applied to the result {@code KStream}. (cf. {@link #mapValues(ValueMapper)})
-     *
-     * @param mapper a {@link KeyValueMapper} that computes a new output record
-     * @param <KR>   the key type of the result stream
-     * @param <VR>   the value type of the result stream
-     * @return a {@code KStream} that contains records with new key and value (possibly both of different type)
-     * @see #selectKey(KeyValueMapper)
-     * @see #flatMap(KeyValueMapper)
-     * @see #mapValues(ValueMapper)
-     * @see #mapValues(ValueMapperWithKey)
-     * @see #flatMapValues(ValueMapper)
-     * @see #flatMapValues(ValueMapperWithKey)
-     * @see #process(ProcessorSupplier, String...)
-     * @see #processValues(FixedKeyProcessorSupplier, String...)
-     */
-    <KR, VR> KStream<KR, VR> map(final KeyValueMapper<? super K, ? super V, ? extends KeyValue<? extends KR, ? extends VR>> mapper);
-
-    /**
-     * Transform each record of the input stream into a new record in the output stream (both key and value type can be
-     * altered arbitrarily).
-     * The provided {@link KeyValueMapper} is applied to each input record and computes a new output record.
-     * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K':V'>}.
-     * This is a stateless record-by-record operation (cf. {@link #process(ProcessorSupplier, String...)} for
-     * stateful record processing).
-     * <p>
-     * The example below normalizes the String key to upper-case letters and counts the number of token of the value string.
-     * <pre>{@code
-     * KStream<String, String> inputStream = builder.stream("topic");
-     * KStream<String, Integer> outputStream = inputStream.map(new KeyValueMapper<String, String, KeyValue<String, Integer>> {
-     *     KeyValue<String, Integer> apply(String key, String value) {
-     *         return new KeyValue<>(key.toUpperCase(), value.split(" ").length);
-     *     }
-     * });
-     * }</pre>
-     * The provided {@link KeyValueMapper} must return a {@link KeyValue} type and must not return {@code null}.
-     * <p>
-     * Mapping records might result in an internal data redistribution if a key based operator (like an aggregation or
-     * join) is applied to the result {@code KStream}. (cf. {@link #mapValues(ValueMapper)})
-     *
-     * @param mapper a {@link KeyValueMapper} that computes a new output record
-     * @param named  a {@link Named} config used to name the processor in the topology
-     * @param <KR>   the key type of the result stream
-     * @param <VR>   the value type of the result stream
-     * @return a {@code KStream} that contains records with new key and value (possibly both of different type)
-     * @see #selectKey(KeyValueMapper)
-     * @see #flatMap(KeyValueMapper)
-     * @see #mapValues(ValueMapper)
-     * @see #mapValues(ValueMapperWithKey)
-     * @see #flatMapValues(ValueMapper)
-     * @see #flatMapValues(ValueMapperWithKey)
-     * @see #process(ProcessorSupplier, String...)
-     * @see #processValues(FixedKeyProcessorSupplier, String...)
-     */
-    <KR, VR> KStream<KR, VR> map(final KeyValueMapper<? super K, ? super V, ? extends KeyValue<? extends KR, ? extends VR>> mapper,
-                                 final Named named);
+    <KOut> KStream<KOut, V> selectKey(final KeyValueMapper<? super K, ? super V, ? extends KOut> mapper,
+                                      final Named named);
 
     /**
      * Transform the value of each input record into a new value (with possible new type) of the output record.
@@ -386,6 +285,82 @@ public interface KStream<K, V> {
      */
     <VR> KStream<K, VR> mapValues(final ValueMapperWithKey<? super K, ? super V, ? extends VR> mapper,
                                   final Named named);
+
+    /**
+     * Transform each record of the input stream into a new record in the output stream (both key and value type can be
+     * altered arbitrarily).
+     * The provided {@link KeyValueMapper} is applied to each input record and computes a new output record.
+     * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K':V'>}.
+     * This is a stateless record-by-record operation (cf. {@link #process(ProcessorSupplier, String...)} for
+     * stateful record processing).
+     * <p>
+     * The example below normalizes the String key to upper-case letters and counts the number of token of the value string.
+     * <pre>{@code
+     * KStream<String, String> inputStream = builder.stream("topic");
+     * KStream<String, Integer> outputStream = inputStream.map(new KeyValueMapper<String, String, KeyValue<String, Integer>> {
+     *     KeyValue<String, Integer> apply(String key, String value) {
+     *         return new KeyValue<>(key.toUpperCase(), value.split(" ").length);
+     *     }
+     * });
+     * }</pre>
+     * The provided {@link KeyValueMapper} must return a {@link KeyValue} type and must not return {@code null}.
+     * <p>
+     * Mapping records might result in an internal data redistribution if a key based operator (like an aggregation or
+     * join) is applied to the result {@code KStream}. (cf. {@link #mapValues(ValueMapper)})
+     *
+     * @param mapper a {@link KeyValueMapper} that computes a new output record
+     * @param <KR>   the key type of the result stream
+     * @param <VR>   the value type of the result stream
+     * @return a {@code KStream} that contains records with new key and value (possibly both of different type)
+     * @see #selectKey(KeyValueMapper)
+     * @see #flatMap(KeyValueMapper)
+     * @see #mapValues(ValueMapper)
+     * @see #mapValues(ValueMapperWithKey)
+     * @see #flatMapValues(ValueMapper)
+     * @see #flatMapValues(ValueMapperWithKey)
+     * @see #process(ProcessorSupplier, String...)
+     * @see #processValues(FixedKeyProcessorSupplier, String...)
+     */
+    <KR, VR> KStream<KR, VR> map(final KeyValueMapper<? super K, ? super V, ? extends KeyValue<? extends KR, ? extends VR>> mapper);
+
+    /**
+     * Transform each record of the input stream into a new record in the output stream (both key and value type can be
+     * altered arbitrarily).
+     * The provided {@link KeyValueMapper} is applied to each input record and computes a new output record.
+     * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K':V'>}.
+     * This is a stateless record-by-record operation (cf. {@link #process(ProcessorSupplier, String...)} for
+     * stateful record processing).
+     * <p>
+     * The example below normalizes the String key to upper-case letters and counts the number of token of the value string.
+     * <pre>{@code
+     * KStream<String, String> inputStream = builder.stream("topic");
+     * KStream<String, Integer> outputStream = inputStream.map(new KeyValueMapper<String, String, KeyValue<String, Integer>> {
+     *     KeyValue<String, Integer> apply(String key, String value) {
+     *         return new KeyValue<>(key.toUpperCase(), value.split(" ").length);
+     *     }
+     * });
+     * }</pre>
+     * The provided {@link KeyValueMapper} must return a {@link KeyValue} type and must not return {@code null}.
+     * <p>
+     * Mapping records might result in an internal data redistribution if a key based operator (like an aggregation or
+     * join) is applied to the result {@code KStream}. (cf. {@link #mapValues(ValueMapper)})
+     *
+     * @param mapper a {@link KeyValueMapper} that computes a new output record
+     * @param named  a {@link Named} config used to name the processor in the topology
+     * @param <KR>   the key type of the result stream
+     * @param <VR>   the value type of the result stream
+     * @return a {@code KStream} that contains records with new key and value (possibly both of different type)
+     * @see #selectKey(KeyValueMapper)
+     * @see #flatMap(KeyValueMapper)
+     * @see #mapValues(ValueMapper)
+     * @see #mapValues(ValueMapperWithKey)
+     * @see #flatMapValues(ValueMapper)
+     * @see #flatMapValues(ValueMapperWithKey)
+     * @see #process(ProcessorSupplier, String...)
+     * @see #processValues(FixedKeyProcessorSupplier, String...)
+     */
+    <KR, VR> KStream<KR, VR> map(final KeyValueMapper<? super K, ? super V, ? extends KeyValue<? extends KR, ? extends VR>> mapper,
+                                 final Named named);
 
     /**
      * Transform each record of the input stream into zero or more records in the output stream (both key and value type
@@ -661,7 +636,7 @@ public interface KStream<K, V> {
                                       final Named named);
 
     /**
-     * Print the records of this KStream using the options provided by {@link Printed}
+     * Print the records of this {@code KStream} using the options provided by {@link Printed}.
      * Note that this is mainly for debugging/testing purposes, and it will try to flush on each record print.
      * It <em>SHOULD NOT</em> be used for production usage if performance requirements are concerned.
      *
@@ -670,107 +645,114 @@ public interface KStream<K, V> {
     void print(final Printed<K, V> printed);
 
     /**
-     * Perform an action on each record of {@code KStream}.
-     * This is a stateless record-by-record operation (cf. {@link #process(ProcessorSupplier, String...)}).
-     * Note that this is a terminal operation that returns void.
+     * Perform an action on each record of this {@code KStream}.
+     * This is a stateless record-by-record operation (cf. {@link #process(ProcessorSupplier, String...)} for
+     * stateful record processing).
      *
-     * @param action an action to perform on each record
-     * @see #process(ProcessorSupplier, String...)
+     * <p>{@code Foreach} is a terminal operation that may triggers side effects (such as logging or statistics
+     * collection) and returns {@code void} (cf. {@link #peek(ForeachAction)}).
+     *
+     * <p>Note that this operation may execute multiple times for a single record in failure cases,
+     * and it is <em>not</em> guarded by "exactly-once processing guarantees".
+     *
+     * @param action
+     *        an action to perform on each record
      */
     void foreach(final ForeachAction<? super K, ? super V> action);
 
     /**
-     * Perform an action on each record of {@code KStream}.
-     * This is a stateless record-by-record operation (cf. {@link #process(ProcessorSupplier, String...)}).
-     * Note that this is a terminal operation that returns void.
+     * See {@link #foreach(ForeachAction)}.
      *
-     * @param action an action to perform on each record
-     * @param named  a {@link Named} config used to name the processor in the topology
-     * @see #process(ProcessorSupplier, String...)
+     * <p>Takes an additional {@link Named} parameter that is used to name the processor in the topology.
      */
     void foreach(final ForeachAction<? super K, ? super V> action, final Named named);
 
     /**
-     * Perform an action on each record of {@code KStream}.
-     * This is a stateless record-by-record operation (cf. {@link #process(ProcessorSupplier, String...)}).
-     * <p>
-     * Peek is a non-terminal operation that triggers a side effect (such as logging or statistics collection)
-     * and returns an unchanged stream.
-     * <p>
-     * Note that since this operation is stateless, it may execute multiple times for a single record in failure cases.
+     * Perform an action on each record of this {@code KStream}.
+     * This is a stateless record-by-record operation (cf. {@link #process(ProcessorSupplier, String...)} for
+     * stateful record processing).
      *
-     * @param action an action to perform on each record
-     * @see #process(ProcessorSupplier, String...)
-     * @return itself
+     * <p>{@code Peek} is a non-terminal operation that may triggers side effects (such as logging or statistics
+     * collection) and returns an unchanged {@code KStream} (cf. {@link #foreach(ForeachAction)}).
+     *
+     * <p>Note that this operation may execute multiple times for a single record in failure cases,
+     * and it is <em>not</em> guarded by "exactly-once processing guarantees".
+     *
+     * @param action
+     *        an action to perform on each record
+     *
+     * @return An unmodified {@code KStream}.
      */
     KStream<K, V> peek(final ForeachAction<? super K, ? super V> action);
 
     /**
-     * Perform an action on each record of {@code KStream}.
-     * This is a stateless record-by-record operation (cf. {@link #process(ProcessorSupplier, String...)}).
-     * <p>
-     * Peek is a non-terminal operation that triggers a side effect (such as logging or statistics collection)
-     * and returns an unchanged stream.
-     * <p>
-     * Note that since this operation is stateless, it may execute multiple times for a single record in failure cases.
+     * See {@link #peek(ForeachAction)}.
      *
-     * @param action an action to perform on each record
-     * @param named  a {@link Named} config used to name the processor in the topology
-     * @see #process(ProcessorSupplier, String...)
-     * @return itself
+     * <p>Takes an additional {@link Named} parameter that is used to name the processor in the topology.
      */
     KStream<K, V> peek(final ForeachAction<? super K, ? super V> action, final Named named);
 
     /**
-     * Split this stream into different branches. The returned {@link BranchedKStream} instance can be used for routing
-     * the records to different branches depending on evaluation against the supplied predicates. Records are evaluated against the
-     * predicates in the order they are provided with the first matching predicate accepting the record.
-     * <p>
-     *     Note: Stream branching is a stateless record-by-record operation.
-     *     Please check {@link BranchedKStream} for detailed description and usage example
+     * Split this {@code KStream} into different branches. The returned {@link BranchedKStream} instance can be used
+     * for routing the records to different branches depending on evaluation against the supplied predicates.
+     * Records are evaluated against the predicates in the order they are provided with the first matching predicate
+     * accepting the record. Branching is a stateless record-by-record operation.
+     * See {@link BranchedKStream} for a detailed description and usage example.
      *
-     * @return {@link BranchedKStream} that provides methods for routing the records to different branches.
+     * <p>Splitting a {@code KStream} guarantees that each input record is sent to at most one result {@code KStream}.
+     * There is no operator for broadcasting/multicasting records into multiple result {@code KStream}.
+     * If you want to broadcast records, you can apply multiple downstream operators to the same {@code KStream}
+     * instance:
+     * <pre>{@code
+     * // Broadcasting: every record of `stream` is sent to all three operators for processing
+     * KStream<...> stream1 = stream.map(...);
+     * KStream<...> stream2 = stream.mapValue(...);
+     * KStream<...> stream3 = stream.flatMap(...);
+     * }</pre>
+     *
+     * Multicasting can be achieved with broadcasting into multiple filter operations:
+     * <pre>{@code
+     * // Multicasting: every record of `stream` is sent to all three filters, and thus, may be part of
+     * // multiple result streams, `stream1`, `stream2`, and/or `stream3`
+     * KStream<...> stream1 = stream.filter(predicate1);
+     * KStream<...> stream2 = stream.filter(predicate2);
+     * KStream<...> stream3 = stream.filter(predicate3);
+     * }</pre>
+     *
+     * @return A {@link BranchedKStream} that provides methods for routing the records to different branches.
+     *
+     * @see #merge(KStream)
      */
     BranchedKStream<K, V> split();
 
     /**
-     * Split this stream into different branches. The returned {@link BranchedKStream} instance can be used for routing
-     * the records to different branches depending on evaluation against the supplied predicates. Records are evaluated against the
-     * predicates in the order they are provided with the first matching predicate accepting the record.
-     * <p>
-     *     Note: Stream branching is a stateless record-by-record operation.
-     *     Please check {@link BranchedKStream} for detailed description and usage example
+     * See {@link #split()}.
      *
-     * @param named  a {@link Named} config used to name the processor in the topology and also to set the name prefix
-     *               for the resulting branches (see {@link BranchedKStream})
-     * @return {@link BranchedKStream} that provides methods for routing the records to different branches.
+     * <p>Takes an additional {@link Named} parameter that is used to name the processor in the topology.
      */
     BranchedKStream<K, V> split(final Named named);
 
     /**
-     * Merge this stream and the given stream into one larger stream.
-     * <p>
-     * There is no ordering guarantee between records from this {@code KStream} and records from
+     * Merge this {@code KStream} and the given {@code KStream}.
+     *
+     * <p>There is no ordering guarantee between records from this {@code KStream} and records from
      * the provided {@code KStream} in the merged stream.
-     * Relative order is preserved within each input stream though (ie, records within one input
+     * Relative order is preserved within each input stream though (i.e., records within one input
      * stream are processed in order).
      *
-     * @param stream a stream which is to be merged into this stream
-     * @return a merged stream containing all records from this and the provided {@code KStream}
+     * @param stream
+     *        a stream which is to be merged into this stream
+     *
+     * @return A merged stream containing all records from this and the provided {@code KStream}
+     *
+     * @see #split()
      */
     KStream<K, V> merge(final KStream<K, V> stream);
 
     /**
-     * Merge this stream and the given stream into one larger stream.
-     * <p>
-     * There is no ordering guarantee between records from this {@code KStream} and records from
-     * the provided {@code KStream} in the merged stream.
-     * Relative order is preserved within each input stream though (ie, records within one input
-     * stream are processed in order).
+     * See {@link #merge(KStream)}.
      *
-     * @param stream a stream which is to be merged into this stream
-     * @param named  a {@link Named} config used to name the processor in the topology
-     * @return a merged stream containing all records from this and the provided {@code KStream}
+     * <p>Takes an additional {@link Named} parameter that is used to name the processor in the topology.
      */
     KStream<K, V> merge(final KStream<K, V> stream, final Named named);
 

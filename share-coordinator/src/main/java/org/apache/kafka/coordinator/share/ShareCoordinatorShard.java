@@ -20,6 +20,8 @@ package org.apache.kafka.coordinator.share;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.message.DeleteShareGroupStateRequestData;
+import org.apache.kafka.common.message.DeleteShareGroupStateResponseData;
 import org.apache.kafka.common.message.ReadShareGroupStateRequestData;
 import org.apache.kafka.common.message.ReadShareGroupStateResponseData;
 import org.apache.kafka.common.message.ReadShareGroupStateSummaryRequestData;
@@ -28,6 +30,7 @@ import org.apache.kafka.common.message.WriteShareGroupStateRequestData;
 import org.apache.kafka.common.message.WriteShareGroupStateResponseData;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.DeleteShareGroupStateResponse;
 import org.apache.kafka.common.requests.ReadShareGroupStateResponse;
 import org.apache.kafka.common.requests.ReadShareGroupStateSummaryResponse;
 import org.apache.kafka.common.requests.TransactionResult;
@@ -228,16 +231,25 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
 
     private void handleShareSnapshot(ShareSnapshotKey key, ShareSnapshotValue value, long offset) {
         SharePartitionKey mapKey = SharePartitionKey.getInstance(key.groupId(), key.topicId(), key.partition());
-        maybeUpdateLeaderEpochMap(mapKey, value.leaderEpoch());
-        maybeUpdateStateEpochMap(mapKey, value.stateEpoch());
+        if (value == null) {
+            log.debug("Tombstone records received for share partition key: {}", mapKey);
+            // Consider this a tombstone.
+            shareStateMap.remove(mapKey);
+            leaderEpochMap.remove(mapKey);
+            stateEpochMap.remove(mapKey);
+            snapshotUpdateCount.remove(mapKey);
+        } else {
+            maybeUpdateLeaderEpochMap(mapKey, value.leaderEpoch());
+            maybeUpdateStateEpochMap(mapKey, value.stateEpoch());
 
-        ShareGroupOffset offsetRecord = ShareGroupOffset.fromRecord(value);
-        // this record is the complete snapshot
-        shareStateMap.put(mapKey, offsetRecord);
-        // if number of share updates is exceeded, then reset it
-        if (snapshotUpdateCount.containsKey(mapKey)) {
-            if (snapshotUpdateCount.get(mapKey) >= config.shareCoordinatorSnapshotUpdateRecordsPerSnapshot()) {
-                snapshotUpdateCount.put(mapKey, 0);
+            ShareGroupOffset offsetRecord = ShareGroupOffset.fromRecord(value);
+            // This record is the complete snapshot.
+            shareStateMap.put(mapKey, offsetRecord);
+            // If number of share updates is exceeded, then reset it.
+            if (snapshotUpdateCount.containsKey(mapKey)) {
+                if (snapshotUpdateCount.get(mapKey) >= config.shareCoordinatorSnapshotUpdateRecordsPerSnapshot()) {
+                    snapshotUpdateCount.put(mapKey, 0);
+                }
             }
         }
 
@@ -476,6 +488,49 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     /**
+     * This method writes tombstone records corresponding to the requested topic partitions.
+     * <p>
+     * This method as called by the ShareCoordinatorService will be provided with
+     * the request data which covers only key i.e. group1:topic1:partition1. The implementation
+     * below was done keeping this in mind.
+     *
+     * @param request - ReadShareGroupStateSummaryRequestData for a single key
+     * @return CoordinatorResult(records, response)
+     */
+
+    public CoordinatorResult<DeleteShareGroupStateResponseData, CoordinatorRecord> deleteState(
+        DeleteShareGroupStateRequestData request
+    ) {
+        // Records to write (with both key and value of snapshot type), response to caller
+        // only one key will be there in the request by design.
+        Optional<CoordinatorResult<DeleteShareGroupStateResponseData, CoordinatorRecord>> error = maybeGetDeleteStateError(request);
+        if (error.isPresent()) {
+            return error.get();
+        }
+
+        DeleteShareGroupStateRequestData.DeleteStateData topicData = request.topics().get(0);
+        DeleteShareGroupStateRequestData.PartitionData partitionData = topicData.partitions().get(0);
+        SharePartitionKey key = SharePartitionKey.getInstance(request.groupId(), topicData.topicId(), partitionData.partition());
+
+        CoordinatorRecord record = generateTombstoneRecord(key);
+        // build successful response if record is correctly created
+        DeleteShareGroupStateResponseData responseData = new DeleteShareGroupStateResponseData()
+            .setResults(
+                List.of(
+                    DeleteShareGroupStateResponse.toResponseDeleteStateResult(key.topicId(),
+                        List.of(
+                            DeleteShareGroupStateResponse.toResponsePartitionResult(
+                                key.partition()
+                            )
+                        )
+                    )
+                )
+            );
+
+        return new CoordinatorResult<>(Collections.singletonList(record), responseData);
+    }
+
+    /**
      * Util method to generate a ShareSnapshot or ShareUpdate type record for a key, based on various conditions.
      * <p>
      * If no snapshot has been created for the key => create a new ShareSnapshot record
@@ -535,6 +590,14 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                     .setStateBatches(mergeBatches(Collections.emptyList(), partitionData))
                     .build());
         }
+    }
+
+    private CoordinatorRecord generateTombstoneRecord(SharePartitionKey key) {
+        return ShareCoordinatorRecordHelpers.newShareStateTombstoneRecord(
+            key.groupId(),
+            key.topicId(),
+            key.partition()
+        );
     }
 
     private List<PersisterStateBatch> mergeBatches(
@@ -670,6 +733,37 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         return Optional.empty();
     }
 
+    private Optional<CoordinatorResult<DeleteShareGroupStateResponseData, CoordinatorRecord>> maybeGetDeleteStateError(
+        DeleteShareGroupStateRequestData request
+    ) {
+        DeleteShareGroupStateRequestData.DeleteStateData topicData = request.topics().get(0);
+        DeleteShareGroupStateRequestData.PartitionData partitionData = topicData.partitions().get(0);
+
+        Uuid topicId = topicData.topicId();
+        int partitionId = partitionData.partition();
+
+        if (topicId == null) {
+            return Optional.of(getDeleteErrorResponse(Errors.INVALID_REQUEST, NULL_TOPIC_ID, null, partitionId));
+        }
+
+        if (partitionId < 0) {
+            return Optional.of(getDeleteErrorResponse(Errors.INVALID_REQUEST, NEGATIVE_PARTITION_ID, topicId, partitionId));
+        }
+
+        if (metadataImage == null) {
+            log.error("Metadata image is null");
+            return Optional.of(getDeleteErrorResponse(Errors.UNKNOWN_TOPIC_OR_PARTITION, null, topicId, partitionId));
+        }
+
+        if (metadataImage.topics().getTopic(topicId) == null ||
+            metadataImage.topics().getPartition(topicId, partitionId) == null) {
+            log.error("Topic/TopicPartition not found in metadata image.");
+            return Optional.of(getDeleteErrorResponse(Errors.UNKNOWN_TOPIC_OR_PARTITION, null, topicId, partitionId));
+        }
+
+        return Optional.empty();
+    }
+
     private CoordinatorResult<WriteShareGroupStateResponseData, CoordinatorRecord> getWriteErrorResponse(
         Errors error,
         Exception exception,
@@ -678,6 +772,17 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     ) {
         String message = exception == null ? error.message() : exception.getMessage();
         WriteShareGroupStateResponseData responseData = WriteShareGroupStateResponse.toErrorResponseData(topicId, partitionId, error, message);
+        return new CoordinatorResult<>(Collections.emptyList(), responseData);
+    }
+
+    private CoordinatorResult<DeleteShareGroupStateResponseData, CoordinatorRecord> getDeleteErrorResponse(
+        Errors error,
+        Exception exception,
+        Uuid topicId,
+        int partitionId
+    ) {
+        String message = exception == null ? error.message() : exception.getMessage();
+        DeleteShareGroupStateResponseData responseData = DeleteShareGroupStateResponse.toErrorResponseData(topicId, partitionId, error, message);
         return new CoordinatorResult<>(Collections.emptyList(), responseData);
     }
 

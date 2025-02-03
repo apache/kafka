@@ -20,23 +20,20 @@ package kafka.server
 import java.net.InetAddress
 import java.util
 import java.util.concurrent.{ExecutionException, TimeUnit}
-import org.apache.kafka.common.test.api.ClusterInstance
 import org.apache.kafka.common.test.api.ClusterTest
-import org.apache.kafka.common.test.api.ClusterTestExtensions
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.{ScramCredentialInfo, ScramMechanism, UserScramCredentialUpsertion}
 import org.apache.kafka.common.errors.{InvalidRequestException, UnsupportedVersionException}
 import org.apache.kafka.common.internals.KafkaFutureImpl
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter, ClientQuotaFilterComponent}
 import org.apache.kafka.common.requests.{AlterClientQuotasRequest, AlterClientQuotasResponse, DescribeClientQuotasRequest, DescribeClientQuotasResponse}
+import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.server.config.{QuotaConfig, ZooKeeperInternals}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Disabled
-import org.junit.jupiter.api.extension.ExtendWith
 
 import scala.jdk.CollectionConverters._
 
-@ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 class ClientQuotasRequestTest(cluster: ClusterInstance) {
   @ClusterTest
   def testAlterClientQuotasRequest(): Unit = {
