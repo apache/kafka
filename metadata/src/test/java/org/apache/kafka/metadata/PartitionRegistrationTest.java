@@ -26,7 +26,6 @@ import org.apache.kafka.common.requests.LeaderAndIsrRequest;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.image.writer.UnwritableMetadataException;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
-import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 
 import net.jqwik.api.Arbitraries;
@@ -44,9 +43,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -96,7 +93,6 @@ public class PartitionRegistrationTest {
         int partitionId = 4;
         ApiMessageAndVersion record = registrationA.toRecord(topicId, partitionId, new ImageWriterOptions.Builder().
                 setMetadataVersion(MetadataVersion.IBP_3_7_IV0).
-                setFinalizedFeatures(Collections.emptyMap()).
                 build()); // highest MV for PartitionRecord v0
         PartitionRegistration registrationB =
             new PartitionRegistration((PartitionRecord) record.message());
@@ -341,13 +337,9 @@ public class PartitionRegistrationTest {
             ));
         }
         List<UnwritableMetadataException> exceptions = new ArrayList<>();
-        Map<String, Short> features = new HashMap<>();
-        if (metadataVersion.isElrSupported()) {
-            features.put(EligibleLeaderReplicasVersion.FEATURE_NAME, EligibleLeaderReplicasVersion.ELRV_1.featureLevel());
-        }
         ImageWriterOptions options = new ImageWriterOptions.Builder().
                 setMetadataVersion(metadataVersion).
-                setFinalizedFeatures(features).
+                setEligibleLeaderReplicasEnabled(metadataVersion.isElrSupported()).
                 setLossHandler(exceptions::add).
                 build();
         assertEquals(new ApiMessageAndVersion(expectRecord, metadataVersion.partitionRecordVersion()),
@@ -384,7 +376,6 @@ public class PartitionRegistrationTest {
         List<UnwritableMetadataException> exceptions = new ArrayList<>();
         ImageWriterOptions options = new ImageWriterOptions.Builder().
             setMetadataVersion(MetadataVersion.IBP_4_0_IV1).
-            setFinalizedFeatures(Collections.emptyMap()).
             setLossHandler(exceptions::add).
             build();
         assertEquals(new ApiMessageAndVersion(expectRecord, (short) 2), partitionRegistration.toRecord(topicID, 0, options));

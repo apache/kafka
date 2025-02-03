@@ -17,19 +17,14 @@
 
 package org.apache.kafka.image.writer;
 
-import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
-import org.apache.kafka.server.common.GroupVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-import java.util.Collections;
-import java.util.Map;
 import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 
@@ -49,8 +44,7 @@ public class ImageWriterOptionsTest {
                  i++) {
             MetadataVersion version = MetadataVersion.VERSIONS[i];
             ImageWriterOptions.Builder options = new ImageWriterOptions.Builder().
-                    setMetadataVersion(version).
-                    setFinalizedFeatures(Collections.emptyMap());
+                    setMetadataVersion(version);
             if (i < MetadataVersion.MINIMUM_BOOTSTRAP_VERSION.ordinal()) {
                 assertEquals(MetadataVersion.MINIMUM_KRAFT_VERSION, options.metadataVersion());
                 assertEquals(version, options.requestedMetadataVersion());
@@ -72,7 +66,6 @@ public class ImageWriterOptionsTest {
             Consumer<UnwritableMetadataException> customLossHandler = e -> assertEquals(formattedMessage, e.getMessage());
             ImageWriterOptions options = new ImageWriterOptions.Builder()
                     .setMetadataVersion(version)
-                    .setFinalizedFeatures(Collections.emptyMap())
                     .setLossHandler(customLossHandler)
                     .build();
             options.handleLoss(expectedMessage);
@@ -80,12 +73,15 @@ public class ImageWriterOptionsTest {
     }
 
     @Test
-    public void testSetFeatures() {
+    public void testSetEligibleLeaderReplicasEnabled() {
         MetadataVersion version = MetadataVersion.MINIMUM_BOOTSTRAP_VERSION;
         ImageWriterOptions options = new ImageWriterOptions.Builder().
             setMetadataVersion(version).
-            setFinalizedFeatures(Map.of(EligibleLeaderReplicasVersion.FEATURE_NAME, EligibleLeaderReplicasVersion.ELRV_1.featureLevel())).build();
-        assertEquals(EligibleLeaderReplicasVersion.ELRV_1.featureLevel(), options.finalizedFeatures().get(EligibleLeaderReplicasVersion.FEATURE_NAME));
-        assertFalse(options.finalizedFeatures().containsKey(GroupVersion.FEATURE_NAME));
+            setEligibleLeaderReplicasEnabled(true).build();
+        assertEquals(true, options.isEligibleLeaderReplicasEnabled());
+
+        options = new ImageWriterOptions.Builder().
+            setMetadataVersion(version).build();
+        assertEquals(false, options.isEligibleLeaderReplicasEnabled());
     }
 }

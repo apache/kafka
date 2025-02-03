@@ -848,9 +848,9 @@ public class ReplicationControlManager {
             int partitionIndex = partEntry.getKey();
             PartitionRegistration info = partEntry.getValue();
             records.add(info.toRecord(topicId, partitionIndex, new ImageWriterOptions.Builder().
-                    setMetadataVersion(featureControl.metadataVersion()).
-                    setFinalizedFeatures(featureControl.latestFinalizedFeatures().featureMap()).
-                    build()));
+                setMetadataVersion(featureControl.metadataVersion()).
+                setEligibleLeaderReplicasEnabled(featureControl.isElrFeatureEnabled()).
+                build()));
         }
         return ApiError.NONE;
     }
@@ -1942,7 +1942,7 @@ public class ReplicationControlManager {
             records.add(buildPartitionRegistration(partitionAssignment, isr)
                 .toRecord(topicId, partitionId, new ImageWriterOptions.Builder().
                         setMetadataVersion(featureControl.metadataVersion()).
-                        setFinalizedFeatures(featureControl.latestFinalizedFeatures().featureMap()).
+                        setEligibleLeaderReplicasEnabled(featureControl.isElrFeatureEnabled()).
                         build()));
             partitionId++;
         }

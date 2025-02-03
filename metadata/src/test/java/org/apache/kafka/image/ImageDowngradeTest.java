@@ -202,7 +202,6 @@ public class ImageDowngradeTest {
         RecordListWriter writer = new RecordListWriter();
         image.write(writer, new ImageWriterOptions.Builder().
                 setMetadataVersion(metadataVersion).
-                setFinalizedFeatures(Collections.emptyMap()).
                 setLossHandler(lossConsumer).
                 build());
         assertEquals(expectedLosses, lossConsumer.losses, "Failed to get expected metadata losses.");

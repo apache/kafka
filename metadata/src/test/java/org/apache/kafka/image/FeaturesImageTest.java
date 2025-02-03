@@ -155,7 +155,7 @@ public class FeaturesImageTest {
         RecordListWriter writer = new RecordListWriter();
         image.write(writer, new ImageWriterOptions.Builder().
                 setMetadataVersion(image.metadataVersion()).
-                setFinalizedFeatures(Collections.emptyMap()).
+
                 build());
         return writer.records();
     }

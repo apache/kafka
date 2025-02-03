@@ -25,7 +25,6 @@ import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
@@ -95,7 +94,6 @@ public class MetadataImageTest {
         // check image1 + delta1 = image2, since records for image1 + delta1 might differ from records from image2
         ImageWriterOptions options = new ImageWriterOptions.Builder()
             .setMetadataVersion(IMAGE1.features().metadataVersion())
-            .setFinalizedFeatures(Collections.emptyMap())
             .build();
         List<ApiMessageAndVersion> records = getImageRecords(IMAGE1, options);
         records.addAll(FeaturesImageTest.DELTA1_RECORDS);
@@ -118,7 +116,6 @@ public class MetadataImageTest {
     private static void testToImage(MetadataImage image) {
         testToImage(image, new ImageWriterOptions.Builder()
             .setMetadataVersion(image.features().metadataVersion())
-            .setFinalizedFeatures(Collections.emptyMap())
             .build(), Optional.empty());
     }
 

@@ -20,7 +20,6 @@ package org.apache.kafka.image.writer;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.common.MetadataVersion;
 
-import java.util.Map;
 import java.util.function.Consumer;
 
 
@@ -31,7 +30,7 @@ public final class ImageWriterOptions {
     public static class Builder {
         private MetadataVersion metadataVersion;
         private MetadataVersion requestedMetadataVersion;
-        private Map<String, Short> finalizedFeatures;
+        private boolean isEligibleLeaderReplicasEnabled = false;
         private Consumer<UnwritableMetadataException> lossHandler = e -> {
             throw e;
         };
@@ -56,8 +55,8 @@ public final class ImageWriterOptions {
             return this;
         }
 
-        public Builder setFinalizedFeatures(Map<String, Short> features) {
-            finalizedFeatures = features;
+        public Builder setEligibleLeaderReplicasEnabled(boolean isEligibleLeaderReplicasEnabled) {
+            this.isEligibleLeaderReplicasEnabled = isEligibleLeaderReplicasEnabled;
             return this;
         }
 
@@ -69,8 +68,8 @@ public final class ImageWriterOptions {
             return requestedMetadataVersion;
         }
 
-        public Map<String, Short> finalizedFeatures() {
-            return finalizedFeatures;
+        public boolean isEligibleLeaderReplicasEnabled() {
+            return isEligibleLeaderReplicasEnabled;
         }
 
         public Builder setLossHandler(Consumer<UnwritableMetadataException> lossHandler) {
@@ -79,32 +78,32 @@ public final class ImageWriterOptions {
         }
 
         public ImageWriterOptions build() {
-            return new ImageWriterOptions(metadataVersion, lossHandler, requestedMetadataVersion, finalizedFeatures);
+            return new ImageWriterOptions(metadataVersion, lossHandler, requestedMetadataVersion, isEligibleLeaderReplicasEnabled);
         }
     }
 
     private final MetadataVersion metadataVersion;
     private final MetadataVersion requestedMetadataVersion;
     private final Consumer<UnwritableMetadataException> lossHandler;
-    private final Map<String, Short> finalizedFeatures;
+    private final boolean isEligibleLeaderReplicasEnabled;
 
     private ImageWriterOptions(
         MetadataVersion metadataVersion,
         Consumer<UnwritableMetadataException> lossHandler,
         MetadataVersion orgMetadataVersion,
-        Map<String, Short> finalizedFeatures
+        boolean isEligibleLeaderReplicasEnabled
     ) {
         this.metadataVersion = metadataVersion;
         this.lossHandler = lossHandler;
         this.requestedMetadataVersion = orgMetadataVersion;
-        this.finalizedFeatures = finalizedFeatures;
+        this.isEligibleLeaderReplicasEnabled = isEligibleLeaderReplicasEnabled;
     }
 
     public MetadataVersion metadataVersion() {
         return metadataVersion;
     }
-    public Map<String, Short> finalizedFeatures() {
-        return finalizedFeatures;
+    public boolean isEligibleLeaderReplicasEnabled() {
+        return isEligibleLeaderReplicasEnabled;
     }
 
     public void handleLoss(String loss) {

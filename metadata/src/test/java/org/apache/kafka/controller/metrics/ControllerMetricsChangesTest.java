@@ -131,7 +131,6 @@ public class ControllerMetricsChangesTest {
 
     static {
         ImageWriterOptions options = new ImageWriterOptions.Builder().
-                setFinalizedFeatures(Collections.emptyMap()).
                 setMetadataVersion(MetadataVersion.IBP_3_7_IV0).build(); // highest MV for PartitionRecord v0
         TOPIC_DELTA1 = new TopicDelta(new TopicImage("foo", FOO_ID, Collections.emptyMap()));
         TOPIC_DELTA1.replay((PartitionRecord) fakePartitionRegistration(NORMAL).

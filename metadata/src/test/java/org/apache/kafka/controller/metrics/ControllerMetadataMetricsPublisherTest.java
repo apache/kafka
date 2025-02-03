@@ -40,7 +40,6 @@ import org.apache.kafka.server.fault.MockFaultHandler;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
 import java.util.Optional;
 
 import static org.apache.kafka.controller.metrics.ControllerMetricsTestUtils.FakePartitionRegistrationType.NON_PREFERRED_LEADER;
@@ -148,7 +147,6 @@ public class ControllerMetadataMetricsPublisherTest {
             ImageReWriter writer = new ImageReWriter(delta);
             IMAGE1.write(writer, new ImageWriterOptions.Builder().
                     setMetadataVersion(delta.image().features().metadataVersion()).
-                    setFinalizedFeatures(Collections.emptyMap()).
                     build());
             env.publisher.onMetadataUpdate(delta, IMAGE1, fakeManifest(true));
             assertEquals(0, env.metrics.activeBrokerCount());

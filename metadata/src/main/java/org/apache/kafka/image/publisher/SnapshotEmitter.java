@@ -27,6 +27,7 @@ import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.image.writer.RaftSnapshotWriter;
 import org.apache.kafka.raft.RaftClient;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
 import org.apache.kafka.snapshot.SnapshotWriter;
 
 import org.slf4j.Logger;
@@ -148,7 +149,9 @@ public class SnapshotEmitter implements SnapshotGenerator.Emitter {
         try {
             image.write(writer, new ImageWriterOptions.Builder().
                     setMetadataVersion(image.features().metadataVersion()).
-                    setFinalizedFeatures(image.features().finalizedVersions()).
+                    setEligibleLeaderReplicasEnabled(
+                        image.features().finalizedVersions().getOrDefault(EligibleLeaderReplicasVersion.FEATURE_NAME, EligibleLeaderReplicasVersion.ELRV_0.featureLevel())
+                            >= EligibleLeaderReplicasVersion.ELRV_1.featureLevel()).
                     build());
             writer.close(true);
             metrics.setLatestSnapshotGeneratedTimeMs(time.milliseconds());
