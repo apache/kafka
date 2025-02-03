@@ -272,15 +272,6 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
         }
     }
 
-    public int metadataPartition(TopicIdPartition topicIdPartition) {
-        return rlmTopicPartitioner.metadataPartition(topicIdPartition);
-    }
-
-    // Visible For Testing
-    public Optional<Long> readOffsetForPartition(int metadataPartition) {
-        return consumerManager.readOffsetForPartition(metadataPartition);
-    }
-
     @Override
     public void onPartitionLeadershipChanges(Set<TopicIdPartition> leaderPartitions,
                                              Set<TopicIdPartition> followerPartitions) {
