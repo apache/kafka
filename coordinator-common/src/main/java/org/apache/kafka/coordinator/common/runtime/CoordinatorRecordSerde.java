@@ -76,6 +76,11 @@ public abstract class CoordinatorRecordSerde implements Serializer<CoordinatorRe
 
         final ApiMessage valueMessage = apiMessageValueFor(recordType);
         final short valueVersion = readVersion(valueBuffer, "value");
+
+        if (valueVersion < valueMessage.lowestSupportedVersion() || valueVersion > valueMessage.highestSupportedVersion()) {
+            throw new UnknownRecordVersionException(recordType, valueVersion);
+        }
+
         readMessage(valueMessage, valueBuffer, valueVersion, "value");
 
         return CoordinatorRecord.record(

@@ -14,22 +14,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.kstream.internals;
+package org.apache.kafka.common.metrics;
 
-import org.apache.kafka.streams.kstream.ForeachAction;
-import org.apache.kafka.streams.processor.api.Processor;
-import org.apache.kafka.streams.processor.api.Record;
+/**
+ * Plugins can implement this interface to register their own metrics.
+ */
+public interface Monitorable {
 
-public class ForeachProcessor<K, V> implements Processor<K, V, Void, Void> {
+    /**
+     * Provides a {@link PluginMetrics} instance from the component that instantiates the plugin.
+     * PluginMetrics can be used by the plugin to register and unregister metrics
+     * at any point in their lifecycle prior to their close method being called.
+     * Any metrics registered will be automatically removed when the plugin is closed.
+     */
+    void withPluginMetrics(PluginMetrics metrics);
 
-    private final ForeachAction<? super K, ? super V> action;
-
-    public ForeachProcessor(final ForeachAction<? super K, ? super V> action) {
-        this.action = action;
-    }
-
-    @Override
-    public void process(final Record<K, V> record) {
-        action.apply(record.key(), record.value());
-    }
 }

@@ -46,7 +46,7 @@ import static org.apache.kafka.streams.kstream.internals.foreignkeyjoin.Subscrip
 public class SubscriptionSendProcessorSupplier<K, KO, V> implements ProcessorSupplier<K, Change<V>, KO, SubscriptionWrapper<K>> {
     private static final Logger LOG = LoggerFactory.getLogger(SubscriptionSendProcessorSupplier.class);
 
-    private final ForeignKeyExtractor<K, V, KO> foreignKeyExtractor;
+    private final ForeignKeyExtractor<? super K, ? super V, ? extends KO> foreignKeyExtractor;
     private final Supplier<String> foreignKeySerdeTopicSupplier;
     private final Supplier<String> valueSerdeTopicSupplier;
     private final boolean leftJoin;
@@ -54,7 +54,7 @@ public class SubscriptionSendProcessorSupplier<K, KO, V> implements ProcessorSup
     private Serializer<V> valueSerializer;
     private boolean useVersionedSemantics;
 
-    public SubscriptionSendProcessorSupplier(final ForeignKeyExtractor<K, V, KO> foreignKeyExtractor,
+    public SubscriptionSendProcessorSupplier(final ForeignKeyExtractor<? super K, ? super V, ? extends KO> foreignKeyExtractor,
                                              final Supplier<String> foreignKeySerdeTopicSupplier,
                                              final Supplier<String> valueSerdeTopicSupplier,
                                              final Serde<KO> foreignKeySerde,
@@ -89,7 +89,7 @@ public class SubscriptionSendProcessorSupplier<K, KO, V> implements ProcessorSup
         private String valueSerdeTopic;
         private long[] recordHash;
 
-        @SuppressWarnings("unchecked")
+        @SuppressWarnings({"unchecked", "resource"})
         @Override
         public void init(final ProcessorContext<KO, SubscriptionWrapper<K>> context) {
             super.init(context);
