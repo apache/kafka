@@ -1881,18 +1881,17 @@ public class SharePartition {
                 if (isInitialReadGapOffsetWindowActive()) {
                     // This case will arise if we have a situation where there is an acquirable gap after the lastOffsetAcknowledged.
                     // Ex, the cachedState has following state batches -> {(0, 10), (11, 20), (31,40)} and all these batches are acked.
-                    // In this case, lastOffsetAcknowledged will be 20, but we cannot simply move the start offset to the first offset
-                    // of next cachedState batch. The startOffset should be at 21, because we have an acquirable gap there.
+                    // There is a gap from 21 to 30. Let the initialReadGapOffset.gapStartOffset be 21. In this case,
+                    // lastOffsetAcknowledged will be 20, but we cannot simply move the start offset to the first offset
+                    // of next cachedState batch (next cachedState batch is 31 to 40). There is an acquirable gap in between (21 to 30)
+                    // and The startOffset should be at 21. Hence, we set startOffset to the minimum of initialReadGapOffset.gapStartOffset
+                    // and higher key of lastOffsetAcknowledged
                     startOffset = Math.min(initialReadGapOffset.gapStartOffset(), startOffset);
-                } else {
-                    // If initialReadGapOffset is null, that means the cachedState does not have any acquirable gaps.
-                    // We can simply move the start offset to the first offset of the next cachedState batch.
-                    startOffset = cachedState.higherKey(lastOffsetAcknowledged);
                 }
                 lastKeyToRemove = entry.getKey();
             } else {
-                // The code will reach this point only if lastOffsetAcknowledged is in the middle of a stateBatch. In this case
-                // we can simply move the startOffset to the next offset of lastOffsetAcknowledged.
+                // The code will reach this point only if lastOffsetAcknowledged is in the middle of some stateBatch. In this case
+                // we can simply move the startOffset to the next offset of lastOffsetAcknowledged and should consider any read gap offsets.
                 startOffset = lastOffsetAcknowledged + 1;
                 if (entry.getKey().equals(cachedState.firstKey())) {
                     // If the first batch in cachedState has some records yet to be acknowledged,
@@ -1923,7 +1922,7 @@ public class SharePartition {
 
         NavigableMap.Entry<Long, InFlightBatch> entry = cachedState.floorEntry(startOffset);
         if (entry == null) {
-            log.info("The start offset: {} is not found in the cached state for share partition: {}-{} " +
+            log.debug("The start offset: {} is not found in the cached state for share partition: {}-{} " +
                 "as there is an acquirable gap at the beginning. Cannot move the start offset.", startOffset, groupId, topicIdPartition);
             return false;
         }
@@ -1956,23 +1955,20 @@ public class SharePartition {
         try {
             for (NavigableMap.Entry<Long, InFlightBatch> entry : cachedState.entrySet()) {
                 InFlightBatch inFlightBatch = entry.getValue();
+                // If initialReadGapOffset.gapStartOffset is less than or equal to the last offset of the batch
+                // then we cannot identify the current inFlightBatch as acknowledged. All the offsets between
+                // initialReadGapOffset.gapStartOffset and initialReadGapOffset.endOffset should always be present
+                // in the cachedState
+                if (isInitialReadGapOffsetWindowActive() && inFlightBatch.lastOffset() >= initialReadGapOffset.gapStartOffset()) {
+                    return lastOffsetAcknowledged;
+                }
                 if (inFlightBatch.offsetState() == null) {
                     if (!isRecordStateAcknowledged(inFlightBatch.batchState())) {
-                        return lastOffsetAcknowledged;
-                    }
-                    // If initialReadGapOffset.gapStartOffset is less than or equal to the last offset of the batch
-                    // then we cannot identify the current inFlightBatch as acknowledged. All the offsets between
-                    // initialReadGapOffset.gapStartOffset and initialReadGapOffset.endOffset should always be present
-                    // in the cachedState
-                    if (isInitialReadGapOffsetWindowActive() && inFlightBatch.lastOffset() >= initialReadGapOffset.gapStartOffset()) {
                         return lastOffsetAcknowledged;
                     }
                     lastOffsetAcknowledged = inFlightBatch.lastOffset();
                 } else {
                     for (Map.Entry<Long, InFlightState> offsetState : inFlightBatch.offsetState.entrySet()) {
-                        if (isInitialReadGapOffsetWindowActive() && offsetState.getKey() >= initialReadGapOffset.gapStartOffset()) {
-                            return lastOffsetAcknowledged;
-                        }
                         if (!isRecordStateAcknowledged(offsetState.getValue().state())) {
                             return lastOffsetAcknowledged;
                         }
