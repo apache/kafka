@@ -3936,6 +3936,7 @@ class UnifiedLogTest {
     assertEquals(VerificationGuard.SENTINEL, log.verificationGuard(producerId))
   }
 
+  @Test
   def testNextTransactionVerificationGuardNotCleared(): Unit = {
     val producerStateManagerConfig = new ProducerStateManagerConfig(86400000, true)
 
