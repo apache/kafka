@@ -110,7 +110,9 @@ public class ClientUtilsTest {
             List.of("localhost:10000"),
             // Intentionally provide a single string, as users may provide space-separated brokers, which will be parsed as a single string.
             List.of("localhost:9997\nlocalhost:9998\nlocalhost:9999"),
-            List.of("localhost:9997 localhost:9998 localhost:9999")
+            List.of("localhost:9997 localhost:9998 localhost:9999"),
+            List.of("localhost:9997;localhost:9998;localhost:9999"),
+            List.of("localhost:9997:localhost:9998:localhost:9999")
         );
     }
 
