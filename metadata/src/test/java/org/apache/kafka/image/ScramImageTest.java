@@ -177,8 +177,7 @@ public class ScramImageTest {
     @Test
     public void testEmptyWithInvalidIBP() {
         ImageWriterOptions imageWriterOptions = new ImageWriterOptions.Builder().
-                setMetadataVersion(MetadataVersion.IBP_3_4_IV0).
-                build();
+                setMetadataVersion(MetadataVersion.IBP_3_4_IV0).build();
         RecordListWriter writer = new RecordListWriter();
         ScramImage.EMPTY.write(writer, imageWriterOptions);
     }
@@ -186,8 +185,7 @@ public class ScramImageTest {
     @Test
     public void testImage1withInvalidIBP() {
         ImageWriterOptions imageWriterOptions = new ImageWriterOptions.Builder().
-                setMetadataVersion(MetadataVersion.IBP_3_4_IV0).
-                build();
+                setMetadataVersion(MetadataVersion.IBP_3_4_IV0).build();
         RecordListWriter writer = new RecordListWriter();
         try {
             IMAGE1.write(writer, imageWriterOptions);

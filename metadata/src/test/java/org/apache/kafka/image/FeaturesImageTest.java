@@ -153,10 +153,7 @@ public class FeaturesImageTest {
 
     private static List<ApiMessageAndVersion> getImageRecords(FeaturesImage image) {
         RecordListWriter writer = new RecordListWriter();
-        image.write(writer, new ImageWriterOptions.Builder().
-                setMetadataVersion(image.metadataVersion()).
-
-                build());
+        image.write(writer, new ImageWriterOptions.Builder().setMetadataVersion(image.metadataVersion()).build());
         return writer.records();
     }
 

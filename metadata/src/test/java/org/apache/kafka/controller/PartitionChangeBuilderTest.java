@@ -250,7 +250,8 @@ public class PartitionChangeBuilderTest {
         } else {
             return new PartitionChangeBuilder(OFFLINE_WITHOUT_ELR, OFFLINE_ID, 0, r -> r == 1,
                     metadataVersion, 2).
-                     setDefaultDirProvider(DEFAULT_DIR_PROVIDER);
+                      setEligibleLeaderReplicasEnabled(false).
+                      setDefaultDirProvider(DEFAULT_DIR_PROVIDER);
         }
     }
 
