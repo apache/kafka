@@ -95,15 +95,6 @@ public class ConsumerMetadata extends Metadata {
         if (isInternal && !includeInternalTopics)
             return false;
 
-        // Keep leader metadata for topics matching the RE2J subscription.
-        // We aim to replaced this with something more efficient in KAFKA-18117.
-        if (subscription.hasRe2JPatternSubscription()) {
-            for (TopicPartition topicPartition : subscription.assignedPartitionsList()) {
-                if (topicPartition.topic().equals(topic))
-                    return true;
-            }
-        }
-
-        return subscription.matchesSubscribedPattern(topic);
+        return subscription.matchesSubscribedPattern(topic) || subscription.isAssignedFromRe2j(topic);
     }
 }
