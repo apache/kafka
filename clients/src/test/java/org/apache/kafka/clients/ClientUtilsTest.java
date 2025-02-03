@@ -110,8 +110,8 @@ public class ClientUtilsTest {
 
     @ParameterizedTest
     @MethodSource("provideValidBrokerAddressTestCases")
-    public void testValidBrokerList(List<String> brokerList) {
-        assertDoesNotThrow(() -> ClientUtils.parseAndValidateAddresses(brokerList, ClientDnsLookup.USE_ALL_DNS_IPS));
+    public void testValidBrokerAddress(List<String> addresses) {
+        assertDoesNotThrow(() -> ClientUtils.parseAndValidateAddresses(addresses, ClientDnsLookup.USE_ALL_DNS_IPS));
     }
 
     @Test
