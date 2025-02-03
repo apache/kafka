@@ -19,7 +19,6 @@ package kafka.server
 
 import kafka.server.DynamicBrokerConfig.AllDynamicConfigs
 
-import java.net.{InetAddress, UnknownHostException}
 import java.util.Properties
 import org.apache.kafka.common.config.ConfigDef
 import org.apache.kafka.coordinator.group.GroupConfig
