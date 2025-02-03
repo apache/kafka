@@ -198,26 +198,6 @@ public class TopicConfig {
     public static final String PREALLOCATE_DOC = "True if we should preallocate the file on disk when " +
         "creating a new log segment.";
 
-    /**
-     * @deprecated since 3.0, removal planned in 4.0. The default value for this config is appropriate
-     * for most situations.
-     */
-    @Deprecated
-    public static final String MESSAGE_FORMAT_VERSION_CONFIG = "message.format.version";
-
-    /**
-     * @deprecated since 3.0, removal planned in 4.0. The default value for this config is appropriate
-     * for most situations.
-     */
-    @Deprecated
-    public static final String MESSAGE_FORMAT_VERSION_DOC = "[DEPRECATED] Specify the message format version the broker " +
-        "will use to append messages to the logs. The value of this config is always assumed to be `3.0` if " +
-        "`inter.broker.protocol.version` is 3.0 or higher (the actual config value is ignored). Otherwise, the value should " +
-        "be a valid ApiVersion. Some examples are: 0.10.0, 1.1, 2.8, 3.0. By setting a particular message format version, the " +
-        "user is certifying that all the existing messages on disk are smaller or equal than the specified version. Setting " +
-        "this value incorrectly will cause consumers with older versions to break as they will receive messages with a format " +
-        "that they don't understand.";
-
     public static final String MESSAGE_TIMESTAMP_TYPE_CONFIG = "message.timestamp.type";
     public static final String MESSAGE_TIMESTAMP_TYPE_DOC = "Define whether the timestamp in the message is " +
         "message create time or log append time.";
@@ -234,10 +214,18 @@ public class TopicConfig {
         "or equal to the broker's timestamp, with the maximum allowable difference determined by the value set in this " +
         "configuration. If message.timestamp.type=CreateTime, the message will be rejected if the difference in " +
         "timestamps exceeds this specified threshold. This configuration is ignored if message.timestamp.type=LogAppendTime.";
+
+    /**
+     * @deprecated down-conversion is not possible in Apache Kafka 4.0 and newer, hence this configuration is a no-op,
+     *             and it is deprecated for removal in Apache Kafka 5.0.
+     */
+    @Deprecated
     public static final String MESSAGE_DOWNCONVERSION_ENABLE_CONFIG = "message.downconversion.enable";
-    public static final String MESSAGE_DOWNCONVERSION_ENABLE_DOC = "This configuration controls whether " +
-        "down-conversion of message formats is enabled to satisfy consume requests. When set to <code>false</code>, " +
-        "broker will not perform down-conversion for consumers expecting an older message format. The broker responds " +
-        "with <code>UNSUPPORTED_VERSION</code> error for consume requests from such older clients. This configuration" +
-        "does not apply to any message format conversion that might be required for replication to followers.";
+
+    /**
+     * @deprecated see {@link #MESSAGE_DOWNCONVERSION_ENABLE_CONFIG}.
+     */
+    @Deprecated
+    public static final String MESSAGE_DOWNCONVERSION_ENABLE_DOC = "Down-conversion is not possible in Apache Kafka 4.0 and newer, " +
+        "hence this configuration is no-op and it is deprecated for removal in Apache Kafka 5.0.";
 }

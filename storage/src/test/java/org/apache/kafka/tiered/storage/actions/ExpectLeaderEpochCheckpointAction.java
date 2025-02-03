@@ -30,8 +30,6 @@ import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
 
-import scala.Option;
-
 public final class ExpectLeaderEpochCheckpointAction implements TieredStorageTestAction {
 
     private final Integer brokerId;
@@ -56,10 +54,8 @@ public final class ExpectLeaderEpochCheckpointAction implements TieredStorageTes
             EpochEntry earliestEntry = null;
             Optional<UnifiedLog> log = context.log(brokerId, partition);
             if (log.isPresent()) {
-                Option<LeaderEpochFileCache> leaderEpochCache = log.get().leaderEpochCache();
-                if (leaderEpochCache.isDefined()) {
-                    earliestEntry = leaderEpochCache.get().earliestEntry().orElse(null);
-                }
+                LeaderEpochFileCache leaderEpochCache = log.get().leaderEpochCache();
+                earliestEntry = leaderEpochCache.earliestEntry().orElse(null);
             }
             earliestEntryOpt.set(earliestEntry);
             return earliestEntry != null && beginEpoch == earliestEntry.epoch

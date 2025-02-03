@@ -679,7 +679,7 @@ public class ReassignPartitionsCommand {
                 : new BrokerMetadata(node.id(), Optional.empty())
             ).collect(Collectors.toList());
 
-        long numRackless = results.stream().filter(m -> !m.rack.isPresent()).count();
+        long numRackless = results.stream().filter(m -> m.rack.isEmpty()).count();
         if (enableRackAwareness && numRackless != 0 && numRackless != results.size()) {
             throw new AdminOperationException("Not all brokers have rack information. Add " +
                 "--disable-rack-aware in command line to make replica assignment without rack " +

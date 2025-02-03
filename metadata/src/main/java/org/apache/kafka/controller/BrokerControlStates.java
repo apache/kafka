@@ -44,8 +44,7 @@ class BrokerControlStates {
 
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof BrokerControlStates)) return false;
-        BrokerControlStates other = (BrokerControlStates) o;
+        if (!(o instanceof BrokerControlStates other)) return false;
         return other.current == current && other.next == next;
     }
 
