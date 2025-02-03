@@ -417,7 +417,7 @@ class TransactionStateManager(brokerId: Int,
     val props = new Properties
 
     props.put(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, "false")
-    props.put(TopicConfig.COMPRESSION_TYPE_CONFIG, TransactionStateManager.EnforcedCompression)
+    props.put(TopicConfig.COMPRESSION_TYPE_CONFIG, TransactionStateManager.EnforcedCompression.`type`().name)
     props.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT)
     props.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, config.transactionLogMinInsyncReplicas.toString)
     props.put(TopicConfig.SEGMENT_BYTES_CONFIG, config.transactionLogSegmentBytes.toString)
