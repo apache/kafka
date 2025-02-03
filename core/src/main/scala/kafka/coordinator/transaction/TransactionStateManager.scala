@@ -38,7 +38,6 @@ import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.coordinator.transaction.{TransactionLogConfig, TransactionStateManagerConfig}
 import org.apache.kafka.server.common.{RequestLocal, TransactionVersion}
 import org.apache.kafka.server.config.ServerConfigs
-import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.storage.log.FetchIsolation
 import org.apache.kafka.server.util.Scheduler
 import org.apache.kafka.storage.internals.log.AppendOrigin
@@ -47,13 +46,8 @@ import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 
 object TransactionStateManager {
-  // enforce always using
-  //  1. cleanup policy = compact
-  //  2. compression = none
-  //  3. unclean leader election = disabled
-  //  4. required acks = -1 when writing
   val EnforcedCompression: Compression = Compression.NONE
-  private val EnforcedRequiredAcks: Short = (-1).toShort
+  private val EnforcedRequiredAcks: Short = -1.toShort
 }
 
 /**
@@ -410,12 +404,20 @@ class TransactionStateManager(brokerId: Int,
   def validateTransactionTimeoutMs(txnTimeoutMs: Int): Boolean =
     txnTimeoutMs <= config.transactionMaxTimeoutMs && txnTimeoutMs > 0
 
+  /**
+   * Enforce always using:
+   * <br>1. cleanup policy = compact
+   * <br>2. compression = none
+   * <br>3. unclean leader election = disabled
+   * <br>4. required acks = -1 when writing
+   *
+   * @return transaction topic properties
+   */
   def transactionTopicConfigs: Properties = {
     val props = new Properties
 
-    // enforce disabled unclean leader election, no compression types, and compact cleanup policy
     props.put(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, "false")
-    props.put(TopicConfig.COMPRESSION_TYPE_CONFIG, BrokerCompressionType.UNCOMPRESSED.name)
+    props.put(TopicConfig.COMPRESSION_TYPE_CONFIG, TransactionStateManager.EnforcedCompression)
     props.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT)
     props.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, config.transactionLogMinInsyncReplicas.toString)
     props.put(TopicConfig.SEGMENT_BYTES_CONFIG, config.transactionLogSegmentBytes.toString)
