@@ -85,6 +85,9 @@
                         <li>The default properties files for KRaft mode are no longer stored in the separate <code>config/kraft</code> directory since Zookeeper has been removed. These files have been consolidated with other configuration files.
                             Now all configuration files are in <code>config</code> directory.
                         </li>
+                        <li>The valid format for <code>--bootstrap-server</code> only supports comma-separated value, such as <code>host1:port1,host2:port2,...</code>.
+                            Providing other formats, like space-separated bootstrap servers (e.g., <code>host1:port1 host2:port2 host3:port3</code>), will result in an exception, even though this was allowed in Apache Kafka versions prior to 4.0.
+                        </li>
                     </ul>
                 </li>
                 <li><b>Broker</b>
