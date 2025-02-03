@@ -236,6 +236,9 @@ jobs:
           compression-level: 9
           if-no-files-found: ignore
 
+      - name: Display structure of downloaded files
+        run: ls -R
+
       - name: Archive JUnit XML
         uses: actions/upload-artifact@v4
         with:
