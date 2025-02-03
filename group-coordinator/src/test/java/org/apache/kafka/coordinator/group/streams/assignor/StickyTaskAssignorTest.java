@@ -1094,7 +1094,7 @@ public class StickyTaskAssignorTest {
         }
 
         @Override
-        public int numTasks(String subtopologyId) throws NoSuchElementException {
+        public int maxNumInputPartitions(String subtopologyId) throws NoSuchElementException {
             return numTasks;
         }
 
@@ -1112,7 +1112,7 @@ public class StickyTaskAssignorTest {
         }
 
         @Override
-        public int numTasks(String subtopologyId) throws NoSuchElementException {
+        public int maxNumInputPartitions(String subtopologyId) throws NoSuchElementException {
             if (subtopologyId.equals("test-subtopology1"))
                 return 6;
             return 1;
