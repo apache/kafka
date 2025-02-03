@@ -48,7 +48,6 @@ import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
 import org.apache.kafka.storage.internals.checkpoint.CleanShutdownFileHandler;
 
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -107,7 +106,7 @@ public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarnes
         return JavaConverters.asScalaBuffer(configs).toSeq();
     }
 
-    @BeforeEach
+    @Override
     public void setUp(TestInfo info) {
         super.setUp(info);
         // create adminClient
@@ -126,7 +125,6 @@ public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarnes
     @AfterEach
     public void close() throws Exception {
         if (adminClient != null) adminClient.close();
-        super.tearDown();
     }
 
     @ParameterizedTest
