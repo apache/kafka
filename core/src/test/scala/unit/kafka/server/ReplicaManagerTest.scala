@@ -4189,53 +4189,6 @@ class ReplicaManagerTest {
   }
 
   @Test
-  def testPartitionMetadataFileCreatedWithExistingLog(): Unit = {
-    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time))
-    try {
-      val brokerList = Seq[Integer](0, 1).asJava
-      val topicPartition = new TopicPartition(topic, 0)
-
-      replicaManager.logManager.getOrCreateLog(topicPartition, isNew = true, topicId = None)
-
-      assertTrue(replicaManager.getLog(topicPartition).isDefined)
-      var log = replicaManager.getLog(topicPartition).get
-      assertEquals(None, log.topicId)
-      assertFalse(log.partitionMetadataFile.get.exists())
-
-      val topicIds = Collections.singletonMap(topic, Uuid.randomUuid())
-      val topicNames = topicIds.asScala.map(_.swap).asJava
-
-      def leaderAndIsrRequest(epoch: Int): LeaderAndIsrRequest = new LeaderAndIsrRequest.Builder(0, 0, brokerEpoch,
-        Seq(new LeaderAndIsrRequest.PartitionState()
-          .setTopicName(topic)
-          .setPartitionIndex(0)
-          .setControllerEpoch(0)
-          .setLeader(0)
-          .setLeaderEpoch(epoch)
-          .setIsr(brokerList)
-          .setPartitionEpoch(0)
-          .setReplicas(brokerList)
-          .setIsNew(true)).asJava,
-        topicIds,
-        Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
-
-      val response = replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(0), (_, _) => ())
-      assertEquals(Errors.NONE, response.partitionErrors(topicNames).get(topicPartition))
-      assertFalse(replicaManager.localLog(topicPartition).isEmpty)
-      val id = topicIds.get(topicPartition.topic())
-      log = replicaManager.localLog(topicPartition).get
-      assertTrue(log.partitionMetadataFile.get.exists())
-      val partitionMetadata = log.partitionMetadataFile.get.read()
-
-      // Current version of PartitionMetadataFile is 0.
-      assertEquals(0, partitionMetadata.version)
-      assertEquals(id, partitionMetadata.topicId)
-    } finally {
-      replicaManager.shutdown(checkpointHW = false)
-    }
-  }
-
-  @Test
   def testInconsistentIdReturnsError(): Unit = {
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time))
     try {
