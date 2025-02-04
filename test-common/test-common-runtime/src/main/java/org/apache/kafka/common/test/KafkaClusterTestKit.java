@@ -415,6 +415,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
             throw new RuntimeException(String.format("Node %d already exists.", nodeId));
         }
 
+        // TODO: current only support isolated controller
         props.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller");
         props.putIfAbsent(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER");
         props.put(KRaftConfigs.SERVER_MAX_STARTUP_TIME_MS_CONFIG,
