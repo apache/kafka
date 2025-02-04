@@ -68,7 +68,6 @@ import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
-import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -350,8 +349,6 @@ public class KafkaClusterTestKit implements AutoCloseable {
     private final TestKitNodes nodes;
     private final Map<Integer, ControllerServer> controllers;
     private final Map<Integer, BrokerServer> brokers;
-    private final Map<Integer, BrokerServer> dynamicBrokers = new TreeMap<>();
-    private final Map<Integer, ControllerServer> dynamicControllers = new TreeMap<>();
     private final File baseDirectory;
     private final SimpleFaultHandlerFactory faultHandlerFactory;
     private final PreboundSocketFactoryManager socketFactoryManager;
@@ -377,8 +374,8 @@ public class KafkaClusterTestKit implements AutoCloseable {
         int numOfExecutorThreads = (nodes.brokerNodes().size() + nodes.controllerNodes().size()) * 2;
         this.executorService = Executors.newFixedThreadPool(numOfExecutorThreads, threadFactory);
         this.nodes = nodes;
-        this.controllers = Collections.unmodifiableMap(controllers);
-        this.brokers = Collections.unmodifiableMap(brokers);
+        this.controllers = controllers;
+        this.brokers = brokers;
         this.baseDirectory = baseDirectory;
         this.faultHandlerFactory = faultHandlerFactory;
         this.socketFactoryManager = socketFactoryManager;
@@ -395,14 +392,14 @@ public class KafkaClusterTestKit implements AutoCloseable {
         try {
             for (ControllerServer controller : controllers.values()) {
                 futures.add(executorService.submit(() -> {
-                    formatNode(controller.sharedServer().metaPropsEnsemble(), true, false);
+                    formatNode(controller.sharedServer().metaPropsEnsemble(), true);
                 }));
             }
             for (Entry<Integer, BrokerServer> entry : brokers.entrySet()) {
                 BrokerServer broker = entry.getValue();
                 futures.add(executorService.submit(() -> {
                     formatNode(broker.sharedServer().metaPropsEnsemble(),
-                        !nodes.isCombined(nodes().brokerNodes().get(entry.getKey()).id()), false);
+                        !nodes.isCombined(nodes().brokerNodes().get(entry.getKey()).id()));
                 }));
             }
             for (Future<?> future: futures) {
@@ -418,19 +415,16 @@ public class KafkaClusterTestKit implements AutoCloseable {
     }
 
     public ControllerServer createIsolatedController(Map<String, String> props) throws IOException {
+        int nodeId = Integer.parseInt(props.get(KRaftConfigs.NODE_ID_CONFIG));
+        if (controllers.containsKey(nodeId)) {
+            throw new RuntimeException(String.format("Node %d already exist.", nodeId));
+        }
+
         props.put(KRaftConfigs.SERVER_MAX_STARTUP_TIME_MS_CONFIG,
                 Long.toString(TimeUnit.MINUTES.toMillis(10)));
         props.putIfAbsent(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller");
         props.putIfAbsent(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER");
 
-//        if (props.containsKey(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG) ||
-//                props.containsKey(SocketServerConfigs.LISTENERS_CONFIG) ||
-//                props.containsKey(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG)) {
-//            throw new RuntimeException("");
-//        }
-
-
-        int nodeId = Integer.parseInt(props.get(KRaftConfigs.NODE_ID_CONFIG));
         ServerSocketFactory serverSocketFactor = socketFactoryManager.getOrCreateSocketFactory(nodeId);
         int controllerPort = socketFactoryManager.getOrCreatePortForListener(nodeId, "CONTROLLER");
         int plaintextPort = socketFactoryManager.getOrCreatePortForListener(nodeId, "PLAINTEXT");
@@ -442,7 +436,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
 
         TestKitNode node = nodes.createControllerNode(config, false);
         MetaPropertiesEnsemble metaPropsEnsemble = node.initialMetaPropertiesEnsemble();
-        formatNode(metaPropsEnsemble, true, true);
+        formatNode(metaPropsEnsemble, true);
 
         SharedServer sharedServer = new SharedServer(
                 config,
@@ -467,15 +461,14 @@ public class KafkaClusterTestKit implements AutoCloseable {
         }
 
         controller.startup();
-        dynamicControllers.put(node.id(), controller);
+        controllers.put(node.id(), controller);
 
         return controller;
     }
 
     private void formatNode(
         MetaPropertiesEnsemble ensemble,
-        boolean writeMetadataDirectory,
-        boolean isDynamic
+        boolean writeMetadataDirectory
     ) {
         try {
             Formatter formatter = new Formatter();
@@ -698,12 +691,6 @@ public class KafkaClusterTestKit implements AutoCloseable {
                 futureEntries.add(new SimpleImmutableEntry<>("broker" + brokerId,
                     executorService.submit((Runnable) broker::shutdown)));
             }
-            for (Entry<Integer, BrokerServer> entry : dynamicBrokers.entrySet()) {
-                int brokerId = entry.getKey();
-                BrokerServer broker = entry.getValue();
-                futureEntries.add(new SimpleImmutableEntry<>("broker" + brokerId,
-                        executorService.submit((Runnable) broker::shutdown)));
-            }
             waitForAllFutures(futureEntries);
             futureEntries.clear();
             for (Entry<Integer, ControllerServer> entry : controllers.entrySet()) {
@@ -711,12 +698,6 @@ public class KafkaClusterTestKit implements AutoCloseable {
                 ControllerServer controller = entry.getValue();
                 futureEntries.add(new SimpleImmutableEntry<>("controller" + controllerId,
                     executorService.submit(controller::shutdown)));
-            }
-            for (Entry<Integer, ControllerServer> entry : dynamicControllers.entrySet()) {
-                int controllerId = entry.getKey();
-                ControllerServer controller = entry.getValue();
-                futureEntries.add(new SimpleImmutableEntry<>("controller" + controllerId,
-                        executorService.submit(controller::shutdown)));
             }
             waitForAllFutures(futureEntries);
             futureEntries.clear();

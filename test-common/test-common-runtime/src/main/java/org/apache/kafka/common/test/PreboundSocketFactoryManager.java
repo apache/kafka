@@ -118,9 +118,7 @@ public class PreboundSocketFactoryManager implements AutoCloseable {
         if (socket == null) {
             return null;
         }
-
         usedSockets.computeIfAbsent(nodeId, __ -> new HashSet<>()).add(listener);
-
         return socket;
     }
 
@@ -162,9 +160,7 @@ public class PreboundSocketFactoryManager implements AutoCloseable {
             socketsForNode.put(listener, socketChannel);
         }
         InetSocketAddress socketAddress = (InetSocketAddress) socketChannel.getLocalAddress();
-
-        int port = socketAddress.getPort();
-        return port;
+        return socketAddress.getPort();
     }
 
     @Override

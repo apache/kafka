@@ -183,7 +183,7 @@ public class KafkaClusterTestKitTest {
         props.put("controller.quorum.bootstrap.servers", "localhost:9000");
 
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(nodes).build()) {
-            assertDoesNotThrow(() -> cluster.createIsolatedController(props));
+            assertThrowsExactly(RuntimeException.class, () -> cluster.createIsolatedController(props));
         }
     }
 }
