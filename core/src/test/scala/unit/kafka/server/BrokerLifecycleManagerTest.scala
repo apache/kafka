@@ -288,7 +288,7 @@ class BrokerLifecycleManagerTest {
     assertEquals(1000L, manager.brokerEpoch)
 
     // Trigger JBOD MV update
-    manager.resendBrokerRegistrationUnlessZkMode()
+    manager.resendBrokerRegistration()
 
     // Accept new registration, response sets epoch to 1200
     nextRegistrationRequest(1200L)
