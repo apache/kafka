@@ -72,25 +72,24 @@ public class IQv2EndpointToPartitionsIntegrationTest {
     private static final Logger LOG = LoggerFactory.getLogger(IQv2EndpointToPartitionsIntegrationTest.class);
 
 
-    @BeforeAll
-    public static void startCluster() throws IOException {
+
+    public void startCluster(int standbyConfig) throws IOException {
         final Properties properties = new Properties();
         properties.put(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer,streams");
+        properties.put(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_CONFIG, standbyConfig);
         cluster = new EmbeddedKafkaCluster(NUM_BROKERS, properties);
         cluster.start();
     }
 
-    @BeforeEach
     public void setUp(final TestInfo testInfo) throws InterruptedException {
-        appId = safeUniqueTestName(testInfo);
+        appId = safeUniqueTestName("endpointIntegrationTest");
         inputTopicTwoPartitions = appId + "-input-two";
         outputTopicTwoPartitions = appId + "-output-two";
         cluster.createTopic(inputTopicTwoPartitions, 2, 1);
         cluster.createTopic(outputTopicTwoPartitions, 2, 1);
     }
 
-    @AfterAll
-    public static void closeCluster() {
+    public void closeCluster() {
         cluster.stop();
     }
 
@@ -103,91 +102,100 @@ public class IQv2EndpointToPartitionsIntegrationTest {
     }
 
 
-    @ParameterizedTest(name = "{2}")
+    @ParameterizedTest(name = "{3}")
     @MethodSource("groupProtocolParameters")
-    public void shouldGetCorrectHostPartitionInformation(final String groupProtocolConfig, final boolean usingStandbyReplicas, final String testName) throws Exception {
+    public void shouldGetCorrectHostPartitionInformation(final String groupProtocolConfig,
+                                                         final boolean usingStandbyReplicas,
+                                                         final int numStandbyReplicas,
+                                                         final String testName) throws Exception {
+        try {
+             startCluster(usingStandbyReplicas ? numStandbyReplicas : 0);
+             setUp(null);
 
-        final Properties streamOneProperties = new Properties();
-        streamOneProperties.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId).getPath() + "-ks1");
-        streamOneProperties.put(StreamsConfig.CLIENT_ID_CONFIG, appId + "-ks1");
-        streamOneProperties.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:2020");
-        streamOneProperties.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, groupProtocolConfig);
-        if (usingStandbyReplicas) {
-            streamOneProperties.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
-        }
-        streamsApplicationProperties = props(streamOneProperties);
-
-        final Properties streamTwoProperties = new Properties();
-        streamTwoProperties.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId).getPath() + "-ks2");
-        streamTwoProperties.put(StreamsConfig.CLIENT_ID_CONFIG, appId + "-ks2");
-        streamTwoProperties.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:3030");
-        streamTwoProperties.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, groupProtocolConfig);
-        if (usingStandbyReplicas) {
-            streamTwoProperties.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
-        }
-        streamsSecondApplicationProperties = props(streamTwoProperties);
-
-        final Topology topology = complexTopology();
-        try (final KafkaStreams streamsOne = new KafkaStreams(topology, streamsApplicationProperties)) {
-            IntegrationTestUtils.startApplicationAndWaitUntilRunning(streamsOne);
-            List<StreamsMetadata> streamsMetadataAllClients = new ArrayList<>(streamsOne.metadataForAllStreamsClients());
-            assertEquals(1, streamsMetadataAllClients.size());
-            StreamsMetadata streamsOneMetadataOne = streamsMetadataAllClients.get(0);
-            final Set<TopicPartition> topicPartitions = streamsOneMetadataOne.topicPartitions();
-            assertEquals(2020, streamsOneMetadataOne.hostInfo().port());
-            assertEquals(4, topicPartitions.size());
-            // Only one KS client instance should be no standby assigned
-            assertEquals(0, streamsOneMetadataOne.standbyTopicPartitions().size());
-
-            final long repartitionTopicTaskCount = topicPartitions.stream().filter(tp -> tp.topic().contains("-repartition")).count();
-            final long sourceTopicTaskCount = topicPartitions.stream().filter(tp -> tp.topic().contains("-input-two")).count();
-            assertEquals(2, repartitionTopicTaskCount);
-            assertEquals(2, sourceTopicTaskCount);
-            
-            LOG.info("StreamsMetadata topicPartitions for streamsOne: {}", streamsOneMetadataOne.topicPartitions());
-
-            try (final KafkaStreams streamsTwo = new KafkaStreams(topology, streamsSecondApplicationProperties)) {
-                streamsTwo.start();
-                waitForCondition(() -> KafkaStreams.State.RUNNING == streamsTwo.state() && KafkaStreams.State.RUNNING == streamsOne.state(),
-                        IntegrationTestUtils.DEFAULT_TIMEOUT,
-                        () -> "Kafka Streams one or two never transitioned to a RUNNING state.");
-
-                streamsMetadataAllClients = new ArrayList<>(streamsTwo.metadataForAllStreamsClients());
-                assertEquals(2, streamsMetadataAllClients.size());
-                streamsOneMetadataOne = streamsMetadataAllClients.get(0);
-
-                final Set<TopicPartition> streamsOneTopicPartitions = streamsOneMetadataOne.topicPartitions();
-                LOG.info("StreamsMetadata topicPartitions for streamsOne: {}", streamsOneTopicPartitions);
-                assertEquals(2020, streamsOneMetadataOne.hostInfo().port());
-                assertEquals(2, streamsOneTopicPartitions.size());
-                final int standbyTopicPartitionCount = usingStandbyReplicas ? 1 : 0;
-                assertEquals(standbyTopicPartitionCount, streamsOneMetadataOne.standbyTopicPartitions().size());
-
-                final long streamsOneRepartitionTopicTaskCount = streamsOneTopicPartitions.stream().filter(tp -> tp.topic().contains("-repartition")).count();
-                final long streamsOneSourceTopicTaskCount = streamsOneTopicPartitions.stream().filter(tp -> tp.topic().contains("-input-two")).count();
-                assertEquals(1, streamsOneRepartitionTopicTaskCount);
-                assertEquals(1, streamsOneSourceTopicTaskCount);
-                
-                final StreamsMetadata streamsOneMetadataTwo = streamsMetadataAllClients.get(1);
-                final Set<TopicPartition> streamsTwoTopicPartitions = streamsOneMetadataTwo.topicPartitions();
-                LOG.info("StreamsMetadata topicPartitions for streamsTwo: {}", streamsTwoTopicPartitions);
-                assertEquals(3030, streamsOneMetadataTwo.hostInfo().port());
-                assertEquals(2, streamsTwoTopicPartitions.size());
-                assertEquals(standbyTopicPartitionCount, streamsOneMetadataTwo.standbyTopicPartitions().size());
-
-                final long streamsTwoRepartitionTopicTaskCount = streamsTwoTopicPartitions.stream().filter(tp -> tp.topic().contains("-repartition")).count();
-                final long streamsTwoSourceTopicTaskCount = streamsTwoTopicPartitions.stream().filter(tp -> tp.topic().contains("-input-two")).count();
-                assertEquals(1, streamsTwoRepartitionTopicTaskCount);
-                assertEquals(1, streamsTwoSourceTopicTaskCount);
+            final Properties streamOneProperties = new Properties();
+            streamOneProperties.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId).getPath() + "-ks1");
+            streamOneProperties.put(StreamsConfig.CLIENT_ID_CONFIG, appId + "-ks1");
+            streamOneProperties.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:2020");
+            streamOneProperties.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, groupProtocolConfig);
+            if (usingStandbyReplicas) {
+                streamOneProperties.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, numStandbyReplicas);
             }
+            streamsApplicationProperties = props(streamOneProperties);
+
+            final Properties streamTwoProperties = new Properties();
+            streamTwoProperties.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId).getPath() + "-ks2");
+            streamTwoProperties.put(StreamsConfig.CLIENT_ID_CONFIG, appId + "-ks2");
+            streamTwoProperties.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:3030");
+            streamTwoProperties.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, groupProtocolConfig);
+            if (usingStandbyReplicas) {
+                streamTwoProperties.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, numStandbyReplicas);
+            }
+            streamsSecondApplicationProperties = props(streamTwoProperties);
+
+            final Topology topology = complexTopology();
+            try (final KafkaStreams streamsOne = new KafkaStreams(topology, streamsApplicationProperties)) {
+                IntegrationTestUtils.startApplicationAndWaitUntilRunning(streamsOne);
+                List<StreamsMetadata> streamsMetadataAllClients = new ArrayList<>(streamsOne.metadataForAllStreamsClients());
+                assertEquals(1, streamsMetadataAllClients.size());
+                StreamsMetadata streamsOneMetadataOne = streamsMetadataAllClients.get(0);
+                final Set<TopicPartition> topicPartitions = streamsOneMetadataOne.topicPartitions();
+                assertEquals(2020, streamsOneMetadataOne.hostInfo().port());
+                assertEquals(4, topicPartitions.size());
+                // Only one KS client instance should be no standby assigned
+                assertEquals(0, streamsOneMetadataOne.standbyTopicPartitions().size());
+
+                final long repartitionTopicTaskCount = topicPartitions.stream().filter(tp -> tp.topic().contains("-repartition")).count();
+                final long sourceTopicTaskCount = topicPartitions.stream().filter(tp -> tp.topic().contains("-input-two")).count();
+                assertEquals(2, repartitionTopicTaskCount);
+                assertEquals(2, sourceTopicTaskCount);
+
+                LOG.info("StreamsMetadata topicPartitions for streamsOne: {}", streamsOneMetadataOne.topicPartitions());
+
+                try (final KafkaStreams streamsTwo = new KafkaStreams(topology, streamsSecondApplicationProperties)) {
+                    streamsTwo.start();
+                    waitForCondition(() -> KafkaStreams.State.RUNNING == streamsTwo.state() && KafkaStreams.State.RUNNING == streamsOne.state(),
+                            IntegrationTestUtils.DEFAULT_TIMEOUT,
+                            () -> "Kafka Streams one or two never transitioned to a RUNNING state.");
+
+                    streamsMetadataAllClients = new ArrayList<>(streamsTwo.metadataForAllStreamsClients());
+                    assertEquals(2, streamsMetadataAllClients.size());
+                    streamsOneMetadataOne = streamsMetadataAllClients.get(0);
+
+                    final Set<TopicPartition> streamsOneTopicPartitions = streamsOneMetadataOne.topicPartitions();
+                    LOG.info("StreamsMetadata topicPartitions for streamsOne: {}", streamsOneTopicPartitions);
+                    assertEquals(2020, streamsOneMetadataOne.hostInfo().port());
+                    assertEquals(4, streamsOneTopicPartitions.size());
+                    final int standbyTopicPartitionCount = usingStandbyReplicas ? 1 : 0;
+                    assertEquals(standbyTopicPartitionCount, streamsOneMetadataOne.standbyTopicPartitions().size());
+
+                    final long streamsOneRepartitionTopicTaskCount = streamsOneTopicPartitions.stream().filter(tp -> tp.topic().contains("-repartition")).count();
+                    final long streamsOneSourceTopicTaskCount = streamsOneTopicPartitions.stream().filter(tp -> tp.topic().contains("-input-two")).count();
+                    assertEquals(1, streamsOneRepartitionTopicTaskCount);
+                    assertEquals(1, streamsOneSourceTopicTaskCount);
+
+                    final StreamsMetadata streamsOneMetadataTwo = streamsMetadataAllClients.get(1);
+                    final Set<TopicPartition> streamsTwoTopicPartitions = streamsOneMetadataTwo.topicPartitions();
+                    LOG.info("StreamsMetadata topicPartitions for streamsTwo: {}", streamsTwoTopicPartitions);
+                    assertEquals(3030, streamsOneMetadataTwo.hostInfo().port());
+                    assertEquals(2, streamsTwoTopicPartitions.size());
+                    assertEquals(standbyTopicPartitionCount, streamsOneMetadataTwo.standbyTopicPartitions().size());
+
+                    final long streamsTwoRepartitionTopicTaskCount = streamsTwoTopicPartitions.stream().filter(tp -> tp.topic().contains("-repartition")).count();
+                    final long streamsTwoSourceTopicTaskCount = streamsTwoTopicPartitions.stream().filter(tp -> tp.topic().contains("-input-two")).count();
+                    assertEquals(1, streamsTwoRepartitionTopicTaskCount);
+                    assertEquals(1, streamsTwoSourceTopicTaskCount);
+                }
+            }
+        } finally {
+            closeCluster();
         }
     }
 
     private static Stream<Arguments> groupProtocolParameters() {
-        return Stream.of(Arguments.of("streams", false, "STREAMS protocol No standby"),
-                Arguments.of("classic", false, "CLASSIC protocol No standby"),
-                Arguments.of("streams", true, "STREAMS protocol With standby"),
-                Arguments.of("classic", true, "CLASSIC protocol With standby"));
+        return Stream.of(Arguments.of("streams", false, 0, "STREAMS protocol No standby"),
+                Arguments.of("classic", false, 0, "CLASSIC protocol No standby"),
+                Arguments.of("streams", true, 1, "STREAMS protocol With standby"),
+                Arguments.of("classic", true, 1, "CLASSIC protocol With standby"));
     }
 
     private Properties props(final Properties extraProperties) {

@@ -1403,15 +1403,20 @@ public class StreamThread extends Thread implements ProcessingThread {
             }
 
             // Process metadata from Streams Rebalance Protocol
-            final Map<StreamsAssignmentInterface.HostInfo, List<TopicPartition>> partitionsByEndpoint =
+            final Map<StreamsAssignmentInterface.HostInfo, Map<String, List<TopicPartition>>> partitionsByEndpoint =
                 streamsAssignmentInterface.get().partitionsByHost.get();
-            final Map<HostInfo, Set<TopicPartition>> convertedHostInfoMap = new HashMap<>();
-            partitionsByEndpoint.forEach((hostInfo, topicPartitions) ->
-                convertedHostInfoMap.put(new HostInfo(hostInfo.host, hostInfo.port), new HashSet<>(topicPartitions)));
+            final Map<HostInfo,Set<TopicPartition>> activeHostInfoMap = new HashMap<>();
+            partitionsByEndpoint.forEach((hostInfo, topicPartitions) -> {
+                        activeHostInfoMap.put(new HostInfo(hostInfo.host, hostInfo.port), new HashSet<>(topicPartitions.get("active")));
+                    });
+            final Map<HostInfo,Set<TopicPartition>> standbyHostInfoMap = new HashMap<>();
+            partitionsByEndpoint.forEach((hostInfo, topicPartitions) -> {
+                standbyHostInfoMap.put(new HostInfo(hostInfo.host, hostInfo.port), new HashSet<>(topicPartitions.get("standby")));
+            });
             streamsMetadataState.onChange(
-                convertedHostInfoMap,
-                Collections.emptyMap(), // TODO: We cannot differentiate between standby and active tasks here?!
-                getTopicPartitionInfo(convertedHostInfoMap)
+                activeHostInfoMap,
+                standbyHostInfoMap, // TODO: We cannot differentiate between standby and active tasks here?!
+                getTopicPartitionInfo(activeHostInfoMap)
             );
 
             // Process assignment from Streams Rebalance Protocol

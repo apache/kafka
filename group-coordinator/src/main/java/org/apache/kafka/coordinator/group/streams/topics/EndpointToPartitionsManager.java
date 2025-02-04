@@ -41,7 +41,8 @@ public class EndpointToPartitionsManager {
                                                                                        final StreamsGroup streamsGroup) {
 
         StreamsGroupHeartbeatResponseData.EndpointToPartitions endpointToPartitions = new StreamsGroupHeartbeatResponseData.EndpointToPartitions();
-        List<StreamsGroupHeartbeatResponseData.TopicPartition> allTopicPartitions = new ArrayList<>();
+        List<StreamsGroupHeartbeatResponseData.TopicPartition> activeTopicPartitions = new ArrayList<>();
+        List<StreamsGroupHeartbeatResponseData.TopicPartition> standbyTopicPartitions = new ArrayList<>();
         for (Map.Entry<String, ConfiguredSubtopology> entry : streamsGroup.configuredTopology().subtopologies().entrySet()) {
             ConfiguredSubtopology configuredSubtopology = entry.getValue();
             endpointToPartitions.setUserEndpoint(responseEndpoint);
@@ -50,14 +51,15 @@ public class EndpointToPartitionsManager {
             Supplier<Stream<String>> topicNameStreamSupplier = () -> Stream.concat(configuredSubtopology.sourceTopics().stream(),
                     configuredSubtopology.repartitionSourceTopics().keySet().stream());
             List<StreamsGroupHeartbeatResponseData.TopicPartition> topicPartitionList = getTopicPartitions(taskEntrySet, topicNameStreamSupplier, groupTopicMetadata);
-            allTopicPartitions.addAll(topicPartitionList);
+            activeTopicPartitions.addAll(topicPartitionList);
 
             Set<Map.Entry<String, Set<Integer>>> standbyTaskEntrySet = streamsGroupMember.assignedStandbyTasks().entrySet();
             Supplier<Stream<String>> changelogTopicNameStreamSupplier = () -> configuredSubtopology.nonSourceChangelogTopics().stream().map(ConfiguredInternalTopic::name);
-            List<StreamsGroupHeartbeatResponseData.TopicPartition> standbyTopicPartitionList = getTopicPartitions(standbyTaskEntrySet, changelogTopicNameStreamSupplier, groupTopicMetadata);
-            allTopicPartitions.addAll(standbyTopicPartitionList);
+            List<StreamsGroupHeartbeatResponseData.TopicPartition> standbyList = getTopicPartitions(standbyTaskEntrySet, changelogTopicNameStreamSupplier, groupTopicMetadata);
+            standbyTopicPartitions.addAll(standbyList);
         }
-        endpointToPartitions.setPartitions(allTopicPartitions);
+        endpointToPartitions.setActivePartitions(activeTopicPartitions);
+        endpointToPartitions.setStandbyPartitions(standbyTopicPartitions);
         return endpointToPartitions;
     }
 

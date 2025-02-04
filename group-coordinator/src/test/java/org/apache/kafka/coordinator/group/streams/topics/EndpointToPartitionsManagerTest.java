@@ -95,25 +95,27 @@ class EndpointToPartitionsManagerTest {
 
         // Validate the results
         assertEquals(responseEndpoint, result.userEndpoint());
-        assertEquals(4, result.partitions().size());
+        assertEquals(2, result.activePartitions().size());
+        assertEquals(2, result.standbyPartitions().size());
 
-        List<StreamsGroupHeartbeatResponseData.TopicPartition> topicPartitions = result.partitions();
+        List<StreamsGroupHeartbeatResponseData.TopicPartition> activePartitions = result.activePartitions();
+        List<StreamsGroupHeartbeatResponseData.TopicPartition> standbyPartitions = result.standbyPartitions();
 
-        topicPartitions.sort(Comparator.comparing(StreamsGroupHeartbeatResponseData.TopicPartition::topic));
+        activePartitions.sort(Comparator.comparing(StreamsGroupHeartbeatResponseData.TopicPartition::topic));
         
-        StreamsGroupHeartbeatResponseData.TopicPartition activePartition = topicPartitions.get(0);
-        assertEquals("StateChangeLog-A", activePartition.topic());
-        assertEquals(List.of(0, 1, 2), activePartition.partitions().stream().sorted().toList());
+        StreamsGroupHeartbeatResponseData.TopicPartition standbyPartitionA = standbyPartitions.stream().filter(tp -> tp.topic().equals("StateChangeLog-A")).findFirst().get();
+        assertEquals("StateChangeLog-A", standbyPartitionA.topic());
+        assertEquals(List.of(0, 1, 2), standbyPartitionA.partitions().stream().sorted().toList());
 
-        StreamsGroupHeartbeatResponseData.TopicPartition standbyPartition = result.partitions().get(1);
-        assertEquals("StateChangeLog-B", standbyPartition.topic());
-        assertEquals(List.of(0, 1, 2), standbyPartition.partitions().stream().sorted().toList());
+        StreamsGroupHeartbeatResponseData.TopicPartition standbyPartitionB = result.standbyPartitions().stream().filter(tp -> tp.topic().equals("StateChangeLog-B")).findFirst().get();
+        assertEquals("StateChangeLog-B", standbyPartitionB.topic());
+        assertEquals(List.of(0, 1, 2), standbyPartitionB.partitions().stream().sorted().toList());
 
-        StreamsGroupHeartbeatResponseData.TopicPartition topicAPartition = result.partitions().get(2);
+        StreamsGroupHeartbeatResponseData.TopicPartition topicAPartition = result.activePartitions().stream().filter(tp -> tp.topic().equals("Topic-A")).findFirst().get();
         assertEquals("Topic-A", topicAPartition.topic());
         assertEquals(List.of(0, 1, 2), topicAPartition.partitions().stream().sorted().toList());
 
-        StreamsGroupHeartbeatResponseData.TopicPartition topicBPartition = result.partitions().get(3);
+        StreamsGroupHeartbeatResponseData.TopicPartition topicBPartition = result.activePartitions().stream().filter(tp -> tp.topic().equals("Topic-B")).findFirst().get();
         assertEquals("Topic-B", topicBPartition.topic());
         assertEquals(List.of(0, 1, 2), topicBPartition.partitions().stream().sorted().toList());
     }
@@ -145,16 +147,16 @@ class EndpointToPartitionsManagerTest {
         StreamsGroupHeartbeatResponseData.EndpointToPartitions result = endpointToPartitionsManager.endpointToPartitions(streamsGroupMember, responseEndpoint, streamsGroup);
 
         assertEquals(responseEndpoint, result.userEndpoint());
-        assertEquals(2, result.partitions().size());
+        assertEquals(2, result.activePartitions().size());
 
-        List<StreamsGroupHeartbeatResponseData.TopicPartition> topicPartitions = result.partitions();
+        List<StreamsGroupHeartbeatResponseData.TopicPartition> topicPartitions = result.activePartitions();
         topicPartitions.sort(Comparator.comparing(StreamsGroupHeartbeatResponseData.TopicPartition::topic));
 
-        StreamsGroupHeartbeatResponseData.TopicPartition topicAPartition = result.partitions().get(0);
+            StreamsGroupHeartbeatResponseData.TopicPartition topicAPartition = result.activePartitions().get(0);
         assertEquals("Topic-A", topicAPartition.topic());
         assertEquals(topicAExpectedPartitions, topicAPartition.partitions().stream().sorted().toList());
         
-        StreamsGroupHeartbeatResponseData.TopicPartition topicBPartition = result.partitions().get(1);
+        StreamsGroupHeartbeatResponseData.TopicPartition topicBPartition = result.activePartitions().get(1);
         assertEquals("Topic-B", topicBPartition.topic());
         assertEquals(topicBExpectedPartitions, topicBPartition.partitions().stream().sorted().toList());
     }

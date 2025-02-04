@@ -253,18 +253,26 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         membershipManager.onHeartbeatSuccess(response);
     }
 
-    private static Map<StreamsAssignmentInterface.HostInfo, List<TopicPartition>> convertHostInfoMap(
+    private static Map<StreamsAssignmentInterface.HostInfo, Map<String, List<TopicPartition>>> convertHostInfoMap(
         final StreamsGroupHeartbeatResponseData data) {
-        Map<StreamsAssignmentInterface.HostInfo, List<TopicPartition>> partitionsByHost = new HashMap<>();
+        Map<StreamsAssignmentInterface.HostInfo, Map<String, List<TopicPartition>>> partitionsByHost = new HashMap<>();
         data.partitionsByUserEndpoint().forEach(endpoint -> {
-            List<TopicPartition> topicPartitions = endpoint.partitions().stream()
-                .flatMap(partition ->
-                    partition.partitions().stream().map(partitionId -> new TopicPartition(partition.topic(), partitionId)))
-                .collect(Collectors.toList());
+            List<TopicPartition> activeTopicPartitions = getTopicPartitionList(endpoint.activePartitions());
+            List<TopicPartition> standbyTopicPartitions = getTopicPartitionList(endpoint.standbyPartitions());
             Endpoint userEndpoint = endpoint.userEndpoint();
+            Map<String, List<TopicPartition>> topicPartitions = new HashMap<>();
+            topicPartitions.put("active", activeTopicPartitions);
+            topicPartitions.put("standby", standbyTopicPartitions);
             partitionsByHost.put(new StreamsAssignmentInterface.HostInfo(userEndpoint.host(), userEndpoint.port()), topicPartitions);
         });
         return partitionsByHost;
+    }
+
+    private static List<TopicPartition> getTopicPartitionList(List<StreamsGroupHeartbeatResponseData.TopicPartition> topicPartitions) {
+       return topicPartitions.stream()
+            .flatMap(partition ->
+                partition.partitions().stream().map(partitionId -> new TopicPartition(partition.topic(), partitionId)))
+            .collect(Collectors.toList());
     }
 
     private void updateTaskIdCollection(

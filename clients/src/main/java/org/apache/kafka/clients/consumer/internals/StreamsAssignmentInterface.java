@@ -120,7 +120,7 @@ public class StreamsAssignmentInterface {
     /**
      * List of partitions available on each host. Updated by the streams protocol client.
      */
-    public final AtomicReference<Map<HostInfo, List<TopicPartition>>> partitionsByHost = new AtomicReference<>(Collections.emptyMap());
+    public final AtomicReference<Map<HostInfo, Map<String, List<TopicPartition>>>> partitionsByHost = new AtomicReference<>(Collections.emptyMap());
 
     public static class HostInfo {
 

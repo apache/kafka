@@ -202,6 +202,8 @@ public class StreamsGroup implements Group {
      */
     private DeadlineAndEpoch metadataRefreshDeadline = DeadlineAndEpoch.EMPTY;
 
+    private final TimelineHashMap<String, TopicPartition> stateTopicPartitions;
+
     public StreamsGroup(
         LogContext logContext,
         SnapshotRegistry snapshotRegistry,
@@ -228,6 +230,7 @@ public class StreamsGroup implements Group {
         this.metrics = Objects.requireNonNull(metrics);
         this.topology = new TimelineObject<>(snapshotRegistry, Optional.empty());
         this.configuredTopology = new TimelineObject<>(snapshotRegistry, Optional.empty());
+        this.stateTopicPartitions = new TimelineHashMap<>(snapshotRegistry, 0);
     }
 
     /**
