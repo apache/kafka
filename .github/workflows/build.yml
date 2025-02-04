@@ -231,8 +231,26 @@ jobs:
           compression-level: 9
           if-no-files-found: ignore
 
-      - name: Display structure of downloaded files
-        run: ls -R
+      - name: Archive Thread Dumps
+        id: thread-dump-upload-artifact
+        if: steps.junit-test.outputs.gradle-exitcode == '124'
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-thread-dumps-${{ env.job-variation }}
+          path: |
+            thread-dumps/*
+          compression-level: 9
+          if-no-files-found: ignore
+
+      - name: Capture Job Outputs
+        env:
+          JUNIT_ENV_FILE: build/junit-xml/junit-env-${{ env.job-variation }}.txt
+        run: |
+          echo "job_variation=${{ env.job-variation }}" >> $JUNIT_ENV_FILE
+          echo "run_id=${{ github.run_id }}" >> $JUNIT_ENV_FILE
+          echo "exit_code=${{ steps.junit-test.outputs.gradle-exitcode }}" >> $JUNIT_ENV_FILE
+          echo "junit_report_url=${{ steps.junit-upload-artifact.outputs.artifact-url }}" >> $JUNIT_ENV_FILE
+          echo "thread_dump_url=${{ steps.thread-dump-upload-artifact.outputs.artifact-url }}" >> $JUNIT_ENV_FILE
 
       - name: Archive JUnit XML
         uses: actions/upload-artifact@v4
@@ -243,28 +261,6 @@ jobs:
             build/junit-xml/*.txt
           compression-level: 9
           if-no-files-found: ignore
-
-      - name: Archive Thread Dumps
-        id: thread-dump-upload-artifact
-        if: always() && steps.junit-test.outputs.gradle-exitcode == '124'
-        uses: actions/upload-artifact@v4
-        with:
-          name: junit-thread-dumps-${{ env.job-variation }}
-          path: |
-            thread-dumps/*
-          compression-level: 9
-          if-no-files-found: ignore
-
-      - name: Capture JUnit Env
-        if: always()
-        env:
-          JUNIT_ENV_FILE: build/junit-xml/junit-env-${{ env.job-variation }}.txt
-        run: |
-          echo "job_variation=${{ env.job-variation }}" >> $JUNIT_ENV_FILE
-          echo "run_id=${{ github.run_id }}" >> $JUNIT_ENV_FILE
-          echo "exit_code=${{ steps.junit-test.outputs.gradle-exitcode }}" >> $JUNIT_ENV_FILE
-          echo "junit_report_url=${{ steps.junit-upload-artifact.outputs.artifact-url }}" >> $JUNIT_ENV_FILE
-          echo "thread_dump_url=${{ steps.thread-dump-upload-artifact.outputs.artifact-url }}" >> $JUNIT_ENV_FILE
 
   report:
     needs: test
