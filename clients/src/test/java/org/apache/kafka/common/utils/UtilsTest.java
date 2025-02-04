@@ -77,7 +77,6 @@ import static org.apache.kafka.common.utils.Utils.formatAddress;
 import static org.apache.kafka.common.utils.Utils.formatBytes;
 import static org.apache.kafka.common.utils.Utils.getHost;
 import static org.apache.kafka.common.utils.Utils.getPort;
-import static org.apache.kafka.common.utils.Utils.getProtocol;
 import static org.apache.kafka.common.utils.Utils.intersection;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.murmur2;
