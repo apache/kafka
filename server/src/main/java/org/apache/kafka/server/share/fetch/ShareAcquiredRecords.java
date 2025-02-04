@@ -19,8 +19,8 @@ package org.apache.kafka.server.share.fetch;
 
 import org.apache.kafka.common.message.ShareFetchResponseData.AcquiredRecords;
 
-import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * The ShareAcquiredRecords class is used to send the acquired records and associated metadata.
@@ -39,17 +39,25 @@ public class ShareAcquiredRecords {
      */
     private final int count;
 
+    /**
+     * Whether the acquired records are a subset of the fetched records.
+     */
+    private final boolean subsetAcquired;
+
     public ShareAcquiredRecords(
         List<AcquiredRecords> acquiredRecords,
-        int count
+        int count,
+        boolean subsetAcquired
     ) {
-        this.acquiredRecords = acquiredRecords;
+        this.acquiredRecords = Objects.requireNonNull(acquiredRecords);
         this.count = count;
+        this.subsetAcquired = subsetAcquired;
     }
 
     private ShareAcquiredRecords() {
-        this.acquiredRecords = Collections.emptyList();
+        this.acquiredRecords = List.of();
         this.count = 0;
+        this.subsetAcquired = false;
     }
 
     public List<AcquiredRecords> acquiredRecords() {
@@ -60,13 +68,20 @@ public class ShareAcquiredRecords {
         return count;
     }
 
+    public boolean subsetAcquired() {
+        return subsetAcquired;
+    }
+
     public static ShareAcquiredRecords empty() {
         return EMPTY_SHARE_ACQUIRED_RECORDS;
     }
 
-    public static ShareAcquiredRecords fromAcquiredRecords(AcquiredRecords acquiredRecords) {
-        return new ShareAcquiredRecords(
-            List.of(acquiredRecords), (int) (acquiredRecords.lastOffset() - acquiredRecords.firstOffset() + 1)
-        );
+    @Override
+    public String toString() {
+        return "ShareAcquiredRecords (" +
+            "acquiredRecords=" + acquiredRecords +
+            ", count=" + count +
+            ", subsetAcquired=" + subsetAcquired +
+            ")";
     }
 }

@@ -25,8 +25,11 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.errors.OffsetNotAvailableException;
 import org.apache.kafka.common.message.ShareFetchResponseData;
+import org.apache.kafka.common.message.ShareFetchResponseData.AcquiredRecords;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.record.FileLogInputStream.FileChannelRecordBatch;
 import org.apache.kafka.common.record.FileRecords;
+import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.share.fetch.ShareAcquiredRecords;
@@ -39,6 +42,7 @@ import org.slf4j.LoggerFactory;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.BiConsumer;
@@ -113,13 +117,7 @@ public class ShareFetchUtils {
                         .setAcquiredRecords(Collections.emptyList());
                 } else {
                     partitionData
-                        // We set the records to the fetchPartitionData records. We do not alter the records
-                        // fetched from the replica manager as they follow zero copy buffer. The acquired records
-                        // might be a subset of the records fetched from the replica manager, depending
-                        // on the max fetch records or available records in the share partition. The client
-                        // sends the max bytes in request which should limit the bytes sent to the client
-                        // in the response.
-                        .setRecords(fetchPartitionData.records)
+                        .setRecords(maybeSliceFetchRecords(fetchPartitionData.records, shareAcquiredRecords))
                         .setAcquiredRecords(shareAcquiredRecords.acquiredRecords());
                     acquiredRecordsCount += shareAcquiredRecords.count();
                 }
@@ -186,5 +184,79 @@ public class ShareFetchUtils {
             throw new NotLeaderOrFollowerException();
         }
         return partition;
+    }
+
+    /**
+     * Slice the fetch records based on the acquired records. The slicing is done based on the first
+     * and last offset of the acquired records from the list. The slicing doesn't consider individual
+     * acquired batches rather the boundaries of the acquired list.
+     *
+     * @param records The records to be sliced.
+     * @param shareAcquiredRecords The share acquired records containing the non-empty acquired records.
+     * @return The sliced records, if the records are of type FileRecords and the acquired records are a subset
+     *        of the fetched records. Otherwise, the original records are returned.
+     */
+    static Records maybeSliceFetchRecords(Records records, ShareAcquiredRecords shareAcquiredRecords) {
+        if (!shareAcquiredRecords.subsetAcquired() || !(records instanceof FileRecords fileRecords)) {
+            return records;
+        }
+        // The acquired records should be non-empty, do not check as the method is called only when the
+        // acquired records are non-empty.
+        List<AcquiredRecords> acquiredRecords = shareAcquiredRecords.acquiredRecords();
+        try {
+            final long firstAcquiredOffset = acquiredRecords.get(0).firstOffset();
+            final long lastAcquiredOffset = acquiredRecords.get(acquiredRecords.size() - 1).lastOffset();
+            int startPosition = 0;
+            int size = 0;
+            // Track the previous batch to adjust the start position in case the first acquired offset
+            // is between the batch.
+            FileChannelRecordBatch previousBatch = null;
+            for (FileChannelRecordBatch batch : fileRecords.batches()) {
+                // If the batch base offset is less than the first acquired offset, then the start position
+                // should be updated to skip the batch.
+                if (batch.baseOffset() < firstAcquiredOffset) {
+                    startPosition += batch.sizeInBytes();
+                    previousBatch = batch;
+                    continue;
+                }
+                // If the first acquired offset is between the batch, then adjust the start position
+                // to not skip the previous batch i.e. if batch is from 10-15 and the first acquired
+                // offset is 12, then the start position should be adjusted to include the batch containing
+                // the first acquired offset. Though generally, the first acquired offset should be the
+                // first offset of the batch, but there can be cases where the batch is split because of
+                // initial load from persister which has subset of acknowledged records from the batch.
+                // This adjustment should only be done once for the batch containing the first acquired offset,
+                // hence post the adjustment, the previous batch should be set to null.
+                if (previousBatch != null && batch.baseOffset() != firstAcquiredOffset) {
+                    startPosition -= previousBatch.sizeInBytes();
+                    size += previousBatch.sizeInBytes();
+                }
+                previousBatch = null;
+                // Consider the full batch size for slicing irrespective of the batch last offset i.e.
+                // if the batch last offset is greater than the last offset of the acquired records,
+                // we still consider the full batch size for slicing.
+                if (batch.baseOffset() <= lastAcquiredOffset) {
+                    size += batch.sizeInBytes();
+                } else {
+                    break;
+                }
+            }
+            // If the fetch resulted in single batch and the first acquired offset is not the base offset
+            // of the batch, then the position and size should be adjusted to include the batch. This
+            // can happen rarely when the batch is split because of initial load from persister. In such
+            // cases, check the last offset of the previous batch to include the batch. As the last offset
+            // call on batch is expensive hence the code is optimized to avoid the call. But should be
+            // considered for the edge case.
+            if (previousBatch != null && previousBatch.lastOffset() >= lastAcquiredOffset) {
+                startPosition -= previousBatch.sizeInBytes();
+                size += previousBatch.sizeInBytes();
+            }
+            return fileRecords.slice(startPosition, size);
+        } catch (Exception e) {
+            log.error("Error while checking batches for acquired records: {}, skipping slicing.", acquiredRecords, e);
+            // If there is an exception while slicing, return the original records so that the fetch
+            // can continue with the original records.
+            return records;
+        }
     }
 }

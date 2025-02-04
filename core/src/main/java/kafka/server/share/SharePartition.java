@@ -638,12 +638,17 @@ public class SharePartition {
             List<AcquiredRecords> result = new ArrayList<>();
             // The acquired count is used to track the number of records acquired for the request.
             int acquiredCount = 0;
+            // Tracks if subset of the fetch batch is acquired.
+            boolean subsetAcquired = false;
             // The fetched records are already part of the in-flight records. The records might
             // be available for re-delivery hence try acquiring same. The request batches could
             // be an exact match, subset or span over multiple already fetched batches.
             for (Map.Entry<Long, InFlightBatch> entry : subMap.entrySet()) {
                 // If the acquired count is equal to the max fetch records then break the loop.
                 if (acquiredCount >= maxFetchRecords) {
+                    // If the limit to acquire records is reached then it means there exists additional
+                    // fetch batches which cannot be acquired.
+                    subsetAcquired = true;
                     break;
                 }
 
@@ -714,8 +719,9 @@ public class SharePartition {
                     lastBatch.lastOffset(), batchSize, maxFetchRecords - acquiredCount);
                 result.addAll(shareAcquiredRecords.acquiredRecords());
                 acquiredCount += shareAcquiredRecords.count();
+                subsetAcquired = shareAcquiredRecords.subsetAcquired();
             }
-            return new ShareAcquiredRecords(result, acquiredCount);
+            return new ShareAcquiredRecords(result, acquiredCount, subsetAcquired);
         } finally {
             lock.writeLock().unlock();
         }
@@ -1213,7 +1219,10 @@ public class SharePartition {
                 startOffset = firstAcquiredOffset;
             }
             endOffset = lastAcquiredOffset;
-            return new ShareAcquiredRecords(acquiredRecords, (int) (lastAcquiredOffset - firstAcquiredOffset + 1));
+            return new ShareAcquiredRecords(
+                acquiredRecords,
+                (int) (lastAcquiredOffset - firstAcquiredOffset + 1) /* acquired records count */,
+                lastOffset > lastAcquiredOffset /* subset acquired */);
         } finally {
             lock.writeLock().unlock();
         }
@@ -2138,7 +2147,7 @@ public class SharePartition {
         }
     }
 
-    private long startOffsetDuringInitialization(long partitionDataStartOffset) throws Exception {
+    private long startOffsetDuringInitialization(long partitionDataStartOffset) {
         // Set the state epoch and end offset from the persisted state.
         if (partitionDataStartOffset != PartitionFactory.UNINITIALIZED_START_OFFSET) {
             return partitionDataStartOffset;

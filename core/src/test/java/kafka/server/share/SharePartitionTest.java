@@ -25,7 +25,6 @@ import kafka.server.share.SharePartitionManager.SharePartitionListener;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
 import org.apache.kafka.common.errors.FencedStateEpochException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
@@ -39,7 +38,6 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
-import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
@@ -84,6 +82,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 import static kafka.server.share.SharePartition.EMPTY_MEMBER_ID;
+import static org.apache.kafka.server.share.fetch.ShareFetchTestUtils.memoryRecordsBuilder;
 import static org.apache.kafka.test.TestUtils.assertFutureThrows;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -1010,7 +1009,7 @@ public class SharePartitionTest {
             10,
             new FetchPartitionData(Errors.NONE, 20, 10, records,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)),
-            20);
+            20, true);
 
         // Validate 2 batches are fetched one with 5 records and other till end of batch, third batch
         // should be skipped.
@@ -1023,6 +1022,50 @@ public class SharePartitionTest {
         assertEquals(MEMBER_ID, sharePartition.cachedState().get(10L).batchMemberId());
         assertEquals(1, sharePartition.cachedState().get(10L).batchDeliveryCount());
         assertNull(sharePartition.cachedState().get(10L).offsetState());
+    }
+
+    @Test
+    public void testAcquireMultipleRecordsWithOverlapAndMaxFetchRecords() {
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
+        MemoryRecords records = memoryRecords(5, 0);
+        // Acquire 5 records.
+        fetchAcquiredRecords(sharePartition.acquire(
+                MEMBER_ID,
+                BATCH_SIZE,
+                2,
+                new FetchPartitionData(Errors.NONE, 20, 3, records,
+                    Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)),
+            5);
+
+        records = memoryRecords(5, 5);
+        // Acquire another 5 records.
+        fetchAcquiredRecords(sharePartition.acquire(
+                MEMBER_ID,
+                BATCH_SIZE,
+                2,
+                new FetchPartitionData(Errors.NONE, 20, 3, records,
+                    Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)),
+            5);
+        // Release the acquired records so they can be re-acquired and max fetch records can be tested
+        // for overlapping records.
+        sharePartition.releaseAcquiredRecords(MEMBER_ID);
+        // Add batches from 0-9 offsets and 10-12, 5-9 should be acquired and 0-4 should be ignored.
+        // 10-12 should be ignored as it exceeds the max fetch records.
+        ByteBuffer buffer = ByteBuffer.allocate(4096);
+        memoryRecordsBuilder(buffer, 5, 0).close();
+        memoryRecordsBuilder(buffer, 5, 5).close();
+        buffer.flip();
+
+        records = MemoryRecords.readableRecords(buffer);
+        List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
+                MEMBER_ID,
+                BATCH_SIZE,
+                5,
+                new FetchPartitionData(Errors.NONE, 20, 3, records,
+                    Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)),
+            5, true);
+
+        assertArrayEquals(expectedAcquiredRecords(memoryRecords(5, 0), 2).toArray(), acquiredRecordsList.toArray());
     }
 
     @Test
@@ -1207,7 +1250,7 @@ public class SharePartitionTest {
                 10,
                 new FetchPartitionData(Errors.NONE, 20, 0, records,
                     Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)),
-            20);
+            20, true);
 
         List<AcquiredRecords> expectedAcquiredRecords = expectedAcquiredRecords(records, 1);
         // The last batch should be ignored as it exceeds the max fetch records.
@@ -5845,9 +5888,21 @@ public class SharePartitionTest {
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(10L).batchState());
     }
 
-    private List<AcquiredRecords> fetchAcquiredRecords(ShareAcquiredRecords shareAcquiredRecords, int expectedOffsetCount) {
+    private List<AcquiredRecords> fetchAcquiredRecords(
+        ShareAcquiredRecords shareAcquiredRecords,
+        int expectedOffsetCount
+    ) {
+        return fetchAcquiredRecords(shareAcquiredRecords, expectedOffsetCount, false);
+    }
+
+    private List<AcquiredRecords> fetchAcquiredRecords(
+        ShareAcquiredRecords shareAcquiredRecords,
+        int expectedOffsetCount,
+        boolean subsetAcquired
+    ) {
         assertNotNull(shareAcquiredRecords);
         assertEquals(expectedOffsetCount, shareAcquiredRecords.count());
+        assertEquals(subsetAcquired, shareAcquiredRecords.subsetAcquired());
         return shareAcquiredRecords.acquiredRecords();
     }
 
@@ -5857,19 +5912,6 @@ public class SharePartitionTest {
 
     private MemoryRecords memoryRecords(int numOfRecords, long startOffset) {
         return memoryRecordsBuilder(numOfRecords, startOffset).build();
-    }
-
-    private MemoryRecordsBuilder memoryRecordsBuilder(int numOfRecords, long startOffset) {
-        return memoryRecordsBuilder(ByteBuffer.allocate(1024), numOfRecords, startOffset);
-    }
-
-    private MemoryRecordsBuilder memoryRecordsBuilder(ByteBuffer buffer, int numOfRecords, long startOffset) {
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, Compression.NONE,
-            TimestampType.CREATE_TIME, startOffset, 2);
-        for (int i = 0; i < numOfRecords; i++) {
-            builder.appendWithOffset(startOffset + i, 0L, TestUtils.randomString(10).getBytes(), TestUtils.randomString(10).getBytes());
-        }
-        return builder;
     }
 
     private List<AcquiredRecords> expectedAcquiredRecord(long baseOffset, long lastOffset, int deliveryCount) {
