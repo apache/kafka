@@ -336,6 +336,7 @@ public class QuorumState {
         if (localId.isEmpty()) {
             return false;
         }
+
         return partitionState
             .lastVoterSet()
             .isVoter(ReplicaKey.of(localId.getAsInt(), localDirectoryId));
