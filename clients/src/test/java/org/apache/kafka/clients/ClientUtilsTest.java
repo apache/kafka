@@ -102,7 +102,6 @@ public class ClientUtilsTest {
     static Stream<List<String>> provideValidBrokerAddressTestCases() {
         return Stream.of(
             List.of("localhost:9997", "localhost:9998", "localhost:9999")
-
         );
     }
 
