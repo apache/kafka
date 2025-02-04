@@ -39,7 +39,7 @@ public class QuarantinedPostDiscoveryFilter implements PostDiscoveryFilter {
 
     private static final TestTag FLAKY_TEST_TAG = TestTag.create("flaky");
 
-    public static final String RUN_QUARANTINED_PROP = "kafka.test.run.quarantined";
+    public static final String RUN_NEW_PROP = "kafka.test.run.new";
 
     public static final String RUN_FLAKY_PROP = "kafka.test.run.flaky";
 
@@ -47,57 +47,57 @@ public class QuarantinedPostDiscoveryFilter implements PostDiscoveryFilter {
 
     private final Filter<TestDescriptor> autoQuarantinedFilter;
 
-    private final boolean runQuarantined;
+    private final boolean runNew;
 
     private final boolean runFlaky;
 
     // No-arg public constructor for SPI
     @SuppressWarnings("unused")
     public QuarantinedPostDiscoveryFilter() {
-        runQuarantined = System.getProperty(RUN_QUARANTINED_PROP, "false")
+        runNew = System.getProperty(RUN_NEW_PROP, "false")
             .equalsIgnoreCase("true");
 
         runFlaky = System.getProperty(RUN_FLAKY_PROP, "false")
             .equalsIgnoreCase("true");
 
         String testCatalogFileName = System.getProperty(CATALOG_FILE_PROP);
-        autoQuarantinedFilter = AutoQuarantinedTestFilter.create(testCatalogFileName, runQuarantined);
+        autoQuarantinedFilter = AutoQuarantinedTestFilter.create(testCatalogFileName, runNew);
     }
 
     // Visible for tests
     QuarantinedPostDiscoveryFilter(
         Filter<TestDescriptor> autoQuarantinedFilter,
-        boolean runQuarantined,
+        boolean runNew,
         boolean runFlaky
     ) {
         this.autoQuarantinedFilter = autoQuarantinedFilter;
-        this.runQuarantined = runQuarantined;
+        this.runNew = runNew;
         this.runFlaky = runFlaky;
     }
 
     @Override
     public FilterResult apply(TestDescriptor testDescriptor) {
-        boolean hasTag = testDescriptor.getTags().contains(FLAKY_TEST_TAG);
+        boolean hasFlakyTag = testDescriptor.getTags().contains(FLAKY_TEST_TAG);
         FilterResult result = autoQuarantinedFilter.apply(testDescriptor);
 
-        if (runFlaky && runQuarantined) {
+        if (runFlaky && runNew) {
             //  If selecting flaky and quarantined tests, we first check for explicitly flaky tests.
             //  If no flaky tag is set, defer to the auto-quarantined filter.
-            if (hasTag) {
+            if (hasFlakyTag) {
                 return FilterResult.included("flaky");
             } else {
                 return result;
             }
         } else if (runFlaky) {
             // If selecting only flaky, just check the tag. Don't use the auto-quarantined filter
-            if (hasTag) {
+            if (hasFlakyTag) {
                 return FilterResult.included("flaky");
             } else {
                 return FilterResult.excluded("non-flaky");
             }
         } else {
             // Running only auto-quarantined
-            if (result.included() && hasTag) {
+            if (result.included() && hasFlakyTag) {
                 return FilterResult.excluded("flaky");
             } else {
                 return result;
