@@ -94,13 +94,11 @@ public final class Utils {
 
     private Utils() {}
 
-    // This matches URIs of formats: host:port
+    // This matches URIs of formats: host:port and protocol://host:port
     // IPv6 is supported with [ip] pattern
     private static final Pattern HOST_PORT_PATTERN = Pattern.compile("^(?:[0-9a-zA-Z\\-%._]*://)?\\[?([0-9a-zA-Z\\-%._:]*)]?:([0-9]+)");
 
     private static final Pattern VALID_HOST_CHARACTERS = Pattern.compile("([0-9a-zA-Z\\-%._:]*)");
-
-    private static final Pattern PROTOCOL_PATTERN = Pattern.compile("([A-Za-z0-9_]+)://");
 
     // Prints up to 2 decimal digits. Used for human-readable printing
     private static final DecimalFormat TWO_DIGIT_FORMAT = new DecimalFormat("0.##",
@@ -529,16 +527,6 @@ public final class Utils {
         h ^= h >>> 15;
 
         return h;
-    }
-
-    /**
-     * Extracts the protocol from a "protocol://host:port" address string.
-     * @param address address string to parse
-     * @return hostname or null if the given address is incorrect
-     */
-    public static String getProtocol(String address) {
-        Matcher matcher = PROTOCOL_PATTERN.matcher(address);
-        return matcher.lookingAt() ? matcher.group(1) : null;
     }
 
     /**
