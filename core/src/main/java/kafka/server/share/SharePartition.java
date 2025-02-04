@@ -450,7 +450,7 @@ public class SharePartition {
                 stateEpoch = partitionData.stateEpoch();
 
                 List<PersisterStateBatch> stateBatches = partitionData.stateBatches();
-                boolean isGapPresentInStateBatches = false;
+                long gapStartOffset = -1;
                 // The previousBatchLastOffset is used to track the last offset of the previous batch.
                 // For the first batch that should ideally start from startOffset if there are no gaps,
                 // we assume the previousBatchLastOffset to be startOffset - 1.
@@ -463,8 +463,8 @@ public class SharePartition {
                         throwable = new IllegalStateException(String.format("Failed to initialize the share partition %s-%s", groupId, topicIdPartition));
                         return;
                     }
-                    if (stateBatch.firstOffset() > previousBatchLastOffset + 1) {
-                        isGapPresentInStateBatches = true;
+                    if (gapStartOffset == -1 && stateBatch.firstOffset() > previousBatchLastOffset + 1) {
+                        gapStartOffset = previousBatchLastOffset + 1;
                     }
                     previousBatchLastOffset = stateBatch.lastOffset();
                     InFlightBatch inFlightBatch = new InFlightBatch(EMPTY_MEMBER_ID, stateBatch.firstOffset(),
@@ -478,8 +478,8 @@ public class SharePartition {
                     findNextFetchOffset.set(true);
                     endOffset = cachedState.lastEntry().getValue().lastOffset();
                     // initialReadGapOffset is not required, if there are no gaps in the read state response
-                    if (isGapPresentInStateBatches) {
-                        initialReadGapOffset = new InitialReadGapOffset(endOffset, startOffset);
+                    if (gapStartOffset != -1) {
+                        initialReadGapOffset = new InitialReadGapOffset(endOffset, gapStartOffset);
                     }
                     // In case the persister read state RPC result contains no AVAILABLE records, we can update cached state
                     // and start/end offsets.
@@ -682,7 +682,6 @@ public class SharePartition {
                 }
 
                 InFlightBatch inFlightBatch = entry.getValue();
-
                 // If the initialReadGapOffset window is active, we need to treat the gaps in between the window as
                 // acquirable. Once the window is inactive (when we have acquired all the gaps inside the window),
                 // the remaining gaps are natural (data does not exist at those offsets) and we need not acquire them.
@@ -1922,6 +1921,15 @@ public class SharePartition {
 
         NavigableMap.Entry<Long, InFlightBatch> entry = cachedState.floorEntry(startOffset);
         if (entry == null) {
+            // The start offset is not found in the cached state when there is a gap starting at the start offset.
+            // For example, if the start offset is 10 and the cached state has batches -> { (21, 30), (31, 40) }.
+            // This case arises only when the share partition is initialized and the read state response results in
+            // state batches containing gaps. This situation is possible in the case where in the previous instance
+            // of this share partition, the gap offsets were fetched but not acknowledged, and the next batch of offsets
+            // were fetched as well as acknowledged. In the above example, possibly in the previous instance of the share
+            // partition, the batch 10-20 was fetched but not acknowledged and the batch 21-30 was fetched and acknowledged.
+            // Thus, the persister has no clue about what happened with the batch 10-20. During the re-initialization of
+            // the share partition, the start offset is set to 10 and the cached state has the batch 21-30, resulting in a gap.
             log.debug("The start offset: {} is not found in the cached state for share partition: {}-{} " +
                 "as there is an acquirable gap at the beginning. Cannot move the start offset.", startOffset, groupId, topicIdPartition);
             return false;
@@ -1955,13 +1963,11 @@ public class SharePartition {
         try {
             for (NavigableMap.Entry<Long, InFlightBatch> entry : cachedState.entrySet()) {
                 InFlightBatch inFlightBatch = entry.getValue();
-                // If initialReadGapOffset.gapStartOffset is less than or equal to the last offset of the batch
-                // then we cannot identify the current inFlightBatch as acknowledged. All the offsets between
-                // initialReadGapOffset.gapStartOffset and initialReadGapOffset.endOffset should always be present
-                // in the cachedState
+
                 if (isInitialReadGapOffsetWindowActive() && inFlightBatch.lastOffset() >= initialReadGapOffset.gapStartOffset()) {
                     return lastOffsetAcknowledged;
                 }
+
                 if (inFlightBatch.offsetState() == null) {
                     if (!isRecordStateAcknowledged(inFlightBatch.batchState())) {
                         return lastOffsetAcknowledged;

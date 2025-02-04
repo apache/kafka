@@ -1005,18 +1005,15 @@ public class SharePartitionTest {
 
         assertEquals(SharePartitionState.ACTIVE, sharePartition.partitionState());
         assertFalse(sharePartition.cachedState().isEmpty());
-        assertEquals(15, sharePartition.startOffset());
+        // The start offset will be moved to 21, since the offsets 15 to 20 are acknowledged, and will be removed
+        // from cached state in the maybeUpdateCachedStateAndOffsets method
+        assertEquals(21, sharePartition.startOffset());
         assertEquals(40, sharePartition.endOffset());
         assertEquals(3, sharePartition.stateEpoch());
         assertEquals(21, sharePartition.nextFetchOffset());
 
-        assertEquals(2, sharePartition.cachedState().size());
+        assertEquals(1, sharePartition.cachedState().size());
         assertNotNull(sharePartition.cachedState().get(30L));
-
-        assertEquals(20, sharePartition.cachedState().get(15L).lastOffset());
-        assertEquals(RecordState.ACKNOWLEDGED, sharePartition.cachedState().get(15L).batchState());
-        assertEquals(2, sharePartition.cachedState().get(15L).batchDeliveryCount());
-        assertNull(sharePartition.cachedState().get(15L).offsetState());
 
         assertEquals(40, sharePartition.cachedState().get(30L).lastOffset());
         assertEquals(RecordState.ARCHIVED, sharePartition.cachedState().get(30L).batchState());
@@ -1026,7 +1023,7 @@ public class SharePartitionTest {
         SharePartition.InitialReadGapOffset initialReadGapOffset = sharePartition.initialReadGapOffset();
         assertNotNull(initialReadGapOffset);
 
-        assertEquals(15, initialReadGapOffset.gapStartOffset());
+        assertEquals(21, initialReadGapOffset.gapStartOffset());
         assertEquals(40, initialReadGapOffset.endOffset());
     }
 
@@ -2729,7 +2726,9 @@ public class SharePartitionTest {
 
         assertEquals(SharePartitionState.ACTIVE, sharePartition.partitionState());
         assertFalse(sharePartition.cachedState().isEmpty());
-        assertEquals(11, sharePartition.startOffset());
+        // The start offset will be moved to 21, since the offsets 11 to 20 are acknowledged, and will be removed
+        // from cached state in the maybeUpdateCachedStateAndOffsets method
+        assertEquals(21, sharePartition.startOffset());
         assertEquals(40, sharePartition.endOffset());
         assertEquals(3, sharePartition.stateEpoch());
         assertEquals(21, sharePartition.nextFetchOffset());
@@ -2755,7 +2754,7 @@ public class SharePartitionTest {
 
         assertEquals(SharePartitionState.ACTIVE, sharePartition.partitionState());
         assertFalse(sharePartition.cachedState().isEmpty());
-        assertEquals(11, sharePartition.startOffset());
+        assertEquals(21, sharePartition.startOffset());
         assertEquals(40, sharePartition.endOffset());
         assertEquals(3, sharePartition.stateEpoch());
         assertEquals(27, sharePartition.nextFetchOffset());
@@ -3152,7 +3151,9 @@ public class SharePartitionTest {
 
         assertEquals(SharePartitionState.ACTIVE, sharePartition.partitionState());
         assertFalse(sharePartition.cachedState().isEmpty());
-        assertEquals(11, sharePartition.startOffset());
+        // The start offset will be moved to 21, since the offsets 11 to 20 are acknowledged, and will be removed
+        // from cached state in the maybeUpdateCachedStateAndOffsets method
+        assertEquals(21, sharePartition.startOffset());
         assertEquals(40, sharePartition.endOffset());
         assertEquals(3, sharePartition.stateEpoch());
         assertEquals(21, sharePartition.nextFetchOffset());
@@ -3173,7 +3174,7 @@ public class SharePartitionTest {
 
         assertEquals(SharePartitionState.ACTIVE, sharePartition.partitionState());
         assertFalse(sharePartition.cachedState().isEmpty());
-        assertEquals(11, sharePartition.startOffset());
+        assertEquals(21, sharePartition.startOffset());
         assertEquals(40, sharePartition.endOffset());
         assertEquals(3, sharePartition.stateEpoch());
         assertEquals(41, sharePartition.nextFetchOffset());
@@ -3199,7 +3200,7 @@ public class SharePartitionTest {
 
         assertEquals(SharePartitionState.ACTIVE, sharePartition.partitionState());
         assertFalse(sharePartition.cachedState().isEmpty());
-        assertEquals(11, sharePartition.startOffset());
+        assertEquals(21, sharePartition.startOffset());
         assertEquals(55, sharePartition.endOffset());
         assertEquals(3, sharePartition.stateEpoch());
         assertEquals(56, sharePartition.nextFetchOffset());
@@ -6292,6 +6293,64 @@ public class SharePartitionTest {
     }
 
     @Test
+    public void testMaybeUpdateCachedStateGapAfterLastOffsetAcknowledged() {
+        Persister persister = Mockito.mock(Persister.class);
+        ReadShareGroupStateResult readShareGroupStateResult = Mockito.mock(ReadShareGroupStateResult.class);
+        Mockito.when(readShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
+            new TopicData<>(TOPIC_ID_PARTITION.topicId(), Collections.singletonList(
+                PartitionFactory.newPartitionAllData(0, 3, 11L, Errors.NONE.code(), Errors.NONE.message(),
+                    Arrays.asList(
+                        new PersisterStateBatch(11L, 20L, RecordState.AVAILABLE.id, (short) 2),
+                        new PersisterStateBatch(31L, 40L, RecordState.ARCHIVED.id, (short) 1) // There is a gap from 21 to 30
+                    ))))));
+        Mockito.when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
+
+        WriteShareGroupStateResult writeShareGroupStateResult = Mockito.mock(WriteShareGroupStateResult.class);
+        Mockito.when(writeShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
+            new TopicData<>(TOPIC_ID_PARTITION.topicId(), Collections.singletonList(
+                PartitionFactory.newPartitionErrorData(0, Errors.NONE.code(), Errors.NONE.message())))));
+        Mockito.when(persister.writeState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(writeShareGroupStateResult));
+
+        SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
+
+        CompletableFuture<Void> result = sharePartition.maybeInitialize();
+        assertTrue(result.isDone());
+        assertFalse(result.isCompletedExceptionally());
+
+        assertEquals(SharePartitionState.ACTIVE, sharePartition.partitionState());
+        assertFalse(sharePartition.cachedState().isEmpty());
+        assertEquals(11, sharePartition.startOffset());
+        assertEquals(40, sharePartition.endOffset());
+        assertEquals(3, sharePartition.stateEpoch());
+        assertEquals(11, sharePartition.nextFetchOffset());
+
+        // Acquiring the first AVAILABLE batch from 11 to 20
+        sharePartition.acquire(MEMBER_ID, BATCH_SIZE, MAX_FETCH_RECORDS, new FetchPartitionData(Errors.NONE, 20, 0, memoryRecords(10, 11),
+            Optional.empty(), OptionalLong.empty(), Optional.empty(),
+            OptionalInt.empty(), false));
+        assertTrue(sharePartition.canAcquireRecords());
+
+        // Sending acknowledgment for the first batch from 11 to 20
+        sharePartition.acknowledge(MEMBER_ID, Collections.singletonList(
+            new ShareAcknowledgementBatch(11, 20, Collections.singletonList((byte) 1))));
+
+        assertTrue(sharePartition.canAcquireRecords());
+        // After the acknowledgement is done successfully, maybeUpdateCachedStateAndOffsets method is invoked to see
+        // if the start offset can be moved ahead. The last offset acknowledged is 20. But instead of moving start
+        // offset to the next batch in the cached state (31 to 40), it is moved to the next offset of the last
+        // acknowledged offset (21). This is because there is an acquirable gap in the cached state from 21 to 30.
+        assertEquals(21, sharePartition.startOffset());
+        assertEquals(40, sharePartition.endOffset());
+        assertEquals(21, sharePartition.nextFetchOffset());
+
+        SharePartition.InitialReadGapOffset initialReadGapOffset = sharePartition.initialReadGapOffset();
+        assertNotNull(initialReadGapOffset);
+
+        assertEquals(21, initialReadGapOffset.gapStartOffset());
+        assertEquals(40, initialReadGapOffset.endOffset());
+    }
+
+    @Test
     public void testCanAcquireRecordsReturnsTrue() {
         SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
 
@@ -6981,126 +7040,6 @@ public class SharePartitionTest {
         // Since the initialReadGapOffset window begins at startOffset, we cannot count any of the offsets as acknowledged.
         // Thus, lastOffsetAcknowledged should be -1
         assertEquals(-1, lastOffsetAcknowledged);
-    }
-
-    @Test
-    public void testFindLastOffsetAcknowledgedWhenGapAfterAcknowledgedRecords() {
-        Persister persister = Mockito.mock(Persister.class);
-        ReadShareGroupStateResult readShareGroupStateResult = Mockito.mock(ReadShareGroupStateResult.class);
-        Mockito.when(readShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
-            new TopicData<>(TOPIC_ID_PARTITION.topicId(), Collections.singletonList(
-                PartitionFactory.newPartitionAllData(0, 3, 11L, Errors.NONE.code(), Errors.NONE.message(),
-                    Arrays.asList(
-                        new PersisterStateBatch(11L, 20L, RecordState.ACKNOWLEDGED.id, (short) 2),
-                        new PersisterStateBatch(31L, 40L, RecordState.ARCHIVED.id, (short) 1) // There is a gap from 21 to 30
-                    ))))));
-        Mockito.when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
-
-        SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
-
-        CompletableFuture<Void> result = sharePartition.maybeInitialize();
-        assertTrue(result.isDone());
-        assertFalse(result.isCompletedExceptionally());
-
-        assertEquals(SharePartitionState.ACTIVE, sharePartition.partitionState());
-        assertFalse(sharePartition.cachedState().isEmpty());
-        assertEquals(11, sharePartition.startOffset());
-        assertEquals(40, sharePartition.endOffset());
-        assertEquals(3, sharePartition.stateEpoch());
-        assertEquals(21, sharePartition.nextFetchOffset());
-
-        SharePartition.InitialReadGapOffset initialReadGapOffset = sharePartition.initialReadGapOffset();
-        assertNotNull(initialReadGapOffset);
-
-        // Since the first gap starts at 21, the initialReadGapOffset.gapStartOffset is 21
-        assertEquals(11, initialReadGapOffset.gapStartOffset());
-        assertEquals(40, initialReadGapOffset.endOffset());
-
-        // Acquiring the firs batch so that we can move the initialReadGapOffset.gapStartOffset
-        MemoryRecords records = memoryRecords(10, 21);
-
-        List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
-                MEMBER_ID,
-                BATCH_SIZE,
-                MAX_FETCH_RECORDS,
-                new FetchPartitionData(Errors.NONE, 3, 0, records,
-                    Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)),
-            10);
-
-        assertArrayEquals(expectedAcquiredRecord(21, 30, 1).toArray(), acquiredRecordsList.toArray());
-
-        assertEquals(SharePartitionState.ACTIVE, sharePartition.partitionState());
-        assertFalse(sharePartition.cachedState().isEmpty());
-        assertEquals(11, sharePartition.startOffset());
-        assertEquals(40, sharePartition.endOffset());
-        assertEquals(3, sharePartition.stateEpoch());
-        assertEquals(41, sharePartition.nextFetchOffset());
-
-        long lastOffsetAcknowledged = sharePartition.findLastOffsetAcknowledged();
-
-        // This time, since the first batch is acknowledged and the first gap appears after this batch,
-        // we can count this batch as acknowledged
-        assertEquals(20, lastOffsetAcknowledged);
-    }
-
-    @Test
-    public void testFindLastOffsetAcknowledgedWhenGapAfterRejectedRecords() {
-        Persister persister = Mockito.mock(Persister.class);
-        ReadShareGroupStateResult readShareGroupStateResult = Mockito.mock(ReadShareGroupStateResult.class);
-        Mockito.when(readShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
-            new TopicData<>(TOPIC_ID_PARTITION.topicId(), Collections.singletonList(
-                PartitionFactory.newPartitionAllData(0, 3, 11L, Errors.NONE.code(), Errors.NONE.message(),
-                    Arrays.asList(
-                        new PersisterStateBatch(11L, 20L, RecordState.ARCHIVED.id, (short) 2),
-                        new PersisterStateBatch(31L, 40L, RecordState.ARCHIVED.id, (short) 1) // There is a gap from 21 to 30
-                    ))))));
-        Mockito.when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
-
-        SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
-
-        CompletableFuture<Void> result = sharePartition.maybeInitialize();
-        assertTrue(result.isDone());
-        assertFalse(result.isCompletedExceptionally());
-
-        assertEquals(SharePartitionState.ACTIVE, sharePartition.partitionState());
-        assertFalse(sharePartition.cachedState().isEmpty());
-        assertEquals(11, sharePartition.startOffset());
-        assertEquals(40, sharePartition.endOffset());
-        assertEquals(3, sharePartition.stateEpoch());
-        assertEquals(21, sharePartition.nextFetchOffset());
-
-        SharePartition.InitialReadGapOffset initialReadGapOffset = sharePartition.initialReadGapOffset();
-        assertNotNull(initialReadGapOffset);
-
-        // Since teh first gap starts at 21, the initialReadGapOffset.gapStartOffset is 21
-        assertEquals(11, initialReadGapOffset.gapStartOffset());
-        assertEquals(40, initialReadGapOffset.endOffset());
-
-        // Acquiring the firs batch so that we can move the initialReadGapOffset.gapStartOffset
-        MemoryRecords records = memoryRecords(10, 21);
-
-        List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
-                MEMBER_ID,
-                BATCH_SIZE,
-                MAX_FETCH_RECORDS,
-                new FetchPartitionData(Errors.NONE, 3, 0, records,
-                    Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)),
-            10);
-
-        assertArrayEquals(expectedAcquiredRecord(21, 30, 1).toArray(), acquiredRecordsList.toArray());
-
-        assertEquals(SharePartitionState.ACTIVE, sharePartition.partitionState());
-        assertFalse(sharePartition.cachedState().isEmpty());
-        assertEquals(11, sharePartition.startOffset());
-        assertEquals(40, sharePartition.endOffset());
-        assertEquals(3, sharePartition.stateEpoch());
-        assertEquals(41, sharePartition.nextFetchOffset());
-
-        long lastOffsetAcknowledged = sharePartition.findLastOffsetAcknowledged();
-
-        // This time, since the first batch is rejected and the first gap appears after this batch,
-        // we can count this batch as acknowledged
-        assertEquals(20, lastOffsetAcknowledged);
     }
 
     private List<AcquiredRecords> fetchAcquiredRecords(ShareAcquiredRecords shareAcquiredRecords, int expectedOffsetCount) {
