@@ -24,6 +24,7 @@ import org.apache.kafka.common.Node
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.server.network.BrokerEndPoint
+import org.apache.kafka.network.EndPoint
 
 import scala.collection.Seq
 
@@ -59,7 +60,7 @@ case class Broker(id: Int, endPoints: Seq[EndPoint], rack: Option[String], featu
     s"$id : ${endPointsMap.values.mkString("(",",",")")} : ${rack.orNull} : $features"
 
   def this(id: Int, host: String, port: Int, listenerName: ListenerName, protocol: SecurityProtocol) = {
-    this(id, Seq(EndPoint(host, port, listenerName, protocol)), None, emptySupportedFeatures)
+    this(id, Seq(new EndPoint(host, port, listenerName, protocol)), None, emptySupportedFeatures)
   }
 
   def this(bep: BrokerEndPoint, listenerName: ListenerName, protocol: SecurityProtocol) = {
