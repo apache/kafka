@@ -23,6 +23,7 @@ import kafka.server.ControllerServer;
 import kafka.server.FaultHandlerFactory;
 import kafka.server.KafkaConfig;
 import kafka.server.KafkaRaftServer;
+import kafka.server.Server;
 import kafka.server.SharedServer;
 
 import org.apache.kafka.clients.CommonClientConfigs;
@@ -414,10 +415,6 @@ public class KafkaClusterTestKit implements AutoCloseable {
             throw new RuntimeException(String.format("Node %d already exists.", nodeId));
         }
 
-        if (props.get(KRaftConfigs.PROCESS_ROLES_CONFIG).contains("brokers")) {
-            throw new RuntimeException("Create controller only support isolated controller now.");
-        }
-
         props.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller");
         props.putIfAbsent(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER");
         props.put(KRaftConfigs.SERVER_MAX_STARTUP_TIME_MS_CONFIG,
@@ -637,6 +634,13 @@ public class KafkaClusterTestKit implements AutoCloseable {
 
     public Map<Integer, ControllerServer> controllers() {
         return controllers;
+    }
+
+    public void waitForControllerStarted(int nodeId) throws InterruptedException {
+        ControllerServer controllerServer = controllers.get(nodeId);
+        TestUtils.waitForCondition(() ->
+            controllerServer.status() == Server.STARTED$.MODULE$,
+                60_000, "Controller not started");
     }
 
     public Controller waitForActiveController() throws InterruptedException {

@@ -168,6 +168,7 @@ public class KafkaClusterTestKitTest {
 
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(nodes).build()) {
             assertDoesNotThrow(() -> cluster.createController(props));
+            cluster.waitForControllerStarted(2);
         }
     }
 
