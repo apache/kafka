@@ -237,6 +237,18 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
             return Collections.unmodifiableMap(clusterTestKit.controllers());
         }
 
+        @Override
+        public ControllerServer createController(Map<String, Object> prop) {
+            Map<String, String> stringMap = prop.entrySet()
+                    .stream()
+                    .collect(Collectors.toMap(
+                            Map.Entry::getKey,
+                            entry -> String.valueOf(entry.getValue())
+                    ));
+
+            return clusterTestKit.createController(stringMap);
+        }
+
         public void format() throws Exception {
             if (formated.compareAndSet(false, true)) {
                 Map<String, Feature> nameToSupportedFeature = new TreeMap<>();

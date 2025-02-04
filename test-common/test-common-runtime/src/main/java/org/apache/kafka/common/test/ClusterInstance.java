@@ -249,6 +249,8 @@ public interface ClusterInstance {
         }
     }
 
+    ControllerServer createController(Map<String, Object> config);
+
     /**
      * Returns the first recorded fatal exception, if any.
      *
