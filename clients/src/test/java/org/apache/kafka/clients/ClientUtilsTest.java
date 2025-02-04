@@ -131,7 +131,7 @@ public class ClientUtilsTest {
     @Test
     public void testInvalidConfig() {
         assertThrows(IllegalArgumentException.class,
-                () -> ClientUtils.parseAndValidateAddresses(Collections.singletonList("localhost:10000"), "random.value"));
+            () -> ClientUtils.parseAndValidateAddresses(Collections.singletonList("localhost:10000"), "random.value"));
     }
 
     @Test
