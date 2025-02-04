@@ -56,7 +56,7 @@ def get_env(key: str, fn = str) -> Optional:
 
 def load_job_outputs(fp) -> Dict:
     outputs = {}
-    for line in fp:
+    for line in fp.readlines():
         key, value = line.strip().split("=", 1)
         outputs[key] = value
     return outputs
