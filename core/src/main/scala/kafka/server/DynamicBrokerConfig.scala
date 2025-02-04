@@ -30,13 +30,11 @@ import org.apache.kafka.common.Reconfigurable
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, SaslConfigs, SslConfigs}
 import org.apache.kafka.common.metrics.{Metrics, MetricsReporter}
-import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.network.{ListenerName, ListenerReconfigurable}
 import org.apache.kafka.common.security.authenticator.LoginManager
 import org.apache.kafka.common.utils.{ConfigUtils, Utils}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.network.SocketServerConfigs
-import org.apache.kafka.security.PasswordEncoder
 import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.config.{ReplicationConfigs, ServerConfigs, ServerLogConfigs, ServerTopicConfigSynonyms}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
@@ -210,7 +208,6 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
   private val lock = new ReentrantReadWriteLock
   private var metricsReceiverPluginOpt: Option[ClientMetricsReceiverPlugin] = _
   private var currentConfig: KafkaConfig = _
-  private val dynamicConfigPasswordEncoder = Some(PasswordEncoder.NOOP)
 
   private[server] def initialize(clientMetricsReceiverPluginOpt: Option[ClientMetricsReceiverPlugin]): Unit = {
     currentConfig = new KafkaConfig(kafkaConfig.props, false)
@@ -358,27 +355,6 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     })
   }
 
-  private def passwordEncoder: PasswordEncoder = {
-    dynamicConfigPasswordEncoder.getOrElse(throw new ConfigException("Password encoder secret not configured"))
-  }
-
-  private[server] def toPersistentProps(configProps: Properties, perBrokerConfig: Boolean): Properties = {
-    val props = configProps.clone().asInstanceOf[Properties]
-
-    def encodePassword(configName: String, value: String): Unit = {
-      if (value != null) {
-        if (!perBrokerConfig)
-          throw new ConfigException("Password config can be defined only at broker level")
-        props.setProperty(configName, passwordEncoder.encode(new Password(value)))
-      }
-    }
-    configProps.asScala.foreachEntry { (name, value) =>
-      if (isPasswordConfig(name))
-        encodePassword(name, value)
-    }
-    props
-  }
-
   private[server] def fromPersistentProps(persistentProps: Properties,
                                           perBrokerConfig: Boolean): Properties = {
     val props = persistentProps.clone().asInstanceOf[Properties]
@@ -397,22 +373,6 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     if (!perBrokerConfig)
       removeInvalidProps(perBrokerConfigs(props), "Per-broker configs defined at default cluster level will be ignored")
 
-    def decodePassword(configName: String, value: String): Unit = {
-      if (value != null) {
-        try {
-          props.setProperty(configName, passwordEncoder.decode(value).value)
-        } catch {
-          case e: Exception =>
-            error(s"Dynamic password config $configName could not be decoded, ignoring.", e)
-            props.remove(configName)
-        }
-      }
-    }
-
-    props.asScala.foreachEntry { (name, value) =>
-      if (isPasswordConfig(name))
-        decodePassword(name, value)
-    }
     props
   }
 
