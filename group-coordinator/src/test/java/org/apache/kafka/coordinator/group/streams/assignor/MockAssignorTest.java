@@ -253,7 +253,7 @@ public class MockAssignorTest {
         }
 
         @Override
-        public int numTasks(String subtopologyId) {
+        public int maxNumInputPartitions(String subtopologyId) {
             return numPartitions;
         }
 

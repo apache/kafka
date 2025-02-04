@@ -195,9 +195,14 @@ public class UnifiedLog {
         long producerId = batch.producerId();
         ProducerAppendInfo appendInfo = producers.computeIfAbsent(producerId, __ -> producerStateManager.prepareUpdate(producerId, origin));
         Optional<CompletedTxn> completedTxn = appendInfo.append(batch, firstOffsetMetadata);
-        // Whether we wrote a control marker or a data batch, we can remove VerificationGuard since either the transaction is complete or we have a first offset.
+        // Whether we wrote a control marker or a data batch, we may be able to remove VerificationGuard since either the transaction is complete or we have a first offset.
         if (batch.isTransactional()) {
-            producerStateManager.clearVerificationStateEntry(producerId);
+            VerificationStateEntry entry = producerStateManager.verificationStateEntry(producerId);
+            // The only case we should not remove the verification guard is if the marker was a control marker, we are using TV2 and the epochs match.
+            // This is safe because we always bump epoch upon upgrading to TV2.
+            boolean isV2NextTransactionStarted = entry != null && entry.supportsEpochBump() && batch.isControlBatch() && batch.producerEpoch() == entry.epoch();
+            if (!isV2NextTransactionStarted)
+                producerStateManager.clearVerificationStateEntry(producerId);
         }
         return completedTxn;
     }
