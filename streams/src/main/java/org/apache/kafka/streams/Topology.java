@@ -119,10 +119,14 @@ public class Topology {
      * @return itself
      *
      * @throws TopologyException
-     *         if the provided source name is not unique, or
-     *         if topics have already been registered by another source,
+     *         if the provided source name is not unique,
+     *         no topics are specified, or
+     *         a topic has already been registered by another source,
      *         {@link #addReadOnlyStateStore(StoreBuilder, String, Deserializer, Deserializer, String, String, ProcessorSupplier) read-only state store}, or
      *         {@link #addGlobalStore(StoreBuilder, String, Deserializer, Deserializer, String, String, ProcessorSupplier) global state store}
+     * @throws NullPointerException
+     *         if {@code name} or {@code topics} is {@code null}, or
+     *         {@code topics} contains a {@code null} topic
      *
      * @see #addSource(String, Pattern)
      */
@@ -135,7 +139,7 @@ public class Topology {
     /**
      * See {@link #addSource(String, String...)}.
      *
-     * <p>Takes a {@link Pattern} to match topics to consumes from, instead of a list of topic names.
+     * <p>Takes a {@link Pattern} (cannot be {@code null}) to match topics to consumes from, instead of a list of topic names.
      */
     public synchronized Topology addSource(final String name,
                                            final Pattern topicPattern) {
@@ -282,10 +286,10 @@ public class Topology {
     /**
      * See {@link #addSource(String, String...)}.
      */
-    public synchronized Topology addSource(final String name,
-                                           final Deserializer<?> keyDeserializer,
-                                           final Deserializer<?> valueDeserializer,
-                                           final String... topics) {
+    public synchronized <K, V> Topology addSource(final String name,
+                                                  final Deserializer<K> keyDeserializer,
+                                                  final Deserializer<V> valueDeserializer,
+                                                  final String... topics) {
         internalTopologyBuilder.addSource(null, name, null, keyDeserializer, valueDeserializer, topics);
         return this;
     }
@@ -293,10 +297,10 @@ public class Topology {
     /**
      * See {@link #addSource(String, Pattern)}.
      */
-    public synchronized Topology addSource(final String name,
-                                           final Deserializer<?> keyDeserializer,
-                                           final Deserializer<?> valueDeserializer,
-                                           final Pattern topicPattern) {
+    public synchronized <K, V> Topology addSource(final String name,
+                                                  final Deserializer<K> keyDeserializer,
+                                                  final Deserializer<V> valueDeserializer,
+                                                  final Pattern topicPattern) {
         internalTopologyBuilder.addSource(null, name, null, keyDeserializer, valueDeserializer, topicPattern);
         return this;
     }
@@ -305,11 +309,11 @@ public class Topology {
      * @deprecated Since 4.0. Use {@link #addSource(org.apache.kafka.streams.AutoOffsetReset, String, Deserializer, Deserializer, String...)} instead.
      */
     @Deprecated
-    public synchronized Topology addSource(final AutoOffsetReset offsetReset,
-                                           final String name,
-                                           final Deserializer<?> keyDeserializer,
-                                           final Deserializer<?> valueDeserializer,
-                                           final String... topics) {
+    public synchronized <K, V> Topology addSource(final AutoOffsetReset offsetReset,
+                                                  final String name,
+                                                  final Deserializer<K> keyDeserializer,
+                                                  final Deserializer<V> valueDeserializer,
+                                                  final String... topics) {
         internalTopologyBuilder.addSource(convertOldToNew(offsetReset), name, null, keyDeserializer, valueDeserializer, topics);
         return this;
     }
@@ -317,11 +321,11 @@ public class Topology {
     /**
      * See {@link #addSource(String, String...)}.
      */
-    public synchronized Topology addSource(final org.apache.kafka.streams.AutoOffsetReset offsetReset,
-                                           final String name,
-                                           final Deserializer<?> keyDeserializer,
-                                           final Deserializer<?> valueDeserializer,
-                                           final String... topics) {
+    public synchronized <K, V> Topology addSource(final org.apache.kafka.streams.AutoOffsetReset offsetReset,
+                                                  final String name,
+                                                  final Deserializer<K> keyDeserializer,
+                                                  final Deserializer<V> valueDeserializer,
+                                                  final String... topics) {
         internalTopologyBuilder.addSource(
             offsetReset == null ? null : new AutoOffsetResetInternal(offsetReset),
             name,
@@ -337,11 +341,11 @@ public class Topology {
      * @deprecated Since 4.0. Use {@link #addSource(org.apache.kafka.streams.AutoOffsetReset, String, Deserializer, Deserializer, Pattern)} instead.
      */
     @Deprecated
-    public synchronized Topology addSource(final AutoOffsetReset offsetReset,
-                                           final String name,
-                                           final Deserializer<?> keyDeserializer,
-                                           final Deserializer<?> valueDeserializer,
-                                           final Pattern topicPattern) {
+    public synchronized <K, V> Topology addSource(final AutoOffsetReset offsetReset,
+                                                  final String name,
+                                                  final Deserializer<K> keyDeserializer,
+                                                  final Deserializer<V> valueDeserializer,
+                                                  final Pattern topicPattern) {
         internalTopologyBuilder.addSource(convertOldToNew(offsetReset), name, null, keyDeserializer, valueDeserializer, topicPattern);
         return this;
     }
@@ -349,11 +353,11 @@ public class Topology {
     /**
      * See {@link #addSource(String, Pattern)}.
      */
-    public synchronized Topology addSource(final org.apache.kafka.streams.AutoOffsetReset offsetReset,
-                                           final String name,
-                                           final Deserializer<?> keyDeserializer,
-                                           final Deserializer<?> valueDeserializer,
-                                           final Pattern topicPattern) {
+    public synchronized <K, V> Topology addSource(final org.apache.kafka.streams.AutoOffsetReset offsetReset,
+                                                  final String name,
+                                                  final Deserializer<K> keyDeserializer,
+                                                  final Deserializer<V> valueDeserializer,
+                                                  final Pattern topicPattern) {
         internalTopologyBuilder.addSource(
             offsetReset == null ? null : new AutoOffsetResetInternal(offsetReset),
             name,
@@ -369,12 +373,12 @@ public class Topology {
      * @deprecated Since 4.0. Use {@link #addSource(org.apache.kafka.streams.AutoOffsetReset, String, TimestampExtractor, Deserializer, Deserializer, String...)} instead.
      */
     @Deprecated
-    public synchronized Topology addSource(final AutoOffsetReset offsetReset,
-                                           final String name,
-                                           final TimestampExtractor timestampExtractor,
-                                           final Deserializer<?> keyDeserializer,
-                                           final Deserializer<?> valueDeserializer,
-                                           final String... topics) {
+    public synchronized <K, V> Topology addSource(final AutoOffsetReset offsetReset,
+                                                  final String name,
+                                                  final TimestampExtractor timestampExtractor,
+                                                  final Deserializer<K> keyDeserializer,
+                                                  final Deserializer<V> valueDeserializer,
+                                                  final String... topics) {
         internalTopologyBuilder.addSource(convertOldToNew(offsetReset), name, timestampExtractor, keyDeserializer, valueDeserializer, topics);
         return this;
     }
@@ -382,12 +386,12 @@ public class Topology {
     /**
      * See {@link #addSource(String, String...)}.
      */
-    public synchronized Topology addSource(final org.apache.kafka.streams.AutoOffsetReset offsetReset,
-                                           final String name,
-                                           final TimestampExtractor timestampExtractor,
-                                           final Deserializer<?> keyDeserializer,
-                                           final Deserializer<?> valueDeserializer,
-                                           final String... topics) {
+    public synchronized <K, V> Topology addSource(final org.apache.kafka.streams.AutoOffsetReset offsetReset,
+                                                  final String name,
+                                                  final TimestampExtractor timestampExtractor,
+                                                  final Deserializer<K> keyDeserializer,
+                                                  final Deserializer<V> valueDeserializer,
+                                                  final String... topics) {
         internalTopologyBuilder.addSource(
             offsetReset == null ? null : new AutoOffsetResetInternal(offsetReset),
             name,
@@ -403,12 +407,12 @@ public class Topology {
      * @deprecated Since 4.0. Use {@link #addSource(org.apache.kafka.streams.AutoOffsetReset, String, TimestampExtractor, Deserializer, Deserializer, Pattern)} instead.
      */
     @Deprecated
-    public synchronized Topology addSource(final AutoOffsetReset offsetReset,
-                                           final String name,
-                                           final TimestampExtractor timestampExtractor,
-                                           final Deserializer<?> keyDeserializer,
-                                           final Deserializer<?> valueDeserializer,
-                                           final Pattern topicPattern) {
+    public synchronized <K, V> Topology addSource(final AutoOffsetReset offsetReset,
+                                                  final String name,
+                                                  final TimestampExtractor timestampExtractor,
+                                                  final Deserializer<K> keyDeserializer,
+                                                  final Deserializer<V> valueDeserializer,
+                                                  final Pattern topicPattern) {
         internalTopologyBuilder.addSource(convertOldToNew(offsetReset), name, timestampExtractor, keyDeserializer, valueDeserializer, topicPattern);
         return this;
     }
@@ -416,12 +420,12 @@ public class Topology {
     /**
      * See {@link #addSource(String, Pattern)}.
      */
-    public synchronized Topology addSource(final org.apache.kafka.streams.AutoOffsetReset offsetReset,
-                                           final String name,
-                                           final TimestampExtractor timestampExtractor,
-                                           final Deserializer<?> keyDeserializer,
-                                           final Deserializer<?> valueDeserializer,
-                                           final Pattern topicPattern) {
+    public synchronized <K, V> Topology addSource(final org.apache.kafka.streams.AutoOffsetReset offsetReset,
+                                                  final String name,
+                                                  final TimestampExtractor timestampExtractor,
+                                                  final Deserializer<K> keyDeserializer,
+                                                  final Deserializer<V> valueDeserializer,
+                                                  final Pattern topicPattern) {
         internalTopologyBuilder.addSource(
             offsetReset == null ? null : new AutoOffsetResetInternal(offsetReset),
             name,
@@ -462,7 +466,10 @@ public class Topology {
      *
      * @throws TopologyException
      *         if the provided sink name is not unique, or
-     *         if a parent processor/source name is unknown
+     *         if a parent processor/source name is unknown or specifies a sink
+     * @throws NullPointerException
+     *         if {@code name}, {@code topic}, or {@code parentNames} is {@code null}, or
+     *         {@code parentNames} contains a {@code null} parent name
      *
      * @see #addSink(String, TopicNameExtractor, String...)
      */
@@ -476,10 +483,10 @@ public class Topology {
     /**
      * See {@link #addSink(String, String, String...)}.
      */
-    public synchronized Topology addSink(final String name,
-                                         final String topic,
-                                         final StreamPartitioner<?, ?> partitioner,
-                                         final String... parentNames) {
+    public synchronized <K, V> Topology addSink(final String name,
+                                                final String topic,
+                                                final StreamPartitioner<? super K, ? super V> partitioner,
+                                                final String... parentNames) {
         internalTopologyBuilder.addSink(name, topic, null, null, partitioner, parentNames);
         return this;
     }
@@ -487,11 +494,11 @@ public class Topology {
     /**
      * See {@link #addSink(String, String, String...)}.
      */
-    public synchronized Topology addSink(final String name,
-                                         final String topic,
-                                         final Serializer<?> keySerializer,
-                                         final Serializer<?> valueSerializer,
-                                         final String... parentNames) {
+    public synchronized <K, V> Topology addSink(final String name,
+                                                final String topic,
+                                                final Serializer<K> keySerializer,
+                                                final Serializer<V> valueSerializer,
+                                                final String... parentNames) {
         internalTopologyBuilder.addSink(name, topic, keySerializer, valueSerializer, null, parentNames);
         return this;
     }
@@ -510,51 +517,27 @@ public class Topology {
     }
 
     /**
-     * Add a sink that sends records from upstream
-     * {@link #addProcessor(String, ProcessorSupplier, String...) processors} or
-     * {@link #addSource(String, String...) sources} to Kafka topics based on the provided {@link TopicNameExtractor}.
-     * All topics that the topic name extractor may compute should be created before the {@link KafkaStreams} instance
-     * is started.
+     * See {@link #addSink(String, String, String...)}.
      *
-     * <p>The sink will use the default values from {@link StreamsConfig} for
-     * <ul>
-     *   <li>{@link StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG key serializer}</li>
-     *   <li>{@link StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG value serializer}</li>
-     * </ul>
-     *
-     * Furthermore, the producer's configured partitioner is used to write into the topic.
-     * If you want to specify a sink specific key or value {@link Serializer}, or use a different
-     * {@link StreamPartitioner partitioner}, use the corresponding overloaded {@code addSink(...)} method.
-     *
-     * @param name
-     *        the unique name of the sink
-     * @param topicExtractor
-     *        a topic name extractor to determine the name of the Kafka topic to which this sink should write for each record
-     * @param parentNames
-     *        the name of one or more {@link #addProcessor(String, ProcessorSupplier, String...) processors} or
-     *        {@link #addSource(String, String...) sources}, whose output records this sink should consume and write
-     *        to the specified output topic
-     *
-     * @return itself
-     *
-     * @throws TopologyException
-     *         if the provided sink name is not unique, or
-     *         if a parent processor/source name is unknown
-     *
-     * @see #addSink(String, String, String...)
+     * <p>Takes a {@link TopicNameExtractor} (cannot be {@code null}) that computes topic names to send records into,
+     * instead of a single topic name.
+     * The topic name extractor is called for every result record and may compute a different topic name each time.
+     * All topics, that the topic name extractor may compute, should be created before the {@link KafkaStreams}
+     * instance is started.
+     * Returning {@code null} as topic name is invalid and will result in a runtime exception.
      */
-    public synchronized Topology addSink(final String name,
-                                         final TopicNameExtractor<?, ?> topicExtractor,
-                                         final String... parentNames) {
+    public synchronized <K, V> Topology addSink(final String name,
+                                                final TopicNameExtractor<? super K, ? super V> topicExtractor,
+                                                final String... parentNames) {
         internalTopologyBuilder.addSink(name, topicExtractor, null, null, null, parentNames);
         return this;
     }
 
     /**
-     * See {@link #addSink(String, TopicNameExtractor, String...)}.
+     * See {@link #addSink(String, String, String...)}.
      */
     public synchronized <K, V> Topology addSink(final String name,
-                                                final TopicNameExtractor<K, V> topicExtractor,
+                                                final TopicNameExtractor<? super K, ? super V> topicExtractor,
                                                 final StreamPartitioner<? super K, ? super V> partitioner,
                                                 final String... parentNames) {
         internalTopologyBuilder.addSink(name, topicExtractor, null, null, partitioner, parentNames);
@@ -562,10 +545,10 @@ public class Topology {
     }
 
     /**
-     * See {@link #addSink(String, TopicNameExtractor, String...)}.
+     * See {@link #addSink(String, String, String...)}.
      */
     public synchronized <K, V> Topology addSink(final String name,
-                                                final TopicNameExtractor<K, V> topicExtractor,
+                                                final TopicNameExtractor<? super K, ? super V> topicExtractor,
                                                 final Serializer<K> keySerializer,
                                                 final Serializer<V> valueSerializer,
                                                 final String... parentNames) {
@@ -574,10 +557,10 @@ public class Topology {
     }
 
     /**
-     * See {@link #addSink(String, TopicNameExtractor, String...)}.
+     * See {@link #addSink(String, String, String...)}.
      */
     public synchronized <K, V> Topology addSink(final String name,
-                                                final TopicNameExtractor<K, V> topicExtractor,
+                                                final TopicNameExtractor<? super K, ? super V> topicExtractor,
                                                 final Serializer<K> keySerializer,
                                                 final Serializer<V> valueSerializer,
                                                 final StreamPartitioner<? super K, ? super V> partitioner,
@@ -617,7 +600,9 @@ public class Topology {
      *
      * @throws TopologyException
      *         if the provided processor name is not unique, or
-     *         if a parent processor/source name is unknown
+     *         if a parent processor/source name is unknown or specifies a sink
+     *
+     * @see org.apache.kafka.streams.processor.api.ContextualProcessor ContextualProcessor
      */
     public synchronized <KIn, VIn, KOut, VOut> Topology addProcessor(final String name,
                                                                      final ProcessorSupplier<KIn, VIn, KOut, VOut> supplier,
@@ -677,10 +662,10 @@ public class Topology {
      *
      * @throws TopologyException
      *         if the {@link StoreBuilder#name() state store} was already added, or
-     *         if a processor name is unknown
+     *         if a processor name is unknown or specifies a source or sink
      */
-    public synchronized Topology addStateStore(final StoreBuilder<?> storeBuilder,
-                                               final String... processorNames) {
+    public synchronized <S extends StateStore> Topology addStateStore(final StoreBuilder<S> storeBuilder,
+                                                                      final String... processorNames) {
         internalTopologyBuilder.addStateStore(storeBuilder, processorNames);
         return this;
     }
@@ -746,13 +731,15 @@ public class Topology {
      *         {@link #addSink(String, String, String...) source}, read-only state store, or
      *         {@link #addGlobalStore(StoreBuilder, String, Deserializer, Deserializer, String, String, ProcessorSupplier) global state store}
      */
-    public synchronized <K, V> Topology addReadOnlyStateStore(final StoreBuilder<?> storeBuilder,
-                                                              final String sourceName,
-                                                              final Deserializer<K> keyDeserializer,
-                                                              final Deserializer<V> valueDeserializer,
-                                                              final String topic,
-                                                              final String processorName,
-                                                              final ProcessorSupplier<K, V, Void, Void> stateUpdateSupplier) {
+    public synchronized <K, V, S extends StateStore> Topology addReadOnlyStateStore(
+        final StoreBuilder<S> storeBuilder,
+        final String sourceName,
+        final Deserializer<K> keyDeserializer,
+        final Deserializer<V> valueDeserializer,
+        final String topic,
+        final String processorName,
+        final ProcessorSupplier<K, V, Void, Void> stateUpdateSupplier
+    ) {
         return addReadOnlyStateStore(
             storeBuilder,
             sourceName,
@@ -768,14 +755,16 @@ public class Topology {
     /**
      * See {@link #addReadOnlyStateStore(StoreBuilder, String, Deserializer, Deserializer, String, String, ProcessorSupplier)}.
      */
-    public synchronized <K, V> Topology addReadOnlyStateStore(final StoreBuilder<?> storeBuilder,
-                                                              final String sourceName,
-                                                              final TimestampExtractor timestampExtractor,
-                                                              final Deserializer<K> keyDeserializer,
-                                                              final Deserializer<V> valueDeserializer,
-                                                              final String topic,
-                                                              final String processorName,
-                                                              final ProcessorSupplier<K, V, Void, Void> stateUpdateSupplier) {
+    public synchronized <K, V, S extends StateStore> Topology addReadOnlyStateStore(
+        final StoreBuilder<S> storeBuilder,
+        final String sourceName,
+        final TimestampExtractor timestampExtractor,
+        final Deserializer<K> keyDeserializer,
+        final Deserializer<V> valueDeserializer,
+        final String topic,
+        final String processorName,
+        final ProcessorSupplier<K, V, Void, Void> stateUpdateSupplier
+    ) {
         internalTopologyBuilder.addSource(
             new AutoOffsetResetInternal(org.apache.kafka.streams.AutoOffsetReset.earliest()),
             sourceName,
@@ -854,13 +843,15 @@ public class Topology {
      *         {@link #addReadOnlyStateStore(StoreBuilder, String, Deserializer, Deserializer, String, String, ProcessorSupplier) read-only state store}, or
      *         global state store
      */
-    public synchronized <K, V> Topology addGlobalStore(final StoreBuilder<?> storeBuilder,
-                                                       final String sourceName,
-                                                       final Deserializer<K> keyDeserializer,
-                                                       final Deserializer<V> valueDeserializer,
-                                                       final String topic,
-                                                       final String processorName,
-                                                       final ProcessorSupplier<K, V, Void, Void> stateUpdateSupplier) {
+    public synchronized <K, V, S extends StateStore> Topology addGlobalStore(
+        final StoreBuilder<S> storeBuilder,
+        final String sourceName,
+        final Deserializer<K> keyDeserializer,
+        final Deserializer<V> valueDeserializer,
+        final String topic,
+        final String processorName,
+        final ProcessorSupplier<K, V, Void, Void> stateUpdateSupplier
+    ) {
         Objects.requireNonNull(storeBuilder, "storeBuilder cannot be null");
         Objects.requireNonNull(stateUpdateSupplier, "stateUpdateSupplier cannot be null");
 
@@ -880,14 +871,16 @@ public class Topology {
     /**
      * See {@link #addGlobalStore(StoreBuilder, String, Deserializer, Deserializer, String, String, ProcessorSupplier)}.
      */
-    public synchronized <K, V> Topology addGlobalStore(final StoreBuilder<?> storeBuilder,
-                                                       final String sourceName,
-                                                       final TimestampExtractor timestampExtractor,
-                                                       final Deserializer<K> keyDeserializer,
-                                                       final Deserializer<V> valueDeserializer,
-                                                       final String topic,
-                                                       final String processorName,
-                                                       final ProcessorSupplier<K, V, Void, Void> stateUpdateSupplier) {
+    public synchronized <K, V, S extends StateStore> Topology addGlobalStore(
+        final StoreBuilder<S> storeBuilder,
+        final String sourceName,
+        final TimestampExtractor timestampExtractor,
+        final Deserializer<K> keyDeserializer,
+        final Deserializer<V> valueDeserializer,
+        final String topic,
+        final String processorName,
+        final ProcessorSupplier<K, V, Void, Void> stateUpdateSupplier
+    ) {
         internalTopologyBuilder.addGlobalStore(
             sourceName,
             timestampExtractor,
@@ -916,7 +909,8 @@ public class Topology {
      * @return itself
      *
      * @throws TopologyException
-     *         if the processor name or a state store name is unknown
+     *         if the processor name or a state store name is unknown, or
+     *         if the processor name specifies a source or sink
      */
     public synchronized Topology connectProcessorAndStateStores(final String processorName,
                                                                 final String... stateStoreNames) {
