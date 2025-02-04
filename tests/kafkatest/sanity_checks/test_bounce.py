@@ -21,8 +21,6 @@ from ducktape.utils.util import wait_until
 
 from kafkatest.services.kafka import KafkaService, quorum
 from kafkatest.services.verifiable_producer import VerifiableProducer
-from kafkatest.services.zookeeper import ZookeeperService
-
 
 class TestBounce(Test):
     """Sanity checks on verifiable producer service class with cluster roll."""
