@@ -60,6 +60,8 @@ import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.Monitorable;
+import org.apache.kafka.common.metrics.PluginMetrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.network.Selectable;
@@ -113,6 +115,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -1456,7 +1459,7 @@ public class KafkaProducerTest {
         ApiVersions apiVersions = new ApiVersions();
         apiVersions.update(NODE.idString(), nodeApiVersions);
 
-        ProducerInterceptors<String, String> interceptor = new ProducerInterceptors<>(Collections.emptyList());
+        ProducerInterceptors<String, String> interceptor = new ProducerInterceptors<>(Collections.emptyList(), null);
 
         client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some-txn", NODE));
         client.prepareResponse(initProducerIdResponse(1L, (short) 5, Errors.NONE));
@@ -1730,7 +1733,7 @@ public class KafkaProducerTest {
 
         try (KafkaProducer<String, String> producer = new KafkaProducer<>(
             new ProducerConfig(properties), new StringSerializer(), new StringSerializer(), metadata, client,
-            new ProducerInterceptors<>(Collections.emptyList()), apiVersions, time)) {
+            new ProducerInterceptors<>(Collections.emptyList(), null), apiVersions, time)) {
             producer.initTransactions();
             producer.beginTransaction();
             producer.sendOffsetsToTransaction(Collections.singletonMap(
@@ -1782,7 +1785,7 @@ public class KafkaProducerTest {
         ApiVersions apiVersions = new ApiVersions();
         apiVersions.update(NODE.idString(), nodeApiVersions);
 
-        ProducerInterceptors<String, String> interceptor = new ProducerInterceptors<>(Collections.emptyList());
+        ProducerInterceptors<String, String> interceptor = new ProducerInterceptors<>(Collections.emptyList(), null);
 
         client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some-txn", NODE));
         client.prepareResponse(initProducerIdResponse(1L, (short) 5, Errors.NONE));
@@ -2310,7 +2313,7 @@ public class KafkaProducerTest {
         String invalidTopicName = "topic abc"; // Invalid topic name due to space
 
         ProducerInterceptors<String, String> producerInterceptors =
-                new ProducerInterceptors<>(Collections.singletonList(new MockProducerInterceptor()));
+                new ProducerInterceptors<>(Collections.singletonList(new MockProducerInterceptor()), null);
 
         try (Producer<String, String> producer = kafkaProducer(configs, new StringSerializer(), new StringSerializer(),
                 producerMetadata, client, producerInterceptors, time)) {
@@ -2605,7 +2608,7 @@ public class KafkaProducerTest {
             ProducerConfig producerConfig = new ProducerConfig(
                 ProducerConfig.appendSerializerToConfig(configs, serializer, serializer));
 
-            ProducerInterceptors<T, T> interceptors = new ProducerInterceptors<>(this.interceptors);
+            ProducerInterceptors<T, T> interceptors = new ProducerInterceptors<>(this.interceptors, metrics);
 
             return new KafkaProducer<>(
                 producerConfig,
@@ -2760,5 +2763,101 @@ public class KafkaProducerTest {
         KafkaMetric streamClientMetricOne = new KafkaMetric(lock, metricNameOne, (Measurable) (m, now) -> 1.0, metricConfig, Time.SYSTEM);
         KafkaMetric streamClientMetricTwo = new KafkaMetric(lock, metricNameTwo, (Measurable) (m, now) -> 2.0, metricConfig, Time.SYSTEM);
         return Map.of(metricNameOne, streamClientMetricOne, metricNameTwo, streamClientMetricTwo);
+    }
+
+    @Test
+    void testMonitorablePlugins() {
+        try {
+            String clientId = "testMonitorablePlugins";
+            Map<String, Object> configs = new HashMap<>();
+            configs.put(ProducerConfig.CLIENT_ID_CONFIG, clientId);
+            configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+            configs.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, MonitorableSerializer.class.getName());
+            configs.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, MonitorableSerializer.class.getName());
+            configs.put(ProducerConfig.PARTITIONER_CLASS_CONFIG, MonitorablePartitioner.class.getName());
+            configs.put(ProducerConfig.INTERCEPTOR_CLASSES_CONFIG, MonitorableInterceptor.class.getName());
+            configs.put(MockProducerInterceptor.APPEND_STRING_PROP, "");
+
+            KafkaProducer<String, String> producer = new KafkaProducer<>(configs);
+            Map<MetricName, ? extends Metric> metrics = producer.metrics();
+
+            MetricName expectedKeySerializerMetric = expectedMetricName(
+                    clientId,
+                    ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
+                    MonitorableSerializer.class);
+            assertTrue(metrics.containsKey(expectedKeySerializerMetric));
+            assertEquals(VALUE, metrics.get(expectedKeySerializerMetric).metricValue());
+
+            MetricName expectedValueSerializerMetric = expectedMetricName(
+                    clientId,
+                    ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
+                    MonitorableSerializer.class);
+            assertTrue(metrics.containsKey(expectedValueSerializerMetric));
+            assertEquals(VALUE, metrics.get(expectedValueSerializerMetric).metricValue());
+
+            MetricName expectedPartitionerMetric = expectedMetricName(
+                    clientId,
+                    ProducerConfig.PARTITIONER_CLASS_CONFIG,
+                    MonitorablePartitioner.class);
+            assertTrue(metrics.containsKey(expectedPartitionerMetric));
+            assertEquals(VALUE, metrics.get(expectedPartitionerMetric).metricValue());
+
+            MetricName expectedInterceptorMetric = expectedMetricName(
+                    clientId,
+                    ProducerConfig.INTERCEPTOR_CLASSES_CONFIG,
+                    MonitorableInterceptor.class);
+            assertTrue(metrics.containsKey(expectedInterceptorMetric));
+            assertEquals(VALUE, metrics.get(expectedInterceptorMetric).metricValue());
+
+            producer.close();
+            metrics = producer.metrics();
+            assertFalse(metrics.containsKey(expectedKeySerializerMetric));
+            assertFalse(metrics.containsKey(expectedValueSerializerMetric));
+            assertFalse(metrics.containsKey(expectedPartitionerMetric));
+            assertFalse(metrics.containsKey(expectedInterceptorMetric));
+        } finally {
+            MockProducerInterceptor.resetCounters();
+        }
+    }
+
+    private MetricName expectedMetricName(String clientId, String config, Class<?> clazz) {
+        Map<String, String> expectedTags = new LinkedHashMap<>();
+        expectedTags.put("client-id", clientId);
+        expectedTags.put("config", config);
+        expectedTags.put("class", clazz.getSimpleName());
+        expectedTags.putAll(TAGS);
+        return new MetricName(NAME, "plugins", DESCRIPTION, expectedTags);
+    }
+
+    private static final String NAME = "name";
+    private static final String DESCRIPTION = "description";
+    private static final Map<String, String> TAGS = Collections.singletonMap("k", "v");
+    private static final double VALUE = 123.0;
+
+    public static class MonitorableSerializer extends MockSerializer implements Monitorable {
+
+        @Override
+        public void withPluginMetrics(PluginMetrics metrics) {
+            MetricName name = metrics.metricName(NAME, DESCRIPTION, TAGS);
+            metrics.addMetric(name, (Measurable) (config, now) -> VALUE);
+        }
+    }
+
+    public static class MonitorablePartitioner extends MockPartitioner implements Monitorable {
+
+        @Override
+        public void withPluginMetrics(PluginMetrics metrics) {
+            MetricName name = metrics.metricName(NAME, DESCRIPTION, TAGS);
+            metrics.addMetric(name, (Measurable) (config, now) -> VALUE);
+        }
+    }
+
+    public static class MonitorableInterceptor extends MockProducerInterceptor implements Monitorable {
+
+        @Override
+        public void withPluginMetrics(PluginMetrics metrics) {
+            MetricName name = metrics.metricName(NAME, DESCRIPTION, TAGS);
+            metrics.addMetric(name, (Measurable) (config, now) -> VALUE);
+        }
     }
 }

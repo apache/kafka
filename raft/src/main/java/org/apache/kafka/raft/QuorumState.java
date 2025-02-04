@@ -22,6 +22,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.raft.internals.BatchAccumulator;
 import org.apache.kafka.raft.internals.KRaftControlRecordStateMachine;
+import org.apache.kafka.raft.internals.KafkaRaftMetrics;
 
 import org.slf4j.Logger;
 
@@ -62,6 +63,7 @@ import java.util.Random;
  * Leader transitions to:
  *    Unattached:  After learning of a new election with a higher epoch
  *    Resigned:    When shutting down gracefully
+ *    Follower:    After discovering a leader with a larger epoch
  *
  * Follower transitions to:
  *    Unattached:  After learning of a new election with a higher epoch
@@ -94,6 +96,7 @@ public class QuorumState {
     private final int electionTimeoutMs;
     private final int fetchTimeoutMs;
     private final LogContext logContext;
+    private final KafkaRaftMetrics kafkaRaftMetrics;
 
     private volatile EpochState state;
 
@@ -108,7 +111,8 @@ public class QuorumState {
         QuorumStateStore store,
         Time time,
         LogContext logContext,
-        Random random
+        Random random,
+        KafkaRaftMetrics kafkaRaftMetrics
     ) {
         this.localId = localId;
         this.localDirectoryId = localDirectoryId;
@@ -122,6 +126,7 @@ public class QuorumState {
         this.log = logContext.logger(QuorumState.class);
         this.random = random;
         this.logContext = logContext;
+        this.kafkaRaftMetrics = kafkaRaftMetrics;
     }
 
     private ElectionState readElectionState() {
@@ -722,8 +727,10 @@ public class QuorumState {
             accumulator,
             localListeners,
             fetchTimeoutMs,
-            logContext
+            logContext,
+            kafkaRaftMetrics
         );
+
         durableTransitionTo(state);
         return state;
     }

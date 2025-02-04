@@ -38,11 +38,11 @@ import java.util.function.Function;
 public interface ForeignKeyExtractor<K, V, KO> {
     KO extract(K key, V value);
 
-    static <K, V, KO> ForeignKeyExtractor<K, V, KO> fromFunction(Function<V, KO> function) {
+    static <K, V, KO> ForeignKeyExtractor<? super K, ? super V, ? extends KO> fromFunction(Function<? super V, ? extends KO> function) {
         return (key, value) -> function.apply(value);
     }
 
-    static <K, V, KO> ForeignKeyExtractor<K, V, KO> fromBiFunction(BiFunction<K, V, KO> biFunction) {
+    static <K, V, KO> ForeignKeyExtractor<? super K, ? super V, ? extends KO> fromBiFunction(BiFunction<? super K, ? super V, ? extends KO> biFunction) {
         return biFunction::apply;
     }
 }

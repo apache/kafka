@@ -3936,7 +3936,7 @@ public class FetchRequestManagerTest {
                                      SubscriptionState subscriptionState,
                                      LogContext logContext) {
         buildDependencies(metricConfig, metadataExpireMs, subscriptionState, logContext);
-        Deserializers<K, V> deserializers = new Deserializers<>(keyDeserializer, valueDeserializer);
+        Deserializers<K, V> deserializers = new Deserializers<>(keyDeserializer, valueDeserializer, metrics);
         FetchConfig fetchConfig = new FetchConfig(
                 minBytes,
                 maxBytes,

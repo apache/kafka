@@ -885,7 +885,6 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
 
     @Override
     protected void maybeUpdateGroupState() {
-        ConsumerGroupState previousState = state.get();
         ConsumerGroupState newState = STABLE;
         if (members.isEmpty()) {
             newState = EMPTY;
@@ -901,7 +900,6 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         }
 
         state.set(newState);
-        metrics.onConsumerGroupStateTransition(previousState, newState);
     }
 
     /**

@@ -74,6 +74,8 @@ import org.apache.kafka.snapshot.Snapshots;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 
+import org.mockito.Mockito;
+
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -130,6 +132,7 @@ public final class RaftClientTestContext {
     public final KRaftVersion kraftVersion;
     public final KafkaRaftClient<String> client;
     final Metrics metrics;
+    public final ExternalKRaftMetrics externalKRaftMetrics;
     public final MockLog log;
     final MockNetworkChannel channel;
     final MockMessageQueue messageQueue;
@@ -443,11 +446,14 @@ public final class RaftClientTestContext {
                 quorumConfig
             );
 
+            ExternalKRaftMetrics externalKRaftMetrics = Mockito.mock(ExternalKRaftMetrics.class);
+
             client.register(listener);
             client.initialize(
                 staticVoterAddressMap,
                 quorumStateStore,
-                metrics
+                metrics,
+                externalKRaftMetrics
             );
 
             RaftClientTestContext context = new RaftClientTestContext(
@@ -470,6 +476,7 @@ public final class RaftClientTestContext {
                 raftProtocol,
                 alwaysFlush,
                 metrics,
+                externalKRaftMetrics,
                 listener
             );
 
@@ -498,6 +505,7 @@ public final class RaftClientTestContext {
         RaftProtocol raftProtocol,
         boolean alwaysFlush,
         Metrics metrics,
+        ExternalKRaftMetrics externalKRaftMetrics,
         MockListener listener
     ) {
         this.clusterId = clusterId;
@@ -515,6 +523,7 @@ public final class RaftClientTestContext {
         this.raftProtocol = raftProtocol;
         this.alwaysFlush = alwaysFlush;
         this.metrics = metrics;
+        this.externalKRaftMetrics = externalKRaftMetrics;
         this.listener = listener;
     }
 
