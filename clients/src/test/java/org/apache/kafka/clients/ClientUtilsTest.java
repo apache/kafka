@@ -99,28 +99,38 @@ public class ClientUtilsTest {
         }
     }
 
-    @Test
-    public void testValidBrokerAddress() {
-        List<String> addresses = List.of("localhost:9997", "localhost:9998", "localhost:9999");
+    static Stream<List<String>> provideValidBrokerAddressTestCases() {
+        return Stream.of(
+            List.of("localhost:9997", "localhost:9998", "localhost:9999")
+
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("provideValidBrokerAddressTestCases")
+    public void testValidBrokerAddress(List<String> addresses) {
         assertDoesNotThrow(() -> ClientUtils.parseAndValidateAddresses(addresses, ClientDnsLookup.USE_ALL_DNS_IPS));
     }
 
     static Stream<List<String>> provideInvalidBrokerAddressTestCases() {
         return Stream.of(
-            List.of("localhost:10000"),
-            // Intentionally provide a single string, as users may provide space-separated brokers, which will be parsed as a single string.
             List.of("localhost:9997\nlocalhost:9998\nlocalhost:9999"),
-            List.of("localhost:9997 localhost:9998 localhost:9999"),
-            List.of("localhost:9997;localhost:9998;localhost:9999"),
-            List.of("localhost:9997:localhost:9998:localhost:9999")
+            List.of("localhost:9997", "localhost:9998", " localhost:9999"),
+            // Intentionally provide a single string, as users may provide space-separated brokers, which will be parsed as a single string.
+            List.of("localhost:9997 localhost:9998 localhost:9999")
         );
     }
 
     @ParameterizedTest
     @MethodSource("provideInvalidBrokerAddressTestCases")
     public void testInvalidBrokerAddress(List<String> addresses) {
-        assertThrows(IllegalArgumentException.class,
-            () -> ClientUtils.parseAndValidateAddresses(addresses, "random.value"));
+        assertThrows(ConfigException.class,
+            () -> ClientUtils.parseAndValidateAddresses(addresses, ClientDnsLookup.USE_ALL_DNS_IPS));
+    }
+
+    @Test
+    public void testInvalidConfig() {
+        assertThrows(ConfigException.class, () -> checkWithoutLookup("localhost:10000", "localhost:10001"));
     }
 
     @Test
