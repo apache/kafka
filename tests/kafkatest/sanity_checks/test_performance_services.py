@@ -38,7 +38,7 @@ class PerformanceServiceTest(Test):
             self.zk.start()
 
     @cluster(num_nodes=5)
-    @matrix(version=[str(LATEST_2_1), str(DEV_BRANCH)], metadata_quorum=quorum.all)
+    @matrix(version=[str(LATEST_2_1), str(DEV_BRANCH)], metadata_quorum=quorum.all_kraft)
     def test_version(self, version=str(LATEST_2_1), metadata_quorum=quorum.zk):
         """
         Sanity check out producer performance service - verify that we can run the service with a small
