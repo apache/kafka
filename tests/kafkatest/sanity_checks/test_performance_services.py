@@ -31,12 +31,6 @@ class PerformanceServiceTest(Test):
         self.num_records = 10000
         self.topic = "topic"
 
-        self.zk = ZookeeperService(test_context, 1) if quorum.for_test(test_context) == quorum.zk else None
-
-    def setUp(self):
-        if self.zk:
-            self.zk.start()
-
     @cluster(num_nodes=5)
     @matrix(version=[str(LATEST_2_1), str(DEV_BRANCH)], metadata_quorum=quorum.all_kraft)
     def test_version(self, version=str(LATEST_2_1), metadata_quorum=quorum.zk):
@@ -47,7 +41,7 @@ class PerformanceServiceTest(Test):
         version = KafkaVersion(version)
         self.kafka = KafkaService(
             self.test_context, 1,
-            self.zk, topics={self.topic: {'partitions': 1, 'replication-factor': 1}}, version=DEV_BRANCH)
+            None, topics={self.topic: {'partitions': 1, 'replication-factor': 1}}, version=DEV_BRANCH)
         self.kafka.start()
 
         # check basic run of producer performance
