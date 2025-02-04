@@ -432,6 +432,14 @@ public abstract class AbstractFetch implements Closeable {
             if (!subscriptions.hasValidPosition(partition))
                 continue;
 
+            // A paused partition remains in the fetch buffer even though it's not returned to the user. Unless
+            // this case is handled, a paused partition will inadvertently "block" a request from being created to
+            // fetch data for other partitions, leading users to poll indefinitely waiting for more data.
+            //
+            // See FetchCollector.collectFetch().
+            if (subscriptions.isPaused(partition))
+                continue;
+
             SubscriptionState.FetchPosition position = positionForPartition(partition);
             Optional<Node> nodeOpt = maybeNodeForPosition(partition, position, currentTimeMs);
             nodeOpt.ifPresent(node -> bufferedNodes.add(node.id()));
