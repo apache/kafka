@@ -310,8 +310,11 @@ public class KafkaStreams implements AutoCloseable {
                             interrupted = true;
                         }
                     } else {
-                        log.debug("Cannot transit to {} within {}ms",
-                            Arrays.stream(targetStates).map(State::toString).collect(Collectors.joining(" or ")), waitMs);
+                        log.debug(
+                            "Cannot transit to {} within {}ms",
+                            Arrays.stream(targetStates).map(State::toString).collect(Collectors.joining(" or ")),
+                            waitMs
+                        );
                         return false;
                     }
                     elapsedMs = time.milliseconds() - begin;
@@ -1548,21 +1551,25 @@ public class KafkaStreams implements AutoCloseable {
         }
 
         if (!setState(State.PENDING_SHUTDOWN)) {
-            final State stateCopy = state;
-            if (stateCopy.isShuttingDown()) {
-                log.info("Skipping shutdown since Streams client is already in {}, waiting for a terminal state", stateCopy);
+            // Copy the state so that we can atomically check if we are shut down and act on it (log it)
+            final State immutableStateCopy = state;
+            if (immutableStateCopy.isShuttingDown()) {
+                log.info("Skipping shutdown since Streams client is already in {}, waiting for a terminal state", immutableStateCopy);
                 if (!waitOnStates(timeoutMs, State.ERROR, State.NOT_RUNNING)) {
                     log.warn("Streams client did transition to a terminal state (ERROR or NOT_RUNNING) within the {}ms timeout", timeoutMs);
                     return false;
                 }
                 log.info("Streams client stopped completely and transitioned to the terminal {} state", state);
-            } else if (stateCopy.hasCompletedShutdown()) {
-                log.info("Skipping shutdown since Streams client is already in the terminal {} state", stateCopy);
-            } else {
-                throw new IllegalStateException("If transitioning to PENDING_SHUTDOWN fails, the state should be either in "
-                    + "PENDING_SHUTDOWN, PENDING_ERROR, ERROR, or NOT_RUNNING");
+                return true;
             }
-            return true;
+
+            if (state.hasCompletedShutdown()) {
+                log.info("Skipping shutdown since Streams client is already in the terminal {} state", state);
+                return true;
+            }
+
+            throw new IllegalStateException("If transitioning to PENDING_SHUTDOWN fails, the state should be either in "
+                + "PENDING_SHUTDOWN, PENDING_ERROR, ERROR, or NOT_RUNNING");
         }
 
         final Thread shutdownThread = shutdownHelper(false, timeoutMs, leaveGroup);
