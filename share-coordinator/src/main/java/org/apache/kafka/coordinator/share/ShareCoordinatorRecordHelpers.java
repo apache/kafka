@@ -71,4 +71,14 @@ public class ShareCoordinatorRecordHelpers {
             )
         );
     }
+
+    public static CoordinatorRecord newShareStateTombstoneRecord(String groupId, Uuid topicId, int partitionId) {
+        // Always generate share snapshot type record for tombstone.
+        return CoordinatorRecord.tombstone(
+            new ShareSnapshotKey()
+                .setGroupId(groupId)
+                .setTopicId(topicId)
+                .setPartition(partitionId)
+        );
+    }
 }

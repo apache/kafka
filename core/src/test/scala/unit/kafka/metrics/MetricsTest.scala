@@ -234,23 +234,6 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     })
   }
 
-  /**
-   * Test that the metrics are created with the right name, testZooKeeperStateChangeRateMetrics
-   * and testZooKeeperSessionStateMetric in ZooKeeperClientTest test the metrics behaviour.
-   */
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testSessionExpireListenerMetrics(quorum: String): Unit = {
-    val metrics = KafkaYammerMetrics.defaultRegistry.allMetrics
-    val expectedNumMetrics = 0
-    assertEquals(expectedNumMetrics, metrics.keySet.asScala.
-      count(_.getMBeanName == "kafka.server:type=SessionExpireListener,name=SessionState"))
-    assertEquals(expectedNumMetrics, metrics.keySet.asScala.
-      count(_.getMBeanName == "kafka.server:type=SessionExpireListener,name=ZooKeeperExpiresPerSec"))
-    assertEquals(expectedNumMetrics, metrics.keySet.asScala.
-      count(_.getMBeanName == "kafka.server:type=SessionExpireListener,name=ZooKeeperDisconnectsPerSec"))
-  }
-
   private def topicMetrics(topic: Option[String]): Set[String] = {
     val metricNames = KafkaYammerMetrics.defaultRegistry.allMetrics().keySet.asScala.map(_.getMBeanName)
     filterByTopicMetricRegex(metricNames, topic)

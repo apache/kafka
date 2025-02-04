@@ -68,7 +68,14 @@ public class DelayedShareFetch extends DelayedOperation {
     private LinkedHashMap<TopicIdPartition, Long> partitionsAcquired;
     private LinkedHashMap<TopicIdPartition, LogReadResult> partitionsAlreadyFetched;
 
-    DelayedShareFetch(
+    /**
+     * This function constructs an instance of delayed share fetch operation for completing share fetch requests instantaneously or with delay.
+     * @param shareFetch - The share fetch parameters of the share fetch request.
+     * @param replicaManager - The replica manager instance used to read from log/complete the request.
+     * @param exceptionHandler - The handler to complete share fetch requests with exception.
+     * @param sharePartitions - The share partitions referenced in the share fetch request.
+     */
+    public DelayedShareFetch(
             ShareFetch shareFetch,
             ReplicaManager replicaManager,
             BiConsumer<SharePartitionKey, Throwable> exceptionHandler,

@@ -27,25 +27,18 @@ public final class FinalizedFeatures {
     private final long finalizedFeaturesEpoch;
 
     public static FinalizedFeatures fromKRaftVersion(MetadataVersion version) {
-        return new FinalizedFeatures(version, Collections.emptyMap(), -1, true);
+        return new FinalizedFeatures(version, Collections.emptyMap(), -1);
     }
 
     public FinalizedFeatures(
         MetadataVersion metadataVersion,
         Map<String, Short> finalizedFeatures,
-        long finalizedFeaturesEpoch,
-        boolean kraftMode
+        long finalizedFeaturesEpoch
     ) {
-        this.metadataVersion = metadataVersion;
+        this.metadataVersion = Objects.requireNonNull(metadataVersion);
         this.finalizedFeatures = new HashMap<>(finalizedFeatures);
         this.finalizedFeaturesEpoch = finalizedFeaturesEpoch;
-        // In KRaft mode, we always include the metadata version in the features map.
-        // In ZK mode, we never include it.
-        if (kraftMode) {
-            this.finalizedFeatures.put(MetadataVersion.FEATURE_NAME, metadataVersion.featureLevel());
-        } else {
-            this.finalizedFeatures.remove(MetadataVersion.FEATURE_NAME);
-        }
+        this.finalizedFeatures.put(MetadataVersion.FEATURE_NAME, metadataVersion.featureLevel());
     }
 
     public MetadataVersion metadataVersion() {

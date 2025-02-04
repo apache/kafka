@@ -24,7 +24,7 @@ import kafka.log.remote.RemoteLogManager
 import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.raft.KafkaRaftManager
 import kafka.server.metadata._
-import kafka.server.share.SharePartitionManager
+import kafka.server.share.{ShareCoordinatorMetadataCacheHelperImpl, SharePartitionManager}
 import kafka.utils.CoreUtils
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
@@ -355,7 +355,6 @@ class BrokerServer(
 
       /* start token manager */
       tokenManager = new DelegationTokenManager(config, tokenCache, time)
-      tokenManager.startup()
 
       /* initializing the groupConfigManager */
       groupConfigManager = new GroupConfigManager(config.groupCoordinatorConfig.extractGroupConfigMap(config.shareGroupConfig))
@@ -441,7 +440,8 @@ class BrokerServer(
         config.shareGroupConfig.shareFetchMaxFetchRecords,
         persister,
         groupConfigManager,
-        metrics
+        metrics,
+        brokerTopicStats
       )
 
       dataPlaneRequestProcessor = new KafkaApis(
@@ -786,9 +786,6 @@ class BrokerServer(
         CoreUtils.swallow(groupCoordinator.shutdown(), this)
       if (shareCoordinator.isDefined)
         CoreUtils.swallow(shareCoordinator.get.shutdown(), this)
-
-      if (tokenManager != null)
-        CoreUtils.swallow(tokenManager.shutdown(), this)
 
       if (assignmentsManager != null)
         CoreUtils.swallow(assignmentsManager.close(), this)
