@@ -204,18 +204,19 @@ public class ApiVersionsResponse extends AbstractResponse {
             // Skip telemetry APIs if client telemetry is disabled.
             if ((apiKey == ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS || apiKey == ApiKeys.PUSH_TELEMETRY) && !clientTelemetryEnabled)
                 continue;
-            apiKey.toApiVersion(enableUnstableLastVersion).ifPresent(apiKeys::add);
+            apiKey.toApiVersionForApiResponse(enableUnstableLastVersion, listenerType).ifPresent(apiKeys::add);
         }
         return apiKeys;
     }
 
     public static ApiVersionCollection collectApis(
+        ApiMessageType.ListenerType listenerType,
         Set<ApiKeys> apiKeys,
         boolean enableUnstableLastVersion
     ) {
         ApiVersionCollection res = new ApiVersionCollection();
         for (ApiKeys apiKey : apiKeys) {
-            apiKey.toApiVersion(enableUnstableLastVersion).ifPresent(res::add);
+            apiKey.toApiVersionForApiResponse(enableUnstableLastVersion, listenerType).ifPresent(res::add);
         }
         return res;
     }
@@ -238,7 +239,7 @@ public class ApiVersionsResponse extends AbstractResponse {
     ) {
         ApiVersionCollection apiKeys = new ApiVersionCollection();
         for (ApiKeys apiKey : ApiKeys.apisForListener(listenerType)) {
-            final Optional<ApiVersion> brokerApiVersion = apiKey.toApiVersion(enableUnstableLastVersion);
+            final Optional<ApiVersion> brokerApiVersion = apiKey.toApiVersionForApiResponse(enableUnstableLastVersion, listenerType);
             if (brokerApiVersion.isEmpty()) {
                 // Broker does not support this API key.
                 continue;

@@ -79,9 +79,9 @@ import java.util.List;
 import java.util.Set;
 
 import static org.apache.kafka.coordinator.common.runtime.TestUtil.requestContext;
-import static org.apache.kafka.coordinator.group.GroupCoordinatorShard.CLASSIC_GROUP_SIZE_COUNTER_KEY;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorShard.DEFAULT_GROUP_GAUGES_UPDATE_INTERVAL_MS;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorShard.GROUP_EXPIRATION_KEY;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorShard.GROUP_SIZE_COUNTER_KEY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -1024,7 +1024,7 @@ public class GroupCoordinatorShardTest {
     }
 
     @Test
-    public void testScheduleClassicGroupSizeCounter() {
+    public void testScheduleGroupSizeCounter() {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
         CoordinatorMetrics coordinatorMetrics = mock(CoordinatorMetrics.class);
@@ -1046,21 +1046,21 @@ public class GroupCoordinatorShardTest {
         );
         coordinator.onLoaded(MetadataImage.EMPTY);
 
-        // The classic group size counter is scheduled.
+        // The counter is scheduled.
         assertEquals(
             DEFAULT_GROUP_GAUGES_UPDATE_INTERVAL_MS,
-            timer.timeout(CLASSIC_GROUP_SIZE_COUNTER_KEY).deadlineMs - time.milliseconds()
+            timer.timeout(GROUP_SIZE_COUNTER_KEY).deadlineMs - time.milliseconds()
         );
 
         // Advance the timer to trigger the update.
         time.sleep(DEFAULT_GROUP_GAUGES_UPDATE_INTERVAL_MS + 1);
         timer.poll();
-        verify(groupMetadataManager, times(1)).updateClassicGroupSizeCounter();
+        verify(groupMetadataManager, times(1)).updateGroupSizeCounter();
 
-        // The classic group size counter is scheduled.
+        // The counter is scheduled.
         assertEquals(
             DEFAULT_GROUP_GAUGES_UPDATE_INTERVAL_MS,
-            timer.timeout(CLASSIC_GROUP_SIZE_COUNTER_KEY).deadlineMs - time.milliseconds()
+            timer.timeout(GROUP_SIZE_COUNTER_KEY).deadlineMs - time.milliseconds()
         );
     }
 

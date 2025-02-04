@@ -258,11 +258,11 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     static final String GROUP_EXPIRATION_KEY = "expire-group-metadata";
 
     /**
-     * The classic group size counter key to schedule a timer task.
+     * The classic and consumer group size counter key to schedule a timer task.
      *
      * Visible for testing.
      */
-    static final String CLASSIC_GROUP_SIZE_COUNTER_KEY = "classic-group-size-counter";
+    static final String GROUP_SIZE_COUNTER_KEY = "group-size-counter";
 
     /**
      * Hardcoded default value of the interval to update the classic group size counter.
@@ -699,27 +699,27 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     /**
-     * Schedules (or reschedules) the group size counter for the classic groups.
+     * Schedules (or reschedules) the group size counter for the classic/consumer groups.
      */
-    private void scheduleClassicGroupSizeCounter() {
+    private void scheduleGroupSizeCounter() {
         timer.schedule(
-            CLASSIC_GROUP_SIZE_COUNTER_KEY,
+            GROUP_SIZE_COUNTER_KEY,
             DEFAULT_GROUP_GAUGES_UPDATE_INTERVAL_MS,
             TimeUnit.MILLISECONDS,
             true,
             () -> {
-                groupMetadataManager.updateClassicGroupSizeCounter();
-                scheduleClassicGroupSizeCounter();
+                groupMetadataManager.updateGroupSizeCounter();
+                scheduleGroupSizeCounter();
                 return GroupMetadataManager.EMPTY_RESULT;
             }
         );
     }
 
     /**
-     * Cancels the group size counter for the classic groups.
+     * Cancels the group size counter for the classic/consumer groups.
      */
-    private void cancelClassicGroupSizeCounter() {
-        timer.cancel(CLASSIC_GROUP_SIZE_COUNTER_KEY);
+    private void cancelGroupSizeCounter() {
+        timer.cancel(GROUP_SIZE_COUNTER_KEY);
     }
 
     /**
@@ -736,7 +736,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
 
         groupMetadataManager.onLoaded();
         scheduleGroupMetadataExpiration();
-        scheduleClassicGroupSizeCounter();
+        scheduleGroupSizeCounter();
     }
 
     @Override
@@ -744,7 +744,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         timer.cancel(GROUP_EXPIRATION_KEY);
         coordinatorMetrics.deactivateMetricsShard(metricsShard);
         groupMetadataManager.onUnloaded();
-        cancelClassicGroupSizeCounter();
+        cancelGroupSizeCounter();
     }
 
     /**

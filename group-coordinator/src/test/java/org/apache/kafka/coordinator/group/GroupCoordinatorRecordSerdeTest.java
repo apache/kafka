@@ -18,8 +18,8 @@ package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.MessageUtil;
-import org.apache.kafka.coordinator.common.runtime.CoordinatorLoader;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
+import org.apache.kafka.coordinator.common.runtime.Deserializer;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMetadataValue;
 import org.apache.kafka.coordinator.group.generated.CoordinatorRecordType;
@@ -121,8 +121,8 @@ public class GroupCoordinatorRecordSerdeTest {
 
         ByteBuffer valueBuffer = ByteBuffer.allocate(64);
 
-        CoordinatorLoader.UnknownRecordTypeException ex =
-            assertThrows(CoordinatorLoader.UnknownRecordTypeException.class,
+        Deserializer.UnknownRecordTypeException ex =
+            assertThrows(Deserializer.UnknownRecordTypeException.class,
                 () -> serde.deserialize(keyBuffer, valueBuffer));
         assertEquals((short) 255, ex.unknownType());
     }
@@ -196,6 +196,34 @@ public class GroupCoordinatorRecordSerdeTest {
                 () -> serde.deserialize(keyBuffer, valueBuffer));
         assertTrue(ex.getMessage().startsWith("Could not read record with version 0 from value's buffer due to"),
             ex.getMessage());
+    }
+
+    @Test
+    public void testDeserializeWithInvalidValueVersion() {
+        GroupCoordinatorRecordSerde serde = new GroupCoordinatorRecordSerde();
+
+        ApiMessage key = new ConsumerGroupMetadataKey().setGroupId("foo");
+        ByteBuffer keyBuffer = MessageUtil.toCoordinatorTypePrefixedByteBuffer(key);
+
+        ByteBuffer valueBuffer1 = ByteBuffer.allocate(2);
+        valueBuffer1.putShort((short) (ConsumerGroupMetadataValue.HIGHEST_SUPPORTED_VERSION + 1));
+        valueBuffer1.rewind();
+
+        Deserializer.UnknownRecordVersionException ex =
+            assertThrows(Deserializer.UnknownRecordVersionException.class,
+                () -> serde.deserialize(keyBuffer, valueBuffer1));
+        assertEquals(key.apiKey(), ex.type());
+        assertEquals(ConsumerGroupMetadataValue.HIGHEST_SUPPORTED_VERSION + 1, ex.unknownVersion());
+
+        keyBuffer.rewind();
+        ByteBuffer valueBuffer2 = ByteBuffer.allocate(2);
+        valueBuffer2.putShort((short) (ConsumerGroupMetadataValue.LOWEST_SUPPORTED_VERSION - 1));
+        valueBuffer2.rewind();
+
+        ex = assertThrows(Deserializer.UnknownRecordVersionException.class,
+            () -> serde.deserialize(keyBuffer, valueBuffer2));
+        assertEquals(key.apiKey(), ex.type());
+        assertEquals(ConsumerGroupMetadataValue.LOWEST_SUPPORTED_VERSION - 1, ex.unknownVersion());
     }
 
     @Test

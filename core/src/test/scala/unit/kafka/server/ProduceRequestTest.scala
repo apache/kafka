@@ -254,7 +254,7 @@ class ProduceRequestTest extends BaseRequestTest {
     // Create a single-partition topic compressed with ZSTD
     val topicConfig = new Properties
     topicConfig.setProperty(TopicConfig.COMPRESSION_TYPE_CONFIG, BrokerCompressionType.ZSTD.name)
-    val partitionToLeader = createTopic(topic, topicConfig =  topicConfig)
+    val partitionToLeader = createTopic(topic, topicConfig = topicConfig)
     val leader = partitionToLeader(partition)
     val memoryRecords = MemoryRecords.withRecords(Compression.zstd().build(),
       new SimpleRecord(System.currentTimeMillis(), "key".getBytes, "value".getBytes))

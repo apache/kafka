@@ -47,7 +47,8 @@ public final class BrokerServerMetricsTest {
                 new MetricName("last-applied-record-timestamp", expectedGroup, "", Collections.emptyMap()),
                 new MetricName("last-applied-record-lag-ms", expectedGroup, "", Collections.emptyMap()),
                 new MetricName("metadata-load-error-count", expectedGroup, "", Collections.emptyMap()),
-                new MetricName("metadata-apply-error-count", expectedGroup, "", Collections.emptyMap())
+                new MetricName("metadata-apply-error-count", expectedGroup, "", Collections.emptyMap()),
+                new MetricName("ignored-static-voters", expectedGroup, "", Collections.emptyMap())
         ));
 
         try (BrokerServerMetrics ignored = new BrokerServerMetrics(metrics)) {
@@ -136,6 +137,23 @@ public final class BrokerServerMetricsTest {
             long errorCount = 100;
             brokerMetrics.metadataApplyErrorCount().set(errorCount);
             assertEquals((double) errorCount, metadataApplyErrorCountMetric.metricValue());
+        }
+    }
+
+    @Test
+    public void testIgnoredStaticVoters() throws Exception {
+        MockTime time = new MockTime();
+        Metrics metrics = new Metrics(time);
+        try (BrokerServerMetrics brokerMetrics = new BrokerServerMetrics(metrics)) {
+            KafkaMetric ignoredStaticVotersMetric = metrics.metrics().get(brokerMetrics.ignoredStaticVotersName());
+
+            assertEquals(0, ignoredStaticVotersMetric.metricValue());
+
+            brokerMetrics.setIgnoredStaticVoters(true);
+            assertEquals(1, ignoredStaticVotersMetric.metricValue());
+
+            brokerMetrics.setIgnoredStaticVoters(false);
+            assertEquals(0, ignoredStaticVotersMetric.metricValue());
         }
     }
 }
