@@ -196,7 +196,7 @@ object AbstractCoordinatorConcurrencyTest {
 
     @volatile var logs: mutable.Map[TopicPartition, (UnifiedLog, Long)] = _
 
-    override def maybeStartTransactionVerificationForPartition(
+    override def maybeSendPartitionToTransactionCoordinator(
       topicPartition: TopicPartition,
       transactionalId: String,
       producerId: Long,

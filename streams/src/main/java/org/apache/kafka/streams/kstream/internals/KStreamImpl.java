@@ -961,21 +961,27 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
     @Override
-    public <VO, VR> KStream<K, VR> join(final KTable<K, VO> table,
-                                        final ValueJoiner<? super V, ? super VO, ? extends VR> joiner) {
+    public <TableValue, VOut> KStream<K, VOut> join(
+        final KTable<K, TableValue> table,
+        final ValueJoiner<? super V, ? super TableValue, ? extends VOut> joiner
+    ) {
         return join(table, toValueJoinerWithKey(joiner));
     }
 
     @Override
-    public <VO, VR> KStream<K, VR> join(final KTable<K, VO> table,
-                                        final ValueJoinerWithKey<? super K, ? super V, ? super VO, ? extends VR> joiner) {
+    public <TableValue, VOut> KStream<K, VOut> join(
+        final KTable<K, TableValue> table,
+        final ValueJoinerWithKey<? super K, ? super V, ? super TableValue, ? extends VOut> joiner
+    ) {
         return join(table, joiner, Joined.with(null, null, null));
     }
 
     @Override
-    public <VO, VR> KStream<K, VR> join(final KTable<K, VO> table,
-                                        final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
-                                        final Joined<K, V, VO> joined) {
+    public <TableValue, VOut> KStream<K, VOut> join(
+        final KTable<K, TableValue> table,
+        final ValueJoiner<? super V, ? super TableValue, ? extends VOut> joiner,
+        final Joined<K, V, TableValue> joined
+    ) {
         Objects.requireNonNull(table, "table can't be null");
         Objects.requireNonNull(joiner, "joiner can't be null");
         Objects.requireNonNull(joined, "joined can't be null");
@@ -983,14 +989,16 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
     @Override
-    public <VO, VR> KStream<K, VR> join(final KTable<K, VO> table,
-                                        final ValueJoinerWithKey<? super K, ? super V, ? super VO, ? extends VR> joiner,
-                                        final Joined<K, V, VO> joined) {
+    public <TableValue, VOut> KStream<K, VOut> join(
+        final KTable<K, TableValue> table,
+        final ValueJoinerWithKey<? super K, ? super V, ? super TableValue, ? extends VOut> joiner,
+        final Joined<K, V, TableValue> joined
+    ) {
         Objects.requireNonNull(table, "table can't be null");
         Objects.requireNonNull(joiner, "joiner can't be null");
         Objects.requireNonNull(joined, "joined can't be null");
 
-        final JoinedInternal<K, V, VO> joinedInternal = new JoinedInternal<>(joined);
+        final JoinedInternal<K, V, TableValue> joinedInternal = new JoinedInternal<>(joined);
         final String name = joinedInternal.name();
 
         if (repartitionRequired) {
@@ -1149,14 +1157,14 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
     @SuppressWarnings({"unchecked", "resource"})
-    private <VO, VR> KStream<K, VR> doStreamTableJoin(final KTable<K, VO> table,
-                                                      final ValueJoinerWithKey<? super K, ? super V, ? super VO, ? extends VR> joiner,
-                                                      final JoinedInternal<K, V, VO> joinedInternal,
-                                                      final boolean leftJoin) {
+    private <VTable, VOut> KStream<K, VOut> doStreamTableJoin(final KTable<K, VTable> table,
+                                                              final ValueJoinerWithKey<? super K, ? super V, ? super VTable, ? extends VOut> joiner,
+                                                              final JoinedInternal<K, V, VTable> joinedInternal,
+                                                              final boolean leftJoin) {
         Objects.requireNonNull(table, "table can't be null");
         Objects.requireNonNull(joiner, "joiner can't be null");
 
-        final Set<String> allSourceNodes = ensureCopartitionWith(Collections.singleton((AbstractStream<K, VO>) table));
+        final Set<String> allSourceNodes = ensureCopartitionWith(Collections.singleton((AbstractStream<K, VTable>) table));
 
         final NamedInternal renamed = new NamedInternal(joinedInternal.name());
 
@@ -1165,7 +1173,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         Optional<StoreBuilder<?>> bufferStoreBuilder = Optional.empty();
 
         if (joinedInternal.gracePeriod() != null) {
-            if (!((KTableImpl<K, ?, VO>) table).graphNode.isOutputVersioned().orElse(true)) {
+            if (!((KTableImpl<K, ?, VTable>) table).graphNode.isOutputVersioned().orElse(true)) {
                 throw new IllegalArgumentException("KTable must be versioned to use a grace period in a stream table join.");
             }
             final String bufferName = name + "-Buffer";
@@ -1178,19 +1186,19 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             );
         }
 
-        final ProcessorSupplier<K, V, K, VR> processorSupplier = new KStreamKTableJoin<>(
-            ((KTableImpl<K, ?, VO>) table).valueGetterSupplier(),
+        final ProcessorSupplier<K, V, K, VOut> processorSupplier = new KStreamKTableJoin<>(
+            ((KTableImpl<K, ?, VTable>) table).valueGetterSupplier(),
             joiner,
             leftJoin,
             Optional.ofNullable(joinedInternal.gracePeriod()),
             bufferStoreBuilder
         );
 
-        final ProcessorParameters<K, V, K, VR> processorParameters = new ProcessorParameters<>(processorSupplier, name);
-        final StreamTableJoinNode<K, V, VR> streamTableJoinNode = new StreamTableJoinNode<>(
+        final ProcessorParameters<K, V, K, VOut> processorParameters = new ProcessorParameters<>(processorSupplier, name);
+        final StreamTableJoinNode<K, V, VOut> streamTableJoinNode = new StreamTableJoinNode<>(
             name,
             processorParameters,
-            ((KTableImpl<K, ?, VO>) table).valueGetterSupplier().storeNames(),
+            ((KTableImpl<K, ?, VTable>) table).valueGetterSupplier().storeNames(),
             this.name,
             joinedInternal.gracePeriod()
         );

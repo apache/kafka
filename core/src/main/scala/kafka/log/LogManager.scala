@@ -353,8 +353,8 @@ class LogManager(logDirs: Seq[File],
       addStrayLog(topicPartition, log)
       warn(s"Loaded stray log: $logDir")
     } else if (isStray(log)) {
-      // Unlike Zookeeper mode, which tracks pending topic deletions under a ZNode, KRaft is unable to prevent a topic from being recreated before every replica has been deleted.
-      // A KRaft broker with an offline directory may be unable to detect it still holds a to-be-deleted replica,
+      // We are unable to prevent a topic from being recreated before every replica has been deleted.
+      // Broker with an offline directory may be unable to detect it still holds a to-be-deleted replica,
       // and can create a conflicting topic partition for a new incarnation of the topic in one of the remaining online directories.
       // So upon a restart in which the offline directory is back online we need to clean up the old replica directory.
       log.renameDir(UnifiedLog.logStrayDirName(log.topicPartition), shouldReinitialize = false)
@@ -950,7 +950,6 @@ class LogManager(logDirs: Seq[File],
                         wasRemoteLogEnabled: Boolean): Unit = {
     topicConfigUpdated(topic)
     val logs = logsByTopic(topic)
-    // Combine the default properties with the overrides in zk to create the new LogConfig
     val newLogConfig = LogConfig.fromProps(currentDefaultConfig.originals, newTopicConfig)
     val isRemoteLogStorageEnabled = newLogConfig.remoteStorageEnable()
     // We would like to validate the configuration no matter whether the logs have materialised on disk or not.
@@ -1079,11 +1078,7 @@ class LogManager(logDirs: Seq[File],
 
         log
       }
-      // When running a ZK controller, we may get a log that does not have a topic ID. Assign it here.
-      if (log.topicId.isEmpty) {
-        topicId.foreach(log.assignTopicId)
-      }
-
+      
       // Ensure topic IDs are consistent
       topicId.foreach { topicId =>
         log.topicId.foreach { logTopicId =>
