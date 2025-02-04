@@ -29,23 +29,6 @@ import java.util.concurrent.CompletableFuture;
 public interface CoordinatorLoader<U> extends AutoCloseable {
 
     /**
-     * UnknownRecordTypeException is thrown when the Deserializer encounters
-     * an unknown record type.
-     */
-    class UnknownRecordTypeException extends RuntimeException {
-        private final short unknownType;
-
-        public UnknownRecordTypeException(short unknownType) {
-            super(String.format("Found an unknown record type %d", unknownType));
-            this.unknownType = unknownType;
-        }
-
-        public short unknownType() {
-            return unknownType;
-        }
-    }
-
-    /**
      * Object that is returned as part of the future from load(). Holds the partition load time and the
      * end time.
      */

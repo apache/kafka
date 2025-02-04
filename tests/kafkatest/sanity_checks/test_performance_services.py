@@ -20,7 +20,6 @@ from ducktape.tests.test import Test
 from kafkatest.services.kafka import KafkaService, quorum
 from kafkatest.services.performance import ProducerPerformanceService, ConsumerPerformanceService, EndToEndLatencyService
 from kafkatest.services.performance import latency, compute_aggregate_throughput
-from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.version import DEV_BRANCH, LATEST_2_1, KafkaVersion
 
 
@@ -31,14 +30,8 @@ class PerformanceServiceTest(Test):
         self.num_records = 10000
         self.topic = "topic"
 
-        self.zk = ZookeeperService(test_context, 1) if quorum.for_test(test_context) == quorum.zk else None
-
-    def setUp(self):
-        if self.zk:
-            self.zk.start()
-
     @cluster(num_nodes=5)
-    @matrix(version=[str(LATEST_2_1), str(DEV_BRANCH)], metadata_quorum=quorum.all)
+    @matrix(version=[str(LATEST_2_1), str(DEV_BRANCH)], metadata_quorum=quorum.all_kraft)
     def test_version(self, version=str(LATEST_2_1), metadata_quorum=quorum.zk):
         """
         Sanity check out producer performance service - verify that we can run the service with a small
@@ -47,7 +40,7 @@ class PerformanceServiceTest(Test):
         version = KafkaVersion(version)
         self.kafka = KafkaService(
             self.test_context, 1,
-            self.zk, topics={self.topic: {'partitions': 1, 'replication-factor': 1}}, version=DEV_BRANCH)
+            None, topics={self.topic: {'partitions': 1, 'replication-factor': 1}}, version=DEV_BRANCH)
         self.kafka.start()
 
         # check basic run of producer performance
