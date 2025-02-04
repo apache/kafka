@@ -109,10 +109,11 @@ final class KafkaMetadataLog private (
   }
 
   private def handleAndConvertLogAppendInfo(appendInfo: internals.log.LogAppendInfo): LogAppendInfo = {
-    if (appendInfo.firstOffset != UnifiedLog.UnknownOffset)
+    if (appendInfo.firstOffset == UnifiedLog.UnknownOffset) {
+      throw new InvalidRecordException(s"Append failed unexpectedly $appendInfo")
+    } else {
       new LogAppendInfo(appendInfo.firstOffset, appendInfo.lastOffset)
-    else
-      throw new KafkaException(s"Append failed unexpectedly")
+    }
   }
 
   override def lastFetchedEpoch: Int = {

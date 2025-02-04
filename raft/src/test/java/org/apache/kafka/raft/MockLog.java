@@ -316,6 +316,17 @@ public class MockLog implements ReplicatedLog {
                 );
             }
 
+            if (epoch.isPresent() && epoch.getAsInt() != batch.partitionLeaderEpoch()) {
+                // the partition leader epoch is set and does not match the one set in the batch
+                throw new RuntimeException(
+                    String.format(
+                        "Epoch %s doesn't match batch leader epoch %s",
+                        epoch,
+                        batch.partitionLeaderEpoch()
+                    )
+                );
+            }
+
             LogBatch logBatch = new LogBatch(
                 epoch.orElseGet(batch::partitionLeaderEpoch),
                 batch.isControlBatch(),

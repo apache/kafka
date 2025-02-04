@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
@@ -23,6 +24,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
+import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.feature.SupportedVersionRange;
 import org.apache.kafka.common.memory.MemoryPool;
@@ -1786,8 +1788,16 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                 }
             } else {
                 Records records = FetchResponse.recordsOrFail(partitionResponse);
-                if (records.sizeInBytes() > 0) {
+                try {
+                    // TODO: make sure to test corrupted records in kafka metadata log
                     appendAsFollower(records);
+                } catch (CorruptRecordException | InvalidRecordException e) {
+                    // TODO: this should log up to 265 bytes from the records
+                    logger.info(
+                        "Failed to append the records {} in the fetch response to the log",
+                        records,
+                        e
+                    );
                 }
 
                 OptionalLong highWatermark = partitionResponse.highWatermark() < 0 ?
@@ -3474,6 +3484,10 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         LeaderState<T> leaderState = quorum.<T>maybeLeaderState().orElseThrow(
             () -> new NotLeaderException("Append failed because the replica is not the current leader")
         );
+
+        if (records.isEmpty()) {
+            throw new IllegalArgumentException("Append failed because there are no records");
+        }
 
         BatchAccumulator<T> accumulator = leaderState.accumulator();
         boolean isFirstAppend = accumulator.isEmpty();
