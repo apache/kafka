@@ -224,7 +224,7 @@ jobs:
       - name: Capture JUnit Env
         env:
           JUNIT_ENV_FILE: build/junit-xml/junit-env-${{ env.job-variation }}.txt
-        run:
+        run: |
           echo "job-name=${{ github.job }}" >> $JUNIT_ENV_FILE
           echo "run-id=${{ github.run_id }}" >> $JUNIT_ENV_FILE
           echo "exitcode=${{ steps.junit-test.outputs.gradle-exitcode }}" >> $JUNIT_ENV_FILE
