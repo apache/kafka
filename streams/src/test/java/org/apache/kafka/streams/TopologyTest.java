@@ -146,8 +146,7 @@ public class TopologyTest {
 
     @Test
     public void shouldNotAllowNullProcessorSupplierWhenAddingProcessor() {
-        assertThrows(NullPointerException.class, () -> topology.addProcessor("name",
-            (ProcessorSupplier<Object, Object, Object, Object>) null));
+        assertThrows(NullPointerException.class, () -> topology.addProcessor("name", null));
     }
 
     @Test
@@ -376,6 +375,7 @@ public class TopologyTest {
         }
     }
 
+    @SuppressWarnings("resource")
     @Test
     public void shouldThrowOnUnassignedStateStoreAccess() {
         final String sourceNodeName = "source";
@@ -411,7 +411,7 @@ public class TopologyTest {
 
         @Override
         public Processor<Object, Object, Object, Object> get() {
-            return new Processor<Object, Object, Object, Object>() {
+            return new Processor<>() {
                 @Override
                 public void init(final ProcessorContext<Object, Object> context) {
                     context.getStateStore(STORE_NAME);
@@ -1157,7 +1157,7 @@ public class TopologyTest {
     public void topologyWithDynamicRoutingShouldDescribeExtractorClass() {
         final StreamsBuilder builder  = new StreamsBuilder();
 
-        final TopicNameExtractor<Object, Object> topicNameExtractor = new TopicNameExtractor<Object, Object>() {
+        final TopicNameExtractor<Object, Object> topicNameExtractor = new TopicNameExtractor<>() {
             @Override
             public String extract(final Object key, final Object value, final RecordContext recordContext) {
                 return recordContext.topic() + "-" + key;
@@ -2257,16 +2257,16 @@ public class TopologyTest {
 
     private TopologyDescription.Source addSource(final String sourceName,
                                                  final String... sourceTopic) {
-        topology.addSource((Topology.AutoOffsetReset) null, sourceName, null, null, null, sourceTopic);
-        final StringBuilder allSourceTopics = new StringBuilder(sourceTopic[0]);
-        for (int i = 1; i < sourceTopic.length; ++i) {
-            allSourceTopics.append(", ").append(sourceTopic[i]);
-        }
+        topology.addSource((AutoOffsetReset) null, sourceName, null, null, null, sourceTopic);
         return new InternalTopologyBuilder.Source(sourceName, new HashSet<>(Arrays.asList(sourceTopic)), null);
     }
 
+    @SuppressWarnings("deprecation")
     private TopologyDescription.Source addSource(final String sourceName,
                                                  final Pattern sourcePattern) {
+        // we still test the old `Topology.AutoOffsetReset` here, to increase test coverage
+        // (cf `addSource` about which used the new one)
+        // When can rewrite this to the new one, when the old one is removed
         topology.addSource((Topology.AutoOffsetReset) null, sourceName, null, null, null, sourcePattern);
         return new InternalTopologyBuilder.Source(sourceName, null, sourcePattern);
     }
@@ -2338,7 +2338,6 @@ public class TopologyTest {
         return expectedSinkNode;
     }
 
-    @Deprecated // testing old PAPI
     private void addGlobalStoreToTopologyAndExpectedDescription(final String globalStoreName,
                                                                 final String sourceName,
                                                                 final String globalTopicName,
@@ -2441,17 +2440,17 @@ public class TopologyTest {
         topology.addSource("source", "topic");
         topology.addProcessor(
             "p1",
-            () -> (Processor<Object, Object, Object, Object>) record -> System.out.println("Processing: " + random.nextInt()),
+            () -> record -> System.out.println("Processing: " + random.nextInt()),
             "source"
         );
         topology.addProcessor(
             "p2",
-            () -> (Processor<Object, Object, Object, Object>) record -> System.out.println("Processing: " + random.nextInt()),
+            () -> record -> System.out.println("Processing: " + random.nextInt()),
             "p1"
         );
         topology.addProcessor(
             "p3",
-            () -> (Processor<Object, Object, Object, Object>) record -> System.out.println("Processing: " + random.nextInt()),
+            () -> record -> System.out.println("Processing: " + random.nextInt()),
             "p2"
         );
         assertThat(counter.numWrappedProcessors(), is(3));
