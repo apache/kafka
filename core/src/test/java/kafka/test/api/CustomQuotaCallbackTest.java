@@ -73,13 +73,13 @@ public class CustomQuotaCallbackTest {
 
             List<ClientQuotaAlteration> clientQuotaAlterations = List.of(
                 new ClientQuotaAlteration(new org.apache.kafka.common.quota.ClientQuotaEntity(Map.of(CLIENT_ID, "testClient")), List.of(
-                    new ClientQuotaAlteration.Op(QuotaConfig.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, null),
-                    new ClientQuotaAlteration.Op(QuotaConfig.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG, null))
+                    new ClientQuotaAlteration.Op(QuotaConfig.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, 8000.0),
+                    new ClientQuotaAlteration.Op(QuotaConfig.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG, 8000.0))
                 )
             );
-
+            // Reset the counters, and we expect the callback to be triggered again in all controllers
             CustomQuotaCallback.COUNTERS.clear();
-            admin.alterClientQuotas(clientQuotaAlterations, new AlterClientQuotasOptions().validateOnly(true));
+            admin.alterClientQuotas(clientQuotaAlterations, new AlterClientQuotasOptions());
             TestUtils.waitForCondition(
                 () -> CustomQuotaCallback.COUNTERS.size() == 3
                         && CustomQuotaCallback.COUNTERS.values().stream().allMatch(counter -> counter.get() > 0), 
