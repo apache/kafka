@@ -115,17 +115,11 @@ public class ClientUtilsTest {
         assertDoesNotThrow(() -> ClientUtils.parseAndValidateAddresses(addresses, ClientDnsLookup.USE_ALL_DNS_IPS));
     }
 
-    static Stream<List<String>> provideInvalidBrokerAddressTestCases() {
-        return Stream.of(
-            Collections.singletonList("localhost:9997\nlocalhost:9998\nlocalhost:9999")
-        );
-    }
-
-    @ParameterizedTest
-    @MethodSource("provideInvalidBrokerAddressTestCases")
-    public void testInvalidBrokerAddress(List<String> addresses) {
+    @Test
+    public void testInvalidBrokerAddress() {
+        List<String> invalidBrokerAddress = Collections.singletonList("localhost:9997\nlocalhost:9998\nlocalhost:9999");
         assertThrows(ConfigException.class,
-            () -> ClientUtils.parseAndValidateAddresses(addresses, ClientDnsLookup.USE_ALL_DNS_IPS));
+            () -> ClientUtils.parseAndValidateAddresses(invalidBrokerAddress, ClientDnsLookup.USE_ALL_DNS_IPS));
     }
 
     @Test
