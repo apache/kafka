@@ -99,16 +99,10 @@ public class ClientUtilsTest {
         }
     }
 
-    static Stream<List<String>> provideValidBrokerAddressTestCases() {
-        return Stream.of(
-            List.of("localhost:9997", "localhost:9998", "localhost:9999")
-        );
-    }
-
-    @ParameterizedTest
-    @MethodSource("provideValidBrokerAddressTestCases")
-    public void testValidBrokerAddress(List<String> addresses) {
-        assertDoesNotThrow(() -> ClientUtils.parseAndValidateAddresses(addresses, ClientDnsLookup.USE_ALL_DNS_IPS));
+    @Test
+    public void testValidBrokerAddress() {
+        List<String> validBrokerAddress = List.of("localhost:9997", "localhost:9998", "localhost:9999");
+        assertDoesNotThrow(() -> ClientUtils.parseAndValidateAddresses(validBrokerAddress, ClientDnsLookup.USE_ALL_DNS_IPS));
     }
 
     static Stream<List<String>> provideInvalidBrokerAddressTestCases() {
