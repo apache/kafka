@@ -176,7 +176,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     append("@").
                     append("localhost").
                     append(":").
-                    append(socketFactoryManager.getOrCreatePortForListener(nodeId, controllerListenerName, false));
+                    append(socketFactoryManager.getOrCreatePortForListener(nodeId, controllerListenerName));
                 prefix = ",";
             }
             props.put(QuorumConfig.QUORUM_VOTERS_CONFIG, quorumVoterStringBuilder.toString());
@@ -235,7 +235,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
             try {
                 baseDirectory = new File(nodes.baseDirectory());
                 for (TestKitNode node : nodes.controllerNodes().values()) {
-                    socketFactoryManager.getOrCreatePortForListener(node.id(), controllerListenerName, false);
+                    socketFactoryManager.getOrCreatePortForListener(node.id(), controllerListenerName);
                 }
                 for (TestKitNode node : nodes.controllerNodes().values()) {
                     setupNodeDirectories(baseDirectory, node.metadataDirectory(), Collections.emptyList());
@@ -248,7 +248,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                         CompletableFuture.completedFuture(QuorumConfig.parseVoterConnections(config.quorumConfig().voters())),
                         Collections.emptyList(),
                         faultHandlerFactory,
-                        socketFactoryManager.getOrCreateSocketFactory(node.id(), false)
+                        socketFactoryManager.getOrCreateSocketFactory(node.id())
                     );
                     ControllerServer controller = null;
                     try {
@@ -276,7 +276,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                             CompletableFuture.completedFuture(QuorumConfig.parseVoterConnections(config.quorumConfig().voters())),
                             Collections.emptyList(),
                             faultHandlerFactory,
-                            socketFactoryManager.getOrCreateSocketFactory(node.id(), false)
+                            socketFactoryManager.getOrCreateSocketFactory(node.id())
                         );
                         jointServers.put(node.id(), sharedServer);
                     }
@@ -384,12 +384,11 @@ public class KafkaClusterTestKit implements AutoCloseable {
         this.socketFactoryManager = socketFactoryManager;
         this.controllerListenerName = nodes.controllerListenerName().value();
         this.jaasFile = jaasFile;
-        socketFactoryManager.finalInitial();
     }
 
     public void format() throws Exception {
         if (!init) {
-            throw new RuntimeException("ASDASD");
+            throw new RuntimeException("The format function only call from init flow.");
         }
 
         List<Future<?>> futures = new ArrayList<>();
@@ -432,9 +431,9 @@ public class KafkaClusterTestKit implements AutoCloseable {
 
 
         int nodeId = Integer.parseInt(props.get(KRaftConfigs.NODE_ID_CONFIG));
-        ServerSocketFactory serverSocketFactor = socketFactoryManager.getOrCreateSocketFactory(nodeId, true);
-        int controllerPort = socketFactoryManager.getOrCreatePortForListener(nodeId, "CONTROLLER", true);
-        int plaintextPort = socketFactoryManager.getOrCreatePortForListener(nodeId, "PLAINTEXT", true);
+        ServerSocketFactory serverSocketFactor = socketFactoryManager.getOrCreateSocketFactory(nodeId);
+        int controllerPort = socketFactoryManager.getOrCreatePortForListener(nodeId, "CONTROLLER");
+        int plaintextPort = socketFactoryManager.getOrCreatePortForListener(nodeId, "PLAINTEXT");
         props.put("controller.listener.names", "CONTROLLER");
         props.put("listeners", String.format("CONTROLLER://localhost:%d", controllerPort));
         props.put("advertised.listeners", String.format("PLAINTEXT://localhost:%d", plaintextPort));
@@ -508,7 +507,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                 String prefix = "";
                 for (TestKitNode controllerNode : nodes.controllerNodes().values()) {
                     int port = socketFactoryManager.
-                        getOrCreatePortForListener(controllerNode.id(), controllerListenerName, isDynamic);
+                        getOrCreatePortForListener(controllerNode.id(), controllerListenerName);
                     dynamicVotersBuilder.append(prefix);
                     prefix = ",";
                     dynamicVotersBuilder.append(String.format("%d@localhost:%d:%s",
@@ -540,6 +539,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
             for (Future<?> future: futures) {
                 future.cancel(true);
             }
+            System.err.println("ZZZ " + e);
             throw e;
         }
     }

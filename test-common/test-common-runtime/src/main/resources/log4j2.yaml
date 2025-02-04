@@ -35,3 +35,5 @@ Configuration:
         level: WARN
       - name: kafka.server
         level: INFO
+      - name: kafka.network
+        level: DEBUG

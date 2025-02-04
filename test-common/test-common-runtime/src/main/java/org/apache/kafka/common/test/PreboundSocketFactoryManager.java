@@ -82,31 +82,15 @@ public class PreboundSocketFactoryManager implements AutoCloseable {
 
     /**
      * Maps node IDs to socket factory objects.
+     * Protected by the object lock.
      */
     private final Map<Integer, PreboundSocketFactory> factories = new HashMap<>();
-
-    /**
-     * Maps node IDs to socket factory objects after initial flow.
-     */
-    private final Map<Integer, PreboundSocketFactory> dynamicFactories = new HashMap<>();
 
     /**
      * Maps node IDs to maps of listener names to ports.
      * Protected by the object lock.
      */
     private final Map<Integer, Map<String, ServerSocketChannel>> sockets = new HashMap<>();
-
-    /**
-     * Maps node IDs to maps of listener names to ports after initialization.
-     * The node id maybe same with sockets.
-     * Protected by the object lock.
-     */
-    private final Map<Integer, Map<String, ServerSocketChannel>> dynamicSockets = new HashMap<>();
-
-    /**
-     * After initial flow, this flag will be set as false forever
-     */
-    private boolean initalizating = true;
 
     /**
      * Maps node IDs to set of the listeners that were used.
@@ -126,13 +110,7 @@ public class PreboundSocketFactoryManager implements AutoCloseable {
         int nodeId,
         String listener
     ) {
-
-        Map<Integer, Map<String, ServerSocketChannel>> checkedsockets = sockets;
-        if (!initalizating) {
-            checkedsockets = this.dynamicSockets;
-        }
-
-        Map<String, ServerSocketChannel> socketsForNode = checkedsockets.get(nodeId);
+        Map<String, ServerSocketChannel> socketsForNode = sockets.get(nodeId);
         if (socketsForNode == null) {
             return null;
         }
@@ -141,12 +119,7 @@ public class PreboundSocketFactoryManager implements AutoCloseable {
             return null;
         }
 
-        if (initalizating)
-            usedSockets.computeIfAbsent(nodeId, __ -> new HashSet<>()).add(listener);
-
-
-//        usedSockets.computeIfAbsent(nodeId, __ -> new HashSet<>()).add(listener);
-
+        usedSockets.computeIfAbsent(nodeId, __ -> new HashSet<>()).add(listener);
 
         return socket;
     }
@@ -158,14 +131,8 @@ public class PreboundSocketFactoryManager implements AutoCloseable {
      *
      * @return              The socket factory.
      */
-    public synchronized ServerSocketFactory getOrCreateSocketFactory(int nodeId, boolean isDynamic) {
-        Map<Integer, PreboundSocketFactory> checkedFactories = factories;
-
-        if (isDynamic) {
-            checkedFactories = dynamicFactories;
-        }
-
-        return checkedFactories.computeIfAbsent(nodeId, __ -> new PreboundSocketFactory(nodeId));
+    public synchronized ServerSocketFactory getOrCreateSocketFactory(int nodeId) {
+        return factories.computeIfAbsent(nodeId, __ -> new PreboundSocketFactory(nodeId));
     }
 
     /**
@@ -178,17 +145,10 @@ public class PreboundSocketFactoryManager implements AutoCloseable {
      */
     public synchronized int getOrCreatePortForListener(
         int nodeId,
-        String listener,
-        boolean isDynamic
+        String listener
     ) throws IOException {
-        Map<Integer, Map<String, ServerSocketChannel>> checkedsockets = sockets;
-
-        if (isDynamic) {
-            checkedsockets = dynamicSockets;
-        }
-
         Map<String, ServerSocketChannel> socketsForNode =
-                checkedsockets.computeIfAbsent(nodeId, __ -> new HashMap<>());
+            sockets.computeIfAbsent(nodeId, __ -> new HashMap<>());
         ServerSocketChannel socketChannel = socketsForNode.get(listener);
         if (socketChannel == null) {
             if (closed) {
@@ -203,21 +163,8 @@ public class PreboundSocketFactoryManager implements AutoCloseable {
         }
         InetSocketAddress socketAddress = (InetSocketAddress) socketChannel.getLocalAddress();
 
-
         int port = socketAddress.getPort();
-        System.err.println("KKK nodeId " + nodeId + " listener " + listener +  " port " + port);
-
         return port;
-
-
-    }
-
-    /**
-     * If this method is called, we create a new socket after initial flow.
-     * This method should be called after initial flow.
-     */
-    public synchronized void finalInitial() {
-        initalizating = false;
     }
 
     @Override
@@ -229,14 +176,9 @@ public class PreboundSocketFactoryManager implements AutoCloseable {
         // Close all sockets that haven't been used by a SocketServer. (We don't want to close the
         // ones that have been used by a SocketServer because that is the responsibility of that
         // SocketServer.)
-        closeSocket(sockets);
-        closeSocket(dynamicSockets);
-    }
-
-    private void closeSocket(Map<Integer, Map<String, ServerSocketChannel>> sockets) {
         for (Entry<Integer, Map<String, ServerSocketChannel>> socketsEntry : sockets.entrySet()) {
             Set<String> usedListeners = usedSockets.getOrDefault(
-                    socketsEntry.getKey(), Collections.emptySet());
+                socketsEntry.getKey(), Collections.emptySet());
             for (Entry<String, ServerSocketChannel> entry : socketsEntry.getValue().entrySet()) {
                 if (!usedListeners.contains(entry.getKey())) {
                     Utils.closeQuietly(entry.getValue(), "serverSocketChannel");
