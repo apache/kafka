@@ -167,7 +167,7 @@ public class KafkaClusterTestKitTest {
         props.put("controller.quorum.bootstrap.servers", "localhost:9000");
 
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(nodes).build()) {
-            assertDoesNotThrow(() -> cluster.createIsolatedController(props));
+            assertDoesNotThrow(() -> cluster.createController(props));
         }
     }
 
@@ -179,11 +179,11 @@ public class KafkaClusterTestKitTest {
                 .build();
 
         Map<String, String> props = new HashMap<>();
-        props.put("node.id", "0");
+        props.put("node.id", "3000");
         props.put("controller.quorum.bootstrap.servers", "localhost:9000");
 
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(nodes).build()) {
-            assertThrowsExactly(RuntimeException.class, () -> cluster.createIsolatedController(props));
+            assertThrowsExactly(RuntimeException.class, () -> cluster.createController(props));
         }
     }
 }

@@ -354,7 +354,6 @@ public class KafkaClusterTestKit implements AutoCloseable {
     private final PreboundSocketFactoryManager socketFactoryManager;
     private final String controllerListenerName;
     private final Optional<File> jaasFile;
-    private boolean init = true;
 
     private KafkaClusterTestKit(
         TestKitNodes nodes,
@@ -384,10 +383,6 @@ public class KafkaClusterTestKit implements AutoCloseable {
     }
 
     public void format() throws Exception {
-        if (!init) {
-            throw new RuntimeException("The format function only call from init flow.");
-        }
-
         List<Future<?>> futures = new ArrayList<>();
         try {
             for (ControllerServer controller : controllers.values()) {
@@ -411,12 +406,11 @@ public class KafkaClusterTestKit implements AutoCloseable {
             }
             throw e;
         }
-        init = false;
     }
 
-    public ControllerServer createIsolatedController(Map<String, String> props) throws IOException {
+    public ControllerServer createController(Map<String, String> props) throws IOException {
         int nodeId = Integer.parseInt(props.get(KRaftConfigs.NODE_ID_CONFIG));
-        if (controllers.containsKey(nodeId)) {
+        if (controllers.containsKey(nodeId) || brokers.containsKey(nodeId)) {
             throw new RuntimeException(String.format("Node %d already exist.", nodeId));
         }
 
@@ -426,15 +420,20 @@ public class KafkaClusterTestKit implements AutoCloseable {
         props.putIfAbsent(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER");
 
         ServerSocketFactory serverSocketFactor = socketFactoryManager.getOrCreateSocketFactory(nodeId);
-        int controllerPort = socketFactoryManager.getOrCreatePortForListener(nodeId, "CONTROLLER");
-        int plaintextPort = socketFactoryManager.getOrCreatePortForListener(nodeId, "PLAINTEXT");
-        props.put("controller.listener.names", "CONTROLLER");
-        props.put("listeners", String.format("CONTROLLER://localhost:%d", controllerPort));
-        props.put("advertised.listeners", String.format("PLAINTEXT://localhost:%d", plaintextPort));
+        props.compute(SocketServerConfigs.LISTENERS_CONFIG, (key, val) ->
+                TestUtils.replaceSocketPort(nodeId,
+                        (val == null) ? "CONTROLLER://localhost:0" : val, socketFactoryManager)
+        );
+
+        props.compute(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, (key, val) ->
+                TestUtils.replaceSocketPort(nodeId,
+                        (val == null) ? "PLAINTEXT://localhost:0" : val, socketFactoryManager)
+        );
 
         KafkaConfig config = new KafkaConfig(props);
+        boolean isCombined = config.getString(KRaftConfigs.PROCESS_ROLES_CONFIG).contains("broker");
 
-        TestKitNode node = nodes.createControllerNode(config, false);
+        TestKitNode node = nodes.createControllerNode(config, isCombined);
         MetaPropertiesEnsemble metaPropsEnsemble = node.initialMetaPropertiesEnsemble();
         formatNode(metaPropsEnsemble, true);
 

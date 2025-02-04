@@ -24,6 +24,7 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 
+import org.apache.kafka.server.util.Csv;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -151,6 +152,28 @@ public class TestUtils {
             }
         };
         return doWaitUntilLeaderIsElectedOrChanged(getPartitionLeader, topic, partitionNumber, timeoutMs);
+    }
+
+    public static String replaceSocketPort(int nodeId, String listeners, PreboundSocketFactoryManager socketFactoryManager) {
+        StringBuilder builder = new StringBuilder();
+
+        try {
+            for (String entry : Csv.parseCsvList(listeners.trim())) {
+                builder.append(Utils.getProtocol(entry));
+                builder.append("://");
+                builder.append(Utils.getHost(entry));
+                builder.append(":");
+                builder.append(
+                        socketFactoryManager.getOrCreatePortForListener(nodeId, Utils.getProtocol(entry))
+                );
+                builder.append(",");
+            }
+            builder.setLength(builder.length() - 1);
+
+            return builder.toString();
+        } catch (IOException e) {
+            return listeners;
+        }
     }
 
     private static Integer getLeaderFromAdmin(Admin admin, String topic, int partition) throws Exception {
