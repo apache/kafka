@@ -408,18 +408,20 @@ public class KafkaClusterTestKit implements AutoCloseable {
         }
     }
 
-    public ControllerServer createController(Map<String, String> props) throws IOException {
+    public ControllerServer createController(Map<String, String> props) {
         int nodeId = Integer.parseInt(props.get(KRaftConfigs.NODE_ID_CONFIG));
-        if (controllers.containsKey(nodeId) || brokers.containsKey(nodeId)) {
-            throw new RuntimeException(String.format("Node %d already exist.", nodeId));
+        if (controllers.containsKey(nodeId)) {
+            throw new RuntimeException(String.format("Node %d already exists.", nodeId));
         }
 
-        props.putIfAbsent(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller");
+        if (props.get(KRaftConfigs.PROCESS_ROLES_CONFIG).contains("brokers")) {
+            throw new RuntimeException("Create controller only support isolated controller now.");
+        }
+
+        props.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller");
         props.putIfAbsent(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER");
         props.put(KRaftConfigs.SERVER_MAX_STARTUP_TIME_MS_CONFIG,
                 Long.toString(TimeUnit.MINUTES.toMillis(10)));
-
-        boolean isCombined = props.get(KRaftConfigs.PROCESS_ROLES_CONFIG).contains("broker");
 
         ServerSocketFactory serverSocketFactor = socketFactoryManager.getOrCreateSocketFactory(nodeId);
         props.compute(SocketServerConfigs.LISTENERS_CONFIG, (key, val) ->
@@ -434,7 +436,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
 
         KafkaConfig config = new KafkaConfig(props);
 
-        TestKitNode node = nodes.createControllerNode(config, isCombined);
+        TestKitNode node = nodes.createControllerNode(config, false);
         MetaPropertiesEnsemble metaPropsEnsemble = node.initialMetaPropertiesEnsemble();
         formatNode(metaPropsEnsemble, true);
 
