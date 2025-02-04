@@ -2167,7 +2167,7 @@ public class SharePartitionTest {
 
         CompletableFuture<Void> ackResult = sharePartition.acknowledge(
             MEMBER_ID,
-            Collections.singletonList(new ShareAcknowledgementBatch(12, 30, Collections.singletonList((byte) 2))));
+            List.of(new ShareAcknowledgementBatch(12, 30, Collections.singletonList((byte) 2))));
         assertNull(ackResult.join());
         assertFalse(ackResult.isCompletedExceptionally());
 
