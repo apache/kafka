@@ -75,13 +75,4 @@ public class ShareAcquiredRecords {
     public static ShareAcquiredRecords empty() {
         return EMPTY_SHARE_ACQUIRED_RECORDS;
     }
-
-    @Override
-    public String toString() {
-        return "ShareAcquiredRecords (" +
-            "acquiredRecords=" + acquiredRecords +
-            ", count=" + count +
-            ", subsetAcquired=" + subsetAcquired +
-            ")";
-    }
 }
