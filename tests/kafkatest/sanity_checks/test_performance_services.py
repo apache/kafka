@@ -20,7 +20,6 @@ from ducktape.tests.test import Test
 from kafkatest.services.kafka import KafkaService, quorum
 from kafkatest.services.performance import ProducerPerformanceService, ConsumerPerformanceService, EndToEndLatencyService
 from kafkatest.services.performance import latency, compute_aggregate_throughput
-from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.version import DEV_BRANCH, LATEST_2_1, KafkaVersion
 
 
