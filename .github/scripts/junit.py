@@ -349,14 +349,51 @@ if __name__ == "__main__":
     duration = pretty_time_duration(total_time)
     logger.info(f"Finished processing {len(reports)} reports")
 
-    # Print summary of the tests.
+    # Print summary of the tests and determine exit status
     # The stdout (print) goes to the workflow step console output.
     # The stderr (logger) is redirected to GITHUB_STEP_SUMMARY which becomes part of the HTML job summary.
-    report_url = get_env("JUNIT_REPORT_URL")
-    if report_url:
-        report_md = f"Download [HTML report]({report_url})."
-    else:
-        report_md = "No report available. JUNIT_REPORT_URL was missing."
+    output_files = glob(pathname=args.junit_output_file_pattern, recursive=False)
+    failure_messages = []
+
+    found_output_files = len(output_files)
+    expected_output_files = args.expected_junit_output_file
+    if found_output_files < expected_output_files:
+        failure_messages.append(f"Found {found_output_files} JUnit output files, but expected {expected_output_files}.")
+
+    report_md = ""
+    logger.debug(f"::group::Found {len(output_files)} JUnit output files")
+    for output_file in output_files:
+        with open(output_file, "r") as fp:
+            outputs = load_job_outputs(fp)
+            logger.debug(f"Loaded job outputs from {output_file}: {outputs}")
+
+            exit_code = int(outputs.get("exit_code", -1))
+            job_variation = outputs.get("job_variation")
+            junit_report_url = outputs.get("junit_report_url")
+            thread_dump_url = outputs.get("thread-dump-url")
+
+            if exit_code == -1:
+                failure_messages.append("Missing required 'exitcode' value in outputs. Check the CI workflow jobs for errors.")
+            elif exit_code == 124:
+                # Special handling for timeouts. The exit code 124 is emitted by 'timeout' command used in build.yml.
+                # A watchdog script "thread-dump.sh" will use jstack to force a thread dump for any Gradle process
+                # still running after the timeout. We capture the exit codes of the two test tasks and pass them to
+                # this script. If any task fails due to timeout, we want to fail the overall build since it will not
+                # include all the test results
+                failure_messages.append(f"Gradle task in job {job_variation} had a timeout. These are partial results!")
+
+            elif exit_code > 0:
+                failure_messages.append(f"Gradle task in job {job_variation} had a failure exit code")
+
+            if thread_dump_url:
+                failure_messages.append(f"Thread dump available at {thread_dump_url}")
+
+            if junit_report_url:
+                report_md += f"* Download [HTML report]({junit_report_url}) for {job_variation}"
+    logger.debug("::endgroup::")
+
+    if report_md == "":
+        report_md = "No reports available. Key 'junit_report_url' was missing from all output files."
     summary = (f"{total_run} tests cases run in {duration}.\n\n"
                f"{total_success} {PASSED}, {total_failures} {FAILED}, "
                f"{total_flaky} {FLAKY}, {total_skipped} {SKIPPED}, {len(quarantined_table)} {QUARANTINED}, and {total_errors} errors.")
@@ -422,35 +459,8 @@ if __name__ == "__main__":
 
     print("<hr/>")
 
-    # Determine exit status
-    output_files = glob(pathname=args.junit_output_file_pattern, recursive=False)
-    logger.info(f"Found {len(output_files)} JUnit output files")
-    failure_messages = []
 
-    found_output_files = len(output_files)
-    expected_output_files = args.expected_junit_output_file
-    if found_output_files < expected_output_files:
-        failure_messages.append(f"Found {found_output_files} JUnit output files, but expected {expected_output_files}.")
-
-    for output_file in output_files:
-        with open(output_file, "r") as fp:
-            outputs = load_job_outputs(fp)
-            logger.debug(f"Loaded job outputs {outputs}")
-            if outputs["exitcode"] == "124":
-                # Special handling for timeouts. The exit code 124 is emitted by 'timeout' command used in build.yml.
-                # A watchdog script "thread-dump.sh" will use jstack to force a thread dump for any Gradle process
-                # still running after the timeout. We capture the exit codes of the two test tasks and pass them to
-                # this script. If any task fails due to timeout, we want to fail the overall build since it will not
-                # include all the test results
-                failure_messages.append(f"Gradle task in job {outputs['job-name']} had a timeout. These are partial results!")
-
-            elif outputs["exitcode"] != "0":
-                failure_messages.append(f"Gradle task in job {outputs['job-name']} had a failure exit code")
-
-            if outputs["thread-dump-url"] != "":
-                failure_messages.append(f"Thread dump available at {outputs['thread-dump-url']}")
-
-
+    # Print errors and exit
     for message in failure_messages:
         logger.debug(message)
     logger.debug(summary)

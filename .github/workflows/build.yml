@@ -221,15 +221,6 @@ jobs:
           test-xml-output: ${{ env.job-variation }}
           test-repeat: ${{ !inputs.is-trunk && matrix.run-new && '3' || '1' }}
 
-      - name: Capture JUnit Env
-        env:
-          JUNIT_ENV_FILE: build/junit-xml/junit-env-${{ env.job-variation }}.txt
-        run: |
-          echo "job-name=${{ github.job }}" >> $JUNIT_ENV_FILE
-          echo "run-id=${{ github.run_id }}" >> $JUNIT_ENV_FILE
-          echo "exitcode=${{ steps.junit-test.outputs.gradle-exitcode }}" >> $JUNIT_ENV_FILE
-          echo "junit-report-url=${{ steps.junit-upload-artifact.outputs.artifact-url }}" >> $JUNIT_ENV_FILE
-          echo "thread-dump-url=${{ steps.thread-dump-upload-artifact.outputs.artifact-url }}" >> $JUNIT_ENV_FILE
       - name: Archive JUnit HTML reports
         uses: actions/upload-artifact@v4
         id: junit-upload-artifact
@@ -263,6 +254,17 @@ jobs:
             thread-dumps/*
           compression-level: 9
           if-no-files-found: ignore
+
+      - name: Capture JUnit Env
+        if: always()
+        env:
+          JUNIT_ENV_FILE: build/junit-xml/junit-env-${{ env.job-variation }}.txt
+        run: |
+          echo "job_variation=${{ env.job-variation }}" >> $JUNIT_ENV_FILE
+          echo "run_id=${{ github.run_id }}" >> $JUNIT_ENV_FILE
+          echo "exit_code=${{ steps.junit-test.outputs.gradle-exitcode }}" >> $JUNIT_ENV_FILE
+          echo "junit_report_url=${{ steps.junit-upload-artifact.outputs.artifact-url }}" >> $JUNIT_ENV_FILE
+          echo "thread_dump_url=${{ steps.thread-dump-upload-artifact.outputs.artifact-url }}" >> $JUNIT_ENV_FILE
 
   report:
     needs: test
