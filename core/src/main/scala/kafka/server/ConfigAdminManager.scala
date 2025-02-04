@@ -20,7 +20,6 @@ import kafka.server.logger.RuntimeLoggerManager
 
 import java.util
 import java.util.Properties
-import kafka.server.metadata.ConfigRepository
 import kafka.utils._
 import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry}
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
@@ -36,6 +35,7 @@ import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.{Alte
 import org.apache.kafka.common.protocol.Errors.{INVALID_REQUEST, UNKNOWN_SERVER_ERROR}
 import org.apache.kafka.common.requests.ApiError
 import org.apache.kafka.common.resource.{Resource, ResourceType}
+import org.apache.kafka.metadata.ConfigRepository
 import org.slf4j.{Logger, LoggerFactory}
 
 import scala.collection.{Map, Seq}
