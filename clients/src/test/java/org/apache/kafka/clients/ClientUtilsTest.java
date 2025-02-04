@@ -130,7 +130,8 @@ public class ClientUtilsTest {
 
     @Test
     public void testInvalidConfig() {
-        assertThrows(ConfigException.class, () -> checkWithoutLookup("localhost:10000", "localhost:10001"));
+        assertThrows(IllegalArgumentException.class,
+                () -> ClientUtils.parseAndValidateAddresses(Collections.singletonList("localhost:10000"), "random.value"));
     }
 
     @Test
