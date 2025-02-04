@@ -21,7 +21,6 @@ import java.util
 import java.util.{Collections, Properties}
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.locks.ReentrantReadWriteLock
-import kafka.cluster.EndPoint
 import kafka.log.{LogCleaner, LogManager}
 import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.server.DynamicBrokerConfig._
@@ -31,6 +30,7 @@ import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, SaslConfigs, SslConfigs}
 import org.apache.kafka.common.metrics.{Metrics, MetricsReporter}
 import org.apache.kafka.common.network.{ListenerName, ListenerReconfigurable}
+import org.apache.kafka.common.Endpoint
 import org.apache.kafka.common.security.authenticator.LoginManager
 import org.apache.kafka.common.utils.{ConfigUtils, Utils}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
@@ -928,9 +928,9 @@ class DynamicListenerConfig(server: KafkaBroker) extends BrokerReconfigurable wi
 
   def validateReconfiguration(newConfig: KafkaConfig): Unit = {
     val oldConfig = server.config
-    val newListeners = newConfig.listeners.map(_.listenerName).toSet
-    val oldAdvertisedListeners = oldConfig.effectiveAdvertisedBrokerListeners.map(_.listenerName).toSet
-    val oldListeners = oldConfig.listeners.map(_.listenerName).toSet
+    val newListeners = newConfig.listeners.map(listener => new ListenerName(listener.listenerName().get())).toSet
+    val oldAdvertisedListeners = oldConfig.effectiveAdvertisedBrokerListeners.map(listener => new ListenerName(listener.listenerName().get())).toSet
+    val oldListeners = oldConfig.listeners.map(listener => new ListenerName(listener.listenerName().get())).toSet
     if (!oldAdvertisedListeners.subsetOf(newListeners))
       throw new ConfigException(s"Advertised listeners '$oldAdvertisedListeners' must be a subset of listeners '$newListeners'")
     if (!newListeners.subsetOf(newConfig.effectiveListenerSecurityProtocolMap.keySet))
@@ -955,7 +955,7 @@ class DynamicListenerConfig(server: KafkaBroker) extends BrokerReconfigurable wi
     val newListenerMap = listenersToMap(newListeners)
     val oldListeners = oldConfig.listeners
     val oldListenerMap = listenersToMap(oldListeners)
-    val listenersRemoved = oldListeners.filterNot(e => newListenerMap.contains(e.listenerName))
+    val listenersRemoved = oldListeners.filterNot(e => newListenerMap.contains(new  e.listenerName))
     val listenersAdded = newListeners.filterNot(e => oldListenerMap.contains(e.listenerName))
     if (listenersRemoved.nonEmpty || listenersAdded.nonEmpty) {
       LoginManager.closeAll() // Clear SASL login cache to force re-login
@@ -964,7 +964,7 @@ class DynamicListenerConfig(server: KafkaBroker) extends BrokerReconfigurable wi
     }
   }
 
-  private def listenersToMap(listeners: Seq[EndPoint]): Map[ListenerName, EndPoint] =
+  private def listenersToMap(listeners: Seq[Endpoint]): Map[ListenerName, Endpoint] =
     listeners.map(e => (e.listenerName, e)).toMap
 
 }

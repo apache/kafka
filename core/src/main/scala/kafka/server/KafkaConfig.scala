@@ -20,7 +20,6 @@ package kafka.server
 import java.util
 import java.util.concurrent.TimeUnit
 import java.util.Properties
-import kafka.cluster.EndPoint
 import kafka.utils.{CoreUtils, Logging}
 import kafka.utils.Implicits._
 import org.apache.kafka.common.Reconfigurable
@@ -33,6 +32,7 @@ import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.security.auth.KafkaPrincipalSerde
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.Endpoint
 import org.apache.kafka.coordinator.group.Group.GroupType
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig
 import org.apache.kafka.coordinator.group.{GroupConfig, GroupCoordinatorConfig}
@@ -288,8 +288,8 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   }
 
   val earlyStartListeners: Set[ListenerName] = {
-    val listenersSet = listeners.map(_.listenerName).toSet
-    val controllerListenersSet = controllerListeners.map(_.listenerName).toSet
+    val listenersSet = listeners.map(listener => new ListenerName(listener.listenerName.get)).toSet
+    val controllerListenersSet = controllerListeners.map(listener => new ListenerName(listener.listenerName.get)).toSet
     Option(getString(ServerConfigs.EARLY_START_LISTENERS_CONFIG)) match {
       case None => controllerListenersSet
       case Some(str) =>
@@ -516,7 +516,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
     }
   }
 
-  def listeners: Seq[EndPoint] =
+  def listeners: Seq[Endpoint] =
     CoreUtils.listenerListToEndPoints(getString(SocketServerConfigs.LISTENERS_CONFIG), effectiveListenerSecurityProtocolMap)
 
   def controllerListenerNames: Seq[String] = {
@@ -528,20 +528,20 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
     }
   }
 
-  def controllerListeners: Seq[EndPoint] =
-    listeners.filter(l => controllerListenerNames.contains(l.listenerName.value()))
+  def controllerListeners: Seq[Endpoint] =
+    listeners.filter(l => controllerListenerNames.contains(l.listenerName.get()))
 
   def saslMechanismControllerProtocol: String = getString(KRaftConfigs.SASL_MECHANISM_CONTROLLER_PROTOCOL_CONFIG)
 
-  def dataPlaneListeners: Seq[EndPoint] = {
+  def dataPlaneListeners: Seq[Endpoint] = {
     listeners.filterNot { listener =>
-      val name = listener.listenerName.value()
+      val name = listener.listenerName.get()
         controllerListenerNames.contains(name)
     }
   }
 
-  def effectiveAdvertisedControllerListeners: Seq[EndPoint] = {
-    val controllerAdvertisedListeners = advertisedListeners.filter(l => controllerListenerNames.contains(l.listenerName.value()))
+  def effectiveAdvertisedControllerListeners: Seq[Endpoint] = {
+    val controllerAdvertisedListeners = advertisedListeners.filter(l => controllerListenerNames.contains(l.listenerName.get()))
     val controllerListenersValue = controllerListeners
 
     controllerListenerNames.flatMap { name =>
@@ -551,13 +551,13 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
     }
   }
 
-  def effectiveAdvertisedBrokerListeners: Seq[EndPoint] = {
+  def effectiveAdvertisedBrokerListeners: Seq[Endpoint] = {
     // Only expose broker listeners
-    advertisedListeners.filterNot(l => controllerListenerNames.contains(l.listenerName.value()))
+    advertisedListeners.filterNot(l => controllerListenerNames.contains(l.listenerName.get()))
   }
 
   // Use advertised listeners if defined, fallback to listeners otherwise
-  private def advertisedListeners: Seq[EndPoint] = {
+  private def advertisedListeners: Seq[Endpoint] = {
     val advertisedListenersProp = getString(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG)
     if (advertisedListenersProp != null) {
       CoreUtils.listenerListToEndPoints(advertisedListenersProp, effectiveListenerSecurityProtocolMap, requireDistinctPorts=false)
@@ -605,7 +605,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
       // check controller listener names (they won't appear in listeners when process.roles=broker)
       // as well as listeners for occurrences of SSL or SASL_*
       if (controllerListenerNames.exists(isSslOrSasl) ||
-        Csv.parseCsvList(getString(SocketServerConfigs.LISTENERS_CONFIG)).asScala.exists(listenerValue => isSslOrSasl(EndPoint.parseListenerName(listenerValue)))) {
+        Csv.parseCsvList(getString(SocketServerConfigs.LISTENERS_CONFIG)).asScala.exists(listenerValue => isSslOrSasl(Utils.getProtocol(listenerValue)))) {
         mapValue // don't add default mappings since we found something that is SSL or SASL_*
       } else {
         // add the PLAINTEXT mappings for all controller listener names that are not explicitly PLAINTEXT
@@ -633,7 +633,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
     require(replicaFetchWaitMaxMs <= replicaLagTimeMaxMs, "replica.fetch.wait.max.ms should always be less than or equal to replica.lag.time.max.ms" +
       " to prevent frequent changes in ISR")
 
-    val advertisedBrokerListenerNames = effectiveAdvertisedBrokerListeners.map(_.listenerName).toSet
+    val advertisedBrokerListenerNames = effectiveAdvertisedBrokerListeners.map(listener => new ListenerName(listener.listenerName.get)).toSet
 
     // validate KRaft-related configs
     val voterIds = QuorumConfig.parseVoterIds(quorumConfig.voters)
@@ -656,7 +656,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
         s"${KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG} must contain at least one value appearing in the '${SocketServerConfigs.LISTENERS_CONFIG}' configuration when running the KRaft controller role")
     }
     def validateControllerListenerNamesMustAppearInListenersForKRaftController(): Unit = {
-      val listenerNameValues = listeners.map(_.listenerName.value).toSet
+      val listenerNameValues = listeners.map(_.listenerName.get).toSet
       require(controllerListenerNames.forall(cln => listenerNameValues.contains(cln)),
         s"${KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG} must only contain values appearing in the '${SocketServerConfigs.LISTENERS_CONFIG}' configuration when running the KRaft controller role")
     }
@@ -719,7 +719,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
         s"${KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG} must be empty when not running in KRaft mode: ${controllerListenerNames.asJava}")
     }
 
-    val listenerNames = listeners.map(_.listenerName).toSet
+    val listenerNames = listeners.map(listener => new ListenerName(listener.listenerName().get())).toSet
     if (processRoles.isEmpty || processRoles.contains(ProcessRole.BrokerRole)) {
       // validations for all broker setups (i.e. broker-only and co-located)
       validateAdvertisedBrokerListenersNonEmptyForBroker()
