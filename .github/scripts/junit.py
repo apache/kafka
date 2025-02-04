@@ -246,7 +246,13 @@ if __name__ == "__main__":
     parser.add_argument("--junit-output-file-pattern",
                         required=False,
                         default="junit-xml/*.txt",
-                        help="Glob path for JUnit exit files.")
+                        help="Glob path for JUnit output files.")
+    parser.add_argument("--expected-junit-output-file",
+                        required=True,
+                        default=0,
+                        type=int,
+                        help="The number of expected JUnit output files to match the glob given by "
+                             "--junit-output-file-pattern. Set this to 0 to omit this check.")
     parser.add_argument("--export-test-catalog",
                         required=False,
                         default="",
@@ -422,6 +428,14 @@ if __name__ == "__main__":
         logger.debug("::endgroup::")
 
     print("<hr/>")
+
+
+
+    found_output_files = len(output_files)
+    expected_output_files = args.expected_junit_output_file
+    if found_output_files < expected_output_files:
+        print(f"Found {found_output_files} JUnit output files, but expected {expected_output_files}.")
+        exit(1)
 
     # Print special message if there was a timeout
     test_exit_code = get_env("GRADLE_TEST_EXIT_CODE", int)

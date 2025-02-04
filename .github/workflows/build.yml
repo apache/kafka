@@ -263,6 +263,7 @@ jobs:
 
   report:
     needs: test
+    if: ${{ always() }}
     runs-on: ubuntu-latest
     steps:
       - name: Env
@@ -283,7 +284,12 @@ jobs:
       - name: Display structure of downloaded files
         run: ls -R
       - name: Parse JUnit tests
-        run: python .github/scripts/junit.py --export-test-catalog ./test-catalog >> $GITHUB_STEP_SUMMARY
+        run: |
+          python .github/scripts/junit.py \
+           --junit-xml-glob-path junit-xml/**/*.xml \
+           --junit-output-file-pattern junit-xml/*.txt \
+           --expected-junit-output-file 6 \
+           --export-test-catalog ./test-catalog >> $GITHUB_STEP_SUMMARY
         env:
           GITHUB_WORKSPACE: ${{ github.workspace }}
 
