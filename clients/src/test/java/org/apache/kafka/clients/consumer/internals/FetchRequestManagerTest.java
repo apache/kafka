@@ -3710,6 +3710,41 @@ public class FetchRequestManagerTest {
         assertFutureThrows(future, IllegalStateException.class);
     }
 
+    @Test
+    public void testFetchRequestWithBufferedAndPausedPartition() {
+        buildFetcher();
+
+        Set<TopicPartition> partitions = Set.of(tp0, tp1);
+        assignFromUser(partitions);
+
+        // Seek each partition so that it becomes eligible to fetch.
+        partitions.forEach(tp -> subscriptions.seek(tp, 0));
+
+        // sendFetches() call #1 should issue a request since there's no buffered data.
+        assertEquals(1, sendFetches());
+        prepareFetchResponses(metadata.fetch().leaderFor(tp0), Set.of(tp0, tp1), 0);
+        networkClientDelegate.poll(time.timer(0));
+
+        // Per the fetch response, data for both of the partitions are in the fetch buffer.
+        assertTrue(fetcher.fetchBuffer.bufferedPartitions().contains(tp0));
+        assertTrue(fetcher.fetchBuffer.bufferedPartitions().contains(tp1));
+
+        // Collect the first partition (tp0) which will remove it from the fetch buffer.
+        collectSelectedPartition(tp0, partitions);
+        assertFalse(fetcher.fetchBuffer.bufferedPartitions().contains(tp0));
+
+        // Pause tp1, but verify that it is still buffered. Having a paused, buffered partition is key to triggering
+        // the test case.
+        subscriptions.pause(tp1);
+        assertTrue(fetcher.fetchBuffer.bufferedPartitions().contains(tp1));
+
+        // sendFetches() call #2 should issue a fetch request because it has no buffered partitions:
+        //
+        // - tp0 was collected and thus not in the fetch buffer
+        // - tp1, while still in the fetch buffer, is paused and its node should be ignored
+        assertEquals(1, sendFetches());
+    }
+
     /**
      * For each partition given, return the set of nodes that represent the partition's leader using
      * {@link Cluster#leaderFor(TopicPartition)}.
