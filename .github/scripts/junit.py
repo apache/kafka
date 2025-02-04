@@ -241,7 +241,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Parse JUnit XML results.")
     parser.add_argument("--junit-xml-glob-path",
                         required=False,
-                        default="junit-xml/**.xml",
+                        default="junit-xml/**/*.xml",
                         help="Glob path of JUnit XML files.")
     parser.add_argument("--junit-output-file-pattern",
                         required=False,
@@ -290,7 +290,7 @@ if __name__ == "__main__":
     logger.debug(f"::group::Parsing {len(reports)} JUnit Report Files")
     for report in reports:
         with open(report, "r") as fp:
-            module_path, task = split_report_path(args.path, report)
+            module_path, task = split_report_path(args.junit_xml_glob_path, report)
             logger.debug(f"Parsing file: {report}, module: {module_path}, task: {task}")
             for suite in parse_report(workspace_path, report, fp):
                 total_skipped += suite.skipped
