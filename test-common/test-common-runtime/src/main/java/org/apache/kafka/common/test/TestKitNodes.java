@@ -223,8 +223,6 @@ public class TestKitNodes {
     private final BootstrapMetadata bootstrapMetadata;
     private final SortedMap<Integer, TestKitNode> controllerNodes;
     private final SortedMap<Integer, TestKitNode> brokerNodes;
-    private final SortedMap<Integer, TestKitNode> dynamicControllerNodes;
-    private final SortedMap<Integer, TestKitNode> dynamicBrokerNodes;
     private final ListenerName brokerListenerName;
     private final ListenerName controllerListenerName;
     private final SecurityProtocol brokerSecurityProtocol;
@@ -244,10 +242,8 @@ public class TestKitNodes {
         this.baseDirectory = Objects.requireNonNull(baseDirectory);
         this.clusterId = Objects.requireNonNull(clusterId);
         this.bootstrapMetadata = Objects.requireNonNull(bootstrapMetadata);
-        this.controllerNodes = Collections.unmodifiableSortedMap(new TreeMap<>(Objects.requireNonNull(controllerNodes)));
+        this.controllerNodes = new TreeMap<>(Objects.requireNonNull(controllerNodes));
         this.brokerNodes = Collections.unmodifiableSortedMap(new TreeMap<>(Objects.requireNonNull(brokerNodes)));
-        this.dynamicControllerNodes = new TreeMap<>();
-        this.dynamicBrokerNodes = new TreeMap<>();
         this.brokerListenerName = Objects.requireNonNull(brokerListenerName);
         this.controllerListenerName = Objects.requireNonNull(controllerListenerName);
         this.brokerSecurityProtocol = Objects.requireNonNull(brokerSecurityProtocol);
@@ -304,9 +300,9 @@ public class TestKitNodes {
                 isCombined,
                 config.originalsStrings()
         );
-        dynamicControllerNodes.put(newNodeId, controller);
+        controllerNodes.put(newNodeId, controller);
         if (isCombined) {
-            dynamicBrokerNodes.put(newNodeId, controller);
+            brokerNodes.put(newNodeId, controller);
         }
 
         return controller;
