@@ -190,7 +190,7 @@ public final class ProcessorContextImpl extends AbstractProcessorContext<Object,
         final Record<K, V> toForward = new Record<>(
             key,
             value,
-            timestamp(),
+            recordContext.timestamp(),
             headers()
         );
         forward(toForward);
@@ -204,7 +204,7 @@ public final class ProcessorContextImpl extends AbstractProcessorContext<Object,
         final Record<K, V> toForward = new Record<>(
             key,
             value,
-            toInternal.hasTimestamp() ? toInternal.timestamp() : timestamp(),
+            toInternal.hasTimestamp() ? toInternal.timestamp() : recordContext.timestamp(),
             headers()
         );
         forward(toForward, toInternal.child());
@@ -250,11 +250,11 @@ public final class ProcessorContextImpl extends AbstractProcessorContext<Object,
             // old API processors wouldn't see the timestamps or headers of upstream
             // new API processors. But then again, from the perspective of those old-API
             // processors, even consulting the timestamp or headers when the record context
-            // is undefined is itself not well defined. Plus, I don't think we need to worry
+            // is undefined is itself not well-defined. Plus, I don't think we need to worry
             // too much about heterogeneous applications, in which the upstream processor is
             // implementing the new API and the downstream one is implementing the old API.
             // So, this seems like a fine compromise for now.
-            if (recordContext != null && (record.timestamp() != timestamp() || record.headers() != headers())) {
+            if (recordContext != null && (record.timestamp() != recordContext.timestamp() || record.headers() != recordContext.headers())) {
                 recordContext = new ProcessorRecordContext(
                     record.timestamp(),
                     recordContext.offset(),

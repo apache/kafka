@@ -17,17 +17,14 @@
 
 package kafka.server
 
-import org.apache.kafka.common.test.api.ClusterInstance
 import org.apache.kafka.common.message.ApiVersionsRequestData
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.ApiVersionsRequest
+import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterTest, Type}
-import org.apache.kafka.common.test.api.ClusterTestExtensions
 import org.apache.kafka.server.common.MetadataVersion
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.extension.ExtendWith
 
-@ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 class ApiVersionsRequestTest(cluster: ClusterInstance) extends AbstractApiVersionsRequestTest(cluster) {
 
   @ClusterTest(types = Array(Type.KRAFT, Type.CO_KRAFT), serverProperties = Array(

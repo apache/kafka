@@ -19,7 +19,7 @@ package kafka.server
 
 import kafka.server.metadata.{ConfigRepository, KRaftMetadataCache}
 import org.apache.kafka.admin.BrokerMetadata
-import org.apache.kafka.common.message.{DescribeClientQuotasRequestData, DescribeClientQuotasResponseData, DescribeUserScramCredentialsRequestData, DescribeUserScramCredentialsResponseData, MetadataResponseData}
+import org.apache.kafka.common.message.{DescribeClientQuotasRequestData, DescribeClientQuotasResponseData, DescribeTopicPartitionsResponseData, DescribeUserScramCredentialsRequestData, DescribeUserScramCredentialsResponseData, MetadataResponseData}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.{Cluster, Node, TopicPartition, Uuid}
 import org.apache.kafka.metadata.LeaderAndIsr
@@ -55,6 +55,12 @@ trait MetadataCache extends ConfigRepository {
   def hasAliveBroker(brokerId: Int): Boolean
 
   def getAliveBrokers(): Iterable[BrokerMetadata]
+
+  def getAliveBrokerEpoch(brokerId: Int): Option[Long]
+
+  def isBrokerFenced(brokerId: Int): Boolean
+
+  def isBrokerShuttingDown(brokerId: Int): Boolean
 
   def getTopicId(topicName: String): Uuid
 
@@ -105,6 +111,30 @@ trait MetadataCache extends ConfigRepository {
   def describeClientQuotas(request: DescribeClientQuotasRequestData): DescribeClientQuotasResponseData
 
   def describeScramCredentials(request: DescribeUserScramCredentialsRequestData): DescribeUserScramCredentialsResponseData
+
+  /**
+   * Get the topic metadata for the given topics.
+   *
+   * The quota is used to limit the number of partitions to return. The NextTopicPartition field points to the first
+   * partition can't be returned due the limit.
+   * If a topic can't return any partition due to quota limit reached, this topic will not be included in the response.
+   *
+   * Note, the topics should be sorted in alphabetical order. The topics in the DescribeTopicPartitionsResponseData
+   * will also be sorted in alphabetical order.
+   *
+   * @param topics                        The iterator of topics and their corresponding first partition id to fetch.
+   * @param listenerName                  The listener name.
+   * @param topicPartitionStartIndex      The start partition index for the first topic
+   * @param maximumNumberOfPartitions     The max number of partitions to return.
+   * @param ignoreTopicsWithExceptions    Whether ignore the topics with exception.
+   */
+  def describeTopicResponse(
+    topics: Iterator[String],
+    listenerName: ListenerName,
+    topicPartitionStartIndex: String => Int,
+    maximumNumberOfPartitions: Int,
+    ignoreTopicsWithExceptions: Boolean
+  ): DescribeTopicPartitionsResponseData
 }
 
 object MetadataCache {

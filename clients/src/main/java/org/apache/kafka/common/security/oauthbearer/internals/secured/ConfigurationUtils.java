@@ -25,8 +25,14 @@ import java.net.MalformedURLException;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG;
+import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_URLS_DEFAULT;
 
 /**
  * <code>ConfigurationUtils</code> is a utility class to perform basic configuration-related
@@ -151,11 +157,12 @@ public class ConfigurationUtils {
     /**
      * Validates that the configured URL that:
      *
-     * <li>
-     *     <ul>is well-formed</ul>
-     *     <ul>contains a scheme</ul>
-     *     <ul>uses either HTTP, HTTPS, or file protocols</ul>
-     * </li>
+     * <ul>
+     *     <li>is well-formed</li>
+     *     <li>contains a scheme</li>
+     *     <li>uses either HTTP, HTTPS, or file protocols</li>
+     *     <li>is in the allow-list</li>
+     * </ul>
      *
      * No effort is made to connect to the URL in the validation step.
      */
@@ -179,6 +186,8 @@ public class ConfigurationUtils {
 
         if (!(protocol.equals("http") || protocol.equals("https") || protocol.equals("file")))
             throw new ConfigException(String.format("The OAuth configuration option %s contains a URL (%s) that contains an invalid protocol (%s); only \"http\", \"https\", and \"file\" protocol are supported", name, value, protocol));
+
+        throwIfURLIsNotAllowed(value);
 
         return url;
     }
@@ -228,4 +237,16 @@ public class ConfigurationUtils {
         return (T) configs.get(name);
     }
 
+    // visible for testing
+    // make sure the url is in the "org.apache.kafka.sasl.oauthbearer.allowed.urls" system property
+    void throwIfURLIsNotAllowed(String value) {
+        Set<String> allowedUrls = Arrays.stream(
+                        System.getProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, ALLOWED_SASL_OAUTHBEARER_URLS_DEFAULT).split(","))
+                .map(String::trim)
+                .collect(Collectors.toSet());
+        if (!allowedUrls.contains(value)) {
+            throw new ConfigException(value + " is not allowed. Update system property '"
+                    + ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG + "' to allow " + value);
+        }
+    }
 }

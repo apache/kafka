@@ -18,20 +18,17 @@ package kafka.server
 
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.message.LeaveGroupResponseData
-import org.apache.kafka.common.test.api.ClusterInstance
 import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
-import org.apache.kafka.common.test.api.ClusterTestExtensions
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.JoinGroupRequest
+import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup.ConsumerGroupState
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.extension.ExtendWith
 
 import scala.jdk.CollectionConverters._
 
-@ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 @ClusterTestDefaults(types = Array(Type.KRAFT), serverProperties = Array(
   new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
   new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")

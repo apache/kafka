@@ -208,26 +208,26 @@ public class Protocol {
             // Responses
             b.append("<b>Responses:</b><br>\n");
             Schema[] responses = key.messageType.responseSchemas();
-            for (int i = 0; i < responses.length; i++) {
-                Schema schema = responses[i];
+            for (int version = key.oldestVersion(); version < key.latestVersion(); version++) {
+                Schema schema = responses[version];
+                if (schema == null)
+                    throw new IllegalStateException("Unexpected null schema for " + key + " with version " + version);
                 // Schema
-                if (schema != null) {
-                    b.append("<div>");
-                    // Version header
-                    b.append("<pre>");
-                    b.append(key.name);
-                    b.append(" Response (Version: ");
-                    b.append(i);
-                    b.append(") => ");
-                    schemaToBnfHtml(responses[i], b, 2);
-                    b.append("</pre>");
+                b.append("<div>");
+                // Version header
+                b.append("<pre>");
+                b.append(key.name);
+                b.append(" Response (Version: ");
+                b.append(version);
+                b.append(") => ");
+                schemaToBnfHtml(responses[version], b, 2);
+                b.append("</pre>");
 
-                    b.append("<p><b>Response header version:</b> ");
-                    b.append(key.responseHeaderVersion((short) i));
-                    b.append("</p>\n");
+                b.append("<p><b>Response header version:</b> ");
+                b.append(key.responseHeaderVersion((short) version));
+                b.append("</p>\n");
 
-                    schemaToFieldTableHtml(responses[i], b);
-                }
+                schemaToFieldTableHtml(responses[version], b);
                 b.append("</div>\n");
             }
         }

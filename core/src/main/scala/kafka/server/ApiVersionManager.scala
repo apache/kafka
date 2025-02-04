@@ -94,7 +94,7 @@ class SimpleApiVersionManager(
     )
   }
 
-  private val apiVersions = ApiVersionsResponse.collectApis(enabledApis.asJava, enableUnstableLastVersion)
+  private val apiVersions = ApiVersionsResponse.collectApis(listenerType, enabledApis.asJava, enableUnstableLastVersion)
 
   override def apiVersionResponse(
     throttleTimeMs: Int,

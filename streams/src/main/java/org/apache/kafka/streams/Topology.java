@@ -169,7 +169,14 @@ public class Topology {
     public synchronized Topology addSource(final org.apache.kafka.streams.AutoOffsetReset offsetReset,
                                            final String name,
                                            final String... topics) {
-        internalTopologyBuilder.addSource(new AutoOffsetResetInternal(offsetReset), name, null, null, null, topics);
+        internalTopologyBuilder.addSource(
+            offsetReset == null ? null : new AutoOffsetResetInternal(offsetReset),
+            name,
+            null,
+            null,
+            null,
+            topics
+        );
         return this;
     }
 
@@ -215,7 +222,14 @@ public class Topology {
     public synchronized Topology addSource(final org.apache.kafka.streams.AutoOffsetReset offsetReset,
                                            final String name,
                                            final Pattern topicPattern) {
-        internalTopologyBuilder.addSource(new AutoOffsetResetInternal(offsetReset), name, null, null, null, topicPattern);
+        internalTopologyBuilder.addSource(
+            offsetReset == null ? null : new AutoOffsetResetInternal(offsetReset),
+            name,
+            null,
+            null,
+            null,
+            topicPattern
+        );
         return this;
     }
 
@@ -304,7 +318,14 @@ public class Topology {
                                            final TimestampExtractor timestampExtractor,
                                            final String name,
                                            final String... topics) {
-        internalTopologyBuilder.addSource(new AutoOffsetResetInternal(offsetReset), name, timestampExtractor, null, null, topics);
+        internalTopologyBuilder.addSource(
+            offsetReset == null ? null : new AutoOffsetResetInternal(offsetReset),
+            name,
+            timestampExtractor,
+            null,
+            null,
+            topics
+        );
         return this;
     }
 
@@ -351,7 +372,14 @@ public class Topology {
                                            final TimestampExtractor timestampExtractor,
                                            final String name,
                                            final Pattern topicPattern) {
-        internalTopologyBuilder.addSource(new AutoOffsetResetInternal(offsetReset), name, timestampExtractor, null, null, topicPattern);
+        internalTopologyBuilder.addSource(
+            offsetReset == null ? null : new AutoOffsetResetInternal(offsetReset),
+            name,
+            timestampExtractor,
+            null,
+            null,
+            topicPattern
+        );
         return this;
     }
 
@@ -457,7 +485,14 @@ public class Topology {
                                            final Deserializer<?> keyDeserializer,
                                            final Deserializer<?> valueDeserializer,
                                            final String... topics) {
-        internalTopologyBuilder.addSource(new AutoOffsetResetInternal(offsetReset), name, null, keyDeserializer, valueDeserializer, topics);
+        internalTopologyBuilder.addSource(
+            offsetReset == null ? null : new AutoOffsetResetInternal(offsetReset),
+            name,
+            null,
+            keyDeserializer,
+            valueDeserializer,
+            topics
+        );
         return this;
     }
 
@@ -514,7 +549,14 @@ public class Topology {
                                            final Deserializer<?> keyDeserializer,
                                            final Deserializer<?> valueDeserializer,
                                            final Pattern topicPattern) {
-        internalTopologyBuilder.addSource(new AutoOffsetResetInternal(offsetReset), name, null, keyDeserializer, valueDeserializer, topicPattern);
+        internalTopologyBuilder.addSource(
+            offsetReset == null ? null : new AutoOffsetResetInternal(offsetReset),
+            name,
+            null,
+            keyDeserializer,
+            valueDeserializer,
+            topicPattern
+        );
         return this;
     }
 
@@ -571,7 +613,14 @@ public class Topology {
                                            final Deserializer<?> keyDeserializer,
                                            final Deserializer<?> valueDeserializer,
                                            final String... topics) {
-        internalTopologyBuilder.addSource(new AutoOffsetResetInternal(offsetReset), name, timestampExtractor, keyDeserializer, valueDeserializer, topics);
+        internalTopologyBuilder.addSource(
+            offsetReset == null ? null : new AutoOffsetResetInternal(offsetReset),
+            name,
+            timestampExtractor,
+            keyDeserializer,
+            valueDeserializer,
+            topics
+        );
         return this;
     }
 
@@ -634,7 +683,14 @@ public class Topology {
                                            final Deserializer<?> keyDeserializer,
                                            final Deserializer<?> valueDeserializer,
                                            final Pattern topicPattern) {
-        internalTopologyBuilder.addSource(new AutoOffsetResetInternal(offsetReset), name, timestampExtractor, keyDeserializer, valueDeserializer, topicPattern);
+        internalTopologyBuilder.addSource(
+            offsetReset == null ? null : new AutoOffsetResetInternal(offsetReset),
+            name,
+            timestampExtractor,
+            keyDeserializer,
+            valueDeserializer,
+            topicPattern
+        );
         return this;
     }
 

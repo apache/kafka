@@ -62,6 +62,7 @@ import org.apache.kafka.clients.consumer.internals.events.PollEvent;
 import org.apache.kafka.clients.consumer.internals.events.ResetOffsetEvent;
 import org.apache.kafka.clients.consumer.internals.events.ResumePartitionsEvent;
 import org.apache.kafka.clients.consumer.internals.events.SeekUnvalidatedEvent;
+import org.apache.kafka.clients.consumer.internals.events.StopFindCoordinatorOnCloseEvent;
 import org.apache.kafka.clients.consumer.internals.events.SyncCommitEvent;
 import org.apache.kafka.clients.consumer.internals.events.TopicMetadataEvent;
 import org.apache.kafka.clients.consumer.internals.events.TopicPatternSubscriptionChangeEvent;
@@ -325,12 +326,12 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
 
             List<ConsumerInterceptor<K, V>> interceptorList = configuredConsumerInterceptors(config);
-            this.interceptors = new ConsumerInterceptors<>(interceptorList);
-            this.deserializers = new Deserializers<>(config, keyDeserializer, valueDeserializer);
+            this.interceptors = new ConsumerInterceptors<>(interceptorList, metrics);
+            this.deserializers = new Deserializers<>(config, keyDeserializer, valueDeserializer, metrics);
             this.subscriptions = createSubscriptionState(config, logContext);
             ClusterResourceListeners clusterResourceListeners = ClientUtils.configureClusterResourceListeners(metrics.reporters(),
                     interceptorList,
-                    Arrays.asList(deserializers.keyDeserializer, deserializers.valueDeserializer));
+                    Arrays.asList(deserializers.keyDeserializer(), deserializers.valueDeserializer()));
             this.metadata = metadataFactory.build(config, subscriptions, logContext, clusterResourceListeners);
             final List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config);
             metadata.bootstrap(addresses);
@@ -493,13 +494,13 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         this.autoCommitEnabled = config.getBoolean(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG);
         this.fetchBuffer = new FetchBuffer(logContext);
         this.isolationLevel = IsolationLevel.READ_UNCOMMITTED;
-        this.interceptors = new ConsumerInterceptors<>(Collections.emptyList());
         this.time = time;
         this.metrics = new Metrics(time);
+        this.interceptors = new ConsumerInterceptors<>(Collections.emptyList(), metrics);
         this.metadata = metadata;
         this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
         this.defaultApiTimeoutMs = Duration.ofMillis(config.getInt(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG));
-        this.deserializers = new Deserializers<>(keyDeserializer, valueDeserializer);
+        this.deserializers = new Deserializers<>(keyDeserializer, valueDeserializer, metrics);
         this.clientTelemetryReporter = Optional.empty();
 
         ConsumerMetrics metricsRegistry = new ConsumerMetrics(CONSUMER_METRIC_GROUP_PREFIX);
@@ -1333,6 +1334,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         // sequence...
         swallow(log, Level.ERROR, "Failed to auto-commit offsets",
             () -> autoCommitOnClose(closeTimer), firstException);
+        swallow(log, Level.ERROR, "Failed to stop finding coordinator",
+            this::stopFindCoordinatorOnClose, firstException);
         swallow(log, Level.ERROR, "Failed to release group assignment",
             () -> runRebalanceCallbacksOnClose(closeTimer), firstException);
         swallow(log, Level.ERROR, "Failed to leave group while closing consumer",
@@ -1419,6 +1422,13 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         } finally {
             timer.update();
         }
+    }
+
+    private void stopFindCoordinatorOnClose() {
+        if (groupMetadata.get().isEmpty())
+            return;
+        log.debug("Stop finding coordinator during consumer close");
+        applicationEventHandler.add(new StopFindCoordinatorOnCloseEvent());
     }
 
     // Visible for testing

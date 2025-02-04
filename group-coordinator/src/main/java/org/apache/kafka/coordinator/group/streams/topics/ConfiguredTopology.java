@@ -23,6 +23,7 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.SortedMap;
 import java.util.stream.Collectors;
 
 /**
@@ -41,7 +42,7 @@ import java.util.stream.Collectors;
  *                                    reported back to the client.
  */
 public record ConfiguredTopology(int topologyEpoch,
-                                 Optional<Map<String, ConfiguredSubtopology>> subtopologies,
+                                 Optional<SortedMap<String, ConfiguredSubtopology>> subtopologies,
                                  Map<String, CreatableTopic> internalTopicsToBeCreated,
                                  Optional<TopicConfigurationException> topicConfigurationException) {
 

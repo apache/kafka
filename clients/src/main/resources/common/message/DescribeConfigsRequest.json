@@ -16,7 +16,7 @@
 {
   "apiKey": 32,
   "type": "request",
-  "listeners": ["zkBroker", "broker", "controller"],
+  "listeners": ["broker", "controller"],
   "name": "DescribeConfigsRequest",
   // Version 0 was removed in Apache Kafka 4.0, Version 1 is the new baseline.
   // Version 1 adds IncludeSynonyms and removes IsDefault.
