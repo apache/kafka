@@ -267,13 +267,6 @@ if __name__ == "__main__":
     reports = glob(pathname=args.junit_xml_glob_path, recursive=True)
     logger.info(f"Found {len(reports)} JUnit XML files")
 
-    output_files = glob(pathname=args.junit_output_file_pattern, recursive=False)
-    logger.info(f"Found {len(output_files)} JUnit output files")
-    for output_file in output_files:
-        with open(output_file, "r") as fp:
-            outputs = load_job_outputs(fp)
-            print(outputs)
-
     workspace_path = get_env("GITHUB_WORKSPACE") # e.g., /home/runner/work/apache/kafka
 
     total_file_count = 0
@@ -429,48 +422,40 @@ if __name__ == "__main__":
 
     print("<hr/>")
 
-
+    # Determine exit status
+    output_files = glob(pathname=args.junit_output_file_pattern, recursive=False)
+    logger.info(f"Found {len(output_files)} JUnit output files")
+    failure_messages = []
 
     found_output_files = len(output_files)
     expected_output_files = args.expected_junit_output_file
     if found_output_files < expected_output_files:
-        print(f"Found {found_output_files} JUnit output files, but expected {expected_output_files}.")
-        exit(1)
+        failure_messages.append(f"Found {found_output_files} JUnit output files, but expected {expected_output_files}.")
 
-    # Print special message if there was a timeout
-    test_exit_code = get_env("GRADLE_TEST_EXIT_CODE", int)
-    quarantined_test_exit_code = get_env("GRADLE_QUARANTINED_TEST_EXIT_CODE", int)
+    for output_file in output_files:
+        with open(output_file, "r") as fp:
+            outputs = load_job_outputs(fp)
+            logger.debug(f"Loaded job outputs {outputs}")
+            if outputs["exitcode"] == "124":
+                # Special handling for timeouts. The exit code 124 is emitted by 'timeout' command used in build.yml.
+                # A watchdog script "thread-dump.sh" will use jstack to force a thread dump for any Gradle process
+                # still running after the timeout. We capture the exit codes of the two test tasks and pass them to
+                # this script. If any task fails due to timeout, we want to fail the overall build since it will not
+                # include all the test results
+                failure_messages.append(f"Gradle task in job {outputs['job-name']} had a timeout. These are partial results!")
 
-    if test_exit_code == 124 or quarantined_test_exit_code == 124:
-        # Special handling for timeouts. The exit code 124 is emitted by 'timeout' command used in build.yml.
-        # A watchdog script "thread-dump.sh" will use jstack to force a thread dump for any Gradle process
-        # still running after the timeout. We capture the exit codes of the two test tasks and pass them to
-        # this script. If either "test" or "quarantinedTest" fails due to timeout, we want to fail the overall build.
-        thread_dump_url = get_env("THREAD_DUMP_URL")
-        if test_exit_code == 124:
-            logger.debug(f"Gradle task for 'test' timed out. These are partial results!")
-        else:
-            logger.debug(f"Gradle task for 'quarantinedTest' timed out. These are partial results!")
-        logger.debug(summary)
-        if thread_dump_url:
-            print(f"\nThe JUnit tests were cancelled due to a timeout. Thread dumps were generated before the job was cancelled. "
-                  f"Download [thread dumps]({thread_dump_url}).\n")
-            logger.debug(f"Failing this step because the tests timed out. Thread dumps were taken and archived here: {thread_dump_url}")
-        else:
-            logger.debug(f"Failing this step because the tests timed out. Thread dumps were not archived, check logs in JUnit step.")
+            elif outputs["exitcode"] != "0":
+                failure_messages.append(f"Gradle task in job {outputs['job-name']} had a failure exit code")
+
+            if outputs["thread-dump-url"] != "":
+                failure_messages.append(f"Thread dump available at {outputs['thread-dump-url']}")
+
+
+    for message in failure_messages:
+        logger.debug(message)
+    logger.debug(summary)
+
+    if len(failure_messages) > 0:
         exit(1)
-    elif test_exit_code == 1 or quarantined_test_exit_code == 1:
-        logger.debug(summary)
-        if total_failures > 0:
-            logger.debug(f"Failing this step due to {total_failures} test failures")
-            exit(1)
-        elif total_errors > 0:
-            logger.debug(f"Failing this step due to {total_errors} test errors")
-            exit(1)
-        else:
-            logger.debug("There was an error during the test or quarantinedTest task. Please check the logs")
-            exit(1)
     else:
-        # Normal exit
-        logger.debug(summary)
         exit(0)

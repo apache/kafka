@@ -219,14 +219,17 @@ jobs:
           run-flaky-tests: ${{ matrix.run-flaky }}
           test-retries: ${{ matrix.run-flaky == true && '3' || '1' }}
           test-xml-output: ${{ env.job-variation }}
+          test-repeat: ${{ !inputs.is-trunk && matrix.run-new && '3' || '1' }}
 
       - name: Capture JUnit Env
         env:
           JUNIT_ENV_FILE: build/junit-xml/junit-env-${{ env.job-variation }}.txt
         run:
-          echo "exitcode=${{ steps.junit-test.outputs.gradle-exitcode }}" >> $JUNIT_ENV_FILE
-          echo "junit-report-url=${{ steps.junit-upload-artifact.outputs.artifact-url }}" >> $JUNIT_ENV_FILE
-          echo "thread-dump-url=${{ steps.thread-dump-upload-artifact.outputs.artifact-url }}" >> $JUNIT_ENV_FILE
+          echo "job-name=${{ github.job }}\n" >> $JUNIT_ENV_FILE
+          echo "run-id=${{ github.run_id }}\n" >> $JUNIT_ENV_FILE
+          echo "exitcode=${{ steps.junit-test.outputs.gradle-exitcode }}\n" >> $JUNIT_ENV_FILE
+          echo "junit-report-url=${{ steps.junit-upload-artifact.outputs.artifact-url }}\n" >> $JUNIT_ENV_FILE
+          echo "thread-dump-url=${{ steps.thread-dump-upload-artifact.outputs.artifact-url }}\n" >> $JUNIT_ENV_FILE
       - name: Archive JUnit HTML reports
         uses: actions/upload-artifact@v4
         id: junit-upload-artifact
