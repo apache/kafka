@@ -282,7 +282,8 @@ jobs:
       - name: Check For Thread Dump
         id: check-for-thread-dump
         run: |
-          if [ -f thread-dumps ]; then
+          find .
+          if [ -d thread-dumps ]; then
               echo "Found thread-dumps directory";
               exit 1;
           fi
