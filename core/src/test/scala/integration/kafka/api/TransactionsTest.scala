@@ -605,7 +605,7 @@ class TransactionsTest extends IntegrationTestHarness {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testFencingOnTransactionExpiration(quorum: String, groupProtocol: String): Unit = {
-    val producer = createTransactionalProducer("expiringProducer", transactionTimeoutMs = 100)
+    val producer = createTransactionalProducer("expiringProducer", transactionTimeoutMs = 300)
 
     producer.initTransactions()
     producer.beginTransaction()
@@ -617,20 +617,16 @@ class TransactionsTest extends IntegrationTestHarness {
     // Wait for the expiration cycle to kick in.
     Thread.sleep(600)
 
-    TestUtils.waitUntilTrue(() => {
-      var foundException = false
-      try {
-        // Now that the transaction has expired, the second send should fail with a InvalidProducerEpochException. We may see some concurrentTransactionsExceptions.
-        producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "2", "2", willBeCommitted = false)).get()
-        fail("should have raised an error due to concurrent transactions or invalid producer epoch")
-      } catch {
-        case _: ConcurrentTransactionsException =>
-        case _: InvalidProducerEpochException =>
-        case e: ExecutionException =>
-          foundException = e.getCause.isInstanceOf[InvalidProducerEpochException]
-      }
-      foundException
-    }, "Never returned the expected InvalidProducerEpochException")
+    try {
+      // Now that the transaction has expired, the second send should fail with a InvalidProducerEpochException. We may see some concurrentTransactionsExceptions.
+      producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "2", "2", willBeCommitted = false)).get()
+      fail("should have raised an error due to concurrent transactions or invalid producer epoch")
+    } catch {
+      case _: ConcurrentTransactionsException =>
+      case _: InvalidProducerEpochException =>
+      case e: ExecutionException =>
+        assertTrue(e.getCause.isInstanceOf[InvalidProducerEpochException], "Error was " + e.getCause + " and not InvalidProducerEpochException")
+    }
 
     // Verify that the first message was aborted and the second one was never written at all.
     val nonTransactionalConsumer = nonTransactionalConsumers.head

@@ -20,32 +20,9 @@ import org.apache.kafka.clients.RequestCompletionHandler;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.requests.AbstractRequest;
 
-public final class RequestAndCompletionHandler {
-
-    public final long creationTimeMs;
-    public final Node destination;
-    public final AbstractRequest.Builder<? extends AbstractRequest> request;
-    public final RequestCompletionHandler handler;
-
-    public RequestAndCompletionHandler(
-        long creationTimeMs,
-        Node destination,
-        AbstractRequest.Builder<? extends AbstractRequest> request,
-        RequestCompletionHandler handler
-    ) {
-        this.creationTimeMs = creationTimeMs;
-        this.destination = destination;
-        this.request = request;
-        this.handler = handler;
-    }
-
-    @Override
-    public String toString() {
-        return "RequestAndCompletionHandler(" +
-            "creationTimeMs=" + creationTimeMs +
-            ", destination=" + destination +
-            ", request=" + request +
-            ", handler=" + handler +
-            ')';
-    }
-}
+public record RequestAndCompletionHandler(
+    long creationTimeMs,
+    Node destination,
+    AbstractRequest.Builder<? extends AbstractRequest> request,
+    RequestCompletionHandler handler
+) { }
