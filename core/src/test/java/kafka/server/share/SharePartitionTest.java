@@ -2716,7 +2716,7 @@ public class SharePartitionTest {
                 6, // maxFetchRecords is less than the number of records fetched
                 new FetchPartitionData(Errors.NONE, 3, 0, records,
                     Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)),
-            6);
+            6, true);
 
         // Since max fetch records (6) is less than the number of records fetched (8), only 6 records will be acquired
         assertArrayEquals(expectedAcquiredRecord(21, 26, 1).toArray(), acquiredRecordsList.toArray());
@@ -2765,7 +2765,7 @@ public class SharePartitionTest {
                 8, // maxFetchRecords is less than the number of records fetched
                 new FetchPartitionData(Errors.NONE, 3, 0, records,
                     Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)),
-            10);
+            10, true);
 
         assertArrayEquals(expectedAcquiredRecord(11, 20, 1).toArray(), acquiredRecordsList.toArray());
 
@@ -2813,7 +2813,7 @@ public class SharePartitionTest {
                 8, // maxFetchRecords is less than the number of records fetched
                 new FetchPartitionData(Errors.NONE, 3, 0, records,
                     Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)),
-            10);
+            10, true);
 
         assertArrayEquals(expectedAcquiredRecord(11, 20, 3).toArray(), acquiredRecordsList.toArray());
 

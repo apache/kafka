@@ -703,6 +703,9 @@ public class SharePartition {
                     maybeGapStartOffset = inFlightBatch.lastOffset() + 1;
                     // If the acquired count is equal to the max fetch records then break the loop.
                     if (acquiredCount >= maxFetchRecords) {
+                        // If the limit to acquire records is reached then it means there exists additional
+                        // fetch batches which cannot be acquired.
+                        subsetAcquired = true;
                         break;
                     }
                 }
