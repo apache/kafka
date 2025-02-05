@@ -217,6 +217,33 @@ class PlaintextConsumerSubscriptionTest extends AbstractConsumerTest {
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersConsumerGroupProtocolOnly"))
+  def testRe2JPatternSubscriptionFetch(quorum: String, groupProtocol: String): Unit = {
+    val topic1 = "topic1" // matches subscribed pattern
+    createTopic(topic1, 2, brokerCount)
+
+    val consumer = createConsumer()
+    assertEquals(0, consumer.assignment().size)
+
+    val pattern = new SubscriptionPattern("topic.*")
+    consumer.subscribe(pattern)
+
+    val assignment = Set(
+      new TopicPartition(topic, 0),
+      new TopicPartition(topic, 1),
+      new TopicPartition(topic1, 0),
+      new TopicPartition(topic1, 1))
+    awaitAssignment(consumer, assignment)
+
+    val producer = createProducer()
+    val totalRecords = 10L
+    val startingTimestamp = System.currentTimeMillis()
+    val tp = new TopicPartition(topic1, 0)
+    sendRecords(producer, totalRecords.toInt, tp, startingTimestamp = startingTimestamp)
+    consumeAndVerifyRecords(consumer = consumer, numRecords = totalRecords.toInt, startingOffset = 0, startingTimestamp = startingTimestamp, tp = tp)
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersConsumerGroupProtocolOnly"))
   def testRe2JPatternExpandSubscription(quorum: String, groupProtocol: String): Unit = {
     val topic1 = "topic1" // matches first pattern
     createTopic(topic1, 2, brokerCount)

@@ -246,6 +246,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     private final ConsumerMetadata metadata;
     private final Metrics metrics;
     private final long retryBackoffMs;
+    private final int requestTimeoutMs;
     private final Duration defaultApiTimeoutMs;
     private final boolean autoCommitEnabled;
     private volatile boolean closed = false;
@@ -324,6 +325,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             this.metrics = createMetrics(config, time, reporters);
             this.kafkaConsumerMetrics = new AsyncConsumerMetrics(metrics);
             this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
+            this.requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
 
             List<ConsumerInterceptor<K, V>> interceptorList = configuredConsumerInterceptors(config);
             this.interceptors = new ConsumerInterceptors<>(interceptorList, metrics);
@@ -447,6 +449,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                        SubscriptionState subscriptions,
                        ConsumerMetadata metadata,
                        long retryBackoffMs,
+                       int requestTimeoutMs,
                        int defaultApiTimeoutMs,
                        String groupId,
                        boolean autoCommitEnabled) {
@@ -466,6 +469,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         this.groupMetadata.set(initializeGroupMetadata(groupId, Optional.empty()));
         this.metadata = metadata;
         this.retryBackoffMs = retryBackoffMs;
+        this.requestTimeoutMs = requestTimeoutMs;
         this.defaultApiTimeoutMs = Duration.ofMillis(defaultApiTimeoutMs);
         this.deserializers = deserializers;
         this.applicationEventHandler = applicationEventHandler;
@@ -499,6 +503,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         this.interceptors = new ConsumerInterceptors<>(Collections.emptyList(), metrics);
         this.metadata = metadata;
         this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
+        this.requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
         this.defaultApiTimeoutMs = Duration.ofMillis(config.getInt(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG));
         this.deserializers = new Deserializers<>(keyDeserializer, valueDeserializer, metrics);
         this.clientTelemetryReporter = Optional.empty();
@@ -1326,7 +1331,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         // We are already closing with a timeout, don't allow wake-ups from here on.
         wakeupTrigger.disableWakeups();
 
-        final Timer closeTimer = time.timer(timeout);
+        final Timer closeTimer = createTimerForCloseRequests(timeout);
         clientTelemetryReporter.ifPresent(ClientTelemetryReporter::initiateClose);
         closeTimer.update();
         // Prepare shutting down the network thread
@@ -1337,7 +1342,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         swallow(log, Level.ERROR, "Failed to stop finding coordinator",
             this::stopFindCoordinatorOnClose, firstException);
         swallow(log, Level.ERROR, "Failed to release group assignment",
-            () -> runRebalanceCallbacksOnClose(closeTimer), firstException);
+            this::runRebalanceCallbacksOnClose, firstException);
         swallow(log, Level.ERROR, "Failed to leave group while closing consumer",
             () -> leaveGroupOnClose(closeTimer), firstException);
         swallow(log, Level.ERROR, "Failed invoking asynchronous commit callbacks while closing consumer",
@@ -1368,6 +1373,12 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         }
     }
 
+    private Timer createTimerForCloseRequests(Duration timeout) {
+        // this.time could be null if an exception occurs in constructor prior to setting the this.time field
+        final Time time = (this.time == null) ? Time.SYSTEM : this.time;
+        return time.timer(Math.min(timeout.toMillis(), requestTimeoutMs));
+    }
+
     private void autoCommitOnClose(final Timer timer) {
         if (groupMetadata.get().isEmpty())
             return;
@@ -1378,7 +1389,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         applicationEventHandler.add(new CommitOnCloseEvent());
     }
 
-    private void runRebalanceCallbacksOnClose(final Timer timer) {
+    private void runRebalanceCallbacksOnClose() {
         if (groupMetadata.get().isEmpty())
             return;
 
@@ -1393,19 +1404,15 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         SortedSet<TopicPartition> droppedPartitions = new TreeSet<>(TOPIC_PARTITION_COMPARATOR);
         droppedPartitions.addAll(assignedPartitions);
 
-        try {
-            final Exception error;
+        final Exception error;
 
-            if (memberEpoch > 0)
-                error = rebalanceListenerInvoker.invokePartitionsRevoked(droppedPartitions);
-            else
-                error = rebalanceListenerInvoker.invokePartitionsLost(droppedPartitions);
+        if (memberEpoch > 0)
+            error = rebalanceListenerInvoker.invokePartitionsRevoked(droppedPartitions);
+        else
+            error = rebalanceListenerInvoker.invokePartitionsLost(droppedPartitions);
 
-            if (error != null)
-                throw ConsumerUtils.maybeWrapAsKafkaException(error);
-        } finally {
-            timer.update();
-        }
+        if (error != null)
+            throw ConsumerUtils.maybeWrapAsKafkaException(error);
     }
 
     private void leaveGroupOnClose(final Timer timer) {

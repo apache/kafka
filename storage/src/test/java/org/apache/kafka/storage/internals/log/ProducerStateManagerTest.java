@@ -238,7 +238,7 @@ public class ProducerStateManagerTest {
         long offset = 992342L;
         ProducerAppendInfo appendInfo = new ProducerAppendInfo(partition, producerId,
                 ProducerStateEntry.empty(producerId), AppendOrigin.CLIENT,
-                stateManager.maybeCreateVerificationStateEntry(producerId, defaultSequence, epoch));
+                stateManager.maybeCreateVerificationStateEntry(producerId, defaultSequence, epoch, true));
 
         LogOffsetMetadata firstOffsetMetadata = new LogOffsetMetadata(offset, 990000L, 234224);
         appendInfo.appendDataBatch(epoch, defaultSequence, defaultSequence, 
@@ -987,11 +987,11 @@ public class ProducerStateManagerTest {
 
     @Test
     public void testEntryForVerification() {
-        VerificationStateEntry originalEntry = stateManager.maybeCreateVerificationStateEntry(producerId, 0, epoch);
+        VerificationStateEntry originalEntry = stateManager.maybeCreateVerificationStateEntry(producerId, 0, epoch, true);
         VerificationGuard originalEntryVerificationGuard = originalEntry.verificationGuard();
 
         // If we already have an entry, reuse it.
-        VerificationStateEntry updateEntry = stateManager.maybeCreateVerificationStateEntry(producerId, 0, epoch);
+        VerificationStateEntry updateEntry = stateManager.maybeCreateVerificationStateEntry(producerId, 0, epoch, true);
         VerificationStateEntry entry = stateManager.verificationStateEntry(producerId);
         assertEquals(originalEntryVerificationGuard, entry.verificationGuard());
         assertEquals(entry.verificationGuard(), updateEntry.verificationGuard());
@@ -1005,28 +1005,28 @@ public class ProducerStateManagerTest {
 
     @Test
     public void testSequenceAndEpochInVerificationEntry() {
-        VerificationStateEntry originalEntry = stateManager.maybeCreateVerificationStateEntry(producerId, 1, epoch);
+        VerificationStateEntry originalEntry = stateManager.maybeCreateVerificationStateEntry(producerId, 1, epoch, true);
         VerificationGuard originalEntryVerificationGuard = originalEntry.verificationGuard();
 
         verifyEntry(originalEntryVerificationGuard, originalEntry, 1, epoch);
 
         // If we see a lower sequence, update to the lower one.
-        VerificationStateEntry updatedEntry = stateManager.maybeCreateVerificationStateEntry(producerId, 0, epoch);
+        VerificationStateEntry updatedEntry = stateManager.maybeCreateVerificationStateEntry(producerId, 0, epoch, true);
         verifyEntry(originalEntryVerificationGuard, updatedEntry, 0, epoch);
 
         // If we see a new epoch that is higher, update the sequence.
-        VerificationStateEntry updatedEntryNewEpoch = stateManager.maybeCreateVerificationStateEntry(producerId, 2, (short) 1);
+        VerificationStateEntry updatedEntryNewEpoch = stateManager.maybeCreateVerificationStateEntry(producerId, 2, (short) 1, true);
         verifyEntry(originalEntryVerificationGuard, updatedEntryNewEpoch, 2, (short) 1);
 
         // Ignore a lower epoch.
-        VerificationStateEntry updatedEntryOldEpoch = stateManager.maybeCreateVerificationStateEntry(producerId, 0, epoch);
+        VerificationStateEntry updatedEntryOldEpoch = stateManager.maybeCreateVerificationStateEntry(producerId, 0, epoch, true);
         verifyEntry(originalEntryVerificationGuard, updatedEntryOldEpoch, 2, (short) 1);
     }
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     public void testThrowOutOfOrderSequenceWithVerificationSequenceCheck(boolean dynamicallyDisable) {
-        VerificationStateEntry originalEntry = stateManager.maybeCreateVerificationStateEntry(producerId, 0, epoch);
+        VerificationStateEntry originalEntry = stateManager.maybeCreateVerificationStateEntry(producerId, 0, epoch, true);
 
         // Even if we dynamically disable, we should still execute the sequence check if we have an entry
         if (dynamicallyDisable)
@@ -1041,7 +1041,7 @@ public class ProducerStateManagerTest {
 
     @Test
     public void testVerificationStateEntryExpiration() {
-        VerificationStateEntry originalEntry = stateManager.maybeCreateVerificationStateEntry(producerId, 0, epoch);
+        VerificationStateEntry originalEntry = stateManager.maybeCreateVerificationStateEntry(producerId, 0, epoch, true);
 
         // Before timeout, we do not remove. Note: Accessing the verification entry does not update the time.
         time.sleep(producerStateManagerConfig.producerIdExpirationMs() / 2);
@@ -1315,7 +1315,7 @@ public class ProducerStateManagerTest {
                 producerId,
                 ProducerStateEntry.empty(producerId),
                 AppendOrigin.CLIENT,
-                stateManager.maybeCreateVerificationStateEntry(producerId, 0, epoch)
+                stateManager.maybeCreateVerificationStateEntry(producerId, 0, epoch, true)
         );
         LogOffsetMetadata firstOffsetMetadata = new LogOffsetMetadata(startOffset, segmentBaseOffset, 50 * relativeOffset);
         appendInfo.appendDataBatch(epoch, 0, 0, time.milliseconds(),

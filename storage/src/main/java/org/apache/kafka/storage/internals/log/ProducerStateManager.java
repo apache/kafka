@@ -157,9 +157,9 @@ public class ProducerStateManager {
      * Maybe create the VerificationStateEntry for a given producer ID and return it.
      * This method also updates the sequence and epoch accordingly.
      */
-    public VerificationStateEntry maybeCreateVerificationStateEntry(long producerId, int sequence, short epoch) {
+    public VerificationStateEntry maybeCreateVerificationStateEntry(long producerId, int sequence, short epoch, boolean supportsEpochBump) {
         VerificationStateEntry entry = verificationStates.computeIfAbsent(producerId, pid ->
-            new VerificationStateEntry(time.milliseconds(), sequence, epoch)
+            new VerificationStateEntry(time.milliseconds(), sequence, epoch, supportsEpochBump)
         );
         entry.maybeUpdateLowestSequenceAndEpoch(sequence, epoch);
         return entry;

@@ -24,6 +24,8 @@ import org.apache.kafka.clients.RequestCompletionHandler;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.internals.Topic;
+import org.apache.kafka.common.message.DeleteShareGroupStateRequestData;
+import org.apache.kafka.common.message.DeleteShareGroupStateResponseData;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.message.FindCoordinatorResponseData;
 import org.apache.kafka.common.message.ReadShareGroupStateRequestData;
@@ -36,6 +38,8 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
+import org.apache.kafka.common.requests.DeleteShareGroupStateRequest;
+import org.apache.kafka.common.requests.DeleteShareGroupStateResponse;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.ReadShareGroupStateRequest;
@@ -875,6 +879,144 @@ public class PersisterStateManager {
         }
     }
 
+    public class DeleteStateHandler extends PersisterStateManagerHandler {
+        private final CompletableFuture<DeleteShareGroupStateResponse> result;
+        private final BackoffManager deleteStateBackoff;
+
+        public DeleteStateHandler(
+            String groupId,
+            Uuid topicId,
+            int partition,
+            CompletableFuture<DeleteShareGroupStateResponse> result,
+            long backoffMs,
+            long backoffMaxMs,
+            int maxRPCRetryAttempts
+        ) {
+            super(groupId, topicId, partition, backoffMs, backoffMaxMs, maxRPCRetryAttempts);
+            this.result = result;
+            this.deleteStateBackoff = new BackoffManager(maxRPCRetryAttempts, backoffMs, backoffMaxMs);
+        }
+
+        public DeleteStateHandler(
+            String groupId,
+            Uuid topicId,
+            int partition,
+            CompletableFuture<DeleteShareGroupStateResponse> result,
+            Consumer<ClientResponse> onCompleteCallback
+        ) {
+            this(
+                groupId,
+                topicId,
+                partition,
+                result,
+                REQUEST_BACKOFF_MS,
+                REQUEST_BACKOFF_MAX_MS,
+                MAX_FIND_COORD_ATTEMPTS
+            );
+        }
+
+        @Override
+        protected String name() {
+            return "DeleteStateHandler";
+        }
+
+        @Override
+        protected AbstractRequest.Builder<? extends AbstractRequest> requestBuilder() {
+            throw new RuntimeException("Delete requests are batchable, hence individual requests not needed.");
+        }
+
+        @Override
+        protected boolean isResponseForRequest(ClientResponse response) {
+            return response.requestHeader().apiKey() == ApiKeys.DELETE_SHARE_GROUP_STATE;
+        }
+
+        @Override
+        protected void handleRequestResponse(ClientResponse response) {
+            log.debug("Delete state response received - {}", response);
+            deleteStateBackoff.incrementAttempt();
+
+            // response can be a combined one for large number of requests
+            // we need to deconstruct it
+            DeleteShareGroupStateResponse combinedResponse = (DeleteShareGroupStateResponse) response.responseBody();
+
+            for (DeleteShareGroupStateResponseData.DeleteStateResult deleteStateResult : combinedResponse.data().results()) {
+                if (deleteStateResult.topicId().equals(partitionKey().topicId())) {
+                    Optional<DeleteShareGroupStateResponseData.PartitionResult> partitionStateData =
+                        deleteStateResult.partitions().stream()
+                            .filter(partitionResult -> partitionResult.partition() == partitionKey().partition())
+                            .findFirst();
+
+                    if (partitionStateData.isPresent()) {
+                        Errors error = Errors.forCode(partitionStateData.get().errorCode());
+                        switch (error) {
+                            case NONE:
+                                deleteStateBackoff.resetAttempts();
+                                DeleteShareGroupStateResponseData.DeleteStateResult result = DeleteShareGroupStateResponse.toResponseDeleteStateResult(
+                                    partitionKey().topicId(),
+                                    List.of(partitionStateData.get())
+                                );
+                                this.result.complete(new DeleteShareGroupStateResponse(
+                                    new DeleteShareGroupStateResponseData().setResults(List.of(result))));
+                                return;
+
+                            // check retriable errors
+                            case COORDINATOR_NOT_AVAILABLE:
+                            case COORDINATOR_LOAD_IN_PROGRESS:
+                            case NOT_COORDINATOR:
+                                log.warn("Received retriable error in delete state RPC for key {}: {}", partitionKey(), error.message());
+                                if (!deleteStateBackoff.canAttempt()) {
+                                    log.error("Exhausted max retries for delete state RPC for key {} without success.", partitionKey());
+                                    deleteStateErrorResponse(error, new Exception("Exhausted max retries to complete delete state RPC without success."));
+                                    return;
+                                }
+                                super.resetCoordinatorNode();
+                                timer.add(new PersisterTimerTask(deleteStateBackoff.backOff(), this));
+                                return;
+
+                            default:
+                                log.error("Unable to perform delete state RPC for key {}: {}", partitionKey(), error.message());
+                                deleteStateErrorResponse(error, null);
+                                return;
+                        }
+                    }
+                }
+            }
+
+            // no response found specific topic partition
+            IllegalStateException exception = new IllegalStateException(
+                "Failed to delete state for share partition: " + partitionKey()
+            );
+            deleteStateErrorResponse(Errors.forException(exception), exception);
+        }
+
+        private void deleteStateErrorResponse(Errors error, Exception exception) {
+            this.result.complete(new DeleteShareGroupStateResponse(
+                DeleteShareGroupStateResponse.toErrorResponseData(partitionKey().topicId(), partitionKey().partition(), error, "Error in delete state RPC. " +
+                    (exception == null ? error.message() : exception.getMessage()))));
+        }
+
+        @Override
+        protected void findCoordinatorErrorResponse(Errors error, Exception exception) {
+            this.result.complete(new DeleteShareGroupStateResponse(
+                DeleteShareGroupStateResponse.toErrorResponseData(partitionKey().topicId(), partitionKey().partition(), error, "Error in find coordinator. " +
+                    (exception == null ? error.message() : exception.getMessage()))));
+        }
+
+        protected CompletableFuture<DeleteShareGroupStateResponse> result() {
+            return result;
+        }
+
+        @Override
+        protected boolean isBatchable() {
+            return true;
+        }
+
+        @Override
+        protected RPCType rpcType() {
+            return RPCType.DELETE;
+        }
+    }
+
     private class SendThread extends InterBrokerSendThread {
         private final ConcurrentLinkedQueue<PersisterStateManagerHandler> queue = new ConcurrentLinkedQueue<>();
         private final Random random;
@@ -1059,6 +1201,8 @@ public class PersisterStateManager {
                     return coalesceReads(groupId, handlers);
                 case SUMMARY:
                     return coalesceReadSummaries(groupId, handlers);
+                case DELETE:
+                    return coalesceDeletes(groupId, handlers);
                 default:
                     throw new RuntimeException("Unknown rpc type: " + rpcType);
             }
@@ -1139,6 +1283,27 @@ public class PersisterStateManager {
                     .collect(Collectors.toList())),
                 true
             );
+        }
+
+        private static AbstractRequest.Builder<? extends AbstractRequest> coalesceDeletes(String groupId, List<? extends PersisterStateManagerHandler> handlers) {
+            Map<Uuid, List<DeleteShareGroupStateRequestData.PartitionData>> partitionData = new HashMap<>();
+            handlers.forEach(persHandler -> {
+                assert persHandler instanceof DeleteStateHandler;
+                DeleteStateHandler handler = (DeleteStateHandler) persHandler;
+                partitionData.computeIfAbsent(handler.partitionKey().topicId(), topicId -> new LinkedList<>())
+                    .add(
+                        new DeleteShareGroupStateRequestData.PartitionData()
+                            .setPartition(handler.partitionKey().partition())
+                    );
+            });
+
+            return new DeleteShareGroupStateRequest.Builder(new DeleteShareGroupStateRequestData()
+                .setGroupId(groupId)
+                .setTopics(partitionData.entrySet().stream()
+                    .map(entry -> new DeleteShareGroupStateRequestData.DeleteStateData()
+                        .setTopicId(entry.getKey())
+                        .setPartitions(entry.getValue()))
+                    .toList()));
         }
     }
 }
