@@ -48,7 +48,7 @@ jobs:
           github.event_name == 'pull_request' && 
           github.event.pull_request.draft
         run: echo "is-draft=true" >> "$GITHUB_OUTPUT"
-      - name: Test Catalog age
+      - name: Test Catalog Age
         id: test-catalog
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
@@ -182,7 +182,7 @@ jobs:
             run-new: true
     env:
       job-variation: ${{ matrix.java }}-${{ matrix.run-flaky == true && 'flaky' || 'noflaky' }}-${{ matrix.run-new == true && 'new' || 'nonew' }}
-    name: JUnit tests Java ${{ matrix.java }}${{ matrix.run-flaky == true && ' flaky' || '' }}${{ matrix.run-new == true && ' new' || '' }}
+    name: JUnit tests Java ${{ matrix.java }}${{ matrix.run-flaky == true && ' (flaky)' || '' }}${{ matrix.run-new == true && ' (new)' || '' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -231,6 +231,15 @@ jobs:
           compression-level: 9
           if-no-files-found: ignore
 
+      - name: Archive JUnit XML
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-xml-${{ env.job-variation }}
+          path: |
+            build/junit-xml/**/*.xml
+          compression-level: 9
+          if-no-files-found: ignore
+
       - name: Archive Thread Dumps
         id: archive-thread-dump
         if: steps.junit-test.outputs.gradle-exitcode == '124'
@@ -239,16 +248,6 @@ jobs:
           name: junit-thread-dumps-${{ env.job-variation }}
           path: |
             thread-dumps/*
-          compression-level: 9
-          if-no-files-found: ignore
-
-      - name: Archive JUnit XML
-        uses: actions/upload-artifact@v4
-        with:
-          name: junit-xml-${{ env.job-variation }}
-          path: |
-            build/junit-xml/**/*.xml
-            build/junit-xml/*.txt
           compression-level: 9
           if-no-files-found: ignore
 
@@ -263,31 +262,51 @@ jobs:
            --junit-xml-glob-path "build/junit-xml/**/*.xml" \
            --export-test-catalog ./test-catalog >> $GITHUB_STEP_SUMMARY
 
-  report:
+  collate-test-catalog:
     needs: test
     if: ${{ always() }}
     runs-on: ubuntu-latest
+    outputs:
+      test-timed-out: ${{ steps.check-for-thread-dump.outcome == 'failure' }}
     steps:
-      - name: Env
-        run: printenv
-        env:
-          GITHUB_CONTEXT: ${{ toJson(github) }}
-          NEEDS_CONTEXT: ${{ toJson(needs) }}
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           persist-credentials: false
+      - name: Download Thread Dumps
+        uses: actions/download-artifact@v4
+        with:
+          pattern: junit-thread-dumps-23-*
+          path: thread-dumps
+          merge-multiple: true
+      - name: Check For Thread Dump
+        id: check-for-thread-dump
+        run: |
+          if [ -f thread-dumps ]; then
+              echo "Found thread-dumps directory";
+              exit 1;
+          fi
       - name: Download JUnit XMLs
         uses: actions/download-artifact@v4
         with:
-          pattern: junit-xml-*
+          pattern: junit-xml-23-*  # Only look at JDK 23 tests for the test catalog
           path: junit-xml
           merge-multiple: true
+      - name: Collate Test Catalog
+        env:
+          GITHUB_WORKSPACE: ${{ github.workspace }}
+          GRADLE_TEST_EXIT_CODE: 0
+        run: |
+          python .github/scripts/junit.py \
+           --junit-xml-glob-path "junit-xml/**/*.xml" \
+           --export-test-catalog ./test-catalog >> $GITHUB_STEP_SUMMARY
+      - name: Archive Test Catalog
+        uses: actions/upload-artifact@v4
 
   update-test-catalog:
     name: Update Test Catalog
-    needs: report
-    if: ${{ always() && inputs.is-trunk && needs.test.outputs.timed-out == 'false' }}
+    needs: collate-test-catalog
+    if: ${{ always() && inputs.is-trunk && needs.collate-test-catalog.outputs.test-timed-out == 'false' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
