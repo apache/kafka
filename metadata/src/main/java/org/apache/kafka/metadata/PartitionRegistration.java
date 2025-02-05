@@ -393,6 +393,11 @@ public class PartitionRegistration {
             if (elr.length > 0) record.setEligibleLeaderReplicas(Replicas.toList(elr));
             if (lastKnownElr.length > 0) record.setLastKnownElr(Replicas.toList(lastKnownElr));
         }
+
+        if (options.metadataVersion() == null) {
+            options.handleLoss("the metadata version");
+            return new ApiMessageAndVersion(record, (short) 0);
+        }
         if (options.metadataVersion().isDirectoryAssignmentSupported()) {
             record.setDirectories(Uuid.toList(directories));
         } else {

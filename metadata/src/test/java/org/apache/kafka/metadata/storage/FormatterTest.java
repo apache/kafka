@@ -29,6 +29,7 @@ import org.apache.kafka.metadata.properties.MetaProperties;
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble;
 import org.apache.kafka.raft.DynamicVoters;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
 import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.GroupVersion;
 import org.apache.kafka.server.common.MetadataVersion;
@@ -341,6 +342,9 @@ public class FormatterTest {
                 setName(MetadataVersion.FEATURE_NAME).
                 setFeatureLevel(MetadataVersion.latestProduction().featureLevel()),
                     (short) 0));
+            expected.add(new ApiMessageAndVersion(new FeatureLevelRecord().
+                setName(EligibleLeaderReplicasVersion.FEATURE_NAME).
+                setFeatureLevel(EligibleLeaderReplicasVersion.ELRV_1.featureLevel()), (short) 0));
             expected.add(new ApiMessageAndVersion(new FeatureLevelRecord().
                 setName(GroupVersion.FEATURE_NAME).
                 setFeatureLevel(GroupVersion.GV_1.featureLevel()), (short) 0));

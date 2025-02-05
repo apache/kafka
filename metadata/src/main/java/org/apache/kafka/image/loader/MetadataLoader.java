@@ -33,7 +33,6 @@ import org.apache.kafka.raft.BatchReader;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.raft.RaftClient;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
-import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
 import org.apache.kafka.server.fault.FaultHandler;
 import org.apache.kafka.server.fault.FaultHandlerException;
 import org.apache.kafka.snapshot.SnapshotReader;
@@ -296,9 +295,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
         ImageReWriter writer = new ImageReWriter(delta);
         image.write(writer, new ImageWriterOptions.Builder().
                 setMetadataVersion(image.features().metadataVersion()).
-                setEligibleLeaderReplicasEnabled(
-                    image.features().finalizedVersions().getOrDefault(EligibleLeaderReplicasVersion.FEATURE_NAME, EligibleLeaderReplicasVersion.ELRV_0.featureLevel())
-                        >= EligibleLeaderReplicasVersion.ELRV_1.featureLevel()).
+                setEligibleLeaderReplicasEnabled(image.features().isElrEnabled()).
                 build());
         // ImageReWriter#close invokes finishSnapshot, so we don't need to invoke it here.
         SnapshotManifest manifest = new SnapshotManifest(
