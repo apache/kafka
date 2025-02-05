@@ -1009,7 +1009,7 @@ public interface KStream<K, V> {
 
     /**
      * Join records of this (left) stream with another (right) {@code KStream}'s records using a windowed inner equi-join.
-     * The join is computed on using the records' key as join attribute, i.e., {@code leftRecord.key == rightRight.key}.
+     * The join is computed using the records' key as join attribute, i.e., {@code leftRecord.key == rightRight.key}.
      * Furthermore, two records are only joined if their timestamps are close to each other as defined by the given
      * {@link JoinWindows}, i.e., the window defines an additional join predicate on the record timestamps.
      *
@@ -1019,7 +1019,7 @@ public interface KStream<K, V> {
      * If you need read access to the join key, use {@link #join(KStream, ValueJoinerWithKey, JoinWindows)}.
      * If an input record's key or value is {@code null} the input record will be dropped, and no join computation
      * is triggered.
-     * Similarly, so-call late records, i.e., records with a timestamp belonging to an already closed window (based
+     * Similarly, so-called late records, i.e., records with a timestamp belonging to an already closed window (based
      * on stream-time progress, window size, and grace period), will be dropped.
      *
      * <p>Example (assuming all input records belong to the correct windows):
@@ -1048,13 +1048,13 @@ public interface KStream<K, V> {
      *
      * Both {@code KStreams} (or to be more precise, their underlying source topics) need to have the same number of
      * partitions.
-     * If this is not the case (and if not auto-repartitioning happens, see further below),
-     * you would need to call {@link #repartition(Repartitioned)} (for at least one of both
-     * {@code KStreams}) before doing the join and specify the "correct" number of partitions via {@link Repartitioned}
-     * parameter to align the partition count for both inputs to each other.
+     * If this is not the case (and if not auto-repartitioning happens, see further below), you would need to call
+     * {@link #repartition(Repartitioned)} (for at least one of the two {@code KStreams}) before doing the join and
+     * specify the matching number of partitions via {@link Repartitioned} parameter to align the partition count for
+     * both inputs to each other.
      * Furthermore, both {@code KStreams} need to be co-partitioned on the join key (i.e., use the same partitioner).
-     * Note: Kafka Streams cannot verify the used partitioning strategy, so it is the user's responsibility to ensure
-     * that the same partitioner is used for both inputs for the join.
+     * Note: Kafka Streams cannot verify the used partitioner, so it is the user's responsibility to ensure that the
+     * same partitioner is used for both inputs for the join.
      *
      * <p>If a key changing operator was used before this operation on either input stream
      * (e.g., {@link #selectKey(KeyValueMapper)}, {@link #map(KeyValueMapper)}, {@link #flatMap(KeyValueMapper)} or
@@ -1066,21 +1066,22 @@ public interface KStream<K, V> {
      * where "applicationId" is user-specified in {@link StreamsConfig} via parameter
      * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},
      * "&lt;name&gt;" is an internally generated name, and "-repartition" is a fixed suffix.
-     * The number of partitions for the repartition topic(s) is determined based on both upstream topics partition
-     * numbers, and Kafka Streams will automatically align the number of partitions if required for co-partitioning.
+     * The number of partitions for the repartition topic(s) is determined based on the partition numbers of both
+     * upstream topics, and Kafka Streams will automatically align the number of partitions if required for
+     * co-partitioning.
      * Furthermore, the topic(s) will be created with infinite retention time and data will be automatically purged
      * by Kafka Streams.
      *
-     * <p>Both of the joining {@code KStream}s will be materialized in local state stores.
+     * <p>Both of the joined {@code KStream}s will be materialized in local state stores.
      * For failure and recovery each store will be backed by an internal changelog topic that will be created in Kafka.
-     * The changelog topic will be named "${applicationId}-&lt;storename&gt;-changelog",
-     * where "applicationId" is user-specified in {@link StreamsConfig} via parameter
+     * The changelog topic will be named "${applicationId}-&lt;storename&gt;-changelog", where "applicationId" is
+     * user-specified in {@link StreamsConfig} via parameter
      * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},
      * "storeName" is an internally generated name, and "-changelog" is a fixed suffix.
      *
      * <p>You can retrieve all generated internal topic names via {@link Topology#describe()}.
      * To explicitly set key/value serdes, to customize the names of the repartition and changelog topic, or to
-     * customize the use state store, use {@link #join(KStream, ValueJoiner, JoinWindows, StreamJoined)}.
+     * customize the used state store, use {@link #join(KStream, ValueJoiner, JoinWindows, StreamJoined)}.
      * For more control over the repartitioning, use {@link #repartition(Repartitioned)} on eiter input before {@code join()}.
      *
      * @param rightStream
