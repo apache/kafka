@@ -802,14 +802,11 @@ class ReplicaManager(val config: KafkaConfig,
     val addPartitionsRetryBackoffMs = config.addPartitionsToTxnConfig.addPartitionsToTxnRetryBackoffMs
     val startVerificationTimeMs = time.milliseconds
     def maybeRetryOnConcurrentTransactions(results: (Map[TopicPartition, Errors], Map[TopicPartition, VerificationGuard])): Unit = {
-      error("----" + time.milliseconds() + " " + startVerificationTimeMs + " " + retryTimeoutMs + " " + results)
       if (time.milliseconds() - startVerificationTimeMs >= retryTimeoutMs) {
         // We've exceeded the retry timeout, so just call the callback with whatever results we have
-        error("----trigger1")
         wrappedPostVerificationCallback(results)
       } else if (results._1.values.exists(_ == Errors.CONCURRENT_TRANSACTIONS)) {
         // Retry the verification with backoff
-        error("----trigger2")
         scheduler.scheduleOnce("retry-add-partitions-to-txn", () => {
           maybeSendPartitionsToTransactionCoordinator(
             topicPartitionBatchInfo,
@@ -821,7 +818,6 @@ class ReplicaManager(val config: KafkaConfig,
           )
         }, addPartitionsRetryBackoffMs * 1L)
       } else {
-        error("----3")
         // We don't have concurrent transaction errors, so just call the callback with the results
         wrappedPostVerificationCallback(results)
       }
@@ -999,7 +995,6 @@ class ReplicaManager(val config: KafkaConfig,
     callback: ((Map[TopicPartition, Errors], Map[TopicPartition, VerificationGuard])) => Unit,
     transactionSupportedOperation: TransactionSupportedOperation
   ): Unit = {
-    warn("---maybe send")
     // Skip verification if the request is not transactional or transaction verification is disabled.
     if (transactionalId == null ||
       (!config.transactionLogConfig.transactionPartitionVerificationEnable && !transactionSupportedOperation.supportsEpochBump)
@@ -1038,7 +1033,6 @@ class ReplicaManager(val config: KafkaConfig,
     ): Unit = {
       callback((errors ++ verificationErrors, verificationGuards.toMap))
     }
-    warn("---called")
     addPartitionsToTxnManager.foreach(_.addOrVerifyTransaction(
       transactionalId = transactionalId,
       producerId = producerId,
