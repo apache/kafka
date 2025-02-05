@@ -28,7 +28,7 @@ import static java.lang.annotation.RetentionPolicy.RUNTIME;
 /**
  * Used to set class level defaults for any test template methods annotated with {@link ClusterTest} or
  * {@link ClusterTests}. The default values here are also used as the source for defaults in
- * {@link ClusterTestExtensions}.
+ * {@link org.apache.kafka.common.test.junit.ClusterTestExtensions}.
  */
 @Documented
 @Target({TYPE})
