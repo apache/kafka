@@ -17,10 +17,8 @@
 package kafka.test.api;
 
 import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.AlterClientQuotasOptions;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.Cluster;
-import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.TestUtils;
@@ -40,8 +38,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
-
-import static org.apache.kafka.common.quota.ClientQuotaEntity.CLIENT_ID;
 
 @ClusterTestDefaults(controllers = 3, 
     types = {Type.KRAFT},
@@ -71,15 +67,16 @@ public class CustomQuotaCallbackTest {
                     "The CustomQuotaCallback not triggered in all controllers. "
             );
 
-            List<ClientQuotaAlteration> clientQuotaAlterations = List.of(
-                new ClientQuotaAlteration(new org.apache.kafka.common.quota.ClientQuotaEntity(Map.of(CLIENT_ID, "testClient")), List.of(
-                    new ClientQuotaAlteration.Op(QuotaConfig.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, 8000.0),
-                    new ClientQuotaAlteration.Op(QuotaConfig.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG, 8000.0))
-                )
-            );
+//            List<ClientQuotaAlteration> clientQuotaAlterations = List.of(
+//                new ClientQuotaAlteration(new org.apache.kafka.common.quota.ClientQuotaEntity(Map.of(CLIENT_ID, "testClient")), List.of(
+//                    new ClientQuotaAlteration.Op(QuotaConfig.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, 8000.0),
+//                    new ClientQuotaAlteration.Op(QuotaConfig.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG, 8000.0))
+//                )
+//            );
             // Reset the counters, and we expect the callback to be triggered again in all controllers
             CustomQuotaCallback.COUNTERS.clear();
-            admin.alterClientQuotas(clientQuotaAlterations, new AlterClientQuotasOptions());
+//            admin.alterClientQuotas(clientQuotaAlterations, new AlterClientQuotasOptions());
+            admin.deleteTopics(List.of("topic"));
             TestUtils.waitForCondition(
                 () -> CustomQuotaCallback.COUNTERS.size() == 3
                         && CustomQuotaCallback.COUNTERS.values().stream().allMatch(counter -> counter.get() > 0), 

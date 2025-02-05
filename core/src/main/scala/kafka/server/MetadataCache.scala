@@ -22,8 +22,9 @@ import org.apache.kafka.admin.BrokerMetadata
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.{DescribeClientQuotasRequestData, DescribeClientQuotasResponseData, DescribeTopicPartitionsResponseData, DescribeUserScramCredentialsRequestData, DescribeUserScramCredentialsResponseData, MetadataResponseData}
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.{Cluster, Node, TopicPartition, Uuid}
-import org.apache.kafka.metadata.{ConfigRepository, LeaderAndIsr}
+import org.apache.kafka.common.{Cluster, Node, PartitionInfo, TopicPartition, Uuid}
+import org.apache.kafka.image.MetadataImage
+import org.apache.kafka.metadata.{BrokerRegistration, ConfigRepository, LeaderAndIsr, PartitionRegistration}
 import org.apache.kafka.server.common.{FinalizedFeatures, KRaftVersion, MetadataVersion}
 
 import java.util
