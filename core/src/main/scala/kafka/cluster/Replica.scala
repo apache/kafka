@@ -19,7 +19,6 @@ package kafka.cluster
 
 import kafka.log.UnifiedLog
 import kafka.server.MetadataCache
-import kafka.server.metadata.KRaftMetadataCache
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException
@@ -113,15 +112,11 @@ class Replica(val brokerId: Int, val topicPartition: TopicPartition, val metadat
     brokerEpoch: Long
   ): Unit = {
     replicaState.updateAndGet { currentReplicaState =>
-      metadataCache match {
-        case kRaftMetadataCache: KRaftMetadataCache =>
-          val cachedBrokerEpoch = kRaftMetadataCache.getAliveBrokerEpoch(brokerId)
-          // Fence the update if it provides a stale broker epoch.
-          if (brokerEpoch != -1 && cachedBrokerEpoch.exists(_ > brokerEpoch)) {
-            throw new NotLeaderOrFollowerException(s"Received stale fetch state update. broker epoch=$brokerEpoch " +
-              s"vs expected=${cachedBrokerEpoch.get}")
-          }
-        case _ =>
+      val cachedBrokerEpoch = metadataCache.getAliveBrokerEpoch(brokerId)
+      // Fence the update if it provides a stale broker epoch.
+      if (brokerEpoch != -1 && cachedBrokerEpoch.exists(_ > brokerEpoch)) {
+        throw new NotLeaderOrFollowerException(s"Received stale fetch state update. broker epoch=$brokerEpoch " +
+          s"vs expected=${currentReplicaState.brokerEpoch.get}")
       }
 
       val lastCaughtUpTime = if (followerFetchOffsetMetadata.messageOffset >= leaderEndOffset) {

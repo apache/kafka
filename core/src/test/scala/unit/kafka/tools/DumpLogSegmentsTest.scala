@@ -655,7 +655,7 @@ class DumpLogSegmentsTest {
 
     // The key is mandatory.
     assertEquals(
-      "Failed to decode message at offset 0 using offset topic decoder (message had a missing key)",
+      "Failed to decode message at offset 0 using the specified decoder (message had a missing key)",
       assertThrows(
         classOf[RuntimeException],
         () => parser.parse(TestUtils.singletonRecords(key = null, value = null).records.iterator.next)
@@ -813,7 +813,7 @@ class DumpLogSegmentsTest {
 
     // The key is mandatory.
     assertEquals(
-      "Failed to decode message at offset 0 using offset transaction-log decoder (message had a missing key)",
+      "Failed to decode message at offset 0 using the specified decoder (message had a missing key)",
       assertThrows(
         classOf[RuntimeException],
         () => parser.parse(TestUtils.singletonRecords(key = null, value = null).records.iterator.next)
@@ -1044,7 +1044,7 @@ class DumpLogSegmentsTest {
 
     // The key is mandatory.
     assertEquals(
-      "Failed to decode message at offset 0 using share group state topic decoder (message had a missing key)",
+      "Failed to decode message at offset 0 using the specified decoder (message had a missing key)",
       assertThrows(
         classOf[RuntimeException],
         () => parser.parse(TestUtils.singletonRecords(key = null, value = null).records.iterator.next)

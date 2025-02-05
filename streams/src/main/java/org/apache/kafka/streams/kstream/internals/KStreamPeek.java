@@ -24,9 +24,9 @@ import org.apache.kafka.streams.processor.api.FixedKeyRecord;
 
 class KStreamPeek<K, V> implements FixedKeyProcessorSupplier<K, V, V> {
 
-    private final ForeachAction<K, V> action;
+    private final ForeachAction<? super K, ? super V> action;
 
-    public KStreamPeek(final ForeachAction<K, V> action) {
+    public KStreamPeek(final ForeachAction<? super K, ? super V> action) {
         this.action = action;
     }
 

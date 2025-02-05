@@ -16,7 +16,7 @@
 {
   "apiKey": 10,
   "type": "request",
-  "listeners": ["zkBroker", "broker"],
+  "listeners": ["broker"],
   "name": "FindCoordinatorRequest",
   // Version 1 adds KeyType.
   //

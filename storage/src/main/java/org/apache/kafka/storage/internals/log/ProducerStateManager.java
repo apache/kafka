@@ -157,9 +157,9 @@ public class ProducerStateManager {
      * Maybe create the VerificationStateEntry for a given producer ID and return it.
      * This method also updates the sequence and epoch accordingly.
      */
-    public VerificationStateEntry maybeCreateVerificationStateEntry(long producerId, int sequence, short epoch) {
+    public VerificationStateEntry maybeCreateVerificationStateEntry(long producerId, int sequence, short epoch, boolean supportsEpochBump) {
         VerificationStateEntry entry = verificationStates.computeIfAbsent(producerId, pid ->
-            new VerificationStateEntry(time.milliseconds(), sequence, epoch)
+            new VerificationStateEntry(time.milliseconds(), sequence, epoch, supportsEpochBump)
         );
         entry.maybeUpdateLowestSequenceAndEpoch(sequence, epoch);
         return entry;
@@ -567,15 +567,15 @@ public class ProducerStateManager {
     }
 
     public Optional<File> fetchSnapshot(long offset) {
-        return Optional.ofNullable(snapshots.get(offset)).map(x -> x.file());
+        return Optional.ofNullable(snapshots.get(offset)).map(SnapshotFile::file);
     }
 
     private Optional<SnapshotFile> oldestSnapshotFile() {
-        return Optional.ofNullable(snapshots.firstEntry()).map(x -> x.getValue());
+        return Optional.ofNullable(snapshots.firstEntry()).map(Map.Entry::getValue);
     }
 
     private Optional<SnapshotFile> latestSnapshotFile() {
-        return Optional.ofNullable(snapshots.lastEntry()).map(e -> e.getValue());
+        return Optional.ofNullable(snapshots.lastEntry()).map(Map.Entry::getValue);
     }
 
     /**

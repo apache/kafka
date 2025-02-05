@@ -188,7 +188,6 @@ import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.STABL
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.CLASSIC_GROUP_COMPLETED_REBALANCES_SENSOR_NAME;
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.CONSUMER_GROUP_REBALANCES_SENSOR_NAME;
 import static org.apache.kafka.coordinator.group.modern.ModernGroupMember.hasAssignedPartitionsChanged;
-import static org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember.hasAssignedPartitionsChanged;
 
 /**
  * The GroupMetadataManager manages the metadata of all classic and consumer groups. It holds
@@ -745,7 +744,6 @@ public class GroupMetadataManager {
         if (group == null) {
             ConsumerGroup consumerGroup = new ConsumerGroup(snapshotRegistry, groupId, metrics);
             groups.put(groupId, consumerGroup);
-            metrics.onConsumerGroupStateTransition(null, consumerGroup.state());
             return consumerGroup;
         } else if (group.type() == CONSUMER) {
             return (ConsumerGroup) group;
@@ -756,7 +754,6 @@ public class GroupMetadataManager {
             // replaying consumer group records after offset commit records would not work.
             ConsumerGroup consumerGroup = new ConsumerGroup(snapshotRegistry, groupId, metrics);
             groups.put(groupId, consumerGroup);
-            metrics.onConsumerGroupStateTransition(null, consumerGroup.state());
             return consumerGroup;
         } else {
             throw new IllegalStateException(String.format("Group %s is not a consumer group", groupId));
@@ -1134,24 +1131,7 @@ public class GroupMetadataManager {
     private void removeGroup(
         String groupId
     ) {
-        Group group = groups.remove(groupId);
-        if (group != null) {
-            switch (group.type()) {
-                case CONSUMER:
-                    ConsumerGroup consumerGroup = (ConsumerGroup) group;
-                    metrics.onConsumerGroupStateTransition(consumerGroup.state(), null);
-                    break;
-                case CLASSIC:
-                    // The classic group size counter is implemented as scheduled task.
-                    break;
-                case SHARE:
-                    // Nothing for now, but we may want to add metrics in the future.
-                    break;
-                default:
-                    log.warn("Removed group {} with an unknown group type {}.", groupId, group.type());
-                    break;
-            }
-        }
+        groups.remove(groupId);
     }
 
     /**
@@ -4137,16 +4117,25 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Counts and updates the number of classic groups in different states.
+     * Counts and updates the number of classic and consumer groups in different states.
      */
-    public void updateClassicGroupSizeCounter() {
-        Map<ClassicGroupState, Long> groupSizeCounter = new HashMap<>();
+    public void updateGroupSizeCounter() {
+        Map<ClassicGroupState, Long> classicGroupSizeCounter = new HashMap<>();
+        Map<ConsumerGroup.ConsumerGroupState, Long> consumerGroupSizeCounter = new HashMap<>();
         groups.forEach((__, group) -> {
-            if (group.type() == CLASSIC) {
-                groupSizeCounter.compute(((ClassicGroup) group).currentState(), Utils::incValue);
+            switch (group.type()) {
+                case CLASSIC:
+                    classicGroupSizeCounter.compute(((ClassicGroup) group).currentState(), Utils::incValue);
+                    break;
+                case CONSUMER:
+                    consumerGroupSizeCounter.compute(((ConsumerGroup) group).state(), Utils::incValue);
+                    break;
+                default:
+                    break;
             }
         });
-        metrics.setClassicGroupGauges(groupSizeCounter);
+        metrics.setClassicGroupGauges(classicGroupSizeCounter);
+        metrics.setConsumerGroupGauges(consumerGroupSizeCounter);
     }
 
     /**
