@@ -1033,6 +1033,7 @@ class ReplicaManager(val config: KafkaConfig,
     ): Unit = {
       callback((errors ++ verificationErrors, verificationGuards.toMap))
     }
+    
     addPartitionsToTxnManager.foreach(_.addOrVerifyTransaction(
       transactionalId = transactionalId,
       producerId = producerId,
