@@ -340,7 +340,7 @@ public class StreamsGroup implements Group {
     public StreamsGroupMember getOrMaybeCreateMember(
         String memberId,
         boolean createIfNotExists
-    ) {
+    ) throws UnknownMemberIdException {
         StreamsGroupMember member = members.get(memberId);
         if (member != null) {
             return member;
@@ -932,7 +932,7 @@ public class StreamsGroup implements Group {
     }
 
     /**
-     * Adds the partitions epoch based on the provided assignment.
+     * Adds the partition epoch based on the provided assignment.
      *
      * @param tasks     The assigned tasks.
      * @param processId The process ID.
@@ -942,7 +942,7 @@ public class StreamsGroup implements Group {
         TasksTuple tasks,
         String processId
     ) {
-        if (tasks != null) {
+        if (tasks != null && processId != null) {
             addTaskProcessId(tasks.activeTasks(), processId, currentActiveTaskToProcessId);
             addTaskProcessIdToSet(tasks.standbyTasks(), processId, currentStandbyTaskToProcessIds);
             addTaskProcessIdToSet(tasks.warmupTasks(), processId, currentWarmupTaskToProcessIds);
