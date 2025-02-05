@@ -21,11 +21,11 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 
-public final class FinalizedFeatures {
-    private final MetadataVersion metadataVersion;
-    private final Map<String, Short> finalizedFeatures;
-    private final long finalizedFeaturesEpoch;
-
+public record FinalizedFeatures(
+    MetadataVersion metadataVersion,
+    Map<String, Short> finalizedFeatures,
+    long finalizedFeaturesEpoch
+) {
     public static FinalizedFeatures fromKRaftVersion(MetadataVersion version) {
         return new FinalizedFeatures(version, Collections.emptyMap(), -1);
     }
@@ -39,40 +39,5 @@ public final class FinalizedFeatures {
         this.finalizedFeatures = new HashMap<>(finalizedFeatures);
         this.finalizedFeaturesEpoch = finalizedFeaturesEpoch;
         this.finalizedFeatures.put(MetadataVersion.FEATURE_NAME, metadataVersion.featureLevel());
-    }
-
-    public MetadataVersion metadataVersion() {
-        return metadataVersion;
-    }
-
-    public Map<String, Short> finalizedFeatures() {
-        return finalizedFeatures;
-    }
-
-    public long finalizedFeaturesEpoch() {
-        return finalizedFeaturesEpoch;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (o == null || !(o.getClass().equals(FinalizedFeatures.class))) return false;
-        FinalizedFeatures other = (FinalizedFeatures) o;
-        return metadataVersion == other.metadataVersion &&
-            finalizedFeatures.equals(other.finalizedFeatures) &&
-                finalizedFeaturesEpoch == other.finalizedFeaturesEpoch;
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(metadataVersion, finalizedFeatures, finalizedFeaturesEpoch);
-    }
-
-    @Override
-    public String toString() {
-        return "Features" +
-                "(metadataVersion=" + metadataVersion +
-                ", finalizedFeatures=" + finalizedFeatures +
-                ", finalizedFeaturesEpoch=" + finalizedFeaturesEpoch +
-                ")";
     }
 }
