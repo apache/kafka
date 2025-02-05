@@ -17,13 +17,14 @@
 package org.apache.kafka.tools.consumer.group;
 
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AdminClientTestUtils;
 import org.apache.kafka.clients.admin.DescribeShareGroupsOptions;
 import org.apache.kafka.clients.admin.DescribeShareGroupsResult;
 import org.apache.kafka.clients.admin.GroupListing;
 import org.apache.kafka.clients.admin.KafkaAdminClient;
 import org.apache.kafka.clients.admin.ListGroupsOptions;
 import org.apache.kafka.clients.admin.ListGroupsResult;
-import org.apache.kafka.clients.admin.ListOffsetsResult;
+import org.apache.kafka.clients.admin.ListShareGroupOffsetsResult;
 import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.clients.admin.ShareGroupDescription;
 import org.apache.kafka.clients.admin.ShareMemberAssignment;
@@ -159,15 +160,16 @@ public class ShareGroupCommandTest {
                 ), 0)),
                 GroupState.STABLE,
                 new Node(0, "host1", 9090), 0, 0);
-            ListOffsetsResult resultOffsets = new ListOffsetsResult(
+            ListShareGroupOffsetsResult listShareGroupOffsetsResult = AdminClientTestUtils.createListShareGroupOffsetsResult(
                 Map.of(
-                    new TopicPartition("topic1", 0),
-                    KafkaFuture.completedFuture(new ListOffsetsResult.ListOffsetsResultInfo(0, 0, Optional.empty()))
-                ));
+                    firstGroup,
+                    KafkaFuture.completedFuture(Map.of(new TopicPartition("topic1", 0), 0L))
+                )
+            );
 
             when(describeShareGroupsResult.describedGroups()).thenReturn(Map.of(firstGroup, KafkaFuture.completedFuture(exp)));
             when(adminClient.describeShareGroups(ArgumentMatchers.anyCollection(), any(DescribeShareGroupsOptions.class))).thenReturn(describeShareGroupsResult);
-            when(adminClient.listOffsets(ArgumentMatchers.anyMap())).thenReturn(resultOffsets);
+            when(adminClient.listShareGroupOffsets(ArgumentMatchers.anyMap())).thenReturn(listShareGroupOffsetsResult);
             try (ShareGroupService service = getShareGroupService(cgcArgs.toArray(new String[0]), adminClient)) {
                 TestUtils.waitForCondition(() -> {
                     Entry<String, String> res = ToolsTestUtils.grabConsoleOutputAndError(describeGroups(service));
@@ -212,17 +214,33 @@ public class ShareGroupCommandTest {
                 ), 0)),
                 GroupState.STABLE,
                 new Node(0, "host1", 9090), 0, 0);
-            ListOffsetsResult resultOffsets = new ListOffsetsResult(
+            ListShareGroupOffsetsResult listShareGroupOffsetsResult1 = AdminClientTestUtils.createListShareGroupOffsetsResult(
                 Map.of(
-                    new TopicPartition("topic1", 0),
-                    KafkaFuture.completedFuture(new ListOffsetsResult.ListOffsetsResultInfo(0, 0, Optional.empty()))
-                ));
+                    firstGroup,
+                    KafkaFuture.completedFuture(Map.of(new TopicPartition("topic1", 0), 0L))
+                )
+            );
+            ListShareGroupOffsetsResult listShareGroupOffsetsResult2 = AdminClientTestUtils.createListShareGroupOffsetsResult(
+                Map.of(
+                    secondGroup,
+                    KafkaFuture.completedFuture(Map.of(new TopicPartition("topic1", 0), 0L))
+                )
+            );
 
             when(listGroupsResult.all()).thenReturn(KafkaFuture.completedFuture(List.of(firstGroupListing, secondGroupListing)));
             when(adminClient.listGroups(any(ListGroupsOptions.class))).thenReturn(listGroupsResult);
             when(describeShareGroupsResult.describedGroups()).thenReturn(Map.of(firstGroup, KafkaFuture.completedFuture(exp1), secondGroup, KafkaFuture.completedFuture(exp2)));
             when(adminClient.describeShareGroups(ArgumentMatchers.anyCollection(), any(DescribeShareGroupsOptions.class))).thenReturn(describeShareGroupsResult);
-            when(adminClient.listOffsets(ArgumentMatchers.anyMap())).thenReturn(resultOffsets);
+            when(adminClient.listShareGroupOffsets(ArgumentMatchers.anyMap())).thenAnswer(
+                invocation -> {
+                    Map<String, Object> argument = invocation.getArgument(0);
+                    if (argument.containsKey(firstGroup)) {
+                        return listShareGroupOffsetsResult1;
+                    } else if (argument.containsKey(secondGroup)) {
+                        return listShareGroupOffsetsResult2;
+                    }
+                    return null;
+                });
             try (ShareGroupService service = getShareGroupService(cgcArgs.toArray(new String[0]), adminClient)) {
                 TestUtils.waitForCondition(() -> {
                     Entry<String, String> res = ToolsTestUtils.grabConsoleOutputAndError(describeGroups(service));

@@ -86,4 +86,24 @@ public class DescribeShareGroupOffsetsRequest extends AbstractRequest {
                 version
         );
     }
+
+    public static List<DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic> getErrorDescribeShareGroupOffsets(
+        List<DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestTopic> topics,
+        Errors error
+    ) {
+        return topics.stream()
+            .map(
+                requestTopic -> new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic()
+                    .setTopicName(requestTopic.topicName())
+                    .setPartitions(
+                        requestTopic.partitions().stream().map(
+                            partition -> new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition()
+                                .setPartitionIndex(partition)
+                                .setErrorCode(error.code())
+                                .setErrorMessage(error.message())
+                                .setStartOffset(0)
+                        ).collect(Collectors.toList())
+                    )
+            ).collect(Collectors.toList());
+    }
 }
