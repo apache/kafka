@@ -535,26 +535,26 @@ public class InternalTopologyBuilder {
     }
 
     public final void addProcessor(final String name,
-                                   final ProcessorSupplier<?, ?, ?, ?> supplier,
+                                   final ProcessorSupplier<?, ?, ?, ?> processorSupplier,
                                    final String... predecessorNames) {
         verifyName(name);
-        ApiUtils.checkSupplier(supplier);
+        ApiUtils.checkSupplier(processorSupplier);
         verifyParents(name, predecessorNames);
 
-        nodeFactories.put(name, new ProcessorNodeFactory<>(name, predecessorNames, supplier));
+        nodeFactories.put(name, new ProcessorNodeFactory<>(name, predecessorNames, processorSupplier));
         nodeGrouper.add(name);
         nodeGrouper.unite(name, predecessorNames);
         nodeGroups = null;
     }
 
     public final <KIn, VIn, VOut> void addProcessor(final String name,
-                                                    final FixedKeyProcessorSupplier<KIn, VIn, VOut> supplier,
+                                                    final FixedKeyProcessorSupplier<KIn, VIn, VOut> processorSupplier,
                                                     final String... predecessorNames) {
         verifyName(name);
-        ApiUtils.checkSupplier(supplier);
+        ApiUtils.checkSupplier(processorSupplier);
         verifyParents(name, predecessorNames);
 
-        nodeFactories.put(name, new FixedKeyProcessorNodeFactory<>(name, predecessorNames, supplier));
+        nodeFactories.put(name, new FixedKeyProcessorNodeFactory<>(name, predecessorNames, processorSupplier));
         nodeGrouper.add(name);
         nodeGrouper.unite(name, predecessorNames);
         nodeGroups = null;

@@ -81,11 +81,11 @@ public final class ApiUtils {
     /**
      * @throws IllegalArgumentException if the same instance is obtained each time
      */
-    public static void checkSupplier(final Supplier<?> supplier) {
-        Objects.requireNonNull(supplier, "supplier cannot be null");
+    public static void checkSupplier(final Supplier<?> processorSupplier) {
+        Objects.requireNonNull(processorSupplier, "processorSupplier cannot be null");
 
-        if (supplier.get() == supplier.get()) {
-            final String supplierClass = supplier.getClass().getName();
+        if (processorSupplier.get() == processorSupplier.get()) {
+            final String supplierClass = processorSupplier.getClass().getName();
             throw new IllegalArgumentException(String.format("%s generates single reference." +
                     " %s#get() must return a new object each time it is called.", supplierClass, supplierClass));
         }
