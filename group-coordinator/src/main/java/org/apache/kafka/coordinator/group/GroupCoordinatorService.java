@@ -26,6 +26,8 @@ import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.DeleteGroupsResponseData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData;
+import org.apache.kafka.common.message.DescribeShareGroupOffsetsRequestData;
+import org.apache.kafka.common.message.DescribeShareGroupOffsetsResponseData;
 import org.apache.kafka.common.message.HeartbeatRequestData;
 import org.apache.kafka.common.message.HeartbeatResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
@@ -40,6 +42,7 @@ import org.apache.kafka.common.message.OffsetDeleteRequestData;
 import org.apache.kafka.common.message.OffsetDeleteResponseData;
 import org.apache.kafka.common.message.OffsetFetchRequestData;
 import org.apache.kafka.common.message.OffsetFetchResponseData;
+import org.apache.kafka.common.message.ReadShareGroupStateSummaryRequestData;
 import org.apache.kafka.common.message.ShareGroupDescribeResponseData;
 import org.apache.kafka.common.message.ShareGroupDescribeResponseData.DescribedGroup;
 import org.apache.kafka.common.message.ShareGroupHeartbeatRequestData;
@@ -53,6 +56,7 @@ import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.requests.ConsumerGroupDescribeRequest;
 import org.apache.kafka.common.requests.DeleteGroupsRequest;
 import org.apache.kafka.common.requests.DescribeGroupsRequest;
+import org.apache.kafka.common.requests.DescribeShareGroupOffsetsRequest;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.ShareGroupDescribeRequest;
@@ -75,6 +79,8 @@ import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.record.BrokerCompressionType;
+import org.apache.kafka.server.share.persister.Persister;
+import org.apache.kafka.server.share.persister.ReadShareGroupStateSummaryParameters;
 import org.apache.kafka.server.util.FutureUtils;
 import org.apache.kafka.server.util.timer.Timer;
 
@@ -114,6 +120,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         private CoordinatorRuntimeMetrics coordinatorRuntimeMetrics;
         private GroupCoordinatorMetrics groupCoordinatorMetrics;
         private GroupConfigManager groupConfigManager;
+        private Persister persister;
 
         public Builder(
             int nodeId,
@@ -158,23 +165,21 @@ public class GroupCoordinatorService implements GroupCoordinator {
             return this;
         }
 
+        public Builder withPersister(Persister persister) {
+            this.persister = persister;
+            return this;
+        }
+
         public GroupCoordinatorService build() {
-            if (config == null)
-                throw new IllegalArgumentException("Config must be set.");
-            if (writer == null)
-                throw new IllegalArgumentException("Writer must be set.");
-            if (loader == null)
-                throw new IllegalArgumentException("Loader must be set.");
-            if (time == null)
-                throw new IllegalArgumentException("Time must be set.");
-            if (timer == null)
-                throw new IllegalArgumentException("Timer must be set.");
-            if (coordinatorRuntimeMetrics == null)
-                throw new IllegalArgumentException("CoordinatorRuntimeMetrics must be set.");
-            if (groupCoordinatorMetrics == null)
-                throw new IllegalArgumentException("GroupCoordinatorMetrics must be set.");
-            if (groupConfigManager == null)
-                throw new IllegalArgumentException("GroupConfigManager must be set.");
+            requireNonNull(config, new IllegalArgumentException("Config must be set."));
+            requireNonNull(writer, new IllegalArgumentException("Writer must be set."));
+            requireNonNull(loader, new IllegalArgumentException("Loader must be set."));
+            requireNonNull(time, new IllegalArgumentException("Time must be set."));
+            requireNonNull(timer, new IllegalArgumentException("Timer must be set."));
+            requireNonNull(coordinatorRuntimeMetrics, new IllegalArgumentException("CoordinatorRuntimeMetrics must be set."));
+            requireNonNull(groupCoordinatorMetrics, new IllegalArgumentException("GroupCoordinatorMetrics must be set."));
+            requireNonNull(groupConfigManager, new IllegalArgumentException("GroupConfigManager must be set."));
+            requireNonNull(persister, new IllegalArgumentException("Persister must be set."));
 
             String logPrefix = String.format("GroupCoordinator id=%d", nodeId);
             LogContext logContext = new LogContext(String.format("[%s] ", logPrefix));
@@ -214,7 +219,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 config,
                 runtime,
                 groupCoordinatorMetrics,
-                groupConfigManager
+                groupConfigManager,
+                persister
             );
         }
     }
@@ -245,6 +251,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
     private final GroupConfigManager groupConfigManager;
 
     /**
+     * The Persister to persist the state of share partition state.
+     */
+    private final Persister persister;
+
+    /**
      * Boolean indicating whether the coordinator is active or not.
      */
     private final AtomicBoolean isActive = new AtomicBoolean(false);
@@ -256,25 +267,34 @@ public class GroupCoordinatorService implements GroupCoordinator {
     private volatile int numPartitions = -1;
 
     /**
+     * The metadata image to extract topic id to names map.
+     * This is initialised when the {@link GroupCoordinator#onNewMetadataImage(MetadataImage, MetadataDelta)} is called
+     */
+    private MetadataImage metadataImage = null;
+
+    /**
      *
      * @param logContext                The log context.
      * @param config                    The group coordinator config.
      * @param runtime                   The runtime.
      * @param groupCoordinatorMetrics   The group coordinator metrics.
      * @param groupConfigManager        The group config manager.
+     * @param persister                 The persister
      */
     GroupCoordinatorService(
         LogContext logContext,
         GroupCoordinatorConfig config,
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime,
         GroupCoordinatorMetrics groupCoordinatorMetrics,
-        GroupConfigManager groupConfigManager
+        GroupConfigManager groupConfigManager,
+        Persister persister
     ) {
         this.log = logContext.logger(GroupCoordinatorService.class);
         this.config = config;
         this.runtime = runtime;
         this.groupCoordinatorMetrics = groupCoordinatorMetrics;
         this.groupConfigManager = groupConfigManager;
+        this.persister = persister;
     }
 
     /**
@@ -936,6 +956,78 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
+     * See {@link GroupCoordinator#describeShareGroupOffsets(RequestContext, DescribeShareGroupOffsetsRequestData)}.
+     */
+    @Override
+    public CompletableFuture<DescribeShareGroupOffsetsResponseData> describeShareGroupOffsets(
+        RequestContext context,
+        DescribeShareGroupOffsetsRequestData requestData
+    ) {
+        if (!isActive.get()) {
+            return CompletableFuture.completedFuture(
+                new DescribeShareGroupOffsetsResponseData()
+                    .setResponses(DescribeShareGroupOffsetsRequest.getErrorDescribeShareGroupOffsets(
+                        requestData.topics(),
+                        Errors.COORDINATOR_NOT_AVAILABLE
+                    ))
+            );
+        }
+
+        if (metadataImage == null) {
+            return CompletableFuture.completedFuture(
+                new DescribeShareGroupOffsetsResponseData()
+                    .setResponses(DescribeShareGroupOffsetsRequest.getErrorDescribeShareGroupOffsets(
+                        requestData.topics(),
+                        Errors.UNKNOWN_TOPIC_OR_PARTITION
+                    ))
+            );
+        }
+
+        List<ReadShareGroupStateSummaryRequestData.ReadStateSummaryData> readStateSummaryData =
+            requestData.topics().stream().map(
+                topic -> new ReadShareGroupStateSummaryRequestData.ReadStateSummaryData()
+                    .setTopicId(metadataImage.topics().topicNameToIdView().get(topic.topicName()))
+                    .setPartitions(
+                        topic.partitions().stream().map(
+                            partitionIndex -> new ReadShareGroupStateSummaryRequestData.PartitionData().setPartition(partitionIndex)
+                        ).toList()
+                    )
+            ).toList();
+        ReadShareGroupStateSummaryRequestData readSummaryRequestData = new ReadShareGroupStateSummaryRequestData()
+            .setGroupId(requestData.groupId())
+            .setTopics(readStateSummaryData);
+        CompletableFuture<DescribeShareGroupOffsetsResponseData> future = new CompletableFuture<>();
+        persister.readSummary(ReadShareGroupStateSummaryParameters.from(readSummaryRequestData))
+            .whenComplete((result, error) -> {
+                if (error != null) {
+                    log.error("Failed to read summary of the share partition");
+                    future.completeExceptionally(error);
+                    return;
+                }
+                if (result == null || result.topicsData() == null) {
+                    log.error("Result is null for the read state summary");
+                    future.completeExceptionally(new IllegalStateException("Result is null for the read state summary"));
+                    return;
+                }
+                List<DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic> describeShareGroupOffsetsResponseTopicList =
+                    result.topicsData().stream().map(
+                        topicData -> new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic()
+                            .setTopicId(topicData.topicId())
+                            .setTopicName(metadataImage.topics().topicIdToNameView().get(topicData.topicId()))
+                            .setPartitions(topicData.partitions().stream().map(
+                                partitionData -> new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition()
+                                    .setPartitionIndex(partitionData.partition())
+                                    .setStartOffset(partitionData.startOffset())
+                                    .setErrorMessage(partitionData.errorMessage())
+                                    .setErrorCode(partitionData.errorCode())
+                            ).toList())
+                    ).toList();
+                future.complete(new DescribeShareGroupOffsetsResponseData().setResponses(describeShareGroupOffsetsResponseTopicList));
+            });
+        return future;
+    }
+
+    /**
      * See {@link GroupCoordinator#commitOffsets(RequestContext, OffsetCommitRequestData, BufferSupplier)}.
      */
     @Override
@@ -1161,6 +1253,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         MetadataDelta delta
     ) {
         throwIfNotActive();
+        metadataImage = newImage;
         runtime.onNewMetadataImage(newImage, delta);
     }
 
@@ -1275,6 +1368,12 @@ public class GroupCoordinatorService implements GroupCoordinator {
                         .setErrorCode(error.code()),
                     log
                 );
+        }
+    }
+
+    private static void requireNonNull(Object obj, RuntimeException throwable) {
+        if (obj == null) {
+            throw throwable;
         }
     }
 }

@@ -3190,9 +3190,28 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def handleDescribeShareGroupOffsetsRequest(request: RequestChannel.Request): Unit = {
     val describeShareGroupOffsetsRequest = request.body[DescribeShareGroupOffsetsRequest]
-    // TODO: Implement the DescribeShareGroupOffsetsRequest handling
-    requestHelper.sendMaybeThrottle(request, describeShareGroupOffsetsRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
-    CompletableFuture.completedFuture[Unit](())
+
+    if (!isShareGroupProtocolEnabled) {
+      requestHelper.sendMaybeThrottle(request, describeShareGroupOffsetsRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+      CompletableFuture.completedFuture[Unit](())
+    } else if (!authHelper.authorize(request.context, READ, GROUP, describeShareGroupOffsetsRequest.data.groupId)) {
+      requestHelper.sendMaybeThrottle(request, describeShareGroupOffsetsRequest.getErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED.exception))
+      CompletableFuture.completedFuture[Unit](())
+    } else {
+      groupCoordinator.describeShareGroupOffsets(
+        request.context,
+        describeShareGroupOffsetsRequest.data,
+      ).handle[Unit] { (response, exception) =>
+        if (exception != null) {
+          requestHelper.sendMaybeThrottle(request, describeShareGroupOffsetsRequest.getErrorResponse(exception))
+        } else {
+          requestHelper.sendMaybeThrottle(
+            request,
+            new DescribeShareGroupOffsetsResponse(response)
+          )
+        }
+      }
+    }
   }
 
   // Visible for Testing
