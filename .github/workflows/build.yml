@@ -223,7 +223,7 @@ jobs:
 
       - name: Archive JUnit HTML reports
         uses: actions/upload-artifact@v4
-        id: junit-upload-artifact
+        id: archive-junit-html
         with:
           name: junit-reports-${{ env.job-variation }}
           path: |
@@ -232,7 +232,7 @@ jobs:
           if-no-files-found: ignore
 
       - name: Archive Thread Dumps
-        id: thread-dump-upload-artifact
+        id: archive-thread-dump
         if: steps.junit-test.outputs.gradle-exitcode == '124'
         uses: actions/upload-artifact@v4
         with:
@@ -241,16 +241,6 @@ jobs:
             thread-dumps/*
           compression-level: 9
           if-no-files-found: ignore
-
-      - name: Capture Job Outputs
-        env:
-          JUNIT_ENV_FILE: build/junit-xml/junit-env-${{ env.job-variation }}.txt
-        run: |
-          echo "job_variation=${{ env.job-variation }}" >> $JUNIT_ENV_FILE
-          echo "run_id=${{ github.run_id }}" >> $JUNIT_ENV_FILE
-          echo "exit_code=${{ steps.junit-test.outputs.gradle-exitcode }}" >> $JUNIT_ENV_FILE
-          echo "junit_report_url=${{ steps.junit-upload-artifact.outputs.artifact-url }}" >> $JUNIT_ENV_FILE
-          echo "thread_dump_url=${{ steps.thread-dump-upload-artifact.outputs.artifact-url }}" >> $JUNIT_ENV_FILE
 
       - name: Archive JUnit XML
         uses: actions/upload-artifact@v4
@@ -261,6 +251,17 @@ jobs:
             build/junit-xml/*.txt
           compression-level: 9
           if-no-files-found: ignore
+
+      - name: Parse JUnit tests
+        env:
+          GITHUB_WORKSPACE: ${{ github.workspace }}
+          JUNIT_REPORT_URL: ${{ steps.archive-junit-html.outputs.artifact-url }}
+          THREAD_DUMP_URL: ${{ steps.archive-thread-dump.outputs.artifact-url }}
+          GRADLE_TEST_EXIT_CODE: ${{ steps.junit-test.outputs.gradle-exitcode }}
+        run: |
+          python .github/scripts/junit.py \
+           --junit-xml-glob-path "build/junit-xml/**/*.xml" \
+           --export-test-catalog ./test-catalog >> $GITHUB_STEP_SUMMARY
 
   report:
     needs: test
@@ -282,17 +283,6 @@ jobs:
           pattern: junit-xml-*
           path: junit-xml
           merge-multiple: true
-      - name: Display structure of downloaded files
-        run: ls -R
-      - name: Parse JUnit tests
-        run: |
-          python .github/scripts/junit.py \
-           --junit-xml-glob-path "junit-xml/**/*.xml" \
-           --junit-output-file-pattern "junit-xml/*.txt" \
-           --expected-junit-output-file 6 \
-           --export-test-catalog ./test-catalog >> $GITHUB_STEP_SUMMARY
-        env:
-          GITHUB_WORKSPACE: ${{ github.workspace }}
 
   update-test-catalog:
     name: Update Test Catalog
