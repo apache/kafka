@@ -350,10 +350,10 @@ if __name__ == "__main__":
     elif exit_code > 0:
         failure_messages.append(f"Gradle task had a failure exit code")
 
-    if thread_dump_url is not None:
+    if thread_dump_url != "":
         failure_messages.append(f"Thread dump available at {thread_dump_url}")
 
-    if junit_report_url:
+    if junit_report_url != "":
         report_md = f"Download [JUnit HTML report]({junit_report_url})"
     else:
         report_md = "No reports available. Environment variable JUNIT_REPORT_URL was not found."
