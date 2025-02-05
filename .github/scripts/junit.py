@@ -231,10 +231,10 @@ if __name__ == "__main__":
     Exits with status code 0 if no tests failed, 1 otherwise.
     """
     parser = argparse.ArgumentParser(description="Parse JUnit XML results.")
-    parser.add_argument("--junit-xml-glob-path",
+    parser.add_argument("--path",
                         required=False,
-                        default="junit-xml/**/*.xml",
-                        help="Glob path of JUnit XML files.")
+                        default="build/junit-xml",
+                        help="Base path of JUnit XML files. A glob of **/*.xml will be applied on top of this path.")
     parser.add_argument("--export-test-catalog",
                         required=False,
                         default="",
@@ -246,8 +246,9 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    reports = glob(pathname=args.junit_xml_glob_path, recursive=True)
-    logger.info(f"Found {len(reports)} JUnit XML files")
+    glob_path = os.path.join(args.path, "**/*.xml")
+    reports = glob(pathname=glob_path, recursive=True)
+    logger.info(f"Found {len(reports)} JUnit results")
 
     workspace_path = get_env("GITHUB_WORKSPACE") # e.g., /home/runner/work/apache/kafka
 
@@ -271,7 +272,7 @@ if __name__ == "__main__":
     logger.debug(f"::group::Parsing {len(reports)} JUnit Report Files")
     for report in reports:
         with open(report, "r") as fp:
-            module_path, task = split_report_path(args.junit_xml_glob_path, report)
+            module_path, task = split_report_path(args.path, report)
             logger.debug(f"Parsing file: {report}, module: {module_path}, task: {task}")
             for suite in parse_report(workspace_path, report, fp):
                 total_skipped += suite.skipped

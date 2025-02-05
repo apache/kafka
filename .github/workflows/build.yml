@@ -259,7 +259,7 @@ jobs:
           GRADLE_TEST_EXIT_CODE: ${{ steps.junit-test.outputs.gradle-exitcode }}
         run: |
           python .github/scripts/junit.py \
-           --junit-xml-glob-path "build/junit-xml/**/*.xml" \
+           --path build/junit-xml \
            --export-test-catalog ./test-catalog >> $GITHUB_STEP_SUMMARY
 
   collate-test-catalog:
@@ -299,7 +299,7 @@ jobs:
           GRADLE_TEST_EXIT_CODE: 0
         run: |
           python .github/scripts/junit.py \
-           --junit-xml-glob-path "junit-xml/**/*.xml" \
+           --path junit-xml \
            --export-test-catalog ./test-catalog >> $GITHUB_STEP_SUMMARY
       - name: Archive Test Catalog
         uses: actions/upload-artifact@v4
