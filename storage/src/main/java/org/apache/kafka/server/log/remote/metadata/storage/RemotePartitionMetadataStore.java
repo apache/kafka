@@ -144,7 +144,7 @@ public class RemotePartitionMetadataStore extends RemotePartitionMetadataEventHa
     }
 
     Optional<Long> highestLogOffset(TopicIdPartition topicIdPartition,
-                                           int leaderEpoch) throws RemoteStorageException {
+                                    int leaderEpoch) throws RemoteStorageException {
         return getRemoteLogMetadataCache(topicIdPartition).highestOffsetForEpoch(leaderEpoch);
     }
 

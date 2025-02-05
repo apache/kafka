@@ -97,7 +97,7 @@ public class ConsumerManager implements Closeable {
      * @throws TimeoutException if this method execution did not complete with in the given {@code timeoutMs}.
      */
     void waitTillConsumptionCatchesUp(RecordMetadata recordMetadata,
-                                             long timeoutMs) throws TimeoutException {
+                                      long timeoutMs) throws TimeoutException {
         int partition = recordMetadata.partition();
         // If the current assignment does not have the subscription for this partition then return immediately.
         if (!consumerTask.isMetadataPartitionAssigned(partition)) {
