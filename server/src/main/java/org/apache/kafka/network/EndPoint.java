@@ -17,12 +17,9 @@
 
 package org.apache.kafka.network;
 
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
-import org.apache.kafka.common.utils.Utils;
 
-import java.util.Locale;
 import java.util.Objects;
 
 public class EndPoint {
@@ -38,22 +35,9 @@ public class EndPoint {
         this.securityProtocol = securityProtocol;
     }
 
-    public static String parseListenerName(String connectionString) {
-        int firstColon = connectionString.indexOf(':');
-        if (firstColon < 0) {
-            throw new KafkaException("Unable to parse a listener name from " + connectionString);
-        }
-        return connectionString.substring(0, firstColon).toUpperCase(Locale.ROOT);
-    }
-
     public static EndPoint fromPublic(org.apache.kafka.common.Endpoint endpoint) {
         return new EndPoint(endpoint.host(), endpoint.port(),
                 new ListenerName(endpoint.listenerName().get()), endpoint.securityProtocol());
-    }
-
-    public String connectionString() {
-        String hostport = (host == null) ? (":" + port) : Utils.formatAddress(host, port);
-        return listenerName.value() + "://" + hostport;
     }
 
     public org.apache.kafka.common.Endpoint toPublic() {

@@ -605,7 +605,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
       // check controller listener names (they won't appear in listeners when process.roles=broker)
       // as well as listeners for occurrences of SSL or SASL_*
       if (controllerListenerNames.exists(isSslOrSasl) ||
-        Csv.parseCsvList(getString(SocketServerConfigs.LISTENERS_CONFIG)).asScala.exists(listenerValue => isSslOrSasl(EndPoint.parseListenerName(listenerValue)))) {
+        Csv.parseCsvList(getString(SocketServerConfigs.LISTENERS_CONFIG)).asScala.exists(listenerValue => isSslOrSasl(CoreUtils.parseListenerName(listenerValue)))) {
         mapValue // don't add default mappings since we found something that is SSL or SASL_*
       } else {
         // add the PLAINTEXT mappings for all controller listener names that are not explicitly PLAINTEXT
