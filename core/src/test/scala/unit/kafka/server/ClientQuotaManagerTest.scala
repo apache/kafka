@@ -37,12 +37,12 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
       // Case 1: Update the quota. Assert that the new quota value is returned
       clientQuotaManager.updateQuota(
         client1.configUser,
-        client1.sanitizedConfigClientEntity,
+        client1.configClientEntity,
         Some(new Quota(2000, true))
       )
       clientQuotaManager.updateQuota(
         client2.configUser,
-        client2.sanitizedConfigClientEntity,
+        client2.configClientEntity,
         Some(new Quota(4000, true))
       )
 
@@ -61,7 +61,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
       // p1 should not longer be throttled after the quota change
       clientQuotaManager.updateQuota(
         client1.configUser,
-        client1.sanitizedConfigClientEntity,
+        client1.configClientEntity,
         Some(new Quota(3000, true))
       )
       assertEquals(3000, clientQuotaManager.quota(client1.user, client1.clientId).bound, 0.0, "Should return the newly overridden value (3000)")
@@ -72,7 +72,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
       // Case 3: Change quota back to default. Should be throttled again
       clientQuotaManager.updateQuota(
         client1.configUser,
-        client1.sanitizedConfigClientEntity,
+        client1.configClientEntity,
         Some(new Quota(500, true))
       )
       assertEquals(500, clientQuotaManager.quota(client1.user, client1.clientId).bound, 0.0, "Should return the default value (500)")
@@ -83,12 +83,12 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
       // Case 4: Set high default quota, remove p1 quota. p1 should no longer be throttled
       clientQuotaManager.updateQuota(
         client1.configUser,
-        client1.sanitizedConfigClientEntity,
+        client1.configClientEntity,
         None
       )
       clientQuotaManager.updateQuota(
         defaultConfigClient.configUser,
-        defaultConfigClient.sanitizedConfigClientEntity,
+        defaultConfigClient.configClientEntity,
         Some(new Quota(4000, true))
       )
       assertEquals(4000, clientQuotaManager.quota(client1.user, client1.clientId).bound, 0.0, "Should return the newly overridden value (4000)")
@@ -502,8 +502,9 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
   }
 
   private case class UserClient(
-    user: String, clientId: String, 
+    user: String,
+    clientId: String,
     configUser: Option[BaseUserEntity] = None,
-    sanitizedConfigClientEntity: Option[ClientQuotaManager.ClientIdEntity] = None
+    configClientEntity: Option[ClientQuotaManager.ClientIdEntity] = None
   )
 }
