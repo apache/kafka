@@ -699,12 +699,14 @@ public interface KStream<K, V> {
     /**
      * Materialize the record of this stream to different topics.
      * The provided {@link TopicNameExtractor} is applied to each input record to compute the output topic name.
-     * All topics should be manually created before they are use (i.e., before the Kafka Streams application is started).
+     * All topics should be manually created before they are used (i.e., before the Kafka Streams application is started).
      *
      * <p>To explicitly set key/value serdes or the partitioning strategy, use {@link #to(TopicNameExtractor, Produced)}.
      *
      * @param topicExtractor
      *        the extractor to determine the name of the Kafka topic to write to for each record
+     *
+     * @see #to(String)
      */
     void to(final TopicNameExtractor<K, V> topicExtractor);
 
