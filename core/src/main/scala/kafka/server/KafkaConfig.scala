@@ -221,8 +221,6 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   val controllerPerformanceSamplePeriodMs: Long = getLong(KRaftConfigs.CONTROLLER_PERFORMANCE_SAMPLE_PERIOD_MS)
   val controllerPerformanceAlwaysLogThresholdMs: Long = getLong(KRaftConfigs.CONTROLLER_PERFORMANCE_ALWAYS_LOG_THRESHOLD_MS)
 
-  def requiresZookeeper: Boolean = processRoles.isEmpty
-
   private def parseProcessRoles(): Set[ProcessRole] = {
     val roles = getList(KRaftConfigs.PROCESS_ROLES_CONFIG).asScala.map {
       case "broker" => ProcessRole.BrokerRole
@@ -700,7 +698,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
 
     val listenerNames = listeners.map(_.listenerName).toSet
     if (processRoles.contains(ProcessRole.BrokerRole)) {
-      // validations for all broker setups (i.e. ZooKeeper and KRaft broker-only and KRaft co-located)
+      // validations for KRaft broker-only and KRaft co-located
       validateAdvertisedBrokerListenersNonEmptyForBroker()
       require(advertisedBrokerListenerNames.contains(interBrokerListenerName),
         s"${ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG} must be a listener name defined in ${SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG}. " +

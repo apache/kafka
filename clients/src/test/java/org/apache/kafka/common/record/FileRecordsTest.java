@@ -44,6 +44,7 @@ import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.stream.IntStream;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.utf8;
@@ -430,6 +431,39 @@ public class FileRecordsTest {
     public void testSearchForTimestamp() throws IOException {
         for (RecordVersion version : RecordVersion.values()) {
             testSearchForTimestamp(version);
+        }
+    }
+
+    /**
+     * Test slice when already sliced file records have start position greater than available bytes
+     * in the file records.
+     */
+    @Test
+    public void testSliceForAlreadySlicedFileRecords() throws IOException {
+        byte[][] values = new byte[][] {
+            "abcd".getBytes(),
+            "efgh".getBytes(),
+            "ijkl".getBytes(),
+            "mnop".getBytes(),
+            "qrst".getBytes()
+        };
+        try (FileRecords fileRecords = createFileRecords(values)) {
+            List<RecordBatch> items = batches(fileRecords.slice(0, fileRecords.sizeInBytes()));
+
+            // Slice from fourth message until the end.
+            int position = IntStream.range(0, 3).map(i -> items.get(i).sizeInBytes()).sum();
+            FileRecords sliced  = fileRecords.slice(position, fileRecords.sizeInBytes() - position);
+            assertEquals(fileRecords.sizeInBytes() - position, sliced.sizeInBytes());
+            assertEquals(items.subList(3, items.size()), batches(sliced), "Read starting from the fourth message");
+
+            // Further slice the already sliced file records, from fifth message until the end. Now the
+            // bytes available in the sliced file records are less than the start position. However, the
+            // position to slice is relative hence reset position to second message in the sliced file
+            // records i.e. reset with the size of the fourth message from the original file records.
+            position = items.get(4).sizeInBytes();
+            FileRecords finalSliced = sliced.slice(position, sliced.sizeInBytes() - position);
+            assertEquals(sliced.sizeInBytes() - position, finalSliced.sizeInBytes());
+            assertEquals(items.subList(4, items.size()), batches(finalSliced), "Read starting from the fifth message");
         }
     }
 

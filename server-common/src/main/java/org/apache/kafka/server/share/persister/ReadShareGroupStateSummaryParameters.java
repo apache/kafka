@@ -19,6 +19,7 @@ package org.apache.kafka.server.share.persister;
 
 import org.apache.kafka.common.message.ReadShareGroupStateSummaryRequestData;
 
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
@@ -57,5 +58,17 @@ public class ReadShareGroupStateSummaryParameters implements PersisterParameters
         public ReadShareGroupStateSummaryParameters build() {
             return new ReadShareGroupStateSummaryParameters(groupTopicPartitionData);
         }
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (o == null || getClass() != o.getClass()) return false;
+        ReadShareGroupStateSummaryParameters that = (ReadShareGroupStateSummaryParameters) o;
+        return Objects.equals(groupTopicPartitionData, that.groupTopicPartitionData);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hashCode(groupTopicPartitionData);
     }
 }

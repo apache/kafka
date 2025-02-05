@@ -50,6 +50,17 @@ import scala.jdk.CollectionConverters._
 
 class KafkaConfigTest {
 
+  def createDefaultConfig(): Properties = {
+    val props = new Properties()
+    props.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker,controller")
+    props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
+    props.setProperty(KRaftConfigs.NODE_ID_CONFIG, "1")
+    props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, "PLAINTEXT://localhost:0,CONTROLLER://localhost:5000")
+    props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "2@localhost:5000")
+    props.setProperty(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "PLAINTEXT:PLAINTEXT,CONTROLLER:SASL_SSL")
+    props
+  }
+
   @Test
   def testLogRetentionTimeHoursProvided(): Unit = {
     val props = TestUtils.createBrokerConfig(0, port = 8181)
@@ -148,17 +159,6 @@ class KafkaConfigTest {
     assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props1))
     assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props2))
     assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props3))
-  }
-
-  def createDefaultConfig(): Properties = {
-    val props = new Properties()
-    props.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker,controller")
-    props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
-    props.setProperty(KRaftConfigs.NODE_ID_CONFIG, "1")
-    props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, "PLAINTEXT://localhost:0,CONTROLLER://localhost:5000")
-    props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "2@localhost:5000")
-    props.setProperty(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "PLAINTEXT:PLAINTEXT,CONTROLLER:SASL_SSL")
-    props
   }
 
   @Test

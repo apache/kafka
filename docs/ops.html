@@ -1035,6 +1035,7 @@ $ bin/connect-mirror-maker.sh connect-mirror-maker.properties \
 
 <pre><code class="language-text"># MBean: kafka.connect.mirror:type=MirrorSourceConnector,target=([-.w]+),topic=([-.w]+),partition=([0-9]+)
 record-count            # number of records replicated source -> target
+record-rate             # average number of records/sec in replicated records
 record-age-ms           # age of records when they are replicated
 record-age-ms-min
 record-age-ms-max
@@ -1044,8 +1045,9 @@ replication-latency-ms-min
 replication-latency-ms-max
 replication-latency-ms-avg
 byte-rate               # average number of bytes/sec in replicated records
+byte-count              # number of bytes replicated source -> target
 
-# MBean: kafka.connect.mirror:type=MirrorCheckpointConnector,source=([-.w]+),target=([-.w]+)
+# MBean: kafka.connect.mirror:type=MirrorCheckpointConnector,source=([-.w]+),target=([-.w]+),group=([-.w]+),topic=([-.w]+),partition=([0-9]+)
 
 checkpoint-latency-ms   # time it takes to replicate consumer offsets
 checkpoint-latency-ms-min
@@ -1769,6 +1771,21 @@ NodeId	DirectoryId           	LogEndOffset	Lag	LastFetchTimestamp	LastCaughtUpTi
         <td>Last offset in a partition</td>
         <td>kafka.log:type=Log,name=LogEndOffset,topic=([-.\w]+),partition=([0-9]+)</td>
         <td>The last offset in a partition.</td>
+      </tr>
+      <tr>
+        <td>Remaining logs to recover</td>
+        <td>kafka.log:type=LogManager,name=remainingLogsToRecover</td>
+        <td>The number of remaining logs for each log.dir to be recovered.This metric provides an overview of the recovery progress for a given log directory.</td>
+      </tr>
+      <tr>
+        <td>Remaining segments to recover for the current recovery thread</td>
+        <td>kafka.log:type=LogManager,name=remainingSegmentsToRecover</td>
+        <td>The number of remaining segments assigned to the currently active recovery thread.</td>
+      </tr>
+      <tr>
+        <td>Log directory offline status</td>
+        <td>kafka.log:type=LogManager,name=LogDirectoryOffline</td>
+        <td>Indicates if a log directory is offline (1) or online (0).</td>
       </tr>
   </tbody></table>
 

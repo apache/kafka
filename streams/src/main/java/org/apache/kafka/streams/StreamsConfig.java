@@ -1293,6 +1293,11 @@ public class StreamsConfig extends AbstractConfig {
         public static final String PROCESSING_THREADS_ENABLED = "__processing.threads.enabled__";
 
         public static boolean processingThreadsEnabled(final Map<String, Object> configs) {
+            // note: we did disable testing "processing threads"` in SmokeTestDriverIntegrationTest due to
+            // high failure rate, and the feature being incomplete with no active work
+            //
+            // we should re-enable testing this feature in SmokeTestDriverIntegrationTest
+            // once it is complete (or maybe even earlier when we resumg working on it
             return InternalConfig.getBoolean(configs, InternalConfig.PROCESSING_THREADS_ENABLED, false);
         }
 

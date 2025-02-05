@@ -38,6 +38,7 @@ import org.junit.jupiter.api.Test;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.stream.IntStream;
 
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.CLASSIC_GROUP_COMPLETED_REBALANCES_SENSOR_NAME;
@@ -181,9 +182,11 @@ public class GroupCoordinatorMetricsTest {
             Utils.mkEntry(ClassicGroupState.DEAD, 1L)
         ));
 
-        IntStream.range(0, 5).forEach(__ -> shard0.incrementNumConsumerGroups(ConsumerGroupState.ASSIGNING));
-        IntStream.range(0, 5).forEach(__ -> shard1.incrementNumConsumerGroups(ConsumerGroupState.RECONCILING));
-        IntStream.range(0, 3).forEach(__ -> shard1.decrementNumConsumerGroups(ConsumerGroupState.DEAD));
+        shard0.setConsumerGroupGauges(Collections.singletonMap(ConsumerGroupState.ASSIGNING, 5L));
+        shard1.setConsumerGroupGauges(Map.of(
+            ConsumerGroupState.RECONCILING, 1L,
+            ConsumerGroupState.DEAD, 1L
+        ));
 
         IntStream.range(0, 6).forEach(__ -> shard0.incrementNumOffsets());
         IntStream.range(0, 2).forEach(__ -> shard1.incrementNumOffsets());

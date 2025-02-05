@@ -738,12 +738,20 @@ class ReplicaManager(val config: KafkaConfig,
               // retry correctly. Translate these to an error which will cause such clients to retry
               // the produce request. We pick `NOT_ENOUGH_REPLICAS` because it does not trigger a
               // metadata refresh.
-              case Errors.CONCURRENT_TRANSACTIONS |
-                   Errors.NETWORK_EXCEPTION |
+              case Errors.NETWORK_EXCEPTION |
                    Errors.COORDINATOR_LOAD_IN_PROGRESS |
                    Errors.COORDINATOR_NOT_AVAILABLE |
                    Errors.NOT_COORDINATOR => Some(new NotEnoughReplicasException(
                 s"Unable to verify the partition has been added to the transaction. Underlying error: ${error.toString}"))
+              case Errors.CONCURRENT_TRANSACTIONS =>
+                if (!transactionSupportedOperation.supportsEpochBump) {
+                  Some(new NotEnoughReplicasException(
+                    s"Unable to verify the partition has been added to the transaction. Underlying error: ${error.toString}"))
+                } else {
+                  // Don't convert the Concurrent Transaction exception for TV2. Because the error is very common during
+                  // the transaction commit phase. Returning Concurrent Transaction is less confusing to the client.
+                  None
+                }
               case _ => None
             }
           topicPartition -> LogAppendResult(
@@ -782,7 +790,7 @@ class ReplicaManager(val config: KafkaConfig,
       return
     }
 
-    maybeStartTransactionVerificationForPartitions(
+    maybeSendPartitionsToTransactionCoordinator(
       topicPartitionBatchInfo,
       transactionalId,
       transactionalProducerInfo.head._1,
@@ -887,7 +895,7 @@ class ReplicaManager(val config: KafkaConfig,
 
   /**
    *
-   * @param topicPartition                the topic partition to maybe verify
+   * @param topicPartition                the topic partition to maybe verify or add
    * @param transactionalId               the transactional id for the transaction
    * @param producerId                    the producer id for the producer writing to the transaction
    * @param producerEpoch                 the epoch of the producer writing to the transaction
@@ -895,11 +903,15 @@ class ReplicaManager(val config: KafkaConfig,
    * @param callback                      the method to execute once the verification is either completed or returns an error
    * @param transactionSupportedOperation determines the supported operation based on the client's Request API version
    *
-   * When the verification returns, the callback will be supplied the error if it exists or Errors.NONE.
+   * If this is the first time a partition appears in a transaction, it must be verified or added to the partition depending on the
+   * transactionSupported operation.
+   * If verifying, when the verification returns, the callback will be supplied the error if it exists or Errors.NONE.
    * If the verification guard exists, it will also be supplied. Otherwise the SENTINEL verification guard will be returned.
    * This guard can not be used for verification and any appends that attempt to use it will fail.
+   *
+   * If adding, the callback will be supplied the error if it exists or Errors.NONE.
    */
-  def maybeStartTransactionVerificationForPartition(
+  def maybeSendPartitionToTransactionCoordinator(
     topicPartition: TopicPartition,
     transactionalId: String,
     producerId: Long,
@@ -916,7 +928,7 @@ class ReplicaManager(val config: KafkaConfig,
       ))
     }
 
-    maybeStartTransactionVerificationForPartitions(
+    maybeSendPartitionsToTransactionCoordinator(
       Map(topicPartition -> baseSequence),
       transactionalId,
       producerId,
@@ -928,19 +940,23 @@ class ReplicaManager(val config: KafkaConfig,
 
   /**
    *
-   * @param topicPartitionBatchInfo         the topic partitions to maybe verify mapped to the base sequence of their first record batch
+   * @param topicPartitionBatchInfo         the topic partitions to maybe verify or add mapped to the base sequence of their first record batch
    * @param transactionalId                 the transactional id for the transaction
    * @param producerId                      the producer id for the producer writing to the transaction
    * @param producerEpoch                   the epoch of the producer writing to the transaction
    * @param callback                        the method to execute once the verification is either completed or returns an error
    * @param transactionSupportedOperation   determines the supported operation based on the client's Request API version
    *
-   * When the verification returns, the callback will be supplied the errors per topic partition if there were errors.
+   * If this is the first time the partitions appear in a transaction, they must be verified or added to the partition depending on the
+   * transactionSupported operation.
+   * If verifying, when the verification returns, the callback will be supplied the errors per topic partition if there were errors.
    * The callback will also be supplied the verification guards per partition if they exist. It is possible to have an
    * error and a verification guard for a topic partition if the topic partition was unable to be verified by the transaction
    * coordinator. Transaction coordinator errors are mapped to append-friendly errors.
+   *
+   * If adding, the callback will be e supplied the errors per topic partition if there were errors.
    */
-  private def maybeStartTransactionVerificationForPartitions(
+  private def maybeSendPartitionsToTransactionCoordinator(
     topicPartitionBatchInfo: Map[TopicPartition, Int],
     transactionalId: String,
     producerId: Long,
@@ -950,7 +966,7 @@ class ReplicaManager(val config: KafkaConfig,
   ): Unit = {
     // Skip verification if the request is not transactional or transaction verification is disabled.
     if (transactionalId == null ||
-      !config.transactionLogConfig.transactionPartitionVerificationEnable
+      (!config.transactionLogConfig.transactionPartitionVerificationEnable && !transactionSupportedOperation.supportsEpochBump)
       || addPartitionsToTxnManager.isEmpty
     ) {
       callback((Map.empty[TopicPartition, Errors], Map.empty[TopicPartition, VerificationGuard]))
@@ -965,7 +981,8 @@ class ReplicaManager(val config: KafkaConfig,
         topicPartition,
         producerId,
         producerEpoch,
-        baseSequence
+        baseSequence,
+        transactionSupportedOperation.supportsEpochBump
       )
 
       errorOrGuard match {
@@ -975,7 +992,6 @@ class ReplicaManager(val config: KafkaConfig,
       }
     }
 
-    // No partitions require verification.
     if (verificationGuards.isEmpty) {
       callback((errors.toMap, Map.empty[TopicPartition, VerificationGuard]))
       return
@@ -1002,11 +1018,12 @@ class ReplicaManager(val config: KafkaConfig,
     topicPartition: TopicPartition,
     producerId: Long,
     producerEpoch: Short,
-    baseSequence: Int
+    baseSequence: Int,
+    supportsEpochBump: Boolean
   ): Either[Errors, VerificationGuard] = {
     try {
       val verificationGuard = getPartitionOrException(topicPartition)
-        .maybeStartTransactionVerification(producerId, baseSequence, producerEpoch)
+        .maybeStartTransactionVerification(producerId, baseSequence, producerEpoch, supportsEpochBump)
       Right(verificationGuard)
     } catch {
       case e: Exception =>
