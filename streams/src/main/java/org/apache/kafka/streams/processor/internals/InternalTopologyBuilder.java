@@ -632,6 +632,7 @@ public class InternalTopologyBuilder {
             throw new TopologyException("sourceName and processorName must be different.");
         }
 
+        ApiUtils.checkSupplier(stateUpdateSupplier);
         final Set<StoreBuilder<?>> stores = stateUpdateSupplier.stores();
         if (stores == null || stores.size() != 1) {
             throw new IllegalArgumentException(
