@@ -240,7 +240,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testClose(quorum: String, groupProtocol: String): Unit = {
     val numRecords = 10
     val producer = createProducer()
