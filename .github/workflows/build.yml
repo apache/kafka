@@ -303,6 +303,11 @@ jobs:
            --export-test-catalog ./test-catalog >> $GITHUB_STEP_SUMMARY
       - name: Archive Test Catalog
         uses: actions/upload-artifact@v4
+        with:
+          name: test-catalog
+          path: test-catalog
+          compression-level: 9
+          if-no-files-found: error
 
   update-test-catalog:
     name: Update Test Catalog
