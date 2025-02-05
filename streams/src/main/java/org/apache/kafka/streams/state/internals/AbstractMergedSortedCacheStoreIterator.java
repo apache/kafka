@@ -27,9 +27,9 @@ import java.util.NoSuchElementException;
  * the other from a store. It ensures the merged results maintain sorted order while resolving conflicts between cache
  * and store entries.
  *
- * <p>This iterator is primarily used in Kafka Streams' state store layer, where state is backed by an in-memory cache
- * and persistent store. It handles common scenarios like skipping tombstones (deleted entries) and preferring cache
- * entries over store entries when conflicts arise.</p>
+ * <p>This iterator is used for state stores in Kafka Streams, which have an (optional) caching layer that needs to be
+ * "merged" with the underlying state. It handles common scenarios like skipping records with cached tombstones (deleted
+ * entries) and preferring cache entries over store entries when conflicts arise.</p>
  *
  * @param <K>  The type of the resulting merged key.
  * @param <KS> The type of the store key.
