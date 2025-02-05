@@ -339,21 +339,21 @@ if __name__ == "__main__":
     thread_dump_url = get_env("THREAD_DUMP_URL")
 
     if exit_code is None:
-        failure_messages.append("Missing required GRADLE_TEST_EXIT_CODE environment variable.")
+        failure_messages.append("Missing required GRADLE_TEST_EXIT_CODE environment variable. Failing this script.")
     elif exit_code == 124:
         # Special handling for timeouts. The exit code 124 is emitted by 'timeout' command used in build.yml.
         # A watchdog script "thread-dump.sh" will use jstack to force a thread dump for any Gradle process
         # still running after the timeout. We capture the exit codes of the two test tasks and pass them to
         # this script. If any task fails due to timeout, we want to fail the overall build since it will not
         # include all the test results
-        failure_messages.append(f"Gradle task had a timeout. These are partial results!")
+        failure_messages.append(f"Gradle task had a timeout. Failing this script. These are partial results!")
     elif exit_code > 0:
-        failure_messages.append(f"Gradle task had a failure exit code")
+        failure_messages.append(f"Gradle task had a failure exit code. Failing this script.")
 
-    if thread_dump_url != "":
-        failure_messages.append(f"Thread dump available at {thread_dump_url}")
+    if thread_dump_url:
+        failure_messages.append(f"Thread dump available at {thread_dump_url}. Failing this script.")
 
-    if junit_report_url != "":
+    if junit_report_url:
         report_md = f"Download [JUnit HTML report]({junit_report_url})"
     else:
         report_md = "No reports available. Environment variable JUNIT_REPORT_URL was not found."
