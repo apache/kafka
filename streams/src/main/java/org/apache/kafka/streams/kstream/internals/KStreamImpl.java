@@ -1057,14 +1057,14 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
     @SuppressWarnings({"unchecked", "resource"})
-    private <VO, VR> KStream<K, VR> doStreamTableJoin(final KTable<K, VO> table,
-                                                      final ValueJoinerWithKey<? super K, ? super V, ? super VO, ? extends VR> joiner,
-                                                      final JoinedInternal<K, V, VO> joinedInternal,
-                                                      final boolean leftJoin) {
+    private <VTable, VOut> KStream<K, VOut> doStreamTableJoin(final KTable<K, VTable> table,
+                                                              final ValueJoinerWithKey<? super K, ? super V, ? super VTable, ? extends VOut> joiner,
+                                                              final JoinedInternal<K, V, VTable> joinedInternal,
+                                                              final boolean leftJoin) {
         Objects.requireNonNull(table, "table can't be null");
         Objects.requireNonNull(joiner, "joiner can't be null");
 
-        final Set<String> allSourceNodes = ensureCopartitionWith(Collections.singleton((AbstractStream<K, VO>) table));
+        final Set<String> allSourceNodes = ensureCopartitionWith(Collections.singleton((AbstractStream<K, VTable>) table));
 
         final NamedInternal renamed = new NamedInternal(joinedInternal.name());
 
@@ -1073,7 +1073,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         Optional<StoreBuilder<?>> bufferStoreBuilder = Optional.empty();
 
         if (joinedInternal.gracePeriod() != null) {
-            if (!((KTableImpl<K, ?, VO>) table).graphNode.isOutputVersioned().orElse(true)) {
+            if (!((KTableImpl<K, ?, VTable>) table).graphNode.isOutputVersioned().orElse(true)) {
                 throw new IllegalArgumentException("KTable must be versioned to use a grace period in a stream table join.");
             }
             final String bufferName = name + "-Buffer";
@@ -1086,19 +1086,19 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             );
         }
 
-        final ProcessorSupplier<K, V, K, VR> processorSupplier = new KStreamKTableJoin<>(
-            ((KTableImpl<K, ?, VO>) table).valueGetterSupplier(),
+        final ProcessorSupplier<K, V, K, VOut> processorSupplier = new KStreamKTableJoin<>(
+            ((KTableImpl<K, ?, VTable>) table).valueGetterSupplier(),
             joiner,
             leftJoin,
             Optional.ofNullable(joinedInternal.gracePeriod()),
             bufferStoreBuilder
         );
 
-        final ProcessorParameters<K, V, K, VR> processorParameters = new ProcessorParameters<>(processorSupplier, name);
-        final StreamTableJoinNode<K, V, VR> streamTableJoinNode = new StreamTableJoinNode<>(
+        final ProcessorParameters<K, V, K, VOut> processorParameters = new ProcessorParameters<>(processorSupplier, name);
+        final StreamTableJoinNode<K, V, VOut> streamTableJoinNode = new StreamTableJoinNode<>(
             name,
             processorParameters,
-            ((KTableImpl<K, ?, VO>) table).valueGetterSupplier().storeNames(),
+            ((KTableImpl<K, ?, VTable>) table).valueGetterSupplier().storeNames(),
             this.name,
             joinedInternal.gracePeriod()
         );
@@ -1215,69 +1215,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             null,
             subTopologySourceNodes,
             repartitionRequired,
-            streamTableJoinNode,
-            builder);
-    }
-
-    @SuppressWarnings({"unchecked", "resource"})
-    private <VTable, VOut> KStream<K, VOut> doStreamTableJoin(final KTable<K, VTable> table,
-                                                              final ValueJoinerWithKey<? super K, ? super V, ? super VTable, ? extends VOut> joiner,
-                                                              final JoinedInternal<K, V, VTable> joinedInternal,
-                                                              final boolean leftJoin) {
-        Objects.requireNonNull(table, "table can't be null");
-        Objects.requireNonNull(joiner, "joiner can't be null");
-
-        final Set<String> allSourceNodes = ensureCopartitionWith(Collections.singleton((AbstractStream<K, VTable>) table));
-
-        final NamedInternal renamed = new NamedInternal(joinedInternal.name());
-
-        final String name = renamed.orElseGenerateWithPrefix(builder, leftJoin ? LEFTJOIN_NAME : JOIN_NAME);
-
-        Optional<StoreBuilder<?>> bufferStoreBuilder = Optional.empty();
-
-        if (joinedInternal.gracePeriod() != null) {
-            if (!((KTableImpl<K, ?, VTable>) table).graphNode.isOutputVersioned().orElse(true)) {
-                throw new IllegalArgumentException("KTable must be versioned to use a grace period in a stream table join.");
-            }
-            final String bufferName = name + "-Buffer";
-            bufferStoreBuilder = Optional.of(new RocksDBTimeOrderedKeyValueBuffer.Builder<>(
-                bufferName,
-                joinedInternal.keySerde() != null ? joinedInternal.keySerde() : keySerde,
-                joinedInternal.leftValueSerde() != null ? joinedInternal.leftValueSerde() : valueSerde,
-                joinedInternal.gracePeriod(),
-                name)
-            );
-        }
-
-        final ProcessorSupplier<K, V, K, VOut> processorSupplier = new KStreamKTableJoin<>(
-            ((KTableImpl<K, ?, VTable>) table).valueGetterSupplier(),
-            joiner,
-            leftJoin,
-            Optional.ofNullable(joinedInternal.gracePeriod()),
-            bufferStoreBuilder
-        );
-
-        final ProcessorParameters<K, V, K, VOut> processorParameters = new ProcessorParameters<>(processorSupplier, name);
-        final StreamTableJoinNode<K, V, VOut> streamTableJoinNode = new StreamTableJoinNode<>(
-            name,
-            processorParameters,
-            ((KTableImpl<K, ?, VTable>) table).valueGetterSupplier().storeNames(),
-            this.name,
-            joinedInternal.gracePeriod()
-        );
-
-        builder.addGraphNode(graphNode, streamTableJoinNode);
-        if (leftJoin) {
-            streamTableJoinNode.labels().add(GraphNode.Label.NULL_KEY_RELAXED_JOIN);
-        }
-
-        // do not have serde for joined result
-        return new KStreamImpl<>(
-            name,
-            joinedInternal.keySerde() != null ? joinedInternal.keySerde() : keySerde,
-            null,
-            allSourceNodes,
-            false,
             streamTableJoinNode,
             builder);
     }
