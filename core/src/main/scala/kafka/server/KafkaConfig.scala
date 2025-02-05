@@ -603,7 +603,6 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
     if (nodeId != brokerId) {
       throw new ConfigException(s"You must set `${KRaftConfigs.NODE_ID_CONFIG}` to the same value as `${ServerConfigs.BROKER_ID_CONFIG}`.")
     }
-    // KRaft-based metadata quorum
     require(logRollTimeMillis >= 1, "log.roll.ms must be greater than or equal to 1")
     require(logRollTimeJitterMillis >= 0, "log.roll.jitter.ms must be greater than or equal to 0")
     require(logRetentionTimeMillis >= 1 || logRetentionTimeMillis == -1, "log.retention.ms must be unlimited (-1) or, greater than or equal to 1")
@@ -698,7 +697,6 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
 
     val listenerNames = listeners.map(_.listenerName).toSet
     if (processRoles.contains(ProcessRole.BrokerRole)) {
-      // validations for KRaft broker-only and KRaft co-located
       validateAdvertisedBrokerListenersNonEmptyForBroker()
       require(advertisedBrokerListenerNames.contains(interBrokerListenerName),
         s"${ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG} must be a listener name defined in ${SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG}. " +

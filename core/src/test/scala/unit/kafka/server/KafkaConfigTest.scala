@@ -1382,7 +1382,7 @@ class KafkaConfigTest {
   }
 
   @Test
-  def testAcceptsLargeNodeIdForRaftBasedCase(): Unit = {
+  def testAcceptsLargeId(): Unit = {
     val largeBrokerId = 2000
     val props = new Properties()
     props.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker")
