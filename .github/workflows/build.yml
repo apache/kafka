@@ -33,7 +33,7 @@ on:
 jobs:
   configure:
     runs-on: ubuntu-latest
-    name: Configure
+    name: Configure Workflow
     outputs:
       is-draft: ${{ steps.check-draft-pr.outputs.is-draft }}
       test-catalog-days: ${{ steps.test-catalog.outputs.days }}
@@ -272,7 +272,7 @@ jobs:
     if: ${{ always() }}
     runs-on: ubuntu-latest
     outputs:
-      test-timed-out: ${{ steps.check-for-thread-dump.outcome == 'failure' }}
+      uploaded-test-catalog: ${{ steps.archive-test-catalog.outcome == 'success' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -308,6 +308,7 @@ jobs:
            --path junit-xml \
            --export-test-catalog ./test-catalog >> $GITHUB_STEP_SUMMARY
       - name: Archive Test Catalog
+        id: archive-test-catalog
         uses: actions/upload-artifact@v4
         with:
           name: test-catalog
@@ -320,7 +321,7 @@ jobs:
   update-test-catalog:
     name: Update Test Catalog
     needs: collate-test-catalog
-    if: ${{ always() && inputs.is-trunk && needs.collate-test-catalog.outputs.test-timed-out == 'false' }}
+    if: ${{ always() && inputs.is-trunk && needs.collate-test-catalog.outputs.uploaded-test-catalog == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
