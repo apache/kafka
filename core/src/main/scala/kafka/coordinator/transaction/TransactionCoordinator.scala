@@ -19,6 +19,7 @@ package kafka.coordinator.transaction
 import kafka.server.{KafkaConfig, MetadataCache, ReplicaManager}
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.AddPartitionsToTxnResponseData.AddPartitionsToTxnResult
 import org.apache.kafka.common.message.{DescribeTransactionsResponseData, ListTransactionsResponseData}
@@ -36,6 +37,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 import scala.jdk.CollectionConverters._
 
 object TransactionCoordinator {
+  val EnforcedCompression: Compression = Compression.NONE
+  val EnforcedRequiredAcks: Short = -1.toShort
 
   def apply(config: KafkaConfig,
             replicaManager: ReplicaManager,
