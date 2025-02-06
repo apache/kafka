@@ -52,15 +52,19 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -69,6 +73,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 class PersisterStateManagerTest {
     private static final KafkaClient CLIENT = mock(KafkaClient.class);
@@ -163,6 +168,20 @@ class PersisterStateManagerTest {
 
         @Override
         protected void findCoordinatorErrorResponse(Errors error, Exception exception) {
+            this.result.complete(new TestHandlerResponse(new TestHandlerResponseData()
+                .setResults(Collections.singletonList(new WriteShareGroupStateResponseData.WriteStateResult()
+                    .setTopicId(partitionKey().topicId())
+                    .setPartitions(Collections.singletonList(new WriteShareGroupStateResponseData.PartitionResult()
+                        .setPartition(partitionKey().partition())
+                        .setErrorMessage(exception == null ? error.message() : exception.getMessage())
+                        .setErrorCode(error.code()))
+                    )
+                ))
+            ));
+        }
+
+        @Override
+        protected void requestErrorResponse(Errors error, Exception exception) {
             this.result.complete(new TestHandlerResponse(new TestHandlerResponseData()
                 .setResults(Collections.singletonList(new WriteShareGroupStateResponseData.WriteStateResult()
                     .setTopicId(partitionKey().topicId())
@@ -3590,5 +3609,74 @@ class PersisterStateManagerTest {
         } catch (Exception e) {
             fail("unexpected exception", e);
         }
+    }
+
+    static class TestHolder {
+        boolean hasResponse;
+        boolean wasDisconnected;
+        boolean wasTimedOut;
+        Optional<Errors> exp;
+
+        TestHolder(boolean hasResponse, boolean wasDisconnected, boolean wasTimedOut, Optional<Errors> exp) {
+            this.hasResponse = hasResponse;
+            this.wasDisconnected = wasDisconnected;
+            this.wasTimedOut = wasTimedOut;
+            this.exp = exp;
+        }
+    }
+
+    private static Stream<TestHolder> generatorDifferentStates() {
+        return Stream.of(
+            // Let the actual handler handle since response present.
+            new TestHolder(true, false, false, Optional.empty()),
+            new TestHolder(true, true, true, Optional.empty()),
+            new TestHolder(true, false, true, Optional.empty()),
+            new TestHolder(true, true, false, Optional.empty()),
+
+            // Handled my checkNetworkError.
+            new TestHolder(false, true, false, Optional.of(Errors.NETWORK_EXCEPTION)),
+            new TestHolder(false, false, true, Optional.of(Errors.REQUEST_TIMED_OUT)),
+            new TestHolder(false, true, true, Optional.of(Errors.NETWORK_EXCEPTION)),   // takes precedence
+            new TestHolder(false, false, false, Optional.of(Errors.UNKNOWN_SERVER_ERROR))
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("generatorDifferentStates")
+    public void testNetworkErrorHandling(TestHolder holder) {
+        KafkaClient client = mock(KafkaClient.class);
+        Timer timer = mock(Timer.class);
+        PersisterStateManager psm = PersisterStateManagerBuilder
+            .builder()
+            .withTimer(timer)
+            .withKafkaClient(client)
+            .build();
+
+        SharePartitionKey key = SharePartitionKey.getInstance("group", Uuid.randomUuid(), 1);
+
+        CompletableFuture<TestStateHandler.TestHandlerResponse> future = new CompletableFuture<>();
+
+        TestStateHandler handler = spy(new TestStateHandler(
+            psm,
+            key.groupId(),
+            key.topicId(),
+            key.partition(),
+            future,
+            REQUEST_BACKOFF_MS,
+            REQUEST_BACKOFF_MAX_MS,
+            MAX_RPC_RETRY_ATTEMPTS
+        ) {
+            @Override
+            protected AbstractRequest.Builder<? extends AbstractRequest> requestBuilder() {
+                return null;
+            }
+        });
+
+        ClientResponse response = mock(ClientResponse.class);
+        when(response.hasResponse()).thenReturn(holder.hasResponse);
+        when(response.wasDisconnected()).thenReturn(holder.wasDisconnected);
+        when(response.wasTimedOut()).thenReturn(holder.wasTimedOut);
+        assertEquals(holder.exp, handler.checkNetworkError(response, (err, exp) -> {
+        }));
     }
 }
