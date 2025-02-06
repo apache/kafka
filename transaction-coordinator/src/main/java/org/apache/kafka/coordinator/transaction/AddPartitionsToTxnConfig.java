@@ -33,11 +33,11 @@ public final class AddPartitionsToTxnConfig {
             "It will not be effective if it is larger than request.timeout.ms";
     public static final String ADD_PARTITIONS_TO_TXN_RETRY_BACKOFF_MS_CONFIG = "add.partitions.to.txn.retry.backoff.ms";
     public static final int ADD_PARTITIONS_TO_TXN_RETRY_BACKOFF_MS_DEFAULT = 20;
-    public static final String ADD_PARTITIONS_TO_TXN_RETRY_BACKOFF_MS_DOC = "The retry backoff when the server attempts" +
+    public static final String ADD_PARTITIONS_TO_TXN_RETRY_BACKOFF_MS_DOC = "The server-side retry backoff when the server attempts" +
         "to add the partition to the transaction";
 
     public static final ConfigDef CONFIG_DEF =  new ConfigDef()
-        .define(ADD_PARTITIONS_TO_TXN_MAX_TIMEOUT_MS_CONFIG, INT, ADD_PARTITIONS_TO_TXN_MAX_TIMEOUT_MS_DEFAULT, atLeast(1), HIGH, ADD_PARTITIONS_TO_TXN_MAX_TIMEOUT_MS_DOC)
+        .define(ADD_PARTITIONS_TO_TXN_MAX_TIMEOUT_MS_CONFIG, INT, ADD_PARTITIONS_TO_TXN_MAX_TIMEOUT_MS_DEFAULT, atLeast(0), HIGH, ADD_PARTITIONS_TO_TXN_MAX_TIMEOUT_MS_DOC)
         .define(ADD_PARTITIONS_TO_TXN_RETRY_BACKOFF_MS_CONFIG, INT, ADD_PARTITIONS_TO_TXN_RETRY_BACKOFF_MS_DEFAULT, atLeast(1), HIGH, ADD_PARTITIONS_TO_TXN_RETRY_BACKOFF_MS_DOC);
 
     private final int addPartitionsToTxnMaxTimeoutMs;
