@@ -421,26 +421,21 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
      */
     lock.writeLock().lock()
     try {
-      val clientIdEntity = clientEntity match {
-        case Some(client: ClientIdEntity) => Some(ClientIdEntity(client.name))
-        case _ => clientEntity
-      }
-        
-      val quotaEntity = KafkaQuotaEntity(userEntity, clientIdEntity)
+      val quotaEntity = KafkaQuotaEntity(userEntity, clientEntity)
 
       if (userEntity.nonEmpty) {
         if (quotaEntity.clientIdEntity.nonEmpty)
           quotaTypesEnabled |= QuotaTypes.UserClientIdQuotaEnabled
         else
           quotaTypesEnabled |= QuotaTypes.UserQuotaEnabled
-      } else if (clientIdEntity.nonEmpty)
+      } else if (clientEntity.nonEmpty)
         quotaTypesEnabled |= QuotaTypes.ClientIdQuotaEnabled
 
       quota match {
         case Some(newQuota) => quotaCallback.updateQuota(clientQuotaType, quotaEntity, newQuota.bound)
         case None => quotaCallback.removeQuota(clientQuotaType, quotaEntity)
       }
-      val updatedEntity = if (userEntity.contains(DefaultUserEntity) || clientIdEntity.contains(DefaultClientIdEntity))
+      val updatedEntity = if (userEntity.contains(DefaultUserEntity) || clientEntity.contains(DefaultClientIdEntity))
         None // more than one entity may need updating, so `updateQuotaMetricConfigs` will go through all metrics
       else
         Some(quotaEntity)
