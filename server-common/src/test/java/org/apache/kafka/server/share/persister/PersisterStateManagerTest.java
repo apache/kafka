@@ -22,12 +22,15 @@ import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.message.DeleteShareGroupStateResponseData;
 import org.apache.kafka.common.message.FindCoordinatorResponseData;
 import org.apache.kafka.common.message.ReadShareGroupStateResponseData;
 import org.apache.kafka.common.message.ReadShareGroupStateSummaryResponseData;
 import org.apache.kafka.common.message.WriteShareGroupStateResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractRequest;
+import org.apache.kafka.common.requests.DeleteShareGroupStateRequest;
+import org.apache.kafka.common.requests.DeleteShareGroupStateResponse;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.ReadShareGroupStateRequest;
@@ -2841,6 +2844,728 @@ class PersisterStateManagerTest {
         } catch (Exception e) {
             fail("Failed to stop state manager", e);
         }
+    }
+
+    @Test
+    public void testDeleteStateRequestCoordinatorFoundSuccessfully() {
+        MockClient client = new MockClient(MOCK_TIME);
+
+        String groupId = "group1";
+        Uuid topicId = Uuid.randomUuid();
+        int partition = 10;
+
+        Node suppliedNode = new Node(0, HOST, PORT);
+        Node coordinatorNode = new Node(1, HOST, PORT);
+
+        String coordinatorKey = SharePartitionKey.asCoordinatorKey(groupId, topicId, partition);
+
+        client.prepareResponseFrom(body -> body instanceof FindCoordinatorRequest
+                && ((FindCoordinatorRequest) body).data().keyType() == FindCoordinatorRequest.CoordinatorType.SHARE.id()
+                && ((FindCoordinatorRequest) body).data().coordinatorKeys().get(0).equals(coordinatorKey),
+            new FindCoordinatorResponse(
+                new FindCoordinatorResponseData()
+                    .setCoordinators(Collections.singletonList(
+                        new FindCoordinatorResponseData.Coordinator()
+                            .setNodeId(1)
+                            .setHost(HOST)
+                            .setPort(PORT)
+                            .setErrorCode(Errors.NONE.code())
+                    ))
+            ),
+            suppliedNode
+        );
+
+        client.prepareResponseFrom(body -> {
+            DeleteShareGroupStateRequest request = (DeleteShareGroupStateRequest) body;
+            String requestGroupId = request.data().groupId();
+            Uuid requestTopicId = request.data().topics().get(0).topicId();
+            int requestPartition = request.data().topics().get(0).partitions().get(0).partition();
+
+            return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
+        }, new DeleteShareGroupStateResponse(
+            new DeleteShareGroupStateResponseData()
+                .setResults(List.of(
+                    new DeleteShareGroupStateResponseData.DeleteStateResult()
+                        .setTopicId(topicId)
+                        .setPartitions(List.of(
+                            new DeleteShareGroupStateResponseData.PartitionResult()
+                                .setPartition(partition)
+                                .setErrorCode(Errors.NONE.code())
+                                .setErrorMessage("")
+                        ))
+                ))
+        ), coordinatorNode);
+
+        ShareCoordinatorMetadataCacheHelper cacheHelper = getDefaultCacheHelper(suppliedNode);
+
+        PersisterStateManager stateManager = PersisterStateManagerBuilder.builder()
+            .withKafkaClient(client)
+            .withTimer(mockTimer)
+            .withCacheHelper(cacheHelper)
+            .build();
+
+        stateManager.start();
+
+        CompletableFuture<DeleteShareGroupStateResponse> future = new CompletableFuture<>();
+
+        PersisterStateManager.DeleteStateHandler handler = spy(stateManager.new DeleteStateHandler(
+            groupId,
+            topicId,
+            partition,
+            future,
+            REQUEST_BACKOFF_MS,
+            REQUEST_BACKOFF_MAX_MS,
+            MAX_RPC_RETRY_ATTEMPTS
+        ));
+
+        stateManager.enqueue(handler);
+
+        CompletableFuture<DeleteShareGroupStateResponse> resultFuture = handler.result();
+
+        DeleteShareGroupStateResponse result = null;
+        try {
+            result = resultFuture.get();
+        } catch (Exception e) {
+            fail("Failed to get result from future", e);
+        }
+
+        DeleteShareGroupStateResponseData.PartitionResult partitionResult = result.data().results().get(0).partitions().get(0);
+
+        verify(handler, times(1)).findShareCoordinatorBuilder();
+        verify(handler, times(0)).requestBuilder();
+
+        // Verifying the coordinator node was populated correctly by the FIND_COORDINATOR request
+        assertEquals(coordinatorNode, handler.getCoordinatorNode());
+
+        // Verifying the result returned in correct
+        assertEquals(partition, partitionResult.partition());
+        assertEquals(Errors.NONE.code(), partitionResult.errorCode());
+
+        try {
+            // Stopping the state manager
+            stateManager.stop();
+        } catch (Exception e) {
+            fail("Failed to stop state manager", e);
+        }
+    }
+
+    @Test
+    public void testDeleteStateRequestRetryWithNotCoordinatorSuccessfulOnRetry() throws InterruptedException, ExecutionException {
+        MockClient client = new MockClient(MOCK_TIME);
+
+        String groupId = "group1";
+        Uuid topicId = Uuid.randomUuid();
+        int partition = 10;
+
+        Node suppliedNode = new Node(0, HOST, PORT);
+        Node coordinatorNode = new Node(1, HOST, PORT);
+
+        String coordinatorKey = SharePartitionKey.asCoordinatorKey(groupId, topicId, partition);
+
+        client.prepareResponseFrom(body -> body instanceof FindCoordinatorRequest
+                && ((FindCoordinatorRequest) body).data().keyType() == FindCoordinatorRequest.CoordinatorType.SHARE.id()
+                && ((FindCoordinatorRequest) body).data().coordinatorKeys().get(0).equals(coordinatorKey),
+            new FindCoordinatorResponse(
+                new FindCoordinatorResponseData()
+                    .setCoordinators(Collections.singletonList(
+                        new FindCoordinatorResponseData.Coordinator()
+                            .setErrorCode(Errors.NOT_COORDINATOR.code())
+                    ))
+            ),
+            suppliedNode
+        );
+
+        client.prepareResponseFrom(body -> body instanceof FindCoordinatorRequest
+                && ((FindCoordinatorRequest) body).data().keyType() == FindCoordinatorRequest.CoordinatorType.SHARE.id()
+                && ((FindCoordinatorRequest) body).data().coordinatorKeys().get(0).equals(coordinatorKey),
+            new FindCoordinatorResponse(
+                new FindCoordinatorResponseData()
+                    .setCoordinators(Collections.singletonList(
+                        new FindCoordinatorResponseData.Coordinator()
+                            .setNodeId(1)
+                            .setHost(HOST)
+                            .setPort(PORT)
+                            .setErrorCode(Errors.NONE.code())
+                    ))
+            ),
+            suppliedNode
+        );
+
+        client.prepareResponseFrom(body -> {
+            DeleteShareGroupStateRequest request = (DeleteShareGroupStateRequest) body;
+            String requestGroupId = request.data().groupId();
+            Uuid requestTopicId = request.data().topics().get(0).topicId();
+            int requestPartition = request.data().topics().get(0).partitions().get(0).partition();
+
+            return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
+        }, new DeleteShareGroupStateResponse(
+            new DeleteShareGroupStateResponseData()
+                .setResults(List.of(
+                    new DeleteShareGroupStateResponseData.DeleteStateResult()
+                        .setTopicId(topicId)
+                        .setPartitions(List.of(
+                            new DeleteShareGroupStateResponseData.PartitionResult()
+                                .setPartition(partition)
+                                .setErrorCode(Errors.NONE.code())
+                                .setErrorMessage("")
+                        ))
+                ))
+        ), coordinatorNode);
+
+        ShareCoordinatorMetadataCacheHelper cacheHelper = getDefaultCacheHelper(suppliedNode);
+
+        PersisterStateManager stateManager = PersisterStateManagerBuilder.builder()
+            .withKafkaClient(client)
+            .withTimer(mockTimer)
+            .withCacheHelper(cacheHelper)
+            .build();
+
+        stateManager.start();
+
+        CompletableFuture<DeleteShareGroupStateResponse> future = new CompletableFuture<>();
+
+        PersisterStateManager.DeleteStateHandler handler = spy(stateManager.new DeleteStateHandler(
+            groupId,
+            topicId,
+            partition,
+            future,
+            REQUEST_BACKOFF_MS,
+            REQUEST_BACKOFF_MAX_MS,
+            MAX_RPC_RETRY_ATTEMPTS
+        ));
+
+        stateManager.enqueue(handler);
+
+        CompletableFuture<DeleteShareGroupStateResponse> resultFuture = handler.result();
+
+        TestUtils.waitForCondition(resultFuture::isDone, TestUtils.DEFAULT_MAX_WAIT_MS, 10L, () -> "Failed to get result from future");
+
+        DeleteShareGroupStateResponse result = resultFuture.get();
+        DeleteShareGroupStateResponseData.PartitionResult partitionResult = result.data().results().get(0).partitions().get(0);
+
+        verify(handler, times(2)).findShareCoordinatorBuilder();
+        verify(handler, times(0)).requestBuilder();
+
+        // Verifying the coordinator node was populated correctly by the FIND_COORDINATOR request
+        assertEquals(coordinatorNode, handler.getCoordinatorNode());
+
+        // Verifying the result returned is correct
+        assertEquals(partition, partitionResult.partition());
+        assertEquals(Errors.NONE.code(), partitionResult.errorCode());
+
+        try {
+            // Stopping the state manager
+            stateManager.stop();
+        } catch (Exception e) {
+            fail("Failed to stop state manager", e);
+        }
+    }
+
+    @Test
+    public void testDeleteStateRequestCoordinatorFoundOnRetry() {
+        MockClient client = new MockClient(MOCK_TIME);
+
+        String groupId = "group1";
+        Uuid topicId = Uuid.randomUuid();
+        int partition = 10;
+
+        Node suppliedNode = new Node(0, HOST, PORT);
+        Node coordinatorNode = new Node(1, HOST, PORT);
+
+        String coordinatorKey = SharePartitionKey.asCoordinatorKey(groupId, topicId, partition);
+
+        client.prepareResponseFrom(body -> body instanceof FindCoordinatorRequest
+                && ((FindCoordinatorRequest) body).data().keyType() == FindCoordinatorRequest.CoordinatorType.SHARE.id()
+                && ((FindCoordinatorRequest) body).data().coordinatorKeys().get(0).equals(coordinatorKey),
+            new FindCoordinatorResponse(
+                new FindCoordinatorResponseData()
+                    .setCoordinators(Collections.singletonList(
+                        new FindCoordinatorResponseData.Coordinator()
+                            .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
+                    ))
+            ),
+            suppliedNode
+        );
+
+        client.prepareResponseFrom(body -> body instanceof FindCoordinatorRequest
+                && ((FindCoordinatorRequest) body).data().keyType() == FindCoordinatorRequest.CoordinatorType.SHARE.id()
+                && ((FindCoordinatorRequest) body).data().coordinatorKeys().get(0).equals(coordinatorKey),
+            new FindCoordinatorResponse(
+                new FindCoordinatorResponseData()
+                    .setCoordinators(Collections.singletonList(
+                        new FindCoordinatorResponseData.Coordinator()
+                            .setNodeId(1)
+                            .setHost(HOST)
+                            .setPort(PORT)
+                            .setErrorCode(Errors.NONE.code())
+                    ))
+            ),
+            suppliedNode
+        );
+
+        client.prepareResponseFrom(body -> {
+            DeleteShareGroupStateRequest request = (DeleteShareGroupStateRequest) body;
+            String requestGroupId = request.data().groupId();
+            Uuid requestTopicId = request.data().topics().get(0).topicId();
+            int requestPartition = request.data().topics().get(0).partitions().get(0).partition();
+
+            return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
+        }, new DeleteShareGroupStateResponse(
+            new DeleteShareGroupStateResponseData()
+                .setResults(List.of(
+                    new DeleteShareGroupStateResponseData.DeleteStateResult()
+                        .setTopicId(topicId)
+                        .setPartitions(List.of(
+                            new DeleteShareGroupStateResponseData.PartitionResult()
+                                .setPartition(partition)
+                                .setErrorCode(Errors.NONE.code())
+                                .setErrorMessage("")
+                        ))
+                ))
+        ), coordinatorNode);
+
+        ShareCoordinatorMetadataCacheHelper cacheHelper = getDefaultCacheHelper(suppliedNode);
+
+        PersisterStateManager stateManager = PersisterStateManagerBuilder.builder()
+            .withKafkaClient(client)
+            .withTimer(mockTimer)
+            .withCacheHelper(cacheHelper)
+            .build();
+
+        stateManager.start();
+
+        CompletableFuture<DeleteShareGroupStateResponse> future = new CompletableFuture<>();
+
+        PersisterStateManager.DeleteStateHandler handler = spy(stateManager.new DeleteStateHandler(
+            groupId,
+            topicId,
+            partition,
+            future,
+            REQUEST_BACKOFF_MS,
+            REQUEST_BACKOFF_MAX_MS,
+            MAX_RPC_RETRY_ATTEMPTS
+        ));
+
+        stateManager.enqueue(handler);
+
+        CompletableFuture<DeleteShareGroupStateResponse> resultFuture = handler.result();
+
+        DeleteShareGroupStateResponse result = null;
+        try {
+            result = resultFuture.get();
+        } catch (Exception e) {
+            fail("Failed to get result from future", e);
+        }
+
+        DeleteShareGroupStateResponseData.PartitionResult partitionResult = result.data().results().get(0).partitions().get(0);
+
+        verify(handler, times(2)).findShareCoordinatorBuilder();
+        verify(handler, times(0)).requestBuilder();
+
+        // Verifying the coordinator node was populated correctly by the FIND_COORDINATOR request
+        assertEquals(coordinatorNode, handler.getCoordinatorNode());
+
+        // Verifying the result returned in correct
+        assertEquals(partition, partitionResult.partition());
+        assertEquals(Errors.NONE.code(), partitionResult.errorCode());
+
+        try {
+            // Stopping the state manager
+            stateManager.stop();
+        } catch (Exception e) {
+            fail("Failed to stop state manager", e);
+        }
+    }
+
+    @Test
+    public void testDeleteStateRequestWithCoordinatorNodeLookup() {
+        MockClient client = new MockClient(MOCK_TIME);
+
+        String groupId = "group1";
+        Uuid topicId = Uuid.randomUuid();
+        int partition = 10;
+
+        Node coordinatorNode = new Node(1, HOST, PORT);
+
+        client.prepareResponseFrom(body -> {
+            DeleteShareGroupStateRequest request = (DeleteShareGroupStateRequest) body;
+            String requestGroupId = request.data().groupId();
+            Uuid requestTopicId = request.data().topics().get(0).topicId();
+            int requestPartition = request.data().topics().get(0).partitions().get(0).partition();
+
+            return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
+        }, new DeleteShareGroupStateResponse(
+            new DeleteShareGroupStateResponseData()
+                .setResults(List.of(
+                    new DeleteShareGroupStateResponseData.DeleteStateResult()
+                        .setTopicId(topicId)
+                        .setPartitions(List.of(
+                            new DeleteShareGroupStateResponseData.PartitionResult()
+                                .setPartition(partition)
+                                .setErrorCode(Errors.NONE.code())
+                                .setErrorMessage("")
+                        ))
+                ))
+        ), coordinatorNode);
+
+        ShareCoordinatorMetadataCacheHelper cacheHelper = getCoordinatorCacheHelper(coordinatorNode);
+
+        PersisterStateManager stateManager = PersisterStateManagerBuilder.builder()
+            .withKafkaClient(client)
+            .withTimer(mockTimer)
+            .withCacheHelper(cacheHelper)
+            .build();
+
+        stateManager.start();
+
+        CompletableFuture<DeleteShareGroupStateResponse> future = new CompletableFuture<>();
+
+        PersisterStateManager.DeleteStateHandler handler = spy(stateManager.new DeleteStateHandler(
+            groupId,
+            topicId,
+            partition,
+            future,
+            REQUEST_BACKOFF_MS,
+            REQUEST_BACKOFF_MAX_MS,
+            MAX_RPC_RETRY_ATTEMPTS
+        ));
+
+        stateManager.enqueue(handler);
+
+        CompletableFuture<DeleteShareGroupStateResponse> resultFuture = handler.result();
+
+        DeleteShareGroupStateResponse result = null;
+        try {
+            result = resultFuture.get();
+        } catch (Exception e) {
+            fail("Failed to get result from future", e);
+        }
+
+        DeleteShareGroupStateResponseData.PartitionResult partitionResult = result.data().results().get(0).partitions().get(0);
+
+        verify(handler, times(0)).findShareCoordinatorBuilder();
+        verify(handler, times(0)).requestBuilder();
+        verify(handler, times(1)).onComplete(any());
+
+        // Verifying the coordinator node was populated correctly by the FIND_COORDINATOR request
+        assertEquals(coordinatorNode, handler.getCoordinatorNode());
+
+        // Verifying the result returned in correct
+        assertEquals(partition, partitionResult.partition());
+        assertEquals(Errors.NONE.code(), partitionResult.errorCode());
+
+        try {
+            // Stopping the state manager
+            stateManager.stop();
+        } catch (Exception e) {
+            fail("Failed to stop state manager", e);
+        }
+    }
+
+    @Test
+    public void testDeleteStateRequestWithRetryAndCoordinatorNodeLookup() {
+        MockClient client = new MockClient(MOCK_TIME);
+
+        String groupId = "group1";
+        Uuid topicId = Uuid.randomUuid();
+        int partition = 10;
+
+        Node coordinatorNode = new Node(1, HOST, PORT);
+
+        client.prepareResponseFrom(body -> {
+            DeleteShareGroupStateRequest request = (DeleteShareGroupStateRequest) body;
+            String requestGroupId = request.data().groupId();
+            Uuid requestTopicId = request.data().topics().get(0).topicId();
+            int requestPartition = request.data().topics().get(0).partitions().get(0).partition();
+
+            return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
+        }, new DeleteShareGroupStateResponse(
+            new DeleteShareGroupStateResponseData()
+                .setResults(List.of(
+                    new DeleteShareGroupStateResponseData.DeleteStateResult()
+                        .setTopicId(topicId)
+                        .setPartitions(List.of(
+                            new DeleteShareGroupStateResponseData.PartitionResult()
+                                .setPartition(partition)
+                                .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code())
+                                .setErrorMessage("")
+                        ))
+                ))
+        ), coordinatorNode);
+
+        client.prepareResponseFrom(body -> {
+            DeleteShareGroupStateRequest request = (DeleteShareGroupStateRequest) body;
+            String requestGroupId = request.data().groupId();
+            Uuid requestTopicId = request.data().topics().get(0).topicId();
+            int requestPartition = request.data().topics().get(0).partitions().get(0).partition();
+
+            return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
+        }, new DeleteShareGroupStateResponse(
+            new DeleteShareGroupStateResponseData()
+                .setResults(List.of(
+                    new DeleteShareGroupStateResponseData.DeleteStateResult()
+                        .setTopicId(topicId)
+                        .setPartitions(List.of(
+                            new DeleteShareGroupStateResponseData.PartitionResult()
+                                .setPartition(partition)
+                                .setErrorCode(Errors.NONE.code())
+                                .setErrorMessage("")
+                        ))
+                ))
+        ), coordinatorNode);
+
+        ShareCoordinatorMetadataCacheHelper cacheHelper = getCoordinatorCacheHelper(coordinatorNode);
+
+        PersisterStateManager stateManager = PersisterStateManagerBuilder.builder()
+            .withKafkaClient(client)
+            .withTimer(mockTimer)
+            .withCacheHelper(cacheHelper)
+            .build();
+
+        stateManager.start();
+
+        CompletableFuture<DeleteShareGroupStateResponse> future = new CompletableFuture<>();
+
+        PersisterStateManager.DeleteStateHandler handler = spy(stateManager.new DeleteStateHandler(
+            groupId,
+            topicId,
+            partition,
+            future,
+            REQUEST_BACKOFF_MS,
+            REQUEST_BACKOFF_MAX_MS,
+            MAX_RPC_RETRY_ATTEMPTS
+        ));
+
+        stateManager.enqueue(handler);
+
+        CompletableFuture<DeleteShareGroupStateResponse> resultFuture = handler.result();
+
+        DeleteShareGroupStateResponse result = null;
+        try {
+            result = resultFuture.get();
+        } catch (Exception e) {
+            fail("Failed to get result from future", e);
+        }
+
+        DeleteShareGroupStateResponseData.PartitionResult partitionResult = result.data().results().get(0).partitions().get(0);
+
+        verify(handler, times(0)).findShareCoordinatorBuilder();
+        verify(handler, times(0)).requestBuilder();
+        verify(handler, times(2)).onComplete(any());
+
+        // Verifying the coordinator node was populated correctly by the FIND_COORDINATOR request
+        assertEquals(coordinatorNode, handler.getCoordinatorNode());
+
+        // Verifying the result returned in correct
+        assertEquals(partition, partitionResult.partition());
+        assertEquals(Errors.NONE.code(), partitionResult.errorCode());
+
+        try {
+            // Stopping the state manager
+            stateManager.stop();
+        } catch (Exception e) {
+            fail("Failed to stop state manager", e);
+        }
+    }
+
+    @Test
+    public void testDeleteStateRequestFailedMaxRetriesExhausted() {
+        MockClient client = new MockClient(MOCK_TIME);
+
+        String groupId = "group1";
+        Uuid topicId = Uuid.randomUuid();
+        int partition = 10;
+
+        Node coordinatorNode = new Node(1, HOST, PORT);
+
+        client.prepareResponseFrom(body -> {
+            DeleteShareGroupStateRequest request = (DeleteShareGroupStateRequest) body;
+            String requestGroupId = request.data().groupId();
+            Uuid requestTopicId = request.data().topics().get(0).topicId();
+            int requestPartition = request.data().topics().get(0).partitions().get(0).partition();
+
+            return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
+        }, new DeleteShareGroupStateResponse(
+            new DeleteShareGroupStateResponseData()
+                .setResults(List.of(
+                    new DeleteShareGroupStateResponseData.DeleteStateResult()
+                        .setTopicId(topicId)
+                        .setPartitions(List.of(
+                            new DeleteShareGroupStateResponseData.PartitionResult()
+                                .setPartition(partition)
+                                .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code())
+                                .setErrorMessage("")
+                        ))
+                ))
+        ), coordinatorNode);
+
+        client.prepareResponseFrom(body -> {
+            DeleteShareGroupStateRequest request = (DeleteShareGroupStateRequest) body;
+            String requestGroupId = request.data().groupId();
+            Uuid requestTopicId = request.data().topics().get(0).topicId();
+            int requestPartition = request.data().topics().get(0).partitions().get(0).partition();
+
+            return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
+        }, new DeleteShareGroupStateResponse(
+            new DeleteShareGroupStateResponseData()
+                .setResults(List.of(
+                    new DeleteShareGroupStateResponseData.DeleteStateResult()
+                        .setTopicId(topicId)
+                        .setPartitions(List.of(
+                            new DeleteShareGroupStateResponseData.PartitionResult()
+                                .setPartition(partition)
+                                .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code())
+                                .setErrorMessage("")
+                        ))
+                ))
+        ), coordinatorNode);
+
+        client.prepareResponseFrom(body -> {
+            DeleteShareGroupStateRequest request = (DeleteShareGroupStateRequest) body;
+            String requestGroupId = request.data().groupId();
+            Uuid requestTopicId = request.data().topics().get(0).topicId();
+            int requestPartition = request.data().topics().get(0).partitions().get(0).partition();
+
+            return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
+        }, new DeleteShareGroupStateResponse(
+            new DeleteShareGroupStateResponseData()
+                .setResults(List.of(
+                    new DeleteShareGroupStateResponseData.DeleteStateResult()
+                        .setTopicId(topicId)
+                        .setPartitions(List.of(
+                            new DeleteShareGroupStateResponseData.PartitionResult()
+                                .setPartition(partition)
+                                .setErrorCode(Errors.NONE.code())
+                                .setErrorMessage("")
+                        ))
+                ))
+        ), coordinatorNode);
+
+        ShareCoordinatorMetadataCacheHelper cacheHelper = getCoordinatorCacheHelper(coordinatorNode);
+
+        PersisterStateManager stateManager = PersisterStateManagerBuilder.builder()
+            .withKafkaClient(client)
+            .withTimer(mockTimer)
+            .withCacheHelper(cacheHelper)
+            .build();
+
+        stateManager.start();
+
+        CompletableFuture<DeleteShareGroupStateResponse> future = new CompletableFuture<>();
+
+        PersisterStateManager.DeleteStateHandler handler = spy(stateManager.new DeleteStateHandler(
+            groupId,
+            topicId,
+            partition,
+            future,
+            REQUEST_BACKOFF_MS,
+            REQUEST_BACKOFF_MAX_MS,
+            2
+        ));
+
+        stateManager.enqueue(handler);
+
+        CompletableFuture<DeleteShareGroupStateResponse> resultFuture = handler.result();
+
+        DeleteShareGroupStateResponse result = null;
+        try {
+            result = resultFuture.get();
+        } catch (Exception e) {
+            fail("Failed to get result from future", e);
+        }
+
+        DeleteShareGroupStateResponseData.PartitionResult partitionResult = result.data().results().get(0).partitions().get(0);
+
+        verify(handler, times(0)).findShareCoordinatorBuilder();
+        verify(handler, times(0)).requestBuilder();
+        verify(handler, times(2)).onComplete(any());
+
+        // Verifying the coordinator node was populated correctly by the FIND_COORDINATOR request
+        assertEquals(coordinatorNode, handler.getCoordinatorNode());
+
+        // Verifying the result returned in correct
+        assertEquals(partition, partitionResult.partition());
+        assertEquals(Errors.COORDINATOR_LOAD_IN_PROGRESS.code(), partitionResult.errorCode());
+
+        try {
+            // Stopping the state manager
+            stateManager.stop();
+        } catch (Exception e) {
+            fail("Failed to stop state manager", e);
+        }
+    }
+
+    @Test
+    public void testDeleteStateRequestBatchingWithCoordinatorNodeLookup() throws Exception {
+        MockClient client = new MockClient(MOCK_TIME);
+
+        String groupId = "group1";
+        Uuid topicId = Uuid.randomUuid();
+        int partition = 10;
+
+        Node coordinatorNode = new Node(1, HOST, PORT);
+
+        client.prepareResponseFrom(body -> {
+            DeleteShareGroupStateRequest request = (DeleteShareGroupStateRequest) body;
+            String requestGroupId = request.data().groupId();
+            Uuid requestTopicId = request.data().topics().get(0).topicId();
+            int requestPartition = request.data().topics().get(0).partitions().get(0).partition();
+
+            return requestGroupId.equals(groupId) && requestTopicId == topicId && requestPartition == partition;
+        }, new DeleteShareGroupStateResponse(
+            new DeleteShareGroupStateResponseData()
+                .setResults(List.of(
+                    new DeleteShareGroupStateResponseData.DeleteStateResult()
+                        .setTopicId(topicId)
+                        .setPartitions(List.of(
+                            new DeleteShareGroupStateResponseData.PartitionResult()
+                                .setPartition(partition)
+                                .setErrorCode(Errors.NONE.code())
+                                .setErrorMessage("")
+                        ))
+                ))
+        ), coordinatorNode);
+
+        ShareCoordinatorMetadataCacheHelper cacheHelper = getCoordinatorCacheHelper(coordinatorNode);
+
+        PersisterStateManager stateManager = PersisterStateManagerBuilder.builder()
+            .withKafkaClient(client)
+            .withTimer(mockTimer)
+            .withCacheHelper(cacheHelper)
+            .build();
+
+        AtomicBoolean isBatchingSuccess = new AtomicBoolean(false);
+        stateManager.setGenerateCallback(() -> {
+            Map<PersisterStateManager.RPCType, Map<String, List<PersisterStateManager.PersisterStateManagerHandler>>> handlersPerType = stateManager.nodeRPCMap().get(coordinatorNode);
+            if (handlersPerType != null && handlersPerType.containsKey(PersisterStateManager.RPCType.DELETE) && handlersPerType.get(PersisterStateManager.RPCType.DELETE).containsKey(groupId)) {
+                if (handlersPerType.get(PersisterStateManager.RPCType.DELETE).get(groupId).size() > 2)
+                    isBatchingSuccess.set(true);
+            }
+        });
+
+        stateManager.start();
+
+        CompletableFuture<DeleteShareGroupStateResponse> future = new CompletableFuture<>();
+
+        List<PersisterStateManager.DeleteStateHandler> handlers = new ArrayList<>();
+        for (int i = 0; i < 5; i++) {
+            PersisterStateManager.DeleteStateHandler handler = spy(stateManager.new DeleteStateHandler(
+                groupId,
+                topicId,
+                partition,
+                future,
+                REQUEST_BACKOFF_MS,
+                REQUEST_BACKOFF_MAX_MS,
+                MAX_RPC_RETRY_ATTEMPTS
+            ));
+            handlers.add(handler);
+            stateManager.enqueue(handler);
+        }
+
+        CompletableFuture.allOf(handlers.stream()
+            .map(PersisterStateManager.DeleteStateHandler::result).toArray(CompletableFuture[]::new)).get();
+
+        TestUtils.waitForCondition(isBatchingSuccess::get, TestUtils.DEFAULT_MAX_WAIT_MS, 10L, () -> "unable to verify batching");
     }
 
     @Test

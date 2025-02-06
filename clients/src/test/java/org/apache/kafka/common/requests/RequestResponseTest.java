@@ -407,7 +407,7 @@ public class RequestResponseTest {
     public void testApiVersionsSerialization() {
         for (short version : API_VERSIONS.allVersions()) {
             checkErrorResponse(createApiVersionRequest(version), new UnsupportedVersionException("Not Supported"));
-            checkResponse(TestUtils.defaultApiVersionsResponse(ApiMessageType.ListenerType.ZK_BROKER), version);
+            checkResponse(TestUtils.defaultApiVersionsResponse(ApiMessageType.ListenerType.BROKER), version);
         }
     }
 
@@ -840,7 +840,7 @@ public class RequestResponseTest {
     }
 
     private ApiVersionsResponse defaultApiVersionsResponse() {
-        return TestUtils.defaultApiVersionsResponse(ApiMessageType.ListenerType.ZK_BROKER);
+        return TestUtils.defaultApiVersionsResponse(ApiMessageType.ListenerType.BROKER);
     }
 
     @Test
@@ -2024,7 +2024,8 @@ public class RequestResponseTest {
                         .setPartitionIndex(1)
                         .setHighWatermark(1000000)
                         .setLogStartOffset(0)
-                        .setAbortedTransactions(abortedTransactions));
+                        .setAbortedTransactions(abortedTransactions)
+                        .setRecords(MemoryRecords.EMPTY));
         return FetchResponse.parse(FetchResponse.of(Errors.NONE, 25, sessionId,
             responseData).serialize(FETCH.latestVersion()), FETCH.latestVersion());
     }
@@ -2048,7 +2049,8 @@ public class RequestResponseTest {
                         .setPartitionIndex(1)
                         .setHighWatermark(1000000)
                         .setLogStartOffset(0)
-                        .setAbortedTransactions(abortedTransactions));
+                        .setAbortedTransactions(abortedTransactions)
+                        .setRecords(MemoryRecords.EMPTY));
         return FetchResponse.parse(FetchResponse.of(Errors.NONE, 25, INVALID_SESSION_ID,
             responseData).serialize(FETCH.latestVersion()), FETCH.latestVersion());
     }

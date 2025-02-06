@@ -16,7 +16,7 @@
 {
   "apiKey": 23,
   "type": "request",
-  "listeners": ["zkBroker", "broker"],
+  "listeners": ["broker"],
   "name": "OffsetForLeaderEpochRequest",
   // Versions 0-1 were removed in Apache Kafka 4.0, Version 2 is the new baseline.
   //

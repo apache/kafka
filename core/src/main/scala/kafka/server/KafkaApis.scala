@@ -21,7 +21,6 @@ import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinat
 import kafka.network.RequestChannel
 import kafka.server.QuotaFactory.{QuotaManagers, UNBOUNDED_QUOTA}
 import kafka.server.handlers.DescribeTopicPartitionsRequestHandler
-import kafka.server.metadata.{ConfigRepository, KRaftMetadataCache}
 import kafka.server.share.SharePartitionManager
 import kafka.utils.Logging
 import org.apache.kafka.admin.AdminUtils
@@ -59,6 +58,7 @@ import org.apache.kafka.common.utils.{ProducerIdAndEpoch, Time}
 import org.apache.kafka.common.{Node, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.coordinator.group.{Group, GroupCoordinator}
 import org.apache.kafka.coordinator.share.ShareCoordinator
+import org.apache.kafka.metadata.ConfigRepository
 import org.apache.kafka.server.ClientMetricsManager
 import org.apache.kafka.server.authorizer._
 import org.apache.kafka.server.common.{GroupVersion, RequestLocal, TransactionVersion}
@@ -113,11 +113,8 @@ class KafkaApis(val requestChannel: RequestChannel,
   val requestHelper = new RequestHandlerHelper(requestChannel, quotas, time)
   val aclApis = new AclApis(authHelper, authorizer, requestHelper, "broker", config)
   val configManager = new ConfigAdminManager(brokerId, config, configRepository)
-  val describeTopicPartitionsRequestHandler : Option[DescribeTopicPartitionsRequestHandler] = metadataCache match {
-    case kRaftMetadataCache: KRaftMetadataCache =>
-      Some(new DescribeTopicPartitionsRequestHandler(kRaftMetadataCache, authHelper, config))
-    case _ => None
-  }
+  val describeTopicPartitionsRequestHandler = new DescribeTopicPartitionsRequestHandler(
+    metadataCache, authHelper, config)
 
   def close(): Unit = {
     aclApis.close()
@@ -967,21 +964,14 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleDescribeTopicPartitionsRequest(request: RequestChannel.Request): Unit = {
-    describeTopicPartitionsRequestHandler match {
-      case Some(handler) => {
-        val response = handler.handleDescribeTopicPartitionsRequest(request)
-        trace("Sending topic partitions metadata %s for correlation id %d to client %s".format(response.topics().asScala.mkString(","),
-          request.header.correlationId, request.header.clientId))
+    val response = describeTopicPartitionsRequestHandler.handleDescribeTopicPartitionsRequest(request)
+    trace("Sending topic partitions metadata %s for correlation id %d to client %s".format(response.topics().asScala.mkString(","),
+      request.header.correlationId, request.header.clientId))
 
-        requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {
-          response.setThrottleTimeMs(requestThrottleMs)
-          new DescribeTopicPartitionsResponse(response)
-        })
-      }
-      case None => {
-        requestHelper.sendMaybeThrottle(request, request.body[DescribeTopicPartitionsRequest].getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
-      }
-    }
+    requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {
+      response.setThrottleTimeMs(requestThrottleMs)
+      new DescribeTopicPartitionsResponse(response)
+    })
   }
 
   /**
@@ -2247,22 +2237,22 @@ class KafkaApis(val requestChannel: RequestChannel,
     val describeTokenRequest = request.body[DescribeDelegationTokenRequest]
 
     // the callback for sending a describe token response
-    def sendResponseCallback(error: Errors, tokenDetails: List[DelegationToken]): Unit = {
+    def sendResponseCallback(error: Errors, tokenDetails: util.List[DelegationToken]): Unit = {
       requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-        new DescribeDelegationTokenResponse(request.context.requestVersion(), requestThrottleMs, error, tokenDetails.asJava))
+        new DescribeDelegationTokenResponse(request.context.requestVersion(), requestThrottleMs, error, tokenDetails))
       trace("Sending describe token response for correlation id %d to client %s."
         .format(request.header.correlationId, request.header.clientId))
     }
 
     if (!allowTokenRequests(request))
-      sendResponseCallback(Errors.DELEGATION_TOKEN_REQUEST_NOT_ALLOWED, List.empty)
+      sendResponseCallback(Errors.DELEGATION_TOKEN_REQUEST_NOT_ALLOWED, Collections.emptyList)
     else if (!config.tokenAuthEnabled)
-      sendResponseCallback(Errors.DELEGATION_TOKEN_AUTH_DISABLED, List.empty)
+      sendResponseCallback(Errors.DELEGATION_TOKEN_AUTH_DISABLED, Collections.emptyList)
     else {
       val requestPrincipal = request.context.principal
 
       if (describeTokenRequest.ownersListEmpty()) {
-        sendResponseCallback(Errors.NONE, List())
+        sendResponseCallback(Errors.NONE, Collections.emptyList)
       }
       else {
         val owners = if (describeTokenRequest.data.owners == null)
@@ -2806,9 +2796,9 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     // Handling the Fetch from the ShareFetchRequest.
     // Variable to store the topic partition wise result of fetching.
-    val fetchResult: CompletableFuture[Map[TopicIdPartition, ShareFetchResponseData.PartitionData]] =
-      handleFetchFromShareFetchRequest(
+    val fetchResult: CompletableFuture[Map[TopicIdPartition, ShareFetchResponseData.PartitionData]] = handleFetchFromShareFetchRequest(
       request,
+      shareSessionEpoch,
       erroneousAndValidPartitionData,
       sharePartitionManager,
       authorizedTopics
@@ -2903,6 +2893,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   // Visible for Testing
   def handleFetchFromShareFetchRequest(request: RequestChannel.Request,
+                                       shareSessionEpoch: Int,
                                        erroneousAndValidPartitionData: ErroneousAndValidPartitionData,
                                        sharePartitionManagerInstance: SharePartitionManager,
                                        authorizedTopics: Set[String]
@@ -2964,6 +2955,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         groupId,
         shareFetchRequest.data.memberId,
         params,
+        shareSessionEpoch,
         shareFetchRequest.data.batchSize,
         interestedWithMaxBytes
       ).thenApply{ result =>
@@ -3158,9 +3150,22 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def handleDeleteShareGroupStateRequest(request: RequestChannel.Request): Unit = {
     val deleteShareGroupStateRequest = request.body[DeleteShareGroupStateRequest]
-    // TODO: Implement the DeleteShareGroupStateRequest handling
-    requestHelper.sendMaybeThrottle(request, deleteShareGroupStateRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
-    CompletableFuture.completedFuture[Unit](())
+    authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
+
+    shareCoordinator match {
+      case None => requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+        deleteShareGroupStateRequest.getErrorResponse(requestThrottleMs,
+          new ApiException("Share coordinator is not enabled.")))
+
+      case Some(coordinator) => coordinator.deleteState(request.context, deleteShareGroupStateRequest.data)
+        .handle[Unit] { (response, exception) =>
+          if (exception != null) {
+            requestHelper.sendMaybeThrottle(request, deleteShareGroupStateRequest.getErrorResponse(exception))
+          } else {
+            requestHelper.sendMaybeThrottle(request, new DeleteShareGroupStateResponse(response))
+          }
+        }
+    }
   }
 
   def handleReadShareGroupStateSummaryRequest(request: RequestChannel.Request): Unit = {
@@ -3185,9 +3190,28 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def handleDescribeShareGroupOffsetsRequest(request: RequestChannel.Request): Unit = {
     val describeShareGroupOffsetsRequest = request.body[DescribeShareGroupOffsetsRequest]
-    // TODO: Implement the DescribeShareGroupOffsetsRequest handling
-    requestHelper.sendMaybeThrottle(request, describeShareGroupOffsetsRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
-    CompletableFuture.completedFuture[Unit](())
+
+    if (!isShareGroupProtocolEnabled) {
+      requestHelper.sendMaybeThrottle(request, describeShareGroupOffsetsRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+      CompletableFuture.completedFuture[Unit](())
+    } else if (!authHelper.authorize(request.context, READ, GROUP, describeShareGroupOffsetsRequest.data.groupId)) {
+      requestHelper.sendMaybeThrottle(request, describeShareGroupOffsetsRequest.getErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED.exception))
+      CompletableFuture.completedFuture[Unit](())
+    } else {
+      groupCoordinator.describeShareGroupOffsets(
+        request.context,
+        describeShareGroupOffsetsRequest.data,
+      ).handle[Unit] { (response, exception) =>
+        if (exception != null) {
+          requestHelper.sendMaybeThrottle(request, describeShareGroupOffsetsRequest.getErrorResponse(exception))
+        } else {
+          requestHelper.sendMaybeThrottle(
+            request,
+            new DescribeShareGroupOffsetsResponse(response)
+          )
+        }
+      }
+    }
   }
 
   // Visible for Testing

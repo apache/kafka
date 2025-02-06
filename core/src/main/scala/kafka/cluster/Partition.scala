@@ -23,7 +23,6 @@ import kafka.controller.StateChangeLogger
 import kafka.log._
 import kafka.log.remote.RemoteLogManager
 import kafka.server._
-import kafka.server.metadata.KRaftMetadataCache
 import kafka.server.share.DelayedShareFetch
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils._
@@ -618,9 +617,9 @@ class Partition(val topicPartition: TopicPartition,
 
   // Returns a VerificationGuard if we need to verify. This starts or continues the verification process. Otherwise return the
   // sentinel VerificationGuard.
-  def maybeStartTransactionVerification(producerId: Long, sequence: Int, epoch: Short): VerificationGuard = {
+  def maybeStartTransactionVerification(producerId: Long, sequence: Int, epoch: Short, supportsEpochBump: Boolean): VerificationGuard = {
     leaderLogIfLocal match {
-      case Some(log) => log.maybeStartTransactionVerification(producerId, sequence, epoch)
+      case Some(log) => log.maybeStartTransactionVerification(producerId, sequence, epoch, supportsEpochBump)
       case None => throw new NotLeaderOrFollowerException()
     }
   }
@@ -1050,28 +1049,23 @@ class Partition(val topicPartition: TopicPartition,
   }
 
   private def isReplicaIsrEligible(followerReplicaId: Int): Boolean = {
-    metadataCache match {
-      // In KRaft mode, only a replica which meets all of the following requirements is allowed to join the ISR.
-      // 1. It is not fenced.
-      // 2. It is not in controlled shutdown.
-      // 3. Its metadata cached broker epoch matches its Fetch request broker epoch. Or the Fetch
-      //    request broker epoch is -1 which bypasses the epoch verification.
-      case kRaftMetadataCache: KRaftMetadataCache =>
-        val mayBeReplica = getReplica(followerReplicaId)
-        // The topic is already deleted and we don't have any replica information. In this case, we can return false
-        // so as to avoid NPE
-        if (mayBeReplica.isEmpty) {
-          warn(s"The replica state of replica ID:[$followerReplicaId] doesn't exist in the leader node. It might because the topic is already deleted.")
-          return false
-        }
-        val storedBrokerEpoch = mayBeReplica.get.stateSnapshot.brokerEpoch
-        val cachedBrokerEpoch = kRaftMetadataCache.getAliveBrokerEpoch(followerReplicaId)
-        !kRaftMetadataCache.isBrokerFenced(followerReplicaId) &&
-          !kRaftMetadataCache.isBrokerShuttingDown(followerReplicaId) &&
-          isBrokerEpochIsrEligible(storedBrokerEpoch, cachedBrokerEpoch)
-
-      case _ => true
+    // A replica which meets all of the following requirements is allowed to join the ISR.
+    // 1. It is not fenced.
+    // 2. It is not in controlled shutdown.
+    // 3. Its metadata cached broker epoch matches its Fetch request broker epoch. Or the Fetch
+    //    request broker epoch is -1 which bypasses the epoch verification.
+    val mayBeReplica = getReplica(followerReplicaId)
+    // The topic is already deleted and we don't have any replica information. In this case, we can return false
+    // so as to avoid NPE
+    if (mayBeReplica.isEmpty) {
+      warn(s"The replica state of replica ID:[$followerReplicaId] doesn't exist in the leader node. It might because the topic is already deleted.")
+      return false
     }
+    val storedBrokerEpoch = mayBeReplica.get.stateSnapshot.brokerEpoch
+    val cachedBrokerEpoch = metadataCache.getAliveBrokerEpoch(followerReplicaId)
+    !metadataCache.isBrokerFenced(followerReplicaId) &&
+      !metadataCache.isBrokerShuttingDown(followerReplicaId) &&
+      isBrokerEpochIsrEligible(storedBrokerEpoch, cachedBrokerEpoch)
   }
 
   private def isBrokerEpochIsrEligible(storedBrokerEpoch: Option[Long], cachedBrokerEpoch: Option[Long]): Boolean = {
@@ -1635,24 +1629,6 @@ class Partition(val topicPartition: TopicPartition,
     localLog.fetchOffsetSnapshot
   }
 
-  def legacyFetchOffsetsForTimestamp(timestamp: Long,
-                                     maxNumOffsets: Int,
-                                     isFromConsumer: Boolean,
-                                     fetchOnlyFromLeader: Boolean): Seq[Long] = inReadLock(leaderIsrUpdateLock) {
-    val localLog = localLogWithEpochOrThrow(Optional.empty(), fetchOnlyFromLeader)
-    val allOffsets = localLog.legacyFetchOffsetsBefore(timestamp, maxNumOffsets)
-
-    if (!isFromConsumer) {
-      allOffsets
-    } else {
-      val hw = localLog.highWatermark
-      if (allOffsets.exists(_ > hw))
-        hw +: allOffsets.dropWhile(_ > hw)
-      else
-        allOffsets
-    }
-  }
-
   def logStartOffset: Long = {
     inReadLock(leaderIsrUpdateLock) {
       leaderLogIfLocal.map(_.logStartOffset).getOrElse(-1)
@@ -1811,9 +1787,7 @@ class Partition(val topicPartition: TopicPartition,
   private def addBrokerEpochToIsr(isr: List[Int]): List[BrokerState] = {
     isr.map { brokerId =>
       val brokerState = new BrokerState().setBrokerId(brokerId)
-      if (!metadataCache.isInstanceOf[KRaftMetadataCache]) {
-        brokerState.setBrokerEpoch(-1)
-      } else if (brokerId == localBrokerId) {
+      if (brokerId == localBrokerId) {
         brokerState.setBrokerEpoch(localBrokerEpochSupplier())
       } else {
         val replica = remoteReplicasMap.get(brokerId)

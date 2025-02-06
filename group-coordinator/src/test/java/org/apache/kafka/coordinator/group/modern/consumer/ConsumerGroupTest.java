@@ -81,8 +81,6 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
 
 public class ConsumerGroupTest {
 
@@ -426,7 +424,6 @@ public class ConsumerGroupTest {
 
     @Test
     public void testGroupState() {
-        Uuid fooTopicId = Uuid.randomUuid();
         ConsumerGroup consumerGroup = createConsumerGroup("foo");
         assertEquals(ConsumerGroup.ConsumerGroupState.EMPTY, consumerGroup.state());
 
@@ -1293,46 +1290,6 @@ public class ConsumerGroupTest {
             new MetadataImageBuilder().build().topics());
 
         assertEquals(expected, actual);
-    }
-
-    @Test
-    public void testStateTransitionMetrics() {
-        // Confirm metrics is not updated when a new ConsumerGroup is created but only when the group transitions
-        // its state.
-        GroupCoordinatorMetricsShard metrics = mock(GroupCoordinatorMetricsShard.class);
-        ConsumerGroup consumerGroup = new ConsumerGroup(
-            new SnapshotRegistry(new LogContext()),
-            "group-id",
-            metrics
-        );
-
-        assertEquals(ConsumerGroup.ConsumerGroupState.EMPTY, consumerGroup.state());
-        verify(metrics, times(0)).onConsumerGroupStateTransition(null, ConsumerGroup.ConsumerGroupState.EMPTY);
-
-        ConsumerGroupMember member = new ConsumerGroupMember.Builder("member")
-            .setMemberEpoch(1)
-            .setPreviousMemberEpoch(0)
-            .build();
-
-        consumerGroup.updateMember(member);
-
-        assertEquals(ConsumerGroup.ConsumerGroupState.RECONCILING, consumerGroup.state());
-        verify(metrics, times(1)).onConsumerGroupStateTransition(ConsumerGroup.ConsumerGroupState.EMPTY, ConsumerGroup.ConsumerGroupState.RECONCILING);
-
-        consumerGroup.setGroupEpoch(1);
-
-        assertEquals(ConsumerGroup.ConsumerGroupState.ASSIGNING, consumerGroup.state());
-        verify(metrics, times(1)).onConsumerGroupStateTransition(ConsumerGroup.ConsumerGroupState.RECONCILING, ConsumerGroup.ConsumerGroupState.ASSIGNING);
-
-        consumerGroup.setTargetAssignmentEpoch(1);
-
-        assertEquals(ConsumerGroup.ConsumerGroupState.STABLE, consumerGroup.state());
-        verify(metrics, times(1)).onConsumerGroupStateTransition(ConsumerGroup.ConsumerGroupState.ASSIGNING, ConsumerGroup.ConsumerGroupState.STABLE);
-
-        consumerGroup.removeMember("member");
-
-        assertEquals(ConsumerGroup.ConsumerGroupState.EMPTY, consumerGroup.state());
-        verify(metrics, times(1)).onConsumerGroupStateTransition(ConsumerGroup.ConsumerGroupState.STABLE, ConsumerGroup.ConsumerGroupState.EMPTY);
     }
 
     @Test

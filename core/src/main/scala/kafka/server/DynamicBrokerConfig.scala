@@ -30,13 +30,11 @@ import org.apache.kafka.common.Reconfigurable
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, SaslConfigs, SslConfigs}
 import org.apache.kafka.common.metrics.{Metrics, MetricsReporter}
-import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.network.{ListenerName, ListenerReconfigurable}
 import org.apache.kafka.common.security.authenticator.LoginManager
 import org.apache.kafka.common.utils.{ConfigUtils, Utils}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.network.SocketServerConfigs
-import org.apache.kafka.security.PasswordEncoder
 import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.config.{ReplicationConfigs, ServerConfigs, ServerLogConfigs, ServerTopicConfigSynonyms}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
@@ -48,12 +46,12 @@ import scala.collection._
 import scala.jdk.CollectionConverters._
 
 /**
-  * Dynamic broker configurations are stored in ZooKeeper and may be defined at two levels:
+  * Dynamic broker configurations may be defined at two levels:
   * <ul>
-  *   <li>Per-broker configs persisted at <tt>/configs/brokers/{brokerId}</tt>: These can be described/altered
-  *       using AdminClient using the resource name brokerId.</li>
-  *   <li>Cluster-wide defaults persisted at <tt>/configs/brokers/&lt;default&gt;</tt>: These can be described/altered
-  *       using AdminClient using an empty resource name.</li>
+  *   <li>Per-broker configurations are persisted at the controller and can be described 
+  *         or altered using AdminClient with the resource name brokerId.</li>
+  *   <li>Cluster-wide default configurations are persisted at the cluster level and can be 
+  *         described or altered using AdminClient with an empty resource name.</li>
   * </ul>
   * The order of precedence for broker configs is:
   * <ol>
@@ -210,7 +208,6 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
   private val lock = new ReentrantReadWriteLock
   private var metricsReceiverPluginOpt: Option[ClientMetricsReceiverPlugin] = _
   private var currentConfig: KafkaConfig = _
-  private val dynamicConfigPasswordEncoder = Some(PasswordEncoder.NOOP)
 
   private[server] def initialize(clientMetricsReceiverPluginOpt: Option[ClientMetricsReceiverPlugin]): Unit = {
     currentConfig = new KafkaConfig(kafkaConfig.props, false)
@@ -250,7 +247,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     addReconfigurable(new DynamicClientQuotaCallback(kafkaServer.quotaManagers, kafkaServer.config))
 
     addBrokerReconfigurable(new BrokerDynamicThreadPool(kafkaServer))
-    addBrokerReconfigurable(new DynamicLogConfig(kafkaServer.logManager, kafkaServer))
+    addBrokerReconfigurable(new DynamicLogConfig(kafkaServer.logManager))
     addBrokerReconfigurable(new DynamicListenerConfig(kafkaServer))
     addBrokerReconfigurable(kafkaServer.socketServer)
     addBrokerReconfigurable(new DynamicProducerStateManagerConfig(kafkaServer.logManager.producerStateManagerConfig))
@@ -336,12 +333,12 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
   }
 
   /**
-   * All config updates through ZooKeeper are triggered through actual changes in values stored in ZooKeeper.
+   * Config updates are triggered through actual changes in stored values.
    * For some configs like SSL keystores and truststores, we also want to reload the store if it was modified
-   * in-place, even though the actual value of the file path and password haven't changed. This scenario alone
-   * is handled here when a config update request using admin client is processed by ZkAdminManager. If any of
-   * the SSL configs have changed, then the update will not be done here, but will be handled later when ZK
-   * changes are processed. At the moment, only listener configs are considered for reloading.
+   * in-place, even though the actual value of the file path and password haven't changed. This scenario is
+   * handled when a config update request using admin client is processed by the AdminManager. If any of
+   * the SSL configs have changed, then the update will be handled when configuration changes are processed.
+   * At the moment, only listener configs are considered for reloading.
    */
   private[server] def reloadUpdatedFilesWithoutConfigChange(newProps: Properties): Unit = CoreUtils.inWriteLock(lock) {
     reconfigurables.forEach(r => {
@@ -358,27 +355,6 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     })
   }
 
-  private def passwordEncoder: PasswordEncoder = {
-    dynamicConfigPasswordEncoder.getOrElse(throw new ConfigException("Password encoder secret not configured"))
-  }
-
-  private[server] def toPersistentProps(configProps: Properties, perBrokerConfig: Boolean): Properties = {
-    val props = configProps.clone().asInstanceOf[Properties]
-
-    def encodePassword(configName: String, value: String): Unit = {
-      if (value != null) {
-        if (!perBrokerConfig)
-          throw new ConfigException("Password config can be defined only at broker level")
-        props.setProperty(configName, passwordEncoder.encode(new Password(value)))
-      }
-    }
-    configProps.asScala.foreachEntry { (name, value) =>
-      if (isPasswordConfig(name))
-        encodePassword(name, value)
-    }
-    props
-  }
-
   private[server] def fromPersistentProps(persistentProps: Properties,
                                           perBrokerConfig: Boolean): Properties = {
     val props = persistentProps.clone().asInstanceOf[Properties]
@@ -391,28 +367,12 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
         error(s"$errorMessage: $invalidPropNames")
       }
     }
-    removeInvalidProps(nonDynamicConfigs(props), "Non-dynamic configs configured in ZooKeeper will be ignored")
+    removeInvalidProps(nonDynamicConfigs(props), "Non-dynamic configs will be ignored")
     removeInvalidProps(securityConfigsWithoutListenerPrefix(props),
       "Security configs can be dynamically updated only using listener prefix, base configs will be ignored")
     if (!perBrokerConfig)
       removeInvalidProps(perBrokerConfigs(props), "Per-broker configs defined at default cluster level will be ignored")
 
-    def decodePassword(configName: String, value: String): Unit = {
-      if (value != null) {
-        try {
-          props.setProperty(configName, passwordEncoder.decode(value).value)
-        } catch {
-          case e: Exception =>
-            error(s"Dynamic password config $configName could not be decoded, ignoring.", e)
-            props.remove(configName)
-        }
-      }
-    }
-
-    props.asScala.foreachEntry { (name, value) =>
-      if (isPasswordConfig(name))
-        decodePassword(name, value)
-    }
     props
   }
 
@@ -620,7 +580,7 @@ object DynamicLogConfig {
     ServerTopicConfigSynonyms.TOPIC_CONFIG_SYNONYMS.asScala.values.toSet
 }
 
-class DynamicLogConfig(logManager: LogManager, server: KafkaBroker) extends BrokerReconfigurable with Logging {
+class DynamicLogConfig(logManager: LogManager) extends BrokerReconfigurable with Logging {
 
   override def reconfigurableConfigs: Set[String] = {
     DynamicLogConfig.ReconfigurableConfigs

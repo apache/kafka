@@ -106,13 +106,13 @@ $ cd kafka_{{scalaVersion}}-{{fullDotVersion}}</code></pre>
   Format Log Directories
 </p>
 
-<pre><code class="language-bash">$ bin/kafka-storage.sh format --standalone -t $KAFKA_CLUSTER_ID -c config/kraft/reconfig-server.properties</code></pre>
+<pre><code class="language-bash">$ bin/kafka-storage.sh format --standalone -t $KAFKA_CLUSTER_ID -c config/server.properties</code></pre>
 
 <p>
   Start the Kafka Server
 </p>
 
-<pre><code class="language-bash">$ bin/kafka-server-start.sh config/kraft/reconfig-server.properties</code></pre>
+<pre><code class="language-bash">$ bin/kafka-server-start.sh config/server.properties</code></pre>
 
 <h4><a id="quickstart_streams_prepare" href="#quickstart_streams_prepare">Step 3: Prepare input topic and start Kafka producer</a></h4>
 

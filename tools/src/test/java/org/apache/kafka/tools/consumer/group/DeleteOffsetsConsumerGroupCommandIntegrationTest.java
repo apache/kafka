@@ -31,14 +31,12 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
+import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfig;
-import org.apache.kafka.common.test.api.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTemplate;
-import org.apache.kafka.common.test.api.ClusterTestExtensions;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 
 import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.time.Duration;
 import java.util.Collections;
@@ -52,7 +50,6 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
-@ExtendWith(ClusterTestExtensions.class)
 public class DeleteOffsetsConsumerGroupCommandIntegrationTest {
     public static final String TOPIC_PREFIX = "foo.";
     public static final String GROUP_PREFIX = "test.group.";

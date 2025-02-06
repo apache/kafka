@@ -569,11 +569,11 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    * Maybe create and return the VerificationGuard for the given producer ID if the transaction is not yet ongoing.
    * Creation starts the verification process. Otherwise return the sentinel VerificationGuard.
    */
-  def maybeStartTransactionVerification(producerId: Long, sequence: Int, epoch: Short): VerificationGuard = lock synchronized {
+  def maybeStartTransactionVerification(producerId: Long, sequence: Int, epoch: Short, supportsEpochBump: Boolean): VerificationGuard = lock synchronized {
     if (hasOngoingTransaction(producerId, epoch))
       VerificationGuard.SENTINEL
     else
-      maybeCreateVerificationGuard(producerId, sequence, epoch)
+      maybeCreateVerificationGuard(producerId, sequence, epoch, supportsEpochBump)
   }
 
   /**
@@ -581,8 +581,9 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    */
   private def maybeCreateVerificationGuard(producerId: Long,
                                            sequence: Int,
-                                           epoch: Short): VerificationGuard = lock synchronized {
-    producerStateManager.maybeCreateVerificationStateEntry(producerId, sequence, epoch).verificationGuard
+                                           epoch: Short,
+                                           supportsEpochBump: Boolean): VerificationGuard = lock synchronized {
+    producerStateManager.maybeCreateVerificationStateEntry(producerId, sequence, epoch, supportsEpochBump).verificationGuard
   }
 
   /**
@@ -1324,51 +1325,6 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     val segmentsCopy = logSegments.asScala.toBuffer
     val targetSeg = segmentsCopy.find(_.largestTimestamp >= targetTimestamp)
     targetSeg.flatMap(_.findOffsetByTimestamp(targetTimestamp, startOffset).toScala)
-  }
-
-  def legacyFetchOffsetsBefore(timestamp: Long, maxNumOffsets: Int): Seq[Long] = {
-    // Cache to avoid race conditions. `toBuffer` is faster than most alternatives and provides
-    // constant time access while being safe to use with concurrent collections unlike `toArray`.
-    val allSegments = logSegments.asScala.toBuffer
-    val lastSegmentHasSize = allSegments.last.size > 0
-
-    val offsetTimeArray =
-      if (lastSegmentHasSize)
-        new Array[(Long, Long)](allSegments.length + 1)
-      else
-        new Array[(Long, Long)](allSegments.length)
-
-    for (i <- allSegments.indices)
-      offsetTimeArray(i) = (math.max(allSegments(i).baseOffset, logStartOffset), allSegments(i).lastModified)
-    if (lastSegmentHasSize)
-      offsetTimeArray(allSegments.length) = (logEndOffset, time.milliseconds)
-
-    var startIndex = -1
-    timestamp match {
-      case ListOffsetsRequest.LATEST_TIMESTAMP =>
-        startIndex = offsetTimeArray.length - 1
-      case ListOffsetsRequest.EARLIEST_TIMESTAMP =>
-        startIndex = 0
-      case _ =>
-        var isFound = false
-        debug("Offset time array = " + offsetTimeArray.foreach(o => "%d, %d".format(o._1, o._2)))
-        startIndex = offsetTimeArray.length - 1
-        while (startIndex >= 0 && !isFound) {
-          if (offsetTimeArray(startIndex)._2 <= timestamp)
-            isFound = true
-          else
-            startIndex -= 1
-        }
-    }
-
-    val retSize = maxNumOffsets.min(startIndex + 1)
-    val ret = new Array[Long](retSize)
-    for (j <- 0 until retSize) {
-      ret(j) = offsetTimeArray(startIndex)._1
-      startIndex -= 1
-    }
-    // ensure that the returned seq is in descending order of offsets
-    ret.toSeq.sortBy(-_)
   }
 
   /**

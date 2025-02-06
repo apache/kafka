@@ -34,7 +34,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.server.authorizer._
-import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerConfigs, ServerLogConfigs, ZkConfigs}
+import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.{KafkaYammerMetrics, MetricConfigs}
 import org.apache.kafka.server.util.KafkaScheduler
@@ -253,7 +253,7 @@ class DynamicBrokerConfigTest {
 
     val securityPropsWithoutListenerPrefix = Map(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG -> "PKCS12")
     verifyConfigUpdateWithInvalidConfig(config, origProps, validProps, securityPropsWithoutListenerPrefix)
-    val nonDynamicProps = Map(ZkConfigs.ZK_CONNECT_CONFIG -> "somehost:2181")
+    val nonDynamicProps = Map(KRaftConfigs.NODE_ID_CONFIG -> "123")
     verifyConfigUpdateWithInvalidConfig(config, origProps, validProps, nonDynamicProps)
 
     // Test update of configs with invalid type
@@ -377,7 +377,7 @@ class DynamicBrokerConfigTest {
 
     def updateConfig(): Unit = {
       if (perBrokerConfig)
-        config.dynamicConfig.updateBrokerConfig(0, config.dynamicConfig.toPersistentProps(props, perBrokerConfig))
+        config.dynamicConfig.updateBrokerConfig(0, props)
       else
         config.dynamicConfig.updateDefaultConfig(props)
     }
@@ -404,8 +404,8 @@ class DynamicBrokerConfigTest {
     // in an AlterConfigs request. Validation should fail with an exception if any of the configs are invalid.
     assertThrows(classOf[ConfigException], () => config.dynamicConfig.validate(props, perBrokerConfig = true))
 
-    // DynamicBrokerConfig#updateBrokerConfig is used to update configs from ZooKeeper during
-    // startup and when configs are updated in ZK. Update should apply valid configs and ignore
+    // DynamicBrokerConfig#updateBrokerConfig is used to update configs from broker during
+    // startup and when configs are updated in broker. Update should apply valid configs and ignore
     // invalid ones.
     config.dynamicConfig.updateBrokerConfig(0, props)
     validProps.foreach { case (name, value) => assertEquals(value, config.originals.get(name)) }
@@ -681,7 +681,7 @@ class DynamicBrokerConfigTest {
     val props = TestUtils.createBrokerConfig(0, port = 8181)
     props.put(ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG, "2592000000")
     val config = KafkaConfig(props)
-    val dynamicLogConfig = new DynamicLogConfig(mock(classOf[LogManager]), mock(classOf[KafkaBroker]))
+    val dynamicLogConfig = new DynamicLogConfig(mock(classOf[LogManager]))
     config.dynamicConfig.initialize(None)
     config.dynamicConfig.addBrokerReconfigurable(dynamicLogConfig)
 
@@ -704,7 +704,7 @@ class DynamicBrokerConfigTest {
     val props = TestUtils.createBrokerConfig(0, port = 8181)
     props.put(ServerLogConfigs.LOG_RETENTION_BYTES_CONFIG, "4294967296")
     val config = KafkaConfig(props)
-    val dynamicLogConfig = new DynamicLogConfig(mock(classOf[LogManager]), mock(classOf[KafkaBroker]))
+    val dynamicLogConfig = new DynamicLogConfig(mock(classOf[LogManager]))
     config.dynamicConfig.initialize(None)
     config.dynamicConfig.addBrokerReconfigurable(dynamicLogConfig)
 
@@ -964,7 +964,7 @@ class DynamicBrokerConfigTest {
     props.put(ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG, retentionMs.toString)
     props.put(ServerLogConfigs.LOG_RETENTION_BYTES_CONFIG, retentionBytes.toString)
     val config = KafkaConfig(props)
-    val dynamicLogConfig = new DynamicLogConfig(mock(classOf[LogManager]), mock(classOf[KafkaBroker]))
+    val dynamicLogConfig = new DynamicLogConfig(mock(classOf[LogManager]))
     config.dynamicConfig.initialize(None)
     config.dynamicConfig.addBrokerReconfigurable(dynamicLogConfig)
 
@@ -992,7 +992,7 @@ class DynamicBrokerConfigTest {
       .thenAnswer(invocation => currentDefaultLogConfig.set(invocation.getArgument(0)))
 
     config.dynamicConfig.initialize(None)
-    config.dynamicConfig.addBrokerReconfigurable(new DynamicLogConfig(logManagerMock, serverMock))
+    config.dynamicConfig.addBrokerReconfigurable(new DynamicLogConfig(logManagerMock))
   }
 
   @Test

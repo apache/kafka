@@ -84,7 +84,8 @@ public class ConfigurationControlManagerTest {
             define("abc", ConfigDef.Type.LIST, ConfigDef.Importance.HIGH, "abc").
             define("def", ConfigDef.Type.STRING, ConfigDef.Importance.HIGH, "def").
             define("ghi", ConfigDef.Type.BOOLEAN, true, ConfigDef.Importance.HIGH, "ghi").
-            define("quuux", ConfigDef.Type.LONG, ConfigDef.Importance.HIGH, "quux"));
+            define("quuux", ConfigDef.Type.LONG, ConfigDef.Importance.HIGH, "quux").
+            define(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, ConfigDef.Type.INT, ConfigDef.Importance.HIGH, ""));
     }
 
     public static final Map<String, List<ConfigSynonym>> SYNONYMS = new HashMap<>();
@@ -95,6 +96,7 @@ public class ConfigurationControlManagerTest {
         SYNONYMS.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG,
             Collections.singletonList(new ConfigSynonym(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG)));
         SYNONYMS.put("quuux", Collections.singletonList(new ConfigSynonym("quux", HOURS_TO_MILLISECONDS)));
+        SYNONYMS.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, Collections.singletonList(new ConfigSynonym(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG)));
     }
 
     static final KafkaConfigSchema SCHEMA = new KafkaConfigSchema(CONFIGS, SYNONYMS);
@@ -114,7 +116,7 @@ public class ConfigurationControlManagerTest {
     }
 
     @SuppressWarnings("unchecked")
-    private static <A, B> Map<A, B> toMap(Entry... entries) {
+    static <A, B> Map<A, B> toMap(Entry... entries) {
         Map<A, B> map = new LinkedHashMap<>();
         for (Entry<A, B> entry : entries) {
             map.put(entry.getKey(), entry.getValue());

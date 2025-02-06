@@ -188,7 +188,6 @@ import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.STABL
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.CLASSIC_GROUP_COMPLETED_REBALANCES_SENSOR_NAME;
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.CONSUMER_GROUP_REBALANCES_SENSOR_NAME;
 import static org.apache.kafka.coordinator.group.modern.ModernGroupMember.hasAssignedPartitionsChanged;
-import static org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember.hasAssignedPartitionsChanged;
 
 /**
  * The GroupMetadataManager manages the metadata of all classic and consumer groups. It holds
@@ -728,8 +727,7 @@ public class GroupMetadataManager {
      *                          created if it does not exist.
      *
      * @return A ConsumerGroup.
-     * @throws GroupIdNotFoundException if the group does not exist and createIfNotExists is false or
-     *                                  if the group is not a consumer group.
+     * @throws GroupIdNotFoundException if the group does not exist and createIfNotExists is false.
      * @throws IllegalStateException    if the group does not have the expected type.
      * Package private for testing.
      */
@@ -746,7 +744,6 @@ public class GroupMetadataManager {
         if (group == null) {
             ConsumerGroup consumerGroup = new ConsumerGroup(snapshotRegistry, groupId, metrics);
             groups.put(groupId, consumerGroup);
-            metrics.onConsumerGroupStateTransition(null, consumerGroup.state());
             return consumerGroup;
         } else if (group.type() == CONSUMER) {
             return (ConsumerGroup) group;
@@ -757,7 +754,6 @@ public class GroupMetadataManager {
             // replaying consumer group records after offset commit records would not work.
             ConsumerGroup consumerGroup = new ConsumerGroup(snapshotRegistry, groupId, metrics);
             groups.put(groupId, consumerGroup);
-            metrics.onConsumerGroupStateTransition(null, consumerGroup.state());
             return consumerGroup;
         } else {
             throw new IllegalStateException(String.format("Group %s is not a consumer group", groupId));
@@ -846,28 +842,28 @@ public class GroupMetadataManager {
 
         if (group == null) {
             return new ShareGroup(snapshotRegistry, groupId);
+        } else {
+            if (group.type() == SHARE) {
+                return (ShareGroup) group;
+            } else {
+                // We don't support upgrading/downgrading between protocols at the moment so
+                // we throw an exception if a group exists with the wrong type.
+                throw new GroupIdNotFoundException(String.format("Group %s is not a share group.", groupId));
+            }
         }
-
-        if (group.type() != SHARE) {
-            // We don't support upgrading/downgrading between protocols at the moment so
-            // we throw an exception if a group exists with the wrong type.
-            throw new GroupIdNotFoundException(String.format("Group %s is not a share group.",
-                groupId));
-        }
-
-        return (ShareGroup) group;
     }
 
     /**
-     * Gets or maybe creates a share group.
+     * The method should be called on the replay path.
+     * Gets or maybe creates a share group and updates the groups map if a new group is created.
      *
      * @param groupId           The group id.
      * @param createIfNotExists A boolean indicating whether the group should be
      *                          created if it does not exist.
      *
      * @return A ShareGroup.
-     * @throws GroupIdNotFoundException if the group does not exist and createIfNotExists is false or
-     *                                  if the group is not a consumer group.
+     * @throws GroupIdNotFoundException if the group does not exist and createIfNotExists is false.
+     * @throws IllegalStateException    if the group does not have the expected type.
      *
      * Package private for testing.
      */
@@ -878,22 +874,22 @@ public class GroupMetadataManager {
         Group group = groups.get(groupId);
 
         if (group == null && !createIfNotExists) {
-            throw new IllegalStateException(String.format("Share group %s not found.", groupId));
+            throw new GroupIdNotFoundException(String.format("Share group %s not found.", groupId));
         }
 
         if (group == null) {
             ShareGroup shareGroup = new ShareGroup(snapshotRegistry, groupId);
             groups.put(groupId, shareGroup);
             return shareGroup;
+        } else {
+            if (group.type() == SHARE) {
+                return (ShareGroup) group;
+            } else {
+                // We don't support upgrading/downgrading between protocols at the moment so
+                // we throw an exception if a group exists with the wrong type.
+                throw new IllegalStateException(String.format("Group %s is not a share group.", groupId));
+            }
         }
-
-        if (group.type() != SHARE) {
-            // We don't support upgrading/downgrading between protocols at the moment so
-            // we throw an exception if a group exists with the wrong type.
-            throw new GroupIdNotFoundException(String.format("Group %s is not a share group.", groupId));
-        }
-
-        return (ShareGroup) group;
     }
 
     /**
@@ -1135,24 +1131,7 @@ public class GroupMetadataManager {
     private void removeGroup(
         String groupId
     ) {
-        Group group = groups.remove(groupId);
-        if (group != null) {
-            switch (group.type()) {
-                case CONSUMER:
-                    ConsumerGroup consumerGroup = (ConsumerGroup) group;
-                    metrics.onConsumerGroupStateTransition(consumerGroup.state(), null);
-                    break;
-                case CLASSIC:
-                    // The classic group size counter is implemented as scheduled task.
-                    break;
-                case SHARE:
-                    // Nothing for now, but we may want to add metrics in the future.
-                    break;
-                default:
-                    log.warn("Removed group {} with an unknown group type {}.", groupId, group.type());
-                    break;
-            }
-        }
+        groups.remove(groupId);
     }
 
     /**
@@ -2032,11 +2011,10 @@ public class GroupMetadataManager {
 
         // Get or create the share group.
         boolean createIfNotExists = memberEpoch == 0;
-        final ShareGroup group = getOrMaybeCreatePersistedShareGroup(groupId, createIfNotExists);
+        final ShareGroup group = getOrMaybeCreateShareGroup(groupId, createIfNotExists);
         throwIfShareGroupIsFull(group, memberId);
 
         // Get or create the member.
-        if (memberId.isEmpty()) memberId = Uuid.randomUuid().toString();
         ShareGroupMember member = getOrMaybeSubscribeShareGroupMember(
             group,
             memberId,
@@ -2143,9 +2121,12 @@ public class GroupMetadataManager {
             .setHeartbeatIntervalMs(shareGroupHeartbeatIntervalMs(groupId));
 
         // The assignment is only provided in the following cases:
-        // 1. The member just joined or rejoined to group (epoch equals to zero);
+        // 1. The member sent a full request. It does so when joining or rejoining the group with zero
+        //    as the member epoch; or on any errors (e.g. timeout). We use all the non-optional fields
+        //    (subscribedTopicNames) to detect a full request as those must be set in a full request.
         // 2. The member's assignment has been updated.
-        if (memberEpoch == 0 || hasAssignedPartitionsChanged(member, updatedMember)) {
+        boolean isFullRequest = subscribedTopicNames != null;
+        if (memberEpoch == 0 || isFullRequest || hasAssignedPartitionsChanged(member, updatedMember)) {
             response.setAssignment(createShareGroupResponseAssignment(updatedMember));
         }
 
@@ -4136,16 +4117,25 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Counts and updates the number of classic groups in different states.
+     * Counts and updates the number of classic and consumer groups in different states.
      */
-    public void updateClassicGroupSizeCounter() {
-        Map<ClassicGroupState, Long> groupSizeCounter = new HashMap<>();
+    public void updateGroupSizeCounter() {
+        Map<ClassicGroupState, Long> classicGroupSizeCounter = new HashMap<>();
+        Map<ConsumerGroup.ConsumerGroupState, Long> consumerGroupSizeCounter = new HashMap<>();
         groups.forEach((__, group) -> {
-            if (group.type() == CLASSIC) {
-                groupSizeCounter.compute(((ClassicGroup) group).currentState(), Utils::incValue);
+            switch (group.type()) {
+                case CLASSIC:
+                    classicGroupSizeCounter.compute(((ClassicGroup) group).currentState(), Utils::incValue);
+                    break;
+                case CONSUMER:
+                    consumerGroupSizeCounter.compute(((ConsumerGroup) group).state(), Utils::incValue);
+                    break;
+                default:
+                    break;
             }
         });
-        metrics.setClassicGroupGauges(groupSizeCounter);
+        metrics.setClassicGroupGauges(classicGroupSizeCounter);
+        metrics.setConsumerGroupGauges(consumerGroupSizeCounter);
     }
 
     /**
