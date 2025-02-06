@@ -46,6 +46,7 @@ import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.DeleteShareGroupStateRequest;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.LogContext;
@@ -96,6 +97,13 @@ import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.share.persister.DeleteShareGroupStateParameters;
+import org.apache.kafka.server.share.persister.DeleteShareGroupStateResult;
+import org.apache.kafka.server.share.persister.GroupTopicPartitionData;
+import org.apache.kafka.server.share.persister.PartitionFactory;
+import org.apache.kafka.server.share.persister.PartitionIdData;
+import org.apache.kafka.server.share.persister.Persister;
+import org.apache.kafka.server.share.persister.TopicData;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
 import org.slf4j.Logger;
@@ -103,8 +111,10 @@ import org.slf4j.Logger;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -130,6 +140,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         private CoordinatorExecutor<CoordinatorRecord> executor;
         private CoordinatorMetrics coordinatorMetrics;
         private TopicPartition topicPartition;
+        private Persister persister;
 
         public Builder(
             GroupCoordinatorConfig config,
@@ -193,6 +204,12 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             return this;
         }
 
+        @Override
+        public CoordinatorShardBuilder<GroupCoordinatorShard, CoordinatorRecord> withPersister(Persister persister) {
+            this.persister = persister;
+            return this;
+        }
+
         @SuppressWarnings("NPathComplexity")
         @Override
         public GroupCoordinatorShard build() {
@@ -245,7 +262,8 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 timer,
                 config,
                 coordinatorMetrics,
-                metricsShard
+                metricsShard,
+                persister
             );
         }
     }
@@ -310,6 +328,11 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     private final CoordinatorMetricsShard metricsShard;
 
     /**
+     * The persister instance.
+     */
+    private Persister persister;
+
+    /**
      * Constructor.
      *
      * @param logContext            The log context.
@@ -317,6 +340,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      * @param offsetMetadataManager The offset metadata manager.
      * @param coordinatorMetrics    The coordinator metrics.
      * @param metricsShard          The coordinator metrics shard.
+     * @param persister             The persister instance
      */
     GroupCoordinatorShard(
         LogContext logContext,
@@ -326,7 +350,8 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         CoordinatorTimer<Void, CoordinatorRecord> timer,
         GroupCoordinatorConfig config,
         CoordinatorMetrics coordinatorMetrics,
-        CoordinatorMetricsShard metricsShard
+        CoordinatorMetricsShard metricsShard,
+        Persister persister
     ) {
         this.log = logContext.logger(GroupCoordinatorShard.class);
         this.groupMetadataManager = groupMetadataManager;
@@ -336,6 +361,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         this.config = config;
         this.coordinatorMetrics = coordinatorMetrics;
         this.metricsShard = metricsShard;
+        this.persister = persister;
     }
 
     /**
@@ -467,6 +493,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                         .setErrorCode(Errors.forException(exception).code())
                 );
             }
+            maybeDeleteFromShareCoordinator(groupId);
         }
 
         log.info("The following groups were deleted: {}. A total of {} offsets were removed.",
@@ -474,6 +501,27 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             numDeletedOffsets
         );
         return new CoordinatorResult<>(records, resultCollection);
+    }
+
+    private Optional<CompletableFuture<DeleteShareGroupStateResult>> maybeDeleteFromShareCoordinator(String groupId) {
+        if (groupMetadataManager.group(groupId).type() == Group.GroupType.SHARE) {
+            log.info("Deleting share group {}", groupId);
+            List<TopicData<PartitionIdData>> topicPartitionList = new ArrayList<>();
+            offsetMetadataManager.getGroupTopicPartitionMapping(groupId).forEach((topicId, partitionList) -> {
+                List<PartitionIdData> partitionIdDataList = partitionList.stream()
+                    .map(PartitionFactory::newPartitionIdData)
+                    .toList();
+                topicPartitionList.add(new TopicData<>(topicId, partitionIdDataList));
+            });
+            return Optional.of(persister.deleteState(
+                    new DeleteShareGroupStateParameters.Builder()
+                        .setGroupTopicPartitionData(new GroupTopicPartitionData<>(groupId, topicPartitionList))
+                        .build()
+                )
+            );
+        }
+
+        return Optional.empty();
     }
 
     /**

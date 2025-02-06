@@ -838,7 +838,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
 
             futures.add(future);
         });
-
         return FutureUtils.combineFutures(futures, DeleteGroupsResponseData.DeletableGroupResultCollection::new,
             // We don't use res.addAll(future.join()) because DeletableGroupResultCollection is an ImplicitLinkedHashMultiCollection,
             // which has requirements for adding elements (see ImplicitLinkedHashCollection.java#add).
