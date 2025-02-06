@@ -14,28 +14,27 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.consumer.internals.events;
+package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.consumer.internals.NodeAcknowledgements;
-import org.apache.kafka.common.TopicIdPartition;
+import java.util.Objects;
 
-import java.util.Map;
+/**
+ * This class combines Acknowledgements with the id of the node to use for acknowledging.
+ */
+public class NodeAcknowledgements {
+    private final int nodeId;
+    private final Acknowledgements acknowledgements;
 
-public class ShareFetchEvent extends ApplicationEvent {
-
-    private final Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap;
-
-    public ShareFetchEvent(Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap) {
-        super(Type.SHARE_FETCH);
-        this.acknowledgementsMap = acknowledgementsMap;
+    public NodeAcknowledgements(int nodeId, Acknowledgements acknowledgements) {
+        this.nodeId = nodeId;
+        this.acknowledgements = Objects.requireNonNull(acknowledgements);
     }
 
-    public Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap() {
-        return acknowledgementsMap;
+    public int nodeId() {
+        return nodeId;
     }
 
-    @Override
-    protected String toStringBase() {
-        return super.toStringBase() + ", acknowledgementsMap=" + acknowledgementsMap;
+    public Acknowledgements acknowledgements() {
+        return acknowledgements;
     }
 }
