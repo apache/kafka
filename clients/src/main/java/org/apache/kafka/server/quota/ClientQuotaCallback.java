@@ -89,11 +89,12 @@ public interface ClientQuotaCallback extends Configurable {
     boolean quotaResetRequired(ClientQuotaType quotaType);
 
     /**
-     * Metadata update callback that is invoked whenever the topic and cluster delta changed. 
+     * This callback is invoked whenever there are changes in the cluster metadata, such as 
+     * brokers being added or removed, topics being created or deleted, or partition leadership updates.
      * This is useful if quota computation takes partitions into account.
      * Topics that are being deleted will not be included in `cluster`.
      *
-     * @param cluster Cluster metadata including topic and cluster
+     * @param cluster Cluster metadata including partitions and their leaders if known
      * @return true if quotas have changed and metric configs may need to be updated
      */
     boolean updateClusterMetadata(Cluster cluster);

@@ -151,13 +151,13 @@ object MetadataCache {
   }
 
   def toCluster(clusterId: String, image: MetadataImage): Cluster = {
-    val brokerToNodes = new util.HashMap[Integer, java.util.List[Node]]
+    val brokerToNodes = new util.HashMap[Integer, util.List[Node]]
     image.cluster().brokers()
       .values().stream()
       .filter(broker => !broker.fenced())
       .forEach { broker => brokerToNodes.put(broker.id(), broker.nodes()) }
 
-    def getNodes(id: Int): java.util.List[Node] = brokerToNodes.get(id)
+    def getNodes(id: Int): util.List[Node] = brokerToNodes.get(id)
 
     val partitionInfos = new util.ArrayList[PartitionInfo]
     val internalTopics = new util.HashSet[String]

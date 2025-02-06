@@ -88,10 +88,6 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
     closeSasl()
   }
 
-  override def configureSecurityBeforeServersStart(testInfo: TestInfo): Unit = {
-    super.configureSecurityBeforeServersStart(testInfo)
-  }
-
   override def configureSecurityAfterServersStart(): Unit = {
     super.configureSecurityAfterServersStart()
     createScramCredentials(createAdminClient(), JaasTestUtils.KAFKA_SCRAM_ADMIN, JaasTestUtils.KAFKA_SCRAM_ADMIN_PASSWORD)
@@ -99,7 +95,7 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
 
   override def addFormatterSettings(formatter: Formatter): Unit = {
     formatter.setScramArguments(
-      List(s"SCRAM-SHA-256=[name=${JaasTestUtils.KAFKA_SCRAM_ADMIN},password=${JaasTestUtils.KAFKA_SCRAM_ADMIN_PASSWORD}]").asJava)
+      util.List.of(s"SCRAM-SHA-256=[name=${JaasTestUtils.KAFKA_SCRAM_ADMIN},password=${JaasTestUtils.KAFKA_SCRAM_ADMIN_PASSWORD}]"))
   }
 
   override def createPrivilegedAdminClient() = {
@@ -108,7 +104,7 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testCustomQuotaCallback(quorum: String, groupProtocol: String): Unit = {
     // Large quota override, should not throttle
     var brokerId = 0

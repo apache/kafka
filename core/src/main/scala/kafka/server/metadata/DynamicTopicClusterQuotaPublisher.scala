@@ -48,7 +48,6 @@ class DynamicTopicClusterQuotaPublisher (
     delta: MetadataDelta,
     newImage: MetadataImage,
   ): Unit = {
-    val deltaName = s"MetadataDelta up to ${newImage.highestOffsetAndEpoch().offset}"
     try {
       quotaManagers.clientQuotaCallback().ifPresent(clientQuotaCallback => {
         if (delta.topicsDelta() != null || delta.clusterDelta() != null) {
@@ -62,8 +61,10 @@ class DynamicTopicClusterQuotaPublisher (
         }
       })
     } catch {
-      case t: Throwable => faultHandler.handleFault("Uncaught exception while " +
-        s"publishing dynamic topic or cluster changes from $deltaName", t)
+      case t: Throwable =>
+        val deltaName = s"MetadataDelta up to ${newImage.highestOffsetAndEpoch().offset}"
+        faultHandler.handleFault("Uncaught exception while " +
+          s"publishing dynamic topic or cluster changes from $deltaName", t)
     }
   }
 }
