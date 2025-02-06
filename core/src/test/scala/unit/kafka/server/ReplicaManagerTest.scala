@@ -2297,25 +2297,26 @@ class ReplicaManagerTest {
       callback(Map(tp0 -> error).toMap)
 
       if (error != Errors.CONCURRENT_TRANSACTIONS) {
+        // NOT_COORDINATOR is converted to NOT_ENOUGH_REPLICAS
         assertEquals(Errors.NOT_ENOUGH_REPLICAS, result.assertFired.error)
-        return
-      }
-      // The append should not finish with error, it should retry later.
-      assertFalse(result.hasFired)
-      assertEquals(verificationGuard, getVerificationGuard(replicaManager, tp0, producerId))
+      } else {
+        // The append should not finish with error, it should retry later.
+        assertFalse(result.hasFired)
+        assertEquals(verificationGuard, getVerificationGuard(replicaManager, tp0, producerId))
 
-      verify(addPartitionsToTxnManager, times(1)).addOrVerifyTransaction(
-        ArgumentMatchers.eq(transactionalId),
-        ArgumentMatchers.eq(producerId),
-        ArgumentMatchers.eq(producerEpoch),
-        ArgumentMatchers.eq(Seq(tp0)),
-        appendCallback.capture(),
-        any()
-      )
-      callback = appendCallback.getValue()
-      callback(Map.empty[TopicPartition, Errors].toMap)
-      assertEquals(VerificationGuard.SENTINEL, getVerificationGuard(replicaManager, tp0, producerId))
-      assertTrue(replicaManager.localLog(tp0).get.hasOngoingTransaction(producerId, producerEpoch))
+        verify(addPartitionsToTxnManager, times(1)).addOrVerifyTransaction(
+          ArgumentMatchers.eq(transactionalId),
+          ArgumentMatchers.eq(producerId),
+          ArgumentMatchers.eq(producerEpoch),
+          ArgumentMatchers.eq(Seq(tp0)),
+          appendCallback.capture(),
+          any()
+        )
+        callback = appendCallback.getValue()
+        callback(Map.empty[TopicPartition, Errors].toMap)
+        assertEquals(VerificationGuard.SENTINEL, getVerificationGuard(replicaManager, tp0, producerId))
+        assertTrue(replicaManager.localLog(tp0).get.hasOngoingTransaction(producerId, producerEpoch))
+      }
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }
