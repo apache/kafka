@@ -460,16 +460,16 @@ public class QuorumControllerTest {
             int brokerToUncleanShutdown, brokerToBeTheLeader;
 
             // lastKnownElr stores the last known leader.
+            brokerToUncleanShutdown = lastKnownElr[0];
             if (lastKnownElr[0] == partition.elr[0]) {
-                brokerToUncleanShutdown = partition.elr[0];
                 brokerToBeTheLeader = partition.elr[1];
             } else {
-                brokerToUncleanShutdown = partition.elr[1];
                 brokerToBeTheLeader = partition.elr[0];
             }
 
-            // Unclean shutdown should remove the ELR members.
-            active.registerBroker(
+            // Unclean shutdown should remove brokerToUncleanShutdown from the ELR members, but it should still be in
+            // the lastKnownElr.
+            CompletableFuture<BrokerRegistrationReply> reply = active.registerBroker(
                 anonymousContextFor(ApiKeys.BROKER_REGISTRATION),
                 new BrokerRegistrationRequestData().
                     setBrokerId(brokerToUncleanShutdown).
@@ -477,22 +477,23 @@ public class QuorumControllerTest {
                     setFeatures(features).
                     setIncarnationId(Uuid.randomUuid()).
                     setLogDirs(Collections.singletonList(Uuid.randomUuid())).
-                    setListeners(listeners)).get();
+                    setListeners(listeners));
+            brokerEpochs.put(brokerToUncleanShutdown, reply.get().epoch());
             partition = active.replicationControl().getPartition(topicIdFoo, 0);
             assertArrayEquals(new int[]{brokerToBeTheLeader}, partition.elr, partition.toString());
+            assertArrayEquals(lastKnownElr, partition.lastKnownElr, partition.toString());
 
             // Unclean shutdown should not remove the last known ELR members.
             active.registerBroker(
                 anonymousContextFor(ApiKeys.BROKER_REGISTRATION),
                 new BrokerRegistrationRequestData().
-                    setBrokerId(lastKnownElr[0]).
+                    setBrokerId(brokerToBeTheLeader).
                     setClusterId(active.clusterId()).
                     setFeatures(features).
                     setIncarnationId(Uuid.randomUuid()).
+                    setPreviousBrokerEpoch(brokerEpochs.get(brokerToBeTheLeader)).
                     setLogDirs(Collections.singletonList(Uuid.randomUuid())).
-                    setListeners(listeners)).get();
-            partition = active.replicationControl().getPartition(topicIdFoo, 0);
-            assertArrayEquals(lastKnownElr, partition.lastKnownElr, partition.toString());
+                    setListeners(listeners));
 
             // Unfence the last one in the ELR, it should be elected.
             sendBrokerHeartbeatToUnfenceBrokers(active, singletonList(brokerToBeTheLeader), brokerEpochs);

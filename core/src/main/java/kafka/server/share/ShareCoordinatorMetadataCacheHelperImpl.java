@@ -15,12 +15,11 @@
  * limitations under the License.
  */
 
-package kafka.server.metadata;
+package kafka.server.share;
 
 import kafka.server.MetadataCache;
 
 import org.apache.kafka.common.Node;
-import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
 import org.apache.kafka.common.message.MetadataResponseData;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.Errors;
@@ -52,18 +51,19 @@ public class ShareCoordinatorMetadataCacheHelperImpl implements ShareCoordinator
         Function<SharePartitionKey, Integer> keyToPartitionMapper,
         ListenerName interBrokerListenerName
     ) {
-        Objects.requireNonNull(metadataCache, "metadataCache must not be null");
-        Objects.requireNonNull(keyToPartitionMapper, "keyToPartitionMapper must not be null");
-        Objects.requireNonNull(interBrokerListenerName, "interBrokerListenerName must not be null");
-
-        this.metadataCache = metadataCache;
-        this.keyToPartitionMapper = keyToPartitionMapper;
-        this.interBrokerListenerName = interBrokerListenerName;
+        this.metadataCache = Objects.requireNonNull(metadataCache, "metadataCache must not be null");
+        this.keyToPartitionMapper = Objects.requireNonNull(keyToPartitionMapper, "keyToPartitionMapper must not be null");
+        this.interBrokerListenerName = Objects.requireNonNull(interBrokerListenerName, "interBrokerListenerName must not be null");
     }
 
     @Override
     public boolean containsTopic(String topic) {
-        return metadataCache.contains(topic);
+        try {
+            return metadataCache.contains(topic);
+        } catch (Exception e) {
+            log.warn("Exception checking {} in metadata cache", topic, e);
+        }
+        return false;
     }
 
     @Override
@@ -99,14 +99,19 @@ public class ShareCoordinatorMetadataCacheHelperImpl implements ShareCoordinator
                     }
                 }
             }
-        } catch (CoordinatorNotAvailableException e) {
-            log.warn("Coordinator not available", e);
+        } catch (Exception e) {
+            log.warn("Exception while getting share coordinator", e);
         }
         return Node.noNode();
     }
 
     @Override
     public List<Node> getClusterNodes() {
-        return CollectionConverters.asJava(metadataCache.getAliveBrokerNodes(interBrokerListenerName).toSeq());
+        try {
+            return CollectionConverters.asJava(metadataCache.getAliveBrokerNodes(interBrokerListenerName).toSeq());
+        } catch (Exception e) {
+            log.warn("Exception while getting cluster nodes", e);
+        }
+        return List.of();
     }
 }

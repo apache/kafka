@@ -21,7 +21,6 @@ import kafka.log._
 import kafka.network.RequestChannel
 import kafka.security.JaasTestUtils
 import kafka.server._
-import kafka.server.metadata.{ConfigRepository, MockConfigRepository}
 import kafka.utils.Implicits._
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin._
@@ -47,7 +46,7 @@ import org.apache.kafka.common.serialization._
 import org.apache.kafka.common.utils.Utils.formatAddress
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
-import org.apache.kafka.metadata.LeaderAndIsr
+import org.apache.kafka.metadata.{ConfigRepository, LeaderAndIsr, MockConfigRepository}
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.network.metrics.RequestChannelMetrics
 import org.apache.kafka.raft.QuorumConfig

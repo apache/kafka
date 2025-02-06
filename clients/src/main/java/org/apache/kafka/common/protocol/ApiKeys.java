@@ -149,6 +149,11 @@ public enum ApiKeys {
     private static final Map<Integer, ApiKeys> ID_TO_TYPE = Arrays.stream(ApiKeys.values())
         .collect(Collectors.toMap(key -> (int) key.id, Function.identity()));
 
+    // Versions 0-2 were removed in Apache Kafka 4.0, version 3 is the new baseline. Due to a bug in librdkafka,
+    // version `0` has to be included in the api versions response (see KAFKA-18659). In order to achieve that,
+    // we adjust `toApiVersion` to return `0` for the min version of `produce` in the broker listener.
+    public static final short PRODUCE_API_VERSIONS_RESPONSE_MIN_VERSION = 0;
+
     /** the permanent and immutable id of an API - this can't change ever */
     public final short id;
 
@@ -264,8 +269,30 @@ public enum ApiKeys {
         return oldestVersion() <= latestVersion();
     }
 
+    /**
+     * To workaround a critical bug in librdkafka, the api versions response is inconsistent with the actual versions
+     * supported by `produce` - this method handles that. It should be called in the context of the api response protocol
+     * handling.
+     *
+     * It should not be used by code generating protocol documentation - we keep that consistent with the actual versions
+     * supported by `produce`.
+     *
+     * See `PRODUCE_API_VERSIONS_RESPONSE_MIN_VERSION` for details.
+     */
+    public Optional<ApiVersionsResponseData.ApiVersion> toApiVersionForApiResponse(boolean enableUnstableLastVersion,
+                                                                                   ApiMessageType.ListenerType listenerType) {
+        return toApiVersion(enableUnstableLastVersion, Optional.of(listenerType));
+    }
+
     public Optional<ApiVersionsResponseData.ApiVersion> toApiVersion(boolean enableUnstableLastVersion) {
-        short oldestVersion = oldestVersion();
+        return toApiVersion(enableUnstableLastVersion, Optional.empty());
+    }
+
+    private Optional<ApiVersionsResponseData.ApiVersion> toApiVersion(boolean enableUnstableLastVersion,
+                                                                     Optional<ApiMessageType.ListenerType> listenerType) {
+        // see `PRODUCE_API_VERSIONS_RESPONSE_MIN_VERSION` for details on why we do this
+        short oldestVersion = (this == PRODUCE && listenerType.map(l -> l == ApiMessageType.ListenerType.BROKER).orElse(false)) ?
+            PRODUCE_API_VERSIONS_RESPONSE_MIN_VERSION : oldestVersion();
         short latestVersion = latestVersion(enableUnstableLastVersion);
 
         // API is entirely disabled if latestStableVersion is smaller than oldestVersion.
@@ -299,7 +326,7 @@ public enum ApiKeys {
         b.append("<th>Key</th>\n");
         b.append("</tr>");
         clientApis().stream()
-            .filter(apiKey -> apiKey.toApiVersion(false).isPresent())
+            .filter(apiKey -> apiKey.toApiVersion(false, Optional.empty()).isPresent())
             .forEach(apiKey -> {
                 b.append("<tr>\n");
                 b.append("<td>");
@@ -341,10 +368,7 @@ public enum ApiKeys {
     }
 
     public static EnumSet<ApiKeys> clientApis() {
-        List<ApiKeys> apis = Arrays.stream(ApiKeys.values())
-            .filter(apiKey -> apiKey.inScope(ApiMessageType.ListenerType.BROKER))
-            .collect(Collectors.toList());
-        return EnumSet.copyOf(apis);
+        return brokerApis();
     }
 
     public static EnumSet<ApiKeys> apisForListener(ApiMessageType.ListenerType listener) {

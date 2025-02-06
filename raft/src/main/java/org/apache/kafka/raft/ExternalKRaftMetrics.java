@@ -14,29 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.security;
 
-import org.apache.kafka.common.config.types.Password;
+package org.apache.kafka.raft;
 
-import java.security.GeneralSecurityException;
-
-public interface PasswordEncoder {
-    /**
-     * A password encoder that does not modify the given password. This is used in KRaft mode only.
-     */
-    PasswordEncoder NOOP = new PasswordEncoder() {
-
-        @Override
-        public String encode(Password password) {
-            return password.value();
-        }
-
-        @Override
-        public Password decode(String encodedPassword) {
-            return new Password(encodedPassword);
-        }
-    };
-
-    String encode(Password password) throws GeneralSecurityException;
-    Password decode(String encodedPassword) throws GeneralSecurityException;
+/**
+ * Implementations of this interface store external metrics objects whose
+ * values are updated in the raft layer. They are not allowed to block.
+ */
+public interface ExternalKRaftMetrics {
+    void setIgnoredStaticVoters(boolean ignoredStaticVoters);
 }
