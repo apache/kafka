@@ -638,6 +638,7 @@ class BrokerServer(
         .withCoordinatorRuntimeMetrics(new GroupCoordinatorRuntimeMetrics(metrics))
         .withGroupCoordinatorMetrics(new GroupCoordinatorMetrics(KafkaYammerMetrics.defaultRegistry, metrics))
         .withGroupConfigManager(groupConfigManager)
+        .withPersister(persister)
         .build()
     } else {
       GroupCoordinatorAdapter(

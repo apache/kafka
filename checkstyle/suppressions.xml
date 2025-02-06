@@ -347,6 +347,8 @@
               files="(ShareCoordinatorServiceTest|DefaultStatePersisterTest|PersisterStateManagerTest).java"/>
     <suppress checks="CyclomaticComplexity"
               files="ShareCoordinatorShard.java"/>
+    <suppress checks="ClassFanOutComplexity"
+              files="(PersisterStateManagerTest|DefaultStatePersisterTest).java"/>
 
     <!-- storage -->
     <suppress checks="CyclomaticComplexity"

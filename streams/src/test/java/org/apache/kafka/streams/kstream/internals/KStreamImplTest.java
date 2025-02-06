@@ -507,7 +507,7 @@ public class KStreamImplTest {
     public void shouldNotAllowNullGroupedOnGroupBy() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
-            () -> testStream.groupBy((k, v) -> k, (Grouped<String, String>) null));
+            () -> testStream.groupBy((k, v) -> k, null));
         assertThat(exception.getMessage(), equalTo("grouped can't be null"));
     }
 
@@ -515,7 +515,7 @@ public class KStreamImplTest {
     public void shouldNotAllowNullGroupedOnGroupByKey() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
-            () -> testStream.groupByKey((Grouped<String, String>) null));
+            () -> testStream.groupByKey(null));
         assertThat(exception.getMessage(), equalTo("grouped can't be null"));
     }
 
@@ -646,7 +646,7 @@ public class KStreamImplTest {
                 testStream,
                 MockValueJoiner.TOSTRING_JOINER,
                 JoinWindows.of(ofMillis(10)),
-                (StreamJoined<String, String, String>) null));
+                null));
         assertThat(exception.getMessage(), equalTo("streamJoined can't be null"));
     }
 
@@ -746,7 +746,7 @@ public class KStreamImplTest {
                 testStream,
                 MockValueJoiner.TOSTRING_JOINER,
                 JoinWindows.of(ofMillis(10)),
-                (StreamJoined<String, String, String>) null));
+                null));
         assertThat(exception.getMessage(), equalTo("streamJoined can't be null"));
     }
 
@@ -845,7 +845,7 @@ public class KStreamImplTest {
                 testStream,
                 MockValueJoiner.TOSTRING_JOINER,
                 JoinWindows.of(ofMillis(10)),
-                (StreamJoined<String, String, String>) null));
+                null));
         assertThat(exception.getMessage(), equalTo("streamJoined can't be null"));
     }
 
@@ -1595,7 +1595,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.process((ProcessorSupplier<? super String, ? super String, Void, Void>) null));
-        assertThat(exception.getMessage(), equalTo("processorSupplier can't be null"));
+        assertThat(exception.getMessage(), equalTo("processorSupplier cannot be null"));
     }
 
     @Test
@@ -1604,7 +1604,7 @@ public class KStreamImplTest {
             NullPointerException.class,
             () -> testStream.process((ProcessorSupplier<? super String, ? super String, Void, Void>) null,
                                      "storeName"));
-        assertThat(exception.getMessage(), equalTo("processorSupplier can't be null"));
+        assertThat(exception.getMessage(), equalTo("processorSupplier cannot be null"));
     }
 
     @Test
@@ -1613,7 +1613,7 @@ public class KStreamImplTest {
             NullPointerException.class,
             () -> testStream.process((ProcessorSupplier<? super String, ? super String, Void, Void>) null,
                                      Named.as("processor")));
-        assertThat(exception.getMessage(), equalTo("processorSupplier can't be null"));
+        assertThat(exception.getMessage(), equalTo("processorSupplier cannot be null"));
     }
 
     @Test
@@ -1622,7 +1622,7 @@ public class KStreamImplTest {
             NullPointerException.class,
             () -> testStream.process((ProcessorSupplier<? super String, ? super String, Void, Void>) null,
                                      Named.as("processor"), "stateStore"));
-        assertThat(exception.getMessage(), equalTo("processorSupplier can't be null"));
+        assertThat(exception.getMessage(), equalTo("processorSupplier cannot be null"));
     }
 
     @Test
@@ -1678,7 +1678,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.processValues((FixedKeyProcessorSupplier<? super String, ? super String, Void>) null));
-        assertThat(exception.getMessage(), equalTo("processorSupplier can't be null"));
+        assertThat(exception.getMessage(), equalTo("processorSupplier cannot be null"));
     }
 
     @Test
@@ -1687,7 +1687,7 @@ public class KStreamImplTest {
             NullPointerException.class,
             () -> testStream.processValues((FixedKeyProcessorSupplier<? super String, ? super String, Void>) null,
                 "storeName"));
-        assertThat(exception.getMessage(), equalTo("processorSupplier can't be null"));
+        assertThat(exception.getMessage(), equalTo("processorSupplier cannot be null"));
     }
 
     @Test
@@ -1696,7 +1696,7 @@ public class KStreamImplTest {
             NullPointerException.class,
             () -> testStream.process((ProcessorSupplier<? super String, ? super String, Void, Void>) null,
                 Named.as("processor")));
-        assertThat(exception.getMessage(), equalTo("processorSupplier can't be null"));
+        assertThat(exception.getMessage(), equalTo("processorSupplier cannot be null"));
     }
 
     @Test
@@ -1705,7 +1705,7 @@ public class KStreamImplTest {
             NullPointerException.class,
             () -> testStream.process((ProcessorSupplier<? super String, ? super String, Void, Void>) null,
                 Named.as("processor"), "stateStore"));
-        assertThat(exception.getMessage(), equalTo("processorSupplier can't be null"));
+        assertThat(exception.getMessage(), equalTo("processorSupplier cannot be null"));
     }
 
     @Test
