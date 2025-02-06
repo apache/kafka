@@ -679,7 +679,7 @@ public class InternalTopologyBuilder {
         nodeGrouper.add(processorName);
         nodeGrouper.unite(processorName, predecessors);
         globalStateBuilders.put(storeFactory.storeName(), storeFactory);
-        // connect source topic as (read-only) changelog topic for fault-tolerance
+        // connect the source topic as (read-only) changelog topic for fault-tolerance
         storeFactory.withLoggingDisabled();
         connectSourceStoreAndTopic(storeFactory.storeName(), topic);
         nodeGroups = null;
