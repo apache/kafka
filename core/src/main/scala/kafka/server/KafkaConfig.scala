@@ -549,7 +549,9 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
         .find(endpoint => endpoint.listenerName.equals(ListenerName.normalised(name)))
         .orElse(
           // If users don't define advertised.listeners, the advertised controller listeners inherit from listeners configuration
-          // which match listener names in controller.listener.names. Also, removing "0.0.0.0" host to avoid validation errors.
+          // which match listener names in controller.listener.names.
+          // Removing "0.0.0.0" host to avoid validation errors. This is compatible with the old behavior before 3.9.
+          // The null or "" host does a reverse lookup in ListenerInfo#withWildcardHostnamesResolved.
           controllerListenersValue
             .find(endpoint => endpoint.listenerName.equals(ListenerName.normalised(name)))
             .map(endpoint => if (endpoint.host == "0.0.0.0") {

@@ -1257,7 +1257,7 @@ class KafkaConfigTest {
   }
 
   @Test
-  def testImplicitAllBindingControllerListenersCanBeAdvertisedForKRaftCombined(): Unit = {
+  def testImplicitAllBindingControllerListenersCanBeAdvertisedForKRaftController(): Unit = {
     val props = new Properties()
     props.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller")
     val listeners = "CONTROLLER://:9093"
@@ -1276,7 +1276,7 @@ class KafkaConfigTest {
   }
 
   @Test
-  def testExplicitAllBindingControllerListenersCanBeAdvertisedForKRaftCombined(): Unit = {
+  def testExplicitAllBindingControllerListenersCanBeAdvertisedForKRaftController(): Unit = {
     val props = new Properties()
     props.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller")
     val listeners = "CONTROLLER://0.0.0.0:9093"
