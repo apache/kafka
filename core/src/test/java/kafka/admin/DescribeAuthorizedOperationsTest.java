@@ -20,15 +20,14 @@ package kafka.admin;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ConsumerGroupDescription;
-import org.apache.kafka.clients.admin.CreateAclsResult;
 import org.apache.kafka.clients.admin.DescribeClusterOptions;
 import org.apache.kafka.clients.admin.DescribeConsumerGroupsOptions;
 import org.apache.kafka.clients.admin.DescribeConsumerGroupsResult;
 import org.apache.kafka.clients.admin.DescribeTopicsOptions;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.TopicDescription;
-import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
@@ -51,7 +50,6 @@ import org.apache.kafka.security.authorizer.AclEntry;
 
 import org.junit.jupiter.api.extension.ExtendWith;
 
-import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -101,68 +99,57 @@ public class DescribeAuthorizedOperationsTest {
     }
 
     private Map<String, Object> createAdminConfig(String username, String password) {
-        return createAdminConfig(username, password, Map.of());
-    }
-
-    private Map<String, Object> createAdminConfig(String username, String password, Map<String, Object> additionalConfigs) {
         Map<String, Object> configs = new HashMap<>();
         configs.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, SecurityProtocol.SASL_PLAINTEXT.name);
         configs.put(SaslConfigs.SASL_MECHANISM, "PLAIN");
         configs.put(SaslConfigs.SASL_JAAS_CONFIG,
             String.format("org.apache.kafka.common.security.plain.PlainLoginModule required username=\"%s\" password=\"%s\";", username, password));
-        configs.putAll(additionalConfigs);
         return configs;
     }
 
-    private void setupSecurity(ClusterInstance clusterInstance) {
+    private void setupSecurity(ClusterInstance clusterInstance) throws InterruptedException {
         try (Admin admin = clusterInstance.admin(createAdminConfig(JaasUtils.KAFKA_PLAIN_ADMIN, JaasUtils.KAFKA_PLAIN_ADMIN_PASSWORD))) {
             ResourcePattern topicResource = new ResourcePattern(ResourceType.TOPIC, AclEntry.WILDCARD_RESOURCE, PatternType.LITERAL);
 
-            CreateAclsResult result = admin.createAcls(List.of(
+            admin.createAcls(List.of(
                 new AclBinding(CLUSTER_PATTERN, ALTER_ENTRY),
                 new AclBinding(topicResource, DESCRIBE_ENTRY)
-            ));
-            assertDoesNotThrow(result::all);
+            )).all();
 
-            assertDoesNotThrow(() -> clusterInstance.waitAcls(new AclBindingFilter(CLUSTER_PATTERN.toFilter(), ANY), Set.of(ALTER_ENTRY)));
-            assertDoesNotThrow(() -> clusterInstance.waitAcls(new AclBindingFilter(topicResource.toFilter(), ANY), Set.of(DESCRIBE_ENTRY)));
+            clusterInstance.waitAcls(new AclBindingFilter(CLUSTER_PATTERN.toFilter(), ANY), Set.of(ALTER_ENTRY));
+            clusterInstance.waitAcls(new AclBindingFilter(topicResource.toFilter(), ANY), Set.of(DESCRIBE_ENTRY));
         }
     }
 
     @ClusterTemplate("generator")
-    public void testConsumerGroupAuthorizedOperations(ClusterInstance clusterInstance) {
+    public void testConsumerGroupAuthorizedOperations(ClusterInstance clusterInstance) throws InterruptedException {
         setupSecurity(clusterInstance);
-        try (Admin admin = clusterInstance.admin(createAdminConfig(JaasUtils.KAFKA_PLAIN_ADMIN, JaasUtils.KAFKA_PLAIN_ADMIN_PASSWORD))) {
-            assertDoesNotThrow(() -> admin.createTopics(List.of(new NewTopic("topic1", 1, (short) 1))));
-            assertDoesNotThrow(() -> clusterInstance.waitForTopic("topic1", 1));
-        }
-        try (Admin admin = clusterInstance.admin(createAdminConfig(JaasUtils.KAFKA_PLAIN_USER1, JaasUtils.KAFKA_PLAIN_USER1_PASSWORD));
-             Consumer<Byte, Byte> consumer1 = clusterInstance.consumer(createAdminConfig(JaasUtils.KAFKA_PLAIN_ADMIN, JaasUtils.KAFKA_PLAIN_ADMIN_PASSWORD, Map.of(ConsumerConfig.GROUP_ID_CONFIG, GROUP1)));
-             Consumer<Byte, Byte> consumer2 = clusterInstance.consumer(createAdminConfig(JaasUtils.KAFKA_PLAIN_ADMIN, JaasUtils.KAFKA_PLAIN_ADMIN_PASSWORD, Map.of(ConsumerConfig.GROUP_ID_CONFIG, GROUP2)));
-             Consumer<Byte, Byte> consumer3 = clusterInstance.consumer(createAdminConfig(JaasUtils.KAFKA_PLAIN_ADMIN, JaasUtils.KAFKA_PLAIN_ADMIN_PASSWORD, Map.of(ConsumerConfig.GROUP_ID_CONFIG, GROUP3)))
+        try (Admin admin = clusterInstance.admin(createAdminConfig(JaasUtils.KAFKA_PLAIN_ADMIN, JaasUtils.KAFKA_PLAIN_ADMIN_PASSWORD));
+             Admin user1 = clusterInstance.admin(createAdminConfig(JaasUtils.KAFKA_PLAIN_USER1, JaasUtils.KAFKA_PLAIN_USER1_PASSWORD));
         ) {
+            admin.createTopics(List.of(new NewTopic("topic1", 1, (short) 1)));
+            clusterInstance.waitForTopic("topic1", 1);
+
             // create consumers to avoid group not found error
-            consumer1.subscribe(List.of("topic1"));
-            consumer1.poll(Duration.ofMillis(1000));
-            consumer2.subscribe(List.of("topic1"));
-            consumer2.poll(Duration.ofMillis(1000));
-            consumer3.subscribe(List.of("topic1"));
-            consumer3.poll(Duration.ofMillis(1000));
+            TopicPartition tp = new TopicPartition("topic1", 0);
+            OffsetAndMetadata offsetAndMetadata = new OffsetAndMetadata(0);
+            assertDoesNotThrow(() -> admin.alterConsumerGroupOffsets(GROUP1, Map.of(tp, offsetAndMetadata)).all().get());
+            assertDoesNotThrow(() -> admin.alterConsumerGroupOffsets(GROUP2, Map.of(tp, offsetAndMetadata)).all().get());
+            assertDoesNotThrow(() -> admin.alterConsumerGroupOffsets(GROUP3, Map.of(tp, offsetAndMetadata)).all().get());
 
             AccessControlEntry allOperationsEntry = createAccessControlEntry(JaasUtils.KAFKA_PLAIN_USER1, ALL);
             AccessControlEntry describeEntry = createAccessControlEntry(JaasUtils.KAFKA_PLAIN_USER1, DESCRIBE);
             AccessControlEntry deleteEntry = createAccessControlEntry(JaasUtils.KAFKA_PLAIN_USER1, DELETE);
-            CreateAclsResult result = admin.createAcls(List.of(
+            user1.createAcls(List.of(
                 new AclBinding(GROUP1_PATTERN, allOperationsEntry),
                 new AclBinding(GROUP2_PATTERN, describeEntry),
                 new AclBinding(GROUP3_PATTERN, deleteEntry)
-            ));
-            assertDoesNotThrow(result::all);
-            assertDoesNotThrow(() -> clusterInstance.waitAcls(new AclBindingFilter(GROUP1_PATTERN.toFilter(), ANY), Set.of(allOperationsEntry)));
-            assertDoesNotThrow(() -> clusterInstance.waitAcls(new AclBindingFilter(GROUP2_PATTERN.toFilter(), ANY), Set.of(describeEntry)));
-            assertDoesNotThrow(() -> clusterInstance.waitAcls(new AclBindingFilter(GROUP3_PATTERN.toFilter(), ANY), Set.of(deleteEntry)));
+            )).all();
+            clusterInstance.waitAcls(new AclBindingFilter(GROUP1_PATTERN.toFilter(), ANY), Set.of(allOperationsEntry));
+            clusterInstance.waitAcls(new AclBindingFilter(GROUP2_PATTERN.toFilter(), ANY), Set.of(describeEntry));
+            clusterInstance.waitAcls(new AclBindingFilter(GROUP3_PATTERN.toFilter(), ANY), Set.of(deleteEntry));
 
-            DescribeConsumerGroupsResult describeConsumerGroupsResult = admin.describeConsumerGroups(
+            DescribeConsumerGroupsResult describeConsumerGroupsResult = user1.describeConsumerGroups(
                 List.of(GROUP1, GROUP2, GROUP3), new DescribeConsumerGroupsOptions().includeAuthorizedOperations(true));
             assertEquals(3, describeConsumerGroupsResult.describedGroups().size());
 
@@ -181,7 +168,7 @@ public class DescribeAuthorizedOperationsTest {
     }
 
     @ClusterTemplate("generator")
-    public void testClusterAuthorizedOperations(ClusterInstance clusterInstance) {
+    public void testClusterAuthorizedOperations(ClusterInstance clusterInstance) throws InterruptedException {
         setupSecurity(clusterInstance);
         try (Admin admin = clusterInstance.admin(createAdminConfig(JaasUtils.KAFKA_PLAIN_USER1, JaasUtils.KAFKA_PLAIN_USER1_PASSWORD))) {
             // test without includeAuthorizedOperations flag
@@ -197,12 +184,11 @@ public class DescribeAuthorizedOperationsTest {
         // enable all operations for cluster resource
         try (Admin admin = clusterInstance.admin(createAdminConfig(JaasUtils.KAFKA_PLAIN_ADMIN, JaasUtils.KAFKA_PLAIN_ADMIN_PASSWORD))) {
             AccessControlEntry allOperationEntry = createAccessControlEntry(JaasUtils.KAFKA_PLAIN_USER1, ALL);
-            CreateAclsResult result = admin.createAcls(List.of(new AclBinding(CLUSTER_PATTERN, allOperationEntry)));
-            assertDoesNotThrow(result::all);
-            assertDoesNotThrow(() -> clusterInstance.waitAcls(
+            admin.createAcls(List.of(new AclBinding(CLUSTER_PATTERN, allOperationEntry))).all();
+            clusterInstance.waitAcls(
                 new AclBindingFilter(CLUSTER_PATTERN.toFilter(), ANY),
                 Set.of(allOperationEntry, ALTER_ENTRY)
-            ));
+            );
         }
 
         try (Admin admin = clusterInstance.admin(createAdminConfig(JaasUtils.KAFKA_PLAIN_USER1, JaasUtils.KAFKA_PLAIN_USER1_PASSWORD))) {
@@ -213,17 +199,17 @@ public class DescribeAuthorizedOperationsTest {
     }
 
     @ClusterTemplate("generator")
-    public void testTopicAuthorizedOperations(ClusterInstance clusterInstance) {
+    public void testTopicAuthorizedOperations(ClusterInstance clusterInstance) throws InterruptedException {
         String topic1 = "topic1";
         String topic2 = "topic2";
         setupSecurity(clusterInstance);
         try (Admin admin = clusterInstance.admin(createAdminConfig(JaasUtils.KAFKA_PLAIN_ADMIN, JaasUtils.KAFKA_PLAIN_ADMIN_PASSWORD))) {
-            assertDoesNotThrow(() -> admin.createTopics(List.of(
+            admin.createTopics(List.of(
                 new NewTopic(topic1, 1, (short) 1),
                 new NewTopic(topic2, 1, (short) 1)
-            )));
-            assertDoesNotThrow(() -> clusterInstance.waitForTopic(topic1, 1));
-            assertDoesNotThrow(() -> clusterInstance.waitForTopic(topic2, 1));
+            ));
+            clusterInstance.waitForTopic(topic1, 1);
+            clusterInstance.waitForTopic(topic2, 1);
         }
 
         try (Admin admin = clusterInstance.admin(createAdminConfig(JaasUtils.KAFKA_PLAIN_USER1, JaasUtils.KAFKA_PLAIN_USER1_PASSWORD))) {
@@ -248,19 +234,18 @@ public class DescribeAuthorizedOperationsTest {
             ResourcePattern topic2Resource = new ResourcePattern(ResourceType.TOPIC, topic2, PatternType.LITERAL);
             AccessControlEntry allOperationEntry = createAccessControlEntry(JaasUtils.KAFKA_PLAIN_USER1, ALL);
             AccessControlEntry deleteEntry = createAccessControlEntry(JaasUtils.KAFKA_PLAIN_USER1, DELETE);
-            CreateAclsResult result = admin.createAcls(List.of(
+            admin.createAcls(List.of(
                 new AclBinding(topic1Resource, allOperationEntry),
                 new AclBinding(topic2Resource, deleteEntry)
-            ));
-            assertDoesNotThrow(result::all);
-            assertDoesNotThrow(() -> clusterInstance.waitAcls(
+            )).all();
+            clusterInstance.waitAcls(
                 new AclBindingFilter(topic1Resource.toFilter(), ANY),
                 Set.of(allOperationEntry)
-            ));
-            assertDoesNotThrow(() -> clusterInstance.waitAcls(
+            );
+            clusterInstance.waitAcls(
                 new AclBindingFilter(topic2Resource.toFilter(), ANY),
                 Set.of(deleteEntry)
-            ));
+            );
         }
 
         try (Admin admin = clusterInstance.admin(createAdminConfig(JaasUtils.KAFKA_PLAIN_USER1, JaasUtils.KAFKA_PLAIN_USER1_PASSWORD))) {
