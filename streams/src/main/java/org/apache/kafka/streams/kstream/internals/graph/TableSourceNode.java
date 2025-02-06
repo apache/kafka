@@ -103,13 +103,16 @@ public class TableSourceNode<K, V> extends SourceGraphNode<K, V> {
                                       consumedInternal().valueDeserializer(),
                                       topicName);
 
-            processorParameters.addProcessorTo(topologyBuilder, new String[] {sourceName});
+            processorParameters.addProcessorTo(topologyBuilder, sourceName);
 
             // if the KTableSource should not be materialized, stores will be null or empty
             final KTableSource<K, V> tableSource = (KTableSource<K, V>) processorParameters.processorSupplier();
             if (tableSource.stores() != null) {
                 if (shouldReuseSourceTopicForChangelog) {
+                    // TODO: rewrite this part to use Topology.addReadOnlyStateStore() instead
+                    // should allow to move off using `InternalTopologyBuilder` in favor of the public `Topology` API
                     tableSource.stores().forEach(store -> {
+                        // connect the source topic as (read-only) changelog topic for fault-tolerance
                         store.withLoggingDisabled();
                         topologyBuilder.connectSourceStoreAndTopic(store.name(), topicName);
                     });
