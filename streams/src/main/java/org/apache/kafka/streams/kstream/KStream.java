@@ -2403,8 +2403,9 @@ public interface KStream<K, V> {
      *
      * In contrast to {@link #join(KTable, ValueJoiner)}, there is no co-partitioning requirement between this
      * {@code KStream} and the {@link GlobalKTable}.
-     * Also note, that the {@link GlobalKTable} is updated "asynchronously", and thus this operation is inherently
-     * non-deterministic.
+     * Also note that there are no ordering guarantees between the updates on the left and the right side of this join,
+     * since updates to the {@link GlobalKTable} are in no way synchronized.
+     * Therefore, the result of the join is inherently non-deterministic.
      *
      * @param globalTable
      *        the {@link GlobalKTable} to be joined with this stream
