@@ -19,11 +19,10 @@ package kafka.server
 
 import kafka.server.DynamicBrokerConfig.AllDynamicConfigs
 
-import java.net.{InetAddress, UnknownHostException}
 import java.util.Properties
 import org.apache.kafka.common.config.ConfigDef
 import org.apache.kafka.coordinator.group.GroupConfig
-import org.apache.kafka.server.config.{QuotaConfig, ZooKeeperInternals}
+import org.apache.kafka.server.config.QuotaConfig 
 
 import java.util
 import scala.jdk.CollectionConverters._
@@ -83,17 +82,6 @@ object DynamicConfig {
     def names: util.Set[String] = ipConfigs.names
 
     def validate(props: Properties): util.Map[String, AnyRef] = DynamicConfig.validate(ipConfigs, props, customPropsAllowed = false)
-
-    def isValidIpEntity(ip: String): Boolean = {
-      if (ip != ZooKeeperInternals.DEFAULT_STRING) {
-        try {
-          InetAddress.getByName(ip)
-        } catch {
-          case _: UnknownHostException => return false
-        }
-      }
-      true
-    }
   }
 
   object ClientMetrics {
