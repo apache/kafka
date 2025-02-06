@@ -35,6 +35,8 @@ import org.apache.kafka.storage.internals.log.{LogConfig, LogStartOffsetIncremen
 import org.apache.kafka.test.TestUtils.assertOptional
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ArgumentsSource
 
 import java.io.File
 import java.nio.ByteBuffer
@@ -44,6 +46,8 @@ import java.util.{Collections, Optional, Properties}
 import scala.jdk.CollectionConverters._
 import scala.util.Using
 
+// TODO: Test random memory records
+// TODO: check that we test the empty record case
 final class KafkaMetadataLogTest {
   import KafkaMetadataLogTest._
 
@@ -963,6 +967,20 @@ final class KafkaMetadataLogTest {
       latestSnapshotOffset >= log.startOffset,
       s"latest snapshot offset ($latestSnapshotOffset) must be >= log start offset (${log.startOffset})"
     )
+  }
+
+  @ParameterizedTest
+  @ArgumentsSource(classOf[InvalidMemoryRecordsProvider])
+  def testInvalidMemoryRecords(records: MemoryRecords, expectedException: Class[Exception]): Unit = {
+    val log = buildMetadataLog(tempDir, mockTime)
+    val previousEndOffset = log.endOffset().offset()
+
+    assertThrows(
+      expectedException,
+      () => log.appendAsFollower(records)
+    );
+
+    assertEquals(previousEndOffset, log.endOffset().offset())
   }
 }
 

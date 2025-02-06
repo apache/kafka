@@ -1812,9 +1812,12 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         }
     }
 
-    private void appendAsFollower(
-        Records records
-    ) {
+    private void appendAsFollower(Records records) {
+        if (records.sizeInBytes() == 0) {
+            // Nothing to do if there are no bytes in the response
+            return;
+        }
+
         LogAppendInfo info = log.appendAsFollower(records);
         if (quorum.isVoter() || followersAlwaysFlush) {
             // the leader only requires that voters have flushed their log before sending a Fetch

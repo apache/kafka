@@ -35,6 +35,8 @@ import org.apache.kafka.snapshot.RawSnapshotWriter;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ArgumentsSource;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -50,6 +52,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+// TODO: check that we test the empty record case
+// TODO: Test random memory records
 public class MockLogTest {
 
     private MockLog log;
@@ -187,7 +191,13 @@ public class MockLogTest {
         LeaderChangeMessage messageData =  new LeaderChangeMessage().setLeaderId(0);
         ByteBuffer buffer = ByteBuffer.allocate(256);
         log.appendAsLeader(
-            MemoryRecords.withLeaderChangeMessage(initialOffset, 0L, 2, buffer, messageData),
+            MemoryRecords.withLeaderChangeMessage(
+                initialOffset,
+                0L,
+                currentEpoch,
+                buffer,
+                messageData
+            ),
             currentEpoch
         );
 
@@ -890,6 +900,19 @@ public class MockLogTest {
         assertEquals(ValidOffsetAndEpoch.Kind.VALID, resultOffsetAndEpoch.kind());
     }
 
+    @ParameterizedTest
+    @ArgumentsSource(InvalidMemoryRecordsProvider.class)
+    void testInvalidMemoryRecords(MemoryRecords records, Class<Exception> expectedException) {
+        long previousEndOffset = log.endOffset().offset();
+
+        assertThrows(
+            expectedException,
+            () -> log.appendAsFollower(records)
+        );
+
+        assertEquals(previousEndOffset, log.endOffset().offset());
+    }
+
     private Optional<OffsetRange> readOffsets(long startOffset, Isolation isolation) {
         // The current MockLog implementation reads at most one batch
 
@@ -958,6 +981,7 @@ public class MockLogTest {
             MemoryRecords.withRecords(
                 log.endOffset().offset(),
                 Compression.NONE,
+                epoch,
                 records.toArray(new SimpleRecord[records.size()])
             ),
             epoch

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
@@ -297,12 +298,15 @@ public class MockLog implements ReplicatedLog {
     }
 
     private LogAppendInfo append(Records records, OptionalInt epoch) {
-        if (records.sizeInBytes() == 0)
+        if (records.sizeInBytes() == 0) {
             throw new IllegalArgumentException("Attempt to append an empty record set");
+        }
 
         long baseOffset = endOffset().offset();
         long lastOffset = baseOffset;
+        boolean hasBatches = false;
         for (RecordBatch batch : records.batches()) {
+            hasBatches = true;
             if (batch.baseOffset() != endOffset().offset()) {
                 /* KafkaMetadataLog throws an kafka.common.UnexpectedAppendOffsetException this is the
                  * best we can do from this module.
@@ -343,6 +347,11 @@ public class MockLog implements ReplicatedLog {
 
             appendBatch(logBatch);
             lastOffset = logBatch.last().offset;
+        }
+
+        if (!hasBatches) {
+            // This emulates the default handling when records doesn't have enough bytes for a batch
+            throw new InvalidRecordException("Append failed unexpectedly");
         }
 
         return new LogAppendInfo(baseOffset, lastOffset);

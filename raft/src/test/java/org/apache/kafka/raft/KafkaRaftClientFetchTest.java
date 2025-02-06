@@ -17,121 +17,36 @@
 package org.apache.kafka.raft;
 
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.LegacyRecord;
 import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.record.Records;
 import org.apache.kafka.server.common.KRaftVersion;
 
 import net.jqwik.api.AfterFailureMode;
 import net.jqwik.api.ForAll;
 import net.jqwik.api.Property;
 
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ArgumentsSource;
 
-import java.nio.ByteBuffer;
 import java.util.Random;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public final class KafkaRaftClientFetchTest {
-    // Since the log is empty the valid offset is 0. Use an invalid offset to show that records are not getting decoded
-    private static final long BASE_OFFSET = 1234;
-    private static final int EPOCH = 4321;
-
     @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
     void testRandomRecords(
         @ForAll int seed
     ) throws Exception {
-        testFetchResponseWithInvalidRecord(buildRandomRecords(new Random(seed)));
+        testFetchResponseWithInvalidRecord(InvalidMemoryRecordsProvider.buildRandomRecords(new Random(seed)));
     }
 
-    @Test
-    void testNotEnoughBytes() throws Exception {
-        testFetchResponseWithInvalidRecord(
-            MemoryRecords.readableRecords(ByteBuffer.wrap(new byte[Records.LOG_OVERHEAD - 1]))
-        );
+    @ParameterizedTest
+    @ArgumentsSource(InvalidMemoryRecordsProvider.class)
+    void testInvalidMemoryRecords(MemoryRecords records, Class<Exception> expectedException) throws Exception {
+        // CorruptRecordException are handled by the KafkaRaftClient so ignore the expected exception
+        testFetchResponseWithInvalidRecord(records);
     }
 
-    @Test
-    void testRecordsSizeTooSmall() throws Exception {
-        var buffer = ByteBuffer.allocate(256);
-        // Write the base offset
-        buffer.putLong(BASE_OFFSET);
-        // Write record size
-        buffer.putInt(LegacyRecord.RECORD_OVERHEAD_V0 - 1);
-        buffer.position(0);
-        buffer.limit(buffer.capacity());
-
-        testFetchResponseWithInvalidRecord(MemoryRecords.readableRecords(buffer));
-    }
-
-    @Test
-    void testNotEnoughBytesToMagic() throws Exception {
-        var buffer = ByteBuffer.allocate(256);
-        // Write the base offset
-        buffer.putLong(BASE_OFFSET);
-        // Write record size
-        buffer.putInt(buffer.capacity() - Records.LOG_OVERHEAD);
-        buffer.position(0);
-        buffer.limit(Records.HEADER_SIZE_UP_TO_MAGIC - 1);
-
-        testFetchResponseWithInvalidRecord(MemoryRecords.readableRecords(buffer));
-    }
-
-    @Test
-    void testNegativedMagic() throws Exception {
-        var buffer = ByteBuffer.allocate(256);
-        // Write the base offset
-        buffer.putLong(BASE_OFFSET);
-        // Write record size
-        buffer.putInt(buffer.capacity() - Records.LOG_OVERHEAD);
-        // Write the epoch
-        buffer.putInt(EPOCH);
-        // Write magic
-        buffer.put((byte) -1);
-        buffer.position(0);
-        buffer.limit(buffer.capacity());
-
-        testFetchResponseWithInvalidRecord(MemoryRecords.readableRecords(buffer));
-    }
-
-    @Test
-    void testLargedMagic() throws Exception {
-        var buffer = ByteBuffer.allocate(256);
-        // Write the base offset
-        buffer.putLong(BASE_OFFSET);
-        // Write record size
-        buffer.putInt(buffer.capacity() - Records.LOG_OVERHEAD);
-        // Write the epoch
-        buffer.putInt(EPOCH);
-        // Write magic
-        buffer.put((byte) (RecordBatch.CURRENT_MAGIC_VALUE + 1));
-        buffer.position(0);
-        buffer.limit(buffer.capacity());
-
-        testFetchResponseWithInvalidRecord(MemoryRecords.readableRecords(buffer));
-    }
-
-    @Test
-    void testLessBytesThanRecordSize() throws Exception {
-        var buffer = ByteBuffer.allocate(256);
-        // Write the base offset
-        buffer.putLong(BASE_OFFSET);
-        // Write record size
-        buffer.putInt(buffer.capacity() - Records.LOG_OVERHEAD);
-        // Write the epoch
-        buffer.putInt(EPOCH);
-        // Write magic
-        buffer.put(RecordBatch.CURRENT_MAGIC_VALUE);
-        buffer.position(0);
-        buffer.limit(buffer.capacity() - Records.LOG_OVERHEAD - 1);
-
-        testFetchResponseWithInvalidRecord(MemoryRecords.readableRecords(buffer));
-    }
-
-    @Test
     private static void testFetchResponseWithInvalidRecord(MemoryRecords records) throws Exception {
         int localId = KafkaRaftClientTest.randomReplicaId();
         ReplicaKey local = KafkaRaftClientTest.replicaKey(localId, true);
@@ -164,13 +79,5 @@ public final class KafkaRaftClientFetchTest {
         context.client.poll();
 
         assertEquals(oldLogEndOffset, context.log.endOffset().offset());
-    }
-
-    private static MemoryRecords buildRandomRecords(Random random) {
-        int size = random.nextInt(255) + 1;
-        byte[] bytes = new byte[size];
-        random.nextBytes(bytes);
-
-        return MemoryRecords.readableRecords(ByteBuffer.wrap(bytes));
     }
 }
