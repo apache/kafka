@@ -158,11 +158,12 @@ class KafkaApisTest extends Logging {
     metrics.close()
   }
 
-  def createKafkaApis(interBrokerProtocolVersion: MetadataVersion = MetadataVersion.latestTesting,
-                      authorizer: Option[Authorizer] = None,
-                      configRepository: ConfigRepository = new MockConfigRepository(),
-                      overrideProperties: Map[String, String] = Map.empty,
-                      featureVersions: Seq[FeatureVersion] = Seq.empty): KafkaApis = {
+  def createKafkaApis(
+    authorizer: Option[Authorizer] = None,
+    configRepository: ConfigRepository = new MockConfigRepository(),
+    overrideProperties: Map[String, String] = Map.empty,
+    featureVersions: Seq[FeatureVersion] = Seq.empty
+  ): KafkaApis = {
 
     val properties = TestUtils.createBrokerConfig(brokerId)
     properties.put(KRaftConfigs.NODE_ID_CONFIG, brokerId.toString)
@@ -171,7 +172,6 @@ class KafkaApisTest extends Logging {
     properties.put(QuorumConfig.QUORUM_VOTERS_CONFIG, s"$voterId@localhost:9093")
 
     overrideProperties.foreach( p => properties.put(p._1, p._2))
-    TestUtils.setIbpVersion(properties, interBrokerProtocolVersion)
     val config = new KafkaConfig(properties)
 
     val listenerType = ListenerType.BROKER

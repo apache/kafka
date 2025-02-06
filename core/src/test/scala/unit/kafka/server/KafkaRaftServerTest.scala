@@ -26,7 +26,7 @@ import org.apache.kafka.metadata.bootstrap.{BootstrapDirectory, BootstrapMetadat
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.network.SocketServerConfigs
-import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerLogConfigs}
+import org.apache.kafka.server.config.{KRaftConfigs, ServerLogConfigs}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.test.TestUtils
 import org.junit.jupiter.api.Assertions._
@@ -262,7 +262,7 @@ class KafkaRaftServerTest {
   }
 
   @Test
-  def testKRaftUpdateWithIBP(): Unit = {
+  def testKRaftUpdateAt3_3_IV1(): Unit = {
     val clusterId = clusterIdBase64
     val nodeId = 0
     val metaProperties = new MetaProperties.Builder().
@@ -278,10 +278,9 @@ class KafkaRaftServerTest {
     configProperties.put(SocketServerConfigs.LISTENERS_CONFIG, "PLAINTEXT://127.0.0.1:9092,SSL://127.0.0.1:9093")
     configProperties.put(QuorumConfig.QUORUM_VOTERS_CONFIG, s"$nodeId@localhost:9093")
     configProperties.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL")
-    configProperties.put(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG, "3.3-IV1")
 
     val (metaPropertiesEnsemble, bootstrapMetadata) =
-      invokeLoadMetaProperties(metaProperties, configProperties, None)
+      invokeLoadMetaProperties(metaProperties, configProperties, Some(MetadataVersion.IBP_3_3_IV1))
 
     assertEquals(metaProperties, metaPropertiesEnsemble.logDirProps().values().iterator().next())
     assertTrue(metaPropertiesEnsemble.errorLogDirs().isEmpty)
@@ -290,7 +289,7 @@ class KafkaRaftServerTest {
   }
 
   @Test
-  def testKRaftUpdateWithoutIBP(): Unit = {
+  def testKRaftUpdate(): Unit = {
     val clusterId = clusterIdBase64
     val nodeId = 0
     val metaProperties = new MetaProperties.Builder().
