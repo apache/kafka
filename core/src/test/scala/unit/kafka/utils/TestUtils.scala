@@ -314,10 +314,6 @@ object TestUtils extends Logging {
     props
   }
 
-  def setIbpVersion(config: Properties, version: MetadataVersion): Unit = {
-    config.setProperty(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG, version.version)
-  }
-
   def createAdminClient[B <: KafkaBroker](
     brokers: Seq[B],
     listenerName: ListenerName,
