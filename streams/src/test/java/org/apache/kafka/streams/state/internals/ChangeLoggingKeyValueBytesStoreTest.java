@@ -69,7 +69,7 @@ import static org.mockito.Mockito.when;
 @SuppressWarnings("rawtypes")
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.STRICT_STUBS)
-public class ChangeLoggingKeyValueBytesStoreTest {
+class ChangeLoggingKeyValueBytesStoreTest {
 
     private final MockRecordCollector collector = new MockRecordCollector();
     private final InMemoryKeyValueStore inner = new InMemoryKeyValueStore("kv");
@@ -111,7 +111,7 @@ public class ChangeLoggingKeyValueBytesStoreTest {
     }
 
     @Test
-    public void shouldDelegateInit() {
+    void shouldDelegateInit() {
         final InternalMockProcessorContext context = mockContext();
         final KeyValueStore<Bytes, byte[]> innerMock = mock(InMemoryKeyValueStore.class);
         final StateStore outer = new ChangeLoggingKeyValueBytesStore(innerMock);
@@ -120,7 +120,7 @@ public class ChangeLoggingKeyValueBytesStoreTest {
     }
 
     @Test
-    public void shouldWriteKeyValueBytesToInnerStoreOnPut() {
+    void shouldWriteKeyValueBytesToInnerStoreOnPut() {
         store.put(hi, there);
         assertThat(inner.get(hi), equalTo(there));
         assertThat(collector.collected().size(), equalTo(1));
@@ -129,7 +129,7 @@ public class ChangeLoggingKeyValueBytesStoreTest {
     }
 
     @Test
-    public void shouldWriteAllKeyValueToInnerStoreOnPutAll() {
+    void shouldWriteAllKeyValueToInnerStoreOnPutAll() {
         store.putAll(Arrays.asList(KeyValue.pair(hi, there),
                                    KeyValue.pair(hello, world)));
         assertThat(inner.get(hi), equalTo(there));
@@ -143,7 +143,7 @@ public class ChangeLoggingKeyValueBytesStoreTest {
     }
 
     @Test
-    public void shouldPropagateDelete() {
+    void shouldPropagateDelete() {
         store.put(hi, there);
         store.delete(hi);
         assertThat(inner.approximateNumEntries(), equalTo(0L));
@@ -151,13 +151,13 @@ public class ChangeLoggingKeyValueBytesStoreTest {
     }
 
     @Test
-    public void shouldReturnOldValueOnDelete() {
+    void shouldReturnOldValueOnDelete() {
         store.put(hi, there);
         assertThat(store.delete(hi), equalTo(there));
     }
 
     @Test
-    public void shouldLogKeyNullOnDelete() {
+    void shouldLogKeyNullOnDelete() {
         store.put(hi, there);
         assertThat(store.delete(hi), equalTo(there));
 
@@ -169,20 +169,20 @@ public class ChangeLoggingKeyValueBytesStoreTest {
     }
 
     @Test
-    public void shouldWriteToInnerOnPutIfAbsentNoPreviousValue() {
+    void shouldWriteToInnerOnPutIfAbsentNoPreviousValue() {
         store.putIfAbsent(hi, there);
         assertThat(inner.get(hi), equalTo(there));
     }
 
     @Test
-    public void shouldNotWriteToInnerOnPutIfAbsentWhenValueForKeyExists() {
+    void shouldNotWriteToInnerOnPutIfAbsentWhenValueForKeyExists() {
         store.put(hi, there);
         store.putIfAbsent(hi, world);
         assertThat(inner.get(hi), equalTo(there));
     }
 
     @Test
-    public void shouldWriteToChangelogOnPutIfAbsentWhenNoPreviousValue() {
+    void shouldWriteToChangelogOnPutIfAbsentWhenNoPreviousValue() {
         store.putIfAbsent(hi, there);
 
         assertThat(collector.collected().size(), equalTo(1));
@@ -191,7 +191,7 @@ public class ChangeLoggingKeyValueBytesStoreTest {
     }
 
     @Test
-    public void shouldNotWriteToChangeLogOnPutIfAbsentWhenValueForKeyExists() {
+    void shouldNotWriteToChangeLogOnPutIfAbsentWhenValueForKeyExists() {
         store.put(hi, there);
         store.putIfAbsent(hi, world);
 
@@ -201,24 +201,24 @@ public class ChangeLoggingKeyValueBytesStoreTest {
     }
 
     @Test
-    public void shouldReturnCurrentValueOnPutIfAbsent() {
+    void shouldReturnCurrentValueOnPutIfAbsent() {
         store.put(hi, there);
         assertThat(store.putIfAbsent(hi, world), equalTo(there));
     }
 
     @Test
-    public void shouldReturnNullOnPutIfAbsentWhenNoPreviousValue() {
+    void shouldReturnNullOnPutIfAbsentWhenNoPreviousValue() {
         assertThat(store.putIfAbsent(hi, there), is(nullValue()));
     }
 
     @Test
-    public void shouldReturnValueOnGetWhenExists() {
+    void shouldReturnValueOnGetWhenExists() {
         store.put(hello, world);
         assertThat(store.get(hello), equalTo(world));
     }
 
     @Test
-    public void shouldGetRecordsWithPrefixKey() {
+    void shouldGetRecordsWithPrefixKey() {
         store.put(hi, there);
         store.put(Bytes.increment(hi), world);
 
@@ -241,12 +241,12 @@ public class ChangeLoggingKeyValueBytesStoreTest {
     }
 
     @Test
-    public void shouldReturnNullOnGetWhenDoesntExist() {
+    void shouldReturnNullOnGetWhenDoesntExist() {
         assertThat(store.get(hello), is(nullValue()));
     }
 
     @Test
-    public void shouldLogPositionOnPut() {
+    void shouldLogPositionOnPut() {
         context.setRecordContext(new ProcessorRecordContext(-1, INPUT_OFFSET, INPUT_PARTITION, INPUT_TOPIC_NAME, new RecordHeaders()));
         context.setTime(1L);
         store.put(hi, there);
