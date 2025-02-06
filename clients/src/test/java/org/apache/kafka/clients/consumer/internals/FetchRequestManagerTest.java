@@ -3418,7 +3418,7 @@ public class FetchRequestManagerTest {
         assertFalse(future.isDone());
 
         assertDoesNotThrow(() -> sendFetches(false));
-        assertFutureThrows(future, AuthenticationException.class);
+        assertFutureThrows(AuthenticationException.class, future);
     }
 
     @Test

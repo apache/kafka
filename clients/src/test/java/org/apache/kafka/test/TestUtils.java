@@ -583,12 +583,12 @@ public class TestUtils {
      * Assert that a future raises an expected exception cause type. Return the exception cause
      * if the assertion succeeds; otherwise raise AssertionError.
      *
-     * @param future The future to await
-     * @param exceptionCauseClass Class of the expected exception cause
      * @param <T> Exception cause type parameter
+     * @param exceptionCauseClass Class of the expected exception cause
+     * @param future The future to await
      * @return The caught exception cause
      */
-    public static <T extends Throwable> T assertFutureThrows(Future<?> future, Class<T> exceptionCauseClass) {
+    public static <T extends Throwable> T assertFutureThrows(Class<T> exceptionCauseClass, Future<?> future) {
         ExecutionException exception = assertThrows(ExecutionException.class, future::get);
         Throwable cause = exception.getCause();
         assertEquals(exceptionCauseClass, cause.getClass(),
@@ -598,11 +598,11 @@ public class TestUtils {
     }
 
     public static <T extends Throwable> void assertFutureThrows(
-        Future<?> future,
-        Class<T> expectedCauseClassApiException,
-        String expectedMessage
+            Class<T> expectedCauseClassApiException,
+            Future<?> future,
+            String expectedMessage
     ) {
-        T receivedException = assertFutureThrows(future, expectedCauseClassApiException);
+        T receivedException = assertFutureThrows(expectedCauseClassApiException, future);
         assertEquals(expectedMessage, receivedException.getMessage());
     }
 

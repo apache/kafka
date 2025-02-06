@@ -1915,7 +1915,7 @@ public class GroupCoordinatorServiceTest {
             Duration.ofMillis(100)
         );
 
-        assertFutureThrows(future, CoordinatorNotAvailableException.class);
+        assertFutureThrows(CoordinatorNotAvailableException.class, future);
     }
 
     @Test
@@ -1935,7 +1935,7 @@ public class GroupCoordinatorServiceTest {
             Duration.ofMillis(100)
         );
 
-        assertFutureThrows(future, IllegalStateException.class);
+        assertFutureThrows(IllegalStateException.class, future);
     }
 
     @Test
@@ -2352,7 +2352,7 @@ public class GroupCoordinatorServiceTest {
 
         CompletableFuture<DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup> future =
             service.describeShareGroupOffsets(requestContext(ApiKeys.DESCRIBE_SHARE_GROUP_OFFSETS), requestData);
-        assertFutureThrows(future, Exception.class, "Unable to validate read state summary request");
+        assertFutureThrows(Exception.class, future, "Unable to validate read state summary request");
     }
 
     @Test
@@ -2379,7 +2379,7 @@ public class GroupCoordinatorServiceTest {
 
         CompletableFuture<DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup> future =
             service.describeShareGroupOffsets(requestContext(ApiKeys.DESCRIBE_SHARE_GROUP_OFFSETS), requestData);
-        assertFutureThrows(future, IllegalStateException.class, "Result is null for the read state summary");
+        assertFutureThrows(IllegalStateException.class, future, "Result is null for the read state summary");
     }
 
     @Test
@@ -2409,7 +2409,7 @@ public class GroupCoordinatorServiceTest {
 
         CompletableFuture<DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup> future =
             service.describeShareGroupOffsets(requestContext(ApiKeys.DESCRIBE_SHARE_GROUP_OFFSETS), requestData);
-        assertFutureThrows(future, IllegalStateException.class, "Result is null for the read state summary");
+        assertFutureThrows(IllegalStateException.class, future, "Result is null for the read state summary");
     }
 
     @Test
