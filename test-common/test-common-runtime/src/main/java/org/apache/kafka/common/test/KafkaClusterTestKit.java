@@ -370,7 +370,6 @@ public class KafkaClusterTestKit implements AutoCloseable {
                             = Total number of brokers + Total number of controllers * 2
                               (Raft Manager per broker/controller)
         */
-        // TODO: can adjust thread size depend on controller and broker number?
         int numOfExecutorThreads = (nodes.brokerNodes().size() + nodes.controllerNodes().size()) * 2;
         this.executorService = Executors.newFixedThreadPool(numOfExecutorThreads, threadFactory);
         this.nodes = nodes;
