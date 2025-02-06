@@ -798,7 +798,7 @@ class ReplicaManager(val config: KafkaConfig,
       requestLocal
     )
 
-    val retryTimeoutMs = config.addPartitionsToTxnConfig.addPartitionsToTxnMaxTimeoutMs()
+    val retryTimeoutMs = config.requestTimeoutMs
     val addPartitionsRetryBackoffMs = config.addPartitionsToTxnConfig.addPartitionsToTxnRetryBackoffMs
     val startVerificationTimeMs = time.milliseconds
     def maybeRetryOnConcurrentTransactions(results: (Map[TopicPartition, Errors], Map[TopicPartition, VerificationGuard])): Unit = {
