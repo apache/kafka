@@ -39,7 +39,6 @@ import org.apache.kafka.metadata.ConfigRepository
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, PropertiesUtils}
 
 import java.util.{Collections, OptionalLong, Properties}
-import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.{FileLock, Scheduler}
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig, RemoteIndexCache}
@@ -72,7 +71,6 @@ class LogManager(logDirs: Seq[File],
                  val maxTransactionTimeoutMs: Int,
                  val producerStateManagerConfig: ProducerStateManagerConfig,
                  val producerIdExpirationCheckIntervalMs: Int,
-                 interBrokerProtocolVersion: MetadataVersion,
                  scheduler: Scheduler,
                  brokerTopicStats: BrokerTopicStats,
                  logDirFailureChannel: LogDirFailureChannel,
@@ -505,7 +503,7 @@ class LogManager(logDirs: Seq[File],
               }
 
               if (remainingLogs == 0) {
-                // loadLog is completed for all logs under the logDdir, mark it.
+                // loadLog is completed for all logs under the logDir, mark it.
                 loadLogsCompletedFlags.put(logDirAbsolutePath, true)
               }
             }
@@ -810,7 +808,7 @@ class LogManager(logDirs: Seq[File],
   /**
    * Checkpoint recovery offsets for all the logs in logDir.
    *
-   * @param logDir the directory in which the logs to be checkpointed are
+   * @param logDir the directory in which the logs to be checkpoint are
    */
   // Only for testing
   private[log] def checkpointRecoveryOffsetsInDir(logDir: File): Unit = {
@@ -821,7 +819,7 @@ class LogManager(logDirs: Seq[File],
    * Checkpoint recovery offsets for all the provided logs.
    *
    * @param logDir the directory in which the logs are
-   * @param logsToCheckpoint the logs to be checkpointed
+   * @param logsToCheckpoint the logs to be checkpoint
    */
   private def checkpointRecoveryOffsetsInDir(logDir: File, logsToCheckpoint: Map[TopicPartition, UnifiedLog]): Unit = {
     try {
@@ -843,8 +841,8 @@ class LogManager(logDirs: Seq[File],
   /**
    * Checkpoint log start offsets for all the provided logs in the provided directory.
    *
-   * @param logDir the directory in which logs are checkpointed
-   * @param logsToCheckpoint the logs to be checkpointed
+   * @param logDir the directory in which logs are checkpoint
+   * @param logsToCheckpoint the logs to be checkpoint
    */
   private def checkpointLogStartOffsetsInDir(logDir: File, logsToCheckpoint: Map[TopicPartition, UnifiedLog]): Unit = {
     try {
@@ -1000,7 +998,7 @@ class LogManager(logDirs: Seq[File],
    * @param isNew Whether the replica should have existed on the broker or not
    * @param isFuture True if the future log of the specified partition should be returned or created
    * @param topicId The topic ID of the partition's topic
-   * @param targetLogDirectoryId The directory Id that should host the the partition's topic.
+   * @param targetLogDirectoryId The directory Id that should host the partition's topic.
    *                             The next selected directory will be picked up if it None or equal {@link DirectoryId.UNASSIGNED}.
    *                             The method assumes provided Id belong to online directory.
    * @throws KafkaStorageException if isNew=false, log is not found in the cache and there is offline log directory on the broker
@@ -1315,7 +1313,7 @@ class LogManager(logDirs: Seq[File],
    * deletion. Checkpoints are updated once all the directories have been renamed.
    *
    * @param topicPartitions The set of topic-partitions to delete asynchronously
-   * @param errorHandler The error handler that will be called when a exception for a particular
+   * @param errorHandler The error handler that will be called when an exception for a particular
    *                     topic-partition is raised
    */
   def asyncDelete(topicPartitions: Iterable[TopicPartition],
@@ -1563,7 +1561,6 @@ object LogManager {
       brokerTopicStats = brokerTopicStats,
       logDirFailureChannel = logDirFailureChannel,
       time = time,
-      interBrokerProtocolVersion = config.interBrokerProtocolVersion,
       remoteStorageSystemEnable = config.remoteLogManagerConfig.isRemoteStorageSystemEnabled(),
       initialTaskDelayMs = config.logInitialTaskDelayMs)
   }
