@@ -14,29 +14,27 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.security;
+package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.common.config.types.Password;
+import java.util.Objects;
 
-import java.security.GeneralSecurityException;
+/**
+ * This class combines Acknowledgements with the id of the node to use for acknowledging.
+ */
+public class NodeAcknowledgements {
+    private final int nodeId;
+    private final Acknowledgements acknowledgements;
 
-public interface PasswordEncoder {
-    /**
-     * A password encoder that does not modify the given password. This is used in KRaft mode only.
-     */
-    PasswordEncoder NOOP = new PasswordEncoder() {
+    public NodeAcknowledgements(int nodeId, Acknowledgements acknowledgements) {
+        this.nodeId = nodeId;
+        this.acknowledgements = Objects.requireNonNull(acknowledgements);
+    }
 
-        @Override
-        public String encode(Password password) {
-            return password.value();
-        }
+    public int nodeId() {
+        return nodeId;
+    }
 
-        @Override
-        public Password decode(String encodedPassword) {
-            return new Password(encodedPassword);
-        }
-    };
-
-    String encode(Password password) throws GeneralSecurityException;
-    Password decode(String encodedPassword) throws GeneralSecurityException;
+    public Acknowledgements acknowledgements() {
+        return acknowledgements;
+    }
 }
