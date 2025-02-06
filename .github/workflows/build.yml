@@ -262,7 +262,12 @@ jobs:
            --path build/junit-xml \
            --export-test-catalog ./test-catalog >> $GITHUB_STEP_SUMMARY
 
+  # This job downloads all the JUnit XML files and thread dumps from the JDK 23 test runs.
+  # If any thread dump artifact is present, this job will fail since that means we had a
+  # timeout and probably did not run all tests. If there were no timeouts, this job will
+  # produce the test catalog and archive it.
   collate-test-catalog:
+    name: Collate Test Catalog
     needs: test
     if: ${{ always() }}
     runs-on: ubuntu-latest
@@ -294,6 +299,7 @@ jobs:
           path: junit-xml
           merge-multiple: true
       - name: Collate Test Catalog
+        continue-on-error: true
         env:
           GITHUB_WORKSPACE: ${{ github.workspace }}
           GRADLE_TEST_EXIT_CODE: 0
@@ -309,6 +315,8 @@ jobs:
           compression-level: 9
           if-no-files-found: error
 
+  # This job downloads the test catalog from the previous job and overlays it on the test-catalog branch.
+  # This will only run on trunk and only if the collate job did not detect a timeout.
   update-test-catalog:
     name: Update Test Catalog
     needs: collate-test-catalog
