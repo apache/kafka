@@ -112,11 +112,11 @@ class ChangeLoggingKeyValueBytesStoreTest {
 
     @Test
     void shouldDelegateInit() {
-        final InternalMockProcessorContext context = mockContext();
+        final InternalMockProcessorContext mockContext = mockContext();
         final KeyValueStore<Bytes, byte[]> innerMock = mock(InMemoryKeyValueStore.class);
         final StateStore outer = new ChangeLoggingKeyValueBytesStore(innerMock);
-        outer.init(context, outer);
-        verify(innerMock).init(context, outer);
+        outer.init(mockContext, outer);
+        verify(innerMock).init(mockContext, outer);
     }
 
     @Test
@@ -264,13 +264,13 @@ class ChangeLoggingKeyValueBytesStoreTest {
     }
 
     private StreamsConfig streamsConfigMock() {
-        final StreamsConfig streamsConfig = mock(StreamsConfig.class);
+        final StreamsConfig mockedStreamsConfig = mock(StreamsConfig.class);
 
         final Map<String, Object> myValues = new HashMap<>();
         myValues.put(InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED, true);
-        when(streamsConfig.originals()).thenReturn(myValues);
-        when(streamsConfig.values()).thenReturn(Collections.emptyMap());
-        when(streamsConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG)).thenReturn("add-id");
-        return streamsConfig;
+        when(mockedStreamsConfig.originals()).thenReturn(myValues);
+        when(mockedStreamsConfig.values()).thenReturn(Collections.emptyMap());
+        when(mockedStreamsConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG)).thenReturn("add-id");
+        return mockedStreamsConfig;
     }
 }
