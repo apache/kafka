@@ -292,6 +292,22 @@ class StreamsGroupHeartbeatRequestManagerTest {
         final Uuid uuid0 = Uuid.randomUuid();
         final Uuid uuid1 = Uuid.randomUuid();
 
+        final StreamsGroupHeartbeatResponseData.Endpoint endpoint = new StreamsGroupHeartbeatResponseData.Endpoint();
+        endpoint.setHost("localhost");
+        endpoint.setPort(8080);
+        StreamsGroupHeartbeatResponseData.TopicPartition active = new StreamsGroupHeartbeatResponseData.TopicPartition();
+        active.setTopic("activeTopic");
+        active.setPartitions(Arrays.asList(0, 1, 2));
+        StreamsGroupHeartbeatResponseData.TopicPartition standby = new StreamsGroupHeartbeatResponseData.TopicPartition();
+        standby.setTopic("standbyTopic");
+        standby.setPartitions(Arrays.asList(3, 4, 5));
+        StreamsGroupHeartbeatResponseData.EndpointToPartitions endpointToPartitions = new StreamsGroupHeartbeatResponseData.EndpointToPartitions();
+        endpointToPartitions.setActivePartitions(List.of(active));
+        endpointToPartitions.setStandbyPartitions(List.of(standby));
+        endpointToPartitions.setUserEndpoint(endpoint);
+
+
+
         final TopicInfo emptyTopicInfo = new TopicInfo(Optional.empty(), Optional.empty(), Collections.emptyMap());
 
         when(metadata.topicIds()).thenReturn(
@@ -299,6 +315,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
                 mkEntry("source0", uuid0),
                 mkEntry("repartition0", uuid1)
             ));
+
 
         streamsAssignmentInterface.subtopologyMap().put("0",
             new Subtopology(
@@ -332,6 +349,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
             .setMemberEpoch(TEST_MEMBER_EPOCH)
             .setThrottleTimeMs(TEST_THROTTLE_TIME_MS)
             .setHeartbeatIntervalMs(1000)
+            .setPartitionsByUserEndpoint(List.of(endpointToPartitions))
             .setActiveTasks(Collections.singletonList(
                 new StreamsGroupHeartbeatResponseData.TaskIds().setSubtopologyId("0").setPartitions(Collections.singletonList(0))))
             .setStandbyTasks(Collections.singletonList(
@@ -352,6 +370,14 @@ class StreamsGroupHeartbeatRequestManagerTest {
         assertEquals(data.activeTasks(), response.activeTasks());
         assertEquals(data.standbyTasks(), response.standbyTasks());
         assertEquals(data.warmupTasks(), response.warmupTasks());
+        
+        assertEquals(data.partitionsByUserEndpoint(), response.partitionsByUserEndpoint());
+        Map<StreamsAssignmentInterface.HostInfo, StreamsAssignmentInterface.EndpointPartitions> endpointPartitionsMap = streamsAssignmentInterface.partitionsByHost.get();
+        assertEquals(endpointPartitionsMap.size(), response.partitionsByUserEndpoint().size());
+        StreamsAssignmentInterface.HostInfo hostInfo = endpointPartitionsMap.keySet().iterator().next();
+        assertEquals(hostInfo.host, endpoint.host());
+        assertEquals(hostInfo.port, endpoint.port());
+        StreamsAssignmentInterface.EndpointPartitions endpointPartitions = endpointPartitionsMap.get(hostInfo);
     }
 
     private void mockResponse(final StreamsGroupHeartbeatResponseData data) {

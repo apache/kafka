@@ -120,7 +120,7 @@ public class StreamsAssignmentInterface {
     /**
      * List of partitions available on each host. Updated by the streams protocol client.
      */
-    public final AtomicReference<Map<HostInfo, List<TopicPartition>>> partitionsByHost = new AtomicReference<>(Collections.emptyMap());
+    public final AtomicReference<Map<HostInfo, EndpointPartitions>> partitionsByHost = new AtomicReference<>(Collections.emptyMap());
 
     public static class HostInfo {
 
@@ -142,6 +142,27 @@ public class StreamsAssignmentInterface {
         }
 
     }
+
+    public static class EndpointPartitions {
+        public final List<TopicPartition> activePartitions;
+        public final List<TopicPartition> standbyPartitions;
+
+        public EndpointPartitions(final List<TopicPartition> activePartitions,
+                                  final List<TopicPartition> standbyPartitions) {
+            this.activePartitions = activePartitions;
+            this.standbyPartitions = standbyPartitions;
+        }
+
+        @Override
+        public String toString() {
+            return "EndpointPartitions {"
+                    + "activePartitions=" + activePartitions
+                    + ", standbyPartitions=" + standbyPartitions
+                    + '}';
+        }
+    }
+
+
 
     public static class Assignment {
 
