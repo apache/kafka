@@ -112,7 +112,7 @@ public class TableSourceNode<K, V> extends SourceGraphNode<K, V> {
                     // TODO: rewrite this part to use Topology.addReadOnlyStateStore() instead
                     // should allow to move off using `InternalTopologyBuilder` in favor of the public `Topology` API
                     tableSource.stores().forEach(store -> {
-                        // connect source topic as (read-only) changelog topic for fault-tolerance
+                        // connect the source topic as (read-only) changelog topic for fault-tolerance
                         store.withLoggingDisabled();
                         topologyBuilder.connectSourceStoreAndTopic(store.name(), topicName);
                     });
