@@ -70,8 +70,10 @@
       "fields": [
         { "name": "UserEndpoint", "type": "Endpoint", "versions": "0+",
           "about": "User-defined endpoint to connect to the node" },
-        { "name": "Partitions", "type": "[]TopicPartition", "versions": "0+",
-          "about": "All partitions available on the node" }
+        { "name": "ActivePartitions", "type": "[]TopicPartition", "versions": "0+",
+          "about": "All active partitions available on the node" },
+        { "name": "StandbyPartitions", "type": "[]TopicPartition", "versions": "0+",
+          "about": "All standby partitions available on the node" }
       ]
     }
   ],
