@@ -161,7 +161,7 @@ streams.setUncaughtExceptionHandler((Thread thread, Throwable throwable) -&gt; {
 streams.close();</code></pre>
       <p>To allow your application to gracefully shutdown in response to SIGTERM, it is recommended that you add a shutdown hook
         and call <code class="docutils literal"><span class="pre">KafkaStreams#close</span></code>.</p>
-      <p class="first">Here is a shutdown hook example in Java 11+:</p>
+      <p class="first">Here is a shutdown hook example in Java:</p>
             <pre class="line-numbers"><code class="language-java">// Add shutdown hook to stop the Kafka Streams threads.
 // You can optionally provide a timeout to `close`.
 Runtime.getRuntime().addShutdownHook(new Thread(streams::close));</code></pre>
