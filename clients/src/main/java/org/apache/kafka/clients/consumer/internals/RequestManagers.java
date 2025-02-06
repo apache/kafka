@@ -194,7 +194,6 @@ public class RequestManagers implements Closeable {
                             logContext,
                             retryBackoffMs,
                             retryBackoffMaxMs,
-                            backgroundEventHandler,
                             groupRebalanceConfig.groupId);
                     commitRequestManager = new CommitRequestManager(
                             time,
@@ -295,7 +294,6 @@ public class RequestManagers implements Closeable {
                         logContext,
                         retryBackoffMs,
                         retryBackoffMaxMs,
-                        backgroundEventHandler,
                         groupRebalanceConfig.groupId);
                 ShareMembershipManager shareMembershipManager = new ShareMembershipManager(
                         logContext,
@@ -303,7 +301,7 @@ public class RequestManagers implements Closeable {
                         null,
                         subscriptions,
                         metadata,
-                    time,
+                        time,
                         metrics);
 
                 // Update the group member ID label in the client telemetry reporter.

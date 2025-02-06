@@ -933,7 +933,7 @@ private[group] class GroupCoordinator(
           }
         }
         val transactionSupportedOperation = AddPartitionsToTxnManager.txnOffsetCommitRequestVersionToTransactionSupportedOperation(apiVersion)
-        groupManager.replicaManager.maybeStartTransactionVerificationForPartition(
+        groupManager.replicaManager.maybeSendPartitionToTransactionCoordinator(
           topicPartition = offsetTopicPartition,
           transactionalId,
           producerId,
@@ -1804,8 +1804,7 @@ object GroupCoordinator {
       groupMaxSize = config.groupCoordinatorConfig.classicGroupMaxSize,
       groupInitialRebalanceDelayMs = config.groupCoordinatorConfig.classicGroupInitialRebalanceDelayMs)
 
-    val groupMetadataManager = new GroupMetadataManager(config.brokerId, config.interBrokerProtocolVersion,
-      offsetConfig, replicaManager, time, metrics)
+    val groupMetadataManager = new GroupMetadataManager(config.brokerId, offsetConfig, replicaManager, time, metrics)
     new GroupCoordinator(config.brokerId, groupConfig, offsetConfig, groupMetadataManager, heartbeatPurgatory,
       rebalancePurgatory, time, metrics)
   }

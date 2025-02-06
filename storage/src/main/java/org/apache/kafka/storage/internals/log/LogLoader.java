@@ -357,7 +357,7 @@ public class LogLoader {
         // segments that come before it
         File[] files = dir.listFiles();
         if (files == null) files = new File[0];
-        List<File> sortedFiles = Arrays.stream(files).filter(File::isFile).sorted().collect(Collectors.toList());
+        List<File> sortedFiles = Arrays.stream(files).filter(File::isFile).sorted().toList();
         for (File file : sortedFiles) {
             if (LogFileUtils.isIndexFile(file)) {
                 // if it is an index file, make sure it has a corresponding .log file

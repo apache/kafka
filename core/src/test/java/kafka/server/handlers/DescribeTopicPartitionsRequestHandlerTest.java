@@ -31,8 +31,6 @@ import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.message.DescribeTopicPartitionsRequestData;
 import org.apache.kafka.common.message.DescribeTopicPartitionsResponseData;
 import org.apache.kafka.common.message.DescribeTopicPartitionsResponseData.DescribeTopicPartitionsResponseTopic;
-import org.apache.kafka.common.message.UpdateMetadataRequestData;
-import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataBroker;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord.BrokerEndpoint;
@@ -106,16 +104,13 @@ class DescribeTopicPartitionsRequestHandlerTest {
     };
 
     ListenerName plaintextListener = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT);
-    UpdateMetadataBroker broker = new UpdateMetadataBroker()
-        .setId(0)
-        .setRack("rack")
-        .setEndpoints(Arrays.asList(
-            new UpdateMetadataRequestData.UpdateMetadataEndpoint()
-                .setHost("broker0")
-                .setPort(9092)
-                .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
-                .setListener(plaintextListener.value())
-        ));
+    String rack = "rack";
+    int brokerId = 0;
+    BrokerEndpoint brokerEndpoint = new BrokerEndpoint()
+        .setName(plaintextListener.value())
+        .setHost("broker0")
+        .setPort(9092)
+        .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id);
 
     @Test
     void testDescribeTopicPartitionsRequest() {
@@ -150,19 +145,14 @@ class DescribeTopicPartitionsRequestHandlerTest {
         topicIds.put(unauthorizedTopic, unauthorizedTopicId);
 
         BrokerEndpointCollection collection = new BrokerEndpointCollection();
-        collection.add(new BrokerEndpoint()
-            .setName(broker.endpoints().get(0).listener())
-            .setHost(broker.endpoints().get(0).host())
-            .setPort(broker.endpoints().get(0).port())
-            .setSecurityProtocol(broker.endpoints().get(0).securityProtocol())
-        );
+        collection.add(brokerEndpoint);
         List<ApiMessage> records = Arrays.asList(
             new RegisterBrokerRecord()
-                .setBrokerId(broker.id())
+                .setBrokerId(brokerId)
                 .setBrokerEpoch(0)
                 .setIncarnationId(Uuid.randomUuid())
                 .setEndPoints(collection)
-                .setRack(broker.rack())
+                .setRack(rack)
                 .setFenced(false),
             new TopicRecord().setName(authorizedTopic).setTopicId(topicIds.get(authorizedTopic)),
             new TopicRecord().setName(unauthorizedTopic).setTopicId(topicIds.get(unauthorizedTopic)),
@@ -352,19 +342,14 @@ class DescribeTopicPartitionsRequestHandlerTest {
         topicIds.put(authorizedTopic2, authorizedTopicId2);
 
         BrokerEndpointCollection collection = new BrokerEndpointCollection();
-        collection.add(new BrokerEndpoint()
-                .setName(broker.endpoints().get(0).listener())
-                .setHost(broker.endpoints().get(0).host())
-                .setPort(broker.endpoints().get(0).port())
-                .setSecurityProtocol(broker.endpoints().get(0).securityProtocol())
-        );
+        collection.add(brokerEndpoint);
         List<ApiMessage> records = Arrays.asList(
             new RegisterBrokerRecord()
-                .setBrokerId(broker.id())
+                .setBrokerId(brokerId)
                 .setBrokerEpoch(0)
                 .setIncarnationId(Uuid.randomUuid())
                 .setEndPoints(collection)
-                .setRack(broker.rack())
+                .setRack(rack)
                 .setFenced(false),
             new TopicRecord().setName(authorizedTopic).setTopicId(topicIds.get(authorizedTopic)),
             new TopicRecord().setName(authorizedTopic2).setTopicId(topicIds.get(authorizedTopic2)),

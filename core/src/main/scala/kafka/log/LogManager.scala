@@ -22,7 +22,6 @@ import java.io.{File, IOException}
 import java.nio.file.{Files, NoSuchFileException}
 import java.util.concurrent._
 import java.util.concurrent.atomic.AtomicInteger
-import kafka.server.metadata.ConfigRepository
 import kafka.server.{KafkaConfig, KafkaRaftServer}
 import kafka.server.metadata.BrokerMetadataPublisher.info
 import kafka.utils.threadsafe
@@ -35,8 +34,8 @@ import scala.jdk.CollectionConverters._
 import scala.collection._
 import scala.collection.mutable.ArrayBuffer
 import scala.util.{Failure, Success, Try}
-import org.apache.kafka.common.requests.{AbstractControlRequest, LeaderAndIsrRequest}
 import org.apache.kafka.image.TopicsImage
+import org.apache.kafka.metadata.ConfigRepository
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, PropertiesUtils}
 
 import java.util.{Collections, OptionalLong, Properties}
@@ -354,8 +353,8 @@ class LogManager(logDirs: Seq[File],
       addStrayLog(topicPartition, log)
       warn(s"Loaded stray log: $logDir")
     } else if (isStray(log)) {
-      // Unlike Zookeeper mode, which tracks pending topic deletions under a ZNode, KRaft is unable to prevent a topic from being recreated before every replica has been deleted.
-      // A KRaft broker with an offline directory may be unable to detect it still holds a to-be-deleted replica,
+      // We are unable to prevent a topic from being recreated before every replica has been deleted.
+      // Broker with an offline directory may be unable to detect it still holds a to-be-deleted replica,
       // and can create a conflicting topic partition for a new incarnation of the topic in one of the remaining online directories.
       // So upon a restart in which the offline directory is back online we need to clean up the old replica directory.
       log.renameDir(UnifiedLog.logStrayDirName(log.topicPartition), shouldReinitialize = false)
@@ -948,21 +947,15 @@ class LogManager(logDirs: Seq[File],
   def updateTopicConfig(topic: String,
                         newTopicConfig: Properties,
                         isRemoteLogStorageSystemEnabled: Boolean,
-                        wasRemoteLogEnabled: Boolean,
-                        fromZK: Boolean): Unit = {
+                        wasRemoteLogEnabled: Boolean): Unit = {
     topicConfigUpdated(topic)
     val logs = logsByTopic(topic)
-    // Combine the default properties with the overrides in zk to create the new LogConfig
     val newLogConfig = LogConfig.fromProps(currentDefaultConfig.originals, newTopicConfig)
     val isRemoteLogStorageEnabled = newLogConfig.remoteStorageEnable()
     // We would like to validate the configuration no matter whether the logs have materialised on disk or not.
     // Otherwise we risk someone creating a tiered-topic, disabling Tiered Storage cluster-wide and the check
     // failing since the logs for the topic are non-existent.
     LogConfig.validateRemoteStorageOnlyIfSystemEnabled(newLogConfig.values(), isRemoteLogStorageSystemEnabled, true)
-    // `remote.log.delete.on.disable` and `remote.log.copy.disable` are unsupported in ZK mode
-    if (fromZK) {
-      LogConfig.validateNoInvalidRemoteStorageConfigsInZK(newLogConfig.values())
-    }
     LogConfig.validateTurningOffRemoteStorageWithDelete(newLogConfig.values(), wasRemoteLogEnabled, isRemoteLogStorageEnabled)
     LogConfig.validateRetentionConfigsWhenRemoteCopyDisabled(newLogConfig.values(), isRemoteLogStorageEnabled)
     if (logs.nonEmpty) {
@@ -1085,11 +1078,7 @@ class LogManager(logDirs: Seq[File],
 
         log
       }
-      // When running a ZK controller, we may get a log that does not have a topic ID. Assign it here.
-      if (log.topicId.isEmpty) {
-        topicId.foreach(log.assignTopicId)
-      }
-
+      
       // Ensure topic IDs are consistent
       topicId.foreach { topicId =>
         log.topicId.foreach { logTopicId =>
@@ -1617,50 +1606,6 @@ object LogManager {
       case None =>
         info(s"Found stray log dir $log: the topicId $topicId does not exist in the metadata image")
         true
-    }
-  }
-
-  /**
-   * Find logs which should not be on the current broker, according to the full LeaderAndIsrRequest.
-   *
-   * @param brokerId        The ID of the current broker.
-   * @param request         The full LeaderAndIsrRequest, containing all partitions owned by the broker.
-   * @param logs            A collection of Log objects.
-   *
-   * @return                The topic partitions which are no longer needed on this broker.
-   */
-  def findStrayReplicas(
-    brokerId: Int,
-    request: LeaderAndIsrRequest,
-    logs: Iterable[UnifiedLog]
-  ): Iterable[TopicPartition] = {
-    if (request.requestType() != AbstractControlRequest.Type.FULL) {
-      throw new RuntimeException("Cannot use incremental LeaderAndIsrRequest to find strays.")
-    }
-    val partitions = new util.HashMap[TopicPartition, Uuid]()
-    request.data().topicStates().forEach(topicState => {
-      topicState.partitionStates().forEach(partition => {
-        partitions.put(new TopicPartition(topicState.topicName(), partition.partitionIndex()),
-          topicState.topicId())
-      })
-    })
-    logs.flatMap { log =>
-      val topicId = log.topicId.getOrElse {
-        throw new RuntimeException(s"The log dir $log does not have a topic ID, " +
-          "which is not allowed when running in KRaft mode.")
-      }
-      Option(partitions.get(log.topicPartition)) match {
-        case Some(id) =>
-          if (id.equals(topicId)) {
-            None
-          } else {
-            info(s"Found stray log dir $log: this partition now exists with topic ID $id not $topicId.")
-            Some(log.topicPartition)
-          }
-        case None =>
-          info(s"Found stray log dir $log: this partition does not exist in the new full LeaderAndIsrRequest.")
-          Some(log.topicPartition)
-      }
     }
   }
 }

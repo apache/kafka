@@ -84,7 +84,7 @@ class SocketServerTest {
   TestUtils.clearYammerMetrics()
 
   private val apiVersionManager = new SimpleApiVersionManager(ListenerType.BROKER, true,
-    () => new FinalizedFeatures(MetadataVersion.latestTesting(), Collections.emptyMap[String, java.lang.Short], 0, true))
+    () => new FinalizedFeatures(MetadataVersion.latestTesting(), Collections.emptyMap[String, java.lang.Short], 0))
   var server: SocketServer = _
   val sockets = new ArrayBuffer[Socket]
 

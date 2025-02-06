@@ -67,10 +67,14 @@ object AddPartitionsToTxnManager {
  *    genericErrorSupported: This maps to the case when the clients are updated to handle the TransactionAbortableException
  *    addPartition:          This allows the partition to be added to the transactions inflight with the Produce and TxnOffsetCommit requests. Plus the behaviors in genericErrorSupported.
  */
-sealed trait TransactionSupportedOperation
+sealed trait TransactionSupportedOperation {
+  val supportsEpochBump = false;
+}
 case object defaultError extends TransactionSupportedOperation
 case object genericErrorSupported extends TransactionSupportedOperation
-case object addPartition extends TransactionSupportedOperation
+case object addPartition extends TransactionSupportedOperation {
+  override val supportsEpochBump = true
+}
 
 /*
  * Data structure to hold the transactional data to send to a node. Note -- at most one request per transactional ID
@@ -128,7 +132,7 @@ class AddPartitionsToTxnManager(
         .setTransactionalId(transactionalId)
         .setProducerId(producerId)
         .setProducerEpoch(producerEpoch)
-        .setVerifyOnly(transactionSupportedOperation != addPartition)
+        .setVerifyOnly(!transactionSupportedOperation.supportsEpochBump)
         .setTopics(topicCollection)
 
       addTxnData(coordinatorNode.get, transactionData, callback, transactionSupportedOperation)
@@ -182,7 +186,7 @@ class AddPartitionsToTxnManager(
   }
 
   private def getTransactionCoordinator(partition: Int): Option[Node] = {
-   metadataCache.getPartitionInfo(Topic.TRANSACTION_STATE_TOPIC_NAME, partition)
+   metadataCache.getLeaderAndIsr(Topic.TRANSACTION_STATE_TOPIC_NAME, partition)
       .filter(_.leader != MetadataResponse.NO_LEADER_ID)
       .flatMap(metadata => metadataCache.getAliveBrokerNode(metadata.leader, interBrokerListenerName))
   }

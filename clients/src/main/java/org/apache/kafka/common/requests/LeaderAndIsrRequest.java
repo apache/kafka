@@ -18,96 +18,69 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.message.LeaderAndIsrRequestData;
-import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrLiveLeader;
-import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState;
-import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrTopicState;
-import org.apache.kafka.common.message.LeaderAndIsrResponseData;
-import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrPartitionError;
-import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrTopicError;
-import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.MessageUtil;
 import org.apache.kafka.common.utils.FlattenedIterator;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
-public final class LeaderAndIsrRequest extends AbstractControlRequest {
+public final class LeaderAndIsrRequest {
 
-    public static class Builder extends AbstractControlRequest.Builder<LeaderAndIsrRequest> {
+    /**
+     * Indicates if a controller request is incremental, full, or unknown.
+     */
+    public enum Type {
+        UNKNOWN(0),
+        INCREMENTAL(1),
+        FULL(2);
 
-        private final List<LeaderAndIsrPartitionState> partitionStates;
+        private final byte type;
+        Type(int type) {
+            this.type = (byte) type;
+        }
+
+        public byte toByte() {
+            return type;
+        }
+    }
+
+    public static class Builder {
+        protected final int controllerId;
+        protected final int controllerEpoch;
+        protected final long brokerEpoch;
+        private final List<PartitionState> partitionStates;
         private final Map<String, Uuid> topicIds;
         private final Collection<Node> liveLeaders;
         private final Type updateType;
 
-        public Builder(short version, int controllerId, int controllerEpoch, long brokerEpoch,
-                       List<LeaderAndIsrPartitionState> partitionStates, Map<String, Uuid> topicIds,
+        public Builder(int controllerId, int controllerEpoch, long brokerEpoch,
+                       List<PartitionState> partitionStates, Map<String, Uuid> topicIds,
                        Collection<Node> liveLeaders) {
-            this(version, controllerId, controllerEpoch, brokerEpoch, partitionStates, topicIds,
-                liveLeaders, false, Type.UNKNOWN);
+            this(controllerId, controllerEpoch, brokerEpoch, partitionStates, topicIds, liveLeaders, Type.UNKNOWN);
         }
 
-        public Builder(short version, int controllerId, int controllerEpoch, long brokerEpoch,
-                       List<LeaderAndIsrPartitionState> partitionStates, Map<String, Uuid> topicIds,
-                       Collection<Node> liveLeaders, boolean kraftController, Type updateType) {
-            super(ApiKeys.LEADER_AND_ISR, version, controllerId, controllerEpoch, brokerEpoch, kraftController);
+        public Builder(int controllerId, int controllerEpoch, long brokerEpoch,
+                       List<PartitionState> partitionStates, Map<String, Uuid> topicIds,
+                       Collection<Node> liveLeaders, Type updateType) {
+            this.controllerId = controllerId;
+            this.controllerEpoch = controllerEpoch;
+            this.brokerEpoch = brokerEpoch;
             this.partitionStates = partitionStates;
             this.topicIds = topicIds;
             this.liveLeaders = liveLeaders;
             this.updateType = updateType;
         }
 
-        @Override
-        public LeaderAndIsrRequest build(short version) {
-            List<LeaderAndIsrLiveLeader> leaders = liveLeaders.stream().map(n -> new LeaderAndIsrLiveLeader()
-                .setBrokerId(n.id())
-                .setHostName(n.host())
-                .setPort(n.port())
-            ).collect(Collectors.toList());
-
-            LeaderAndIsrRequestData data = new LeaderAndIsrRequestData()
-                .setControllerId(controllerId)
-                .setControllerEpoch(controllerEpoch)
-                .setBrokerEpoch(brokerEpoch)
-                .setLiveLeaders(leaders);
-
-            if (version >= 7) {
-                data.setIsKRaftController(kraftController);
-            }
-
-            if (version >= 5) {
-                data.setType(updateType.toByte());
-            }
-
-            if (version >= 2) {
-                Map<String, LeaderAndIsrTopicState> topicStatesMap = groupByTopic(partitionStates, topicIds);
-                data.setTopicStates(new ArrayList<>(topicStatesMap.values()));
-            } else {
-                data.setUngroupedPartitionStates(partitionStates);
-            }
-
-            return new LeaderAndIsrRequest(data, version);
-        }
-
-        private static Map<String, LeaderAndIsrTopicState> groupByTopic(List<LeaderAndIsrPartitionState> partitionStates, Map<String, Uuid> topicIds) {
-            Map<String, LeaderAndIsrTopicState> topicStates = new HashMap<>();
-            // We don't null out the topic name in LeaderAndIsrRequestPartition since it's ignored by
-            // the generated code if version >= 2
-            for (LeaderAndIsrPartitionState partition : partitionStates) {
-                LeaderAndIsrTopicState topicState = topicStates.computeIfAbsent(partition.topicName(), t -> new LeaderAndIsrTopicState()
-                                .setTopicName(partition.topicName())
-                                .setTopicId(topicIds.getOrDefault(partition.topicName(), Uuid.ZERO_UUID)));
-                topicState.partitionStates().add(partition);
-            }
-            return topicStates;
+        public LeaderAndIsrRequest build() {
+            return new LeaderAndIsrRequest(this);
         }
 
         @Override
@@ -124,105 +97,307 @@ public final class LeaderAndIsrRequest extends AbstractControlRequest {
         }
     }
 
-    private final LeaderAndIsrRequestData data;
+    private final int controllerId;
+    private final int controllerEpoch;
+    private final long brokerEpoch;
+    private final List<Node> liveLeaders;
+    private final List<TopicState> topicStates;
+    private final Type requestType;
 
-    public LeaderAndIsrRequest(LeaderAndIsrRequestData data, short version) {
-        super(ApiKeys.LEADER_AND_ISR, version);
-        this.data = data;
-        // Do this from the constructor to make it thread-safe (even though it's only needed when some methods are called)
-        normalize();
+    public LeaderAndIsrRequest(Builder builder) {
+        this.controllerId = builder.controllerId;
+        this.controllerEpoch = builder.controllerEpoch;
+        this.brokerEpoch = builder.brokerEpoch;
+        this.requestType = builder.updateType;
+        this.liveLeaders = new ArrayList<>(builder.liveLeaders);
+        this.topicStates = new ArrayList<>(groupByTopic(builder.partitionStates, builder.topicIds).values());
     }
 
-    private void normalize() {
-        if (version() >= 2) {
-            for (LeaderAndIsrTopicState topicState : data.topicStates()) {
-                for (LeaderAndIsrPartitionState partitionState : topicState.partitionStates()) {
-                    // Set the topic name so that we can always present the ungrouped view to callers
-                    partitionState.setTopicName(topicState.topicName());
-                }
-            }
+    private static Map<String, TopicState> groupByTopic(List<PartitionState> partitionStates, Map<String, Uuid> topicIds) {
+        Map<String, TopicState> topicStates = new HashMap<>();
+        for (PartitionState partition : partitionStates) {
+            TopicState topicState = topicStates.computeIfAbsent(partition.topicName(), t -> {
+                var topic = new TopicState();
+                topic.topicName = partition.topicName();
+                topic.topicId = topicIds.getOrDefault(partition.topicName(), Uuid.ZERO_UUID);
+                return topic;
+            });
+            topicState.partitionStates().add(partition);
         }
+        return topicStates;
     }
 
-    @Override
-    public LeaderAndIsrResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-        LeaderAndIsrResponseData responseData = new LeaderAndIsrResponseData();
-        Errors error = Errors.forException(e);
-        responseData.setErrorCode(error.code());
-
-        if (version() < 5) {
-            List<LeaderAndIsrPartitionError> partitions = new ArrayList<>();
-            for (LeaderAndIsrPartitionState partition : partitionStates()) {
-                partitions.add(new LeaderAndIsrPartitionError()
-                        .setTopicName(partition.topicName())
-                        .setPartitionIndex(partition.partitionIndex())
-                        .setErrorCode(error.code()));
-            }
-            responseData.setPartitionErrors(partitions);
-        } else {
-            for (LeaderAndIsrTopicState topicState : data.topicStates()) {
-                List<LeaderAndIsrPartitionError> partitions = new ArrayList<>(
-                    topicState.partitionStates().size());
-                for (LeaderAndIsrPartitionState partition : topicState.partitionStates()) {
-                    partitions.add(new LeaderAndIsrPartitionError()
-                        .setPartitionIndex(partition.partitionIndex())
-                        .setErrorCode(error.code()));
-                }
-                responseData.topics().add(new LeaderAndIsrTopicError()
-                    .setTopicId(topicState.topicId())
-                    .setPartitionErrors(partitions));
-            }
-        }
-
-        return new LeaderAndIsrResponse(responseData, version());
-    }
-
-    @Override
     public int controllerId() {
-        return data.controllerId();
+        return controllerId;
     }
 
-    @Override
-    public boolean isKRaftController() {
-        return data.isKRaftController();
-    }
-
-    @Override
     public int controllerEpoch() {
-        return data.controllerEpoch();
+        return controllerEpoch;
     }
 
-    @Override
     public long brokerEpoch() {
-        return data.brokerEpoch();
+        return brokerEpoch;
     }
 
-    public Iterable<LeaderAndIsrPartitionState> partitionStates() {
-        if (version() >= 2)
-            return () -> new FlattenedIterator<>(data.topicStates().iterator(),
+    public Iterable<PartitionState> partitionStates() {
+        return () -> new FlattenedIterator<>(topicStates.iterator(),
                 topicState -> topicState.partitionStates().iterator());
-        return data.ungroupedPartitionStates();
     }
 
     public Map<String, Uuid> topicIds() {
-        return data.topicStates().stream()
-                .collect(Collectors.toMap(LeaderAndIsrTopicState::topicName, LeaderAndIsrTopicState::topicId));
+        return topicStates.stream()
+                .collect(Collectors.toMap(TopicState::topicName, TopicState::topicId));
     }
 
-    public List<LeaderAndIsrLiveLeader> liveLeaders() {
-        return Collections.unmodifiableList(data.liveLeaders());
+    public List<Node> liveLeaders() {
+        return Collections.unmodifiableList(liveLeaders);
     }
 
     public Type requestType() {
-        return Type.fromByte(data.type());
+        return requestType;
     }
 
-    @Override
-    public LeaderAndIsrRequestData data() {
-        return data;
+    public LeaderAndIsrResponse getErrorResponse(Exception e) {
+        LinkedHashMap<Uuid, List<LeaderAndIsrResponse.PartitionError>> errorsMap = new LinkedHashMap<>();
+        Errors error = Errors.forException(e);
+
+        for (TopicState topicState : topicStates) {
+            List<LeaderAndIsrResponse.PartitionError> partitions = new ArrayList<>(topicState.partitionStates().size());
+            for (PartitionState partition : topicState.partitionStates()) {
+                partitions.add(new LeaderAndIsrResponse.PartitionError(partition.partitionIndex, error.code()));
+            }
+            errorsMap.put(topicState.topicId, partitions);
+        }
+
+        return new LeaderAndIsrResponse(error, errorsMap);
+
     }
 
-    public static LeaderAndIsrRequest parse(ByteBuffer buffer, short version) {
-        return new LeaderAndIsrRequest(new LeaderAndIsrRequestData(new ByteBufferAccessor(buffer), version), version);
+    public static class TopicState {
+        String topicName;
+        Uuid topicId;
+        List<PartitionState> partitionStates;
+
+        public TopicState() {
+            this.topicName = "";
+            this.topicId = Uuid.ZERO_UUID;
+            this.partitionStates = new ArrayList<>(0);
+        }
+
+        public String topicName() {
+            return this.topicName;
+        }
+
+        public Uuid topicId() {
+            return this.topicId;
+        }
+
+        public List<PartitionState> partitionStates() {
+            return this.partitionStates;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (o == null || getClass() != o.getClass())
+                return false;
+            TopicState that = (TopicState) o;
+            return Objects.equals(topicName, that.topicName) &&
+                    Objects.equals(topicId, that.topicId) &&
+                    Objects.equals(partitionStates, that.partitionStates);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(topicName, topicId, partitionStates);
+        }
+
+        @Override
+        public String toString() {
+            return "LeaderAndIsrTopicState("
+                    + "topicName='" + topicName + "'"
+                    + ", topicId=" + topicId
+                    + ", partitionStates=" + MessageUtil.deepToString(partitionStates.iterator())
+                    + ")";
+        }
+    }
+
+    public static class PartitionState {
+        String topicName;
+        int partitionIndex;
+        int controllerEpoch;
+        int leader;
+        int leaderEpoch;
+        List<Integer> isr;
+        int partitionEpoch;
+        List<Integer> replicas;
+        List<Integer> addingReplicas;
+        List<Integer> removingReplicas;
+        boolean isNew;
+        byte leaderRecoveryState;
+
+        public PartitionState() {
+            this.topicName = "";
+            this.partitionIndex = 0;
+            this.controllerEpoch = 0;
+            this.leader = 0;
+            this.leaderEpoch = 0;
+            this.isr = new ArrayList<>(0);
+            this.partitionEpoch = 0;
+            this.replicas = new ArrayList<>(0);
+            this.addingReplicas = new ArrayList<>(0);
+            this.removingReplicas = new ArrayList<>(0);
+            this.isNew = false;
+            this.leaderRecoveryState = (byte) 0;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (o == null || getClass() != o.getClass()) return false;
+            PartitionState that = (PartitionState) o;
+            return partitionIndex == that.partitionIndex &&
+                    controllerEpoch == that.controllerEpoch &&
+                    leader == that.leader &&
+                    leaderEpoch == that.leaderEpoch &&
+                    partitionEpoch == that.partitionEpoch &&
+                    isNew == that.isNew &&
+                    leaderRecoveryState == that.leaderRecoveryState &&
+                    Objects.equals(topicName, that.topicName) &&
+                    Objects.equals(isr, that.isr) &&
+                    Objects.equals(replicas, that.replicas) &&
+                    Objects.equals(addingReplicas, that.addingReplicas) &&
+                    Objects.equals(removingReplicas, that.removingReplicas);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(topicName, partitionIndex, controllerEpoch, leader, leaderEpoch, isr, partitionEpoch,
+                    replicas, addingReplicas, removingReplicas, isNew, leaderRecoveryState);
+        }
+
+        @Override
+        public String toString() {
+            return "LeaderAndIsrPartitionState("
+                    + "topicName='" + topicName + "'"
+                    + ", partitionIndex=" + partitionIndex
+                    + ", controllerEpoch=" + controllerEpoch
+                    + ", leader=" + leader
+                    + ", leaderEpoch=" + leaderEpoch
+                    + ", isr=" + MessageUtil.deepToString(isr.iterator())
+                    + ", partitionEpoch=" + partitionEpoch
+                    + ", replicas=" + MessageUtil.deepToString(replicas.iterator())
+                    + ", addingReplicas=" + MessageUtil.deepToString(addingReplicas.iterator())
+                    + ", removingReplicas=" + MessageUtil.deepToString(removingReplicas.iterator())
+                    + ", isNew=" + (isNew ? "true" : "false")
+                    + ", leaderRecoveryState=" + leaderRecoveryState
+                    + ")";
+        }
+
+        public String topicName() {
+            return this.topicName;
+        }
+
+        public int partitionIndex() {
+            return this.partitionIndex;
+        }
+
+        public int controllerEpoch() {
+            return this.controllerEpoch;
+        }
+
+        public int leader() {
+            return this.leader;
+        }
+
+        public int leaderEpoch() {
+            return this.leaderEpoch;
+        }
+
+        public List<Integer> isr() {
+            return this.isr;
+        }
+
+        public int partitionEpoch() {
+            return this.partitionEpoch;
+        }
+
+        public List<Integer> replicas() {
+            return this.replicas;
+        }
+
+        public List<Integer> addingReplicas() {
+            return this.addingReplicas;
+        }
+
+        public List<Integer> removingReplicas() {
+            return this.removingReplicas;
+        }
+
+        public boolean isNew() {
+            return this.isNew;
+        }
+
+        public byte leaderRecoveryState() {
+            return this.leaderRecoveryState;
+        }
+
+        public PartitionState setTopicName(String v) {
+            this.topicName = v;
+            return this;
+        }
+
+        public PartitionState setPartitionIndex(int v) {
+            this.partitionIndex = v;
+            return this;
+        }
+
+        public PartitionState setControllerEpoch(int v) {
+            this.controllerEpoch = v;
+            return this;
+        }
+
+        public PartitionState setLeader(int v) {
+            this.leader = v;
+            return this;
+        }
+
+        public PartitionState setLeaderEpoch(int v) {
+            this.leaderEpoch = v;
+            return this;
+        }
+
+        public PartitionState setIsr(List<Integer> v) {
+            this.isr = v;
+            return this;
+        }
+
+        public PartitionState setPartitionEpoch(int v) {
+            this.partitionEpoch = v;
+            return this;
+        }
+
+        public PartitionState setReplicas(List<Integer> v) {
+            this.replicas = v;
+            return this;
+        }
+
+        public PartitionState setAddingReplicas(List<Integer> v) {
+            this.addingReplicas = v;
+            return this;
+        }
+
+        public PartitionState setRemovingReplicas(List<Integer> v) {
+            this.removingReplicas = v;
+            return this;
+        }
+
+        public PartitionState setIsNew(boolean v) {
+            this.isNew = v;
+            return this;
+        }
+
+        public PartitionState setLeaderRecoveryState(byte v) {
+            this.leaderRecoveryState = v;
+            return this;
+        }
     }
 }

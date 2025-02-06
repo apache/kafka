@@ -22,7 +22,7 @@ import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinat
 import kafka.log.UnifiedLog
 import kafka.network.RequestChannel
 import kafka.server.QuotaFactory.QuotaManagers
-import kafka.server.metadata.{ConfigRepository, KRaftMetadataCache, MockConfigRepository}
+import kafka.server.metadata.KRaftMetadataCache
 import kafka.server.share.SharePartitionManager
 import kafka.utils.{CoreUtils, Log4jController, Logging, TestUtils}
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
@@ -43,6 +43,8 @@ import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData.DescribedGroup
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult
+import org.apache.kafka.common.message.DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestTopic
+import org.apache.kafka.common.message.DescribeShareGroupOffsetsResponseData.{DescribeShareGroupOffsetsResponsePartition, DescribeShareGroupOffsetsResponseTopic}
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.{AlterConfigsResource => IAlterConfigsResource, AlterConfigsResourceCollection => IAlterConfigsResourceCollection, AlterableConfig => IAlterableConfig, AlterableConfigCollection => IAlterableConfigCollection}
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.{AlterConfigsResourceResponse => IAlterConfigsResourceResponse}
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
@@ -54,7 +56,9 @@ import org.apache.kafka.common.message.OffsetDeleteRequestData.{OffsetDeleteRequ
 import org.apache.kafka.common.message.OffsetDeleteResponseData.{OffsetDeleteResponsePartition, OffsetDeleteResponsePartitionCollection, OffsetDeleteResponseTopic, OffsetDeleteResponseTopicCollection}
 import org.apache.kafka.common.message.ShareFetchRequestData.{AcknowledgementBatch, ForgottenTopic}
 import org.apache.kafka.common.message.ShareFetchResponseData.{AcquiredRecords, PartitionData, ShareFetchableTopicResponse}
-import org.apache.kafka.common.message.UpdateMetadataRequestData.{UpdateMetadataBroker, UpdateMetadataEndpoint, UpdateMetadataPartitionState}
+import org.apache.kafka.common.metadata.{PartitionRecord, RegisterBrokerRecord, TopicRecord}
+import org.apache.kafka.common.metadata.RegisterBrokerRecord.{BrokerEndpoint, BrokerEndpointCollection}
+import org.apache.kafka.common.protocol.ApiMessage
 import org.apache.kafka.common.message._
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ClientInformation, ListenerName}
@@ -74,6 +78,7 @@ import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig
 import org.apache.kafka.coordinator.group.{GroupConfig, GroupCoordinator, GroupCoordinatorConfig}
 import org.apache.kafka.coordinator.share.{ShareCoordinator, ShareCoordinatorTestConfig}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
+import org.apache.kafka.metadata.{ConfigRepository, MockConfigRepository}
 import org.apache.kafka.network.metrics.{RequestChannelMetrics, RequestMetrics}
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.security.authorizer.AclEntry
@@ -177,7 +182,7 @@ class KafkaApisTest extends Logging {
       enabledApis,
       BrokerFeatures.defaultSupportedFeatures(true),
       true,
-      () => new FinalizedFeatures(MetadataVersion.latestTesting(), Collections.emptyMap[String, java.lang.Short], 0, true))
+      () => new FinalizedFeatures(MetadataVersion.latestTesting(), Collections.emptyMap[String, java.lang.Short], 0))
 
     when(groupCoordinator.isNewGroupCoordinator).thenReturn(config.isNewGroupCoordinatorEnabled)
     setupFeatures(featureVersions)
@@ -210,20 +215,13 @@ class KafkaApisTest extends Logging {
   private def setupFeatures(featureVersions: Seq[FeatureVersion]): Unit = {
     if (featureVersions.isEmpty) return
 
-    metadataCache match {
-      case cache: KRaftMetadataCache =>
-        when(cache.features()).thenReturn {
-          new FinalizedFeatures(
-            MetadataVersion.latestTesting,
-            featureVersions.map { featureVersion =>
-              featureVersion.featureName -> featureVersion.featureLevel.asInstanceOf[java.lang.Short]
-            }.toMap.asJava,
-            0,
-            true
-          )
-        }
-
-      case _ => throw new IllegalStateException("Test must set an instance of KRaftMetadataCache")
+    when(metadataCache.features()).thenReturn {
+      new FinalizedFeatures(
+        MetadataVersion.latestTesting,
+        featureVersions.map { featureVersion =>
+          featureVersion.featureName -> featureVersion.featureLevel.asInstanceOf[java.lang.Short]
+        }.toMap.asJava,
+        0)
     }
   }
 
@@ -525,7 +523,6 @@ class KafkaApisTest extends Logging {
 
     val capturedResponse = verifyNoThrottling[AbstractResponse](request)
     assertEquals(expectedResponse.data, capturedResponse.data)
-
   }
 
   private def authorizeResource(authorizer: Authorizer,
@@ -2233,7 +2230,7 @@ class KafkaApisTest extends Logging {
       when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
         any[RequestChannel.Request](), anyDouble, anyLong)).thenReturn(0)
       when(metadataCache.contains(tp)).thenAnswer(_ => true)
-      when(metadataCache.getPartitionInfo(tp.topic(), tp.partition())).thenAnswer(_ => Option.empty)
+      when(metadataCache.getLeaderAndIsr(tp.topic(), tp.partition())).thenAnswer(_ => Option.empty)
       when(metadataCache.getAliveBrokerNode(any(), any())).thenReturn(Option.empty)
       kafkaApis = createKafkaApis()
       kafkaApis.handleProduceRequest(request, RequestLocal.withThreadConfinedCaching)
@@ -3561,6 +3558,149 @@ class KafkaApisTest extends Logging {
     assertEquals(Set(0), response.brokers.asScala.map(_.id).toSet)
   }
 
+
+  /**
+   * Metadata request to fetch all topics should not result in the followings:
+   * 1) Auto topic creation
+   * 2) UNKNOWN_TOPIC_OR_PARTITION
+   *
+   * This case is testing the case that a topic is being deleted from MetadataCache right after
+   * authorization but before checking in MetadataCache.
+   */
+  @Test
+  def testGetAllTopicMetadataShouldNotCreateTopicOrReturnUnknownTopicPartition(): Unit = {
+    // Setup: authorizer authorizes 2 topics, but one got deleted in metadata cache
+    metadataCache = mock(classOf[KRaftMetadataCache])
+    when(metadataCache.getAliveBrokerNodes(any())).thenReturn(List(new Node(brokerId,"localhost", 0)))
+    when(metadataCache.getRandomAliveBrokerId).thenReturn(None)
+
+    // 2 topics returned for authorization in during handle
+    val topicsReturnedFromMetadataCacheForAuthorization = Set("remaining-topic", "later-deleted-topic")
+    when(metadataCache.getAllTopics()).thenReturn(topicsReturnedFromMetadataCacheForAuthorization)
+    // 1 topic is deleted from metadata right at the time between authorization and the next getTopicMetadata() call
+    when(metadataCache.getTopicMetadata(
+      ArgumentMatchers.eq(topicsReturnedFromMetadataCacheForAuthorization),
+      any[ListenerName],
+      anyBoolean,
+      anyBoolean
+    )).thenReturn(Seq(
+      new MetadataResponseTopic()
+        .setErrorCode(Errors.NONE.code)
+        .setName("remaining-topic")
+        .setIsInternal(false)
+    ))
+
+    val response = sendMetadataRequestWithInconsistentListeners(new ListenerName("PLAINTEXT"))
+    val responseTopics = response.topicMetadata().asScala.map { metadata => metadata.topic() }
+
+    // verify we don't create topic when getAllTopicMetadata
+    verify(autoTopicCreationManager, never).createTopics(any(), any(), any())
+    assertEquals(List("remaining-topic"), responseTopics)
+    assertTrue(response.topicsByError(Errors.UNKNOWN_TOPIC_OR_PARTITION).isEmpty)
+  }
+
+  @Test
+  def testUnauthorizedTopicMetadataRequest(): Unit = {
+    // 1. Set up broker information
+    val plaintextListener = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
+    val endpoints = new BrokerEndpointCollection()
+    endpoints.add(
+      new BrokerEndpoint()
+        .setHost("broker0")
+        .setPort(9092)
+        .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
+        .setName(plaintextListener.value)
+    )
+    MetadataCacheTest.updateCache(metadataCache,
+      Seq(new RegisterBrokerRecord().setBrokerId(0).setRack("rack").setFenced(false).setEndPoints(endpoints))
+    )
+
+    // 2. Set up authorizer
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+    val unauthorizedTopic = "unauthorized-topic"
+    val authorizedTopic = "authorized-topic"
+
+    val expectedActions = Seq(
+      new Action(AclOperation.DESCRIBE, new ResourcePattern(ResourceType.TOPIC, unauthorizedTopic, PatternType.LITERAL), 1, true, true),
+      new Action(AclOperation.DESCRIBE, new ResourcePattern(ResourceType.TOPIC, authorizedTopic, PatternType.LITERAL), 1, true, true)
+    )
+
+    when(authorizer.authorize(any[RequestContext], argThat((t: java.util.List[Action]) => t.containsAll(expectedActions.asJava))))
+      .thenAnswer { invocation =>
+        val actions = invocation.getArgument(1).asInstanceOf[util.List[Action]].asScala
+        actions.map { action =>
+          if (action.resourcePattern().name().equals(authorizedTopic))
+            AuthorizationResult.ALLOWED
+          else
+            AuthorizationResult.DENIED
+        }.asJava
+      }
+
+    // 3. Set up MetadataCache
+    val authorizedTopicId = Uuid.randomUuid()
+    val unauthorizedTopicId = Uuid.randomUuid()
+    addTopicToMetadataCache(authorizedTopic, 1, topicId = authorizedTopicId)
+    addTopicToMetadataCache(unauthorizedTopic, 1, topicId = unauthorizedTopicId)
+
+    def createDummyPartitionRecord(topicId: Uuid) = {
+      new PartitionRecord()
+        .setTopicId(topicId)
+        .setPartitionId(0)
+        .setLeader(0)
+        .setLeaderEpoch(0)
+        .setReplicas(Collections.singletonList(0))
+        .setIsr(Collections.singletonList(0))
+    }
+
+    val partitionRecords = Seq(authorizedTopicId, unauthorizedTopicId).map(createDummyPartitionRecord)
+    MetadataCacheTest.updateCache(metadataCache, partitionRecords)
+
+    // 4. Send TopicMetadataReq using topicId
+    val metadataReqByTopicId = new MetadataRequest.Builder(util.Arrays.asList(authorizedTopicId, unauthorizedTopicId)).build()
+    val repByTopicId = buildRequest(metadataReqByTopicId, plaintextListener)
+    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
+      any[Long])).thenReturn(0)
+    kafkaApis = createKafkaApis(authorizer = Some(authorizer))
+    kafkaApis.handleTopicMetadataRequest(repByTopicId)
+    val metadataByTopicIdResp = verifyNoThrottling[MetadataResponse](repByTopicId)
+
+    val metadataByTopicId = metadataByTopicIdResp.data().topics().asScala.groupBy(_.topicId()).map(kv => (kv._1, kv._2.head))
+
+    metadataByTopicId.foreach { case (topicId, metadataResponseTopic) =>
+      if (topicId == unauthorizedTopicId) {
+        // Return an TOPIC_AUTHORIZATION_FAILED on unauthorized error regardless of leaking the existence of topic id
+        assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED.code(), metadataResponseTopic.errorCode())
+        // Do not return topic information on unauthorized error
+        assertNull(metadataResponseTopic.name())
+      } else {
+        assertEquals(Errors.NONE.code(), metadataResponseTopic.errorCode())
+        assertEquals(authorizedTopic, metadataResponseTopic.name())
+      }
+    }
+    kafkaApis.close()
+
+    // 4. Send TopicMetadataReq using topic name
+    reset(clientRequestQuotaManager, requestChannel)
+    val metadataReqByTopicName = new MetadataRequest.Builder(util.Arrays.asList(authorizedTopic, unauthorizedTopic), false).build()
+    val repByTopicName = buildRequest(metadataReqByTopicName, plaintextListener)
+    kafkaApis = createKafkaApis(authorizer = Some(authorizer))
+    kafkaApis.handleTopicMetadataRequest(repByTopicName)
+    val metadataByTopicNameResp = verifyNoThrottling[MetadataResponse](repByTopicName)
+
+    val metadataByTopicName = metadataByTopicNameResp.data().topics().asScala.groupBy(_.name()).map(kv => (kv._1, kv._2.head))
+
+    metadataByTopicName.foreach { case (topicName, metadataResponseTopic) =>
+      if (topicName == unauthorizedTopic) {
+        assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED.code(), metadataResponseTopic.errorCode())
+        // Do not return topic Id on unauthorized error
+        assertEquals(Uuid.ZERO_UUID, metadataResponseTopic.topicId())
+      } else {
+        assertEquals(Errors.NONE.code(), metadataResponseTopic.errorCode())
+        assertEquals(authorizedTopicId, metadataResponseTopic.topicId())
+      }
+    }
+  }
+
     /**
    * Verifies that sending a fetch request with version 9 works correctly when
    * ReplicaManager.getLogConfig returns None.
@@ -3760,7 +3900,7 @@ class KafkaApisTest extends Logging {
 
     val records = memoryRecords(10, 0)
 
-    when(sharePartitionManager.fetchMessages(any(), any(), any(), anyInt(), any())).thenReturn(
+    when(sharePartitionManager.fetchMessages(any(), any(), any(), anyInt(), anyInt(), any())).thenReturn(
       CompletableFuture.completedFuture(Map[TopicIdPartition, ShareFetchResponseData.PartitionData](
         new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)) ->
           new ShareFetchResponseData.PartitionData()
@@ -3832,7 +3972,7 @@ class KafkaApisTest extends Logging {
 
     val records = memoryRecords(10, 0)
 
-    when(sharePartitionManager.fetchMessages(any(), any(), any(), anyInt(), any())).thenReturn(
+    when(sharePartitionManager.fetchMessages(any(), any(), any(), anyInt(), anyInt(), any())).thenReturn(
       CompletableFuture.completedFuture(Map[TopicIdPartition, ShareFetchResponseData.PartitionData](
         new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)) ->
           new ShareFetchResponseData.PartitionData()
@@ -3937,7 +4077,7 @@ class KafkaApisTest extends Logging {
 
     val records = memoryRecords(10, 0)
 
-    when(sharePartitionManager.fetchMessages(any(), any(), any(), anyInt(), any())).thenReturn(
+    when(sharePartitionManager.fetchMessages(any(), any(), any(), anyInt(), anyInt(), any())).thenReturn(
       CompletableFuture.completedFuture(Map[TopicIdPartition, ShareFetchResponseData.PartitionData](
         new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)) ->
           new ShareFetchResponseData.PartitionData()
@@ -4041,7 +4181,7 @@ class KafkaApisTest extends Logging {
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val memberId: Uuid = Uuid.ZERO_UUID
 
-    when(sharePartitionManager.fetchMessages(any(), any(), any(), anyInt(), any())).thenReturn(
+    when(sharePartitionManager.fetchMessages(any(), any(), any(), anyInt(), anyInt(), any())).thenReturn(
       FutureUtils.failedFuture[util.Map[TopicIdPartition, ShareFetchResponseData.PartitionData]](Errors.UNKNOWN_SERVER_ERROR.exception())
     )
 
@@ -4093,7 +4233,7 @@ class KafkaApisTest extends Logging {
 
     val records = memoryRecords(10, 0)
 
-    when(sharePartitionManager.fetchMessages(any(), any(), any(), anyInt(), any())).thenReturn(
+    when(sharePartitionManager.fetchMessages(any(), any(), any(), anyInt(), anyInt(), any())).thenReturn(
       CompletableFuture.completedFuture(Map[TopicIdPartition, ShareFetchResponseData.PartitionData](
         new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)) ->
           new ShareFetchResponseData.PartitionData()
@@ -4168,7 +4308,7 @@ class KafkaApisTest extends Logging {
 
     val groupId = "group"
 
-    when(sharePartitionManager.fetchMessages(any(), any(), any(), anyInt(), any())).thenReturn(
+    when(sharePartitionManager.fetchMessages(any(), any(), any(), anyInt(), anyInt(), any())).thenReturn(
       FutureUtils.failedFuture[util.Map[TopicIdPartition, ShareFetchResponseData.PartitionData]](Errors.UNKNOWN_SERVER_ERROR.exception())
     )
 
@@ -4232,7 +4372,7 @@ class KafkaApisTest extends Logging {
 
     val records = MemoryRecords.EMPTY
 
-    when(sharePartitionManager.fetchMessages(any(), any(), any(), anyInt(), any())).thenReturn(
+    when(sharePartitionManager.fetchMessages(any(), any(), any(), anyInt(), anyInt(), any())).thenReturn(
       CompletableFuture.completedFuture(Map[TopicIdPartition, ShareFetchResponseData.PartitionData](
         new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)) ->
           new ShareFetchResponseData.PartitionData()
@@ -4297,7 +4437,7 @@ class KafkaApisTest extends Logging {
     val groupId = "group"
     val records = memoryRecords(10, 0)
 
-    when(sharePartitionManager.fetchMessages(any(), any(), any(), anyInt(), any())).thenReturn(
+    when(sharePartitionManager.fetchMessages(any(), any(), any(), anyInt(), anyInt(), any())).thenReturn(
       CompletableFuture.completedFuture(Map[TopicIdPartition, ShareFetchResponseData.PartitionData](
         new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)) ->
           new ShareFetchResponseData.PartitionData()
@@ -4390,7 +4530,7 @@ class KafkaApisTest extends Logging {
     val groupId = "group"
     val records = memoryRecords(10, 0)
 
-    when(sharePartitionManager.fetchMessages(any(), any(), any(), anyInt(), any())).thenReturn(
+    when(sharePartitionManager.fetchMessages(any(), any(), any(), anyInt(), anyInt(), any())).thenReturn(
       CompletableFuture.completedFuture(Map[TopicIdPartition, ShareFetchResponseData.PartitionData](
         new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)) ->
           new ShareFetchResponseData.PartitionData()
@@ -4483,7 +4623,7 @@ class KafkaApisTest extends Logging {
     val records2 = memoryRecords(10, 10)
     val records3 = memoryRecords(10, 20)
 
-    when(sharePartitionManager.fetchMessages(any(), any(), any(), anyInt(), any())).thenReturn(
+    when(sharePartitionManager.fetchMessages(any(), any(), any(), anyInt(), anyInt(), any())).thenReturn(
       CompletableFuture.completedFuture(Map[TopicIdPartition, ShareFetchResponseData.PartitionData](
         new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)) ->
           new ShareFetchResponseData.PartitionData()
@@ -4711,7 +4851,7 @@ class KafkaApisTest extends Logging {
 
     val groupId = "group"
 
-    when(sharePartitionManager.fetchMessages(any(), any(), any(), anyInt(), any())).thenReturn(
+    when(sharePartitionManager.fetchMessages(any(), any(), any(), anyInt(), anyInt(), any())).thenReturn(
       CompletableFuture.completedFuture(Map[TopicIdPartition, ShareFetchResponseData.PartitionData](
         new TopicIdPartition(topicId1, new TopicPartition(topicName1, 0)) ->
           new ShareFetchResponseData.PartitionData()
@@ -5186,7 +5326,7 @@ class KafkaApisTest extends Logging {
     val tp2 = new TopicIdPartition(topicId2, new TopicPartition(topicName2, 0))
     val tp3 = new TopicIdPartition(topicId2, new TopicPartition(topicName2, 1))
 
-    when(sharePartitionManager.fetchMessages(any(), any(), any(), anyInt(), any())).thenReturn(
+    when(sharePartitionManager.fetchMessages(any(), any(), any(), anyInt(), anyInt(), any())).thenReturn(
       CompletableFuture.completedFuture(Map[TopicIdPartition, ShareFetchResponseData.PartitionData](
         tp1 ->
           new ShareFetchResponseData.PartitionData()
@@ -5282,6 +5422,7 @@ class KafkaApisTest extends Logging {
     val fetchResult: Map[TopicIdPartition, ShareFetchResponseData.PartitionData] =
       kafkaApis.handleFetchFromShareFetchRequest(
         request,
+        0,
         erroneousAndValidPartitionData,
         sharePartitionManager,
         authorizedTopics
@@ -5350,7 +5491,7 @@ class KafkaApisTest extends Logging {
     val tp2 = new TopicIdPartition(topicId1, new TopicPartition(topicName1, 1))
     val tp3 = new TopicIdPartition(topicId2, new TopicPartition(topicName2, 0))
 
-    when(sharePartitionManager.fetchMessages(any(), any(), any(), anyInt(), any())).thenReturn(
+    when(sharePartitionManager.fetchMessages(any(), any(), any(), anyInt(), anyInt(), any())).thenReturn(
       CompletableFuture.completedFuture(Map[TopicIdPartition, ShareFetchResponseData.PartitionData](
         tp1 ->
           new ShareFetchResponseData.PartitionData()
@@ -5428,6 +5569,7 @@ class KafkaApisTest extends Logging {
     val fetchResult: Map[TopicIdPartition, ShareFetchResponseData.PartitionData] =
       kafkaApis.handleFetchFromShareFetchRequest(
         request,
+        0,
         erroneousAndValidPartitionData,
         sharePartitionManager,
         authorizedTopics
@@ -5490,7 +5632,7 @@ class KafkaApisTest extends Logging {
     val tp2 = new TopicIdPartition(topicId2, new TopicPartition(topicName2, 0))
     val tp3 = new TopicIdPartition(topicId2, new TopicPartition(topicName2, 1))
 
-    when(sharePartitionManager.fetchMessages(any(), any(), any(), anyInt(), any())).thenReturn(
+    when(sharePartitionManager.fetchMessages(any(), any(), any(), anyInt(), anyInt(), any())).thenReturn(
       CompletableFuture.completedFuture(Map[TopicIdPartition, ShareFetchResponseData.PartitionData](
         tp1 ->
           new ShareFetchResponseData.PartitionData()
@@ -5571,6 +5713,7 @@ class KafkaApisTest extends Logging {
     val fetchResult: Map[TopicIdPartition, ShareFetchResponseData.PartitionData] =
       kafkaApis.handleFetchFromShareFetchRequest(
         request,
+        0,
         erroneousAndValidPartitionData,
         sharePartitionManager,
         authorizedTopics
@@ -5644,7 +5787,7 @@ class KafkaApisTest extends Logging {
     val tp3 = new TopicIdPartition(topicId2, new TopicPartition(topicName2, 1))
     val tp4 = new TopicIdPartition(topicId3, new TopicPartition(topicName3, 0))
 
-    when(sharePartitionManager.fetchMessages(any(), any(), any(), anyInt(), any())).thenReturn(
+    when(sharePartitionManager.fetchMessages(any(), any(), any(), anyInt(), anyInt(), any())).thenReturn(
       CompletableFuture.completedFuture(Map[TopicIdPartition, ShareFetchResponseData.PartitionData](
         tp2 ->
           new ShareFetchResponseData.PartitionData()
@@ -5740,6 +5883,7 @@ class KafkaApisTest extends Logging {
     val fetchResult: Map[TopicIdPartition, ShareFetchResponseData.PartitionData] =
       kafkaApis.handleFetchFromShareFetchRequest(
         request,
+        0,
         erroneousAndValidPartitionData,
         sharePartitionManager,
         authorizedTopics
@@ -5836,7 +5980,7 @@ class KafkaApisTest extends Logging {
 
     val groupId = "group"
 
-    when(sharePartitionManager.fetchMessages(any(), any(), any(), anyInt(), any())).thenReturn(
+    when(sharePartitionManager.fetchMessages(any(), any(), any(), anyInt(), anyInt(), any())).thenReturn(
       CompletableFuture.completedFuture(Map[TopicIdPartition, ShareFetchResponseData.PartitionData](
         new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)) ->
           new ShareFetchResponseData.PartitionData()
@@ -8878,30 +9022,28 @@ class KafkaApisTest extends Logging {
   @Test
   def testDescribeClusterRequest(): Unit = {
     val plaintextListener = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
-    val brokers = Seq(
-      new UpdateMetadataBroker()
-        .setId(0)
-        .setRack("rack")
-        .setEndpoints(Seq(
-          new UpdateMetadataEndpoint()
-            .setHost("broker0")
-            .setPort(9092)
-            .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
-            .setListener(plaintextListener.value)
-        ).asJava),
-      new UpdateMetadataBroker()
-        .setId(1)
-        .setRack("rack")
-        .setEndpoints(Seq(
-          new UpdateMetadataEndpoint()
-            .setHost("broker1")
-            .setPort(9092)
-            .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
-            .setListener(plaintextListener.value)).asJava)
+    val endpoints = new BrokerEndpointCollection()
+    endpoints.add(
+      new BrokerEndpoint()
+        .setHost("broker0")
+        .setPort(9092)
+        .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
+        .setName(plaintextListener.value)
     )
-    val updateMetadataRequest = new UpdateMetadataRequest.Builder(ApiKeys.UPDATE_METADATA.latestVersion, 0,
-      0, 0, Seq.empty[UpdateMetadataPartitionState].asJava, brokers.asJava, Collections.emptyMap()).build()
-    MetadataCacheTest.updateCache(metadataCache, updateMetadataRequest)
+    endpoints.add(
+      new BrokerEndpoint()
+        .setHost("broker1")
+        .setPort(9092)
+        .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
+        .setName(plaintextListener.value)
+    )
+
+    MetadataCacheTest.updateCache(metadataCache,
+      Seq(new RegisterBrokerRecord()
+        .setBrokerId(brokerId)
+        .setRack("rack")
+        .setFenced(false)
+        .setEndPoints(endpoints)))
 
     val describeClusterRequest = new DescribeClusterRequest.Builder(new DescribeClusterRequestData()
       .setIncludeClusterAuthorizedOperations(true)).build()
@@ -8924,35 +9066,37 @@ class KafkaApisTest extends Logging {
   private def updateMetadataCacheWithInconsistentListeners(): (ListenerName, ListenerName) = {
     val plaintextListener = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
     val anotherListener = new ListenerName("LISTENER2")
-    val brokers = Seq(
-      new UpdateMetadataBroker()
-        .setId(0)
-        .setRack("rack")
-        .setEndpoints(Seq(
-          new UpdateMetadataEndpoint()
-            .setHost("broker0")
-            .setPort(9092)
-            .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
-            .setListener(plaintextListener.value),
-          new UpdateMetadataEndpoint()
-            .setHost("broker0")
-            .setPort(9093)
-            .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
-            .setListener(anotherListener.value)
-        ).asJava),
-      new UpdateMetadataBroker()
-        .setId(1)
-        .setRack("rack")
-        .setEndpoints(Seq(
-          new UpdateMetadataEndpoint()
-            .setHost("broker1")
-            .setPort(9092)
-            .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
-            .setListener(plaintextListener.value)).asJava)
+
+    val endpoints0 = new BrokerEndpointCollection()
+    endpoints0.add(
+      new BrokerEndpoint()
+        .setHost("broker0")
+        .setPort(9092)
+        .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
+        .setName(plaintextListener.value)
     )
-    val updateMetadataRequest = new UpdateMetadataRequest.Builder(ApiKeys.UPDATE_METADATA.latestVersion, 0,
-      0, 0, Seq.empty[UpdateMetadataPartitionState].asJava, brokers.asJava, Collections.emptyMap()).build()
-    MetadataCacheTest.updateCache(metadataCache, updateMetadataRequest)
+    endpoints0.add(
+      new BrokerEndpoint()
+        .setHost("broker0")
+        .setPort(9093)
+        .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
+        .setName(anotherListener.value)
+    )
+
+    val endpoints1 = new BrokerEndpointCollection()
+    endpoints1.add(
+      new BrokerEndpoint()
+        .setHost("broker1")
+        .setPort(9092)
+        .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
+        .setName(plaintextListener.value)
+    )
+
+    MetadataCacheTest.updateCache(metadataCache,
+      Seq(new RegisterBrokerRecord().setBrokerId(0).setRack("rack").setFenced(false).setEndPoints(endpoints0),
+      new RegisterBrokerRecord().setBrokerId(1).setRack("rack").setFenced(false).setEndPoints(endpoints1))
+    )
+
     (plaintextListener, anotherListener)
   }
 
@@ -9142,51 +9286,64 @@ class KafkaApisTest extends Logging {
     ).asInstanceOf[T]
   }
 
-  private def createBasicMetadataRequest(topic: String,
-                                         numPartitions: Int,
-                                         brokerEpoch: Long,
-                                         numBrokers: Int,
-                                         topicId: Uuid): UpdateMetadataRequest = {
+  private def createBasicMetadata(topic: String,
+                                  numPartitions: Int,
+                                  brokerEpoch: Long,
+                                  numBrokers: Int,
+                                  topicId: Uuid): Seq[ApiMessage] = {
+
+    val results = new mutable.ArrayBuffer[ApiMessage]()
+    val topicRecord = new TopicRecord().setName(topic).setTopicId(topicId)
+    results += topicRecord
+
     val replicas = List(0.asInstanceOf[Integer]).asJava
 
-    def createPartitionState(partition: Int) = new UpdateMetadataPartitionState()
-      .setTopicName(topic)
-      .setPartitionIndex(partition)
-      .setControllerEpoch(1)
+    def createPartitionRecord(partition: Int) = new PartitionRecord()
+      .setTopicId(topicId)
+      .setPartitionId(partition)
       .setLeader(0)
       .setLeaderEpoch(1)
       .setReplicas(replicas)
-      .setZkVersion(0)
       .setIsr(replicas)
 
     val plaintextListener = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
-    val partitionStates = (0 until numPartitions).map(createPartitionState)
+    val partitionRecords = (0 until numPartitions).map(createPartitionRecord)
     val liveBrokers = (0 until numBrokers).map(
-      brokerId => createMetadataBroker(brokerId, plaintextListener))
-    new UpdateMetadataRequest.Builder(ApiKeys.UPDATE_METADATA.latestVersion, 0,
-      0, brokerEpoch, partitionStates.asJava, liveBrokers.asJava, Collections.singletonMap(topic, topicId)).build()
+      brokerId => createMetadataBroker(brokerId, plaintextListener, brokerEpoch))
+    partitionRecords.foreach(record => results += record)
+    liveBrokers.foreach(record => results +=record)
+
+    results.toSeq
   }
 
   private def setupBasicMetadataCache(topic: String, numPartitions: Int, numBrokers: Int, topicId: Uuid): Unit = {
-    val updateMetadataRequest = createBasicMetadataRequest(topic, numPartitions, 0, numBrokers, topicId)
-    MetadataCacheTest.updateCache(metadataCache, updateMetadataRequest)
+    val updateMetadata = createBasicMetadata(topic, numPartitions, 0, numBrokers, topicId)
+    MetadataCacheTest.updateCache(metadataCache, updateMetadata)
   }
 
   private def addTopicToMetadataCache(topic: String, numPartitions: Int, numBrokers: Int = 1, topicId: Uuid = Uuid.ZERO_UUID): Unit = {
-    val updateMetadataRequest = createBasicMetadataRequest(topic, numPartitions, 0, numBrokers, topicId)
-    MetadataCacheTest.updateCache(metadataCache, updateMetadataRequest)
+    val updateMetadata = createBasicMetadata(topic, numPartitions, 0, numBrokers, topicId)
+    MetadataCacheTest.updateCache(metadataCache, updateMetadata)
   }
 
   private def createMetadataBroker(brokerId: Int,
-                                   listener: ListenerName): UpdateMetadataBroker = {
-    new UpdateMetadataBroker()
-      .setId(brokerId)
-      .setRack("rack")
-      .setEndpoints(Seq(new UpdateMetadataEndpoint()
+                                   listener: ListenerName,
+                                   brokerEpoch: Long): RegisterBrokerRecord = {
+    val endpoints = new BrokerEndpointCollection()
+    endpoints.add(
+      new BrokerEndpoint()
         .setHost("broker" + brokerId)
         .setPort(9092)
         .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
-        .setListener(listener.value)).asJava)
+        .setName(listener.value)
+    )
+
+    new RegisterBrokerRecord()
+      .setBrokerId(brokerId)
+      .setRack("rack")
+      .setFenced(false)
+      .setEndPoints(endpoints)
+      .setBrokerEpoch(brokerEpoch)
   }
 
   @Test
@@ -10192,6 +10349,221 @@ class KafkaApisTest extends Logging {
   }
 
   @Test
+  def testReadShareGroupStateSummarySuccess(): Unit = {
+    val topicId = Uuid.randomUuid();
+    val readSummaryRequestData = new ReadShareGroupStateSummaryRequestData()
+      .setGroupId("group1")
+      .setTopics(List(
+        new ReadShareGroupStateSummaryRequestData.ReadStateSummaryData()
+          .setTopicId(topicId)
+          .setPartitions(List(
+            new ReadShareGroupStateSummaryRequestData.PartitionData()
+              .setPartition(1)
+              .setLeaderEpoch(1)
+          ).asJava)
+      ).asJava)
+
+    val readStateSummaryResultData: util.List[ReadShareGroupStateSummaryResponseData.ReadStateSummaryResult] = List(
+      new ReadShareGroupStateSummaryResponseData.ReadStateSummaryResult()
+        .setTopicId(topicId)
+        .setPartitions(List(
+          new ReadShareGroupStateSummaryResponseData.PartitionResult()
+            .setPartition(1)
+            .setErrorCode(Errors.NONE.code())
+            .setErrorMessage(null)
+            .setStateEpoch(1)
+            .setStartOffset(10)
+        ).asJava)
+    ).asJava
+
+    val config = Map(
+      ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true",
+    )
+
+    val response = getReadShareGroupSummaryResponse(
+      readSummaryRequestData,
+      config ++ ShareCoordinatorTestConfig.testConfigMap().asScala,
+      verifyNoErr = true,
+      null,
+      readStateSummaryResultData
+    )
+
+    assertNotNull(response.data)
+    assertEquals(1, response.data.results.size)
+  }
+
+  @Test
+  def testReadShareGroupStateSummaryAuthorizationFailed(): Unit = {
+    val topicId = Uuid.randomUuid();
+    val readSummaryRequestData = new ReadShareGroupStateSummaryRequestData()
+      .setGroupId("group1")
+      .setTopics(List(
+        new ReadShareGroupStateSummaryRequestData.ReadStateSummaryData()
+          .setTopicId(topicId)
+          .setPartitions(List(
+            new ReadShareGroupStateSummaryRequestData.PartitionData()
+              .setPartition(1)
+              .setLeaderEpoch(1)
+          ).asJava)
+      ).asJava)
+
+    val readStateSummaryResultData: util.List[ReadShareGroupStateSummaryResponseData.ReadStateSummaryResult] = List(
+      new ReadShareGroupStateSummaryResponseData.ReadStateSummaryResult()
+        .setTopicId(topicId)
+        .setPartitions(List(
+          new ReadShareGroupStateSummaryResponseData.PartitionResult()
+            .setPartition(1)
+            .setErrorCode(Errors.NONE.code())
+            .setErrorMessage(null)
+            .setStateEpoch(1)
+            .setStartOffset(10)
+        ).asJava)
+    ).asJava
+
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+    when(authorizer.authorize(any[RequestContext], any[util.List[Action]]))
+      .thenReturn(Seq(AuthorizationResult.DENIED).asJava, Seq(AuthorizationResult.ALLOWED).asJava)
+
+    val config = Map(
+      ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true",
+    )
+
+    val response = getReadShareGroupSummaryResponse(
+      readSummaryRequestData,
+      config ++ ShareCoordinatorTestConfig.testConfigMap().asScala,
+      verifyNoErr = false,
+      authorizer,
+      readStateSummaryResultData
+    )
+
+    assertNotNull(response.data)
+    assertEquals(1, response.data.results.size)
+    response.data.results.forEach(readResult => {
+      assertEquals(1, readResult.partitions.size)
+      assertEquals(Errors.CLUSTER_AUTHORIZATION_FAILED.code(), readResult.partitions.get(0).errorCode())
+    })
+  }
+
+  @Test
+  def testDescribeShareGroupOffsetsReturnsUnsupportedVersion(): Unit = {
+    val describeShareGroupOffsetsRequest = new DescribeShareGroupOffsetsRequestData().setGroupId("group").setTopics(
+      util.List.of(new DescribeShareGroupOffsetsRequestTopic().setTopicName("topic-1").setPartitions(util.List.of(1)))
+    )
+
+    val requestChannelRequest = buildRequest(new DescribeShareGroupOffsetsRequest.Builder(describeShareGroupOffsetsRequest, true).build())
+    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    kafkaApis = createKafkaApis()
+    kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
+
+    val response = verifyNoThrottling[DescribeShareGroupOffsetsResponse](requestChannelRequest)
+    response.data.responses.forEach(topic => topic.partitions().forEach(partition => assertEquals(Errors.UNSUPPORTED_VERSION.code(), partition.errorCode())))
+  }
+
+  @Test
+  def testDescribeShareGroupOffsetsRequestsAuthorizationFailed(): Unit = {
+    val describeShareGroupOffsetsRequest = new DescribeShareGroupOffsetsRequestData().setGroupId("group").setTopics(
+      util.List.of(new DescribeShareGroupOffsetsRequestTopic().setTopicName("topic-1").setPartitions(util.List.of(1)))
+    )
+
+    val requestChannelRequest = buildRequest(new DescribeShareGroupOffsetsRequest.Builder(describeShareGroupOffsetsRequest, true).build())
+
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+    when(authorizer.authorize(any[RequestContext], any[util.List[Action]]))
+      .thenReturn(util.List.of(AuthorizationResult.DENIED))
+    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    kafkaApis = createKafkaApis(
+      overrideProperties = Map(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
+      authorizer = Some(authorizer),
+    )
+    kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
+
+    val response = verifyNoThrottling[DescribeShareGroupOffsetsResponse](requestChannelRequest)
+    response.data.responses.forEach(
+      topic => topic.partitions().forEach(
+        partition => assertEquals(Errors.GROUP_AUTHORIZATION_FAILED.code(), partition.errorCode())
+      )
+    )
+  }
+
+  @Test
+  def testDescribeShareGroupOffsetsRequestSuccess(): Unit = {
+    val topicName1 = "topic-1"
+    val topicId1 = Uuid.randomUuid()
+    val topicName2 = "topic-2"
+    val topicId2 = Uuid.randomUuid()
+    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    addTopicToMetadataCache(topicName1, 1, topicId = topicId1)
+    addTopicToMetadataCache(topicName2, 1, topicId = topicId2)
+
+    val describeShareGroupOffsetsRequest = new DescribeShareGroupOffsetsRequestData().setGroupId("group").setTopics(
+      util.List.of(
+        new DescribeShareGroupOffsetsRequestTopic().setTopicName(topicName1).setPartitions(util.List.of(1, 2, 3)),
+        new DescribeShareGroupOffsetsRequestTopic().setTopicName(topicName2).setPartitions(util.List.of(10, 20)),
+      )
+    )
+
+    val requestChannelRequest = buildRequest(new DescribeShareGroupOffsetsRequest.Builder(describeShareGroupOffsetsRequest, true).build())
+
+    val future = new CompletableFuture[DescribeShareGroupOffsetsResponseData]()
+    when(groupCoordinator.describeShareGroupOffsets(
+      requestChannelRequest.context,
+      describeShareGroupOffsetsRequest
+    )).thenReturn(future)
+    kafkaApis = createKafkaApis(
+      overrideProperties = Map(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
+    )
+    kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
+
+    val describeShareGroupOffsetsResponse = new DescribeShareGroupOffsetsResponseData()
+      .setResponses(util.List.of(
+        new DescribeShareGroupOffsetsResponseTopic()
+          .setTopicName(topicName1)
+          .setTopicId(topicId1)
+          .setPartitions(util.List.of(
+            new DescribeShareGroupOffsetsResponsePartition()
+              .setPartitionIndex(1)
+              .setStartOffset(0)
+              .setLeaderEpoch(1)
+              .setErrorMessage(null)
+              .setErrorCode(0),
+            new DescribeShareGroupOffsetsResponsePartition()
+              .setPartitionIndex(2)
+              .setStartOffset(0)
+              .setLeaderEpoch(1)
+              .setErrorMessage(null)
+              .setErrorCode(0),
+            new DescribeShareGroupOffsetsResponsePartition()
+              .setPartitionIndex(3)
+              .setStartOffset(0)
+              .setLeaderEpoch(1)
+              .setErrorMessage(null)
+              .setErrorCode(0)
+          )),
+        new DescribeShareGroupOffsetsResponseTopic()
+          .setTopicName(topicName2)
+          .setTopicId(topicId2)
+          .setPartitions(util.List.of(
+            new DescribeShareGroupOffsetsResponsePartition()
+              .setPartitionIndex(10)
+              .setStartOffset(0)
+              .setLeaderEpoch(1)
+              .setErrorMessage(null)
+              .setErrorCode(0),
+            new DescribeShareGroupOffsetsResponsePartition()
+              .setPartitionIndex(20)
+              .setStartOffset(0)
+              .setLeaderEpoch(1)
+              .setErrorMessage(null)
+              .setErrorCode(0)
+          ))
+      ))
+
+    future.complete(describeShareGroupOffsetsResponse)
+    val response = verifyNoThrottling[DescribeShareGroupOffsetsResponse](requestChannelRequest)
+    assertEquals(describeShareGroupOffsetsResponse, response.data)
+  }
+
+  @Test
   def testWriteShareGroupStateSuccess(): Unit = {
     val topicId = Uuid.randomUuid();
     val writeRequestData = new WriteShareGroupStateRequestData()
@@ -10301,6 +10673,96 @@ class KafkaApisTest extends Logging {
     })
   }
 
+  @Test
+  def testDeleteShareGroupStateSuccess(): Unit = {
+    val topicId = Uuid.randomUuid();
+    val deleteRequestData = new DeleteShareGroupStateRequestData()
+      .setGroupId("group1")
+      .setTopics(List(
+        new DeleteShareGroupStateRequestData.DeleteStateData()
+          .setTopicId(topicId)
+          .setPartitions(List(
+            new DeleteShareGroupStateRequestData.PartitionData()
+              .setPartition(1)
+          ).asJava)
+      ).asJava)
+
+    val deleteStateResultData: util.List[DeleteShareGroupStateResponseData.DeleteStateResult] = List(
+      new DeleteShareGroupStateResponseData.DeleteStateResult()
+        .setTopicId(topicId)
+        .setPartitions(List(
+          new DeleteShareGroupStateResponseData.PartitionResult()
+            .setPartition(1)
+            .setErrorCode(Errors.NONE.code())
+            .setErrorMessage(null)
+        ).asJava)
+    ).asJava
+
+    val config = Map(
+      ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true",
+    )
+
+    val response = getDeleteShareGroupResponse(
+      deleteRequestData,
+      config ++ ShareCoordinatorTestConfig.testConfigMap().asScala,
+      verifyNoErr = true,
+      null,
+      deleteStateResultData
+    )
+
+    assertNotNull(response.data)
+    assertEquals(1, response.data.results.size)
+  }
+
+  @Test
+  def testDeleteShareGroupStateAuthorizationFailed(): Unit = {
+    val topicId = Uuid.randomUuid();
+    val deleteRequestData = new DeleteShareGroupStateRequestData()
+      .setGroupId("group1")
+      .setTopics(List(
+        new DeleteShareGroupStateRequestData.DeleteStateData()
+          .setTopicId(topicId)
+          .setPartitions(List(
+            new DeleteShareGroupStateRequestData.PartitionData()
+              .setPartition(1)
+          ).asJava)
+      ).asJava)
+
+    val deleteStateResultData: util.List[DeleteShareGroupStateResponseData.DeleteStateResult] = List(
+      new DeleteShareGroupStateResponseData.DeleteStateResult()
+        .setTopicId(topicId)
+        .setPartitions(List(
+          new DeleteShareGroupStateResponseData.PartitionResult()
+            .setPartition(1)
+            .setErrorCode(Errors.NONE.code())
+            .setErrorMessage(null)
+        ).asJava)
+    ).asJava
+
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+    when(authorizer.authorize(any[RequestContext], any[util.List[Action]]))
+      .thenReturn(Seq(AuthorizationResult.DENIED).asJava, Seq(AuthorizationResult.ALLOWED).asJava)
+
+    val config = Map(
+      ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true",
+    )
+
+    val response = getDeleteShareGroupResponse(
+      deleteRequestData,
+      config ++ ShareCoordinatorTestConfig.testConfigMap().asScala,
+      verifyNoErr = false,
+      authorizer,
+      deleteStateResultData
+    )
+
+    assertNotNull(response.data)
+    assertEquals(1, response.data.results.size)
+    response.data.results.forEach(deleteResult => {
+      assertEquals(1, deleteResult.partitions.size)
+      assertEquals(Errors.CLUSTER_AUTHORIZATION_FAILED.code(), deleteResult.partitions.get(0).errorCode())
+    })
+  }
+
   def getShareGroupDescribeResponse(groupIds: util.List[String], configOverrides: Map[String, String] = Map.empty,
                                     verifyNoErr: Boolean = true, authorizer: Authorizer = null,
                                     describedGroups: util.List[ShareGroupDescribeResponseData.DescribedGroup]): ShareGroupDescribeResponse = {
@@ -10360,6 +10822,35 @@ class KafkaApisTest extends Logging {
     response
   }
 
+  def getReadShareGroupSummaryResponse(requestData: ReadShareGroupStateSummaryRequestData, configOverrides: Map[String, String] = Map.empty,
+                                verifyNoErr: Boolean = true, authorizer: Authorizer = null,
+                                readStateSummaryResult: util.List[ReadShareGroupStateSummaryResponseData.ReadStateSummaryResult]): ReadShareGroupStateSummaryResponse = {
+    val requestChannelRequest = buildRequest(new ReadShareGroupStateSummaryRequest.Builder(requestData, true).build())
+
+    val future = new CompletableFuture[ReadShareGroupStateSummaryResponseData]()
+    when(shareCoordinator.readStateSummary(
+      any[RequestContext],
+      any[ReadShareGroupStateSummaryRequestData]
+    )).thenReturn(future)
+    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    kafkaApis = createKafkaApis(
+      overrideProperties = configOverrides,
+      authorizer = Option(authorizer),
+    )
+    kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching())
+
+    future.complete(new ReadShareGroupStateSummaryResponseData()
+      .setResults(readStateSummaryResult))
+
+    val response = verifyNoThrottling[ReadShareGroupStateSummaryResponse](requestChannelRequest)
+    if (verifyNoErr) {
+      val expectedReadShareGroupStateSummaryResponseData = new ReadShareGroupStateSummaryResponseData()
+        .setResults(readStateSummaryResult)
+      assertEquals(expectedReadShareGroupStateSummaryResponseData, response.data)
+    }
+    response
+  }
+
   def getWriteShareGroupResponse(requestData: WriteShareGroupStateRequestData, configOverrides: Map[String, String] = Map.empty,
                                 verifyNoErr: Boolean = true, authorizer: Authorizer = null,
                                  writeStateResult: util.List[WriteShareGroupStateResponseData.WriteStateResult]): WriteShareGroupStateResponse = {
@@ -10385,6 +10876,35 @@ class KafkaApisTest extends Logging {
       val expectedWriteShareGroupStateResponseData = new WriteShareGroupStateResponseData()
         .setResults(writeStateResult)
       assertEquals(expectedWriteShareGroupStateResponseData, response.data)
+    }
+    response
+  }
+
+  def getDeleteShareGroupResponse(requestData: DeleteShareGroupStateRequestData, configOverrides: Map[String, String] = Map.empty,
+                                  verifyNoErr: Boolean = true, authorizer: Authorizer = null,
+                                  deleteStateResult: util.List[DeleteShareGroupStateResponseData.DeleteStateResult]): DeleteShareGroupStateResponse = {
+    val requestChannelRequest = buildRequest(new DeleteShareGroupStateRequest.Builder(requestData, true).build())
+
+    val future = new CompletableFuture[DeleteShareGroupStateResponseData]()
+    when(shareCoordinator.deleteState(
+      any[RequestContext],
+      any[DeleteShareGroupStateRequestData]
+    )).thenReturn(future)
+    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    kafkaApis = createKafkaApis(
+      overrideProperties = configOverrides,
+      authorizer = Option(authorizer),
+    )
+    kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching())
+
+    future.complete(new DeleteShareGroupStateResponseData()
+      .setResults(deleteStateResult))
+
+    val response = verifyNoThrottling[DeleteShareGroupStateResponse](requestChannelRequest)
+    if (verifyNoErr) {
+      val expectedDeleteShareGroupStateResponseData = new DeleteShareGroupStateResponseData()
+        .setResults(deleteStateResult)
+      assertEquals(expectedDeleteShareGroupStateResponseData, response.data)
     }
     response
   }

@@ -91,7 +91,10 @@ method_matcher = re.compile(r"([a-zA-Z_$][a-zA-Z0-9_$]+).*")
 def clean_test_name(test_name: str) -> str:
     cleaned = test_name.strip("\"").rstrip("()")
     m = method_matcher.match(cleaned)
-    return m.group(1)
+    if m is None:
+        raise ValueError(f"Could not parse test name '{test_name}'. Expected a valid Java method name.")
+    else:
+        return m.group(1)
 
 
 class TestCatalogExporter:
@@ -423,7 +426,7 @@ if __name__ == "__main__":
         else:
             logger.debug(f"Failing this step because the tests timed out. Thread dumps were not archived, check logs in JUnit step.")
         exit(1)
-    elif test_exit_code in (0, 1):
+    elif test_exit_code == 1 or quarantined_test_exit_code == 1:
         logger.debug(summary)
         if total_failures > 0:
             logger.debug(f"Failing this step due to {total_failures} test failures")
@@ -432,7 +435,9 @@ if __name__ == "__main__":
             logger.debug(f"Failing this step due to {total_errors} test errors")
             exit(1)
         else:
-            exit(0)
+            logger.debug("There was an error during the test or quarantinedTest task. Please check the logs")
+            exit(1)
     else:
-        logger.debug(f"Gradle had unexpected exit code {test_exit_code}. Failing this step")
-        exit(1)
+        # Normal exit
+        logger.debug(summary)
+        exit(0)

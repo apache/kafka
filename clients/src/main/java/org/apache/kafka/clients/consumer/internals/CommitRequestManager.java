@@ -176,9 +176,11 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
      */
     @Override
     public NetworkClientDelegate.PollResult poll(final long currentTimeMs) {
-        // poll only when the coordinator node is known.
-        if (coordinatorRequestManager.coordinator().isEmpty())
+        // poll when the coordinator node is known and fatal error is not present
+        if (coordinatorRequestManager.coordinator().isEmpty()) {
+            pendingRequests.maybeFailOnCoordinatorFatalError();
             return EMPTY;
+        }
 
         if (closing) {
             return drainPendingOffsetCommitRequests();
@@ -1245,6 +1247,16 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                 .collect(Collectors.toCollection(ArrayList::new));
             clearAll();
             return res;
+        }
+
+        private void maybeFailOnCoordinatorFatalError() {
+            coordinatorRequestManager.fatalError().ifPresent(error -> {
+                    log.warn("Failing all unsent commit requests and offset fetches because of coordinator fatal error. ", error);
+                    unsentOffsetCommits.forEach(request -> request.future.completeExceptionally(error));
+                    unsentOffsetFetches.forEach(request -> request.future.completeExceptionally(error));
+                    clearAll();
+                }
+            );
         }
     }
 

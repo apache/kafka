@@ -24,7 +24,7 @@ import kafka.log.remote.RemoteLogManager
 import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.raft.KafkaRaftManager
 import kafka.server.metadata._
-import kafka.server.share.SharePartitionManager
+import kafka.server.share.{ShareCoordinatorMetadataCacheHelperImpl, SharePartitionManager}
 import kafka.utils.CoreUtils
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
@@ -223,7 +223,6 @@ class BrokerServer(
       lifecycleManager = new BrokerLifecycleManager(config,
         time,
         s"broker-${config.nodeId}-",
-        isZkBroker = false,
         logDirs = logManager.directoryIdsSet,
         () => new Thread(() => shutdown(), "kafka-shutdown-thread").start())
 
@@ -254,7 +253,7 @@ class BrokerServer(
       val apiVersionManager = ApiVersionManager(
         ListenerType.BROKER,
         config,
-        Some(forwardingManager),
+        forwardingManager,
         brokerFeatures,
         metadataCache,
         Some(clientMetricsManager)
@@ -356,7 +355,6 @@ class BrokerServer(
 
       /* start token manager */
       tokenManager = new DelegationTokenManager(config, tokenCache, time)
-      tokenManager.startup()
 
       /* initializing the groupConfigManager */
       groupConfigManager = new GroupConfigManager(config.groupCoordinatorConfig.extractGroupConfigMap(config.shareGroupConfig))
@@ -387,7 +385,7 @@ class BrokerServer(
         transactionCoordinator, shareCoordinator)
 
       dynamicConfigHandlers = Map[String, ConfigHandler](
-        ConfigType.TOPIC -> new TopicConfigHandler(replicaManager, config, quotaManagers, None),
+        ConfigType.TOPIC -> new TopicConfigHandler(replicaManager, config, quotaManagers),
         ConfigType.BROKER -> new BrokerConfigHandler(config, quotaManagers),
         ConfigType.CLIENT_METRICS -> new ClientMetricsConfigHandler(clientMetricsManager),
         ConfigType.GROUP -> new GroupConfigHandler(groupCoordinator))
@@ -442,7 +440,8 @@ class BrokerServer(
         config.shareGroupConfig.shareFetchMaxFetchRecords,
         persister,
         groupConfigManager,
-        metrics
+        metrics,
+        brokerTopicStats
       )
 
       dataPlaneRequestProcessor = new KafkaApis(
@@ -535,7 +534,7 @@ class BrokerServer(
       })
       metadataPublishers.add(brokerMetadataPublisher)
       brokerRegistrationTracker = new BrokerRegistrationTracker(config.brokerId,
-        () => lifecycleManager.resendBrokerRegistrationUnlessZkMode())
+        () => lifecycleManager.resendBrokerRegistration())
       metadataPublishers.add(brokerRegistrationTracker)
 
 
@@ -639,6 +638,7 @@ class BrokerServer(
         .withCoordinatorRuntimeMetrics(new GroupCoordinatorRuntimeMetrics(metrics))
         .withGroupCoordinatorMetrics(new GroupCoordinatorMetrics(KafkaYammerMetrics.defaultRegistry, metrics))
         .withGroupConfigManager(groupConfigManager)
+        .withPersister(persister)
         .build()
     } else {
       GroupCoordinatorAdapter(
@@ -787,9 +787,6 @@ class BrokerServer(
         CoreUtils.swallow(groupCoordinator.shutdown(), this)
       if (shareCoordinator.isDefined)
         CoreUtils.swallow(shareCoordinator.get.shutdown(), this)
-
-      if (tokenManager != null)
-        CoreUtils.swallow(tokenManager.shutdown(), this)
 
       if (assignmentsManager != null)
         CoreUtils.swallow(assignmentsManager.close(), this)

@@ -21,7 +21,6 @@ import kafka.log._
 import kafka.network.RequestChannel
 import kafka.security.JaasTestUtils
 import kafka.server._
-import kafka.server.metadata.{ConfigRepository, MockConfigRepository}
 import kafka.utils.Implicits._
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin._
@@ -36,7 +35,6 @@ import org.apache.kafka.common.errors.{OperationNotAttemptedException, TopicExis
 import org.apache.kafka.common.header.Header
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.memory.MemoryPool
-import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ClientInformation, ConnectionMode, ListenerName}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
@@ -48,7 +46,7 @@ import org.apache.kafka.common.serialization._
 import org.apache.kafka.common.utils.Utils.formatAddress
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
-import org.apache.kafka.metadata.LeaderAndIsr
+import org.apache.kafka.metadata.{ConfigRepository, LeaderAndIsr, MockConfigRepository}
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.network.metrics.RequestChannelMetrics
 import org.apache.kafka.raft.QuorumConfig
@@ -823,7 +821,7 @@ object TestUtils extends Logging {
   def waitForAllPartitionsMetadata[B <: KafkaBroker](
       brokers: Seq[B],
       topic: String,
-      expectedNumPartitions: Int): Map[TopicPartition, UpdateMetadataPartitionState] = {
+      expectedNumPartitions: Int): Map[TopicPartition, LeaderAndIsr] = {
     waitUntilTrue(
       () => brokers.forall { broker =>
         if (expectedNumPartitions == 0) {
@@ -836,7 +834,7 @@ object TestUtils extends Logging {
 
     // since the metadata is propagated, we should get the same metadata from each server
     (0 until expectedNumPartitions).map { i =>
-      new TopicPartition(topic, i) -> brokers.head.metadataCache.getPartitionInfo(topic, i).getOrElse(
+      new TopicPartition(topic, i) -> brokers.head.metadataCache.getLeaderAndIsr(topic, i).getOrElse(
           throw new IllegalStateException(s"Cannot get topic: $topic, partition: $i in server metadata cache"))
     }.toMap
   }
@@ -853,10 +851,10 @@ object TestUtils extends Logging {
    */
   def waitForPartitionMetadata[B <: KafkaBroker](
       brokers: Seq[B], topic: String, partition: Int,
-      timeout: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): UpdateMetadataPartitionState = {
+      timeout: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): LeaderAndIsr = {
     waitUntilTrue(
       () => brokers.forall { broker =>
-        broker.metadataCache.getPartitionInfo(topic, partition) match {
+        broker.metadataCache.getLeaderAndIsr(topic, partition) match {
           case Some(partitionState) => FetchRequest.isValidBrokerId(partitionState.leader)
           case _ => false
         }
@@ -864,7 +862,7 @@ object TestUtils extends Logging {
       "Partition [%s,%d] metadata not propagated after %d ms".format(topic, partition, timeout),
       waitTimeMs = timeout)
 
-    brokers.head.metadataCache.getPartitionInfo(topic, partition).getOrElse(
+    brokers.head.metadataCache.getLeaderAndIsr(topic, partition).getOrElse(
       throw new IllegalStateException(s"Cannot get topic: $topic, partition: $partition in server metadata cache"))
   }
 

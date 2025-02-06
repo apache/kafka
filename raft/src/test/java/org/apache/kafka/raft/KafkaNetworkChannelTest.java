@@ -285,7 +285,7 @@ public class KafkaNetworkChannelTest {
 
             case VOTE:
                 int lastEpoch = 4;
-                return VoteRequest.singletonRequest(topicPartition, clusterId, leaderEpoch, leaderId, lastEpoch, 329);
+                return VoteRequest.singletonRequest(topicPartition, clusterId, leaderEpoch, leaderId, lastEpoch, 329, true);
 
             case FETCH:
                 FetchRequestData request = RaftUtil.singletonFetchRequest(topicPartition, topicId, fetchPartition ->
