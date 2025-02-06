@@ -209,7 +209,7 @@ public class ShareFetchUtils {
             int startPosition = 0;
             int size = 0;
             // Track the previous batch to adjust the start position in case the first acquired offset
-            // is between the batch.
+            // is within the batch.
             FileChannelRecordBatch previousBatch = null;
             for (FileChannelRecordBatch batch : fileRecords.batches()) {
                 // If the batch base offset is less than the first acquired offset, then the start position
@@ -219,12 +219,12 @@ public class ShareFetchUtils {
                     previousBatch = batch;
                     continue;
                 }
-                // If the first acquired offset is between the batch, then adjust the start position
+                // If the first acquired offset is within the batch, then adjust the start position
                 // to not skip the previous batch i.e. if batch is from 10-15 and the first acquired
                 // offset is 12, then the start position should be adjusted to include the batch containing
                 // the first acquired offset. Though generally, the first acquired offset should be the
                 // first offset of the batch, but there can be cases where the batch is split because of
-                // initial load from persister which has subset of acknowledged records from the batch.
+                // initial load from persister which has subset of acknowledged records from the batch, etc.
                 // This adjustment should only be done once for the batch containing the first acquired offset,
                 // hence post the adjustment, the previous batch should be set to null.
                 if (previousBatch != null && batch.baseOffset() != firstAcquiredOffset) {
@@ -243,10 +243,10 @@ public class ShareFetchUtils {
             }
             // If the fetch resulted in single batch and the first acquired offset is not the base offset
             // of the batch, then the position and size should be adjusted to include the batch. This
-            // can happen rarely when the batch is split because of initial load from persister. In such
-            // cases, check the last offset of the previous batch to include the batch. As the last offset
-            // call on batch is expensive hence the code is optimized to avoid the call. But should be
-            // considered for the edge case.
+            // can happen rarely when the batch is split because of initial load from persister or a
+            // specific offset was released by the client. In such cases, check the last offset of the
+            // previous batch to include the batch. As the last offset call on batch is expensive hence
+            // the code is optimized to avoid the last offset call unless required.
             if (previousBatch != null && previousBatch.lastOffset() >= lastAcquiredOffset) {
                 startPosition -= previousBatch.sizeInBytes();
                 size += previousBatch.sizeInBytes();

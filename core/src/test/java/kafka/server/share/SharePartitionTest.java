@@ -1210,8 +1210,8 @@ public class SharePartitionTest {
         // Release the acquired records so they can be re-acquired and max fetch records can be tested
         // for overlapping records.
         sharePartition.releaseAcquiredRecords(MEMBER_ID);
-        // Add batches from 0-9 offsets and 10-12, 5-9 should be acquired and 0-4 should be ignored.
-        // 10-12 should be ignored as it exceeds the max fetch records.
+        // Add batches from 0-4 and 5-9 offsets. 0-4 should be acquired and 5-9 should be ignored, as
+        // it exceeds the max fetch records. Hence, only first batch should be acquired.
         ByteBuffer buffer = ByteBuffer.allocate(4096);
         memoryRecordsBuilder(buffer, 5, 0).close();
         memoryRecordsBuilder(buffer, 5, 5).close();
