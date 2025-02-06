@@ -339,6 +339,7 @@
 		    This allows to not only collect the metric of the internally used clients of a Kafka Streams appliction via a broker-side plugin,
 		    but also to collect the <a href="/{{version}}/documentation/#kafka_streams_monitoring">metrics</a> of the Kafka Streams runtime itself.
             </li>
+                <li>
                     The default value of 'num.recovery.threads.per.data.dir' has been changed from 1 to 2. The impact of this is faster
                     recovery post unclean shutdown at the expense of extra IO cycles.
                     See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-1030%3A+Change+constraints+and+default+values+for+various+configurations">KIP-1030</a> 
