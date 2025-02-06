@@ -3633,7 +3633,7 @@ class PersisterStateManagerTest {
             new TestHolder(true, false, true, Optional.empty()),
             new TestHolder(true, true, false, Optional.empty()),
 
-            // Handled my checkNetworkError.
+            // Handled by checkNetworkError.
             new TestHolder(false, true, false, Optional.of(Errors.NETWORK_EXCEPTION)),
             new TestHolder(false, false, true, Optional.of(Errors.REQUEST_TIMED_OUT)),
             new TestHolder(false, true, true, Optional.of(Errors.NETWORK_EXCEPTION)),   // takes precedence
