@@ -316,7 +316,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
                 mkEntry("source0", uuid0),
                 mkEntry("repartition0", uuid1)
             ));
-        
+
         streamsAssignmentInterface.subtopologyMap().put("0",
             new Subtopology(
                 Collections.singleton("source0"),
@@ -370,7 +370,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
         assertEquals(data.activeTasks(), response.activeTasks());
         assertEquals(data.standbyTasks(), response.standbyTasks());
         assertEquals(data.warmupTasks(), response.warmupTasks());
-        
+
         assertEquals(data.partitionsByUserEndpoint(), response.partitionsByUserEndpoint());
         Map<StreamsAssignmentInterface.HostInfo, StreamsAssignmentInterface.EndpointPartitions> endpointPartitionsMap = streamsAssignmentInterface.partitionsByHost.get();
         assertEquals(endpointPartitionsMap.size(), response.partitionsByUserEndpoint().size());

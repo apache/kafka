@@ -168,7 +168,7 @@ public class StreamsAssignmentInterface {
                     + '}';
         }
     }
-    
+
     public static class Assignment {
 
         public static final Assignment EMPTY = new Assignment();

@@ -2382,17 +2382,19 @@ public class GroupMetadataManager {
 
     private List<StreamsGroupHeartbeatResponseData.EndpointToPartitions> maybeBuildEndpointToPartitions(StreamsGroup group) {
         List<StreamsGroupHeartbeatResponseData.EndpointToPartitions> endpointToPartitionsList = new ArrayList<>();
-        final Map<String, StreamsGroupMember> members = group.members();
-        for (Map.Entry<String, StreamsGroupMember> entry : members.entrySet()) {
-            final String memberIdForAssignment = entry.getKey();
-            final StreamsGroupMemberMetadataValue.Endpoint endpoint = members.get(memberIdForAssignment).userEndpoint();
-            StreamsGroupMember groupMember = entry.getValue();
-            if (endpoint != null) {
-                final StreamsGroupHeartbeatResponseData.Endpoint responseEndpoint = new StreamsGroupHeartbeatResponseData.Endpoint();
-                responseEndpoint.setHost(endpoint.host());
-                responseEndpoint.setPort(endpoint.port());
-                StreamsGroupHeartbeatResponseData.EndpointToPartitions endpointToPartitions = EndpointToPartitionsManager.endpointToPartitions(groupMember, responseEndpoint, group);
-                endpointToPartitionsList.add(endpointToPartitions);
+        if (group.membersStable()) {
+            final Map<String, StreamsGroupMember> members = group.members();
+            for (Map.Entry<String, StreamsGroupMember> entry : members.entrySet()) {
+                final String memberIdForAssignment = entry.getKey();
+                final StreamsGroupMemberMetadataValue.Endpoint endpoint = members.get(memberIdForAssignment).userEndpoint();
+                StreamsGroupMember groupMember = entry.getValue();
+                if (endpoint != null) {
+                    final StreamsGroupHeartbeatResponseData.Endpoint responseEndpoint = new StreamsGroupHeartbeatResponseData.Endpoint();
+                    responseEndpoint.setHost(endpoint.host());
+                    responseEndpoint.setPort(endpoint.port());
+                    StreamsGroupHeartbeatResponseData.EndpointToPartitions endpointToPartitions = EndpointToPartitionsManager.endpointToPartitions(groupMember, responseEndpoint, group);
+                    endpointToPartitionsList.add(endpointToPartitions);
+                }
             }
         }
         return endpointToPartitionsList;

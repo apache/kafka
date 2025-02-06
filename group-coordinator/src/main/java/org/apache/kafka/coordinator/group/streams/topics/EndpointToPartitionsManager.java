@@ -27,7 +27,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Stream;
 
 public class EndpointToPartitionsManager {
 
@@ -47,11 +46,11 @@ public class EndpointToPartitionsManager {
 
             final Map<String, TopicMetadata> groupTopicMetadata = streamsGroup.partitionMetadata();
             Set<Map.Entry<String, Set<Integer>>> taskEntrySet = streamsGroupMember.assignedActiveTasks().entrySet();
-            List<StreamsGroupHeartbeatResponseData.TopicPartition> topicPartitionList = getTopicPartitions(taskEntrySet, sourceTopics, repartitionSourceTopics, groupTopicMetadata);
+            List<StreamsGroupHeartbeatResponseData.TopicPartition> topicPartitionList = getTopicPartitions(taskEntrySet, sourceTopics, groupTopicMetadata);
             activeTopicPartitions.addAll(topicPartitionList);
 
             Set<Map.Entry<String, Set<Integer>>> standbyTaskEntrySet = streamsGroupMember.assignedStandbyTasks().entrySet();
-            List<StreamsGroupHeartbeatResponseData.TopicPartition> standbyList = getTopicPartitions(standbyTaskEntrySet, sourceTopics, repartitionSourceTopics, groupTopicMetadata);
+            List<StreamsGroupHeartbeatResponseData.TopicPartition> standbyList = getTopicPartitions(standbyTaskEntrySet, repartitionSourceTopics, groupTopicMetadata);
             standbyTopicPartitions.addAll(standbyList);
         }
         endpointToPartitions.setActivePartitions(activeTopicPartitions);
@@ -61,12 +60,11 @@ public class EndpointToPartitionsManager {
 
     private static List<StreamsGroupHeartbeatResponseData.TopicPartition> getTopicPartitions(final Set<Map.Entry<String, Set<Integer>>> taskEntrySet,
                                                                                       final Set<String> topicNames,
-                                                                                      final Set<String> repartitionTopicNames,
                                                                                       final Map<String, TopicMetadata> groupTopicMetadata) {
         final List<StreamsGroupHeartbeatResponseData.TopicPartition> topicPartitionsForTasks = new ArrayList<>();
         for (Map.Entry<String, Set<Integer>> taskEntry : taskEntrySet) {
             List<StreamsGroupHeartbeatResponseData.TopicPartition> topicPartitionList =
-                    Stream.concat(topicNames.stream(), repartitionTopicNames.stream()).map(topic -> {
+                    topicNames.stream().map(topic -> {
                         int numPartitionsForTopic = groupTopicMetadata.get(topic).numPartitions();
                         StreamsGroupHeartbeatResponseData.TopicPartition tp = new StreamsGroupHeartbeatResponseData.TopicPartition();
                         tp.setTopic(topic);

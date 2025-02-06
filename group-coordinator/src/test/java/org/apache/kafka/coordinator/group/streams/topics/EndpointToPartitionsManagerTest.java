@@ -47,7 +47,8 @@ class EndpointToPartitionsManagerTest {
     private StreamsGroup streamsGroup;
     private StreamsGroupMember streamsGroupMember;
     private ConfiguredTopology configuredTopology;
-    private ConfiguredSubtopology configuredSubtopology;
+    private ConfiguredSubtopology configuredSubtopologyOne;
+    private ConfiguredSubtopology configuredSubtopologyTwo;
     private final Map<String, Set<Integer>> activeTasks = new HashMap<>();
     private final Map<String, Set<Integer>> standbyTasks = new HashMap<>();
     private final StreamsGroupHeartbeatResponseData.Endpoint responseEndpoint = new StreamsGroupHeartbeatResponseData.Endpoint();
@@ -57,9 +58,12 @@ class EndpointToPartitionsManagerTest {
         streamsGroup = mock(StreamsGroup.class);
         streamsGroupMember = mock(StreamsGroupMember.class);
         configuredTopology = mock(ConfiguredTopology.class);
-        configuredSubtopology = new ConfiguredSubtopology();
-        configuredSubtopology.setSourceTopics(Set.of("Topic-A", "Topic-B"));
-        configuredTopology.subtopologies().put("0", configuredSubtopology);
+        configuredSubtopologyOne = new ConfiguredSubtopology();
+        configuredSubtopologyTwo = new ConfiguredSubtopology();
+        configuredSubtopologyOne.setSourceTopics(Set.of("Topic-A"));
+        configuredSubtopologyTwo.setRepartitionSourceTopics(Map.of("Topic-B", new ConfiguredInternalTopic("Topic-B")));
+        configuredTopology.subtopologies().put("0", configuredSubtopologyOne);
+        configuredTopology.subtopologies().put("1", configuredSubtopologyTwo);
         responseEndpoint.setHost("localhost");
         responseEndpoint.setPort(9092);
     }
@@ -71,35 +75,31 @@ class EndpointToPartitionsManagerTest {
         topicMetadata.put("Topic-B", new TopicMetadata(Uuid.randomUuid(), "Topic-B", 3, Collections.emptyMap()));
 
         activeTasks.put("0", Set.of(0, 1, 2));
-        standbyTasks.put("0", Set.of(0, 1, 2));
+        standbyTasks.put("1", Set.of(0, 1, 2));
         when(streamsGroupMember.assignedActiveTasks()).thenReturn(activeTasks);
         when(streamsGroupMember.assignedStandbyTasks()).thenReturn(standbyTasks);
         when((streamsGroup.partitionMetadata())).thenReturn(topicMetadata);
         when(streamsGroup.configuredTopology()).thenReturn(configuredTopology);
-        when(configuredTopology.subtopologies()).thenReturn(Map.of("0", configuredSubtopology));
+        when(configuredTopology.subtopologies()).thenReturn(Map.of("0", configuredSubtopologyOne, "1", configuredSubtopologyTwo));
 
         StreamsGroupHeartbeatResponseData.EndpointToPartitions result =
                 EndpointToPartitionsManager.endpointToPartitions(streamsGroupMember, responseEndpoint, streamsGroup);
 
         assertEquals(responseEndpoint, result.userEndpoint());
-        assertEquals(2, result.activePartitions().size());
-        assertEquals(2, result.standbyPartitions().size());
+        assertEquals(1, result.activePartitions().size());
+        assertEquals(1, result.standbyPartitions().size());
         List<StreamsGroupHeartbeatResponseData.TopicPartition> activePartitions = result.activePartitions();
         List<StreamsGroupHeartbeatResponseData.TopicPartition> standbyPartitions = result.standbyPartitions();
         activePartitions.sort(Comparator.comparing(StreamsGroupHeartbeatResponseData.TopicPartition::topic));
         standbyPartitions.sort(Comparator.comparing(StreamsGroupHeartbeatResponseData.TopicPartition::topic));
-        assertTopicPartitionsAssigned(activePartitions);
-        assertTopicPartitionsAssigned(standbyPartitions);
+        assertTopicPartitionsAssigned(activePartitions, "Topic-A");
+        assertTopicPartitionsAssigned(standbyPartitions, "Topic-B");
     }
 
-    private static void assertTopicPartitionsAssigned(List<StreamsGroupHeartbeatResponseData.TopicPartition> topicPartitions) {
-        StreamsGroupHeartbeatResponseData.TopicPartition topicAPartition = topicPartitions.stream().filter(tp -> tp.topic().equals("Topic-A")).findFirst().get();
-        assertEquals("Topic-A", topicAPartition.topic());
-        assertEquals(List.of(0, 1, 2), topicAPartition.partitions().stream().sorted().toList());
-
-        StreamsGroupHeartbeatResponseData.TopicPartition topicBPartition = topicPartitions.stream().filter(tp -> tp.topic().equals("Topic-B")).findFirst().get();
-        assertEquals("Topic-B", topicBPartition.topic());
-        assertEquals(List.of(0, 1, 2), topicBPartition.partitions().stream().sorted().toList());
+    private static void assertTopicPartitionsAssigned(List<StreamsGroupHeartbeatResponseData.TopicPartition> topicPartitions, String topicName) {
+        StreamsGroupHeartbeatResponseData.TopicPartition topicPartition = topicPartitions.stream().filter(tp -> tp.topic().equals(topicName)).findFirst().get();
+        assertEquals(topicName, topicPartition.topic());
+        assertEquals(List.of(0, 1, 2), topicPartition.partitions().stream().sorted().toList());
     }
 
     @ParameterizedTest(name = "{4}")
@@ -114,13 +114,14 @@ class EndpointToPartitionsManagerTest {
         Map<String, TopicMetadata> topicMetadata = new HashMap<>();
         topicMetadata.put("Topic-A", new TopicMetadata(Uuid.randomUuid(), "Topic-A", topicAPartitions, emptyRackMap));
         topicMetadata.put("Topic-B", new TopicMetadata(Uuid.randomUuid(), "Topic-B", topicBPartitions, emptyRackMap));
+        configuredSubtopologyOne.setSourceTopics(Set.of("Topic-A", "Topic-B"));
 
         activeTasks.put("0", Set.of(0, 1, 2, 3, 4));
         when(streamsGroupMember.assignedStandbyTasks()).thenReturn(Collections.emptyMap());
         when(streamsGroupMember.assignedActiveTasks()).thenReturn(activeTasks);
         when(streamsGroup.partitionMetadata()).thenReturn(topicMetadata);
         when(streamsGroup.configuredTopology()).thenReturn(configuredTopology);
-        when(configuredTopology.subtopologies()).thenReturn(Map.of("0", configuredSubtopology));
+        when(configuredTopology.subtopologies()).thenReturn(Map.of("0", configuredSubtopologyOne));
 
         StreamsGroupHeartbeatResponseData.EndpointToPartitions result = EndpointToPartitionsManager.endpointToPartitions(streamsGroupMember, responseEndpoint, streamsGroup);
 
