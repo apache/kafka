@@ -440,7 +440,6 @@ class BrokerServer(
         config.shareGroupConfig.shareFetchMaxFetchRecords,
         persister,
         groupConfigManager,
-        metrics,
         brokerTopicStats
       )
 
