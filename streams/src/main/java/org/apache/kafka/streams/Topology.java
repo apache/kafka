@@ -776,7 +776,7 @@ public class Topology {
         internalTopologyBuilder.addProcessor(processorName, stateUpdateSupplier, sourceName);
         internalTopologyBuilder.addStateStore(storeBuilder, processorName);
 
-        // connect source topic as (read-only) changelog topic for fault-tolerance
+        // connect the source topic as (read-only) changelog topic for fault-tolerance
         storeBuilder.withLoggingDisabled();
         internalTopologyBuilder.connectSourceStoreAndTopic(storeBuilder.name(), topic);
 
