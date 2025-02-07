@@ -422,25 +422,6 @@ class PersisterStateManagerTest {
 
         Node suppliedNode = new Node(0, HOST, PORT);
 
-        String coordinatorKey = SharePartitionKey.asCoordinatorKey(groupId, topicId, partition);
-
-        client.prepareResponseFrom(body -> body instanceof FindCoordinatorRequest
-                && ((FindCoordinatorRequest) body).data().keyType() == FindCoordinatorRequest.CoordinatorType.SHARE.id()
-                && ((FindCoordinatorRequest) body).data().coordinatorKeys().get(0).equals(coordinatorKey),
-            new FindCoordinatorResponse(
-                new FindCoordinatorResponseData()
-                    .setCoordinators(Collections.singletonList(
-                        new FindCoordinatorResponseData.Coordinator()
-                            .setKey(coordinatorKey)
-                            .setErrorCode(Errors.NONE.code())
-                            .setHost(coordinatorKey)
-                            .setNodeId(Node.noNode().id())
-                            .setPort(Node.noNode().port())
-                    ))
-            ),
-            suppliedNode
-        );
-
         client.setUnreachable(suppliedNode, CommonClientConfigs.DEFAULT_SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS + 1);
 
         ShareCoordinatorMetadataCacheHelper cacheHelper = getDefaultCacheHelper(suppliedNode);
