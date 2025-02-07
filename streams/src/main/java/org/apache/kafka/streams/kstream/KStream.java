@@ -1031,7 +1031,8 @@ public interface KStream<K, V> {
     /**
      * See {@link #leftJoin(KStream, ValueJoiner, JoinWindows)}.
      *
-     * <p>Note that the key is read-only and must not be modified, as this can lead to corrupt partitioning.
+     * <p>Note that the key is read-only and must not be modified, as this can lead to corrupt partitioning and
+     * incorrect results.
      */
     <VRight, VOut> KStream<K, VOut> leftJoin(final KStream<K, VRight> rightStream,
                                              final ValueJoinerWithKey<? super K, ? super V, ? super VRight, ? extends VOut> joiner,
@@ -1048,7 +1049,8 @@ public interface KStream<K, V> {
     /**
      * See {@link #leftJoin(KStream, ValueJoiner, JoinWindows)}.
      *
-     * <p>Note that the key is read-only and must not be modified, as this can lead to corrupt partitioning.
+     * <p>Note that the key is read-only and must not be modified, as this can lead to corrupt partitioning and
+     * incorrect results.
      */
     <VRight, VOut> KStream<K, VOut> leftJoin(final KStream<K, VRight> rightStream,
                                              final ValueJoinerWithKey<? super K, ? super V, ? super VRight, ? extends VOut> joiner,
