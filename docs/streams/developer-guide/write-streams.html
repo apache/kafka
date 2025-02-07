@@ -151,8 +151,7 @@ streams.start();</code></pre>
         For more information, see <a class="reference internal" href="../architecture.html#streams_architecture_tasks"><span class="std std-ref">Stream Partitions and Tasks</span></a> and <a class="reference internal" href="../architecture.html#streams_architecture_threads"><span class="std std-ref">Threading Model</span></a>.</p>
       <p>To catch any unexpected exceptions, you can set an <code class="docutils literal"><span class="pre">java.lang.Thread.UncaughtExceptionHandler</span></code> before you start the
         application.  This handler is called whenever a stream thread is terminated by an unexpected exception:</p>
-        <pre class="line-numbers"><code class="language-java">// Java 11+, using lambda expressions
-streams.setUncaughtExceptionHandler((Thread thread, Throwable throwable) -&gt; {
+        <pre class="line-numbers"><code class="language-java">streams.setUncaughtExceptionHandler((Thread thread, Throwable throwable) -&gt; {
   // here you should examine the throwable/exception and perform an appropriate action!
 });
 </code></pre>
