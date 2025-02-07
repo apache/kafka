@@ -19,10 +19,7 @@ package org.apache.kafka.coordinator.group.streams;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupPartitionMetadataValue;
 
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 
 /**
  * Immutable topic metadata, representing the current state of a topic in the broker.
@@ -30,15 +27,12 @@ import java.util.Set;
  * @param id             The topic ID.
  * @param name           The topic name.
  * @param numPartitions  The number of partitions.
- * @param partitionRacks Map of every partition ID to a set of its rack IDs, if they exist. If rack information is unavailable for all
- *                       partitions, this is an empty map.
  */
-public record TopicMetadata(Uuid id, String name, int numPartitions, Map<Integer, Set<String>> partitionRacks) {
+public record TopicMetadata(Uuid id, String name, int numPartitions) {
 
     public TopicMetadata(Uuid id,
                          String name,
-                         int numPartitions,
-                         Map<Integer, Set<String>> partitionRacks) {
+                         int numPartitions) {
         this.id = Objects.requireNonNull(id);
         if (Uuid.ZERO_UUID.equals(id)) {
             throw new IllegalArgumentException("Topic id cannot be ZERO_UUID.");
@@ -51,23 +45,12 @@ public record TopicMetadata(Uuid id, String name, int numPartitions, Map<Integer
         if (numPartitions <= 0) {
             throw new IllegalArgumentException("Number of partitions must be positive.");
         }
-        this.partitionRacks = Objects.requireNonNull(partitionRacks);
     }
 
     public static TopicMetadata fromRecord(StreamsGroupPartitionMetadataValue.TopicMetadata record) {
-        // Converting the data type from a list stored in the record to a map for the topic metadata.
-        Map<Integer, Set<String>> partitionRacks = new HashMap<>();
-        for (StreamsGroupPartitionMetadataValue.PartitionMetadata partitionMetadata : record.partitionMetadata()) {
-            partitionRacks.put(
-                partitionMetadata.partition(),
-                Set.copyOf(partitionMetadata.racks())
-            );
-        }
-
         return new TopicMetadata(
             record.topicId(),
             record.topicName(),
-            record.numPartitions(),
-            partitionRacks);
+            record.numPartitions());
     }
 }

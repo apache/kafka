@@ -30,9 +30,9 @@ import org.apache.kafka.coordinator.group.Group;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
+import org.apache.kafka.coordinator.group.streams.topics.ConfiguredSubtopology;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
 import org.apache.kafka.coordinator.group.streams.topics.InternalTopicManager;
-import org.apache.kafka.image.ClusterImage;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsImage;
 import org.apache.kafka.timeline.SnapshotRegistry;
@@ -51,8 +51,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeMap;
 
-import static java.util.Collections.emptyMap;
 import static org.apache.kafka.coordinator.group.streams.StreamsGroup.StreamsGroupState.ASSIGNING;
 import static org.apache.kafka.coordinator.group.streams.StreamsGroup.StreamsGroupState.EMPTY;
 import static org.apache.kafka.coordinator.group.streams.StreamsGroup.StreamsGroupState.NOT_READY;
@@ -122,7 +122,7 @@ public class StreamsGroup implements Group {
     private final SnapshotRegistry snapshotRegistry;
 
     /**
-     * The group id.
+     * The group ID.
      */
     private final String groupId;
 
@@ -159,24 +159,19 @@ public class StreamsGroup implements Group {
     private final TimelineInteger targetAssignmentEpoch;
 
     /**
-     * The target assignment per member id.
+     * The target assignment per member ID.
      */
     private final TimelineHashMap<String, TasksTuple> targetAssignment;
 
     /**
-     * Reverse lookup map representing tasks with their current member assignments.
+     * These maps map each active/standby/warmup task to the process ID(s) of their current owner.
+     * The mapping is of the form <code>subtopology -> partition -> memberId</code>.
+     * When a member revokes a partition, it removes its process ID from this map.
+     * When a member gets a partition, it adds its process ID to this map.
      */
-    private final TimelineHashMap<String, TimelineHashMap<Integer, String>> invertedTargetActiveTasksAssignment;
-    private final TimelineHashMap<String, TimelineHashMap<Integer, String>> invertedTargetStandbyTasksAssignment;
-    private final TimelineHashMap<String, TimelineHashMap<Integer, String>> invertedTargetWarmupTasksAssignment;
-
-    /**
-     * These maps map each active/standby/warmup task to the process ID(s) of their current owner. When a
-     * member revokes a partition, it removes its process ID from this map. When a member gets a partition, it adds its process ID to this map.
-     */
-    private final TimelineHashMap<String, TimelineHashMap<Integer, String>> currentActiveTaskProcessId;
-    private final TimelineHashMap<String, TimelineHashMap<Integer, Set<String>>> currentStandbyTaskProcessIds;
-    private final TimelineHashMap<String, TimelineHashMap<Integer, Set<String>>> currentWarmupTaskProcessIds;
+    private final TimelineHashMap<String, TimelineHashMap<Integer, String>> currentActiveTaskToProcessId;
+    private final TimelineHashMap<String, TimelineHashMap<Integer, Set<String>>> currentStandbyTaskToProcessIds;
+    private final TimelineHashMap<String, TimelineHashMap<Integer, Set<String>>> currentWarmupTaskToProcessIds;
 
     /**
      * The coordinator metrics.
@@ -219,12 +214,9 @@ public class StreamsGroup implements Group {
         this.partitionMetadata = new TimelineHashMap<>(snapshotRegistry, 0);
         this.targetAssignmentEpoch = new TimelineInteger(snapshotRegistry);
         this.targetAssignment = new TimelineHashMap<>(snapshotRegistry, 0);
-        this.invertedTargetActiveTasksAssignment = new TimelineHashMap<>(snapshotRegistry, 0);
-        this.invertedTargetStandbyTasksAssignment = new TimelineHashMap<>(snapshotRegistry, 0);
-        this.invertedTargetWarmupTasksAssignment = new TimelineHashMap<>(snapshotRegistry, 0);
-        this.currentActiveTaskProcessId = new TimelineHashMap<>(snapshotRegistry, 0);
-        this.currentStandbyTaskProcessIds = new TimelineHashMap<>(snapshotRegistry, 0);
-        this.currentWarmupTaskProcessIds = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.currentActiveTaskToProcessId = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.currentStandbyTaskToProcessIds = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.currentWarmupTaskToProcessIds = new TimelineHashMap<>(snapshotRegistry, 0);
         this.metrics = Objects.requireNonNull(metrics);
         this.topology = new TimelineObject<>(snapshotRegistry, Optional.empty());
         this.configuredTopology = new TimelineObject<>(snapshotRegistry, Optional.empty());
@@ -264,12 +256,12 @@ public class StreamsGroup implements Group {
             .setGroupType(type().toString());
     }
 
-    public ConfiguredTopology configuredTopology() {
-        return configuredTopology.get().orElse(null);
+    public Optional<ConfiguredTopology> configuredTopology() {
+        return configuredTopology.get();
     }
 
-    public StreamsTopology topology() {
-        return topology.get().orElse(null);
+    public Optional<StreamsTopology> topology() {
+        return topology.get();
     }
 
     public void setTopology(StreamsTopology topology) {
@@ -279,7 +271,7 @@ public class StreamsGroup implements Group {
     }
 
     /**
-     * @return The group id.
+     * @return The group ID.
      */
     @Override
     public String groupId() {
@@ -291,13 +283,6 @@ public class StreamsGroup implements Group {
      */
     public StreamsGroupState state() {
         return state.get();
-    }
-
-    /**
-     * @return The current state based on committed offset.
-     */
-    public StreamsGroupState state(long committedOffset) {
-        return state.get(committedOffset);
     }
 
     /**
@@ -335,10 +320,10 @@ public class StreamsGroup implements Group {
     }
 
     /**
-     * Get member id of a static member that matches the given group instance id.
+     * Get member ID of a static member that matches the given group instance ID.
      *
-     * @param groupInstanceId The group instance id.
-     * @return The member id corresponding to the given instance id or null if it does not exist
+     * @param groupInstanceId The group instance ID.
+     * @return The member ID corresponding to the given instance ID or null if it does not exist
      */
     public String staticMemberId(String groupInstanceId) {
         return staticMembers.get(groupInstanceId);
@@ -348,7 +333,7 @@ public class StreamsGroup implements Group {
      * Gets or creates a new member but without adding it to the group. Adding a member is done via the
      * {@link StreamsGroup#updateMember(StreamsGroupMember)} method.
      *
-     * @param memberId          The member id.
+     * @param memberId          The member ID.
      * @param createIfNotExists Booleans indicating whether the member must be created if it does not exist.
      * @return A StreamsGroupMember.
      */
@@ -373,8 +358,8 @@ public class StreamsGroup implements Group {
     /**
      * Gets a static member.
      *
-     * @param instanceId The group instance id.
-     * @return The member corresponding to the given instance id or null if it does not exist
+     * @param instanceId The group instance ID.
+     * @return The member corresponding to the given instance ID or null if it does not exist
      */
     public StreamsGroupMember staticMember(String instanceId) {
         String existingMemberId = staticMemberId(instanceId);
@@ -397,7 +382,7 @@ public class StreamsGroup implements Group {
     }
 
     /**
-     * Updates the member id stored against the instance id if the member is a static member.
+     * Updates the member ID stored against the instance ID if the member is a static member.
      *
      * @param newMember The new member state.
      */
@@ -410,7 +395,7 @@ public class StreamsGroup implements Group {
     /**
      * Remove the member from the group.
      *
-     * @param memberId The member id to remove.
+     * @param memberId The member ID to remove.
      */
     public void removeMember(String memberId) {
         StreamsGroupMember oldMember = members.remove(memberId);
@@ -433,7 +418,7 @@ public class StreamsGroup implements Group {
     /**
      * Returns true if the member exists.
      *
-     * @param memberId The member id.
+     * @param memberId The member ID.
      * @return A boolean indicating whether the member exists or not.
      */
     public boolean hasMember(String memberId) {
@@ -448,14 +433,14 @@ public class StreamsGroup implements Group {
     }
 
     /**
-     * @return An immutable Map containing all the members keyed by their id.
+     * @return An immutable map containing all the members keyed by their ID.
      */
     public Map<String, StreamsGroupMember> members() {
         return Collections.unmodifiableMap(members);
     }
 
     /**
-     * @return An immutable Map containing all the static members keyed by instance id.
+     * @return An immutable map containing all the static members keyed by instance ID.
      */
     public Map<String, String> staticMembers() {
         return Collections.unmodifiableMap(staticMembers);
@@ -471,178 +456,33 @@ public class StreamsGroup implements Group {
     }
 
     /**
-     * @return An immutable map containing all the topic partitions with their current member assignments.
-     */
-    public Map<String, Map<Integer, String>> invertedTargetActiveTasksAssignment() {
-        return Collections.unmodifiableMap(invertedTargetActiveTasksAssignment);
-    }
-
-    public Map<String, Map<Integer, String>> invertedTargetStandbyTasksAssignment() {
-        return Collections.unmodifiableMap(invertedTargetStandbyTasksAssignment);
-    }
-
-    public Map<String, Map<Integer, String>> invertedTargetWarmupTasksAssignment() {
-        return Collections.unmodifiableMap(invertedTargetWarmupTasksAssignment);
-    }
-
-    /**
      * Updates the target assignment of a member.
      *
      * @param memberId            The member id.
      * @param newTargetAssignment The new target assignment.
      */
     public void updateTargetAssignment(String memberId, TasksTuple newTargetAssignment) {
-        updateInvertedTargetActiveTasksAssignment(
-            memberId,
-            targetAssignment.getOrDefault(memberId, new TasksTuple(emptyMap(), emptyMap(), emptyMap())),
-            newTargetAssignment
-        );
-        updateInvertedTargetStandbyTasksAssignment(
-            memberId,
-            targetAssignment.getOrDefault(memberId, new TasksTuple(emptyMap(), emptyMap(), emptyMap())),
-            newTargetAssignment
-        );
-        updateInvertedTargetWarmupTasksAssignment(
-            memberId,
-            targetAssignment.getOrDefault(memberId, new TasksTuple(emptyMap(), emptyMap(), emptyMap())),
-            newTargetAssignment
-        );
         targetAssignment.put(memberId, newTargetAssignment);
     }
 
-
-    private void updateInvertedTargetActiveTasksAssignment(
-        String memberId,
-        TasksTuple oldTargetAssignment,
-        TasksTuple newTargetAssignment
-    ) {
-        updateInvertedTargetAssignment(
-            memberId,
-            oldTargetAssignment,
-            newTargetAssignment,
-            invertedTargetActiveTasksAssignment
-        );
-    }
-
-    private void updateInvertedTargetStandbyTasksAssignment(
-        String memberId,
-        TasksTuple oldTargetAssignment,
-        TasksTuple newTargetAssignment
-    ) {
-        updateInvertedTargetAssignment(
-            memberId,
-            oldTargetAssignment,
-            newTargetAssignment,
-            invertedTargetStandbyTasksAssignment
-        );
-    }
-
-    private void updateInvertedTargetWarmupTasksAssignment(
-        String memberId,
-        TasksTuple oldTargetAssignment,
-        TasksTuple newTargetAssignment
-    ) {
-        updateInvertedTargetAssignment(
-            memberId,
-            oldTargetAssignment,
-            newTargetAssignment,
-            invertedTargetWarmupTasksAssignment
-        );
-    }
-
     /**
-     * Updates the reverse lookup map of the target assignment.
-     *
-     * @param memberId            The member Id.
-     * @param oldTargetAssignment The old target assignment.
-     * @param newTargetAssignment The new target assignment.
-     */
-    private void updateInvertedTargetAssignment(
-        String memberId,
-        TasksTuple oldTargetAssignment,
-        TasksTuple newTargetAssignment,
-        TimelineHashMap<String, TimelineHashMap<Integer, String>> invertedTargetAssignment
-    ) {
-        // Combine keys from both old and new assignments.
-        Set<String> allSubtopologyIds = new HashSet<>();
-        allSubtopologyIds.addAll(oldTargetAssignment.activeTasks().keySet());
-        allSubtopologyIds.addAll(newTargetAssignment.activeTasks().keySet());
-
-        for (String subtopologyId : allSubtopologyIds) {
-            Set<Integer> oldPartitions = oldTargetAssignment.activeTasks().getOrDefault(subtopologyId, Collections.emptySet());
-            Set<Integer> newPartitions = newTargetAssignment.activeTasks().getOrDefault(subtopologyId, Collections.emptySet());
-
-            TimelineHashMap<Integer, String> taskPartitionAssignment = invertedTargetAssignment.computeIfAbsent(
-                subtopologyId, k -> new TimelineHashMap<>(snapshotRegistry, Math.max(oldPartitions.size(), newPartitions.size()))
-            );
-
-            // Remove partitions that aren't present in the new assignment only if the partition is currently
-            // still assigned to the member in question.
-            // If p0 was moved from A to B, and the target assignment map was updated for B first, we don't want to
-            // remove the key p0 from the inverted map and undo the action when A eventually tries to update its assignment.
-            for (Integer partition : oldPartitions) {
-                if (!newPartitions.contains(partition) && memberId.equals(taskPartitionAssignment.get(partition))) {
-                    taskPartitionAssignment.remove(partition);
-                }
-            }
-
-            // Add partitions that are in the new assignment but not in the old assignment.
-            for (Integer partition : newPartitions) {
-                if (!oldPartitions.contains(partition)) {
-                    taskPartitionAssignment.put(partition, memberId);
-                }
-            }
-
-            if (taskPartitionAssignment.isEmpty()) {
-                invertedTargetAssignment.remove(subtopologyId);
-            } else {
-                invertedTargetAssignment.put(subtopologyId, taskPartitionAssignment);
-            }
-        }
-    }
-
-    /**
-     * Removes the target assignment of a member.
-     *
-     * @param memberId The member id.
-     */
-    public void removeTargetAssignment(String memberId) {
-        updateInvertedTargetActiveTasksAssignment(
-            memberId,
-            targetAssignment.getOrDefault(memberId, TasksTuple.EMPTY),
-            TasksTuple.EMPTY
-        );
-        updateInvertedTargetStandbyTasksAssignment(
-            memberId,
-            targetAssignment.getOrDefault(memberId, TasksTuple.EMPTY),
-            TasksTuple.EMPTY
-        );
-        updateInvertedTargetWarmupTasksAssignment(
-            memberId,
-            targetAssignment.getOrDefault(memberId, TasksTuple.EMPTY),
-            TasksTuple.EMPTY
-        );
-        targetAssignment.remove(memberId);
-    }
-
-    /**
-     * @return An immutable Map containing all the target assignment keyed by member id.
+     * @return An immutable map containing all the target assignment keyed by member ID.
      */
     public Map<String, TasksTuple> targetAssignment() {
         return Collections.unmodifiableMap(targetAssignment);
     }
 
     /**
-     * Returns the current processId of a task or null if the task does not have one.
+     * Returns the current process ID of a task or null if the task does not have one.
      *
-     * @param subtopologyId     The topic id.
-     * @param taskId The task id.
-     * @return The processId or null.
+     * @param subtopologyId  The topic ID.
+     * @param taskId         The task ID.
+     * @return The process ID or null.
      */
     public String currentActiveTaskProcessId(
         String subtopologyId, int taskId
     ) {
-        Map<Integer, String> tasks = currentActiveTaskProcessId.get(subtopologyId);
+        Map<Integer, String> tasks = currentActiveTaskToProcessId.get(subtopologyId);
         if (tasks == null) {
             return null;
         } else {
@@ -651,16 +491,16 @@ public class StreamsGroup implements Group {
     }
 
     /**
-     * Returns the current member IDs of a task or empty set if the task does not have one.
+     * Returns the current process IDs of a task or empty set if the task does not have one.
      *
-     * @param subtopologyId     The topic id.
-     * @param taskId The task id.
-     * @return The member IDs or empty set.
+     * @param subtopologyId The topic ID.
+     * @param taskId        The task ID.
+     * @return The process IDs or empty set.
      */
     public Set<String> currentStandbyTaskProcessIds(
         String subtopologyId, int taskId
     ) {
-        Map<Integer, Set<String>> tasks = currentStandbyTaskProcessIds.get(subtopologyId);
+        Map<Integer, Set<String>> tasks = currentStandbyTaskToProcessIds.get(subtopologyId);
         if (tasks == null) {
             return Collections.emptySet();
         } else {
@@ -669,16 +509,16 @@ public class StreamsGroup implements Group {
     }
 
     /**
-     * Returns the current member ID of a task or empty set if the task does not have one.
+     * Returns the current process ID of a task or empty set if the task does not have one.
      *
-     * @param subtopologyId     The topic id.
-     * @param taskId The task id.
+     * @param subtopologyId The topic ID.
+     * @param taskId        The process ID.
      * @return The member IDs or empty set.
      */
     public Set<String> currentWarmupTaskProcessIds(
         String subtopologyId, int taskId
     ) {
-        Map<Integer, Set<String>> tasks = currentWarmupTaskProcessIds.get(subtopologyId);
+        Map<Integer, Set<String>> tasks = currentWarmupTaskToProcessIds.get(subtopologyId);
         if (tasks == null) {
             return Collections.emptySet();
         } else {
@@ -687,7 +527,7 @@ public class StreamsGroup implements Group {
     }
 
     /**
-     * @return An immutable Map of partition metadata for each topic that are inputs for this streams group.
+     * @return An immutable map of partition metadata for each topic that are inputs for this streams group.
      */
     public Map<String, TopicMetadata> partitionMetadata() {
         return Collections.unmodifiableMap(partitionMetadata);
@@ -708,50 +548,33 @@ public class StreamsGroup implements Group {
     }
 
     /**
-     * Computes the partition metadata based on the current topology and the current topics/cluster image.
+     * Computes the partition metadata based on the current topology and the current topics image.
      *
-     * @param topicsImage          The current metadata for all available topics.
-     * @param clusterImage         The current metadata for the Kafka cluster.
-     * @return An immutable map of partition metadata for each topic that the streams topology is using (besides non-repartition sink topics)
+     * @param topicsImage The current metadata for all available topics.
+     * @param topology    The current metadata for the Streams topology
+     * @return An immutable map of partition metadata for each topic that the Streams topology is using (besides non-repartition sink topics)
      */
     public Map<String, TopicMetadata> computePartitionMetadata(
         TopicsImage topicsImage,
-        ClusterImage clusterImage,
         StreamsTopology topology
     ) {
         Set<String> requiredTopicNames = topology.requiredTopics();
 
         // Create the topic metadata for each subscribed topic.
-        Map<String, TopicMetadata> newSubscriptionMetadata = new HashMap<>(requiredTopicNames.size());
+        Map<String, TopicMetadata> newPartitionMetadata = new HashMap<>(requiredTopicNames.size());
 
         requiredTopicNames.forEach(topicName -> {
             TopicImage topicImage = topicsImage.getTopic(topicName);
             if (topicImage != null) {
-                Map<Integer, Set<String>> partitionRacks = new HashMap<>();
-                topicImage.partitions().forEach((partition, partitionRegistration) -> {
-                    Set<String> racks = new HashSet<>();
-                    for (int replica : partitionRegistration.replicas) {
-                        Optional<String> rackOptional = clusterImage.broker(replica).rack();
-                        // Only add the rack if it is available for the broker/replica.
-                        rackOptional.ifPresent(racks::add);
-                    }
-                    // If rack information is unavailable for all replicas of this partition,
-                    // no corresponding entry will be stored for it in the map.
-                    if (!racks.isEmpty()) {
-                        partitionRacks.put(partition, racks);
-                    }
-                });
-
-                newSubscriptionMetadata.put(topicName, new TopicMetadata(
+                newPartitionMetadata.put(topicName, new TopicMetadata(
                     topicImage.id(),
                     topicImage.name(),
-                    topicImage.partitions().size(),
-                    partitionRacks)
+                    topicImage.partitions().size())
                 );
             }
         });
 
-        return Collections.unmodifiableMap(newSubscriptionMetadata);
+        return Collections.unmodifiableMap(newPartitionMetadata);
     }
 
     /**
@@ -796,8 +619,8 @@ public class StreamsGroup implements Group {
     /**
      * Validates the OffsetCommit request.
      *
-     * @param memberId          The member id.
-     * @param groupInstanceId   The group instance id.
+     * @param memberId          The member ID.
+     * @param groupInstanceId   The group instance ID.
      * @param memberEpoch       The member epoch.
      * @param isTransactional   Whether the offset commit is transactional or not.
      * @param apiVersion        The api version.
@@ -817,7 +640,7 @@ public class StreamsGroup implements Group {
         // the request can commit offsets if the group is empty.
         if (memberEpoch < 0 && members().isEmpty()) return;
 
-        // The TxnOffsetCommit API does not require the member id, the generation id and the group instance id fields.
+        // The TxnOffsetCommit API does not require the member ID, the generation ID and the group instance ID fields.
         // Hence, they are only validated if any of them is provided
         if (isTransactional && memberEpoch == JoinGroupRequest.UNKNOWN_GENERATION_ID &&
             memberId.equals(JoinGroupRequest.UNKNOWN_MEMBER_ID) && groupInstanceId == null)
@@ -838,7 +661,7 @@ public class StreamsGroup implements Group {
     /**
      * Validates the OffsetFetch request.
      *
-     * @param memberId            The member id for streams groups.
+     * @param memberId            The member ID for streams groups.
      * @param memberEpoch         The member epoch for streams groups.
      * @param lastCommittedOffset The last committed offsets in the timeline.
      */
@@ -848,7 +671,7 @@ public class StreamsGroup implements Group {
         int memberEpoch,
         long lastCommittedOffset
     ) throws UnknownMemberIdException, StaleMemberEpochException {
-        // When the member id is null and the member epoch is -1, the request either comes
+        // When the member ID is null and the member epoch is -1, the request either comes
         // from the admin client or from a client which does not provide them. In this case,
         // the fetch request is accepted.
         if (memberId == null && memberEpoch < 0) {
@@ -882,6 +705,15 @@ public class StreamsGroup implements Group {
 
     @Override
     public boolean isSubscribedToTopic(String topic) {
+        Optional<ConfiguredTopology> maybeConfiguredTopology = configuredTopology.get();
+        if (maybeConfiguredTopology.isEmpty() || !maybeConfiguredTopology.get().isReady()) {
+            return false;
+        }
+        for (ConfiguredSubtopology sub : maybeConfiguredTopology.get().subtopologies().orElse(new TreeMap<>()).values()) {
+            if (sub.sourceTopics().contains(topic) || sub.repartitionSourceTopics().containsKey(topic)) {
+                return true;
+            }
+        }
         return false;
     }
 
@@ -951,7 +783,7 @@ public class StreamsGroup implements Group {
         StreamsGroupState newState = STABLE;
         if (members.isEmpty()) {
             newState = EMPTY;
-        } else if (topology() == null || configuredTopology() == null || !configuredTopology().isReady()) {
+        } else if (topology() == null || configuredTopology().isEmpty() || !configuredTopology().get().isReady()) {
             newState = NOT_READY;
         } else if (groupEpoch.get() > targetAssignmentEpoch.get()) {
             newState = ASSIGNING;
@@ -1020,9 +852,9 @@ public class StreamsGroup implements Group {
         String processId
     ) {
         if (tasks != null) {
-            removeTaskProcessIds(tasks.activeTasks(), currentActiveTaskProcessId, processId);
-            removeTaskProcessIdsFromSet(tasks.standbyTasks(), currentStandbyTaskProcessIds, processId);
-            removeTaskProcessIdsFromSet(tasks.warmupTasks(), currentWarmupTaskProcessIds, processId);
+            removeTaskProcessIds(tasks.activeTasks(), currentActiveTaskToProcessId, processId);
+            removeTaskProcessIdsFromSet(tasks.standbyTasks(), currentStandbyTaskToProcessIds, processId);
+            removeTaskProcessIdsFromSet(tasks.warmupTasks(), currentWarmupTaskToProcessIds, processId);
         }
     }
 
@@ -1030,8 +862,8 @@ public class StreamsGroup implements Group {
      * Removes the task process IDs based on the provided assignment.
      *
      * @param assignment    The assignment.
-     * @param expectedProcessId The expected processId.
-     * @throws IllegalStateException if the processId does not match the expected one. package-private for testing.
+     * @param expectedProcessId The expected process ID.
+     * @throws IllegalStateException if the process ID does not match the expected one. package-private for testing.
      */
     private void removeTaskProcessIds(
         Map<String, Set<Integer>> assignment,
@@ -1045,8 +877,8 @@ public class StreamsGroup implements Group {
                         String prevValue = partitionsOrNull.remove(partitionId);
                         if (!Objects.equals(prevValue, expectedProcessId)) {
                             throw new IllegalStateException(
-                                String.format("Cannot remove the processId %s from task %s_%s because the partition is " +
-                                    "still owned at a different processId %s", expectedProcessId, subtopologyId, partitionId, prevValue));
+                                String.format("Cannot remove the process ID %s from task %s_%s because the partition is " +
+                                    "still owned at a different process ID %s", expectedProcessId, subtopologyId, partitionId, prevValue));
                         }
                     });
                     if (partitionsOrNull.isEmpty()) {
@@ -1056,7 +888,7 @@ public class StreamsGroup implements Group {
                     }
                 } else {
                     throw new IllegalStateException(
-                        String.format("Cannot remove the processId %s from %s because it does not have any processId",
+                        String.format("Cannot remove the process ID %s from %s because it does not have any processId",
                             expectedProcessId, subtopologyId));
                 }
             });
@@ -1067,8 +899,8 @@ public class StreamsGroup implements Group {
      * Removes the task process IDs based on the provided assignment.
      *
      * @param assignment    The assignment.
-     * @param processIdToRemove The expected processId.
-     * @throws IllegalStateException if the processId does not match the expected one. package-private for testing.
+     * @param processIdToRemove The expected process ID.
+     * @throws IllegalStateException if the process ID does not match the expected one. package-private for testing.
      */
     private void removeTaskProcessIdsFromSet(
         Map<String, Set<Integer>> assignment,
@@ -1081,7 +913,7 @@ public class StreamsGroup implements Group {
                     assignedPartitions.forEach(partitionId -> {
                         if (!partitionsOrNull.get(partitionId).remove(processIdToRemove)) {
                             throw new IllegalStateException(
-                                String.format("Cannot remove the processId %s from task %s_%s because the task is " +
+                                String.format("Cannot remove the process ID %s from task %s_%s because the task is " +
                                     "not owned by this process ID", processIdToRemove, subtopologyId, partitionId));
                         }
                     });
@@ -1092,7 +924,7 @@ public class StreamsGroup implements Group {
                     }
                 } else {
                     throw new IllegalStateException(
-                        String.format("Cannot remove the processId %s from %s because it does not have any processId",
+                        String.format("Cannot remove the process ID %s from %s because it does not have any process ID",
                             processIdToRemove, subtopologyId));
                 }
             });
@@ -1111,9 +943,9 @@ public class StreamsGroup implements Group {
         String processId
     ) {
         if (tasks != null) {
-            addTaskProcessId(tasks.activeTasks(), processId, currentActiveTaskProcessId);
-            addTaskProcessIdToSet(tasks.standbyTasks(), processId, currentStandbyTaskProcessIds);
-            addTaskProcessIdToSet(tasks.warmupTasks(), processId, currentWarmupTaskProcessIds);
+            addTaskProcessId(tasks.activeTasks(), processId, currentActiveTaskToProcessId);
+            addTaskProcessIdToSet(tasks.standbyTasks(), processId, currentStandbyTaskToProcessIds);
+            addTaskProcessIdToSet(tasks.warmupTasks(), processId, currentWarmupTaskToProcessIds);
         }
     }
 
