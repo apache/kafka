@@ -22,6 +22,7 @@ import org.apache.kafka.clients.FetchSessionHandler;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NetworkClientUtils;
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
@@ -44,6 +45,7 @@ import org.slf4j.helpers.MessageFormatter;
 
 import java.io.Closeable;
 import java.time.Duration;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -419,33 +421,7 @@ public abstract class AbstractFetch implements Closeable {
             return Collections.emptyMap();
         }
 
-        Set<Integer> bufferedNodes = new HashSet<>();
-
-        for (TopicPartition partition : buffered) {
-            // It's possible that at the time of the fetcher creating new fetch requests, a partition with buffered
-            // data from a *previous* request is no longer assigned. So before attempting to retrieve the node
-            // information, check that the partition is still assigned and fetchable; an unassigned/invalid partition
-            // will throw an IllegalStateException in positionForPartition.
-            //
-            // Note: this check is not needed for the unbuffered partitions as the logic in
-            // SubscriptionState.fetchablePartitions() only includes partitions currently assigned.
-            if (!subscriptions.hasValidPosition(partition))
-                continue;
-
-            // A paused partition remains in the fetch buffer and is not returned to the user (unless the partition
-            // is later resumed). Therefore, buffered partitions which are also paused should be ignored when
-            // determining which nodes to skip when fetching. Otherwise, the node's *other* eligible (unbuffered
-            // and/or un-paused) partitions would never be fetched, leading users to poll indefinitely waiting for
-            // data to be returned.
-            //
-            // See FetchCollector.collectFetch().
-            if (subscriptions.isPaused(partition))
-                continue;
-
-            SubscriptionState.FetchPosition position = positionForPartition(partition);
-            Optional<Node> nodeOpt = maybeNodeForPosition(partition, position, currentTimeMs);
-            nodeOpt.ifPresent(node -> bufferedNodes.add(node.id()));
-        }
+        Set<Integer> bufferedNodes = bufferedNodes(buffered, currentTimeMs);
 
         for (TopicPartition partition : unbuffered) {
             SubscriptionState.FetchPosition position = positionForPartition(partition);
@@ -530,6 +506,75 @@ public abstract class AbstractFetch implements Closeable {
         // Use the preferred read replica if set, otherwise the partition's leader
         Node node = selectReadReplica(partition, leaderOpt.get(), currentTimeMs);
         return Optional.of(node);
+    }
+
+    /**
+     * Returns the set of IDs for {@link Node}s to which fetch requests should <em>not</em> be sent.
+     *
+     * <p>
+     * When a partition has buffered data in {@link FetchBuffer}, that means that at some point in the <em>past</em>,
+     * the following steps occurred:
+     *
+     * <ol>
+     *     <li>The client submitted a fetch request to the partition's leader</li>
+     *     <li>The leader responded with data</li>
+     *     <li>The client received a response from the leader and stored that data in memory</li>
+     * </ol>
+     *
+     * But it's possible that at the <em>current</em> point in time, that same partition might not be in a fetchable
+     * state. For example:
+     *
+     * <ul>
+     *     <li>
+     *         The partition is no longer assigned to the client. This also includes when the partition assignment
+     *         is either {@link SubscriptionState#markPendingRevocation(Set) pending revocation} or
+     *         {@link SubscriptionState#markPendingOnAssignedCallback(Collection, boolean) pending assignment}.
+     *     </li>
+     *     <li>
+     *         The client {@link Consumer#pause(Collection) paused} the partition. A paused partition remains in
+     *         the fetch buffer, because {@link FetchCollector#collectFetch(FetchBuffer)} explicitly skips over
+     *         paused partitions and does not return them to the user.
+     *     </li>
+     *     <li>
+     *         The partition does not have a valid position on the client. This could be due to the partition
+     *         awaiting validation or awaiting reset.
+     *     </li>
+     * </ul>
+     *
+     * For those reasons, a partition that was <em>previously</em> in a fetchable state might not <em>currently</em>
+     * be in a fetchable state.
+     * </p>
+     *
+     * <p>
+     * Here's why this is important—in a production system, a given leader node serves as a leader for many partitions.
+     * From the client's perspective, it's possible that a node has a mix of both fetchable and unfetchable partitions.
+     * When the client determines which nodes to skip and which to fetch from, it's important that unfetchable
+     * partitions don't block fetchable partitions from being fetched.
+     * </p>
+     *
+     * <p>
+     * So, when it's determined that a buffered partition is not in a fetchable state, it should be skipped.
+     * Otherwise, its node would end up in the set of nodes with buffered data and no fetch would be requested.
+     * </p>
+     *
+     * @param partitions Buffered partitions
+     * @param currentTimeMs Current timestamp
+     *
+     * @return Set of zero or more IDs for leader nodes of buffered partitions
+     */
+    private Set<Integer> bufferedNodes(Set<TopicPartition> partitions, long currentTimeMs) {
+        Set<Integer> ids = new HashSet<>();
+
+        for (TopicPartition partition : partitions) {
+            if (!subscriptions.isFetchable(partition))
+                continue;
+
+            SubscriptionState.FetchPosition position = positionForPartition(partition);
+            Optional<Node> nodeOpt = maybeNodeForPosition(partition, position, currentTimeMs);
+            nodeOpt.ifPresent(node -> ids.add(node.id()));
+        }
+
+        return ids;
     }
 
     // Visible for testing
