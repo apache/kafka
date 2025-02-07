@@ -286,6 +286,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
             producer.send(new ProducerRecord<>(
                 partition.topic(),
                 partition.partition(),
+                System.currentTimeMillis(),
                 keyBytes,
                 valBytes
             ));
