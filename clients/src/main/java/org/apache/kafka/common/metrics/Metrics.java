@@ -553,7 +553,7 @@ public final class Metrics implements Closeable {
                 try {
                     reporter.metricRemoval(metric);
                 } catch (Exception e) {
-                    log.error("Error when removing metric from " + reporter.getClass().getName(), e);
+                    log.error("Error when removing metric from {}", reporter.getClass().getName(), e);
                 }
             }
             log.trace("Removed metric named {}", metricName);
@@ -596,7 +596,7 @@ public final class Metrics implements Closeable {
             try {
                 reporter.metricChange(metric);
             } catch (Exception e) {
-                log.error("Error when registering metric on " + reporter.getClass().getName(), e);
+                log.error("Error when registering metric on {}", reporter.getClass().getName(), e);
             }
         }
         log.trace("Registered metric named {}", metricName);
@@ -688,7 +688,7 @@ public final class Metrics implements Closeable {
                 log.info("Closing reporter {}", reporter.getClass().getName());
                 reporter.close();
             } catch (Exception e) {
-                log.error("Error when closing " + reporter.getClass().getName(), e);
+                log.error("Error when closing {}", reporter.getClass().getName(), e);
             }
         }
         log.info("Metrics reporters closed");
