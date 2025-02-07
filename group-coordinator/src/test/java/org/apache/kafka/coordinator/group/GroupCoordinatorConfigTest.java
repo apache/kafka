@@ -29,8 +29,8 @@ import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorException;
 import org.apache.kafka.coordinator.group.api.assignor.SubscribedTopicDescriber;
 import org.apache.kafka.coordinator.group.assignor.RangeAssignor;
-
 import org.apache.kafka.coordinator.group.assignor.UniformAssignor;
+
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
