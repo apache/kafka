@@ -197,7 +197,7 @@ public class ShareFetchUtils {
      *        of the fetched records. Otherwise, the original records are returned.
      */
     static Records maybeSliceFetchRecords(Records records, ShareAcquiredRecords shareAcquiredRecords) {
-        if (!shareAcquiredRecords.subsetAcquired() || !(records instanceof FileRecords fileRecords)) {
+        if (!(records instanceof FileRecords fileRecords)) {
             return records;
         }
         // The acquired records should be non-empty, do not check as the method is called only when the
@@ -250,6 +250,10 @@ public class ShareFetchUtils {
             if (previousBatch != null && previousBatch.lastOffset() >= lastAcquiredOffset) {
                 startPosition -= previousBatch.sizeInBytes();
                 size += previousBatch.sizeInBytes();
+            }
+            // Check if we do not slicing i.e. neither start position nor size changed.
+            if (startPosition == 0 && size == fileRecords.sizeInBytes()) {
+                return records;
             }
             return fileRecords.slice(startPosition, size);
         } catch (Exception e) {

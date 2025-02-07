@@ -141,20 +141,8 @@ public class ShareFetchTestUtils {
      * @return The share acquired records.
      */
     public static ShareAcquiredRecords createShareAcquiredRecords(AcquiredRecords acquiredRecords) {
-        return createShareAcquiredRecords(acquiredRecords, false);
-    }
-
-    /**
-     * Create a share acquired records from the given acquired records and whether the acquired records
-     * are a subset of the fetched records.
-     *
-     * @param acquiredRecords The acquired records to create the share acquired records from.
-     * @param subsetAcquired Whether the acquired records are a subset of the fetched records.
-     * @return The share acquired records.
-     */
-    public static ShareAcquiredRecords createShareAcquiredRecords(AcquiredRecords acquiredRecords, boolean subsetAcquired) {
         return new ShareAcquiredRecords(
-            List.of(acquiredRecords), (int) (acquiredRecords.lastOffset() - acquiredRecords.firstOffset() + 1), subsetAcquired
+            List.of(acquiredRecords), (int) (acquiredRecords.lastOffset() - acquiredRecords.firstOffset() + 1)
         );
     }
 }

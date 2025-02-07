@@ -39,25 +39,17 @@ public class ShareAcquiredRecords {
      */
     private final int count;
 
-    /**
-     * Whether the acquired records are a subset of the fetched records.
-     */
-    private final boolean subsetAcquired;
-
     public ShareAcquiredRecords(
         List<AcquiredRecords> acquiredRecords,
-        int count,
-        boolean subsetAcquired
+        int count
     ) {
         this.acquiredRecords = Objects.requireNonNull(acquiredRecords);
         this.count = count;
-        this.subsetAcquired = subsetAcquired;
     }
 
     private ShareAcquiredRecords() {
         this.acquiredRecords = List.of();
         this.count = 0;
-        this.subsetAcquired = false;
     }
 
     public List<AcquiredRecords> acquiredRecords() {
@@ -66,10 +58,6 @@ public class ShareAcquiredRecords {
 
     public int count() {
         return count;
-    }
-
-    public boolean subsetAcquired() {
-        return subsetAcquired;
     }
 
     public static ShareAcquiredRecords empty() {

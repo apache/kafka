@@ -2013,7 +2013,7 @@ public class SharePartitionManagerTest {
         when(sharePartitionManager.cachedTopicIdPartitionsInShareSession(groupId, Uuid.fromString(memberId))).thenReturn(Arrays.asList(tp1, tp3));
 
         doAnswer(invocation -> buildLogReadResult(Set.of(tp1))).when(mockReplicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
-        when(sp1.acquire(anyString(), anyInt(), anyInt(), any())).thenReturn(ShareAcquiredRecords.empty());
+        when(sp1.acquire(anyString(), anyInt(), anyInt(), any())).thenReturn(new ShareAcquiredRecords(Collections.emptyList(), 0));
         // Release acquired records on session close request for tp1 and tp3.
         sharePartitionManager.releaseSession(groupId, memberId);
 
@@ -2499,7 +2499,7 @@ public class SharePartitionManagerTest {
         when(sp1.maybeAcquireFetchLock()).thenReturn(true);
         when(sp1.canAcquireRecords()).thenReturn(true);
         when(sp1.maybeInitialize()).thenReturn(CompletableFuture.completedFuture(null));
-        when(sp1.acquire(anyString(), anyInt(), anyInt(), any())).thenReturn(ShareAcquiredRecords.empty());
+        when(sp1.acquire(anyString(), anyInt(), anyInt(), any())).thenReturn(new ShareAcquiredRecords(Collections.emptyList(), 0));
 
         // Fail initialization for tp2.
         SharePartition sp2 = mock(SharePartition.class);

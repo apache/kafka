@@ -1170,7 +1170,7 @@ public class SharePartitionTest {
             10,
             new FetchPartitionData(Errors.NONE, 20, 10, records,
                 Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)),
-            20, true);
+            20);
 
         // Validate 2 batches are fetched one with 5 records and other till end of batch, third batch
         // should be skipped.
@@ -1183,50 +1183,6 @@ public class SharePartitionTest {
         assertEquals(MEMBER_ID, sharePartition.cachedState().get(10L).batchMemberId());
         assertEquals(1, sharePartition.cachedState().get(10L).batchDeliveryCount());
         assertNull(sharePartition.cachedState().get(10L).offsetState());
-    }
-
-    @Test
-    public void testAcquireMultipleRecordsWithOverlapAndMaxFetchRecords() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
-        MemoryRecords records = memoryRecords(5, 0);
-        // Acquire 5 records.
-        fetchAcquiredRecords(sharePartition.acquire(
-                MEMBER_ID,
-                BATCH_SIZE,
-                2,
-                new FetchPartitionData(Errors.NONE, 20, 3, records,
-                    Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)),
-            5);
-
-        records = memoryRecords(5, 5);
-        // Acquire another 5 records.
-        fetchAcquiredRecords(sharePartition.acquire(
-                MEMBER_ID,
-                BATCH_SIZE,
-                2,
-                new FetchPartitionData(Errors.NONE, 20, 3, records,
-                    Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)),
-            5);
-        // Release the acquired records so they can be re-acquired and max fetch records can be tested
-        // for overlapping records.
-        sharePartition.releaseAcquiredRecords(MEMBER_ID);
-        // Add batches from 0-4 and 5-9 offsets. 0-4 should be acquired and 5-9 should be ignored, as
-        // it exceeds the max fetch records. Hence, only first batch should be acquired.
-        ByteBuffer buffer = ByteBuffer.allocate(4096);
-        memoryRecordsBuilder(buffer, 5, 0).close();
-        memoryRecordsBuilder(buffer, 5, 5).close();
-        buffer.flip();
-
-        records = MemoryRecords.readableRecords(buffer);
-        List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition.acquire(
-                MEMBER_ID,
-                BATCH_SIZE,
-                5,
-                new FetchPartitionData(Errors.NONE, 20, 3, records,
-                    Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)),
-            5, true);
-
-        assertArrayEquals(expectedAcquiredRecords(memoryRecords(5, 0), 2).toArray(), acquiredRecordsList.toArray());
     }
 
     @Test
@@ -1411,7 +1367,7 @@ public class SharePartitionTest {
                 10,
                 new FetchPartitionData(Errors.NONE, 20, 0, records,
                     Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)),
-            20, true);
+            20);
 
         List<AcquiredRecords> expectedAcquiredRecords = expectedAcquiredRecords(records, 1);
         // The last batch should be ignored as it exceeds the max fetch records.
@@ -2716,7 +2672,7 @@ public class SharePartitionTest {
                 6, // maxFetchRecords is less than the number of records fetched
                 new FetchPartitionData(Errors.NONE, 3, 0, records,
                     Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)),
-            6, true);
+            6);
 
         // Since max fetch records (6) is less than the number of records fetched (8), only 6 records will be acquired
         assertArrayEquals(expectedAcquiredRecord(21, 26, 1).toArray(), acquiredRecordsList.toArray());
@@ -2765,7 +2721,7 @@ public class SharePartitionTest {
                 8, // maxFetchRecords is less than the number of records fetched
                 new FetchPartitionData(Errors.NONE, 3, 0, records,
                     Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)),
-            10, true);
+            10);
 
         assertArrayEquals(expectedAcquiredRecord(11, 20, 1).toArray(), acquiredRecordsList.toArray());
 
@@ -2813,7 +2769,7 @@ public class SharePartitionTest {
                 8, // maxFetchRecords is less than the number of records fetched
                 new FetchPartitionData(Errors.NONE, 3, 0, records,
                     Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)),
-            10, true);
+            10);
 
         assertArrayEquals(expectedAcquiredRecord(11, 20, 3).toArray(), acquiredRecordsList.toArray());
 
@@ -6932,21 +6888,9 @@ public class SharePartitionTest {
         assertEquals(-1, lastOffsetAcknowledged);
     }
 
-    private List<AcquiredRecords> fetchAcquiredRecords(
-        ShareAcquiredRecords shareAcquiredRecords,
-        int expectedOffsetCount
-    ) {
-        return fetchAcquiredRecords(shareAcquiredRecords, expectedOffsetCount, false);
-    }
-
-    private List<AcquiredRecords> fetchAcquiredRecords(
-        ShareAcquiredRecords shareAcquiredRecords,
-        int expectedOffsetCount,
-        boolean subsetAcquired
-    ) {
+    private List<AcquiredRecords> fetchAcquiredRecords(ShareAcquiredRecords shareAcquiredRecords, int expectedOffsetCount) {
         assertNotNull(shareAcquiredRecords);
         assertEquals(expectedOffsetCount, shareAcquiredRecords.count());
-        assertEquals(subsetAcquired, shareAcquiredRecords.subsetAcquired());
         return shareAcquiredRecords.acquiredRecords();
     }
 
