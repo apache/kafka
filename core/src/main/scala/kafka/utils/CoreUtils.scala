@@ -32,12 +32,10 @@ import org.apache.commons.validator.routines.InetAddressValidator
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.common.KafkaException
 import org.apache.kafka.network.SocketServerConfigs
 import org.slf4j.event.Level
 
 import java.util
-import java.util.Locale
 import scala.jdk.CollectionConverters._
 
 /**
@@ -245,13 +243,5 @@ object CoreUtils {
 
   def replicaToBrokerAssignmentAsScala(map: util.Map[Integer, util.List[Integer]]): Map[Int, Seq[Int]] = {
     map.asScala.map(e => (e._1.asInstanceOf[Int], e._2.asScala.map(_.asInstanceOf[Int])))
-  }
-
-  def parseListenerName(connectionString: String): String = {
-    val firstColon = connectionString.indexOf(':')
-    if (firstColon < 0) {
-      throw new KafkaException(s"Unable to parse a listener name from $connectionString")
-    }
-    connectionString.substring(0, firstColon).toUpperCase(Locale.ROOT)
   }
 }

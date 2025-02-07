@@ -17,22 +17,24 @@
 
 package org.apache.kafka.network;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 
-import java.util.Objects;
+import java.util.Locale;
 
-public class EndPoint {
-    private final String host;
-    private final int port;
-    private final ListenerName listenerName;
-    private final SecurityProtocol securityProtocol;
-
-    public EndPoint(String host, int port, ListenerName listenerName, SecurityProtocol securityProtocol) {
-        this.host = host;
-        this.port = port;
-        this.listenerName = listenerName;
-        this.securityProtocol = securityProtocol;
+public record EndPoint(
+        String host,
+        int port,
+        ListenerName listenerName,
+        SecurityProtocol securityProtocol
+) {
+    public static String parseListenerName(String connectionString) {
+        int firstColon = connectionString.indexOf(':');
+        if (firstColon < 0) {
+            throw new KafkaException("Unable to parse a listener name from " + connectionString);
+        }
+        return connectionString.substring(0, firstColon).toUpperCase(Locale.ROOT);
     }
 
     public static EndPoint fromPublic(org.apache.kafka.common.Endpoint endpoint) {
@@ -42,47 +44,5 @@ public class EndPoint {
 
     public org.apache.kafka.common.Endpoint toPublic() {
         return new org.apache.kafka.common.Endpoint(listenerName.value(), securityProtocol, host, port);
-    }
-
-    public String host() {
-        return host;
-    }
-
-    public int port() {
-        return port;
-    }
-
-    public ListenerName listenerName() {
-        return listenerName;
-    }
-
-    public SecurityProtocol securityProtocol() {
-        return securityProtocol;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        EndPoint endPoint = (EndPoint) o;
-        return port == endPoint.port &&
-                Objects.equals(host, endPoint.host) &&
-                Objects.equals(listenerName, endPoint.listenerName) &&
-                securityProtocol == endPoint.securityProtocol;
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(host, port, listenerName, securityProtocol);
-    }
-
-    @Override
-    public String toString() {
-        return "EndPoint{" +
-                "host='" + host + '\'' +
-                ", port=" + port +
-                ", listenerName=" + listenerName +
-                ", securityProtocol=" + securityProtocol +
-                '}';
     }
 }
