@@ -194,7 +194,6 @@ public class SmokeTestDriver extends SmokeTestUtil {
         final List<ProducerRecord<byte[], byte[]>> dataNeedRetry = new ArrayList<>();
         final List<ProducerRecord<byte[], byte[]>> fkNeedRetry = new ArrayList<>();
 
-
         try (final KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(producerProps)) {
             while (remaining > 0) {
                 final int index = rand.nextInt(remaining);
@@ -210,7 +209,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
                         new ProducerRecord<>(
                             "data",
                             null,
-                            System.currentTimeMillis()  - CREATE_TIME_SHIFT_MS,
+                            System.currentTimeMillis() - CREATE_TIME_SHIFT_MS,
                             stringSerde.serializer().serialize("", key),
                             intSerde.serializer().serialize("", value)
                         );
@@ -221,7 +220,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
                         new ProducerRecord<>(
                             "fk",
                             null,
-                            System.currentTimeMillis()  - CREATE_TIME_SHIFT_MS,
+                            System.currentTimeMillis() - CREATE_TIME_SHIFT_MS,
                             intSerde.serializer().serialize("", value),
                             stringSerde.serializer().serialize("", key)
                         );
