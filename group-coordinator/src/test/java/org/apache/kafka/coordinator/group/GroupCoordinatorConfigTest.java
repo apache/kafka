@@ -126,6 +126,14 @@ public class GroupCoordinatorConfigTest {
         assertEquals(2, assignors.size());
         assertTrue(assignors.get(0) instanceof UniformAssignor);
         assertTrue(assignors.get(1) instanceof CustomAssignor);
+
+        // Test combination of short name and class.
+        configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of("uniform", CustomAssignor.class.getName()));
+        config = createConfig(configs);
+        assignors = config.consumerGroupAssignors();
+        assertEquals(2, assignors.size());
+        assertTrue(assignors.get(0) instanceof UniformAssignor);
+        assertTrue(assignors.get(1) instanceof CustomAssignor);
     }
 
     @Test
@@ -238,6 +246,16 @@ public class GroupCoordinatorConfigTest {
         configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, Collections.singletonList(Object.class));
         assertEquals("class java.lang.Object is not an instance of org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor",
                 assertThrows(KafkaException.class, () -> createConfig(configs)).getMessage());
+
+        configs.clear();
+        configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, Object.class.getName());
+        assertEquals("java.lang.Object is not an instance of org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor",
+            assertThrows(KafkaException.class, () -> createConfig(configs)).getMessage());
+
+        configs.clear();
+        configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, "foo");
+        assertEquals("Class foo cannot be found",
+            assertThrows(KafkaException.class, () -> createConfig(configs)).getMessage());
 
         configs.clear();
         configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_MIGRATION_POLICY_CONFIG, "foobar");

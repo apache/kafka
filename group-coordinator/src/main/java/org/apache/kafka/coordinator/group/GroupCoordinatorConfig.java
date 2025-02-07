@@ -420,6 +420,8 @@ public class GroupCoordinatorConfig {
                             assignor = Utils.newInstance(klass, ConsumerGroupPartitionAssignor.class);
                         } catch (ClassNotFoundException e) {
                             throw new KafkaException("Class " + klass + " cannot be found", e);
+                        } catch (ClassCastException e) {
+                            throw new KafkaException(klass + " is not an instance of " + ConsumerGroupPartitionAssignor.class.getName());
                         }
                     }
                 } else if (object instanceof Class<?> klass) {
