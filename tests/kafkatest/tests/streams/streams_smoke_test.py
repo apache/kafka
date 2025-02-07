@@ -109,5 +109,7 @@ class StreamsSmokeTest(KafkaTest):
 
         if crash and processing_guarantee == 'at_least_once':
             self.driver.node.account.ssh("grep -E 'SUCCESS|PROCESSED-MORE-THAN-GENERATED' %s" % self.driver.STDOUT_FILE, allow_fail=False)
+            # fail if we find "missing result data" output in the stdout file; while we can tolerate duplication, we cannot tolerate data loss
+            self.driver.node.account.ssh("[ ! `grep 'missing result data'" % self.driver.STDOUT_FILE % "` ]", allow_fail=False)
         else:
             self.driver.node.account.ssh("grep SUCCESS %s" % self.driver.STDOUT_FILE, allow_fail=False)

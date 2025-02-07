@@ -535,13 +535,16 @@ public class SmokeTestDriver extends SmokeTestUtil {
                                   final Map<String, Map<String, LinkedList<ConsumerRecord<String, Number>>>> events,
                                   final Function<String, Number> keyToExpectation,
                                   final boolean printResults) {
+        resultStream.printf("verifying topic '%s'%n", topic);
         final Map<String, LinkedList<ConsumerRecord<String, Number>>> observedInputEvents = events.get("data");
         final Map<String, LinkedList<ConsumerRecord<String, Number>>> outputEvents = events.getOrDefault(topic, emptyMap());
         if (outputEvents.isEmpty()) {
-            resultStream.println(topic + " is empty");
+            resultStream.println("missing result data; topic '" + topic + "' is empty, expected " + inputData.size() + " keys");
             return false;
         } else {
-            resultStream.printf("verifying %s with %d keys%n", topic, outputEvents.size());
+            if (outputEvents.size() < inputData.size()) {
+                resultStream.println("missing result data; got " + inputData.size() + " keys, expected: " + outputEvents.size() + " keys");
+            }
 
             if (outputEvents.size() != inputData.size()) {
                 resultStream.printf("fail: resultCount=%d expectedCount=%s%n\tresult=%s%n\texpected=%s%n",
@@ -576,7 +579,6 @@ public class SmokeTestDriver extends SmokeTestUtil {
             return true;
         }
     }
-
 
     private static boolean verifySuppressed(final PrintStream resultStream,
                                             @SuppressWarnings("SameParameterValue") final String topic,
@@ -630,14 +632,17 @@ public class SmokeTestDriver extends SmokeTestUtil {
                                       final Map<String, Set<Integer>> allData,
                                       final Map<String, LinkedList<ConsumerRecord<String, Number>>> taggEvents,
                                       final boolean printResults) {
+        resultStream.println("verifying tagg");
         if (taggEvents == null) {
-            resultStream.println("tagg is missing");
+            resultStream.println("missing result data; tagg is missing, expected: " + allData.size() + " keys");
             return false;
         } else if (taggEvents.isEmpty()) {
-            resultStream.println("tagg is empty");
+            resultStream.println("missing result data; tagg is empty, expected: " + allData.size() + " keys");
             return false;
         } else {
-            resultStream.println("verifying tagg");
+            if (taggEvents.size() < allData.size()) {
+                resultStream.println("missing result data; got " + taggEvents.size() + " keys, expected: " + allData.size() + " keys");
+            }
 
             // generate expected answer
             final Map<String, Long> expected = new HashMap<>();
