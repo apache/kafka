@@ -197,7 +197,8 @@ public interface KStream<K, V> {
     /**
      * See {@link #mapValues(ValueMapper)}.
      *
-     * <p>Note that the key is read-only and must not be modified, as this can lead to corrupt partitioning.
+     * <p>Note that the key is read-only and must not be modified, as this can lead to corrupt partitioning and
+     * incorrect results.
      */
     <VOut> KStream<K, VOut> mapValues(final ValueMapperWithKey<? super K, ? super V, ? extends VOut> mapper);
 
@@ -363,7 +364,8 @@ public interface KStream<K, V> {
     /**
      * See {@link #flatMapValues(ValueMapper)}.
      *
-     * <p>Note that the key is read-only and must not be modified, as this can lead to corrupt partitioning.
+     * <p>Note that the key is read-only and must not be modified, as this can lead to corrupt partitioning and
+     * incorrect results.
      */
     <VOut> KStream<K, VOut> flatMapValues(final ValueMapperWithKey<? super K, ? super V, ? extends Iterable<? extends VOut>> mapper);
 
@@ -779,7 +781,8 @@ public interface KStream<K, V> {
     /**
      * See {@link #join(KStream, ValueJoiner, JoinWindows)}.
      *
-     * <p>Note that the key is read-only and must not be modified, as this can lead to corrupt partitioning.
+     * <p>Note that the key is read-only and must not be modified, as this can lead to corrupt partitioning and
+     * incorrect results.
      */
     <VRight, VOut> KStream<K, VOut> join(final KStream<K, VRight> rightStream,
                                          final ValueJoinerWithKey<? super K, ? super V, ? super VRight, ? extends VOut> joiner,
@@ -796,7 +799,8 @@ public interface KStream<K, V> {
     /**
      * See {@link #join(KStream, ValueJoiner, JoinWindows)}.
      *
-     * <p>Note that the key is read-only and must not be modified, as this can lead to corrupt partitioning.
+     * <p>Note that the key is read-only and must not be modified, as this can lead to corrupt partitioning and
+     * incorrect results.
      */
     <VRight, VOut> KStream<K, VOut> join(final KStream<K, VRight> rightStream,
                                          final ValueJoinerWithKey<? super K, ? super V, ? super VRight, ? extends VOut> joiner,
@@ -1565,7 +1569,8 @@ public interface KStream<K, V> {
     /**
      * See {@link #join(KTable, ValueJoiner)}.
      *
-     * <p>Note that the key is read-only and must not be modified, as this can lead to corrupt partitioning.
+     * <p>Note that the key is read-only and must not be modified, as this can lead to corrupt partitioning and
+     * incorrect results.
      */
     <TableValue, VOut> KStream<K, VOut> join(final KTable<K, TableValue> table,
                                              final ValueJoinerWithKey<? super K, ? super V, ? super TableValue, ? extends VOut> joiner);
@@ -1613,7 +1618,8 @@ public interface KStream<K, V> {
     /**
      * See {@link #join(KTable, ValueJoiner, Joined)}.
      *
-     * <p>Note that the key is read-only and must not be modified, as this can lead to corrupt partitioning.
+     * <p>Note that the key is read-only and must not be modified, as this can lead to corrupt partitioning and
+     * incorrect results.
      */
     <TableValue, VOut> KStream<K, VOut> join(final KTable<K, TableValue> table,
                                              final ValueJoinerWithKey<? super K, ? super V, ? super TableValue, ? extends VOut> joiner,
@@ -1798,7 +1804,8 @@ public interface KStream<K, V> {
     /**
      * See {@link #join(GlobalKTable, KeyValueMapper, ValueJoiner)}.
      *
-     * <p>Note that the {@link KStream} key is read-only and must not be modified, as this can lead to corrupt partitioning.
+     * <p>Note that the {@link KStream} key is read-only and must not be modified, as this can lead to corrupt
+     * partitioning and incorrect results.
      */
     <GlobalKey, GlobalValue, VOut> KStream<K, VOut> join(final GlobalKTable<GlobalKey, GlobalValue> globalTable,
                                                          final KeyValueMapper<? super K, ? super V, ? extends GlobalKey> keySelector,
