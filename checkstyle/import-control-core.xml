@@ -135,6 +135,7 @@
     <allow pkg="kafka.security.authorizer"/>
     <allow pkg="kafka.server"/>
     <allow pkg="kafka.zk"/>
+    <allow pkg="org.apache.kafka.clients"/>
     <allow pkg="org.apache.kafka.clients.admin"/>
     <allow pkg="org.apache.kafka.coordinator.group"/>
     <allow pkg="org.apache.kafka.metadata"/>
