@@ -3875,20 +3875,28 @@ public class FetchRequestManagerTest {
         pausedPartitions.forEach(tp -> subscriptions.resume(tp));
     }
 
+    /**
+     * Returns the unique set of partitions that were included in the given requests.
+     */
     private Set<TopicPartition> partitionsRequested(List<NetworkClientDelegate.UnsentRequest> requests) {
         return requests.stream()
             .map(NetworkClientDelegate.UnsentRequest::requestBuilder)
-            .filter(rb -> rb instanceof FetchRequest.Builder)
-            .map(rb -> ((FetchRequest.Builder) rb))
-            .map(rb -> rb.fetchData().keySet())
+            .filter(FetchRequest.Builder.class::isInstance)
+            .map(FetchRequest.Builder.class::cast)
+            .map(FetchRequest.Builder::fetchData)
+            .map(Map::keySet)
             .flatMap(Set::stream)
             .collect(Collectors.toSet());
     }
 
+    /**
+     * Returns the unique set of nodes to which fetch requests were sent.
+     */
     private Set<Node> nodesRequested(List<NetworkClientDelegate.UnsentRequest> requests) {
         return requests.stream()
-            .map(request -> request.node().orElse(null))
-            .filter(Objects::nonNull)
+            .map(NetworkClientDelegate.UnsentRequest::node)
+            .filter(Optional::isPresent)
+            .map(Optional::get)
             .collect(Collectors.toSet());
     }
 
