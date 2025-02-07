@@ -48,8 +48,6 @@ class EndpointToPartitionsManagerTest {
     private StreamsGroupMember streamsGroupMember;
     private ConfiguredTopology configuredTopology;
     private ConfiguredSubtopology configuredSubtopology;
-
-    private EndpointToPartitionsManager endpointToPartitionsManager;
     private final Map<String, Set<Integer>> activeTasks = new HashMap<>();
     private final Map<String, Set<Integer>> standbyTasks = new HashMap<>();
     private final StreamsGroupHeartbeatResponseData.Endpoint responseEndpoint = new StreamsGroupHeartbeatResponseData.Endpoint();
@@ -59,27 +57,18 @@ class EndpointToPartitionsManagerTest {
         streamsGroup = mock(StreamsGroup.class);
         streamsGroupMember = mock(StreamsGroupMember.class);
         configuredTopology = mock(ConfiguredTopology.class);
-        endpointToPartitionsManager = new EndpointToPartitionsManager();
-
         configuredSubtopology = new ConfiguredSubtopology();
         configuredSubtopology.setSourceTopics(Set.of("Topic-A", "Topic-B"));
-        ConfiguredInternalTopic stateChangelogTopic = new ConfiguredInternalTopic("StateChangeLog-A");
-        ConfiguredInternalTopic stateChangelogTopic2 = new ConfiguredInternalTopic("StateChangeLog-B");
-        configuredSubtopology.setStateChangelogTopics(Map.of("StateChangeLog-A", stateChangelogTopic, "StateChangeLog-B", stateChangelogTopic2));
         configuredTopology.subtopologies().put("0", configuredSubtopology);
-
         responseEndpoint.setHost("localhost");
         responseEndpoint.setPort(9092);
     }
 
     @Test
     void testEndpointToPartitionsWithStandbyTaskAssignments() {
-
         Map<String, TopicMetadata> topicMetadata = new HashMap<>();
         topicMetadata.put("Topic-A", new TopicMetadata(Uuid.randomUuid(), "Topic-A", 3, Collections.emptyMap()));
         topicMetadata.put("Topic-B", new TopicMetadata(Uuid.randomUuid(), "Topic-B", 3, Collections.emptyMap()));
-        topicMetadata.put("StateChangeLog-A", new TopicMetadata(Uuid.randomUuid(), "StateChangeLog-A", 3, Collections.emptyMap()));
-        topicMetadata.put("StateChangeLog-B", new TopicMetadata(Uuid.randomUuid(), "StateChangeLog-B", 3, Collections.emptyMap()));
 
         activeTasks.put("0", Set.of(0, 1, 2));
         standbyTasks.put("0", Set.of(0, 1, 2));
@@ -89,33 +78,26 @@ class EndpointToPartitionsManagerTest {
         when(streamsGroup.configuredTopology()).thenReturn(configuredTopology);
         when(configuredTopology.subtopologies()).thenReturn(Map.of("0", configuredSubtopology));
 
-        // Invoke the method under test
         StreamsGroupHeartbeatResponseData.EndpointToPartitions result =
-                endpointToPartitionsManager.endpointToPartitions(streamsGroupMember, responseEndpoint, streamsGroup);
+                EndpointToPartitionsManager.endpointToPartitions(streamsGroupMember, responseEndpoint, streamsGroup);
 
-        // Validate the results
         assertEquals(responseEndpoint, result.userEndpoint());
         assertEquals(2, result.activePartitions().size());
         assertEquals(2, result.standbyPartitions().size());
-
         List<StreamsGroupHeartbeatResponseData.TopicPartition> activePartitions = result.activePartitions();
         List<StreamsGroupHeartbeatResponseData.TopicPartition> standbyPartitions = result.standbyPartitions();
-
         activePartitions.sort(Comparator.comparing(StreamsGroupHeartbeatResponseData.TopicPartition::topic));
-        
-        StreamsGroupHeartbeatResponseData.TopicPartition standbyPartitionA = standbyPartitions.stream().filter(tp -> tp.topic().equals("StateChangeLog-A")).findFirst().get();
-        assertEquals("StateChangeLog-A", standbyPartitionA.topic());
-        assertEquals(List.of(0, 1, 2), standbyPartitionA.partitions().stream().sorted().toList());
+        standbyPartitions.sort(Comparator.comparing(StreamsGroupHeartbeatResponseData.TopicPartition::topic));
+        assertTopicPartitionsAssigned(activePartitions);
+        assertTopicPartitionsAssigned(standbyPartitions);
+    }
 
-        StreamsGroupHeartbeatResponseData.TopicPartition standbyPartitionB = result.standbyPartitions().stream().filter(tp -> tp.topic().equals("StateChangeLog-B")).findFirst().get();
-        assertEquals("StateChangeLog-B", standbyPartitionB.topic());
-        assertEquals(List.of(0, 1, 2), standbyPartitionB.partitions().stream().sorted().toList());
-
-        StreamsGroupHeartbeatResponseData.TopicPartition topicAPartition = result.activePartitions().stream().filter(tp -> tp.topic().equals("Topic-A")).findFirst().get();
+    private static void assertTopicPartitionsAssigned(List<StreamsGroupHeartbeatResponseData.TopicPartition> topicPartitions) {
+        StreamsGroupHeartbeatResponseData.TopicPartition topicAPartition = topicPartitions.stream().filter(tp -> tp.topic().equals("Topic-A")).findFirst().get();
         assertEquals("Topic-A", topicAPartition.topic());
         assertEquals(List.of(0, 1, 2), topicAPartition.partitions().stream().sorted().toList());
 
-        StreamsGroupHeartbeatResponseData.TopicPartition topicBPartition = result.activePartitions().stream().filter(tp -> tp.topic().equals("Topic-B")).findFirst().get();
+        StreamsGroupHeartbeatResponseData.TopicPartition topicBPartition = topicPartitions.stream().filter(tp -> tp.topic().equals("Topic-B")).findFirst().get();
         assertEquals("Topic-B", topicBPartition.topic());
         assertEquals(List.of(0, 1, 2), topicBPartition.partitions().stream().sorted().toList());
     }
@@ -128,9 +110,7 @@ class EndpointToPartitionsManagerTest {
                                                                      List<Integer> topicBExpectedPartitions,
                                                                      String testName
                                                                      ) {
-
         Map<Integer, Set<String>> emptyRackMap = Collections.emptyMap();
-
         Map<String, TopicMetadata> topicMetadata = new HashMap<>();
         topicMetadata.put("Topic-A", new TopicMetadata(Uuid.randomUuid(), "Topic-A", topicAPartitions, emptyRackMap));
         topicMetadata.put("Topic-B", new TopicMetadata(Uuid.randomUuid(), "Topic-B", topicBPartitions, emptyRackMap));
@@ -142,9 +122,7 @@ class EndpointToPartitionsManagerTest {
         when(streamsGroup.configuredTopology()).thenReturn(configuredTopology);
         when(configuredTopology.subtopologies()).thenReturn(Map.of("0", configuredSubtopology));
 
-        EndpointToPartitionsManager endpointToPartitionsManager = new EndpointToPartitionsManager();
-
-        StreamsGroupHeartbeatResponseData.EndpointToPartitions result = endpointToPartitionsManager.endpointToPartitions(streamsGroupMember, responseEndpoint, streamsGroup);
+        StreamsGroupHeartbeatResponseData.EndpointToPartitions result = EndpointToPartitionsManager.endpointToPartitions(streamsGroupMember, responseEndpoint, streamsGroup);
 
         assertEquals(responseEndpoint, result.userEndpoint());
         assertEquals(2, result.activePartitions().size());
@@ -161,13 +139,10 @@ class EndpointToPartitionsManagerTest {
         assertEquals(topicBExpectedPartitions, topicBPartition.partitions().stream().sorted().toList());
     }
 
-
-
     static Stream<Arguments> argsProvider() {
         return Stream.of(
                 arguments(2, 5, List.of(0, 1), List.of(0, 1, 2, 3, 4), "Should assign correct partitions when partitions differ between topics"),
                 arguments(3, 3, List.of(0, 1, 2), List.of(0, 1, 2), "Should assign correct partitions when partitions same between topics")
         );
     }
-
 }

@@ -29,6 +29,7 @@ import org.apache.kafka.clients.consumer.internals.events.StreamsOnTasksRevokedC
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -140,12 +141,11 @@ public class StreamsAssignmentInterface {
                 ", port=" + port +
                 '}';
         }
-
     }
 
     public static class EndpointPartitions {
-        public final List<TopicPartition> activePartitions;
-        public final List<TopicPartition> standbyPartitions;
+        private final List<TopicPartition> activePartitions;
+        private final List<TopicPartition> standbyPartitions;
 
         public EndpointPartitions(final List<TopicPartition> activePartitions,
                                   final List<TopicPartition> standbyPartitions) {
@@ -153,6 +153,13 @@ public class StreamsAssignmentInterface {
             this.standbyPartitions = standbyPartitions;
         }
 
+        public List<TopicPartition> activePartitions() {
+            return new ArrayList<>(activePartitions);
+        }
+
+        public List<TopicPartition> standbyPartitions() {
+            return new ArrayList<>(standbyPartitions);
+        }
         @Override
         public String toString() {
             return "EndpointPartitions {"
@@ -161,9 +168,7 @@ public class StreamsAssignmentInterface {
                     + '}';
         }
     }
-
-
-
+    
     public static class Assignment {
 
         public static final Assignment EMPTY = new Assignment();

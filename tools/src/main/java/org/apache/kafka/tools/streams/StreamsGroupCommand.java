@@ -223,7 +223,7 @@ public class StreamsGroupCommand {
         }
 
         private void printTaskType(List<StreamsGroupMemberAssignment.TaskIds> tasks, String taskType) {
-            System.out.printf("%s\n", taskType + ": " + tasks.stream().map(taskId -> taskId.subtopologyId() + ": [" + taskId.partitions()).collect(Collectors.joining(",")) + "] ");
+            System.out.printf("%s%n", taskType + ": " + tasks.stream().map(taskId -> taskId.subtopologyId() + ": [" + taskId.partitions()).collect(Collectors.joining(",")) + "] ");
         }
 
         private void printTasks(StreamsGroupMemberAssignment assignment, boolean isTarget) {
@@ -241,11 +241,11 @@ public class StreamsGroupCommand {
             int coordinatorLen = Math.max(25, coordinator.length());
 
             if (!verbose) {
-                String fmt = "%" + -groupLen + "s %" + -coordinatorLen + "s %-15s %s\n";
+                String fmt = "%" + -groupLen + "s %" + -coordinatorLen + "s %-15s %s%n";
                 System.out.printf(fmt, "GROUP", "COORDINATOR (ID)", "STATE", "#MEMBERS");
                 System.out.printf(fmt, description.groupId(), coordinator, description.groupState().toString(), description.members().size());
             } else {
-                String fmt = "%" + -groupLen + "s %" + -coordinatorLen + "s %-15s %-15s %-15s %s\n";
+                String fmt = "%" + -groupLen + "s %" + -coordinatorLen + "s %-15s %-15s %-15s %s%n";
                 System.out.printf(fmt, "GROUP", "COORDINATOR (ID)", "STATE", "GROUP-EPOCH", "TARGET-ASSIGNMENT-EPOCH", "#MEMBERS");
                 System.out.printf(fmt, description.groupId(), coordinator, description.groupState().toString(), description.groupEpoch(), description.targetAssignmentEpoch(), description.members().size());
             }
@@ -261,13 +261,13 @@ public class StreamsGroupCommand {
                 }
 
                 if (!verbose) {
-                    String fmt =  "%" + (-groupLen) + "s %" + (-maxTopicLen) + "s %-10s %s\n";
+                    String fmt =  "%" + (-groupLen) + "s %" + (-maxTopicLen) + "s %-10s %s%n";
                     System.out.printf(fmt, "GROUP", "TOPIC", "PARTITION", "OFFSET-LAG");
                     for (Map.Entry<TopicPartition, Long> offset : offsets.entrySet()) {
                         System.out.printf(fmt, description.groupId(), offset.getKey().topic(), offset.getKey().partition(), offset.getValue());
                     }
                 } else {
-                    String fmt =  "%" + (-groupLen) + "s %" + (-maxTopicLen) + "s %-10s %-15s %s\n";
+                    String fmt =  "%" + (-groupLen) + "s %" + (-maxTopicLen) + "s %-10s %-15s %s%n";
                     System.out.printf(fmt, "GROUP", "TOPIC", "PARTITION", "LEADER-EPOCH", "OFFSET-LAG");
                     for (Map.Entry<TopicPartition, Long> offset : offsets.entrySet()) {
                         System.out.printf(fmt, description.groupId(), offset.getKey().topic(), offset.getKey().partition(), "", offset.getValue());

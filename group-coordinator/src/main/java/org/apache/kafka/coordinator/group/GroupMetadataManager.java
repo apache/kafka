@@ -2382,8 +2382,6 @@ public class GroupMetadataManager {
 
     private List<StreamsGroupHeartbeatResponseData.EndpointToPartitions> maybeBuildEndpointToPartitions(StreamsGroup group) {
         List<StreamsGroupHeartbeatResponseData.EndpointToPartitions> endpointToPartitionsList = new ArrayList<>();
-        EndpointToPartitionsManager endpointToPartitionsManager = new EndpointToPartitionsManager();
-        // Build the endpoint to topic partition information
         final Map<String, StreamsGroupMember> members = group.members();
         for (Map.Entry<String, StreamsGroupMember> entry : members.entrySet()) {
             final String memberIdForAssignment = entry.getKey();
@@ -2393,13 +2391,12 @@ public class GroupMetadataManager {
                 final StreamsGroupHeartbeatResponseData.Endpoint responseEndpoint = new StreamsGroupHeartbeatResponseData.Endpoint();
                 responseEndpoint.setHost(endpoint.host());
                 responseEndpoint.setPort(endpoint.port());
-                StreamsGroupHeartbeatResponseData.EndpointToPartitions endpointToPartitions = endpointToPartitionsManager.endpointToPartitions(groupMember, responseEndpoint, group);
+                StreamsGroupHeartbeatResponseData.EndpointToPartitions endpointToPartitions = EndpointToPartitionsManager.endpointToPartitions(groupMember, responseEndpoint, group);
                 endpointToPartitionsList.add(endpointToPartitions);
             }
         }
         return endpointToPartitionsList;
     }
-
 
     private List<StreamsGroupHeartbeatResponseData.TaskIds> createStreamsGroupHeartbeatResponseTaskIds(final Map<String, Set<Integer>> taskIds) {
         return taskIds.entrySet().stream()

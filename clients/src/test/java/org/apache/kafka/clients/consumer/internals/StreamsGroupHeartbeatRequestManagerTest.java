@@ -23,6 +23,7 @@ import org.apache.kafka.clients.consumer.internals.StreamsAssignmentInterface.Su
 import org.apache.kafka.clients.consumer.internals.StreamsAssignmentInterface.TopicInfo;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
@@ -55,9 +56,11 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
 
+import static org.apache.kafka.clients.consumer.internals.StreamsGroupHeartbeatRequestManager.getTopicPartitionList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertIterableEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -306,8 +309,6 @@ class StreamsGroupHeartbeatRequestManagerTest {
         endpointToPartitions.setStandbyPartitions(List.of(standby));
         endpointToPartitions.setUserEndpoint(endpoint);
 
-
-
         final TopicInfo emptyTopicInfo = new TopicInfo(Optional.empty(), Optional.empty(), Collections.emptyMap());
 
         when(metadata.topicIds()).thenReturn(
@@ -315,8 +316,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
                 mkEntry("source0", uuid0),
                 mkEntry("repartition0", uuid1)
             ));
-
-
+        
         streamsAssignmentInterface.subtopologyMap().put("0",
             new Subtopology(
                 Collections.singleton("source0"),
@@ -375,9 +375,13 @@ class StreamsGroupHeartbeatRequestManagerTest {
         Map<StreamsAssignmentInterface.HostInfo, StreamsAssignmentInterface.EndpointPartitions> endpointPartitionsMap = streamsAssignmentInterface.partitionsByHost.get();
         assertEquals(endpointPartitionsMap.size(), response.partitionsByUserEndpoint().size());
         StreamsAssignmentInterface.HostInfo hostInfo = endpointPartitionsMap.keySet().iterator().next();
-        assertEquals(hostInfo.host, endpoint.host());
-        assertEquals(hostInfo.port, endpoint.port());
+        assertEquals(endpoint.host(), hostInfo.host);
+        assertEquals(endpoint.port(), hostInfo.port);
         StreamsAssignmentInterface.EndpointPartitions endpointPartitions = endpointPartitionsMap.get(hostInfo);
+        List<TopicPartition> activeTopicPartitions = getTopicPartitionList(endpointToPartitions.activePartitions());
+        List<TopicPartition> standbyTopicPartitions = getTopicPartitionList(endpointToPartitions.standbyPartitions());
+        assertIterableEquals(endpointPartitions.activePartitions(), activeTopicPartitions);
+        assertIterableEquals(endpointPartitions.standbyPartitions(), standbyTopicPartitions);
     }
 
     private void mockResponse(final StreamsGroupHeartbeatResponseData data) {

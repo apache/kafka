@@ -266,7 +266,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         return partitionsByHost;
     }
 
-    private static List<TopicPartition> getTopicPartitionList(List<StreamsGroupHeartbeatResponseData.TopicPartition> topicPartitions) {
+    static List<TopicPartition> getTopicPartitionList(List<StreamsGroupHeartbeatResponseData.TopicPartition> topicPartitions) {
         return topicPartitions.stream()
             .flatMap(partition ->
                 partition.partitions().stream().map(partitionId -> new TopicPartition(partition.topic(), partitionId)))

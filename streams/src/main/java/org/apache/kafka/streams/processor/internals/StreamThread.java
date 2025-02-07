@@ -1408,8 +1408,8 @@ public class StreamThread extends Thread implements ProcessingThread {
             final Map<HostInfo, Set<TopicPartition>> standbyHostInfoMap = new HashMap<>();
 
             partitionsByEndpoint.forEach((hostInfo, endpointPartitions) -> {
-                activeHostInfoMap.put(new HostInfo(hostInfo.host, hostInfo.port), new HashSet<>(endpointPartitions.activePartitions));
-                standbyHostInfoMap.put(new HostInfo(hostInfo.host, hostInfo.port), new HashSet<>(endpointPartitions.standbyPartitions));
+                activeHostInfoMap.put(new HostInfo(hostInfo.host, hostInfo.port), new HashSet<>(endpointPartitions.activePartitions()));
+                standbyHostInfoMap.put(new HostInfo(hostInfo.host, hostInfo.port), new HashSet<>(endpointPartitions.standbyPartitions()));
             });
             streamsMetadataState.onChange(
                 activeHostInfoMap,
