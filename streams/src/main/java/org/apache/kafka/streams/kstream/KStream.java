@@ -1698,7 +1698,8 @@ public interface KStream<K, V> {
     /**
      * See {@link #leftJoin(KTable, ValueJoiner)}.
      *
-     * <p>Note that the key is read-only and must not be modified, as this can lead to corrupt partitioning.
+     * <p>Note that the key is read-only and must not be modified, as this can lead to corrupt partitioning and
+     * incorrect results.
      */
     <VTable, VOut> KStream<K, VOut> leftJoin(final KTable<K, VTable> table,
                                              final ValueJoinerWithKey<? super K, ? super V, ? super VTable, ? extends VOut> joiner);
@@ -1720,7 +1721,8 @@ public interface KStream<K, V> {
     /**
      * See {@link #leftJoin(KTable, ValueJoiner, Joined)}.
      *
-     * <p>Note that the key is read-only and must not be modified, as this can lead to corrupt partitioning.
+     * <p>Note that the key is read-only and must not be modified, as this can lead to corrupt partitioning and
+     * incorrect results.
      */
     <VTable, VOut> KStream<K, VOut> leftJoin(final KTable<K, VTable> table,
                                              final ValueJoinerWithKey<? super K, ? super V, ? super VTable, ? extends VOut> joiner,
