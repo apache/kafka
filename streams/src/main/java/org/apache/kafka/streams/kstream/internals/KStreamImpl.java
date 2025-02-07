@@ -211,7 +211,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         Objects.requireNonNull(named, "named can't be null");
 
         final ProcessorGraphNode<K, V> selectKeyProcessorNode = internalSelectKey(mapper, new NamedInternal(named));
-        selectKeyProcessorNode.keyChangingOperation(true);
+        selectKeyProcessorNode.setKeyChangingOperation(true);
 
         builder.addGraphNode(graphNode, selectKeyProcessorNode);
 
@@ -294,7 +294,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             new ProcessorParameters<>(new KStreamMap<>(mapper), name);
         final ProcessorGraphNode<K, V> mapProcessorNode =
             new ProcessorGraphNode<>(name, processorParameters);
-        mapProcessorNode.keyChangingOperation(true);
+        mapProcessorNode.setKeyChangingOperation(true);
 
         builder.addGraphNode(graphNode, mapProcessorNode);
 
@@ -325,7 +325,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             new ProcessorParameters<>(new KStreamFlatMap<>(mapper), name);
         final ProcessorGraphNode<K, V> flatMapNode =
             new ProcessorGraphNode<>(name, processorParameters);
-        flatMapNode.keyChangingOperation(true);
+        flatMapNode.setKeyChangingOperation(true);
 
         builder.addGraphNode(graphNode, flatMapNode);
 
@@ -714,7 +714,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
         final GroupedInternal<KOut, V> groupedInternal = new GroupedInternal<>(grouped);
         final ProcessorGraphNode<K, V> selectKeyMapNode = internalSelectKey(keySelector, new NamedInternal(groupedInternal.name()));
-        selectKeyMapNode.keyChangingOperation(true);
+        selectKeyMapNode.setKeyChangingOperation(true);
 
         builder.addGraphNode(graphNode, selectKeyMapNode);
 
