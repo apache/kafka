@@ -406,12 +406,12 @@ public class ShareFetchUtilsTest {
 
         // Send the topic partitions in order so can validate if correct mock is called, accounting
         // the offset count for the acquired records from the previous share partition acquire.
-        Map<TopicIdPartition, FetchPartitionData> responseData1 = new LinkedHashMap<>();
-        responseData1.put(tp0, fetchPartitionData1);
-        responseData1.put(tp1, fetchPartitionData2);
+        Map<TopicIdPartition, FetchPartitionData> responseData = new LinkedHashMap<>();
+        responseData.put(tp0, fetchPartitionData1);
+        responseData.put(tp1, fetchPartitionData2);
 
         Map<TopicIdPartition, ShareFetchResponseData.PartitionData> resultData =
-            ShareFetchUtils.processFetchResponse(shareFetch, responseData1, sharePartitions,
+            ShareFetchUtils.processFetchResponse(shareFetch, responseData, sharePartitions,
                 mock(ReplicaManager.class), EXCEPTION_HANDLER);
 
         assertEquals(2, resultData.size());
