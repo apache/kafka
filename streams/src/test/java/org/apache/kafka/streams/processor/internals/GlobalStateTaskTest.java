@@ -252,6 +252,10 @@ public class GlobalStateTaskTest {
     @Test
     public void shouldNotCheckpointIfNotReceivedEnoughRecords() {
         globalStateTask.initialize();
+        // Reset after initialization since checkpointing should happen during initialization, KAFKA-18168
+        stateMgr.checkpointWritten = false;
+        stateMgr.flushed = false;
+
         globalStateTask.update(record(topic1, 1, currentOffsetT1 + 9000L, "foo".getBytes(), "foo".getBytes()));
         time.sleep(flushInterval); // flush interval elapsed
         globalStateTask.maybeCheckpoint();
@@ -264,6 +268,9 @@ public class GlobalStateTaskTest {
     @Test
     public void shouldNotCheckpointWhenFlushIntervalHasNotLapsed() {
         globalStateTask.initialize();
+        // Reset after initialization since checkpointing should happen during initialization, KAFKA-18168
+        stateMgr.checkpointWritten = false;
+        stateMgr.flushed = false;
 
         // offset delta exceeded
         globalStateTask.update(record(topic1, 1, currentOffsetT1 + 10000L, "foo".getBytes(), "foo".getBytes()));
@@ -283,6 +290,9 @@ public class GlobalStateTaskTest {
         expectedOffsets.put(t2, 100L);
 
         globalStateTask.initialize();
+        // Reset after initialization since checkpointing should happen during initialization, KAFKA-18168
+        stateMgr.checkpointWritten = false;
+        stateMgr.flushed = false;
 
         time.sleep(flushInterval); // flush interval elapsed
 
@@ -332,5 +342,22 @@ public class GlobalStateTaskTest {
         assertTrue(stateMgr.baseDir().exists());
         globalStateTask.close(true);
         assertFalse(stateMgr.baseDir().exists());
+    }
+
+    @Test
+    public void shouldCheckpointDuringInitialization() {
+        globalStateTask.initialize();
+
+        assertTrue(stateMgr.checkpointWritten);
+        assertTrue(stateMgr.flushed);
+    }
+
+    @Test
+    public void shouldCheckpointDuringClose() throws Exception {
+        globalStateTask.initialize();
+        globalStateTask.close(false);
+
+        assertTrue(stateMgr.checkpointWritten);
+        assertTrue(stateMgr.flushed);
     }
 }
