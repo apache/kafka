@@ -29,7 +29,9 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.config.ConfigResource;
@@ -351,6 +353,28 @@ public class ClusterTestExtensionsTest {
         assertEquals("FOO", cluster.controllerListenerName().get().value());
         try (Admin admin = cluster.admin(Map.of(), true)) {
             assertEquals(1, admin.describeMetadataQuorum().quorumInfo().get().nodes().size());
+        }
+    }
+
+    @ClusterTest(types = {Type.CO_KRAFT, Type.KRAFT}, brokers = 1)
+    public void testBrokerRestart(ClusterInstance cluster) throws ExecutionException, InterruptedException {
+        final String topicName = "topic";
+        try (Admin admin = cluster.admin();
+             Producer<String, String> producer = cluster.producer(Map.of(
+                 ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName(),
+                 ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName()))) {
+            admin.createTopics(List.of(new NewTopic(topicName, 1, (short) 1))).all().get();
+
+            cluster.waitForTopic(topicName, 1);
+
+            cluster.brokers().values().forEach(broker -> {
+                broker.shutdown();
+                broker.awaitShutdown();
+                broker.startup();
+            });
+
+            RecordMetadata recordMetadata0 = producer.send(new ProducerRecord<>(topicName, 0, "key 0", "value 0")).get();
+            assertEquals(0, recordMetadata0.offset());
         }
     }
 

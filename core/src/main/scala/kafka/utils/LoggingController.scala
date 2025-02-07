@@ -17,6 +17,8 @@
 
 package kafka.utils
 
+import com.typesafe.scalalogging.Logger
+import kafka.utils.LoggingController.ROOT_LOGGER
 import org.apache.kafka.common.utils.Utils
 import org.apache.logging.log4j.core.LoggerContext
 import org.apache.logging.log4j.core.config.Configurator
@@ -27,22 +29,62 @@ import java.util.Locale
 import scala.jdk.CollectionConverters._
 
 
-object Log4jController {
+object LoggingController {
+
+  private val logger = Logger[LoggingController]
 
   /**
-   * Note: In log4j, the root logger's name was "root" and Kafka also followed that name for dynamic logging control feature.
+   * Note: In Log4j 1, the root logger's name was "root" and Kafka also followed that name for dynamic logging control feature.
    *
    * The root logger's name is changed in log4j2 to empty string (see: [[LogManager.ROOT_LOGGER_NAME]]) but for backward-
    * compatibility. Kafka keeps its original root logger name. It is why here is a dedicated definition for the root logger name.
    */
   val ROOT_LOGGER = "root"
 
+  private[this] val delegate: LoggingControllerDelegate = {
+    try {
+      new Log4jCoreController
+    } catch {
+      case _: ClassCastException | _: LinkageError =>
+        logger.info("No supported logging implementation found. Logging configuration endpoint will be disabled.")
+        new NoOpController
+      case e: Exception =>
+        logger.warn("A problem occurred, while initializing the logging controller. Logging configuration endpoint will be disabled.", e)
+        new NoOpController
+    }
+  }
+
   /**
    * Returns a map of the log4j loggers and their assigned log level.
    * If a logger does not have a log level assigned, we return the log level of the first ancestor with a level configured.
    */
-  def loggers: Map[String, String] = {
-    val logContext = LogManager.getContext(false).asInstanceOf[LoggerContext]
+  def loggers: Map[String, String] = delegate.loggers
+
+  /**
+   * Sets the log level of a particular logger. If the given logLevel is not an available level
+   * (i.e., one of OFF, FATAL, ERROR, WARN, INFO, DEBUG, TRACE, ALL) it falls back to DEBUG.
+   *
+   * @see [[Level.toLevel]]
+   */
+  def logLevel(loggerName: String, logLevel: String): Boolean = delegate.logLevel(loggerName, logLevel)
+
+  def unsetLogLevel(loggerName: String): Boolean = delegate.unsetLogLevel(loggerName)
+
+  def loggerExists(loggerName: String): Boolean = delegate.loggerExists(loggerName)
+}
+
+private class NoOpController extends LoggingControllerDelegate {
+  override def loggers: Map[String, String] = Map.empty
+
+  override def logLevel(loggerName: String, logLevel: String): Boolean = false
+
+  override def unsetLogLevel(loggerName: String): Boolean = false
+}
+
+private class Log4jCoreController extends LoggingControllerDelegate {
+  private[this] val logContext = LogManager.getContext(false).asInstanceOf[LoggerContext]
+
+  override def loggers: Map[String, String] = {
     val rootLoggerLevel = logContext.getRootLogger.getLevel.toString
 
     // Loggers defined in the configuration
@@ -63,13 +105,7 @@ object Log4jController {
     (configured ++ actual) + (ROOT_LOGGER -> rootLoggerLevel)
   }
 
-  /**
-   * Sets the log level of a particular logger. If the given logLevel is not an available log4j level
-   * (i.e., one of OFF, FATAL, ERROR, WARN, INFO, DEBUG, TRACE, ALL) it falls back to DEBUG.
-   *
-   * @see [[Level.toLevel]]
-   */
-  def logLevel(loggerName: String, logLevel: String): Boolean = {
+  override def logLevel(loggerName: String, logLevel: String): Boolean = {
     if (Utils.isBlank(loggerName) || Utils.isBlank(logLevel))
       return false
 
@@ -87,7 +123,7 @@ object Log4jController {
     }
   }
 
-  def unsetLogLevel(loggerName: String): Boolean = {
+  override def unsetLogLevel(loggerName: String): Boolean = {
     if (loggerName == ROOT_LOGGER) {
       Configurator.setAllLevels(LogManager.ROOT_LOGGER_NAME, null)
       true
@@ -99,7 +135,12 @@ object Log4jController {
       else false
     }
   }
+}
 
+private abstract class LoggingControllerDelegate {
+  def loggers: Map[String, String]
+  def logLevel(loggerName: String, logLevel: String): Boolean
+  def unsetLogLevel(loggerName: String): Boolean
   def loggerExists(loggerName: String): Boolean = loggers.contains(loggerName)
 }
 
@@ -109,25 +150,23 @@ object Log4jController {
  * registers the MBean. The [[kafka.utils.Logging]] trait forces initialization
  * of the companion object.
  */
-class Log4jController extends Log4jControllerMBean {
+class LoggingController extends LoggingControllerMBean {
 
   def getLoggers: util.List[String] = {
     // we replace scala collection by java collection so mbean client is able to deserialize it without scala library.
-    new util.ArrayList[String](Log4jController.loggers.map {
+    new util.ArrayList[String](LoggingController.loggers.map {
       case (logger, level) => s"$logger=$level"
     }.toSeq.asJava)
   }
 
-
   def getLogLevel(loggerName: String): String = {
-    Log4jController.loggers.getOrElse(loggerName, "No such logger.")
+    LoggingController.loggers.getOrElse(loggerName, "No such logger.")
   }
 
-  def setLogLevel(loggerName: String, level: String): Boolean = Log4jController.logLevel(loggerName, level)
+  def setLogLevel(loggerName: String, level: String): Boolean = LoggingController.logLevel(loggerName, level)
 }
 
-
-trait Log4jControllerMBean {
+trait LoggingControllerMBean {
   def getLoggers: java.util.List[String]
   def getLogLevel(logger: String): String
   def setLogLevel(logger: String, level: String): Boolean

@@ -1,6 +1,6 @@
 <!DOCTYPE import-control PUBLIC
-"-//Puppy Crawl//DTD Import Control 1.1//EN"
-"http://www.puppycrawl.com/dtds/import_control_1_1.dtd">
+    "-//Checkstyle//DTD ImportControl Configuration 1.4//EN"
+    "https://checkstyle.sourceforge.io/dtds/import_control_1_4.dtd">
 <!--
  Licensed to the Apache Software Foundation (ASF) under one or more
  contributor license agreements.  See the NOTICE file distributed with
@@ -581,7 +581,10 @@
       <allow pkg="javax.crypto"/>
       <allow pkg="org.apache.maven.artifact.versioning" />
       <allow pkg="org.eclipse.jetty.util" />
-      <allow pkg="org.apache.logging.log4j" />
+
+      <file name="(Mock)?Loggers(Test)?" regex="true">
+        <allow pkg="org.apache.logging.log4j" />
+      </file>
 
       <subpackage name="rest">
         <allow pkg="org.eclipse.jetty" />
@@ -593,7 +596,6 @@
         <allow pkg="com.fasterxml.jackson" />
         <allow pkg="org.apache.http"/>
         <allow pkg="io.swagger.v3.oas.annotations"/>
-        <allow pkg="org.apache.logging.log4j" />
       </subpackage>
 
       <subpackage name="isolation">

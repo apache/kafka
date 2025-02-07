@@ -702,7 +702,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
     @Override
-    public <KOUT> KGroupedStream<KOUT, V> groupBy(final KeyValueMapper<? super K, ? super V, KOUT> keySelector) {
+    public <KOut> KGroupedStream<KOut, V> groupBy(final KeyValueMapper<? super K, ? super V, KOut> keySelector) {
         return groupBy(keySelector, Grouped.with(null, valueSerde));
     }
 
@@ -727,34 +727,33 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             builder);
     }
 
-    @Override
-    public <VO, VR> KStream<K, VR> join(final KStream<K, VO> otherStream,
-                                        final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
-                                        final JoinWindows windows) {
+    public <VRight, VOut> KStream<K, VOut> join(final KStream<K, VRight> otherStream,
+                                                final ValueJoiner<? super V, ? super VRight, ? extends VOut> joiner,
+                                                final JoinWindows windows) {
         return join(otherStream, toValueJoinerWithKey(joiner), windows);
     }
 
     @Override
-    public <VO, VR> KStream<K, VR> join(final KStream<K, VO> otherStream,
-                                        final ValueJoinerWithKey<? super K, ? super V, ? super VO, ? extends VR> joiner,
-                                        final JoinWindows windows) {
+    public <VRight, VOut> KStream<K, VOut> join(final KStream<K, VRight> otherStream,
+                                                final ValueJoinerWithKey<? super K, ? super V, ? super VRight, ? extends VOut> joiner,
+                                                final JoinWindows windows) {
         return join(otherStream, joiner, windows, StreamJoined.with(null, null, null));
     }
 
     @Override
-    public <VO, VR> KStream<K, VR> join(final KStream<K, VO> otherStream,
-                                        final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
-                                        final JoinWindows windows,
-                                        final StreamJoined<K, V, VO> streamJoined) {
+    public <VRight, VOut> KStream<K, VOut> join(final KStream<K, VRight> otherStream,
+                                                final ValueJoiner<? super V, ? super VRight, ? extends VOut> joiner,
+                                                final JoinWindows windows,
+                                                final StreamJoined<K, V, VRight> streamJoined) {
 
         return join(otherStream, toValueJoinerWithKey(joiner), windows, streamJoined);
     }
 
     @Override
-    public <VO, VR> KStream<K, VR> join(final KStream<K, VO> otherStream,
-                                        final ValueJoinerWithKey<? super K, ? super V, ? super VO, ? extends VR> joiner,
-                                        final JoinWindows windows,
-                                        final StreamJoined<K, V, VO> streamJoined) {
+    public <VRight, VOut> KStream<K, VOut> join(final KStream<K, VRight> otherStream,
+                                                final ValueJoinerWithKey<? super K, ? super V, ? super VRight, ? extends VOut> joiner,
+                                                final JoinWindows windows,
+                                                final StreamJoined<K, V, VRight> streamJoined) {
 
         return doJoin(
                 otherStream,
@@ -836,31 +835,41 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         return doJoin(otherStream, joiner, windows, streamJoined, new KStreamImplJoin(builder, true, true));
     }
 
-    private <VO, VR> KStream<K, VR> doJoin(final KStream<K, VO> otherStream,
-                                           final ValueJoinerWithKey<? super K, ? super V, ? super VO, ? extends VR> joiner,
-                                           final JoinWindows windows,
-                                           final StreamJoined<K, V, VO> streamJoined,
-                                           final KStreamImplJoin join) {
+    private <VRight, VOut> KStream<K, VOut> doJoin(
+        final KStream<K, VRight> otherStream,
+        final ValueJoinerWithKey<? super K, ? super V, ? super VRight, ? extends VOut> joiner,
+        final JoinWindows windows,
+        final StreamJoined<K, V, VRight> streamJoined,
+        final KStreamImplJoin join
+    ) {
         Objects.requireNonNull(otherStream, "otherStream can't be null");
         Objects.requireNonNull(joiner, "joiner can't be null");
         Objects.requireNonNull(windows, "windows can't be null");
         Objects.requireNonNull(streamJoined, "streamJoined can't be null");
 
         KStreamImpl<K, V> joinThis = this;
-        KStreamImpl<K, VO> joinOther = (KStreamImpl<K, VO>) otherStream;
+        KStreamImpl<K, VRight> joinOther = (KStreamImpl<K, VRight>) otherStream;
 
-        final StreamJoinedInternal<K, V, VO> streamJoinedInternal = new StreamJoinedInternal<>(streamJoined, builder);
+        final StreamJoinedInternal<K, V, VRight> streamJoinedInternal = new StreamJoinedInternal<>(streamJoined, builder);
         final NamedInternal name = new NamedInternal(streamJoinedInternal.name());
         if (joinThis.repartitionRequired) {
             final String joinThisName = joinThis.name;
             final String leftJoinRepartitionTopicName = name.suffixWithOrElseGet("-left", joinThisName);
-            joinThis = joinThis.repartitionForJoin(leftJoinRepartitionTopicName, streamJoinedInternal.keySerde(), streamJoinedInternal.valueSerde());
+            joinThis = joinThis.repartitionForJoin(
+                leftJoinRepartitionTopicName,
+                streamJoinedInternal.keySerde(),
+                streamJoinedInternal.valueSerde()
+            );
         }
 
         if (joinOther.repartitionRequired) {
             final String joinOtherName = joinOther.name;
             final String rightJoinRepartitionTopicName = name.suffixWithOrElseGet("-right", joinOtherName);
-            joinOther = joinOther.repartitionForJoin(rightJoinRepartitionTopicName, streamJoinedInternal.keySerde(), streamJoinedInternal.otherValueSerde());
+            joinOther = joinOther.repartitionForJoin(
+                rightJoinRepartitionTopicName,
+                streamJoinedInternal.keySerde(),
+                streamJoinedInternal.otherValueSerde()
+            );
         }
 
         joinThis.ensureCopartitionWith(Collections.singleton(joinOther));
