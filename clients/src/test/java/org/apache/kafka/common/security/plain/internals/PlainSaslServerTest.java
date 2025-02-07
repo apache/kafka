@@ -19,17 +19,27 @@ package org.apache.kafka.common.security.plain.internals;
 import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.security.authenticator.TestJaasConfig;
+import org.apache.kafka.common.security.plain.PlainAuthenticateCallback;
 import org.apache.kafka.common.security.plain.PlainLoginModule;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
+import javax.security.auth.callback.Callback;
+import javax.security.auth.callback.UnsupportedCallbackException;
+
+import static org.apache.kafka.common.security.plain.internals.PlainSaslServer.NEGOTIATED_PROPERTY_KEY_CLIENT_INFO;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
 
 public class PlainSaslServerTest {
 
@@ -113,5 +123,37 @@ public class PlainSaslServerTest {
         String nul = "\u0000";
         String message = String.format("%s%s%s%s%s", authorizationId, nul, userName, nul, password);
         return message.getBytes(StandardCharsets.UTF_8);
+    }
+
+    @Test
+    public void testClientInfo() throws IOException, UnsupportedCallbackException {
+        DummyClientInfo expectedClientInfo = new DummyClientInfo("my-org", Set.of("view", "edit"));
+        PlainServerCallbackHandler callbackHandler = mock(PlainServerCallbackHandler.class);
+        doAnswer(invocation -> {
+            Callback[] callbacks = invocation.getArgument(0);
+            for (Callback callback : callbacks) {
+                if (callback instanceof PlainAuthenticateCallback) {
+                    ((PlainAuthenticateCallback) callback).authenticated(true);
+                    ((PlainAuthenticateCallback) callback).clientInfo(expectedClientInfo);
+                }
+            }
+            return null;
+        }).when(callbackHandler).handle(any());
+
+        PlainSaslServer server = new PlainSaslServer(callbackHandler);
+        server.evaluateResponse(saslMessage("username", "username", "password"));
+        DummyClientInfo actualClientInfo = (DummyClientInfo) server.getNegotiatedProperty(NEGOTIATED_PROPERTY_KEY_CLIENT_INFO);
+        assertEquals(expectedClientInfo.scope, actualClientInfo.scope);
+        assertEquals(expectedClientInfo.roles, actualClientInfo.roles);
+    }
+
+    private static class DummyClientInfo {
+        private final String scope;
+        private final Set<String> roles;
+
+        DummyClientInfo(String scope, Set<String> roles) {
+            this.scope = scope;
+            this.roles = roles;
+        }
     }
 }

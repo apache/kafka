@@ -78,6 +78,6 @@ public class PlainAuthenticateCallback implements Callback {
      * value can be (but is not necessarily) non-null.
      */
     public Object clientInfo() {
-        return this.clientInfo;
+        return clientInfo;
     }
 }
