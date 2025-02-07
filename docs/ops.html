@@ -1218,11 +1218,13 @@ $ bin/kafka-acls.sh \
   <h3 class="anchor-heading"><a id="java" class="anchor-link"></a><a href="#java">6.5 Java Version</a></h3>
 
   Java 17 and Java 21 are fully supported while Java 11 is supported for a subset of modules (clients, streams and related).
-  We generally recommend running Apache Kafka with the most recent LTS release (Java 21 at the time of writing) for performance
-  and efficiency reasons.
+  Support for versions newer than the most recent LTS version are best-effort and the project typically only tests with the
+  most recent non LTS version.
 
   <p>
-  From a security perspective, we recommend the latest released patch version as older versions typically have disclosed security vulnerabilities.
+  We generally recommend running Apache Kafka with the most recent LTS release (Java 21 at the time of writing) for performance,
+  efficiency and support reasons. From a security perspective, we recommend the latest released patch version as older versions
+  typically have disclosed security vulnerabilities.
   <p>
   Typical arguments for running Kafka with OpenJDK-based Java implementations (including Oracle JDK) are:
 
