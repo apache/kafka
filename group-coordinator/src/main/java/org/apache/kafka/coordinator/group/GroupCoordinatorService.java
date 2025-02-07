@@ -956,31 +956,21 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * See {@link GroupCoordinator#describeShareGroupOffsets(RequestContext, DescribeShareGroupOffsetsRequestData)}.
+     * See {@link GroupCoordinator#describeShareGroupOffsets(RequestContext, DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup)}.
      */
     @Override
-    public CompletableFuture<DescribeShareGroupOffsetsResponseData> describeShareGroupOffsets(
+    public CompletableFuture<DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup> describeShareGroupOffsets(
         RequestContext context,
-        DescribeShareGroupOffsetsRequestData requestData
+        DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup requestData
     ) {
         if (!isActive.get()) {
             return CompletableFuture.completedFuture(
-                new DescribeShareGroupOffsetsResponseData()
-                    .setResponses(DescribeShareGroupOffsetsRequest.getErrorDescribeShareGroupOffsets(
-                        requestData.topics(),
-                        Errors.COORDINATOR_NOT_AVAILABLE
-                    ))
-            );
+                DescribeShareGroupOffsetsRequest.getErrorDescribedGroup(requestData.groupId(), Errors.COORDINATOR_NOT_AVAILABLE));
         }
 
         if (metadataImage == null) {
             return CompletableFuture.completedFuture(
-                new DescribeShareGroupOffsetsResponseData()
-                    .setResponses(DescribeShareGroupOffsetsRequest.getErrorDescribeShareGroupOffsets(
-                        requestData.topics(),
-                        Errors.UNKNOWN_TOPIC_OR_PARTITION
-                    ))
-            );
+                DescribeShareGroupOffsetsRequest.getErrorDescribedGroup(requestData.groupId(), Errors.COORDINATOR_NOT_AVAILABLE));
         }
 
         List<ReadShareGroupStateSummaryRequestData.ReadStateSummaryData> readStateSummaryData =
@@ -996,7 +986,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         ReadShareGroupStateSummaryRequestData readSummaryRequestData = new ReadShareGroupStateSummaryRequestData()
             .setGroupId(requestData.groupId())
             .setTopics(readStateSummaryData);
-        CompletableFuture<DescribeShareGroupOffsetsResponseData> future = new CompletableFuture<>();
+        CompletableFuture<DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup> future = new CompletableFuture<>();
         persister.readSummary(ReadShareGroupStateSummaryParameters.from(readSummaryRequestData))
             .whenComplete((result, error) -> {
                 if (error != null) {
@@ -1022,7 +1012,10 @@ public class GroupCoordinatorService implements GroupCoordinator {
                                     .setErrorCode(partitionData.errorCode())
                             ).toList())
                     ).toList();
-                future.complete(new DescribeShareGroupOffsetsResponseData().setResponses(describeShareGroupOffsetsResponseTopicList));
+                future.complete(
+                    new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup()
+                        .setGroupId(requestData.groupId())
+                        .setTopics(describeShareGroupOffsetsResponseTopicList));
             });
         return future;
     }
