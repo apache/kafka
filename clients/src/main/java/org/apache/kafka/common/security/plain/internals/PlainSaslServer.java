@@ -48,6 +48,7 @@ import javax.security.sasl.SaslServerFactory;
 public class PlainSaslServer implements SaslServer {
 
     public static final String PLAIN_MECHANISM = "PLAIN";
+    public static final String NEGOTIATED_PROPERTY_KEY_TOKEN = PLAIN_MECHANISM + ".clientInfo";
 
     private final CallbackHandler callbackHandler;
     private boolean complete;

@@ -27,6 +27,7 @@ import javax.security.auth.callback.Callback;
 public class PlainAuthenticateCallback implements Callback {
     private final char[] password;
     private boolean authenticated;
+    private Object clientInfo;
 
     /**
      * Creates a callback with the password provided by the client
@@ -59,5 +60,24 @@ public class PlainAuthenticateCallback implements Callback {
      */
     public void authenticated(boolean authenticated) {
         this.authenticated = authenticated;
+    }
+
+    /**
+     * Sets the client info. Custom implementations of server-side callback handler can use
+     * this method to pass along client info which can then be used by, for example, a custom 
+     * authorizer to make authorization decisions.
+     *
+     * @param clientInfo Object representing client info
+     */
+    public void clientInfo(Object clientInfo) {
+        this.clientInfo = clientInfo;
+    }
+
+    /**
+     * Returns null if client password doesn't match expected password, otherwise return
+     * value can be (but is not necessarily) non-null.
+     */
+    public Object clientInfo() {
+        return this.clientInfo;
     }
 }
