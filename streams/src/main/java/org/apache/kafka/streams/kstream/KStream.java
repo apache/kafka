@@ -126,7 +126,7 @@ public interface KStream<K, V> {
      *     }
      * });
      * }</pre>
-     * Setting a new key might result in an internal data redistribution if a key based operator (like an aggregation
+     * Setting a new key might result in an internal data redistribution if a key-based operator (like an aggregation
      * or join) is applied to the result {@code KStream}.
      *
      * @param mapper
@@ -171,7 +171,7 @@ public interface KStream<K, V> {
      * }</pre>
      *
      * Setting a new value preserves data co-location with respect to the key.
-     * Thus, <em>no</em> internal data redistribution is required if a key based operator (like an aggregation
+     * Thus, <em>no</em> internal data redistribution is required if a key-based operator (like an aggregation
      * or join) is applied to the result {@code KStream} (cf. {@link #map(KeyValueMapper)}).
      *
      * @param mapper
@@ -286,17 +286,17 @@ public interface KStream<K, V> {
      * The provided {@link KeyValueMapper} must return an {@link Iterable} (e.g., any {@link java.util.Collection}
      * type) and the return value must not be {@code null}.
      *
-     * <p>Flat-mapping records might result in an internal data redistribution if a key based operator (like an
+     * <p>Flat-mapping records might result in an internal data redistribution if a key-based operator (like an
      * aggregation or join) is applied to the result {@code KStream}. (cf. {@link #flatMapValues(ValueMapper)})
      *
      * @param mapper
-     *        a {@link KeyValueMapper KeyValueMapper&lt;K, V, Iterable&lt;KeyValue&lt;K', V'&gt;&gt;&lt;} that
+     *        a {@link KeyValueMapper KeyValueMapper&lt;K, V, Iterable&lt;KeyValue&lt;K', V'&gt;&gt;&gt;} that
      *        computes zero of more new {@link KeyValue} pairs for each input record
      *
      * @param <KOut> the key type of the result stream
      * @param <VOut> the value type of the result stream
      *
-     * @return A {@code KStream} that contains more or less records with new keys and values (possibly of different types).
+     * @return A {@code KStream} that contains more or fewer records with new keys and values (possibly of different types).
      *
      * @see #selectKey(KeyValueMapper)
      * @see #map(KeyValueMapper)
@@ -336,7 +336,7 @@ public interface KStream<K, V> {
      * and the return value must not be {@code null}.
      *
      * <p>Splitting a record into multiple records with the same key preserves data co-location with respect to the key.
-     * Thus, <em>no</em> internal data redistribution is required if a key based operator (like an aggregation or join)
+     * Thus, <em>no</em> internal data redistribution is required if a key-based operator (like an aggregation or join)
      * is applied to the result {@code KStream} (cf. {@link #flatMap(KeyValueMapper)}).
      *
      * @param mapper
@@ -2556,7 +2556,7 @@ public interface KStream<K, V> {
      * Even if any upstream operation was key-changing, no auto-repartition is triggered.
      * If repartitioning is required, a call to {@link #repartition()} should be performed before {@code process()}.
      * <p>
-     * Processing records might result in an internal data redistribution if a key based operator (like an aggregation
+     * Processing records might result in an internal data redistribution if a key-based operator (like an aggregation
      * or join) is applied to the result {@code KStream}.
      * (cf. {@link #processValues(FixedKeyProcessorSupplier, String...)})
      *
