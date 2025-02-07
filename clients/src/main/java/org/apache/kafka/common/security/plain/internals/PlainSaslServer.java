@@ -48,11 +48,12 @@ import javax.security.sasl.SaslServerFactory;
 public class PlainSaslServer implements SaslServer {
 
     public static final String PLAIN_MECHANISM = "PLAIN";
-    public static final String NEGOTIATED_PROPERTY_KEY_TOKEN = PLAIN_MECHANISM + ".clientInfo";
+    public static final String NEGOTIATED_PROPERTY_KEY_CLIENT_INFO = PLAIN_MECHANISM + ".clientInfo";
 
     private final CallbackHandler callbackHandler;
     private boolean complete;
     private String authorizationId;
+    private Object clientInfo;
 
     public PlainSaslServer(CallbackHandler callbackHandler) {
         this.callbackHandler = callbackHandler;
@@ -109,6 +110,7 @@ public class PlainSaslServer implements SaslServer {
             throw new SaslAuthenticationException("Authentication failed: Client requested an authorization id that is different from username");
 
         this.authorizationId = username;
+        this.clientInfo = authenticateCallback.clientInfo();
 
         complete = true;
         return new byte[0];
@@ -150,6 +152,8 @@ public class PlainSaslServer implements SaslServer {
     public Object getNegotiatedProperty(String propName) {
         if (!complete)
             throw new IllegalStateException("Authentication exchange has not completed");
+        if (NEGOTIATED_PROPERTY_KEY_CLIENT_INFO.equals(propName))
+            return clientInfo;
         return null;
     }
 
