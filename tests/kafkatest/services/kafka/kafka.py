@@ -206,7 +206,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                  use_new_coordinator=None,
                  consumer_group_migration_policy=None,
                  dynamicRaftQuorum=False,
-                 use_transactions_v2=False
+                 use_transactions_v2=False,
+                 use_share_groups=False,
                  ):
         """
         :param context: test context
@@ -296,6 +297,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         # Assign the determined value.
         self.use_new_coordinator = use_new_coordinator
         self.use_transactions_v2 = use_transactions_v2
+        self.use_share_groups = use_share_groups
 
         # Set consumer_group_migration_policy based on context and arguments.
         if consumer_group_migration_policy is None:
@@ -777,6 +779,13 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
         for prop in self.per_node_server_prop_overrides.get(self.idx(node), []):
             override_configs[prop[0]] = prop[1]
+
+        if self.use_share_groups:
+            override_configs[config_property.SHARE_GROUP_ENABLE] = 'true'
+            override_configs[config_property.UNSTABLE_API_VERSIONS_ENABLE] = 'true'
+            override_configs[config_property.GROUP_COORDINATOR_REBALANCE_PROTOCOLS] = 'classic,consumer,share'
+            override_configs[config_property.SHARE_COORDINATOR_STATE_TOPIC_REPLICATION_FACTOR] = str(self.num_nodes)
+            override_configs[config_property.SHARE_COORDINATOR_STATE_TOPIC_MIN_ISR] = '1'
 
         #update template configs with test override configs
         configs.update(override_configs)

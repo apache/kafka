@@ -38,7 +38,7 @@ class ShareConsumerTest(VerifiableShareConsumerTest):
                                         num_zk=0, num_brokers=self.num_brokers, topics={
                 self.TOPIC1["name"] : { 'partitions': self.TOPIC1["partitions"], 'replication-factor': self.TOPIC1["replication_factor"] },
                 self.TOPIC2["name"] : { 'partitions': self.TOPIC2["partitions"], 'replication-factor': self.TOPIC2["replication_factor"] }
-            })
+            }, use_share_groups=True)
 
     def setup_share_group(self, topic, **kwargs):
         consumer = super(ShareConsumerTest, self).setup_share_group(topic, **kwargs)
