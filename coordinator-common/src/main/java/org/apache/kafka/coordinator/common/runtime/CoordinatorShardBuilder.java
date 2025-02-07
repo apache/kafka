@@ -110,17 +110,6 @@ public interface CoordinatorShardBuilder<S extends CoordinatorShard<U>, U> {
     );
 
     /**
-     * Sets the persister instance. Used to communicate with the share coordinator.
-     *
-     * @param persister
-     *
-     * @return The builder
-     */
-    CoordinatorShardBuilder<S, U> withPersister(
-        Persister persister
-    );
-
-    /**
      * @return The built coordinator.
      */
     S build();

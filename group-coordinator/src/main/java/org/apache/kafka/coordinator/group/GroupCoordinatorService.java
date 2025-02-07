@@ -838,10 +838,22 @@ public class GroupCoordinatorService implements GroupCoordinator {
 
             futures.add(future);
         });
+
+        maybeDeleteFromShareCoordinator(groupsByTopicPartition);
+
         return FutureUtils.combineFutures(futures, DeleteGroupsResponseData.DeletableGroupResultCollection::new,
             // We don't use res.addAll(future.join()) because DeletableGroupResultCollection is an ImplicitLinkedHashMultiCollection,
             // which has requirements for adding elements (see ImplicitLinkedHashCollection.java#add).
             (accumulator, newResults) -> newResults.forEach(result -> accumulator.add(result.duplicate())));
+    }
+
+    private void maybeDeleteFromShareCoordinator(Map<TopicPartition, List<String>> groupsByTopicPartition) {
+        groupsByTopicPartition.forEach((topicPartition, groupList) -> runtime.scheduleReadOperation(
+                "delete-share-groups",
+                topicPartition,
+                (coordinator, offset) -> coordinator.deleteShareGroups(groupList, offset)
+            )
+        );
     }
 
     /**

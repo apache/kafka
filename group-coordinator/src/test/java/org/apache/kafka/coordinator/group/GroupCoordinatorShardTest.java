@@ -115,7 +115,7 @@ public class GroupCoordinatorShardTest {
             new MockCoordinatorTimer<>(Time.SYSTEM),
             mock(GroupCoordinatorConfig.class),
             coordinatorMetrics,
-            metricsShard,
+            metricsShard
         );
 
         RequestContext context = requestContext(ApiKeys.CONSUMER_GROUP_HEARTBEAT);
@@ -147,7 +147,7 @@ public class GroupCoordinatorShardTest {
             new MockCoordinatorTimer<>(Time.SYSTEM),
             mock(GroupCoordinatorConfig.class),
             coordinatorMetrics,
-            metricsShard,
+            metricsShard
         );
 
         RequestContext context = requestContext(ApiKeys.OFFSET_COMMIT);
@@ -179,7 +179,7 @@ public class GroupCoordinatorShardTest {
             new MockCoordinatorTimer<>(new MockTime()),
             mock(GroupCoordinatorConfig.class),
             coordinatorMetrics,
-            metricsShard,
+            metricsShard
         );
 
         RequestContext context = requestContext(ApiKeys.TXN_OFFSET_COMMIT);
@@ -209,7 +209,7 @@ public class GroupCoordinatorShardTest {
             new MockCoordinatorTimer<>(Time.SYSTEM),
             mock(GroupCoordinatorConfig.class),
             mock(CoordinatorMetrics.class),
-            mock(CoordinatorMetricsShard.class),
+            mock(CoordinatorMetricsShard.class)
         );
 
         RequestContext context = requestContext(ApiKeys.DELETE_GROUPS);
@@ -266,7 +266,7 @@ public class GroupCoordinatorShardTest {
             new MockCoordinatorTimer<>(Time.SYSTEM),
             mock(GroupCoordinatorConfig.class),
             mock(CoordinatorMetrics.class),
-            mock(CoordinatorMetricsShard.class),
+            mock(CoordinatorMetricsShard.class)
         );
 
         RequestContext context = requestContext(ApiKeys.DELETE_GROUPS);
@@ -336,7 +336,7 @@ public class GroupCoordinatorShardTest {
             new MockCoordinatorTimer<>(Time.SYSTEM),
             mock(GroupCoordinatorConfig.class),
             coordinatorMetrics,
-            metricsShard,
+            metricsShard
         );
 
         OffsetCommitKey key = new OffsetCommitKey()
@@ -404,7 +404,7 @@ public class GroupCoordinatorShardTest {
             new MockCoordinatorTimer<>(new MockTime()),
             mock(GroupCoordinatorConfig.class),
             coordinatorMetrics,
-            metricsShard,
+            metricsShard
         );
 
         OffsetCommitKey key = new OffsetCommitKey()
@@ -472,7 +472,7 @@ public class GroupCoordinatorShardTest {
             new MockCoordinatorTimer<>(Time.SYSTEM),
             mock(GroupCoordinatorConfig.class),
             coordinatorMetrics,
-            metricsShard,
+            metricsShard
         );
 
         OffsetCommitKey key = new OffsetCommitKey()
@@ -520,7 +520,7 @@ public class GroupCoordinatorShardTest {
             new MockCoordinatorTimer<>(Time.SYSTEM),
             mock(GroupCoordinatorConfig.class),
             coordinatorMetrics,
-            metricsShard,
+            metricsShard
         );
 
         ConsumerGroupMetadataKey key = new ConsumerGroupMetadataKey();
@@ -548,7 +548,7 @@ public class GroupCoordinatorShardTest {
             new MockCoordinatorTimer<>(Time.SYSTEM),
             mock(GroupCoordinatorConfig.class),
             coordinatorMetrics,
-            metricsShard,
+            metricsShard
         );
 
         ConsumerGroupMetadataKey key = new ConsumerGroupMetadataKey();
@@ -574,7 +574,7 @@ public class GroupCoordinatorShardTest {
             new MockCoordinatorTimer<>(Time.SYSTEM),
             mock(GroupCoordinatorConfig.class),
             coordinatorMetrics,
-            metricsShard,
+            metricsShard
         );
 
         ConsumerGroupPartitionMetadataKey key = new ConsumerGroupPartitionMetadataKey();
@@ -602,7 +602,7 @@ public class GroupCoordinatorShardTest {
             new MockCoordinatorTimer<>(Time.SYSTEM),
             mock(GroupCoordinatorConfig.class),
             coordinatorMetrics,
-            metricsShard,
+            metricsShard
         );
 
         ConsumerGroupPartitionMetadataKey key = new ConsumerGroupPartitionMetadataKey();
@@ -628,7 +628,7 @@ public class GroupCoordinatorShardTest {
             new MockCoordinatorTimer<>(Time.SYSTEM),
             mock(GroupCoordinatorConfig.class),
             coordinatorMetrics,
-            metricsShard,
+            metricsShard
         );
 
         ConsumerGroupMemberMetadataKey key = new ConsumerGroupMemberMetadataKey();
@@ -656,7 +656,7 @@ public class GroupCoordinatorShardTest {
             new MockCoordinatorTimer<>(Time.SYSTEM),
             mock(GroupCoordinatorConfig.class),
             coordinatorMetrics,
-            metricsShard,
+            metricsShard
         );
 
         ConsumerGroupMemberMetadataKey key = new ConsumerGroupMemberMetadataKey();
@@ -682,7 +682,7 @@ public class GroupCoordinatorShardTest {
             new MockCoordinatorTimer<>(Time.SYSTEM),
             mock(GroupCoordinatorConfig.class),
             coordinatorMetrics,
-            metricsShard,
+            metricsShard
         );
 
         ConsumerGroupTargetAssignmentMetadataKey key = new ConsumerGroupTargetAssignmentMetadataKey();
@@ -710,7 +710,7 @@ public class GroupCoordinatorShardTest {
             new MockCoordinatorTimer<>(Time.SYSTEM),
             mock(GroupCoordinatorConfig.class),
             coordinatorMetrics,
-            metricsShard,
+            metricsShard
         );
 
         ConsumerGroupTargetAssignmentMetadataKey key = new ConsumerGroupTargetAssignmentMetadataKey();
@@ -736,7 +736,7 @@ public class GroupCoordinatorShardTest {
             new MockCoordinatorTimer<>(Time.SYSTEM),
             mock(GroupCoordinatorConfig.class),
             coordinatorMetrics,
-            metricsShard,
+            metricsShard
         );
 
         ConsumerGroupTargetAssignmentMemberKey key = new ConsumerGroupTargetAssignmentMemberKey();
@@ -764,7 +764,7 @@ public class GroupCoordinatorShardTest {
             new MockCoordinatorTimer<>(Time.SYSTEM),
             mock(GroupCoordinatorConfig.class),
             coordinatorMetrics,
-            metricsShard,
+            metricsShard
         );
 
         ConsumerGroupTargetAssignmentMemberKey key = new ConsumerGroupTargetAssignmentMemberKey();
@@ -790,7 +790,7 @@ public class GroupCoordinatorShardTest {
             new MockCoordinatorTimer<>(Time.SYSTEM),
             mock(GroupCoordinatorConfig.class),
             coordinatorMetrics,
-            metricsShard,
+            metricsShard
         );
 
         ConsumerGroupCurrentMemberAssignmentKey key = new ConsumerGroupCurrentMemberAssignmentKey();
@@ -818,7 +818,7 @@ public class GroupCoordinatorShardTest {
             new MockCoordinatorTimer<>(Time.SYSTEM),
             mock(GroupCoordinatorConfig.class),
             coordinatorMetrics,
-            metricsShard,
+            metricsShard
         );
 
         ConsumerGroupCurrentMemberAssignmentKey key = new ConsumerGroupCurrentMemberAssignmentKey();
@@ -844,7 +844,7 @@ public class GroupCoordinatorShardTest {
             new MockCoordinatorTimer<>(Time.SYSTEM),
             mock(GroupCoordinatorConfig.class),
             coordinatorMetrics,
-            metricsShard,
+            metricsShard
         );
 
         assertThrows(NullPointerException.class, () ->
@@ -871,7 +871,7 @@ public class GroupCoordinatorShardTest {
             new MockCoordinatorTimer<>(Time.SYSTEM),
             mock(GroupCoordinatorConfig.class),
             coordinatorMetrics,
-            metricsShard,
+            metricsShard
         );
 
         coordinator.onLoaded(image);
@@ -898,7 +898,7 @@ public class GroupCoordinatorShardTest {
             new MockCoordinatorTimer<>(Time.SYSTEM),
             mock(GroupCoordinatorConfig.class),
             coordinatorMetrics,
-            metricsShard,
+            metricsShard
         );
 
         GroupMetadataKey key = new GroupMetadataKey();
@@ -926,7 +926,7 @@ public class GroupCoordinatorShardTest {
             new MockCoordinatorTimer<>(Time.SYSTEM),
             mock(GroupCoordinatorConfig.class),
             coordinatorMetrics,
-            metricsShard,
+            metricsShard
         );
 
         GroupMetadataKey key = new GroupMetadataKey();
@@ -952,7 +952,7 @@ public class GroupCoordinatorShardTest {
             timer,
             GroupCoordinatorConfigTest.createGroupCoordinatorConfig(4096, 1000L, 24 * 60),
             mock(CoordinatorMetrics.class),
-            mock(CoordinatorMetricsShard.class),
+            mock(CoordinatorMetricsShard.class)
         );
         MetadataImage image = MetadataImage.EMPTY;
 
@@ -984,7 +984,7 @@ public class GroupCoordinatorShardTest {
             timer,
             mock(GroupCoordinatorConfig.class),
             mock(CoordinatorMetrics.class),
-            mock(CoordinatorMetricsShard.class),
+            mock(CoordinatorMetricsShard.class)
         );
 
         CoordinatorRecord offsetCommitTombstone = GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord("group-id", "topic", 0);
@@ -1042,7 +1042,7 @@ public class GroupCoordinatorShardTest {
             timer,
             config,
             coordinatorMetrics,
-            metricsShard,
+            metricsShard
         );
         coordinator.onLoaded(MetadataImage.EMPTY);
 
@@ -1079,7 +1079,7 @@ public class GroupCoordinatorShardTest {
             new MockCoordinatorTimer<>(Time.SYSTEM),
             mock(GroupCoordinatorConfig.class),
             coordinatorMetrics,
-            metricsShard,
+            metricsShard
         );
 
         coordinator.replayEndTransactionMarker(
@@ -1108,7 +1108,7 @@ public class GroupCoordinatorShardTest {
             new MockCoordinatorTimer<>(Time.SYSTEM),
             mock(GroupCoordinatorConfig.class),
             coordinatorMetrics,
-            metricsShard,
+            metricsShard
         );
 
         List<CoordinatorRecord> records = Collections.singletonList(GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord(
@@ -1143,7 +1143,7 @@ public class GroupCoordinatorShardTest {
             timer,
             GroupCoordinatorConfigTest.createGroupCoordinatorConfig(4096, 1000L, 24 * 60),
             mock(CoordinatorMetrics.class),
-            mock(CoordinatorMetricsShard.class),
+            mock(CoordinatorMetricsShard.class)
         );
 
         coordinator.onUnloaded();
@@ -1165,7 +1165,7 @@ public class GroupCoordinatorShardTest {
             new MockCoordinatorTimer<>(Time.SYSTEM),
             mock(GroupCoordinatorConfig.class),
             coordinatorMetrics,
-            metricsShard,
+            metricsShard
         );
 
         RequestContext context = requestContext(ApiKeys.SHARE_GROUP_HEARTBEAT);
@@ -1197,7 +1197,7 @@ public class GroupCoordinatorShardTest {
             new MockCoordinatorTimer<>(Time.SYSTEM),
             mock(GroupCoordinatorConfig.class),
             coordinatorMetrics,
-            metricsShard,
+            metricsShard
         );
 
         ShareGroupMetadataKey key = new ShareGroupMetadataKey();
@@ -1225,7 +1225,7 @@ public class GroupCoordinatorShardTest {
             new MockCoordinatorTimer<>(Time.SYSTEM),
             mock(GroupCoordinatorConfig.class),
             coordinatorMetrics,
-            metricsShard,
+            metricsShard
         );
 
         ShareGroupMetadataKey key = new ShareGroupMetadataKey();
@@ -1251,7 +1251,7 @@ public class GroupCoordinatorShardTest {
             new MockCoordinatorTimer<>(Time.SYSTEM),
             mock(GroupCoordinatorConfig.class),
             coordinatorMetrics,
-            metricsShard,
+            metricsShard
         );
 
         ShareGroupMemberMetadataKey key = new ShareGroupMemberMetadataKey();
@@ -1279,7 +1279,7 @@ public class GroupCoordinatorShardTest {
             new MockCoordinatorTimer<>(Time.SYSTEM),
             mock(GroupCoordinatorConfig.class),
             coordinatorMetrics,
-            metricsShard,
+            metricsShard
         );
 
         ShareGroupMemberMetadataKey key = new ShareGroupMemberMetadataKey();
@@ -1305,7 +1305,7 @@ public class GroupCoordinatorShardTest {
             new MockCoordinatorTimer<>(Time.SYSTEM),
             mock(GroupCoordinatorConfig.class),
             coordinatorMetrics,
-            metricsShard,
+            metricsShard
         );
 
         ConsumerGroupRegularExpressionKey key = new ConsumerGroupRegularExpressionKey()
@@ -1339,7 +1339,7 @@ public class GroupCoordinatorShardTest {
             new MockCoordinatorTimer<>(Time.SYSTEM),
             mock(GroupCoordinatorConfig.class),
             coordinatorMetrics,
-            metricsShard,
+            metricsShard
         );
 
         ConsumerGroupRegularExpressionKey key = new ConsumerGroupRegularExpressionKey()

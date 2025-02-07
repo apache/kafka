@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
@@ -97,6 +98,7 @@ import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.share.persister.DeleteShareGroupStateParameters;
 import org.apache.kafka.server.share.persister.DeleteShareGroupStateResult;
 import org.apache.kafka.server.share.persister.GroupTopicPartitionData;
@@ -109,13 +111,17 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 /**
  * The group coordinator shard is a replicated state machine that manages the metadata of all
@@ -140,7 +146,6 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         private CoordinatorExecutor<CoordinatorRecord> executor;
         private CoordinatorMetrics coordinatorMetrics;
         private TopicPartition topicPartition;
-        private Persister persister;
 
         public Builder(
             GroupCoordinatorConfig config,
@@ -204,12 +209,6 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             return this;
         }
 
-        @Override
-        public CoordinatorShardBuilder<GroupCoordinatorShard, CoordinatorRecord> withPersister(Persister persister) {
-            this.persister = persister;
-            return this;
-        }
-
         @SuppressWarnings("NPathComplexity")
         @Override
         public GroupCoordinatorShard build() {
@@ -262,8 +261,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 timer,
                 config,
                 coordinatorMetrics,
-                metricsShard,
-                persister
+                metricsShard
             );
         }
     }
@@ -328,11 +326,6 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     private final CoordinatorMetricsShard metricsShard;
 
     /**
-     * The persister instance.
-     */
-    private Persister persister;
-
-    /**
      * Constructor.
      *
      * @param logContext            The log context.
@@ -340,7 +333,6 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      * @param offsetMetadataManager The offset metadata manager.
      * @param coordinatorMetrics    The coordinator metrics.
      * @param metricsShard          The coordinator metrics shard.
-     * @param persister             The persister instance
      */
     GroupCoordinatorShard(
         LogContext logContext,
@@ -350,8 +342,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         CoordinatorTimer<Void, CoordinatorRecord> timer,
         GroupCoordinatorConfig config,
         CoordinatorMetrics coordinatorMetrics,
-        CoordinatorMetricsShard metricsShard,
-        Persister persister
+        CoordinatorMetricsShard metricsShard
     ) {
         this.log = logContext.logger(GroupCoordinatorShard.class);
         this.groupMetadataManager = groupMetadataManager;
@@ -361,7 +352,6 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         this.config = config;
         this.coordinatorMetrics = coordinatorMetrics;
         this.metricsShard = metricsShard;
-        this.persister = persister;
     }
 
     /**
@@ -493,7 +483,6 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                         .setErrorCode(Errors.forException(exception).code())
                 );
             }
-            maybeDeleteFromShareCoordinator(groupId);
         }
 
         log.info("The following groups were deleted: {}. A total of {} offsets were removed.",
@@ -503,25 +492,38 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         return new CoordinatorResult<>(records, resultCollection);
     }
 
-    private Optional<CompletableFuture<DeleteShareGroupStateResult>> maybeDeleteFromShareCoordinator(String groupId) {
-        if (groupMetadataManager.group(groupId).type() == Group.GroupType.SHARE) {
-            log.info("Deleting share group {}", groupId);
-            List<TopicData<PartitionIdData>> topicPartitionList = new ArrayList<>();
-            offsetMetadataManager.getGroupTopicPartitionMapping(groupId).forEach((topicId, partitionList) -> {
-                List<PartitionIdData> partitionIdDataList = partitionList.stream()
-                    .map(PartitionFactory::newPartitionIdData)
-                    .toList();
-                topicPartitionList.add(new TopicData<>(topicId, partitionIdDataList));
-            });
-            return Optional.of(persister.deleteState(
-                    new DeleteShareGroupStateParameters.Builder()
-                        .setGroupTopicPartitionData(new GroupTopicPartitionData<>(groupId, topicPartitionList))
-                        .build()
+    public boolean deleteShareGroups(List<String> groupIds, long committedOffset) throws ApiException {
+        List<String> shareGroupIds = groupIds.stream()
+            .filter(groupId -> groupMetadataManager.group(groupId).type().equals(Group.GroupType.SHARE))
+            .toList();
+
+        List<ShareGroupDescribeResponseData.DescribedGroup> describedGroups = groupMetadataManager.shareGroupDescribe(shareGroupIds, committedOffset);
+
+        Map<String, Map<Uuid, List<Integer>>> gtpData = new HashMap<>();
+        describedGroups.forEach(group -> group.members().forEach(member -> {
+            for (ShareGroupDescribeResponseData.TopicPartitions tps : member.assignment().topicPartitions()) {
+                for (int partitionId : tps.partitions()) {
+                    gtpData.computeIfAbsent(group.groupId(), k -> new HashMap<>())
+                        .computeIfAbsent(tps.topicId(), k -> new LinkedList<>())
+                        .add(partitionId);
+                }
+            }
+        }));
+
+        gtpData.forEach((groupId, tps) -> {
+            List<TopicData<PartitionIdData>> topicData = new LinkedList<>();
+            tps.forEach((topicId, partitions) -> topicData.add(
+                    new TopicData<>(
+                        topicId,
+                        partitions.stream()
+                            .map(PartitionFactory::newPartitionIdData)
+                            .toList()
+                    )
                 )
             );
-        }
+        });
 
-        return Optional.empty();
+        return false;
     }
 
     /**
