@@ -124,7 +124,7 @@ public interface KStream<K, V> {
      *     }
      * });
      * }</pre>
-     * Setting a new key might result in an internal data redistribution if a key based operator (like an aggregation
+     * Setting a new key might result in an internal data redistribution if a key-based operator (like an aggregation
      * or join) is applied to the result {@code KStream}.
      *
      * @param mapper
@@ -169,7 +169,7 @@ public interface KStream<K, V> {
      * }</pre>
      *
      * Setting a new value preserves data co-location with respect to the key.
-     * Thus, <em>no</em> internal data redistribution is required if a key based operator (like an aggregation
+     * Thus, <em>no</em> internal data redistribution is required if a key-based operator (like an aggregation
      * or join) is applied to the result {@code KStream} (cf. {@link #map(KeyValueMapper)}).
      *
      * @param mapper
@@ -256,14 +256,14 @@ public interface KStream<K, V> {
                                          final Named named);
 
     /**
-     * Transform each record of the input stream into zero or more records in the output stream (both key and value type
-     * can be altered arbitrarily).
-     * The provided {@link KeyValueMapper} is applied to each input record and computes zero or more output records.
-     * Thus, an input record {@code <K,V>} can be transformed into output records {@code <K':V'>, <K'':V''>, ...}.
+     * Create a new {@code KStream} that consists of zero or more records for each record in this stream.
+     * The provided {@link KeyValueMapper} is applied to each input record and computes zero or more output records
+     * (possibly of a different key and/or value type) for it.
+     * Thus, an input record {@code <K,V>} can be transformed into output records {@code <K':V'>, <K':V'>, ...}.
      * This is a stateless record-by-record operation (cf. {@link #process(ProcessorSupplier, String...)} for
      * stateful record processing).
-     * <p>
-     * The example below splits input records {@code <null:String>} containing sentences as values into their words
+     *
+     * <p>The example below splits input records {@code <null:String>} containing sentences as values into their words
      * and emit a record {@code <word:1>} for each word.
      * <pre>{@code
      * KStream<byte[], String> inputStream = builder.stream("topic");
@@ -281,89 +281,47 @@ public interface KStream<K, V> {
      *         }
      *     });
      * }</pre>
-     * The provided {@link KeyValueMapper} must return an {@link Iterable} (e.g., any {@link java.util.Collection} type)
-     * and the return value must not be {@code null}.
-     * <p>
-     * Flat-mapping records might result in an internal data redistribution if a key based operator (like an aggregation
-     * or join) is applied to the result {@code KStream}. (cf. {@link #flatMapValues(ValueMapper)})
+     * The provided {@link KeyValueMapper} must return an {@link Iterable} (e.g., any {@link java.util.Collection}
+     * type) and the return value must not be {@code null}.
      *
-     * @param mapper a {@link KeyValueMapper} that computes the new output records
-     * @param <KR>   the key type of the result stream
-     * @param <VR>   the value type of the result stream
-     * @return a {@code KStream} that contains more or less records with new key and value (possibly of different type)
+     * <p>Flat-mapping records might result in an internal data redistribution if a key-based operator (like an
+     * aggregation or join) is applied to the result {@code KStream}. (cf. {@link #flatMapValues(ValueMapper)})
+     *
+     * @param mapper
+     *        a {@link KeyValueMapper KeyValueMapper&lt;K, V, Iterable&lt;KeyValue&lt;K', V'&gt;&gt;&gt;} that
+     *        computes zero of more new {@link KeyValue} pairs for each input record
+     *
+     * @param <KOut> the key type of the result stream
+     * @param <VOut> the value type of the result stream
+     *
+     * @return A {@code KStream} that contains more or fewer records with new keys and values (possibly of different types).
+     *
      * @see #selectKey(KeyValueMapper)
      * @see #map(KeyValueMapper)
      * @see #mapValues(ValueMapper)
-     * @see #mapValues(ValueMapperWithKey)
      * @see #flatMapValues(ValueMapper)
-     * @see #flatMapValues(ValueMapperWithKey)
-     * @see #process(ProcessorSupplier, String...)
-     * @see #processValues(FixedKeyProcessorSupplier, String...)
-     * @see #processValues(FixedKeyProcessorSupplier, Named, String...)
      */
-    <KR, VR> KStream<KR, VR> flatMap(final KeyValueMapper<? super K, ? super V, ? extends Iterable<? extends KeyValue<? extends KR, ? extends VR>>> mapper);
+    <KOut, VOut> KStream<KOut, VOut> flatMap(final KeyValueMapper<? super K, ? super V, ? extends Iterable<? extends KeyValue<? extends KOut, ? extends VOut>>> mapper);
 
     /**
-     * Transform each record of the input stream into zero or more records in the output stream (both key and value type
-     * can be altered arbitrarily).
-     * The provided {@link KeyValueMapper} is applied to each input record and computes zero or more output records.
-     * Thus, an input record {@code <K,V>} can be transformed into output records {@code <K':V'>, <K'':V''>, ...}.
-     * This is a stateless record-by-record operation (cf. {@link #process(ProcessorSupplier, String...)} for
-     * stateful record transformation).
-     * <p>
-     * The example below splits input records {@code <null:String>} containing sentences as values into their words
-     * and emit a record {@code <word:1>} for each word.
-     * <pre>{@code
-     * KStream<byte[], String> inputStream = builder.stream("topic");
-     * KStream<String, Integer> outputStream = inputStream.flatMap(
-     *     new KeyValueMapper<byte[], String, Iterable<KeyValue<String, Integer>>> {
-     *         Iterable<KeyValue<String, Integer>> apply(byte[] key, String value) {
-     *             String[] tokens = value.split(" ");
-     *             List<KeyValue<String, Integer>> result = new ArrayList<>(tokens.length);
+     * See {@link #flatMap(KeyValueMapper)}.
      *
-     *             for(String token : tokens) {
-     *                 result.add(new KeyValue<>(token, 1));
-     *             }
-     *
-     *             return result;
-     *         }
-     *     });
-     * }</pre>
-     * The provided {@link KeyValueMapper} must return an {@link Iterable} (e.g., any {@link java.util.Collection} type)
-     * and the return value must not be {@code null}.
-     * <p>
-     * Flat-mapping records might result in an internal data redistribution if a key based operator (like an aggregation
-     * or join) is applied to the result {@code KStream}. (cf. {@link #flatMapValues(ValueMapper)})
-     *
-     * @param mapper a {@link KeyValueMapper} that computes the new output records
-     * @param named  a {@link Named} config used to name the processor in the topology
-     * @param <KR>   the key type of the result stream
-     * @param <VR>   the value type of the result stream
-     * @return a {@code KStream} that contains more or less records with new key and value (possibly of different type)
-     * @see #selectKey(KeyValueMapper)
-     * @see #map(KeyValueMapper)
-     * @see #mapValues(ValueMapper)
-     * @see #mapValues(ValueMapperWithKey)
-     * @see #flatMapValues(ValueMapper)
-     * @see #flatMapValues(ValueMapperWithKey)
-     * @see #process(ProcessorSupplier, String...)
-     * @see #processValues(FixedKeyProcessorSupplier, String...)
-     * @see #processValues(FixedKeyProcessorSupplier, Named, String...)
+     * <p>Takes an additional {@link Named} parameter that is used to name the processor in the topology.
      */
-    <KR, VR> KStream<KR, VR> flatMap(final KeyValueMapper<? super K, ? super V, ? extends Iterable<? extends KeyValue<? extends KR, ? extends VR>>> mapper,
-                                     final Named named);
+    <KR, VOut> KStream<KR, VOut> flatMap(final KeyValueMapper<? super K, ? super V, ? extends Iterable<? extends KeyValue<? extends KR, ? extends VOut>>> mapper,
+                                         final Named named);
 
     /**
-     * Create a new {@code KStream} by transforming the value of each record in this stream into zero or more values
-     * with the same key in the new stream.
-     * Transform the value of each input record into zero or more records with the same (unmodified) key in the output
-     * stream (value type can be altered arbitrarily).
-     * The provided {@link ValueMapper} is applied to each input record and computes zero or more output values.
-     * Thus, an input record {@code <K,V>} can be transformed into output records {@code <K:V'>, <K:V''>, ...}.
+     * Create a new {@code KStream} that consists of zero or more records with modified value for each record
+     * in this stream.
+     * The provided {@link ValueMapper} is applied to each input record value and computes zero or more output values
+     * (possibly of a different type) for it.
+     * Thus, an input record {@code <K,V>} can be transformed into output records {@code <K:V'>, <K:V'>, ...}.
+     * If you need read access to the input record key, use {@link #flatMapValues(ValueMapperWithKey)}.
      * This is a stateless record-by-record operation (cf. {@link #processValues(FixedKeyProcessorSupplier, String...)}
      * for stateful value processing).
-     * <p>
-     * The example below splits input records {@code <null:String>} containing sentences as values into their words.
+     *
+     * <p>The example below splits input records {@code <null:String>} containing sentences as values into their words.
      * <pre>{@code
      * KStream<byte[], String> inputStream = builder.stream("topic");
      * KStream<byte[], String> outputStream = inputStream.flatMapValues(new ValueMapper<String, Iterable<String>> {
@@ -374,159 +332,48 @@ public interface KStream<K, V> {
      * }</pre>
      * The provided {@link ValueMapper} must return an {@link Iterable} (e.g., any {@link java.util.Collection} type)
      * and the return value must not be {@code null}.
-     * <p>
-     * Splitting a record into multiple records with the same key preserves data co-location with respect to the key.
-     * Thus, <em>no</em> internal data redistribution is required if a key based operator (like an aggregation or join)
-     * is applied to the result {@code KStream}. (cf. {@link #flatMap(KeyValueMapper)})
      *
-     * @param mapper a {@link ValueMapper} the computes the new output values
-     * @param <VR>      the value type of the result stream
-     * @return a {@code KStream} that contains more or less records with unmodified keys and new values of different type
+     * <p>Splitting a record into multiple records with the same key preserves data co-location with respect to the key.
+     * Thus, <em>no</em> internal data redistribution is required if a key-based operator (like an aggregation or join)
+     * is applied to the result {@code KStream} (cf. {@link #flatMap(KeyValueMapper)}).
+     *
+     * @param mapper
+     *        a {@link ValueMapper ValueMapper&lt;V, Iterable&lt;V&gt;&gt;} that computes zero or more new values
+     *        for each input record
+     *
+     * @param <VOut> the value type of the result stream
+     *
+     * @return A {@code KStream} that contains more or fewer records with unmodified keys but new values (possibly of a different type).
+     *
      * @see #selectKey(KeyValueMapper)
      * @see #map(KeyValueMapper)
      * @see #flatMap(KeyValueMapper)
      * @see #mapValues(ValueMapper)
-     * @see #mapValues(ValueMapperWithKey)
-     * @see #process(ProcessorSupplier, String...)
-     * @see #processValues(FixedKeyProcessorSupplier, String...)
-     * @see #processValues(FixedKeyProcessorSupplier, Named, String...)
      */
-    <VR> KStream<K, VR> flatMapValues(final ValueMapper<? super V, ? extends Iterable<? extends VR>> mapper);
+    <VOut> KStream<K, VOut> flatMapValues(final ValueMapper<? super V, ? extends Iterable<? extends VOut>> mapper);
 
     /**
-     * Create a new {@code KStream} by transforming the value of each record in this stream into zero or more values
-     * with the same key in the new stream.
-     * Transform the value of each input record into zero or more records with the same (unmodified) key in the output
-     * stream (value type can be altered arbitrarily).
-     * The provided {@link ValueMapper} is applied to each input record and computes zero or more output values.
-     * Thus, an input record {@code <K,V>} can be transformed into output records {@code <K:V'>, <K:V''>, ...}.
-     * This is a stateless record-by-record operation (cf. {@link #processValues(FixedKeyProcessorSupplier, String...)}
-     * for stateful value processing).
-     * <p>
-     * The example below splits input records {@code <null:String>} containing sentences as values into their words.
-     * <pre>{@code
-     * KStream<byte[], String> inputStream = builder.stream("topic");
-     * KStream<byte[], String> outputStream = inputStream.flatMapValues(new ValueMapper<String, Iterable<String>> {
-     *     Iterable<String> apply(String value) {
-     *         return Arrays.asList(value.split(" "));
-     *     }
-     * });
-     * }</pre>
-     * The provided {@link ValueMapper} must return an {@link Iterable} (e.g., any {@link java.util.Collection} type)
-     * and the return value must not be {@code null}.
-     * <p>
-     * Splitting a record into multiple records with the same key preserves data co-location with respect to the key.
-     * Thus, <em>no</em> internal data redistribution is required if a key based operator (like an aggregation or join)
-     * is applied to the result {@code KStream}. (cf. {@link #flatMap(KeyValueMapper)})
+     * See {@link #flatMapValues(ValueMapper)}.
      *
-     * @param mapper a {@link ValueMapper} the computes the new output values
-     * @param named  a {@link Named} config used to name the processor in the topology
-     * @param <VR>      the value type of the result stream
-     * @return a {@code KStream} that contains more or less records with unmodified keys and new values of different type
-     * @see #selectKey(KeyValueMapper)
-     * @see #map(KeyValueMapper)
-     * @see #flatMap(KeyValueMapper)
-     * @see #mapValues(ValueMapper)
-     * @see #mapValues(ValueMapperWithKey)
-     * @see #process(ProcessorSupplier, String...)
-     * @see #processValues(FixedKeyProcessorSupplier, String...)
-     * @see #processValues(FixedKeyProcessorSupplier, Named, String...)
+     * <p>Takes an additional {@link Named} parameter that is used to name the processor in the topology.
      */
-    <VR> KStream<K, VR> flatMapValues(final ValueMapper<? super V, ? extends Iterable<? extends VR>> mapper,
-                                      final Named named);
-    /**
-     * Create a new {@code KStream} by transforming the value of each record in this stream into zero or more values
-     * with the same key in the new stream.
-     * Transform the value of each input record into zero or more records with the same (unmodified) key in the output
-     * stream (value type can be altered arbitrarily).
-     * The provided {@link ValueMapperWithKey} is applied to each input record and computes zero or more output values.
-     * Thus, an input record {@code <K,V>} can be transformed into output records {@code <K:V'>, <K:V''>, ...}.
-     * This is a stateless record-by-record operation (cf. {@link #processValues(FixedKeyProcessorSupplier, String...)}
-     * for stateful value processing).
-     * <p>
-     * The example below splits input records {@code <Integer:String>}, with key=1, containing sentences as values
-     * into their words.
-     * <pre>{@code
-     * KStream<Integer, String> inputStream = builder.stream("topic");
-     * KStream<Integer, String> outputStream = inputStream.flatMapValues(new ValueMapper<Integer, String, Iterable<String>> {
-     *     Iterable<Integer, String> apply(Integer readOnlyKey, String value) {
-     *         if(readOnlyKey == 1) {
-     *             return Arrays.asList(value.split(" "));
-     *         } else {
-     *             return Arrays.asList(value);
-     *         }
-     *     }
-     * });
-     * }</pre>
-     * The provided {@link ValueMapperWithKey} must return an {@link Iterable} (e.g., any {@link java.util.Collection} type)
-     * and the return value must not be {@code null}.
-     * <p>
-     * Note that the key is read-only and should not be modified, as this can lead to corrupt partitioning.
-     * So, splitting a record into multiple records with the same key preserves data co-location with respect to the key.
-     * Thus, <em>no</em> internal data redistribution is required if a key based operator (like an aggregation or join)
-     * is applied to the result {@code KStream}. (cf. {@link #flatMap(KeyValueMapper)})
-     *
-     * @param mapper a {@link ValueMapperWithKey} the computes the new output values
-     * @param <VR>      the value type of the result stream
-     * @return a {@code KStream} that contains more or less records with unmodified keys and new values of different type
-     * @see #selectKey(KeyValueMapper)
-     * @see #map(KeyValueMapper)
-     * @see #flatMap(KeyValueMapper)
-     * @see #mapValues(ValueMapper)
-     * @see #mapValues(ValueMapperWithKey)
-     * @see #process(ProcessorSupplier, String...)
-     * @see #processValues(FixedKeyProcessorSupplier, String...)
-     * @see #processValues(FixedKeyProcessorSupplier, Named, String...)
-     */
-    <VR> KStream<K, VR> flatMapValues(final ValueMapperWithKey<? super K, ? super V, ? extends Iterable<? extends VR>> mapper);
+    <VOut> KStream<K, VOut> flatMapValues(final ValueMapper<? super V, ? extends Iterable<? extends VOut>> mapper,
+                                          final Named named);
 
     /**
-     * Create a new {@code KStream} by transforming the value of each record in this stream into zero or more values
-     * with the same key in the new stream.
-     * Transform the value of each input record into zero or more records with the same (unmodified) key in the output
-     * stream (value type can be altered arbitrarily).
-     * The provided {@link ValueMapperWithKey} is applied to each input record and computes zero or more output values.
-     * Thus, an input record {@code <K,V>} can be transformed into output records {@code <K:V'>, <K:V''>, ...}.
-     * This is a stateless record-by-record operation (cf. {@link #processValues(FixedKeyProcessorSupplier, String...)}
-     * for stateful value processing).
-     * <p>
-     * The example below splits input records {@code <Integer:String>}, with key=1, containing sentences as values
-     * into their words.
-     * <pre>{@code
-     * KStream<Integer, String> inputStream = builder.stream("topic");
-     * KStream<Integer, String> outputStream = inputStream.flatMapValues(new ValueMapper<Integer, String, Iterable<String>> {
-     *     Iterable<Integer, String> apply(Integer readOnlyKey, String value) {
-     *         if(readOnlyKey == 1) {
-     *             return Arrays.asList(value.split(" "));
-     *         } else {
-     *             return Arrays.asList(value);
-     *         }
-     *     }
-     * });
-     * }</pre>
-     * The provided {@link ValueMapperWithKey} must return an {@link Iterable} (e.g., any {@link java.util.Collection} type)
-     * and the return value must not be {@code null}.
-     * <p>
-     * Note that the key is read-only and should not be modified, as this can lead to corrupt partitioning.
-     * So, splitting a record into multiple records with the same key preserves data co-location with respect to the key.
-     * Thus, <em>no</em> internal data redistribution is required if a key based operator (like an aggregation or join)
-     * is applied to the result {@code KStream}. (cf. {@link #flatMap(KeyValueMapper)})
+     * See {@link #flatMapValues(ValueMapper)}.
      *
-     * @param mapper a {@link ValueMapperWithKey} the computes the new output values
-     * @param named  a {@link Named} config used to name the processor in the topology
-     * @param <VR>      the value type of the result stream
-     * @return a {@code KStream} that contains more or less records with unmodified keys and new values of different type
-     * @see #selectKey(KeyValueMapper)
-     * @see #map(KeyValueMapper)
-     * @see #flatMap(KeyValueMapper)
-     * @see #mapValues(ValueMapper)
-     * @see #mapValues(ValueMapperWithKey)
-     * @see #process(ProcessorSupplier, String...)
-     * @see #processValues(FixedKeyProcessorSupplier, String...)
-     * @see #processValues(FixedKeyProcessorSupplier, Named, String...)
+     * <p>Note that the key is read-only and must not be modified, as this can lead to corrupt partitioning.
      */
-    <VR> KStream<K, VR> flatMapValues(final ValueMapperWithKey<? super K, ? super V, ? extends Iterable<? extends VR>> mapper,
-                                      final Named named);
+    <VOut> KStream<K, VOut> flatMapValues(final ValueMapperWithKey<? super K, ? super V, ? extends Iterable<? extends VOut>> mapper);
+
+    /**
+     * See {@link #flatMapValues(ValueMapperWithKey)}.
+     *
+     * <p>Takes an additional {@link Named} parameter that is used to name the processor in the topology.
+     */
+    <VOut> KStream<K, VOut> flatMapValues(final ValueMapperWithKey<? super K, ? super V, ? extends Iterable<? extends VOut>> mapper,
+                                          final Named named);
 
     /**
      * Print the records of this {@code KStream} using the options provided by {@link Printed}.
@@ -2427,7 +2274,7 @@ public interface KStream<K, V> {
      * Even if any upstream operation was key-changing, no auto-repartition is triggered.
      * If repartitioning is required, a call to {@link #repartition()} should be performed before {@code process()}.
      * <p>
-     * Processing records might result in an internal data redistribution if a key based operator (like an aggregation
+     * Processing records might result in an internal data redistribution if a key-based operator (like an aggregation
      * or join) is applied to the result {@code KStream}.
      * (cf. {@link #processValues(FixedKeyProcessorSupplier, String...)})
      *

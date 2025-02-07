@@ -134,7 +134,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.filter(null));
-        assertThat(exception.getMessage(), equalTo("predicate can't be null"));
+        assertThat(exception.getMessage(), equalTo("predicate cannot be null"));
     }
 
     @Test
@@ -142,7 +142,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.filter(null, Named.as("filter")));
-        assertThat(exception.getMessage(), equalTo("predicate can't be null"));
+        assertThat(exception.getMessage(), equalTo("predicate cannot be null"));
     }
 
     @Test
@@ -150,7 +150,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.filter((k, v) -> true, null));
-        assertThat(exception.getMessage(), equalTo("named can't be null"));
+        assertThat(exception.getMessage(), equalTo("named cannot be null"));
     }
 
     @Test
@@ -158,7 +158,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.filterNot(null));
-        assertThat(exception.getMessage(), equalTo("predicate can't be null"));
+        assertThat(exception.getMessage(), equalTo("predicate cannot be null"));
     }
 
     @Test
@@ -166,7 +166,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.filterNot(null, Named.as("filter")));
-        assertThat(exception.getMessage(), equalTo("predicate can't be null"));
+        assertThat(exception.getMessage(), equalTo("predicate cannot be null"));
     }
 
     @Test
@@ -174,7 +174,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.filterNot((k, v) -> true, null));
-        assertThat(exception.getMessage(), equalTo("named can't be null"));
+        assertThat(exception.getMessage(), equalTo("named cannot be null"));
     }
 
     @Test
@@ -182,7 +182,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.selectKey(null));
-        assertThat(exception.getMessage(), equalTo("mapper can't be null"));
+        assertThat(exception.getMessage(), equalTo("mapper cannot be null"));
     }
 
     @Test
@@ -190,7 +190,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.selectKey(null, Named.as("keySelector")));
-        assertThat(exception.getMessage(), equalTo("mapper can't be null"));
+        assertThat(exception.getMessage(), equalTo("mapper cannot be null"));
     }
 
     @Test
@@ -198,7 +198,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.selectKey((k, v) -> k, null));
-        assertThat(exception.getMessage(), equalTo("named can't be null"));
+        assertThat(exception.getMessage(), equalTo("named cannot be null"));
     }
 
     @Test
@@ -206,7 +206,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.map(null));
-        assertThat(exception.getMessage(), equalTo("mapper can't be null"));
+        assertThat(exception.getMessage(), equalTo("mapper cannot be null"));
     }
 
     @Test
@@ -214,7 +214,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.map(null, Named.as("map")));
-        assertThat(exception.getMessage(), equalTo("mapper can't be null"));
+        assertThat(exception.getMessage(), equalTo("mapper cannot be null"));
     }
 
     @Test
@@ -222,7 +222,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.map(KeyValue::pair, null));
-        assertThat(exception.getMessage(), equalTo("named can't be null"));
+        assertThat(exception.getMessage(), equalTo("named cannot be null"));
     }
 
     @Test
@@ -238,7 +238,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.mapValues((ValueMapperWithKey<Object, Object, Object>) null));
-        assertThat(exception.getMessage(), equalTo("valueMapperWithKey can't be null"));
+        assertThat(exception.getMessage(), equalTo("valueMapperWithKey cannot be null"));
     }
 
     @Test
@@ -256,7 +256,7 @@ public class KStreamImplTest {
             () -> testStream.mapValues(
                 (ValueMapperWithKey<Object, Object, Object>) null,
                 Named.as("valueMapperWithKey")));
-        assertThat(exception.getMessage(), equalTo("valueMapperWithKey can't be null"));
+        assertThat(exception.getMessage(), equalTo("valueMapperWithKey cannot be null"));
     }
 
     @Test
@@ -264,7 +264,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.mapValues(v -> v, null));
-        assertThat(exception.getMessage(), equalTo("named can't be null"));
+        assertThat(exception.getMessage(), equalTo("named cannot be null"));
     }
 
     @Test
@@ -272,7 +272,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.mapValues((k, v) -> v, null));
-        assertThat(exception.getMessage(), equalTo("named can't be null"));
+        assertThat(exception.getMessage(), equalTo("named cannot be null"));
     }
 
     @Test
@@ -280,7 +280,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.flatMap(null));
-        assertThat(exception.getMessage(), equalTo("mapper can't be null"));
+        assertThat(exception.getMessage(), equalTo("mapper cannot be null"));
     }
 
     @Test
@@ -288,7 +288,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.flatMap(null, Named.as("flatMapper")));
-        assertThat(exception.getMessage(), equalTo("mapper can't be null"));
+        assertThat(exception.getMessage(), equalTo("mapper cannot be null"));
     }
 
     @Test
@@ -296,7 +296,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.flatMap((k, v) -> Collections.singleton(new KeyValue<>(k, v)), null));
-        assertThat(exception.getMessage(), equalTo("named can't be null"));
+        assertThat(exception.getMessage(), equalTo("named cannot be null"));
     }
 
     @Test
@@ -312,7 +312,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.flatMapValues((ValueMapperWithKey<Object, Object, ? extends Iterable<Object>>) null));
-        assertThat(exception.getMessage(), equalTo("valueMapper can't be null"));
+        assertThat(exception.getMessage(), equalTo("valueMapper cannot be null"));
     }
 
     @Test
@@ -332,7 +332,7 @@ public class KStreamImplTest {
             () -> testStream.flatMapValues(
                 (ValueMapperWithKey<Object, Object, ? extends Iterable<Object>>) null,
                 Named.as("flatValueMapperWithKey")));
-        assertThat(exception.getMessage(), equalTo("valueMapper can't be null"));
+        assertThat(exception.getMessage(), equalTo("valueMapper cannot be null"));
     }
 
     @Test
@@ -340,7 +340,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.flatMapValues(v -> Collections.emptyList(), null));
-        assertThat(exception.getMessage(), equalTo("named can't be null"));
+        assertThat(exception.getMessage(), equalTo("named cannot be null"));
     }
 
     @Test
@@ -348,7 +348,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.flatMapValues((k, v) -> Collections.emptyList(), null));
-        assertThat(exception.getMessage(), equalTo("named can't be null"));
+        assertThat(exception.getMessage(), equalTo("named cannot be null"));
     }
 
     @Test
@@ -356,7 +356,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.print(null));
-        assertThat(exception.getMessage(), equalTo("printed can't be null"));
+        assertThat(exception.getMessage(), equalTo("printed cannot be null"));
     }
 
     @Test
@@ -364,7 +364,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.foreach(null));
-        assertThat(exception.getMessage(), equalTo("action can't be null"));
+        assertThat(exception.getMessage(), equalTo("action cannot be null"));
     }
 
     @Test
@@ -372,7 +372,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.foreach(null, Named.as("foreach")));
-        assertThat(exception.getMessage(), equalTo("action can't be null"));
+        assertThat(exception.getMessage(), equalTo("action cannot be null"));
     }
 
     @Test
@@ -380,7 +380,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.foreach((k, v) -> { }, null));
-        assertThat(exception.getMessage(), equalTo("named can't be null"));
+        assertThat(exception.getMessage(), equalTo("named cannot be null"));
     }
 
     @Test
@@ -388,7 +388,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.peek(null));
-        assertThat(exception.getMessage(), equalTo("action can't be null"));
+        assertThat(exception.getMessage(), equalTo("action cannot be null"));
     }
 
     @Test
@@ -396,7 +396,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.peek(null, Named.as("peek")));
-        assertThat(exception.getMessage(), equalTo("action can't be null"));
+        assertThat(exception.getMessage(), equalTo("action cannot be null"));
     }
 
     @Test
@@ -404,7 +404,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.peek((k, v) -> { }, null));
-        assertThat(exception.getMessage(), equalTo("named can't be null"));
+        assertThat(exception.getMessage(), equalTo("named cannot be null"));
     }
 
     @Test
@@ -412,7 +412,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.merge(null));
-        assertThat(exception.getMessage(), equalTo("stream can't be null"));
+        assertThat(exception.getMessage(), equalTo("stream cannot be null"));
     }
 
     @Test
@@ -420,7 +420,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.merge(null, Named.as("merge")));
-        assertThat(exception.getMessage(), equalTo("stream can't be null"));
+        assertThat(exception.getMessage(), equalTo("stream cannot be null"));
     }
 
     @Test
@@ -428,7 +428,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.merge(testStream, null));
-        assertThat(exception.getMessage(), equalTo("named can't be null"));
+        assertThat(exception.getMessage(), equalTo("named cannot be null"));
     }
 
     @Test

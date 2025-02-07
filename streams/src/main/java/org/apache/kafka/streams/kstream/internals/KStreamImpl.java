@@ -149,8 +149,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     @Override
     public KStream<K, V> filter(final Predicate<? super K, ? super V> predicate,
                                 final Named named) {
-        Objects.requireNonNull(predicate, "predicate can't be null");
-        Objects.requireNonNull(named, "named can't be null");
+        Objects.requireNonNull(predicate, "predicate cannot be null");
+        Objects.requireNonNull(named, "named cannot be null");
 
         final String name = new NamedInternal(named).orElseGenerateWithPrefix(builder, FILTER_NAME);
         final ProcessorParameters<K, V, K, V> processorParameters =
@@ -178,8 +178,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     @Override
     public KStream<K, V> filterNot(final Predicate<? super K, ? super V> predicate,
                                    final Named named) {
-        Objects.requireNonNull(predicate, "predicate can't be null");
-        Objects.requireNonNull(named, "named can't be null");
+        Objects.requireNonNull(predicate, "predicate cannot be null");
+        Objects.requireNonNull(named, "named cannot be null");
 
         final String name = new NamedInternal(named).orElseGenerateWithPrefix(builder, FILTER_NAME);
         final ProcessorParameters<K, V, K, V> processorParameters =
@@ -207,8 +207,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     @Override
     public <KOut> KStream<KOut, V> selectKey(final KeyValueMapper<? super K, ? super V, ? extends KOut> mapper,
                                              final Named named) {
-        Objects.requireNonNull(mapper, "mapper can't be null");
-        Objects.requireNonNull(named, "named can't be null");
+        Objects.requireNonNull(mapper, "mapper cannot be null");
+        Objects.requireNonNull(named, "named cannot be null");
 
         final ProcessorGraphNode<K, V> selectKeyProcessorNode = internalSelectKey(mapper, new NamedInternal(named));
         selectKeyProcessorNode.setKeyChangingOperation(true);
@@ -255,8 +255,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     @Override
     public <VOut> KStream<K, VOut> mapValues(final ValueMapperWithKey<? super K, ? super V, ? extends VOut> valueMapperWithKey,
                                              final Named named) {
-        Objects.requireNonNull(valueMapperWithKey, "valueMapperWithKey can't be null");
-        Objects.requireNonNull(named, "named can't be null");
+        Objects.requireNonNull(valueMapperWithKey, "valueMapperWithKey cannot be null");
+        Objects.requireNonNull(named, "named cannot be null");
 
         final String name = new NamedInternal(named).orElseGenerateWithPrefix(builder, MAPVALUES_NAME);
         final ProcessorParameters<K, V, K, VOut> processorParameters =
@@ -286,8 +286,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     @Override
     public <KOut, VOut> KStream<KOut, VOut> map(final KeyValueMapper<? super K, ? super V, ? extends KeyValue<? extends KOut, ? extends VOut>> mapper,
                                                 final Named named) {
-        Objects.requireNonNull(mapper, "mapper can't be null");
-        Objects.requireNonNull(named, "named can't be null");
+        Objects.requireNonNull(mapper, "mapper cannot be null");
+        Objects.requireNonNull(named, "named cannot be null");
 
         final String name = new NamedInternal(named).orElseGenerateWithPrefix(builder, MAP_NAME);
         final ProcessorParameters<K, V, KOut, VOut> processorParameters =
@@ -310,18 +310,18 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
     @Override
-    public <KR, VR> KStream<KR, VR> flatMap(final KeyValueMapper<? super K, ? super V, ? extends Iterable<? extends KeyValue<? extends KR, ? extends VR>>> mapper) {
+    public <KOut, VOut> KStream<KOut, VOut> flatMap(final KeyValueMapper<? super K, ? super V, ? extends Iterable<? extends KeyValue<? extends KOut, ? extends VOut>>> mapper) {
         return flatMap(mapper, NamedInternal.empty());
     }
 
     @Override
-    public <KR, VR> KStream<KR, VR> flatMap(final KeyValueMapper<? super K, ? super V, ? extends Iterable<? extends KeyValue<? extends KR, ? extends VR>>> mapper,
-                                            final Named named) {
-        Objects.requireNonNull(mapper, "mapper can't be null");
-        Objects.requireNonNull(named, "named can't be null");
+    public <KOut, VOut> KStream<KOut, VOut> flatMap(final KeyValueMapper<? super K, ? super V, ? extends Iterable<? extends KeyValue<? extends KOut, ? extends VOut>>> mapper,
+                                                    final Named named) {
+        Objects.requireNonNull(mapper, "mapper cannot be null");
+        Objects.requireNonNull(named, "named cannot be null");
 
         final String name = new NamedInternal(named).orElseGenerateWithPrefix(builder, FLATMAP_NAME);
-        final ProcessorParameters<K, V, KR, VR> processorParameters =
+        final ProcessorParameters<K, V, KOut, VOut> processorParameters =
             new ProcessorParameters<>(new KStreamFlatMap<>(mapper), name);
         final ProcessorGraphNode<K, V> flatMapNode =
             new ProcessorGraphNode<>(name, processorParameters);
@@ -334,29 +334,29 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
     @Override
-    public <VR> KStream<K, VR> flatMapValues(final ValueMapper<? super V, ? extends Iterable<? extends VR>> mapper) {
+    public <VOut> KStream<K, VOut> flatMapValues(final ValueMapper<? super V, ? extends Iterable<? extends VOut>> mapper) {
         return flatMapValues(withKey(mapper));
     }
 
     @Override
-    public <VR> KStream<K, VR> flatMapValues(final ValueMapper<? super V, ? extends Iterable<? extends VR>> mapper,
-                                             final Named named) {
+    public <VOut> KStream<K, VOut> flatMapValues(final ValueMapper<? super V, ? extends Iterable<? extends VOut>> mapper,
+                                                 final Named named) {
         return flatMapValues(withKey(mapper), named);
     }
 
     @Override
-    public <VR> KStream<K, VR> flatMapValues(final ValueMapperWithKey<? super K, ? super V, ? extends Iterable<? extends VR>> mapper) {
+    public <VOut> KStream<K, VOut> flatMapValues(final ValueMapperWithKey<? super K, ? super V, ? extends Iterable<? extends VOut>> mapper) {
         return flatMapValues(mapper, NamedInternal.empty());
     }
 
     @Override
-    public <VR> KStream<K, VR> flatMapValues(final ValueMapperWithKey<? super K, ? super V, ? extends Iterable<? extends VR>> valueMapper,
-                                             final Named named) {
-        Objects.requireNonNull(valueMapper, "valueMapper can't be null");
-        Objects.requireNonNull(named, "named can't be null");
+    public <VOut> KStream<K, VOut> flatMapValues(final ValueMapperWithKey<? super K, ? super V, ? extends Iterable<? extends VOut>> valueMapper,
+                                                 final Named named) {
+        Objects.requireNonNull(valueMapper, "valueMapper cannot be null");
+        Objects.requireNonNull(named, "named cannot be null");
 
         final String name = new NamedInternal(named).orElseGenerateWithPrefix(builder, FLATMAPVALUES_NAME);
-        final ProcessorParameters<K, V, K, VR> processorParameters =
+        final ProcessorParameters<K, V, K, VOut> processorParameters =
             new ProcessorParameters<>(new KStreamFlatMapValues<>(valueMapper), name);
         final ProcessorGraphNode<K, V> flatMapValuesNode =
             new ProcessorGraphNode<>(name, processorParameters);
@@ -377,7 +377,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
     @Override
     public void print(final Printed<K, V> printed) {
-        Objects.requireNonNull(printed, "printed can't be null");
+        Objects.requireNonNull(printed, "printed cannot be null");
 
         final PrintedInternal<K, V> printedInternal = new PrintedInternal<>(printed);
         final String name = new NamedInternal(printedInternal.name()).orElseGenerateWithPrefix(builder, PRINTING_NAME);
@@ -397,8 +397,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     @Override
     public void foreach(final ForeachAction<? super K, ? super V> action,
                         final Named named) {
-        Objects.requireNonNull(action, "action can't be null");
-        Objects.requireNonNull(named, "named can't be null");
+        Objects.requireNonNull(action, "action cannot be null");
+        Objects.requireNonNull(named, "named cannot be null");
 
         final String name = new NamedInternal(named).orElseGenerateWithPrefix(builder, FOREACH_NAME);
         final ProcessorParameters<K, V, Void, Void> processorParameters =
@@ -417,8 +417,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     @Override
     public KStream<K, V> peek(final ForeachAction<? super K, ? super V> action,
                               final Named named) {
-        Objects.requireNonNull(action, "action can't be null");
-        Objects.requireNonNull(named, "named can't be null");
+        Objects.requireNonNull(action, "action cannot be null");
+        Objects.requireNonNull(named, "named cannot be null");
 
         final String name = new NamedInternal(named).orElseGenerateWithPrefix(builder, PEEK_NAME);
         final ProcessorParameters<K, V, K, V> processorParameters =
@@ -445,7 +445,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
     @Override
     public BranchedKStream<K, V> split(final Named named) {
-        Objects.requireNonNull(named, "named can't be null");
+        Objects.requireNonNull(named, "named cannot be null");
         return new BranchedKStreamImpl<>(this, repartitionRequired, new NamedInternal(named));
     }
 
@@ -457,8 +457,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     @Override
     public KStream<K, V> merge(final KStream<K, V> stream,
                                final Named named) {
-        Objects.requireNonNull(stream, "stream can't be null");
-        Objects.requireNonNull(named, "named can't be null");
+        Objects.requireNonNull(stream, "stream cannot be null");
+        Objects.requireNonNull(named, "named cannot be null");
 
         return merge(builder, stream, new NamedInternal(named));
     }
