@@ -345,7 +345,7 @@ public interface KStream<K, V> {
      *
      * @param <VOut> the value type of the result stream
      *
-     * @return A {@code KStream} that contains more or less records with unmodified keys but new values (possibly of a different type).
+     * @return A {@code KStream} that contains more or fewer records with unmodified keys but new values (possibly of a different type).
      *
      * @see #selectKey(KeyValueMapper)
      * @see #map(KeyValueMapper)
