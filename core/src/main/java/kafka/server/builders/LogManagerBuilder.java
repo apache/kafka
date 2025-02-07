@@ -18,9 +18,9 @@
 package kafka.server.builders;
 
 import kafka.log.LogManager;
-import kafka.server.metadata.ConfigRepository;
 
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.metadata.ConfigRepository;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.server.util.Scheduler;

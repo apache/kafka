@@ -423,10 +423,8 @@ public class TopologyTest {
         }
     }
 
-    @Deprecated // testing old PAPI
     @Test
     public void shouldNotAllowToAddGlobalStoreWithSourceNameEqualsProcessorName() {
-        when(globalStoreBuilder.name()).thenReturn("anyName");
         assertThrows(TopologyException.class, () -> topology.addGlobalStore(
             globalStoreBuilder,
             "sameName",

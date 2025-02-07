@@ -89,14 +89,14 @@ public abstract class InterBrokerSendThread extends ShutdownableThread {
     private void drainGeneratedRequests() {
         generateRequests().forEach(request ->
             unsentRequests.put(
-                request.destination,
+                request.destination(),
                 networkClient.newClientRequest(
-                    request.destination.idString(),
-                    request.request,
-                    request.creationTimeMs,
+                    request.destination().idString(),
+                    request.request(),
+                    request.creationTimeMs(),
                     true,
                     requestTimeoutMs,
-                    request.handler
+                    request.handler()
                 )
             )
         );

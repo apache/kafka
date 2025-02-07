@@ -30,7 +30,7 @@ import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
-import org.apache.kafka.common.errors.ProducerFencedException;
+import org.apache.kafka.common.errors.InvalidProducerEpochException;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourceType;
@@ -1225,7 +1225,7 @@ public class ExactlyOnceSourceIntegrationTest {
     private void assertTransactionalProducerIsFenced(KafkaProducer<byte[], byte[]> producer, String topic) {
         producer.beginTransaction();
         assertThrows(
-                ProducerFencedException.class,
+                InvalidProducerEpochException.class,
                 () -> {
                     producer.send(new ProducerRecord<>(topic, new byte[] {69}, new byte[] {96}));
                     producer.commitTransaction();

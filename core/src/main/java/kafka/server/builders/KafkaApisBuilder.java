@@ -29,13 +29,13 @@ import kafka.server.KafkaConfig;
 import kafka.server.MetadataCache;
 import kafka.server.QuotaFactory.QuotaManagers;
 import kafka.server.ReplicaManager;
-import kafka.server.metadata.ConfigRepository;
 import kafka.server.share.SharePartitionManager;
 
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.GroupCoordinator;
 import org.apache.kafka.coordinator.share.ShareCoordinator;
+import org.apache.kafka.metadata.ConfigRepository;
 import org.apache.kafka.server.ClientMetricsManager;
 import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;

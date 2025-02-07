@@ -19,6 +19,7 @@ package org.apache.kafka.server.share.persister;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.DeleteShareGroupStateResponse;
 import org.apache.kafka.common.requests.ReadShareGroupStateResponse;
 import org.apache.kafka.common.requests.ReadShareGroupStateSummaryResponse;
 import org.apache.kafka.common.requests.WriteShareGroupStateResponse;
@@ -280,7 +281,46 @@ public class DefaultStatePersister implements Persister {
      * @return A completable future of DeleteShareGroupStateResult
      */
     public CompletableFuture<DeleteShareGroupStateResult> deleteState(DeleteShareGroupStateParameters request) {
-        throw new RuntimeException("not implemented");
+        try {
+            validate(request);
+        } catch (Exception e) {
+            log.error("Unable to validate delete state request", e);
+            return CompletableFuture.failedFuture(e);
+        }
+        GroupTopicPartitionData<PartitionIdData> gtp = request.groupTopicPartitionData();
+        String groupId = gtp.groupId();
+
+        Map<Uuid, Map<Integer, CompletableFuture<DeleteShareGroupStateResponse>>> futureMap = new HashMap<>();
+        List<PersisterStateManager.DeleteStateHandler> handlers = new ArrayList<>();
+
+        gtp.topicsData().forEach(topicData -> {
+            topicData.partitions().forEach(partitionData -> {
+                CompletableFuture<DeleteShareGroupStateResponse> future = futureMap
+                    .computeIfAbsent(topicData.topicId(), k -> new HashMap<>())
+                    .computeIfAbsent(partitionData.partition(), k -> new CompletableFuture<>());
+
+                handlers.add(
+                    stateManager.new DeleteStateHandler(
+                        groupId,
+                        topicData.topicId(),
+                        partitionData.partition(),
+                        future,
+                        null
+                    )
+                );
+            });
+        });
+
+        for (PersisterStateManager.PersisterStateManagerHandler handler : handlers) {
+            stateManager.enqueue(handler);
+        }
+
+        CompletableFuture<Void> combinedFuture = CompletableFuture.allOf(
+            handlers.stream()
+                .map(PersisterStateManager.DeleteStateHandler::result)
+                .toArray(CompletableFuture[]::new));
+
+        return combinedFuture.thenApply(v -> deleteResponsesToResult(futureMap));
     }
 
     /**
@@ -384,6 +424,55 @@ public class DefaultStatePersister implements Persister {
             .build();
     }
 
+    /**
+     * Takes in a list of COMPLETED futures and combines the results,
+     * taking care of errors if any, into a single DeleteShareGroupStateResult
+     *
+     * @param futureMap - HashMap of {topic -> {partition -> future}}
+     * @return Object representing combined result of type DeleteShareGroupStateResult
+     */
+    // visible for testing
+    DeleteShareGroupStateResult deleteResponsesToResult(
+        Map<Uuid, Map<Integer, CompletableFuture<DeleteShareGroupStateResponse>>> futureMap
+    ) {
+        List<TopicData<PartitionErrorData>> topicsData = futureMap.keySet().stream()
+            .map(topicId -> {
+                List<PartitionErrorData> partitionErrorData = futureMap.get(topicId).entrySet().stream()
+                    .map(partitionFuture -> {
+                        int partition = partitionFuture.getKey();
+                        CompletableFuture<DeleteShareGroupStateResponse> future = partitionFuture.getValue();
+                        try {
+                            // already completed because of allOf call in the caller
+                            DeleteShareGroupStateResponse partitionResponse = future.join();
+                            return partitionResponse.data().results().get(0).partitions().stream()
+                                .map(partitionResult -> PartitionFactory.newPartitionErrorData(
+                                        partitionResult.partition(),
+                                        partitionResult.errorCode(),
+                                        partitionResult.errorMessage()
+                                    )
+                                )
+                                .toList();
+                        } catch (Exception e) {
+                            log.error("Unexpected exception while getting data from share coordinator", e);
+                            return List.of(
+                                PartitionFactory.newPartitionErrorData(
+                                    partition,
+                                    Errors.UNKNOWN_SERVER_ERROR.code(),   // No specific public error code exists for InterruptedException / ExecutionException
+                                    "Error deleting state from share coordinator: " + e.getMessage()
+                                )
+                            );
+                        }
+                    })
+                    .flatMap(List::stream)
+                    .collect(Collectors.toList());
+                return new TopicData<>(topicId, partitionErrorData);
+            })
+            .collect(Collectors.toList());
+        return new DeleteShareGroupStateResult.Builder()
+            .setTopicsData(topicsData)
+            .build();
+    }
+
     private static void validate(WriteShareGroupStateParameters params) {
         String prefix = "Write share group parameters";
         if (params == null) {
@@ -410,6 +499,18 @@ public class DefaultStatePersister implements Persister {
 
     private static void validate(ReadShareGroupStateSummaryParameters params) {
         String prefix = "Read share group summary parameters";
+        if (params == null) {
+            throw new IllegalArgumentException(prefix + " cannot be null.");
+        }
+        if (params.groupTopicPartitionData() == null) {
+            throw new IllegalArgumentException(prefix + " data cannot be null.");
+        }
+
+        validateGroupTopicPartitionData(prefix, params.groupTopicPartitionData());
+    }
+
+    private static void validate(DeleteShareGroupStateParameters params) {
+        String prefix = "Delete share group parameters";
         if (params == null) {
             throw new IllegalArgumentException(prefix + " cannot be null.");
         }
