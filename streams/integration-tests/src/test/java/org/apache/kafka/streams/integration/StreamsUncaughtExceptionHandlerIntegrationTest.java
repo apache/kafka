@@ -192,7 +192,7 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
         }
 
         @Override
-        public void init(final ProcessorContext<KOut, VOut> context) {} {
+        public void init(final ProcessorContext<KOut, VOut> context) {
             this.context = context;
         }
 
