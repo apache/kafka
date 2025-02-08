@@ -35,11 +35,13 @@ public class ListOffsetsPartitionStatus {
     private ListOffsetsPartitionStatus(
         Optional<AsyncOffsetReadFutureHolder<FileRecordsOrError>> futureHolderOpt,
         Optional<Long> lastFetchableOffset,
-        Optional<ApiException> maybeOffsetsError
+        Optional<ApiException> maybeOffsetsError,
+        Optional<ListOffsetsPartitionResponse> responseOpt
     ) {
         this.futureHolderOpt = futureHolderOpt;
         this.lastFetchableOffset = lastFetchableOffset;
         this.maybeOffsetsError = maybeOffsetsError;
+        this.responseOpt = responseOpt;
     }
     
     public static Builder builder() {
@@ -73,13 +75,12 @@ public class ListOffsetsPartitionStatus {
         }
         
         public ListOffsetsPartitionStatus build() {
-            ListOffsetsPartitionStatus listOffsetsPartitionStatus = new ListOffsetsPartitionStatus(
+            return new ListOffsetsPartitionStatus(
                     futureHolderOpt,
                     lastFetchableOffset,
-                    maybeOffsetsError
+                    maybeOffsetsError,
+                    responseOpt
             );
-            listOffsetsPartitionStatus.responseOpt = responseOpt;
-            return listOffsetsPartitionStatus;
         }
         
     }
