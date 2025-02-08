@@ -37,6 +37,7 @@ import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.coordinator.transaction.{TransactionLogConfig, TransactionStateManagerConfig}
 import org.apache.kafka.server.common.{RequestLocal, TransactionVersion}
 import org.apache.kafka.server.config.ServerConfigs
+import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.storage.log.FetchIsolation
 import org.apache.kafka.server.util.Scheduler
 import org.apache.kafka.storage.internals.log.AppendOrigin
@@ -402,9 +403,9 @@ class TransactionStateManager(brokerId: Int,
   /**
    * Enforce always using:
    * <ul>
-   * <li>cleanup policy = compact</li>
-   * <li>compression = none</li>
-   * <li>unclean leader election = disabled</li>
+   * <li>cleanup.policy = compact</li>
+   * <li>compression.type = uncompressed</li>
+   * <li>unclean.leader.election.enable = false</li>
    * </ul>
    *
    * @return transaction topic properties
@@ -413,7 +414,7 @@ class TransactionStateManager(brokerId: Int,
     val props = new Properties
 
     props.put(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, "false")
-    props.put(TopicConfig.COMPRESSION_TYPE_CONFIG, TransactionCoordinator.EnforcedCompression.`type`().name)
+    props.put(TopicConfig.COMPRESSION_TYPE_CONFIG, BrokerCompressionType.UNCOMPRESSED.name)
     props.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT)
     props.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, config.transactionLogMinInsyncReplicas.toString)
     props.put(TopicConfig.SEGMENT_BYTES_CONFIG, config.transactionLogSegmentBytes.toString)
