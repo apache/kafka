@@ -77,9 +77,9 @@ class DelayedRemoteListOffsetsTest {
     })
 
     val statusByPartition = mutable.Map(
-      new TopicPartition("test", 0) -> ListOffsetsPartitionStatus.build(Optional.empty(), Optional.of(holder), Optional.empty(), Optional.empty()),
-      new TopicPartition("test", 1) -> ListOffsetsPartitionStatus.build(Optional.empty(), Optional.of(holder), Optional.empty(), Optional.empty()),
-      new TopicPartition("test1", 0) -> ListOffsetsPartitionStatus.build(Optional.empty(), Optional.of(holder), Optional.empty(), Optional.empty()),
+      new TopicPartition("test", 0) -> ListOffsetsPartitionStatus.builder().futureHolderOpt(Optional.of(holder)).build(), 
+      new TopicPartition("test", 1) -> ListOffsetsPartitionStatus.builder().futureHolderOpt(Optional.of(holder)).build(),
+      new TopicPartition("test1", 0) -> ListOffsetsPartitionStatus.builder().futureHolderOpt(Optional.of(holder)).build(),
     )
 
     val delayedRemoteListOffsets = new DelayedRemoteListOffsets(delayMs, version = 5, statusByPartition, replicaManager, responseCallback)
@@ -129,9 +129,9 @@ class DelayedRemoteListOffsetsTest {
     })
 
     val statusByPartition = mutable.Map(
-      new TopicPartition("test", 0) -> ListOffsetsPartitionStatus.build(Optional.empty(), Optional.of(holder), Optional.empty(), Optional.empty()),
-      new TopicPartition("test", 1) -> ListOffsetsPartitionStatus.build(Optional.empty(), Optional.of(holder), Optional.empty(), Optional.empty()),
-      new TopicPartition("test1", 0) -> ListOffsetsPartitionStatus.build(Optional.empty(), Optional.of(holder), Optional.empty(), Optional.empty())
+      new TopicPartition("test", 0) -> ListOffsetsPartitionStatus.builder().futureHolderOpt(Optional.of(holder)).build(),
+      new TopicPartition("test", 1) -> ListOffsetsPartitionStatus.builder().futureHolderOpt(Optional.of(holder)).build(),
+      new TopicPartition("test1", 0) -> ListOffsetsPartitionStatus.builder().futureHolderOpt(Optional.of(holder)).build()
     )
 
     val delayedRemoteListOffsets = new DelayedRemoteListOffsets(delayMs, version = 5, statusByPartition, replicaManager, responseCallback)
@@ -185,9 +185,9 @@ class DelayedRemoteListOffsetsTest {
     when(errorFutureHolder.jobFuture).thenReturn(jobFuture)
 
     val statusByPartition = mutable.Map(
-      new TopicPartition("test", 0) -> ListOffsetsPartitionStatus.build(Optional.empty(), Optional.of(holder), Optional.empty(), Optional.empty()),
-      new TopicPartition("test", 1) -> ListOffsetsPartitionStatus.build(Optional.empty(), Optional.of(holder), Optional.empty(), Optional.empty()),
-      new TopicPartition("test1", 0) -> ListOffsetsPartitionStatus.build(Optional.empty(), Optional.of(errorFutureHolder), Optional.empty(), Optional.empty())
+      new TopicPartition("test", 0) -> ListOffsetsPartitionStatus.builder().futureHolderOpt(Optional.of(holder)).build(),
+      new TopicPartition("test", 1) -> ListOffsetsPartitionStatus.builder().futureHolderOpt(Optional.of(holder)).build(),
+      new TopicPartition("test1", 0) -> ListOffsetsPartitionStatus.builder().futureHolderOpt(Optional.of(errorFutureHolder)).build() 
     )
 
     val delayedRemoteListOffsets = new DelayedRemoteListOffsets(delayMs, version = 5, statusByPartition, replicaManager, responseCallback)
@@ -242,10 +242,10 @@ class DelayedRemoteListOffsetsTest {
     when(errorFutureHolder.jobFuture).thenReturn(jobFuture)
 
     val statusByPartition = mutable.Map(
-      new TopicPartition("test", 0) -> ListOffsetsPartitionStatus.build(Optional.empty(), Optional.of(holder), Optional.empty(), Optional.empty()),
-      new TopicPartition("test", 1) -> ListOffsetsPartitionStatus.build(Optional.empty(), Optional.of(holder), Optional.empty(), Optional.empty()),
-      new TopicPartition("test1", 0) -> ListOffsetsPartitionStatus.build(Optional.empty(), Optional.of(errorFutureHolder), Optional.empty(), Optional.empty()),
-      new TopicPartition("test1", 1) -> ListOffsetsPartitionStatus.build(Optional.empty(), Optional.of(holder), Optional.empty(), Optional.empty())
+      new TopicPartition("test", 0) -> ListOffsetsPartitionStatus.builder().futureHolderOpt(Optional.of(holder)).build(),
+      new TopicPartition("test", 1) -> ListOffsetsPartitionStatus.builder().futureHolderOpt(Optional.of(holder)).build(),
+      new TopicPartition("test1", 0) -> ListOffsetsPartitionStatus.builder().futureHolderOpt(Optional.of(errorFutureHolder)).build(), 
+      new TopicPartition("test1", 1) -> ListOffsetsPartitionStatus.builder().futureHolderOpt(Optional.of(holder)).build()
     )
 
     val delayedRemoteListOffsets = new DelayedRemoteListOffsets(delayMs, version = 5, statusByPartition, replicaManager, responseCallback)

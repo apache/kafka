@@ -41,20 +41,47 @@ public class ListOffsetsPartitionStatus {
         this.lastFetchableOffset = lastFetchableOffset;
         this.maybeOffsetsError = maybeOffsetsError;
     }
-
-    public static ListOffsetsPartitionStatus build(
-        Optional<ListOffsetsPartitionResponse> responseOpt,
-        Optional<AsyncOffsetReadFutureHolder<FileRecordsOrError>> futureHolderOpt,
-        Optional<Long> lastFetchableOffset,
-        Optional<ApiException> maybeOffsetsError
-    ) {
-        ListOffsetsPartitionStatus status = new ListOffsetsPartitionStatus(
-            futureHolderOpt,
-            lastFetchableOffset,
-            maybeOffsetsError
-        );
-        status.responseOpt = responseOpt;
-        return status;
+    
+    public static Builder builder() {
+        return new Builder();
+    }
+    
+    public static class Builder {
+        private Optional<AsyncOffsetReadFutureHolder<FileRecordsOrError>> futureHolderOpt = Optional.empty();
+        private Optional<Long> lastFetchableOffset = Optional.empty();
+        private Optional<ApiException> maybeOffsetsError = Optional.empty();
+        private volatile Optional<ListOffsetsPartitionResponse> responseOpt = Optional.empty();
+        
+        public Builder futureHolderOpt(Optional<AsyncOffsetReadFutureHolder<FileRecordsOrError>>  futureHolder) {
+            this.futureHolderOpt = futureHolder;
+            return this;
+        }
+        
+        public Builder lastFetchableOffset(Optional<Long> lastFetchableOffset) {
+            this.lastFetchableOffset = lastFetchableOffset;
+            return this;
+        }
+        
+        public Builder maybeOffsetsError(Optional<ApiException> maybeOffsetsError) {
+            this.maybeOffsetsError = maybeOffsetsError;
+            return this;
+        }
+        
+        public Builder responseOpt(Optional<ListOffsetsPartitionResponse> responseOpt) {
+            this.responseOpt = responseOpt;
+            return this;
+        }
+        
+        public ListOffsetsPartitionStatus build() {
+            ListOffsetsPartitionStatus listOffsetsPartitionStatus = new ListOffsetsPartitionStatus(
+                    futureHolderOpt,
+                    lastFetchableOffset,
+                    maybeOffsetsError
+            );
+            listOffsetsPartitionStatus.responseOpt = responseOpt;
+            return listOffsetsPartitionStatus;
+        }
+        
     }
 
     public Optional<AsyncOffsetReadFutureHolder<FileRecordsOrError>> futureHolderOpt() {
