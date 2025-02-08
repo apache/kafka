@@ -61,6 +61,12 @@ import static java.util.Collections.emptyMap;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 
 public class SmokeTestDriver extends SmokeTestUtil {
+    /**
+     * We are creating all records two days in the past, so that we can flush all windows by sending a final record
+     * using the current timestamp, without using timestamps in the future.
+     */
+    private static final long CREATE_TIME_SHIFT_MS = Duration.ofDays(2).toMillis();
+
     private static final String[] NUMERIC_VALUE_TOPICS = {
         "data",
         "echo",
@@ -137,6 +143,8 @@ public class SmokeTestDriver extends SmokeTestUtil {
                 final ProducerRecord<byte[], byte[]> record =
                     new ProducerRecord<>(
                         "data",
+                        null,
+                        System.currentTimeMillis() - CREATE_TIME_SHIFT_MS,
                         stringSerde.serializer().serialize("", key),
                         intSerde.serializer().serialize("", value)
                     );
@@ -146,6 +154,8 @@ public class SmokeTestDriver extends SmokeTestUtil {
                 final ProducerRecord<byte[], byte[]> fkRecord =
                     new ProducerRecord<>(
                         "fk",
+                        null,
+                        System.currentTimeMillis() - CREATE_TIME_SHIFT_MS,
                         intSerde.serializer().serialize("", value),
                         stringSerde.serializer().serialize("", key)
                     );
@@ -198,6 +208,8 @@ public class SmokeTestDriver extends SmokeTestUtil {
                     final ProducerRecord<byte[], byte[]> record =
                         new ProducerRecord<>(
                             "data",
+                            null,
+                            System.currentTimeMillis() - CREATE_TIME_SHIFT_MS,
                             stringSerde.serializer().serialize("", key),
                             intSerde.serializer().serialize("", value)
                         );
@@ -207,6 +219,8 @@ public class SmokeTestDriver extends SmokeTestUtil {
                     final ProducerRecord<byte[], byte[]> fkRecord =
                         new ProducerRecord<>(
                             "fk",
+                            null,
+                            System.currentTimeMillis() - CREATE_TIME_SHIFT_MS,
                             intSerde.serializer().serialize("", value),
                             stringSerde.serializer().serialize("", key)
                         );
@@ -272,7 +286,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
             producer.send(new ProducerRecord<>(
                 partition.topic(),
                 partition.partition(),
-                System.currentTimeMillis() + Duration.ofDays(2).toMillis(),
+                System.currentTimeMillis(),
                 keyBytes,
                 valBytes
             ));
