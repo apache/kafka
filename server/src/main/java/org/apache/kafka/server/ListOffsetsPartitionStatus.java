@@ -29,7 +29,7 @@ public class ListOffsetsPartitionStatus {
     private final Optional<Long> lastFetchableOffset;
     private final Optional<ApiException> maybeOffsetsError;
 
-    private volatile Optional<ListOffsetsPartitionResponse> responseOpt = Optional.empty();
+    private volatile Optional<ListOffsetsPartitionResponse> responseOpt;
     private volatile boolean completed = false;
 
     private ListOffsetsPartitionStatus(
