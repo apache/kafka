@@ -19,7 +19,6 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.consumer.AcknowledgementCommitCallback;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableEventReaper;
@@ -123,7 +122,7 @@ public class ShareConsumerImplTest {
                 new StringDeserializer(),
                 new StringDeserializer(),
                 time,
-                (a, b, c, d, e, f, g) -> applicationEventHandler,
+                (a, b, c, d, e, f, g, h) -> applicationEventHandler,
                 a -> backgroundEventReaper,
                 (a, b, c, d, e) -> fetchCollector,
                 backgroundEventQueue
@@ -169,7 +168,7 @@ public class ShareConsumerImplTest {
 
     @Test
     public void testSuccessfulStartupShutdown() {
-        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
+        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
         consumer = newConsumer(subscriptions);
 
         completeShareAcknowledgeOnCloseApplicationEventSuccessfully();
@@ -198,7 +197,7 @@ public class ShareConsumerImplTest {
 
     @Test
     public void testWakeupBeforeCallingPoll() {
-        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
+        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
         consumer = newConsumer(subscriptions);
 
         final String topicName = "foo";
@@ -216,7 +215,7 @@ public class ShareConsumerImplTest {
 
     @Test
     public void testWakeupAfterEmptyFetch() {
-        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
+        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
         consumer = newConsumer(subscriptions);
 
         final String topicName = "foo";
@@ -235,13 +234,13 @@ public class ShareConsumerImplTest {
 
     @Test
     public void testWakeupAfterNonEmptyFetch() {
-        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
+        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
         consumer = newConsumer(subscriptions);
 
         final String topicName = "foo";
         final int partition = 3;
         final TopicIdPartition tip = new TopicIdPartition(Uuid.randomUuid(), partition, topicName);
-        final ShareInFlightBatch<String, String> batch = new ShareInFlightBatch<>(tip);
+        final ShareInFlightBatch<String, String> batch = new ShareInFlightBatch<>(0, tip);
         batch.addRecord(new ConsumerRecord<>(topicName, partition, 2, "key1", "value1"));
         doAnswer(invocation -> {
             consumer.wakeup();
@@ -262,7 +261,7 @@ public class ShareConsumerImplTest {
 
     @Test
     public void testFailOnClosedConsumer() {
-        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
+        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
         consumer = newConsumer(subscriptions);
 
         completeShareAcknowledgeOnCloseApplicationEventSuccessfully();
@@ -274,7 +273,7 @@ public class ShareConsumerImplTest {
 
     @Test
     public void testVerifyApplicationEventOnShutdown() {
-        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
+        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
         consumer = newConsumer(subscriptions);
 
         completeShareAcknowledgeOnCloseApplicationEventSuccessfully();
@@ -336,7 +335,7 @@ public class ShareConsumerImplTest {
 
     @Test
     public void testSubscribeGeneratesEvent() {
-        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
+        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
         consumer = newConsumer(subscriptions);
 
         String topic = "topic1";
@@ -349,7 +348,7 @@ public class ShareConsumerImplTest {
 
     @Test
     public void testUnsubscribeGeneratesUnsubscribeEvent() {
-        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
+        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
         consumer = newConsumer(subscriptions);
 
         completeShareUnsubscribeApplicationEventSuccessfully(subscriptions);
@@ -361,7 +360,7 @@ public class ShareConsumerImplTest {
 
     @Test
     public void testSubscribeToEmptyListActsAsUnsubscribe() {
-        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
+        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
         consumer = newConsumer(subscriptions);
 
         completeShareUnsubscribeApplicationEventSuccessfully(subscriptions);
@@ -461,12 +460,12 @@ public class ShareConsumerImplTest {
 
     @Test
     public void testEnsurePollEventSentOnConsumerPoll() {
-        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
+        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
         consumer = newConsumer(subscriptions);
 
         final TopicPartition tp = new TopicPartition("topic", 0);
         final TopicIdPartition tip = new TopicIdPartition(Uuid.randomUuid(), tp);
-        final ShareInFlightBatch<String, String> batch = new ShareInFlightBatch<>(tip);
+        final ShareInFlightBatch<String, String> batch = new ShareInFlightBatch<>(0, tip);
         batch.addRecord(new ConsumerRecord<>("topic", 0, 2, "key1", "value1"));
         final ShareFetch<String, String> fetch = ShareFetch.empty();
         fetch.add(tip, batch);

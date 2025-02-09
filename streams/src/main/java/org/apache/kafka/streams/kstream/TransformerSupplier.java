@@ -35,7 +35,6 @@ import java.util.function.Supplier;
  * @see Transformer
  * @see ValueTransformer
  * @see ValueTransformerSupplier
- * @see KStream#transformValues(ValueTransformerSupplier, String...)
  * @deprecated Since 4.0. Use {@link org.apache.kafka.streams.processor.api.ProcessorSupplier api.ProcessorSupplier} instead.
  */
 @Deprecated

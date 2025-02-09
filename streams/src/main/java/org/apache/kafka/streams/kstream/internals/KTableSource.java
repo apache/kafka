@@ -17,12 +17,16 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.api.RecordMetadata;
+import org.apache.kafka.streams.processor.internals.StoreFactory;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.KeyValueStoreWrapper;
 
@@ -30,6 +34,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Objects;
+import java.util.Set;
 
 import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensor;
 import static org.apache.kafka.streams.state.VersionedKeyValueStore.PUT_RETURN_CODE_NOT_PUT;
@@ -40,15 +45,17 @@ public class KTableSource<KIn, VIn> implements ProcessorSupplier<KIn, VIn, KIn, 
     private static final Logger LOG = LoggerFactory.getLogger(KTableSource.class);
 
     private final String storeName;
+    private final StoreFactory storeFactory;
     private String queryableName;
     private boolean sendOldValues;
 
-    public KTableSource(final String storeName, final String queryableName) {
+    public KTableSource(
+            final MaterializedInternal<KIn, VIn, KeyValueStore<Bytes, byte[]>> materialized) {
+        this.storeName = materialized.storeName();
         Objects.requireNonNull(storeName, "storeName can't be null");
-
-        this.storeName = storeName;
-        this.queryableName = queryableName;
+        this.queryableName = materialized.queryableStoreName();
         this.sendOldValues = false;
+        this.storeFactory = new KeyValueStoreMaterializer<>(materialized);
     }
 
     public String queryableName() {
@@ -58,6 +65,15 @@ public class KTableSource<KIn, VIn> implements ProcessorSupplier<KIn, VIn, KIn, 
     @Override
     public Processor<KIn, VIn, KIn, Change<VIn>> get() {
         return new KTableSourceProcessor();
+    }
+
+    @Override
+    public Set<StoreBuilder<?>> stores() {
+        if (materialized()) {
+            return Set.of(new StoreFactory.FactoryWrappingStoreBuilder<>(storeFactory));
+        } else {
+            return null;
+        }
     }
 
     // when source ktable requires sending old values, we just

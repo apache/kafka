@@ -23,8 +23,6 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.GroupConfig;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -179,8 +177,6 @@ public class ShareGroupConfig {
      * Copy the subset of properties that are relevant to share group.
      */
     public Map<String, Integer> extractShareGroupConfigMap() {
-        Map<String, Integer> groupProps = new HashMap<>();
-        groupProps.put(GroupConfig.SHARE_RECORD_LOCK_DURATION_MS_CONFIG, shareGroupRecordLockDurationMs());
-        return Collections.unmodifiableMap(groupProps);
+        return Map.of(GroupConfig.SHARE_RECORD_LOCK_DURATION_MS_CONFIG, shareGroupRecordLockDurationMs());
     }
 }

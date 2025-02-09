@@ -34,13 +34,14 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, AlterConfigOp, AlterConfigsResult, ConfigEntry}
 import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
-import org.apache.log4j.{Level, Logger}
+import org.apache.logging.log4j.{Level, LogManager}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 import com.yammer.metrics.core.Meter
 import org.apache.kafka.metadata.LeaderConstants
+import org.apache.logging.log4j.core.config.Configurator
 
 class UncleanLeaderElectionTest extends QuorumTestHarness {
   val brokerId1 = 0
@@ -63,25 +64,23 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
   val partitionId = 0
   val topicPartition = new TopicPartition(topic, partitionId)
 
-  val kafkaApisLogger = Logger.getLogger(classOf[kafka.server.KafkaApis])
-  val networkProcessorLogger = Logger.getLogger(classOf[kafka.network.Processor])
+  val kafkaApisLogger = LogManager.getLogger(classOf[kafka.server.KafkaApis])
+  val networkProcessorLogger = LogManager.getLogger(classOf[kafka.network.Processor])
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
     super.setUp(testInfo)
 
-    configProps1 = createBrokerConfig(brokerId1, zkConnectOrNull)
-    configProps2 = createBrokerConfig(brokerId2, zkConnectOrNull)
+    configProps1 = createBrokerConfig(brokerId1)
+    configProps2 = createBrokerConfig(brokerId2)
 
     for (configProps <- List(configProps1, configProps2)) {
       configProps.put("controlled.shutdown.enable", enableControlledShutdown.toString)
-      configProps.put("controlled.shutdown.max.retries", "1")
-      configProps.put("controlled.shutdown.retry.backoff.ms", "1000")
     }
 
     // temporarily set loggers to a higher level so that tests run quietly
-    kafkaApisLogger.setLevel(Level.FATAL)
-    networkProcessorLogger.setLevel(Level.FATAL)
+    Configurator.setLevel(kafkaApisLogger.getName, Level.FATAL)
+    Configurator.setLevel(networkProcessorLogger.getName, Level.FATAL)
   }
 
   @AfterEach
@@ -90,8 +89,8 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
     brokers.foreach(broker => CoreUtils.delete(broker.config.logDirs))
 
     // restore log levels
-    kafkaApisLogger.setLevel(Level.ERROR)
-    networkProcessorLogger.setLevel(Level.ERROR)
+    Configurator.setLevel(kafkaApisLogger.getName, Level.ERROR)
+    Configurator.setLevel(networkProcessorLogger.getName, Level.ERROR)
 
     admin.close()
 
@@ -283,7 +282,7 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
     produceMessage(brokers, topic, "third")
     //make sure follower server joins the ISR
     TestUtils.waitUntilTrue(() => {
-      val partitionInfoOpt = followerServer.metadataCache.getPartitionInfo(topic, partitionId)
+      val partitionInfoOpt = followerServer.metadataCache.getLeaderAndIsr(topic, partitionId)
       partitionInfoOpt.isDefined && partitionInfoOpt.get.isr.contains(followerId)
     }, "Inconsistent metadata after first server startup")
 
@@ -425,9 +424,9 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
   }
 
   private def waitForNoLeaderAndIsrHasOldLeaderId(metadataCache: MetadataCache, leaderId: Int): Unit = {
-    waitUntilTrue(() => metadataCache.getPartitionInfo(topic, partitionId).isDefined &&
-      metadataCache.getPartitionInfo(topic, partitionId).get.leader() == LeaderConstants.NO_LEADER &&
-      java.util.Arrays.asList(leaderId).equals(metadataCache.getPartitionInfo(topic, partitionId).get.isr()),
+    waitUntilTrue(() => metadataCache.getLeaderAndIsr(topic, partitionId).isDefined &&
+      metadataCache.getLeaderAndIsr(topic, partitionId).get.leader() == LeaderConstants.NO_LEADER &&
+      java.util.Arrays.asList(leaderId).equals(metadataCache.getLeaderAndIsr(topic, partitionId).get.isr()),
       "Timed out waiting for broker metadata cache updates the info for topic partition:" + topicPartition)
   }
 }

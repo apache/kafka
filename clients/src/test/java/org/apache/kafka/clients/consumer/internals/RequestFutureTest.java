@@ -182,7 +182,7 @@ public class RequestFutureTest {
     @Test
     public void testComposeSuccessCase() {
         RequestFuture<String> future = new RequestFuture<>();
-        RequestFuture<Integer> composed = future.compose(new RequestFutureAdapter<String, Integer>() {
+        RequestFuture<Integer> composed = future.compose(new RequestFutureAdapter<>() {
             @Override
             public void onSuccess(String value, RequestFuture<Integer> future) {
                 future.complete(value.length());
@@ -199,7 +199,7 @@ public class RequestFutureTest {
     @Test
     public void testComposeFailureCase() {
         RequestFuture<String> future = new RequestFuture<>();
-        RequestFuture<Integer> composed = future.compose(new RequestFutureAdapter<String, Integer>() {
+        RequestFuture<Integer> composed = future.compose(new RequestFutureAdapter<>() {
             @Override
             public void onSuccess(String value, RequestFuture<Integer> future) {
                 future.complete(value.length());

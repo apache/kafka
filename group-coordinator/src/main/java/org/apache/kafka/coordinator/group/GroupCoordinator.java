@@ -22,6 +22,8 @@ import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.DeleteGroupsResponseData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData;
+import org.apache.kafka.common.message.DescribeShareGroupOffsetsRequestData;
+import org.apache.kafka.common.message.DescribeShareGroupOffsetsResponseData;
 import org.apache.kafka.common.message.HeartbeatRequestData;
 import org.apache.kafka.common.message.HeartbeatResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
@@ -257,6 +259,18 @@ public interface GroupCoordinator {
     );
 
     /**
+     * Fetch the Share Group Offsets for a given group.
+     *
+     * @param context The request context
+     * @param request The DescribeShareGroupOffsets request.
+     * @return A future yielding the results.
+     */
+    CompletableFuture<DescribeShareGroupOffsetsResponseData> describeShareGroupOffsets(
+        RequestContext context,
+        DescribeShareGroupOffsetsRequestData request
+    );
+
+    /**
      * Commit offsets for a given Group.
      *
      * @param context           The request context.
@@ -339,11 +353,18 @@ public interface GroupCoordinator {
     /**
      * Commit or abort the pending transactional offsets for the given partitions.
      *
+     * This method is only used by the old group coordinator. Internally, the old
+     * group coordinator completes the transaction asynchronously in order to
+     * avoid deadlocks. Hence, this method returns a future that the caller
+     * can wait on.
+     *
      * @param producerId        The producer id.
      * @param partitions        The partitions.
      * @param transactionResult The result of the transaction.
+     *
+     * @return A future yielding the result.
      */
-    void onTransactionCompleted(
+    CompletableFuture<Void> onTransactionCompleted(
         long producerId,
         Iterable<TopicPartition> partitions,
         TransactionResult transactionResult
@@ -420,7 +441,6 @@ public interface GroupCoordinator {
      *
      * @param groupId           The group id.
      * @param newGroupConfig    The new group config
-     * @return void
      */
     void updateGroupConfig(String groupId, Properties newGroupConfig);
 

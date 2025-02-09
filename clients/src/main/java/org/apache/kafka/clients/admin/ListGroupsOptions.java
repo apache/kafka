@@ -17,6 +17,7 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
@@ -31,7 +32,18 @@ import java.util.Set;
 @InterfaceStability.Evolving
 public class ListGroupsOptions extends AbstractOptions<ListGroupsOptions> {
 
+    private Set<GroupState> groupStates = Collections.emptySet();
     private Set<GroupType> types = Collections.emptySet();
+
+    /**
+     * If groupStates is set, only groups in these states will be returned by listGroups().
+     * Otherwise, all groups are returned.
+     * This operation is supported by brokers with version 2.6.0 or later.
+     */
+    public ListGroupsOptions inGroupStates(Set<GroupState> groupStates) {
+        this.groupStates = (groupStates == null || groupStates.isEmpty()) ? Collections.emptySet() : Set.copyOf(groupStates);
+        return this;
+    }
 
     /**
      * If types is set, only groups of these types will be returned by listGroups().
@@ -40,6 +52,13 @@ public class ListGroupsOptions extends AbstractOptions<ListGroupsOptions> {
     public ListGroupsOptions withTypes(Set<GroupType> types) {
         this.types = (types == null || types.isEmpty()) ? Set.of() : Set.copyOf(types);
         return this;
+    }
+
+    /**
+     * Returns the list of group states that are requested or empty if no states have been specified.
+     */
+    public Set<GroupState> groupStates() {
+        return groupStates;
     }
 
     /**

@@ -34,7 +34,7 @@ import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuild
 import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.config.ServerConfigs
-import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
+import org.junit.jupiter.api.{BeforeEach, TestInfo}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
@@ -236,19 +236,6 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
     val results = response.data.results
     assertEquals(1, results.size)
     checkAllErrorsAlteringCredentials(results, Errors.RESOURCE_NOT_FOUND, "when deleting a non-existing credential")
-  }
-
-  @Test
-  def testAlterNotController(): Unit = {
-    val request = new AlterUserScramCredentialsRequest.Builder(
-      new AlterUserScramCredentialsRequestData()
-        .setDeletions(util.Arrays.asList(new AlterUserScramCredentialsRequestData.ScramCredentialDeletion().setName(user1).setMechanism(ScramMechanism.SCRAM_SHA_256.`type`)))
-        .setUpsertions(util.Arrays.asList(new AlterUserScramCredentialsRequestData.ScramCredentialUpsertion().setName(user2).setMechanism(ScramMechanism.SCRAM_SHA_512.`type`)))).build()
-    val response = sendAlterUserScramCredentialsRequest(request, notControllerSocketServer)
-
-    val results = response.data.results
-    assertEquals(2, results.size)
-    checkAllErrorsAlteringCredentials(results, Errors.NOT_CONTROLLER, "when routed incorrectly to a non-Controller broker")
   }
 
   @ParameterizedTest

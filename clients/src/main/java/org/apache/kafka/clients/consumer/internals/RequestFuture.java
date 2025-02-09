@@ -200,7 +200,7 @@ public class RequestFuture<T> implements ConsumerNetworkClient.PollCondition {
      */
     public <S> RequestFuture<S> compose(final RequestFutureAdapter<T, S> adapter) {
         final RequestFuture<S> adapted = new RequestFuture<>();
-        addListener(new RequestFutureListener<T>() {
+        addListener(new RequestFutureListener<>() {
             @Override
             public void onSuccess(T value) {
                 adapter.onSuccess(value, adapted);
@@ -215,7 +215,7 @@ public class RequestFuture<T> implements ConsumerNetworkClient.PollCondition {
     }
 
     public void chain(final RequestFuture<T> future) {
-        addListener(new RequestFutureListener<T>() {
+        addListener(new RequestFutureListener<>() {
             @Override
             public void onSuccess(T value) {
                 future.complete(value);

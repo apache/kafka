@@ -21,28 +21,29 @@
   "validVersions": "0",
   "flexibleVersions": "0+",
   "fields": [
-    { "name": "ClusterId", "type": "string", "versions": "0+", "nullableVersions": "0+" },
+    { "name": "ClusterId", "type": "string", "versions": "0+", "nullableVersions": "0+",
+      "about": "The cluster id."},
     { "name": "CurrentLeaderEpoch", "type": "int32", "versions": "0+",
-      "about": "The current leader epoch of the partition, -1 for unknown leader epoch" },
+      "about": "The current leader epoch of the partition, -1 for unknown leader epoch." },
     { "name": "VoterId", "type": "int32", "versions": "0+",
-      "about": "The replica id of the voter getting updated in the topic partition" },
+      "about": "The replica id of the voter getting updated in the topic partition." },
     { "name": "VoterDirectoryId", "type": "uuid", "versions": "0+",
-      "about": "The directory id of the voter getting updated in the topic partition" },
+      "about": "The directory id of the voter getting updated in the topic partition." },
     { "name": "Listeners", "type": "[]Listener", "versions": "0+",
-      "about": "The endpoint that can be used to communicate with the leader", "fields": [
+      "about": "The endpoint that can be used to communicate with the leader.", "fields": [
       { "name": "Name", "type": "string", "versions": "0+", "mapKey": true,
-        "about": "The name of the endpoint" },
+        "about": "The name of the endpoint." },
       { "name": "Host", "type": "string", "versions": "0+",
-        "about": "The hostname" },
+        "about": "The hostname." },
       { "name": "Port", "type": "uint16", "versions": "0+",
-        "about": "The port" }
+        "about": "The port." }
     ]},
     { "name": "KRaftVersionFeature", "type": "KRaftVersionFeature", "versions": "0+",
-      "about": "The range of versions of the protocol that the replica supports", "fields": [
+      "about": "The range of versions of the protocol that the replica supports.", "fields": [
       { "name": "MinSupportedVersion", "type": "int16", "versions": "0+",
-        "about": "The minimum supported KRaft protocol version" },
+        "about": "The minimum supported KRaft protocol version." },
       { "name": "MaxSupportedVersion", "type": "int16", "versions": "0+",
-        "about": "The maximum supported KRaft protocol version" }
+        "about": "The maximum supported KRaft protocol version." }
     ]}
   ]
 }

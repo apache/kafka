@@ -18,8 +18,8 @@
 package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumer;
+import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
 import org.apache.kafka.common.TopicPartition;
 
 import java.time.Duration;
@@ -37,9 +37,9 @@ public class ResetOffsetEvent extends CompletableApplicationEvent<Void> {
 
     private final Collection<TopicPartition> topicPartitions;
 
-    private final OffsetResetStrategy offsetResetStrategy;
+    private final AutoOffsetResetStrategy offsetResetStrategy;
 
-    public ResetOffsetEvent(Collection<TopicPartition> topicPartitions, OffsetResetStrategy offsetResetStrategy, long deadline) {
+    public ResetOffsetEvent(Collection<TopicPartition> topicPartitions, AutoOffsetResetStrategy offsetResetStrategy, long deadline) {
         super(Type.RESET_OFFSET, deadline);
         this.topicPartitions = Collections.unmodifiableCollection(topicPartitions);
         this.offsetResetStrategy = Objects.requireNonNull(offsetResetStrategy);
@@ -49,7 +49,7 @@ public class ResetOffsetEvent extends CompletableApplicationEvent<Void> {
         return topicPartitions;
     }
 
-    public OffsetResetStrategy offsetResetStrategy() {
+    public AutoOffsetResetStrategy offsetResetStrategy() {
         return offsetResetStrategy;
     }
 

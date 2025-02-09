@@ -75,8 +75,6 @@ public class RestServerConfigTest {
         props.put(RestServerConfig.LISTENERS_CONFIG, "http://a.b:9999, https://a.b:7812");
         config = RestServerConfig.forPublic(null, props);
         assertEquals(Arrays.asList("http://a.b:9999", "https://a.b:7812"), config.listeners());
-
-        config = RestServerConfig.forPublic(null, props);
     }
 
     @Test

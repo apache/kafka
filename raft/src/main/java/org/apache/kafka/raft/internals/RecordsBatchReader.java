@@ -51,7 +51,7 @@ public final class RecordsBatchReader<T> implements BatchReader<T> {
     public boolean hasNext() {
         ensureOpen();
 
-        if (!nextBatch.isPresent()) {
+        if (nextBatch.isEmpty()) {
             nextBatch = nextBatch();
         }
 

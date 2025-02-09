@@ -39,7 +39,9 @@
     <module name="EqualsHashCode"/>
     <module name="SimplifyBooleanExpression"/>
     <module name="OneStatementPerLine"/>
-    <module name="UnnecessaryParentheses" />
+    <module name="UnnecessaryParentheses">
+      <property name="tokens" value="IDENT, NUM_DOUBLE, LAMBDA, TEXT_BLOCK_LITERAL_BEGIN, UNARY_MINUS, UNARY_PLUS, INC, DEC, POST_INC, POST_DEC" />
+    </module>
     <module name="SimplifyBooleanReturn"/>
 
     <!-- style -->

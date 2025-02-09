@@ -24,7 +24,7 @@ import org.apache.kafka.common.errors.NotLeaderOrFollowerException
 import org.apache.kafka.common.record.{ControlRecordType, EndTransactionMarker, FileRecords, MemoryRecords, RecordBatch, SimpleRecord}
 import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.{MockTime, Time}
-import org.apache.kafka.coordinator.common.runtime.CoordinatorLoader.UnknownRecordTypeException
+import org.apache.kafka.coordinator.common.runtime.Deserializer.UnknownRecordTypeException
 import org.apache.kafka.coordinator.common.runtime.{CoordinatorPlayback, Deserializer}
 import org.apache.kafka.server.storage.log.FetchIsolation
 import org.apache.kafka.storage.internals.log.{FetchDataInfo, LogOffsetMetadata}
@@ -59,7 +59,7 @@ class CoordinatorLoaderImplTest {
     val serde = mock(classOf[Deserializer[(String, String)]])
     val coordinator = mock(classOf[CoordinatorPlayback[(String, String)]])
 
-    Using(new CoordinatorLoaderImpl[(String, String)](
+    Using.resource(new CoordinatorLoaderImpl[(String, String)](
       time = Time.SYSTEM,
       replicaManager = replicaManager,
       deserializer = serde,
@@ -79,7 +79,7 @@ class CoordinatorLoaderImplTest {
     val serde = mock(classOf[Deserializer[(String, String)]])
     val coordinator = mock(classOf[CoordinatorPlayback[(String, String)]])
 
-    Using(new CoordinatorLoaderImpl[(String, String)](
+    Using.resource(new CoordinatorLoaderImpl[(String, String)](
       time = Time.SYSTEM,
       replicaManager = replicaManager,
       deserializer = serde,
@@ -100,7 +100,7 @@ class CoordinatorLoaderImplTest {
     val log = mock(classOf[UnifiedLog])
     val coordinator = mock(classOf[CoordinatorPlayback[(String, String)]])
 
-    Using(new CoordinatorLoaderImpl[(String, String)](
+    Using.resource(new CoordinatorLoaderImpl[(String, String)](
       time = Time.SYSTEM,
       replicaManager = replicaManager,
       deserializer = serde,
@@ -203,7 +203,7 @@ class CoordinatorLoaderImplTest {
     val log = mock(classOf[UnifiedLog])
     val coordinator = mock(classOf[CoordinatorPlayback[(String, String)]])
 
-    Using(new CoordinatorLoaderImpl[(String, String)](
+    Using.resource(new CoordinatorLoaderImpl[(String, String)](
       time = Time.SYSTEM,
       replicaManager = replicaManager,
       deserializer = serde,
@@ -246,7 +246,7 @@ class CoordinatorLoaderImplTest {
     val log = mock(classOf[UnifiedLog])
     val coordinator = mock(classOf[CoordinatorPlayback[(String, String)]])
 
-    Using(new CoordinatorLoaderImpl[(String, String)](
+    Using.resource(new CoordinatorLoaderImpl[(String, String)](
       time = Time.SYSTEM,
       replicaManager = replicaManager,
       deserializer = serde,
@@ -286,7 +286,7 @@ class CoordinatorLoaderImplTest {
     val log = mock(classOf[UnifiedLog])
     val coordinator = mock(classOf[CoordinatorPlayback[(String, String)]])
 
-    Using(new CoordinatorLoaderImpl[(String, String)](
+    Using.resource(new CoordinatorLoaderImpl[(String, String)](
       time = Time.SYSTEM,
       replicaManager = replicaManager,
       deserializer = serde,
@@ -312,7 +312,8 @@ class CoordinatorLoaderImplTest {
         .thenThrow(new RuntimeException("Error!"))
 
       val ex = assertFutureThrows(loader.load(tp, coordinator), classOf[RuntimeException])
-      assertEquals("Error!", ex.getMessage)
+
+      assertEquals(s"Deserializing record DefaultRecord(offset=0, timestamp=-1, key=2 bytes, value=2 bytes) from $tp failed due to: Error!", ex.getMessage)
     }
   }
 
@@ -327,7 +328,7 @@ class CoordinatorLoaderImplTest {
     val log = mock(classOf[UnifiedLog])
     val coordinator = mock(classOf[CoordinatorPlayback[(String, String)]])
 
-    Using(new CoordinatorLoaderImpl[(String, String)](
+    Using.resource(new CoordinatorLoaderImpl[(String, String)](
       time = Time.SYSTEM,
       replicaManager = replicaManager,
       deserializer = serde,
@@ -359,7 +360,7 @@ class CoordinatorLoaderImplTest {
     val coordinator = mock(classOf[CoordinatorPlayback[(String, String)]])
     val time = new MockTime()
 
-    Using(new CoordinatorLoaderImpl[(String, String)](
+    Using.resource(new CoordinatorLoaderImpl[(String, String)](
       time,
       replicaManager = replicaManager,
       deserializer = serde,
@@ -414,7 +415,7 @@ class CoordinatorLoaderImplTest {
     val log = mock(classOf[UnifiedLog])
     val coordinator = mock(classOf[CoordinatorPlayback[(String, String)]])
 
-    Using(new CoordinatorLoaderImpl[(String, String)](
+    Using.resource(new CoordinatorLoaderImpl[(String, String)](
       time = Time.SYSTEM,
       replicaManager = replicaManager,
       deserializer = serde,
@@ -489,7 +490,7 @@ class CoordinatorLoaderImplTest {
     val log = mock(classOf[UnifiedLog])
     val coordinator = mock(classOf[CoordinatorPlayback[(String, String)]])
 
-    Using(new CoordinatorLoaderImpl[(String, String)](
+    Using.resource(new CoordinatorLoaderImpl[(String, String)](
       time = Time.SYSTEM,
       replicaManager = replicaManager,
       deserializer = serde,
@@ -515,7 +516,7 @@ class CoordinatorLoaderImplTest {
     val log = mock(classOf[UnifiedLog])
     val coordinator = mock(classOf[CoordinatorPlayback[(String, String)]])
 
-    Using(new CoordinatorLoaderImpl[(String, String)](
+    Using.resource(new CoordinatorLoaderImpl[(String, String)](
       time = Time.SYSTEM,
       replicaManager = replicaManager,
       deserializer = serde,
@@ -591,7 +592,7 @@ class CoordinatorLoaderImplTest {
     val log = mock(classOf[UnifiedLog])
     val coordinator = mock(classOf[CoordinatorPlayback[(String, String)]])
 
-    Using(new CoordinatorLoaderImpl[(String, String)](
+    Using.resource(new CoordinatorLoaderImpl[(String, String)](
       time = Time.SYSTEM,
       replicaManager = replicaManager,
       deserializer = serde,

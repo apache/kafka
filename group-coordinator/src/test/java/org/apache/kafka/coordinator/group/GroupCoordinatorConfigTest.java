@@ -36,7 +36,6 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-@SuppressWarnings("deprecation")
 public class GroupCoordinatorConfigTest {
     private static final List<ConfigDef> GROUP_COORDINATOR_CONFIG_DEFS = Arrays.asList(
             GroupCoordinatorConfig.GROUP_COORDINATOR_CONFIG_DEF,
@@ -44,6 +43,19 @@ public class GroupCoordinatorConfigTest {
             GroupCoordinatorConfig.OFFSET_MANAGEMENT_CONFIG_DEF,
             GroupCoordinatorConfig.CONSUMER_GROUP_CONFIG_DEF,
             GroupCoordinatorConfig.SHARE_GROUP_CONFIG_DEF);
+
+    @Test
+    public void testConsumerGroupAssignorsDefault() {
+        // The full class name of the assignors is part of our public api. Hence,
+        // we should ensure that they are not changed by mistake.
+        assertEquals(
+            List.of(
+                "org.apache.kafka.coordinator.group.assignor.UniformAssignor",
+                "org.apache.kafka.coordinator.group.assignor.RangeAssignor"
+            ),
+            GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_DEFAULT
+        );
+    }
 
     @Test
     public void testConfigs() {

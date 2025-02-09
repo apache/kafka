@@ -17,7 +17,6 @@
 package kafka.coordinator.transaction
 
 
-import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.protocol.{ByteBufferAccessor, MessageUtil}
@@ -30,7 +29,7 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
 import org.junit.jupiter.api.Test
 
 import java.nio.ByteBuffer
-import scala.collection.Seq
+import scala.collection.{Seq, mutable}
 import scala.jdk.CollectionConverters._
 
 class TransactionLogTest {
@@ -111,49 +110,15 @@ class TransactionLogTest {
   }
 
   @Test
-  def testTransactionMetadataParsing(): Unit = {
-    val transactionalId = "id"
-    val producerId = 1334L
-    val topicPartition = new TopicPartition("topic", 0)
-
-    val txnMetadata = new TransactionMetadata(transactionalId, producerId, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_ID, producerEpoch,
-      RecordBatch.NO_PRODUCER_EPOCH, transactionTimeoutMs, Ongoing, collection.mutable.Set.empty[TopicPartition], 0, 0, TV_0)
-    txnMetadata.addPartitions(Set(topicPartition))
-
-    val keyBytes = TransactionLog.keyToBytes(transactionalId)
-    val valueBytes = TransactionLog.valueToBytes(txnMetadata.prepareNoTransit(), TV_2)
-    val transactionMetadataRecord = TestUtils.records(Seq(
-      new SimpleRecord(keyBytes, valueBytes)
-    )).records.asScala.head
-
-    val (keyStringOpt, valueStringOpt) = TransactionLog.formatRecordKeyAndValue(transactionMetadataRecord)
-    assertEquals(Some(s"transaction_metadata::transactionalId=$transactionalId"), keyStringOpt)
-    assertEquals(Some(s"producerId:$producerId,producerEpoch:$producerEpoch,state=Ongoing," +
-      s"partitions=[$topicPartition],txnLastUpdateTimestamp=0,txnTimeoutMs=$transactionTimeoutMs"), valueStringOpt)
-  }
-
-  @Test
-  def testTransactionMetadataTombstoneParsing(): Unit = {
-    val transactionalId = "id"
-    val transactionMetadataRecord = TestUtils.records(Seq(
-      new SimpleRecord(TransactionLog.keyToBytes(transactionalId), null)
-    )).records.asScala.head
-
-    val (keyStringOpt, valueStringOpt) = TransactionLog.formatRecordKeyAndValue(transactionMetadataRecord)
-    assertEquals(Some(s"transaction_metadata::transactionalId=$transactionalId"), keyStringOpt)
-    assertEquals(Some("<DELETE>"), valueStringOpt)
-  }
-
-  @Test
   def testSerializeTransactionLogValueToHighestNonFlexibleVersion(): Unit = {
-    val txnTransitMetadata = TxnTransitMetadata(1, 1, 1, 1, 1, 1000, CompleteCommit, Set.empty, 500, 500, TV_0)
+    val txnTransitMetadata = TxnTransitMetadata(1, 1, 1, 1, 1, 1000, CompleteCommit, mutable.Set.empty, 500, 500, TV_0)
     val txnLogValueBuffer = ByteBuffer.wrap(TransactionLog.valueToBytes(txnTransitMetadata, TV_0))
     assertEquals(0, txnLogValueBuffer.getShort)
   }
 
   @Test
   def testSerializeTransactionLogValueToFlexibleVersion(): Unit = {
-    val txnTransitMetadata = TxnTransitMetadata(1, 1, 1, 1, 1, 1000, CompleteCommit, Set.empty, 500, 500, TV_2)
+    val txnTransitMetadata = TxnTransitMetadata(1, 1, 1, 1, 1, 1000, CompleteCommit, mutable.Set.empty, 500, 500, TV_2)
     val txnLogValueBuffer = ByteBuffer.wrap(TransactionLog.valueToBytes(txnTransitMetadata, TV_2))
     assertEquals(TransactionLogValue.HIGHEST_SUPPORTED_VERSION, txnLogValueBuffer.getShort)
   }

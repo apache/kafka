@@ -114,7 +114,7 @@ public final class KafkaRaftClientSnapshotTest {
 
         RaftClientTestContext context = contextBuilder.build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
         // Advance the highWatermark
@@ -236,7 +236,7 @@ public final class KafkaRaftClientSnapshotTest {
             .deleteBeforeSnapshot(snapshotId)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
         // Stop the listener from reading commit batches
@@ -293,7 +293,7 @@ public final class KafkaRaftClientSnapshotTest {
             .deleteBeforeSnapshot(snapshotId)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
         // Send a fetch request for an end offset and epoch which has been snapshotted
@@ -321,7 +321,7 @@ public final class KafkaRaftClientSnapshotTest {
             .withKip853Rpc(withKip853Rpc)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
         List<String> appendRecords = Arrays.asList("a", "b", "c");
@@ -371,7 +371,7 @@ public final class KafkaRaftClientSnapshotTest {
             .withKip853Rpc(withKip853Rpc)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
         List<String> appendRecords = Arrays.asList("a", "b", "c");
@@ -423,7 +423,7 @@ public final class KafkaRaftClientSnapshotTest {
             .withKip853Rpc(withKip853Rpc)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
         assertEquals(oldestSnapshotId.epoch() + 1, epoch);
 
@@ -465,7 +465,7 @@ public final class KafkaRaftClientSnapshotTest {
             .withKip853Rpc(withKip853Rpc)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
         assertEquals(oldestSnapshotId.epoch() + 2 + 1, epoch);
 
@@ -516,7 +516,7 @@ public final class KafkaRaftClientSnapshotTest {
             .withKip853Rpc(withKip853Rpc)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
         assertEquals(oldestSnapshotId.epoch() + 2 + 1, epoch);
 
@@ -562,7 +562,7 @@ public final class KafkaRaftClientSnapshotTest {
             .withKip853Rpc(withKip853Rpc)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
         assertEquals(oldestSnapshotId.epoch() + 2 + 1, epoch);
 
@@ -616,7 +616,7 @@ public final class KafkaRaftClientSnapshotTest {
             .withKip853Rpc(withKip853Rpc)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
         assertEquals(oldestSnapshotId.epoch() + 2 + 1, epoch);
 
@@ -660,7 +660,7 @@ public final class KafkaRaftClientSnapshotTest {
             .withKip853Rpc(withKip853Rpc)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
         context.deliverRequest(
@@ -693,7 +693,7 @@ public final class KafkaRaftClientSnapshotTest {
             .withUnknownLeader(3)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
         context.deliverRequest(
@@ -724,7 +724,7 @@ public final class KafkaRaftClientSnapshotTest {
             .withKip853Rpc(withKip853Rpc)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
         context.deliverRequest(
@@ -756,7 +756,7 @@ public final class KafkaRaftClientSnapshotTest {
             .withKip853Rpc(withKip853Rpc)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
         context.advanceLocalLeaderHighWatermarkToLogEndOffset();
@@ -813,7 +813,7 @@ public final class KafkaRaftClientSnapshotTest {
                 .build();
 
         int resignLeadershipTimeout = context.checkQuorumTimeoutMs;
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
         FetchSnapshotRequestData voter1FetchSnapshotRequest = fetchSnapshotRequest(
@@ -902,7 +902,7 @@ public final class KafkaRaftClientSnapshotTest {
             .withKip853Rpc(withKip853Rpc)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
         context.advanceLocalLeaderHighWatermarkToLogEndOffset();
@@ -1015,7 +1015,7 @@ public final class KafkaRaftClientSnapshotTest {
             .withKip853Rpc(withKip853Rpc)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
         context.advanceLocalLeaderHighWatermarkToLogEndOffset();
@@ -1074,7 +1074,7 @@ public final class KafkaRaftClientSnapshotTest {
             .withKip853Rpc(withKip853Rpc)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
         context.deliverRequest(
@@ -1107,7 +1107,7 @@ public final class KafkaRaftClientSnapshotTest {
             .withKip853Rpc(withKip853Rpc)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
         context.deliverRequest(
@@ -1182,13 +1182,13 @@ public final class KafkaRaftClientSnapshotTest {
         fetchRequest = context.assertSentFetchRequest();
         context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
 
-        // Fetch timer is not reset; sleeping for remainder should transition to candidate
+        // Fetch timer is not reset; sleeping for remainder should transition to prospective
         context.time.sleep(context.fetchTimeoutMs - slept);
 
         context.pollUntilRequest();
 
-        context.assertSentVoteRequest(epoch + 1, 0, 0L, 1);
-        context.assertVotedCandidate(epoch + 1, localId);
+        context.assertSentPreVoteRequest(epoch, 0, 0L, 1);
+        assertTrue(context.client.quorum().isProspective());
     }
 
     @ParameterizedTest
@@ -1777,13 +1777,13 @@ public final class KafkaRaftClientSnapshotTest {
         assertEquals(snapshotId.epoch(), request.snapshotId().epoch());
         assertEquals(0, request.position());
 
-        // Sleeping for fetch timeout should transition to candidate
+        // Sleeping for fetch timeout should transition to prospective
         context.time.sleep(context.fetchTimeoutMs);
 
         context.pollUntilRequest();
 
-        context.assertSentVoteRequest(epoch + 1, 0, 0L, 1);
-        context.assertVotedCandidate(epoch + 1, localId);
+        context.assertSentPreVoteRequest(epoch, 0, 0L, 1);
+        assertTrue(context.client.quorum().isProspective());
 
         // Send the response late
         context.deliverResponse(
@@ -1809,9 +1809,9 @@ public final class KafkaRaftClientSnapshotTest {
             )
         );
 
-        // Assert that the response is ignored and the replicas stays as a candidate
+        // Assert that the response is ignored and the replicas stays as a prospective
         context.client.poll();
-        context.assertVotedCandidate(epoch + 1, localId);
+        assertTrue(context.client.quorum().isProspective());
     }
 
     @ParameterizedTest
@@ -1828,7 +1828,7 @@ public final class KafkaRaftClientSnapshotTest {
             .withKip853Rpc(withKip853Rpc)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
         // valid cluster id is accepted
@@ -1909,13 +1909,20 @@ public final class KafkaRaftClientSnapshotTest {
             .withKip853Rpc(withKip853Rpc)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int currentEpoch = context.currentEpoch();
 
         // When leader creating snapshot:
         // 1.1 high watermark cannot be empty
         assertEquals(OptionalLong.empty(), context.client.highWatermark());
-        assertThrows(IllegalArgumentException.class, () -> context.client.createSnapshot(invalidSnapshotId1, 0));
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> context.client.createSnapshot(invalidSnapshotId1, 0)
+        );
+        assertEquals(
+            "Cannot create a snapshot with an id (OffsetAndEpoch(offset=4, epoch=2)) greater than the high-watermark (0)",
+            exception.getMessage()
+        );
 
         // 1.2 high watermark must larger than or equal to the snapshotId's endOffset
         context.advanceLocalLeaderHighWatermarkToLogEndOffset();
@@ -1927,18 +1934,52 @@ public final class KafkaRaftClientSnapshotTest {
         context.client.poll();
         assertEquals(context.log.endOffset().offset(), context.client.highWatermark().getAsLong() + newRecords.size());
 
-        OffsetAndEpoch invalidSnapshotId2 = new OffsetAndEpoch(context.client.highWatermark().getAsLong() + 2, currentEpoch);
-        assertThrows(IllegalArgumentException.class, () -> context.client.createSnapshot(invalidSnapshotId2, 0));
+        OffsetAndEpoch invalidSnapshotId2 = new OffsetAndEpoch(context.client.highWatermark().getAsLong() + newRecords.size(), currentEpoch);
+        exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> context.client.createSnapshot(invalidSnapshotId2, 0)
+        );
+        assertEquals(
+            "Cannot create a snapshot with an id (OffsetAndEpoch(offset=7, epoch=3)) greater than the high-watermark (4)",
+            exception.getMessage()
+        );
 
         // 2 the quorum epoch must larger than or equal to the snapshotId's epoch
         OffsetAndEpoch invalidSnapshotId3 = new OffsetAndEpoch(context.client.highWatermark().getAsLong(), currentEpoch + 1);
-        assertThrows(IllegalArgumentException.class, () -> context.client.createSnapshot(invalidSnapshotId3, 0));
+        exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> context.client.createSnapshot(invalidSnapshotId3, 0)
+        );
+        assertEquals(
+            "Snapshot id (OffsetAndEpoch(offset=4, epoch=4)) is not valid according to the log: ValidOffsetAndEpoch(kind=DIVERGING, offsetAndEpoch=OffsetAndEpoch(offset=7, epoch=3))",
+            exception.getMessage()
+        );
 
         // 3 the snapshotId should be validated against endOffsetForEpoch
         OffsetAndEpoch endOffsetForEpoch = context.log.endOffsetForEpoch(epoch);
         assertEquals(epoch, endOffsetForEpoch.epoch());
-        OffsetAndEpoch invalidSnapshotId4 = new OffsetAndEpoch(endOffsetForEpoch.offset() + 2, epoch);
-        assertThrows(IllegalArgumentException.class, () -> context.client.createSnapshot(invalidSnapshotId4, 0));
+        OffsetAndEpoch invalidSnapshotId4 = new OffsetAndEpoch(endOffsetForEpoch.offset() + 1, epoch);
+        exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> context.client.createSnapshot(invalidSnapshotId4, 0)
+        );
+        assertEquals(
+            "Snapshot id (OffsetAndEpoch(offset=4, epoch=2)) is not valid according to the log: ValidOffsetAndEpoch(kind=DIVERGING, offsetAndEpoch=OffsetAndEpoch(offset=3, epoch=2))",
+            exception.getMessage()
+        );
+
+        // 4 snapshotId offset must be at a batch boundary
+        context.advanceLocalLeaderHighWatermarkToLogEndOffset();
+        OffsetAndEpoch invalidSnapshotId5 = new OffsetAndEpoch(context.client.highWatermark().getAsLong() - 1, currentEpoch);
+        // this points to the "f" offset, which is not batch aligned
+        exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> context.client.createSnapshot(invalidSnapshotId5, 0)
+        );
+        assertEquals(
+                "Cannot create snapshot at offset (6) because it is not batch aligned. The batch containing the requested offset has a base offset of (4)",
+                exception.getMessage()
+        );
     }
 
     @ParameterizedTest
@@ -1951,6 +1992,7 @@ public final class KafkaRaftClientSnapshotTest {
         Set<Integer> voters = Set.of(localId, leaderId, otherFollowerId);
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .appendToLog(1, List.of("a"))
             .withElectedLeader(epoch, leaderId)
             .withKip853Rpc(withKip853Rpc)
             .build();
@@ -1959,18 +2001,25 @@ public final class KafkaRaftClientSnapshotTest {
         // When follower creating snapshot:
         // 1) The high watermark cannot be empty
         assertEquals(OptionalLong.empty(), context.client.highWatermark());
-        OffsetAndEpoch invalidSnapshotId1 = new OffsetAndEpoch(1, 0);
-        assertThrows(IllegalArgumentException.class, () -> context.client.createSnapshot(invalidSnapshotId1, 0));
+        OffsetAndEpoch invalidSnapshotId1 = new OffsetAndEpoch(1, 1);
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> context.client.createSnapshot(invalidSnapshotId1, 0)
+        );
+        assertEquals(
+            "Cannot create a snapshot with an id (OffsetAndEpoch(offset=1, epoch=1)) greater than the high-watermark (0)",
+            exception.getMessage()
+        );
 
         // Poll for our first fetch request
         context.pollUntilRequest();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
         assertTrue(voters.contains(fetchRequest.destination().id()));
-        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+        context.assertFetchRequestData(fetchRequest, epoch, 1L, 1);
 
         // The response does not advance the high watermark
-        List<String> records1 = Arrays.asList("a", "b", "c");
-        MemoryRecords batch1 = context.buildBatch(0L, 3, records1);
+        List<String> records1 = Arrays.asList("b", "c");
+        MemoryRecords batch1 = context.buildBatch(1L, 3, records1);
         context.deliverResponse(
             fetchRequest.correlationId(),
             fetchRequest.destination(),
@@ -1981,11 +2030,14 @@ public final class KafkaRaftClientSnapshotTest {
         // 2) The high watermark must be larger than or equal to the snapshotId's endOffset
         int currentEpoch = context.currentEpoch();
         OffsetAndEpoch invalidSnapshotId2 = new OffsetAndEpoch(context.client.highWatermark().getAsLong() + 1, currentEpoch);
-        assertThrows(IllegalArgumentException.class, () -> context.client.createSnapshot(invalidSnapshotId2, 0));
-
-        // 3) The quorum epoch must be larger than or equal to the snapshotId's epoch
-        OffsetAndEpoch invalidSnapshotId3 = new OffsetAndEpoch(context.client.highWatermark().getAsLong() + 1, currentEpoch + 1);
-        assertThrows(IllegalArgumentException.class, () -> context.client.createSnapshot(invalidSnapshotId3, 0));
+        exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> context.client.createSnapshot(invalidSnapshotId2, 0)
+        );
+        assertEquals(
+            "Cannot create a snapshot with an id (OffsetAndEpoch(offset=1, epoch=5)) greater than the high-watermark (0)",
+            exception.getMessage()
+        );
 
         // The high watermark advances to be larger than log.endOffsetForEpoch(3), to test the case 3
         context.pollUntilRequest();
@@ -1994,7 +2046,8 @@ public final class KafkaRaftClientSnapshotTest {
         context.assertFetchRequestData(fetchRequest, epoch, 3L, 3);
 
         List<String> records2 = Arrays.asList("d", "e", "f");
-        MemoryRecords batch2 = context.buildBatch(3L, 4, records2);
+        int batch2Epoch = 4;
+        MemoryRecords batch2 = context.buildBatch(3L, batch2Epoch, records2);
         context.deliverResponse(
             fetchRequest.correlationId(),
             fetchRequest.destination(),
@@ -2003,11 +2056,44 @@ public final class KafkaRaftClientSnapshotTest {
         context.client.poll();
         assertEquals(6L, context.client.highWatermark().getAsLong());
 
+        // 3) The quorum epoch must be larger than or equal to the snapshotId's epoch
+        OffsetAndEpoch invalidSnapshotId3 = new OffsetAndEpoch(context.client.highWatermark().getAsLong(), currentEpoch + 1);
+        exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> context.client.createSnapshot(invalidSnapshotId3, 0)
+        );
+        assertEquals(
+            "Snapshot id (OffsetAndEpoch(offset=6, epoch=6)) is not valid according to the log: ValidOffsetAndEpoch(kind=DIVERGING, offsetAndEpoch=OffsetAndEpoch(offset=6, epoch=4))",
+            exception.getMessage()
+        );
+
         // 4) The snapshotId should be validated against endOffsetForEpoch
         OffsetAndEpoch endOffsetForEpoch = context.log.endOffsetForEpoch(3);
         assertEquals(3, endOffsetForEpoch.epoch());
-        OffsetAndEpoch invalidSnapshotId4 = new OffsetAndEpoch(endOffsetForEpoch.offset() + 1, epoch);
-        assertThrows(IllegalArgumentException.class, () -> context.client.createSnapshot(invalidSnapshotId4, 0));
+        OffsetAndEpoch invalidSnapshotId4 = new OffsetAndEpoch(endOffsetForEpoch.offset() + 3, 3);
+        exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> context.client.createSnapshot(invalidSnapshotId4, 0)
+        );
+        assertEquals(
+            "Snapshot id (OffsetAndEpoch(offset=6, epoch=3)) is not valid according to the log: ValidOffsetAndEpoch(kind=DIVERGING, offsetAndEpoch=OffsetAndEpoch(offset=3, epoch=3))",
+            exception.getMessage()
+        );
+
+        // 5) The snapshotId should be batch-aligned
+        endOffsetForEpoch = context.log.endOffsetForEpoch(batch2Epoch);
+        assertEquals(4, endOffsetForEpoch.epoch());
+        assertEquals(6, endOffsetForEpoch.offset());
+        OffsetAndEpoch invalidSnapshotId5 = new OffsetAndEpoch(endOffsetForEpoch.offset() - 1, batch2Epoch);
+        // this points to the "f" offset, which is not batch aligned
+        exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> context.client.createSnapshot(invalidSnapshotId5, 0)
+        );
+        assertEquals(
+            "Cannot create snapshot at offset (5) because it is not batch aligned. The batch containing the requested offset has a base offset of (3)",
+            exception.getMessage()
+        );
     }
 
     private static ReplicaKey replicaKey(int id, boolean withDirectoryId) {

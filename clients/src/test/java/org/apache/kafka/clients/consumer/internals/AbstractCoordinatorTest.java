@@ -19,7 +19,6 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.MockClient;
-import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
@@ -52,6 +51,7 @@ import org.apache.kafka.common.requests.LeaveGroupResponse;
 import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.requests.SyncGroupRequest;
 import org.apache.kafka.common.requests.SyncGroupResponse;
+import org.apache.kafka.common.test.api.Flaky;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
@@ -132,7 +132,7 @@ public class AbstractCoordinatorTest {
         LogContext logContext = new LogContext();
         this.mockTime = new MockTime();
         ConsumerMetadata metadata = new ConsumerMetadata(retryBackoffMs, retryBackoffMaxMs, 60 * 60 * 1000L,
-                false, false, new SubscriptionState(logContext, OffsetResetStrategy.EARLIEST),
+                false, false, new SubscriptionState(logContext, AutoOffsetResetStrategy.EARLIEST),
                 logContext, new ClusterResourceListeners());
 
         this.mockClient = new MockClient(mockTime, metadata);
@@ -156,7 +156,7 @@ public class AbstractCoordinatorTest {
                                                                         groupInstanceId,
                                                                         retryBackoffMs,
                                                                         retryBackoffMaxMs,
-                                                                        !groupInstanceId.isPresent());
+                                                                        groupInstanceId.isEmpty());
         this.coordinator = new DummyCoordinator(rebalanceConfig,
                                                 consumerClient,
                                                 metrics,
@@ -1435,6 +1435,7 @@ public class AbstractCoordinatorTest {
         awaitFirstHeartbeat(heartbeatReceived);
     }
 
+    @Flaky("KAFKA-18310")
     @Test
     public void testWakeupAfterSyncGroupSentExternalCompletion() throws Exception {
         setupCoordinator();
@@ -1471,6 +1472,7 @@ public class AbstractCoordinatorTest {
         awaitFirstHeartbeat(heartbeatReceived);
     }
 
+    @Flaky("KAFKA-18310")
     @Test
     public void testWakeupAfterSyncGroupReceived() throws Exception {
         setupCoordinator();
@@ -1504,6 +1506,7 @@ public class AbstractCoordinatorTest {
         awaitFirstHeartbeat(heartbeatReceived);
     }
 
+    @Flaky("KAFKA-15474,KAFKA-18310")
     @Test
     public void testWakeupAfterSyncGroupReceivedExternalCompletion() throws Exception {
         setupCoordinator();

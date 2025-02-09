@@ -29,6 +29,7 @@ import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity}
 import org.apache.kafka.common.record.{MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.{ProduceRequest, ProduceResponse}
 import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.common.test.api.Flaky
 import org.apache.kafka.common.{KafkaException, requests}
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.server.config.QuotaConfig
@@ -81,6 +82,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     }
   }
 
+  @Flaky("KAFKA-17999")
   @ParameterizedTest
   @ValueSource(strings = Array("kraft"))
   def testDynamicConnectionQuota(quorum: String): Unit = {
@@ -303,7 +305,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
   }
 
   private def produceRequest: ProduceRequest =
-    requests.ProduceRequest.forCurrentMagic(new ProduceRequestData()
+    requests.ProduceRequest.builder(new ProduceRequestData()
       .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
         Collections.singletonList(new ProduceRequestData.TopicProduceData()
           .setName(topic)

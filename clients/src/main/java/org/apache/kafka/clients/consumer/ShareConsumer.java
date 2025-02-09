@@ -22,6 +22,7 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.metrics.KafkaMetric;
 
 import java.io.Closeable;
 import java.time.Duration;
@@ -88,7 +89,7 @@ public interface ShareConsumer<K, V> extends Closeable {
     void setAcknowledgementCommitCallback(AcknowledgementCommitCallback callback);
 
     /**
-     * See {@link KafkaShareConsumer#clientInstanceId(Duration)}}
+     * @see KafkaShareConsumer#clientInstanceId(Duration)
      */
     Uuid clientInstanceId(Duration timeout);
 
@@ -96,6 +97,16 @@ public interface ShareConsumer<K, V> extends Closeable {
      * @see KafkaShareConsumer#metrics()
      */
     Map<MetricName, ? extends Metric> metrics();
+
+    /**
+     * @see KafkaShareConsumer#registerMetricForSubscription(KafkaMetric)
+     */
+    void registerMetricForSubscription(KafkaMetric metric);
+
+    /**
+     * @see KafkaShareConsumer#unregisterMetricFromSubscription(KafkaMetric)
+     */
+    void unregisterMetricFromSubscription(KafkaMetric metric);
 
     /**
      * @see KafkaShareConsumer#close()

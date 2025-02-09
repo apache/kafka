@@ -31,28 +31,7 @@ class EmptyTestInfo extends TestInfo {
 }
 
 object TestInfoUtils {
-  def isKRaft(testInfo: TestInfo): Boolean = {
-    if (testInfo.getDisplayName.contains("quorum=")) {
-      if (testInfo.getDisplayName.contains("quorum=kraft")) {
-        true
-      } else if (testInfo.getDisplayName.contains("quorum=zk")) {
-        false
-      } else {
-        throw new RuntimeException(s"Unknown quorum value")
-      }
-    } else {
-      false
-    }
-  }
-
-  def isZkMigrationTest(testInfo: TestInfo): Boolean = {
-    if (!isKRaft(testInfo)) {
-      false
-    } else {
-      testInfo.getDisplayName.contains("quorum=zkMigration")
-    }
-  }
-
+  
   final val TestWithParameterizedQuorumAndGroupProtocolNames = "{displayName}.quorum={0}.groupProtocol={1}"
 
   def isShareGroupTest(testInfo: TestInfo): Boolean = {
@@ -74,5 +53,13 @@ object TestInfoUtils {
    */
   def isTransactionV2Enabled(testInfo: TestInfo): Boolean = {
     !testInfo.getDisplayName.contains("isTV2Enabled=false")
+  }
+
+  /**
+   * Returns whether eligible leader replicas version 1 is enabled.
+   * When no parameter is provided, the default returned is false.
+   */
+  def isEligibleLeaderReplicasV1Enabled(testInfo: TestInfo): Boolean = {
+    testInfo.getDisplayName.contains("isELRV1Enabled=true")
   }
 }

@@ -21,6 +21,7 @@ import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackCompletedEvent;
 import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackNeededEvent;
+import org.apache.kafka.clients.consumer.internals.metrics.AsyncConsumerMetrics;
 import org.apache.kafka.clients.consumer.internals.metrics.ConsumerRebalanceMetricsManager;
 import org.apache.kafka.clients.consumer.internals.metrics.RebalanceCallbackMetricsManager;
 import org.apache.kafka.common.KafkaException;
@@ -28,6 +29,8 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.InterruptException;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData.Assignment;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData.TopicPartitions;
@@ -45,6 +48,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.InOrder;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -86,6 +90,7 @@ import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
@@ -93,6 +98,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+@SuppressWarnings("ClassDataAbstractionCoupling")
 public class ConsumerMembershipManagerTest {
 
     private static final String GROUP_ID = "test-group";
@@ -115,8 +121,8 @@ public class ConsumerMembershipManagerTest {
         subscriptionState = mock(SubscriptionState.class);
         commitRequestManager = mock(CommitRequestManager.class);
         backgroundEventQueue = new LinkedBlockingQueue<>();
-        backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue);
         time = new MockTime(0);
+        backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue, time, mock(AsyncConsumerMetrics.class));
         metrics = new Metrics(time);
         rebalanceMetricsManager = new ConsumerRebalanceMetricsManager(metrics);
 
@@ -1433,6 +1439,7 @@ public class ConsumerMembershipManagerTest {
         membershipManager.poll(time.milliseconds());
 
         testRevocationOfAllPartitionsCompleted(membershipManager);
+        verify(subscriptionState, times(2)).markPendingRevocation(Set.of(new TopicPartition("topic1", 0)));
     }
 
     @Test
@@ -1456,6 +1463,10 @@ public class ConsumerMembershipManagerTest {
 
         // Complete commit request
         commitResult.complete(null);
+        InOrder inOrder = inOrder(subscriptionState, commitRequestManager);
+        inOrder.verify(subscriptionState).markPendingRevocation(Set.of(new TopicPartition("topic1", 0)));
+        inOrder.verify(commitRequestManager).maybeAutoCommitSyncBeforeRevocation(anyLong());
+        inOrder.verify(subscriptionState).markPendingRevocation(Set.of(new TopicPartition("topic1", 0)));
 
         testRevocationOfAllPartitionsCompleted(membershipManager);
     }
@@ -1480,6 +1491,7 @@ public class ConsumerMembershipManagerTest {
         // Complete commit request
         commitResult.completeExceptionally(new KafkaException("Commit request failed with " +
                 "non-retriable error"));
+        verify(subscriptionState, times(2)).markPendingRevocation(Set.of(new TopicPartition("topic1", 0)));
 
         testRevocationOfAllPartitionsCompleted(membershipManager);
     }
@@ -1579,11 +1591,11 @@ public class ConsumerMembershipManagerTest {
         mockOwnedPartitionAndAssignmentReceived(membershipManager, topicId, topicName, Collections.emptyList());
 
         // Member received assignment to reconcile;
-
         receiveAssignment(topicId, Arrays.asList(0, 1), membershipManager);
 
         verifyReconciliationNotTriggered(membershipManager);
         membershipManager.poll(time.milliseconds());
+        verify(subscriptionState).markPendingRevocation(Set.of());
 
         // Member should complete reconciliation
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
@@ -1607,6 +1619,7 @@ public class ConsumerMembershipManagerTest {
         receiveAssignment(topicId, Collections.singletonList(1), membershipManager);
 
         membershipManager.poll(time.milliseconds());
+        verify(subscriptionState, times(2)).markPendingRevocation(Set.of(new TopicPartition(topicName, 0)));
 
         // Revocation should complete without requesting any metadata update given that the topic
         // received in target assignment should exist in local topic name cache.
@@ -1728,6 +1741,12 @@ public class ConsumerMembershipManagerTest {
 
     @Test
     public void testListenerCallbacksThrowsErrorOnPartitionsRevoked() {
+        testErrorsOnPartitionsRevoked(new WakeupException());
+        testErrorsOnPartitionsRevoked(new InterruptException("Intentional onPartitionsRevoked() error"));
+        testErrorsOnPartitionsRevoked(new IllegalArgumentException("Intentional onPartitionsRevoked() error"));
+    }
+
+    private void testErrorsOnPartitionsRevoked(RuntimeException error) {
         // Step 1: set up mocks
         String topicName = "topic1";
         Uuid topicId = Uuid.randomUuid();
@@ -1735,7 +1754,7 @@ public class ConsumerMembershipManagerTest {
         ConsumerMembershipManager membershipManager = createMemberInStableState();
         mockOwnedPartition(membershipManager, topicId, topicName);
         CounterConsumerRebalanceListener listener = new CounterConsumerRebalanceListener(
-                Optional.of(new IllegalArgumentException("Intentional onPartitionsRevoked() error")),
+                Optional.ofNullable(error),
                 Optional.empty(),
                 Optional.empty()
         );
@@ -1782,6 +1801,12 @@ public class ConsumerMembershipManagerTest {
 
     @Test
     public void testListenerCallbacksThrowsErrorOnPartitionsAssigned() {
+        testErrorsOnPartitionsAssigned(new WakeupException());
+        testErrorsOnPartitionsAssigned(new InterruptException("Intentional error"));
+        testErrorsOnPartitionsAssigned(new IllegalArgumentException("Intentional error"));
+    }
+
+    private void testErrorsOnPartitionsAssigned(RuntimeException error) {
         // Step 1: set up mocks
         ConsumerMembershipManager membershipManager = createMemberInStableState();
         String topicName = "topic1";
@@ -1789,7 +1814,7 @@ public class ConsumerMembershipManagerTest {
         mockOwnedPartition(membershipManager, topicId, topicName);
         CounterConsumerRebalanceListener listener = new CounterConsumerRebalanceListener(
                 Optional.empty(),
-                Optional.of(new IllegalArgumentException("Intentional onPartitionsAssigned() error")),
+                Optional.ofNullable(error),
                 Optional.empty()
         );
         ConsumerRebalanceListenerInvoker invoker = consumerRebalanceListenerInvoker();
@@ -1869,7 +1894,7 @@ public class ConsumerMembershipManagerTest {
             true
         );
 
-        verify(subscriptionState).enablePartitionsAwaitingCallback(addedPartitions);
+        verify(subscriptionState).enablePartitionsAwaitingCallback(assignedPartitions);
     }
 
     @Test
@@ -1905,12 +1930,14 @@ public class ConsumerMembershipManagerTest {
 
     @Test
     public void testOnPartitionsLostNoError() {
-        testOnPartitionsLost(Optional.empty());
+        testOnPartitionsLost(null);
     }
 
     @Test
     public void testOnPartitionsLostError() {
-        testOnPartitionsLost(Optional.of(new KafkaException("Intentional error for test")));
+        testOnPartitionsLost(new KafkaException("Intentional error for test"));
+        testOnPartitionsLost(new WakeupException());
+        testOnPartitionsLost(new InterruptException("Intentional error for test"));
     }
 
     private void assertLeaveGroupDueToExpiredPollAndTransitionToStale(ConsumerMembershipManager membershipManager) {
@@ -2044,7 +2071,7 @@ public class ConsumerMembershipManagerTest {
         receiveAssignment(topicId, Arrays.asList(partitionOwned, partitionAdded), membershipManager);
     }
 
-    private void testOnPartitionsLost(Optional<RuntimeException> lostError) {
+    private void testOnPartitionsLost(RuntimeException lostError) {
         // Step 1: set up mocks
         ConsumerMembershipManager membershipManager = createMemberInStableState();
         String topicName = "topic1";
@@ -2053,7 +2080,7 @@ public class ConsumerMembershipManagerTest {
         CounterConsumerRebalanceListener listener = new CounterConsumerRebalanceListener(
                 Optional.empty(),
                 Optional.empty(),
-                lostError
+                Optional.ofNullable(lostError)
         );
         ConsumerRebalanceListenerInvoker invoker = consumerRebalanceListenerInvoker();
 
@@ -2551,7 +2578,6 @@ public class ConsumerMembershipManagerTest {
         assertEquals(assignmentByTopicId, membershipManager.currentAssignment().partitions);
         assertFalse(membershipManager.reconciliationInProgress());
 
-        verify(subscriptionState).markPendingRevocation(anySet());
         List<TopicPartition> expectedTopicPartitionAssignment =
                 buildTopicPartitions(expectedCurrentAssignment);
         HashSet<TopicPartition> expectedSet = new HashSet<>(expectedTopicPartitionAssignment);

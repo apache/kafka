@@ -17,7 +17,9 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.GroupType;
+import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Objects;
 import java.util.Optional;
@@ -25,22 +27,26 @@ import java.util.Optional;
 /**
  * A listing of a group in the cluster.
  */
+@InterfaceStability.Evolving
 public class GroupListing {
     private final String groupId;
     private final Optional<GroupType> type;
     private final String protocol;
+    private final Optional<GroupState> groupState;
 
     /**
      * Create an instance with the specified parameters.
      *
-     * @param groupId Group Id
-     * @param type Group type
-     * @param protocol Protocol
+     * @param groupId    Group Id
+     * @param type       Group type
+     * @param protocol   Protocol
+     * @param groupState Group state
      */
-    public GroupListing(String groupId, Optional<GroupType> type, String protocol) {
+    public GroupListing(String groupId, Optional<GroupType> type, String protocol, Optional<GroupState> groupState) {
         this.groupId = groupId;
         this.type = Objects.requireNonNull(type);
         this.protocol = protocol;
+        this.groupState = groupState;
     }
 
     /**
@@ -76,6 +82,19 @@ public class GroupListing {
     }
 
     /**
+     * The group state.
+     * <p>
+     * If the broker returns a group state which is not recognised, as might
+     * happen when talking to a broker with a later version, the state will be
+     * <code>Optional.of(GroupState.UNKNOWN)</code>.
+     *
+     * @return An Optional containing the state, if available.
+     */
+    public Optional<GroupState> groupState() {
+        return groupState;
+    }
+
+    /**
      * If the group is a simple consumer group or not.
      */
     public boolean isSimpleConsumerGroup() {
@@ -88,12 +107,13 @@ public class GroupListing {
             "groupId='" + groupId + '\'' +
             ", type=" + type.map(GroupType::toString).orElse("none") +
             ", protocol='" + protocol + '\'' +
+            ", groupState=" + groupState.map(GroupState::toString).orElse("none") +
             ')';
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(groupId, type, protocol);
+        return Objects.hash(groupId, type, protocol, groupState);
     }
 
     @Override
@@ -103,6 +123,7 @@ public class GroupListing {
         GroupListing that = (GroupListing) o;
         return Objects.equals(groupId, that.groupId) &&
             Objects.equals(type, that.type) &&
-            Objects.equals(protocol, that.protocol);
+            Objects.equals(protocol, that.protocol) &&
+            Objects.equals(groupState, that.groupState);
     }
 }

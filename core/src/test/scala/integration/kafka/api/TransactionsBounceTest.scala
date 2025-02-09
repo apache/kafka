@@ -32,7 +32,6 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 
-import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 
@@ -70,19 +69,11 @@ class TransactionsBounceTest extends IntegrationTestHarness {
   // Since such quick rotation of servers is incredibly unrealistic, we allow this one test to preallocate ports, leaving
   // a small risk of hitting errors due to port conflicts. Hopefully this is infrequent enough to not cause problems.
   override def generateConfigs = {
-    FixedPortTestUtils.createBrokerConfigs(brokerCount, zkConnectOrNull)
+    FixedPortTestUtils.createBrokerConfigs(brokerCount)
       .map(KafkaConfig.fromProps(_, overridingProps))
   }
 
   override protected def brokerCount: Int = 4
-
-  @nowarn("cat=deprecation")
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly_KAFKA_17961"))
-  def testWithGroupId(quorum: String, groupProtocol: String): Unit = {
-    testBrokerFailure((producer, groupId, consumer) =>
-      producer.sendOffsetsToTransaction(TestUtils.consumerPositions(consumer).asJava, groupId))
-  }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))

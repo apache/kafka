@@ -891,7 +891,7 @@ public class SelectorTest {
             .filter(entry ->
                 entry.getKey().name().equals(name) && entry.getKey().tags().equals(tags))
             .findFirst();
-        if (!metric.isPresent())
+        if (metric.isEmpty())
             throw new Exception(String.format("Could not find metric called %s with tags %s", name, tags.toString()));
 
         return metric.get().getValue();
@@ -907,8 +907,8 @@ public class SelectorTest {
         }
         assertNotNull(selector.lowestPriorityChannel());
         for (int i = conns - 1; i >= 0; i--) {
-            if (i != 2)
-              assertEquals("", blockingRequest(String.valueOf(i), ""));
+            if (i != 2) 
+                assertEquals("", blockingRequest(String.valueOf(i), ""));
             time.sleep(10);
         }
         assertEquals("2", selector.lowestPriorityChannel().id());
@@ -1112,7 +1112,7 @@ public class SelectorTest {
         Optional<Map.Entry<MetricName, KafkaMetric>> metric = metrics.metrics().entrySet().stream()
                 .filter(entry -> entry.getKey().name().equals(name))
                 .findFirst();
-        if (!metric.isPresent())
+        if (metric.isEmpty())
             throw new Exception(String.format("Could not find metric called %s", name));
 
         return metric.get().getValue();

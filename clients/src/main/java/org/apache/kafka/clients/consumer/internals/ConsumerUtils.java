@@ -25,7 +25,6 @@ import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerInterceptor;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
@@ -69,6 +68,7 @@ public final class ConsumerUtils {
     public static final String CONSUMER_SHARE_METRIC_GROUP_PREFIX = "consumer-share";
     public static final String COORDINATOR_METRICS_SUFFIX = "-coordinator-metrics";
     public static final String CONSUMER_METRICS_SUFFIX = "-metrics";
+    public static final String CONSUMER_METRIC_GROUP = CONSUMER_METRIC_GROUP_PREFIX + CONSUMER_METRICS_SUFFIX;
 
     /**
      * A fixed, large enough value will suffice for max.
@@ -130,8 +130,8 @@ public final class ConsumerUtils {
     }
 
     public static SubscriptionState createSubscriptionState(ConsumerConfig config, LogContext logContext) {
-        String s = config.getString(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG).toUpperCase(Locale.ROOT);
-        OffsetResetStrategy strategy = OffsetResetStrategy.valueOf(s);
+        String s = config.getString(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG);
+        AutoOffsetResetStrategy strategy = AutoOffsetResetStrategy.fromString(s);
         return new SubscriptionState(logContext, strategy);
     }
 

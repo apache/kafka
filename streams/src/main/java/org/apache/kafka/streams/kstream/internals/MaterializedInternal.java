@@ -39,12 +39,19 @@ public final class MaterializedInternal<K, V, S extends StateStore> extends Mate
     public MaterializedInternal(final Materialized<K, V, S> materialized,
                                 final InternalNameProvider nameProvider,
                                 final String generatedStorePrefix) {
+        this(materialized, nameProvider, generatedStorePrefix, false);
+    }
+
+    public MaterializedInternal(final Materialized<K, V, S> materialized,
+                                final InternalNameProvider nameProvider,
+                                final String generatedStorePrefix,
+                                final boolean forceQueryable) {
         super(materialized);
 
         // if storeName is not provided, the corresponding KTable would never be queryable;
         // but we still need to provide an internal name for it in case we materialize.
-        queryable = storeName() != null;
-        if (!queryable && nameProvider != null) {
+        queryable = forceQueryable || storeName() != null;
+        if (storeName() == null && nameProvider != null) {
             storeName = nameProvider.newStoreName(generatedStorePrefix);
         }
 

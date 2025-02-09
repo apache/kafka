@@ -493,11 +493,11 @@ public class AssignmentsManagerTest {
                             setPartitions(Collections.singletonList(
                                 new AssignReplicasToDirsRequestData.PartitionData().
                                     setPartitionIndex(2))),
-                new AssignReplicasToDirsRequestData.TopicData().
-                    setTopicId(TOPIC_2).
-                    setPartitions(Collections.singletonList(
-                        new AssignReplicasToDirsRequestData.PartitionData().
-                            setPartitionIndex(5))))),
+                        new AssignReplicasToDirsRequestData.TopicData().
+                            setTopicId(TOPIC_2).
+                            setPartitions(Collections.singletonList(
+                                new AssignReplicasToDirsRequestData.PartitionData().
+                                    setPartitionIndex(5))))),
                 new AssignReplicasToDirsRequestData.DirectoryData().
                     setId(DIR_3).
                     setTopics(Collections.singletonList(

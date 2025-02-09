@@ -280,7 +280,13 @@ public class DedicatedMirrorIntegrationTest {
             // Cluster aliases
             final String a = "A";
             // Use a convoluted cluster name to ensure URL encoding/decoding works
-            final String b = "B- ._~:/?#[]@!$&'()*+;=\"<>%{}|\\^`618";
+            // The servlet 6.0 spec no longer allows some characters such as forward slashes, control characters,
+            // etc. even if they are encoded. Jetty 12 will enforce this and throw a 400 ambiguous error
+            // so the string of characters for the variable "b" has been updated to only include characters
+            // that are valid with the new spec.
+            // See https://jakarta.ee/specifications/servlet/6.0/jakarta-servlet-spec-6.0#uri-path-canonicalization
+            // and specifically the section: "10. Rejecting Suspicious Sequences." for details.
+            final String b = "B-_~:?#[]@!$&'()*+=\"<>{}|^`618";
             final String ab = a + "->" + b;
             final String ba = b + "->" + a;
             final String testTopicPrefix = "test-topic-";

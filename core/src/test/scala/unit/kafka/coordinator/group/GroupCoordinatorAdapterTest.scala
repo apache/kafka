@@ -19,14 +19,14 @@ package kafka.coordinator.group
 import kafka.coordinator.group.GroupCoordinatorConcurrencyTest.{JoinGroupCallback, SyncGroupCallback}
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.errors.{InvalidGroupIdException, UnsupportedVersionException}
-import org.apache.kafka.common.message.{ConsumerGroupHeartbeatRequestData, DeleteGroupsResponseData, DescribeGroupsResponseData, HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupRequestData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetDeleteRequestData, OffsetDeleteResponseData, OffsetFetchRequestData, OffsetFetchResponseData, ShareGroupHeartbeatRequestData, SyncGroupRequestData, SyncGroupResponseData, TxnOffsetCommitRequestData, TxnOffsetCommitResponseData}
+import org.apache.kafka.common.message.{ConsumerGroupHeartbeatRequestData, DeleteGroupsResponseData, DescribeGroupsResponseData, DescribeShareGroupOffsetsRequestData, HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupRequestData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetDeleteRequestData, OffsetDeleteResponseData, OffsetFetchRequestData, OffsetFetchResponseData, ShareGroupHeartbeatRequestData, SyncGroupRequestData, SyncGroupResponseData, TxnOffsetCommitRequestData, TxnOffsetCommitResponseData}
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol
 import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember
 import org.apache.kafka.common.message.OffsetDeleteRequestData.{OffsetDeleteRequestPartition, OffsetDeleteRequestTopic, OffsetDeleteRequestTopicCollection}
 import org.apache.kafka.common.message.OffsetDeleteResponseData.{OffsetDeleteResponsePartition, OffsetDeleteResponsePartitionCollection, OffsetDeleteResponseTopic, OffsetDeleteResponseTopicCollection}
 import org.apache.kafka.common.network.{ClientInformation, ListenerName}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.requests.{OffsetFetchResponse, RequestContext, RequestHeader}
+import org.apache.kafka.common.requests.{OffsetFetchResponse, RequestContext, RequestHeader, TransactionResult}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.{BufferSupplier, Time}
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource
@@ -37,6 +37,7 @@ import org.apache.kafka.test.TestUtils.assertFutureThrows
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
+import org.mockito.ArgumentMatchers.any
 import org.mockito.{ArgumentCaptor, ArgumentMatchers}
 import org.mockito.Mockito.{mock, verify, when}
 
@@ -88,6 +89,22 @@ class GroupCoordinatorAdapterTest {
       .setGroupId("group")
 
     val future = adapter.shareGroupHeartbeat(ctx, request)
+
+    assertTrue(future.isDone)
+    assertTrue(future.isCompletedExceptionally)
+    assertFutureThrows(future, classOf[UnsupportedVersionException])
+  }
+
+  @Test
+  def testDescribeShareGroupOffsets(): Unit = {
+    val groupCoordinator = mock(classOf[GroupCoordinator])
+    val adapter = new GroupCoordinatorAdapter(groupCoordinator, Time.SYSTEM)
+
+    val context = makeContext(ApiKeys.DESCRIBE_SHARE_GROUP_OFFSETS, ApiKeys.DESCRIBE_SHARE_GROUP_OFFSETS.latestVersion)
+    val request = new DescribeShareGroupOffsetsRequestData()
+      .setGroupId("group")
+
+    val future = adapter.describeShareGroupOffsets(context, request)
 
     assertTrue(future.isDone)
     assertTrue(future.isCompletedExceptionally)
@@ -414,12 +431,12 @@ class GroupCoordinatorAdapterTest {
       ))
     )
 
-    when(groupCoordinator.handleDescribeGroup(groupId1)).thenReturn {
-      (Errors.NONE, groupSummary1)
+    when(groupCoordinator.handleDescribeGroup(groupId1, ApiKeys.DESCRIBE_GROUPS.latestVersion)).thenReturn {
+      (Errors.NONE, None, groupSummary1)
     }
 
-    when(groupCoordinator.handleDescribeGroup(groupId2)).thenReturn {
-      (Errors.NOT_COORDINATOR, GroupCoordinator.EmptyGroup)
+    when(groupCoordinator.handleDescribeGroup(groupId2, ApiKeys.DESCRIBE_GROUPS.latestVersion)).thenReturn {
+      (Errors.NOT_COORDINATOR, None, GroupCoordinator.EmptyGroup)
     }
 
     val ctx = makeContext(ApiKeys.DESCRIBE_GROUPS, ApiKeys.DESCRIBE_GROUPS.latestVersion)
@@ -677,7 +694,6 @@ class GroupCoordinatorAdapterTest {
             new OffsetCommitRequestData.OffsetCommitRequestPartition()
               .setPartitionIndex(0)
               .setCommittedOffset(100)
-              .setCommitTimestamp(now)
               .setCommittedLeaderEpoch(1)
           ).asJava)
       ).asJava)
@@ -929,5 +945,27 @@ class GroupCoordinatorAdapterTest {
     assertTrue(future.isDone)
     assertTrue(future.isCompletedExceptionally)
     assertFutureThrows(future, classOf[UnsupportedVersionException])
+  }
+
+  @Test
+  def testOnTransactionCompletedWithUnexpectedException(): Unit = {
+    val groupCoordinator = mock(classOf[GroupCoordinator])
+    val adapter = new GroupCoordinatorAdapter(groupCoordinator, Time.SYSTEM)
+
+    when(groupCoordinator.scheduleHandleTxnCompletion(
+      any(),
+      any(),
+      any()
+    )).thenThrow(new IllegalStateException("Oh no!"))
+
+    val future = adapter.onTransactionCompleted(
+      10,
+      Seq.empty[TopicPartition].asJava,
+      TransactionResult.COMMIT
+    )
+
+    assertTrue(future.isDone)
+    assertTrue(future.isCompletedExceptionally)
+    assertFutureThrows(future, classOf[IllegalStateException])
   }
 }

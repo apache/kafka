@@ -68,12 +68,12 @@ public class ShareSessionHandler {
      */
     private final LinkedHashMap<TopicPartition, TopicIdPartition> sessionPartitions;
 
-    /*
+    /**
      * The partitions to be included in the next ShareFetch request.
      */
     private LinkedHashMap<TopicPartition, TopicIdPartition> nextPartitions;
 
-    /*
+    /**
      * The acknowledgements to be included in the next ShareFetch/ShareAcknowledge request.
      */
     private LinkedHashMap<TopicIdPartition, Acknowledgements> nextAcknowledgements;
@@ -101,6 +101,10 @@ public class ShareSessionHandler {
         if (partitionAcknowledgements != null) {
             nextAcknowledgements.put(topicIdPartition, partitionAcknowledgements);
         }
+    }
+
+    public void addPartitionToAcknowledgeOnly(TopicIdPartition topicIdPartition, Acknowledgements partitionAcknowledgements) {
+        nextAcknowledgements.put(topicIdPartition, partitionAcknowledgements);
     }
 
     public ShareFetchRequest.Builder newShareFetchBuilder(String groupId, FetchConfig fetchConfig) {
@@ -171,13 +175,15 @@ public class ShareSessionHandler {
 
         return ShareFetchRequest.Builder.forConsumer(
                 groupId, nextMetadata, fetchConfig.maxWaitMs,
-                fetchConfig.minBytes, fetchConfig.maxBytes, fetchConfig.fetchSize,
+                fetchConfig.minBytes, fetchConfig.maxBytes, fetchConfig.fetchSize, fetchConfig.maxPollRecords,
                 added, removed, acknowledgementBatches);
     }
 
     public ShareAcknowledgeRequest.Builder newShareAcknowledgeBuilder(String groupId, FetchConfig fetchConfig) {
         if (nextMetadata.isNewSession()) {
             // A share session cannot be started with a ShareAcknowledge request
+            nextPartitions.clear();
+            nextAcknowledgements.clear();
             return null;
         }
 

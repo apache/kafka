@@ -24,7 +24,7 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
-import com.fasterxml.jackson.module.afterburner.AfterburnerModule;
+import com.fasterxml.jackson.module.blackbird.BlackbirdModule;
 
 import java.util.Collections;
 import java.util.Set;
@@ -53,13 +53,13 @@ public class JsonDeserializer implements Deserializer<JsonNode> {
     JsonDeserializer(
         final Set<DeserializationFeature> deserializationFeatures,
         final JsonNodeFactory jsonNodeFactory,
-        final boolean enableAfterburner
+        final boolean enableBlackbird
     ) {
         objectMapper.enable(JsonReadFeature.ALLOW_LEADING_ZEROS_FOR_NUMBERS.mappedFeature());
         deserializationFeatures.forEach(objectMapper::enable);
         objectMapper.setNodeFactory(jsonNodeFactory);
-        if (enableAfterburner) {
-            objectMapper.registerModule(new AfterburnerModule());
+        if (enableBlackbird) {
+            objectMapper.registerModule(new BlackbirdModule());
         }
     }
 

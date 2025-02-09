@@ -70,7 +70,6 @@ import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 
@@ -91,7 +90,7 @@ public class ClusterControlManager {
         private long sessionTimeoutNs = DEFAULT_SESSION_TIMEOUT_NS;
         private ReplicaPlacer replicaPlacer = null;
         private FeatureControlManager featureControl = null;
-        private BrokerUncleanShutdownHandler brokerUncleanShutdownHandler = null;
+        private BrokerShutdownHandler brokerShutdownHandler = null;
         private String interBrokerListenerName = "PLAINTEXT";
 
         Builder setLogContext(LogContext logContext) {
@@ -129,8 +128,8 @@ public class ClusterControlManager {
             return this;
         }
 
-        Builder setBrokerUncleanShutdownHandler(BrokerUncleanShutdownHandler brokerUncleanShutdownHandler) {
-            this.brokerUncleanShutdownHandler = brokerUncleanShutdownHandler;
+        Builder setBrokerShutdownHandler(BrokerShutdownHandler brokerShutdownHandler) {
+            this.brokerShutdownHandler = brokerShutdownHandler;
             return this;
         }
 
@@ -155,8 +154,8 @@ public class ClusterControlManager {
             if (featureControl == null) {
                 throw new RuntimeException("You must specify FeatureControlManager");
             }
-            if (brokerUncleanShutdownHandler == null) {
-                throw new RuntimeException("You must specify BrokerUncleanShutdownHandler");
+            if (brokerShutdownHandler == null) {
+                throw new RuntimeException("You must specify BrokerShutdownHandler");
             }
             return new ClusterControlManager(logContext,
                 clusterId,
@@ -165,7 +164,7 @@ public class ClusterControlManager {
                 sessionTimeoutNs,
                 replicaPlacer,
                 featureControl,
-                brokerUncleanShutdownHandler,
+                brokerShutdownHandler,
                 interBrokerListenerName
             );
         }
@@ -253,7 +252,7 @@ public class ClusterControlManager {
      */
     private final FeatureControlManager featureControl;
 
-    private final BrokerUncleanShutdownHandler brokerUncleanShutdownHandler;
+    private final BrokerShutdownHandler brokerShutdownHandler;
 
     /**
      * The statically configured inter-broker listener name.
@@ -278,7 +277,7 @@ public class ClusterControlManager {
         long sessionTimeoutNs,
         ReplicaPlacer replicaPlacer,
         FeatureControlManager featureControl,
-        BrokerUncleanShutdownHandler brokerUncleanShutdownHandler,
+        BrokerShutdownHandler brokerShutdownHandler,
         String interBrokerListenerName
     ) {
         this.logContext = logContext;
@@ -294,7 +293,7 @@ public class ClusterControlManager {
         this.featureControl = featureControl;
         this.controllerRegistrations = new TimelineHashMap<>(snapshotRegistry, 0);
         this.directoryToBroker = new TimelineHashMap<>(snapshotRegistry, 0);
-        this.brokerUncleanShutdownHandler = brokerUncleanShutdownHandler;
+        this.brokerShutdownHandler = brokerShutdownHandler;
         this.interBrokerListenerName = interBrokerListenerName;
     }
 
@@ -307,8 +306,11 @@ public class ClusterControlManager {
      */
     public void activate() {
         heartbeatManager = new BrokerHeartbeatManager(logContext, time, sessionTimeoutNs);
+        long nowNs = time.nanoseconds();
         for (BrokerRegistration registration : brokerRegistrations.values()) {
             heartbeatManager.register(registration.id(), registration.fenced());
+            heartbeatManager.tracker().updateContactTime(
+                new BrokerIdAndEpoch(registration.id(), registration.epoch()), nowNs);
         }
     }
 
@@ -327,21 +329,14 @@ public class ClusterControlManager {
         return brokerRegistrations;
     }
 
-    Set<Integer> fencedBrokerIds() {
-        return brokerRegistrations.values()
-            .stream()
-            .filter(BrokerRegistration::fenced)
-            .map(BrokerRegistration::id)
-            .collect(Collectors.toSet());
-    }
-
     /**
      * Process an incoming broker registration request.
      */
     public ControllerResult<BrokerRegistrationReply> registerBroker(
         BrokerRegistrationRequestData request,
         long newBrokerEpoch,
-        FinalizedControllerFeatures finalizedFeatures
+        FinalizedControllerFeatures finalizedFeatures,
+        boolean cleanShutdownDetectionEnabled
     ) {
         if (heartbeatManager == null) {
             throw new RuntimeException("ClusterControlManager is not active.");
@@ -354,8 +349,10 @@ public class ClusterControlManager {
         List<ApiMessageAndVersion> records = new ArrayList<>();
         BrokerRegistration existing = brokerRegistrations.get(brokerId);
         Uuid prevIncarnationId = null;
+        long storedBrokerEpoch = -2; // BrokerRegistration.previousBrokerEpoch default value is -1
         if (existing != null) {
             prevIncarnationId = existing.incarnationId();
+            storedBrokerEpoch = existing.epoch();
             if (heartbeatManager.hasValidSession(brokerId, existing.epoch())) {
                 if (!request.incarnationId().equals(prevIncarnationId)) {
                     throw new DuplicateBrokerRegistrationException("Another broker is " +
@@ -430,7 +427,9 @@ public class ClusterControlManager {
 
         if (!request.incarnationId().equals(prevIncarnationId)) {
             int prevNumRecords = records.size();
-            brokerUncleanShutdownHandler.addRecordsForShutdown(request.brokerId(), records);
+            boolean isCleanShutdown = cleanShutdownDetectionEnabled ?
+                storedBrokerEpoch == request.previousBrokerEpoch() : false;
+            brokerShutdownHandler.addRecordsForShutdown(request.brokerId(), isCleanShutdown, records);
             int numRecordsAdded = records.size() - prevNumRecords;
             if (existing == null) {
                 log.info("No previous registration found for broker {}. New incarnation ID is " +
@@ -460,7 +459,11 @@ public class ClusterControlManager {
         }
         heartbeatManager.register(brokerId, record.fenced());
 
-        return ControllerResult.atomicOf(records, new BrokerRegistrationReply(record.brokerEpoch()));
+        // A broker registration that cleans up a previous incarnation's unclean shutdown may generate a large number of records.
+        // It is safe to return these records as a non-atomic batch as long as the registration record is added last.
+        // This ensures that in case of a controller failure, the broker will re-register and the new controller
+        // can retry the unclean shutdown cleanup.
+        return ControllerResult.of(records, new BrokerRegistrationReply(record.brokerEpoch()));
     }
 
     ControllerResult<Void> registerController(ControllerRegistrationRequestData request) {
@@ -849,7 +852,7 @@ public class ClusterControlManager {
     }
 
     @FunctionalInterface
-    interface BrokerUncleanShutdownHandler {
-        void addRecordsForShutdown(int brokerId, List<ApiMessageAndVersion> records);
+    interface BrokerShutdownHandler {
+        void addRecordsForShutdown(int brokerId, boolean isCleanShutdown, List<ApiMessageAndVersion> records);
     }
 }

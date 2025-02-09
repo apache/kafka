@@ -22,10 +22,7 @@ from ducktape.utils.util import wait_until
 
 from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.services.kafka import KafkaService, quorum
-from kafkatest.services.verifiable_producer import VerifiableProducer
-from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.utils.remote_account import line_count, file_exists
-from kafkatest.version import LATEST_0_8_2
 
 
 class ConsoleConsumerTest(Test):
@@ -34,20 +31,14 @@ class ConsoleConsumerTest(Test):
         super(ConsoleConsumerTest, self).__init__(test_context)
 
         self.topic = "topic"
-        self.zk = ZookeeperService(test_context, num_nodes=1) if quorum.for_test(test_context) == quorum.zk else None
-        self.kafka = KafkaService(self.test_context, num_nodes=1, zk=self.zk, zk_chroot="/kafka",
+        self.kafka = KafkaService(self.test_context, num_nodes=1, zk=None,
                                   topics={self.topic: {"partitions": 1, "replication-factor": 1}})
         self.consumer = ConsoleConsumer(self.test_context, num_nodes=1, kafka=self.kafka, topic=self.topic)
-
-    def setUp(self):
-        if self.zk:
-            self.zk.start()
 
     @cluster(num_nodes=3)
     @matrix(security_protocol=['PLAINTEXT', 'SSL'], metadata_quorum=quorum.all_kraft)
     @cluster(num_nodes=4)
-    @matrix(security_protocol=['SASL_SSL'], sasl_mechanism=['PLAIN'], metadata_quorum=quorum.all_kraft)
-    @matrix(security_protocol=['SASL_SSL'], sasl_mechanism=['SCRAM-SHA-256', 'SCRAM-SHA-512']) # SCRAM not yet supported with KRaft
+    @matrix(security_protocol=['SASL_SSL'], sasl_mechanism=['PLAIN', 'SCRAM-SHA-256', 'SCRAM-SHA-512'], metadata_quorum=quorum.all_kraft)
     @matrix(security_protocol=['SASL_PLAINTEXT', 'SASL_SSL'], metadata_quorum=quorum.all_kraft)
     def test_lifecycle(self, security_protocol, sasl_mechanism='GSSAPI', metadata_quorum=quorum.zk):
         """Check that console consumer starts/stops properly, and that we are capturing log output."""
@@ -77,24 +68,3 @@ class ConsoleConsumerTest(Test):
         assert line_count(node, ConsoleConsumer.STDOUT_CAPTURE) == 0
 
         self.consumer.stop_node(node)
-
-    @cluster(num_nodes=4)
-    def test_version(self):
-        """Check that console consumer v0.8.2.X successfully starts and consumes messages."""
-        self.kafka.start()
-
-        num_messages = 1000
-        self.producer = VerifiableProducer(self.test_context, num_nodes=1, kafka=self.kafka, topic=self.topic,
-                                           max_messages=num_messages, throughput=1000)
-        self.producer.start()
-        self.producer.wait()
-
-        self.consumer.nodes[0].version = LATEST_0_8_2
-        self.consumer.new_consumer = False
-        self.consumer.consumer_timeout_ms = 1000
-        self.consumer.start()
-        self.consumer.wait()
-
-        num_consumed = len(self.consumer.messages_consumed[1])
-        num_produced = self.producer.num_acked
-        assert num_produced == num_consumed, "num_produced: %d, num_consumed: %d" % (num_produced, num_consumed)

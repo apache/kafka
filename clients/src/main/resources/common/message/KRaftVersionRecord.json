@@ -20,8 +20,8 @@
   "flexibleVersions": "0+",
   "fields": [
     { "name": "Version", "type": "int16", "versions": "0+",
-      "about": "The version of the kraft version record" },
+      "about": "The version of the kraft version record." },
     { "name": "KRaftVersion", "type": "int16", "versions": "0+",
-      "about": "The kraft protocol version" }
+      "about": "The kraft protocol version." }
   ]
 }

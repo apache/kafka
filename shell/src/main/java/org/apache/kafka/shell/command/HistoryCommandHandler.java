@@ -93,7 +93,7 @@ public final class HistoryCommandHandler implements Commands.Handler {
         PrintWriter writer,
         MetadataShellState state
     ) throws Exception {
-        if (!shell.isPresent()) {
+        if (shell.isEmpty()) {
             throw new RuntimeException("The history command requires a shell.");
         }
         Iterator<Map.Entry<Integer, String>> iter = shell.get().history(numEntriesToShow);
@@ -110,8 +110,7 @@ public final class HistoryCommandHandler implements Commands.Handler {
 
     @Override
     public boolean equals(Object other) {
-        if (!(other instanceof HistoryCommandHandler)) return false;
-        HistoryCommandHandler o = (HistoryCommandHandler) other;
+        if (!(other instanceof HistoryCommandHandler o)) return false;
         return o.numEntriesToShow == numEntriesToShow;
     }
 }

@@ -94,4 +94,28 @@ public class SnapshotRegistryTest {
 
         assertEquals(latest, duplicate);
     }
+
+    @Test
+    public void testScrub() {
+        SnapshotRegistry registry = new SnapshotRegistry(new LogContext(), 2);
+        new TimelineInteger(registry).set(123);
+        new TimelineInteger(registry).set(123);
+        assertEquals(0, registry.numScrubs());
+        new TimelineInteger(registry).set(123);
+        assertEquals(1, registry.numScrubs());
+        new TimelineInteger(registry).set(123);
+        new TimelineInteger(registry).set(123);
+        new TimelineInteger(registry).set(123);
+        assertEquals(2, registry.numScrubs());
+    }
+
+    @Test
+    public void testReset() {
+        SnapshotRegistry registry = new SnapshotRegistry(new LogContext(), 2);
+        TimelineInteger integer = new TimelineInteger(registry);
+        integer.set(123);
+        registry.reset();
+        assertEquals(0, integer.get());
+        assertEquals(1, registry.numScrubs());
+    }
 }

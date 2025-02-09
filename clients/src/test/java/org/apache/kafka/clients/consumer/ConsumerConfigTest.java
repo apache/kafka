@@ -210,7 +210,7 @@ public class ConsumerConfigTest {
         configs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializerClass);
         configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClass);
         final ConsumerConfig consumerConfig = new ConsumerConfig(configs);
-        assertEquals(MetadataRecoveryStrategy.NONE.name, consumerConfig.getString(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG));
+        assertEquals(MetadataRecoveryStrategy.REBOOTSTRAP.name, consumerConfig.getString(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG));
     }
 
     @Test
@@ -236,5 +236,24 @@ public class ConsumerConfigTest {
         } else {
             assertThrows(ConfigException.class, () -> new ConsumerConfig(configs));
         }
+    }
+
+    @Test
+    public void testUnsupportedConfigsWithConsumerGroupProtocol() {
+        testUnsupportedConfigsWithConsumerGroupProtocol(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, "RoundRobinAssignor");
+        testUnsupportedConfigsWithConsumerGroupProtocol(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 1000);
+        testUnsupportedConfigsWithConsumerGroupProtocol(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 30000);
+    }
+
+    private void testUnsupportedConfigsWithConsumerGroupProtocol(String configName, Object value) {
+        final Map<String, Object> configs = Map.of(
+                ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializerClass,
+                ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClass,
+                ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name(),
+                configName, value
+        );
+        ConfigException exception = assertThrows(ConfigException.class, () -> new ConsumerConfig(configs));
+        assertEquals(configName + " cannot be set when " + 
+                ConsumerConfig.GROUP_PROTOCOL_CONFIG + "=" + GroupProtocol.CONSUMER.name(), exception.getMessage());
     }
 }

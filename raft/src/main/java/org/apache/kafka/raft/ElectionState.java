@@ -73,11 +73,11 @@ public final class ElectionState {
     public boolean isVotedCandidate(ReplicaKey nodeKey) {
         if (nodeKey.id() < 0) {
             throw new IllegalArgumentException("Invalid node key " + nodeKey);
-        } else if (!votedKey.isPresent()) {
+        } else if (votedKey.isEmpty()) {
             return false;
         } else if (votedKey.get().id() != nodeKey.id()) {
             return false;
-        } else if (!votedKey.get().directoryId().isPresent()) {
+        } else if (votedKey.get().directoryId().isEmpty()) {
             // when the persisted voted directory id is not present assume that we voted for this candidate;
             // this happens when the kraft version is 0.
             return true;
@@ -87,7 +87,7 @@ public final class ElectionState {
     }
 
     public int leaderId() {
-        if (!leaderId.isPresent())
+        if (leaderId.isEmpty())
             throw new IllegalStateException("Attempt to access nil leaderId");
         return leaderId.getAsInt();
     }
@@ -101,7 +101,7 @@ public final class ElectionState {
     }
 
     public ReplicaKey votedKey() {
-        if (!votedKey.isPresent()) {
+        if (votedKey.isEmpty()) {
             throw new IllegalStateException("Attempt to access nil votedId");
         }
 
@@ -185,12 +185,17 @@ public final class ElectionState {
         return new ElectionState(epoch, OptionalInt.empty(), Optional.of(votedKey), voters);
     }
 
-    public static ElectionState withElectedLeader(int epoch, int leaderId, Set<Integer> voters) {
+    public static ElectionState withElectedLeader(
+        int epoch,
+        int leaderId,
+        Optional<ReplicaKey> votedKey,
+        Set<Integer> voters
+    ) {
         if (leaderId < 0) {
             throw new IllegalArgumentException("Illegal leader Id " + leaderId + ": must be non-negative");
         }
 
-        return new ElectionState(epoch, OptionalInt.of(leaderId), Optional.empty(), voters);
+        return new ElectionState(epoch, OptionalInt.of(leaderId), votedKey, voters);
     }
 
     public static ElectionState withUnknownLeader(int epoch, Set<Integer> voters) {

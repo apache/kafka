@@ -23,9 +23,7 @@ import org.apache.kafka.common.network.ListenerName;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -177,7 +175,7 @@ public class JaasContext {
         AppConfigurationEntry[] entries = configuration.getAppConfigurationEntry(name);
         if (entries == null)
             throw new IllegalArgumentException("Could not find a '" + name + "' entry in this JAAS configuration.");
-        this.configurationEntries = Collections.unmodifiableList(new ArrayList<>(Arrays.asList(entries)));
+        this.configurationEntries = List.of(entries);
         this.dynamicJaasConfig = dynamicJaasConfig;
     }
 

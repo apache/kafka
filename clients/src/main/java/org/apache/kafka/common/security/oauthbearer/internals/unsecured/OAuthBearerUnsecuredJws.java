@@ -349,9 +349,7 @@ public class OAuthBearerUnsecuredJws implements OAuthBearerToken {
             if (Utils.isBlank(scopeClaimValue))
                 return Collections.emptySet();
             else {
-                Set<String> retval = new HashSet<>();
-                retval.add(scopeClaimValue.trim());
-                return Collections.unmodifiableSet(retval);
+                return Set.of(scopeClaimValue.trim());
             }
         }
         List<?> scopeClaimValue = claim(scopeClaimName, List.class);

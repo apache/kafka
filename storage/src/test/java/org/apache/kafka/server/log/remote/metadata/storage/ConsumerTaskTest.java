@@ -18,7 +18,7 @@ package org.apache.kafka.server.log.remote.metadata.storage;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.MockConsumer;
-import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
@@ -84,7 +84,7 @@ public class ConsumerTaskTest {
     public void beforeEach() {
         final Map<TopicPartition, Long> offsets = remoteLogPartitions.stream()
             .collect(Collectors.toMap(Function.identity(), e -> 0L));
-        consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
+        consumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name());
         consumer.updateBeginningOffsets(offsets);
         consumerTask = new ConsumerTask(handler, partitioner, consumer, 10L, 300_000L, Time.SYSTEM);
     }

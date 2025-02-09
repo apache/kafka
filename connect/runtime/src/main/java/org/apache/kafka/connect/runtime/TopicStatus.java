@@ -93,10 +93,9 @@ public class TopicStatus {
         if (this == o) {
             return true;
         }
-        if (!(o instanceof TopicStatus)) {
+        if (!(o instanceof TopicStatus that)) {
             return false;
         }
-        TopicStatus that = (TopicStatus) o;
         return task == that.task &&
                 discoverTimestamp == that.discoverTimestamp &&
                 topic.equals(that.topic) &&

@@ -39,7 +39,9 @@ class ConsumerTopicCreationTest {
   @MethodSource(Array("parameters"))
   def testAutoTopicCreation(groupProtocol: String, brokerAutoTopicCreationEnable: JBoolean, consumerAllowAutoCreateTopics: JBoolean): Unit = {
     val testCase = new ConsumerTopicCreationTest.TestCase(groupProtocol, brokerAutoTopicCreationEnable, consumerAllowAutoCreateTopics)
-    testCase.setUp(new EmptyTestInfo())
+    testCase.setUp(new EmptyTestInfo() {
+      override def getDisplayName = "quorum=kraft"
+    })
     try testCase.test() finally testCase.tearDown()
   }
 
@@ -88,7 +90,7 @@ object ConsumerTopicCreationTest {
       }, "Timed out waiting to consume")
 
       // MetadataRequest is guaranteed to create the topic znode if creation was required
-      val topicCreated = zkClient.getAllTopicsInCluster().contains(topic_2)
+      val topicCreated = getTopicIds().keySet.contains(topic_2)
       if (brokerAutoTopicCreationEnable && consumerAllowAutoCreateTopics)
         assertTrue(topicCreated)
       else

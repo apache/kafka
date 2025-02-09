@@ -75,8 +75,7 @@ public class BrokerHeartbeatManager {
 
         /**
          * The offset at which the broker should complete its controlled shutdown, or -1
-         * if the broker is not performing a controlled shutdown.  When this field is
-         * updated, we also have to update the broker's position in the shuttingDown set.
+         * if the broker is not performing a controlled shutdown.
          */
         private long controlledShutdownOffset;
 

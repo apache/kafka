@@ -24,6 +24,7 @@ import org.apache.kafka.common.message.BeginQuorumEpochRequestData;
 import org.apache.kafka.common.message.EndQuorumEpochRequestData;
 import org.apache.kafka.common.message.FetchRequestData;
 import org.apache.kafka.common.message.FetchSnapshotRequestData;
+import org.apache.kafka.common.message.UpdateRaftVoterRequestData;
 import org.apache.kafka.common.message.VoteRequestData;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -35,6 +36,7 @@ import org.apache.kafka.common.requests.BeginQuorumEpochRequest;
 import org.apache.kafka.common.requests.EndQuorumEpochRequest;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchSnapshotRequest;
+import org.apache.kafka.common.requests.UpdateRaftVoterRequest;
 import org.apache.kafka.common.requests.VoteRequest;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.util.InterBrokerSendThread;
@@ -187,6 +189,8 @@ public class KafkaNetworkChannel implements NetworkChannel {
             return new FetchRequest.SimpleBuilder((FetchRequestData) requestData);
         if (requestData instanceof FetchSnapshotRequestData)
             return new FetchSnapshotRequest.Builder((FetchSnapshotRequestData) requestData);
+        if (requestData instanceof UpdateRaftVoterRequestData)
+            return new UpdateRaftVoterRequest.Builder((UpdateRaftVoterRequestData) requestData);
         if (requestData instanceof ApiVersionsRequestData)
             return new ApiVersionsRequest.Builder((ApiVersionsRequestData) requestData,
                 ApiKeys.API_VERSIONS.oldestVersion(),

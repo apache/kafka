@@ -160,7 +160,7 @@ public class RequestManagers implements Closeable {
                                                      final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker,
                                                      final MemberStateListener applicationThreadMemberStateListener
                                                      ) {
-        return new CachedSupplier<RequestManagers>() {
+        return new CachedSupplier<>() {
             @Override
             protected RequestManagers create() {
                 final NetworkClientDelegate networkClientDelegate = networkClientDelegateSupplier.get();
@@ -194,7 +194,6 @@ public class RequestManagers implements Closeable {
                             logContext,
                             retryBackoffMs,
                             retryBackoffMaxMs,
-                            backgroundEventHandler,
                             groupRebalanceConfig.groupId);
                     commitRequestManager = new CommitRequestManager(
                             time,
@@ -284,7 +283,7 @@ public class RequestManagers implements Closeable {
                                                      final Optional<ClientTelemetryReporter> clientTelemetryReporter,
                                                      final Metrics metrics
     ) {
-        return new CachedSupplier<RequestManagers>() {
+        return new CachedSupplier<>() {
             @Override
             protected RequestManagers create() {
                 long retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
@@ -295,7 +294,6 @@ public class RequestManagers implements Closeable {
                         logContext,
                         retryBackoffMs,
                         retryBackoffMaxMs,
-                        backgroundEventHandler,
                         groupRebalanceConfig.groupId);
                 ShareMembershipManager shareMembershipManager = new ShareMembershipManager(
                         logContext,
@@ -303,7 +301,7 @@ public class RequestManagers implements Closeable {
                         null,
                         subscriptions,
                         metadata,
-                    time,
+                        time,
                         metrics);
 
                 // Update the group member ID label in the client telemetry reporter.

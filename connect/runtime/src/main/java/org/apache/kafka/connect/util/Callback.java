@@ -32,7 +32,7 @@ public interface Callback<V> {
     }
 
     default <V2> Callback<V2> chainStaging(Callback<V2> chained) {
-        return new Callback<V2>() {
+        return new Callback<>() {
             @Override
             public void recordStage(Stage stage) {
                 Callback.this.recordStage(stage);

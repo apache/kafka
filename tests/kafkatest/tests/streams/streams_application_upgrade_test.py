@@ -21,14 +21,14 @@ from ducktape.utils.util import wait_until
 from kafkatest.services.kafka import KafkaService, quorum
 from kafkatest.services.streams import StreamsSmokeTestDriverService, StreamsSmokeTestJobRunnerService
 from kafkatest.version import LATEST_2_2, LATEST_2_3, LATEST_2_4, LATEST_2_5, LATEST_2_6, LATEST_2_7, LATEST_2_8, \
-  LATEST_3_0, LATEST_3_1, LATEST_3_2, LATEST_3_3, LATEST_3_4, LATEST_3_5, LATEST_3_6, LATEST_3_7, LATEST_3_8, DEV_VERSION, KafkaVersion
+  LATEST_3_0, LATEST_3_1, LATEST_3_2, LATEST_3_3, LATEST_3_4, LATEST_3_5, LATEST_3_6, LATEST_3_7, LATEST_3_8, LATEST_3_9, DEV_VERSION, KafkaVersion
 
 smoke_test_versions = [str(LATEST_2_2), str(LATEST_2_3), str(LATEST_2_4),
                        str(LATEST_2_5), str(LATEST_2_6), str(LATEST_2_7),
                        str(LATEST_2_8), str(LATEST_3_0), str(LATEST_3_1),
                        str(LATEST_3_2), str(LATEST_3_3), str(LATEST_3_4),
                        str(LATEST_3_5), str(LATEST_3_6), str(LATEST_3_7),
-                       str(LATEST_3_8)]
+                       str(LATEST_3_8), str(LATEST_3_9)]
 
 class StreamsUpgradeTest(Test):
     """

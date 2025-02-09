@@ -24,7 +24,7 @@ from kafkatest.services.kafka import KafkaService, config_property, quorum, cons
 from kafkatest.services.connect import ConnectDistributedService, ConnectServiceBase, VerifiableSource, VerifiableSink, ConnectRestError, MockSink, MockSource
 from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.services.security.security_config import SecurityConfig
-from kafkatest.version import DEV_BRANCH, LATEST_2_3, LATEST_2_2, LATEST_2_1, LATEST_2_0, LATEST_1_1, LATEST_1_0, KafkaVersion
+from kafkatest.version import DEV_BRANCH, LATEST_2_3, LATEST_2_2, LATEST_2_1, KafkaVersion
 
 from functools import reduce
 from collections import Counter, namedtuple
@@ -563,7 +563,16 @@ class ConnectDistributedTest(Test):
         # have been discarded
         self._restart_worker(worker)
         restarted_loggers = self.cc.get_all_loggers(worker)
-        assert initial_loggers == restarted_loggers
+
+        for loggerName in restarted_loggers:
+            logger = self.cc.get_logger(worker, loggerName)
+            level = logger['level']
+            # ConsumerConfig logger is pre-defined in log4j2 config with ERROR level,
+            # while other loggers should be set to DEBUG level
+            if loggerName == 'org.apache.kafka.clients.consumer.ConsumerConfig':
+                assert level == 'ERROR'
+            else:
+                assert level == 'DEBUG'
 
     def _different_level(self, current_level):
         return 'INFO' if current_level is None or current_level.upper() != 'INFO' else 'WARN'

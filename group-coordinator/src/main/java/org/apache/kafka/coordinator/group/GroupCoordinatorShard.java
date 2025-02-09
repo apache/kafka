@@ -18,6 +18,7 @@ package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ApiException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
@@ -43,11 +44,13 @@ import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
+import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorExecutor;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetrics;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetricsShard;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
@@ -69,8 +72,11 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmen
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMemberValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMetadataValue;
+import org.apache.kafka.coordinator.group.generated.CoordinatorRecordType;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
+import org.apache.kafka.coordinator.group.generated.LegacyOffsetCommitKey;
+import org.apache.kafka.coordinator.group.generated.LegacyOffsetCommitValue;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupCurrentMemberAssignmentKey;
@@ -116,11 +122,12 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
 
     public static class Builder implements CoordinatorShardBuilder<GroupCoordinatorShard, CoordinatorRecord> {
         private final GroupCoordinatorConfig config;
+        private final GroupConfigManager groupConfigManager;
         private LogContext logContext;
         private SnapshotRegistry snapshotRegistry;
         private Time time;
         private CoordinatorTimer<Void, CoordinatorRecord> timer;
-        private GroupConfigManager groupConfigManager;
+        private CoordinatorExecutor<CoordinatorRecord> executor;
         private CoordinatorMetrics coordinatorMetrics;
         private TopicPartition topicPartition;
 
@@ -157,6 +164,14 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         }
 
         @Override
+        public CoordinatorShardBuilder<GroupCoordinatorShard, CoordinatorRecord> withExecutor(
+            CoordinatorExecutor<CoordinatorRecord> executor
+        ) {
+            this.executor = executor;
+            return this;
+        }
+
+        @Override
         public CoordinatorShardBuilder<GroupCoordinatorShard, CoordinatorRecord> withCoordinatorMetrics(
             CoordinatorMetrics coordinatorMetrics
         ) {
@@ -178,6 +193,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             return this;
         }
 
+        @SuppressWarnings("NPathComplexity")
         @Override
         public GroupCoordinatorShard build() {
             if (logContext == null) logContext = new LogContext();
@@ -189,6 +205,8 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 throw new IllegalArgumentException("Time must be set.");
             if (timer == null)
                 throw new IllegalArgumentException("Timer must be set.");
+            if (executor == null)
+                throw new IllegalArgumentException("Executor must be set.");
             if (coordinatorMetrics == null || !(coordinatorMetrics instanceof GroupCoordinatorMetrics))
                 throw new IllegalArgumentException("CoordinatorMetrics must be set and be of type GroupCoordinatorMetrics.");
             if (topicPartition == null)
@@ -204,20 +222,9 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 .withSnapshotRegistry(snapshotRegistry)
                 .withTime(time)
                 .withTimer(timer)
+                .withExecutor(executor)
+                .withConfig(config)
                 .withGroupConfigManager(groupConfigManager)
-                .withConsumerGroupAssignors(config.consumerGroupAssignors())
-                .withConsumerGroupMaxSize(config.consumerGroupMaxSize())
-                .withConsumerGroupSessionTimeout(config.consumerGroupSessionTimeoutMs())
-                .withConsumerGroupHeartbeatInterval(config.consumerGroupHeartbeatIntervalMs())
-                .withClassicGroupMaxSize(config.classicGroupMaxSize())
-                .withClassicGroupInitialRebalanceDelayMs(config.classicGroupInitialRebalanceDelayMs())
-                .withClassicGroupNewMemberJoinTimeoutMs(config.classicGroupNewMemberJoinTimeoutMs())
-                .withClassicGroupMinSessionTimeoutMs(config.classicGroupMinSessionTimeoutMs())
-                .withClassicGroupMaxSessionTimeoutMs(config.classicGroupMaxSessionTimeoutMs())
-                .withConsumerGroupMigrationPolicy(config.consumerGroupMigrationPolicy())
-                .withShareGroupMaxSize(config.shareGroupMaxSize())
-                .withShareGroupSessionTimeout(config.shareGroupSessionTimeoutMs())
-                .withShareGroupHeartbeatInterval(config.shareGroupHeartbeatIntervalMs())
                 .withGroupCoordinatorMetricsShard(metricsShard)
                 .build();
 
@@ -251,11 +258,11 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     static final String GROUP_EXPIRATION_KEY = "expire-group-metadata";
 
     /**
-     * The classic group size counter key to schedule a timer task.
+     * The classic and consumer group size counter key to schedule a timer task.
      *
      * Visible for testing.
      */
-    static final String CLASSIC_GROUP_SIZE_COUNTER_KEY = "classic-group-size-counter";
+    static final String GROUP_SIZE_COUNTER_KEY = "group-size-counter";
 
     /**
      * Hardcoded default value of the interval to update the classic group size counter.
@@ -601,7 +608,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         List<String> groupIds,
         long committedOffset
     ) {
-        return groupMetadataManager.describeGroups(groupIds, committedOffset);
+        return groupMetadataManager.describeGroups(context, groupIds, committedOffset);
     }
 
     /**
@@ -692,27 +699,27 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     /**
-     * Schedules (or reschedules) the group size counter for the classic groups.
+     * Schedules (or reschedules) the group size counter for the classic/consumer groups.
      */
-    private void scheduleClassicGroupSizeCounter() {
+    private void scheduleGroupSizeCounter() {
         timer.schedule(
-            CLASSIC_GROUP_SIZE_COUNTER_KEY,
+            GROUP_SIZE_COUNTER_KEY,
             DEFAULT_GROUP_GAUGES_UPDATE_INTERVAL_MS,
             TimeUnit.MILLISECONDS,
             true,
             () -> {
-                groupMetadataManager.updateClassicGroupSizeCounter();
-                scheduleClassicGroupSizeCounter();
+                groupMetadataManager.updateGroupSizeCounter();
+                scheduleGroupSizeCounter();
                 return GroupMetadataManager.EMPTY_RESULT;
             }
         );
     }
 
     /**
-     * Cancels the group size counter for the classic groups.
+     * Cancels the group size counter for the classic/consumer groups.
      */
-    private void cancelClassicGroupSizeCounter() {
-        timer.cancel(CLASSIC_GROUP_SIZE_COUNTER_KEY);
+    private void cancelGroupSizeCounter() {
+        timer.cancel(GROUP_SIZE_COUNTER_KEY);
     }
 
     /**
@@ -725,12 +732,11 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     public void onLoaded(MetadataImage newImage) {
         MetadataDelta emptyDelta = new MetadataDelta(newImage);
         groupMetadataManager.onNewMetadataImage(newImage, emptyDelta);
-        offsetMetadataManager.onNewMetadataImage(newImage, emptyDelta);
         coordinatorMetrics.activateMetricsShard(metricsShard);
 
         groupMetadataManager.onLoaded();
         scheduleGroupMetadataExpiration();
-        scheduleClassicGroupSizeCounter();
+        scheduleGroupSizeCounter();
     }
 
     @Override
@@ -738,7 +744,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         timer.cancel(GROUP_EXPIRATION_KEY);
         coordinatorMetrics.deactivateMetricsShard(metricsShard);
         groupMetadataManager.onUnloaded();
-        cancelClassicGroupSizeCounter();
+        cancelGroupSizeCounter();
     }
 
     /**
@@ -750,7 +756,26 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     @Override
     public void onNewMetadataImage(MetadataImage newImage, MetadataDelta delta) {
         groupMetadataManager.onNewMetadataImage(newImage, delta);
-        offsetMetadataManager.onNewMetadataImage(newImage, delta);
+    }
+
+    private static OffsetCommitKey convertLegacyOffsetCommitKey(
+        LegacyOffsetCommitKey key
+    ) {
+        return new OffsetCommitKey()
+            .setGroup(key.group())
+            .setTopic(key.topic())
+            .setPartition(key.partition());
+    }
+
+    private static OffsetCommitValue convertLegacyOffsetCommitValue(
+        LegacyOffsetCommitValue value
+    ) {
+        if (value == null) return null;
+
+        return new OffsetCommitValue()
+            .setOffset(value.offset())
+            .setCommitTimestamp(value.commitTimestamp())
+            .setMetadata(value.metadata());
     }
 
     /**
@@ -770,120 +795,136 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         short producerEpoch,
         CoordinatorRecord record
     ) throws RuntimeException {
-        ApiMessageAndVersion key = record.key();
+        ApiMessage key = record.key();
         ApiMessageAndVersion value = record.value();
 
-        switch (key.version()) {
-            case 0:
-            case 1:
+        CoordinatorRecordType recordType;
+        try {
+            recordType = CoordinatorRecordType.fromId(key.apiKey());
+        } catch (UnsupportedVersionException ex) {
+            throw new IllegalStateException("Received an unknown record type " + key.apiKey()
+                + " in " + record, ex);
+        }
+
+        switch (recordType) {
+            case LEGACY_OFFSET_COMMIT:
                 offsetMetadataManager.replay(
                     offset,
                     producerId,
-                    (OffsetCommitKey) key.message(),
+                    convertLegacyOffsetCommitKey((LegacyOffsetCommitKey) key),
+                    convertLegacyOffsetCommitValue((LegacyOffsetCommitValue) Utils.messageOrNull(value))
+                );
+                break;
+
+            case OFFSET_COMMIT:
+                offsetMetadataManager.replay(
+                    offset,
+                    producerId,
+                    (OffsetCommitKey) key,
                     (OffsetCommitValue) Utils.messageOrNull(value)
                 );
                 break;
 
-            case 2:
+            case GROUP_METADATA:
                 groupMetadataManager.replay(
-                    (GroupMetadataKey) key.message(),
+                    (GroupMetadataKey) key,
                     (GroupMetadataValue) Utils.messageOrNull(value)
                 );
                 break;
 
-            case 3:
+            case CONSUMER_GROUP_METADATA:
                 groupMetadataManager.replay(
-                    (ConsumerGroupMetadataKey) key.message(),
+                    (ConsumerGroupMetadataKey) key,
                     (ConsumerGroupMetadataValue) Utils.messageOrNull(value)
                 );
                 break;
 
-            case 4:
+            case CONSUMER_GROUP_PARTITION_METADATA:
                 groupMetadataManager.replay(
-                    (ConsumerGroupPartitionMetadataKey) key.message(),
+                    (ConsumerGroupPartitionMetadataKey) key,
                     (ConsumerGroupPartitionMetadataValue) Utils.messageOrNull(value)
                 );
                 break;
 
-            case 5:
+            case CONSUMER_GROUP_MEMBER_METADATA:
                 groupMetadataManager.replay(
-                    (ConsumerGroupMemberMetadataKey) key.message(),
+                    (ConsumerGroupMemberMetadataKey) key,
                     (ConsumerGroupMemberMetadataValue) Utils.messageOrNull(value)
                 );
                 break;
 
-            case 6:
+            case CONSUMER_GROUP_TARGET_ASSIGNMENT_METADATA:
                 groupMetadataManager.replay(
-                    (ConsumerGroupTargetAssignmentMetadataKey) key.message(),
+                    (ConsumerGroupTargetAssignmentMetadataKey) key,
                     (ConsumerGroupTargetAssignmentMetadataValue) Utils.messageOrNull(value)
                 );
                 break;
 
-            case 7:
+            case CONSUMER_GROUP_TARGET_ASSIGNMENT_MEMBER:
                 groupMetadataManager.replay(
-                    (ConsumerGroupTargetAssignmentMemberKey) key.message(),
+                    (ConsumerGroupTargetAssignmentMemberKey) key,
                     (ConsumerGroupTargetAssignmentMemberValue) Utils.messageOrNull(value)
                 );
                 break;
 
-            case 8:
+            case CONSUMER_GROUP_CURRENT_MEMBER_ASSIGNMENT:
                 groupMetadataManager.replay(
-                    (ConsumerGroupCurrentMemberAssignmentKey) key.message(),
+                    (ConsumerGroupCurrentMemberAssignmentKey) key,
                     (ConsumerGroupCurrentMemberAssignmentValue) Utils.messageOrNull(value)
                 );
                 break;
 
-            case 9:
+            case SHARE_GROUP_PARTITION_METADATA:
                 groupMetadataManager.replay(
-                    (ShareGroupPartitionMetadataKey) key.message(),
+                    (ShareGroupPartitionMetadataKey) key,
                     (ShareGroupPartitionMetadataValue) Utils.messageOrNull(value)
                 );
                 break;
 
-            case 10:
+            case SHARE_GROUP_MEMBER_METADATA:
                 groupMetadataManager.replay(
-                    (ShareGroupMemberMetadataKey) key.message(),
+                    (ShareGroupMemberMetadataKey) key,
                     (ShareGroupMemberMetadataValue) Utils.messageOrNull(value)
                 );
                 break;
 
-            case 11:
+            case SHARE_GROUP_METADATA:
                 groupMetadataManager.replay(
-                    (ShareGroupMetadataKey) key.message(),
+                    (ShareGroupMetadataKey) key,
                     (ShareGroupMetadataValue) Utils.messageOrNull(value)
                 );
                 break;
 
-            case 12:
+            case SHARE_GROUP_TARGET_ASSIGNMENT_METADATA:
                 groupMetadataManager.replay(
-                    (ShareGroupTargetAssignmentMetadataKey) key.message(),
+                    (ShareGroupTargetAssignmentMetadataKey) key,
                     (ShareGroupTargetAssignmentMetadataValue) Utils.messageOrNull(value)
                 );
                 break;
 
-            case 13:
+            case SHARE_GROUP_TARGET_ASSIGNMENT_MEMBER:
                 groupMetadataManager.replay(
-                    (ShareGroupTargetAssignmentMemberKey) key.message(),
+                    (ShareGroupTargetAssignmentMemberKey) key,
                     (ShareGroupTargetAssignmentMemberValue) Utils.messageOrNull(value)
                 );
                 break;
 
-            case 14:
+            case SHARE_GROUP_CURRENT_MEMBER_ASSIGNMENT:
                 groupMetadataManager.replay(
-                    (ShareGroupCurrentMemberAssignmentKey) key.message(),
+                    (ShareGroupCurrentMemberAssignmentKey) key,
                     (ShareGroupCurrentMemberAssignmentValue) Utils.messageOrNull(value)
                 );
                 break;
 
-            case 16:
+            case CONSUMER_GROUP_REGULAR_EXPRESSION:
                 groupMetadataManager.replay(
-                    (ConsumerGroupRegularExpressionKey) key.message(),
+                    (ConsumerGroupRegularExpressionKey) key,
                     (ConsumerGroupRegularExpressionValue) Utils.messageOrNull(value)
                 );
                 break;
 
             default:
-                throw new IllegalStateException("Received an unknown record type " + key.version()
+                throw new IllegalStateException("Received an unknown record type " + recordType
                     + " in " + record);
         }
     }

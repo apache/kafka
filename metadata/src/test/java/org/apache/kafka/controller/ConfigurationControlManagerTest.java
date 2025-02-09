@@ -18,8 +18,10 @@
 package org.apache.kafka.controller;
 
 import org.apache.kafka.clients.admin.AlterConfigOp;
+import org.apache.kafka.clients.admin.FeatureUpdate;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.PolicyViolationException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.metadata.ConfigRecord;
@@ -28,14 +30,19 @@ import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.metadata.KafkaConfigSchema;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
 import org.apache.kafka.server.config.ConfigSynonym;
 import org.apache.kafka.server.policy.AlterConfigPolicy;
 import org.apache.kafka.server.policy.AlterConfigPolicy.RequestMetadata;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.AbstractMap.SimpleImmutableEntry;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -43,6 +50,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
@@ -56,6 +64,7 @@ import static org.apache.kafka.common.config.ConfigResource.Type.TOPIC;
 import static org.apache.kafka.common.metadata.MetadataRecordType.CONFIG_RECORD;
 import static org.apache.kafka.server.config.ConfigSynonym.HOURS_TO_MILLISECONDS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 
 @Timeout(value = 40)
@@ -67,12 +76,16 @@ public class ConfigurationControlManagerTest {
         CONFIGS.put(BROKER, new ConfigDef().
             define("foo.bar", ConfigDef.Type.LIST, "1", ConfigDef.Importance.HIGH, "foo bar").
             define("baz", ConfigDef.Type.STRING, ConfigDef.Importance.HIGH, "baz").
-            define("quux", ConfigDef.Type.INT, ConfigDef.Importance.HIGH, "quux"));
+            define("quux", ConfigDef.Type.INT, ConfigDef.Importance.HIGH, "quux").
+            define(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG,
+                ConfigDef.Type.INT, "1", ConfigDef.Importance.HIGH, "min.isr"));
+
         CONFIGS.put(TOPIC, new ConfigDef().
             define("abc", ConfigDef.Type.LIST, ConfigDef.Importance.HIGH, "abc").
             define("def", ConfigDef.Type.STRING, ConfigDef.Importance.HIGH, "def").
             define("ghi", ConfigDef.Type.BOOLEAN, true, ConfigDef.Importance.HIGH, "ghi").
-            define("quuux", ConfigDef.Type.LONG, ConfigDef.Importance.HIGH, "quux"));
+            define("quuux", ConfigDef.Type.LONG, ConfigDef.Importance.HIGH, "quux").
+            define(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, ConfigDef.Type.INT, ConfigDef.Importance.HIGH, ""));
     }
 
     public static final Map<String, List<ConfigSynonym>> SYNONYMS = new HashMap<>();
@@ -80,7 +93,10 @@ public class ConfigurationControlManagerTest {
     static {
         SYNONYMS.put("abc", Collections.singletonList(new ConfigSynonym("foo.bar")));
         SYNONYMS.put("def", Collections.singletonList(new ConfigSynonym("baz")));
+        SYNONYMS.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG,
+            Collections.singletonList(new ConfigSynonym(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG)));
         SYNONYMS.put("quuux", Collections.singletonList(new ConfigSynonym("quux", HOURS_TO_MILLISECONDS)));
+        SYNONYMS.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, Collections.singletonList(new ConfigSynonym(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG)));
     }
 
     static final KafkaConfigSchema SCHEMA = new KafkaConfigSchema(CONFIGS, SYNONYMS);
@@ -100,7 +116,7 @@ public class ConfigurationControlManagerTest {
     }
 
     @SuppressWarnings("unchecked")
-    private static <A, B> Map<A, B> toMap(Entry... entries) {
+    static <A, B> Map<A, B> toMap(Entry... entries) {
         Map<A, B> map = new LinkedHashMap<>();
         for (Entry<A, B> entry : entries) {
             map.put(entry.getKey(), entry.getValue());
@@ -316,10 +332,10 @@ public class ConfigurationControlManagerTest {
         assertEquals(ControllerResult.atomicOf(asList(new ApiMessageAndVersion(
                 new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0").
                     setName("foo.bar").setValue("123"), CONFIG_RECORD.highestSupportedVersion()), new ApiMessageAndVersion(
-                new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0").
-                    setName("quux").setValue("456"), CONFIG_RECORD.highestSupportedVersion()), new ApiMessageAndVersion(
-                new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0").
-                    setName("broker.config.to.remove").setValue(null), CONFIG_RECORD.highestSupportedVersion())
+                                new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0").
+                                        setName("quux").setValue("456"), CONFIG_RECORD.highestSupportedVersion()), new ApiMessageAndVersion(
+                                            new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0").
+                                                    setName("broker.config.to.remove").setValue(null), CONFIG_RECORD.highestSupportedVersion())
                 ),
                 toMap(entry(MYTOPIC, new ApiError(Errors.POLICY_VIOLATION,
                     "Expected: AlterConfigPolicy.RequestMetadata(resource=ConfigResource(" +
@@ -390,5 +406,96 @@ public class ConfigurationControlManagerTest {
             toMap(entry(MYTOPIC, ApiError.NONE))),
             manager.legacyAlterConfigs(toMap(entry(MYTOPIC, toMap(entry("def", "901")))),
                 true));
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testMaybeGenerateElrSafetyRecords(boolean setStaticConfig) {
+        ConfigurationControlManager.Builder builder = new ConfigurationControlManager.Builder().
+            setKafkaConfigSchema(SCHEMA);
+        if (setStaticConfig) {
+            builder.setStaticConfig(Map.of(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2"));
+        }
+        ConfigurationControlManager manager = builder.build();
+        Map<String, Entry<AlterConfigOp.OpType, String>> keyToOps =
+            toMap(entry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, entry(SET, "3")));
+        ConfigResource brokerConfigResource = new ConfigResource(ConfigResource.Type.BROKER, "1");
+        ControllerResult<ApiError> result = manager.incrementalAlterConfig(brokerConfigResource, keyToOps, true);
+        assertEquals(Collections.emptySet(), manager.brokersWithConfigs());
+
+        assertEquals(ControllerResult.atomicOf(Collections.singletonList(new ApiMessageAndVersion(
+            new ConfigRecord().setResourceType(BROKER.id()).setResourceName("1").
+                setName(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG).setValue("3"), (short) 0)),
+            ApiError.NONE), result);
+
+        RecordTestUtils.replayAll(manager, result.records());
+        assertEquals(Set.of(1), manager.brokersWithConfigs());
+
+        List<ApiMessageAndVersion> records = new ArrayList<>();
+        String effectiveMinInsync = setStaticConfig ? "2" : "1";
+        assertEquals("Generating cluster-level min.insync.replicas of " +
+            effectiveMinInsync + ". Removing broker-level min.insync.replicas " +
+            "for brokers: 1.", manager.maybeGenerateElrSafetyRecords(records));
+
+        assertEquals(Arrays.asList(new ApiMessageAndVersion(
+            new ConfigRecord().
+                setResourceType(BROKER.id()).
+                setResourceName("").
+                setName(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG).
+                setValue(effectiveMinInsync), (short) 0),
+            new ApiMessageAndVersion(new ConfigRecord().
+                setResourceType(BROKER.id()).
+                setResourceName("1").
+                setName(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG).
+                setValue(null), (short) 0)),
+            records);
+        RecordTestUtils.replayAll(manager, records);
+        assertEquals(Collections.emptySet(), manager.brokersWithConfigs());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testRejectMinIsrChangeWhenElrEnabled(boolean removal) {
+        FeatureControlManager featureManager = new FeatureControlManager.Builder().
+            setQuorumFeatures(new QuorumFeatures(0,
+                QuorumFeatures.defaultSupportedFeatureMap(true),
+                Collections.emptyList())).
+            build();
+        ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
+            setStaticConfig(Map.of(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2")).
+            setFeatureControl(featureManager).
+            setKafkaConfigSchema(SCHEMA).
+            build();
+        ControllerResult<ApiError> result = manager.updateFeatures(
+            Collections.singletonMap(EligibleLeaderReplicasVersion.FEATURE_NAME,
+                EligibleLeaderReplicasVersion.ELRV_1.featureLevel()),
+            Collections.singletonMap(EligibleLeaderReplicasVersion.FEATURE_NAME,
+                FeatureUpdate.UpgradeType.UPGRADE),
+            false);
+        assertNull(result.response());
+        RecordTestUtils.replayAll(manager, result.records());
+        RecordTestUtils.replayAll(featureManager, result.records());
+
+        // Broker level update is not allowed.
+        result = manager.incrementalAlterConfig(new ConfigResource(ConfigResource.Type.BROKER, "1"),
+            toMap(entry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG,
+                removal ? entry(DELETE, null) : entry(SET, "3"))),
+            true);
+        assertEquals(Errors.INVALID_CONFIG, result.response().error());
+        assertEquals("Broker-level min.insync.replicas cannot be altered while ELR is enabled.",
+            result.response().message());
+
+        // Cluster level removal is not allowed.
+        result = manager.incrementalAlterConfig(new ConfigResource(ConfigResource.Type.BROKER, ""),
+            toMap(entry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG,
+                removal ? entry(DELETE, null) : entry(SET, "3"))),
+            true);
+        if (removal) {
+            assertEquals(Errors.INVALID_CONFIG, result.response().error());
+            assertEquals("Cluster-level min.insync.replicas cannot be removed while ELR is enabled.",
+                    result.response().message());
+        } else {
+            assertEquals(Errors.NONE, result.response().error());
+        }
     }
 }
