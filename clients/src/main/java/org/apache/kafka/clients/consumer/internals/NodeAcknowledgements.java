@@ -14,14 +14,27 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.server.config;
+package org.apache.kafka.clients.consumer.internals;
 
-public class ZooKeeperInternals {
-    /**
-     * This string is used in ZooKeeper in several places to indicate a default entity type.
-     * For example, default user quotas are stored under /config/users/&ltdefault&gt
-     * Note that AdminClient does <b>not</b> use this to indicate a default, nor do records in KRaft mode.
-     * This constant will go away in Apache Kafka 4.0 with the end of ZK mode.
-     */
-    public static final String DEFAULT_STRING = "<default>";
+import java.util.Objects;
+
+/**
+ * This class combines Acknowledgements with the id of the node to use for acknowledging.
+ */
+public class NodeAcknowledgements {
+    private final int nodeId;
+    private final Acknowledgements acknowledgements;
+
+    public NodeAcknowledgements(int nodeId, Acknowledgements acknowledgements) {
+        this.nodeId = nodeId;
+        this.acknowledgements = Objects.requireNonNull(acknowledgements);
+    }
+
+    public int nodeId() {
+        return nodeId;
+    }
+
+    public Acknowledgements acknowledgements() {
+        return acknowledgements;
+    }
 }

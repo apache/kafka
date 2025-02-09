@@ -3624,6 +3624,7 @@ class UnifiedLogTest {
     assertThrows(classOf[OffsetOutOfRangeException], () => log.maybeIncrementLogStartOffset(26L, LogStartOffsetIncrementReason.ClientRecordDeletion))
   }
 
+  @Test
   def testBackgroundDeletionWithIOException(): Unit = {
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024)
     val log = createLog(logDir, logConfig)
@@ -3683,6 +3684,7 @@ class UnifiedLogTest {
     assertEquals(None, log.maybeUpdateHighWatermark(101L))
   }
 
+  @Test
   def testEnableRemoteLogStorageOnCompactedTopics(): Unit = {
       var logConfig = LogTestUtils.createLogConfig()
       var log = createLog(logDir, logConfig)
@@ -3936,6 +3938,7 @@ class UnifiedLogTest {
     assertEquals(VerificationGuard.SENTINEL, log.verificationGuard(producerId))
   }
 
+  @Test
   def testNextTransactionVerificationGuardNotCleared(): Unit = {
     val producerStateManagerConfig = new ProducerStateManagerConfig(86400000, true)
 

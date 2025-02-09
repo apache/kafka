@@ -176,6 +176,15 @@ public class AdminClientTestUtils {
         return new ListClientMetricsResourcesResult(future);
     }
 
+    public static ListShareGroupOffsetsResult createListShareGroupOffsetsResult(Map<String, KafkaFuture<Map<TopicPartition, Long>>> groupOffsets) {
+        Map<CoordinatorKey, KafkaFuture<Map<TopicPartition, Long>>> coordinatorFutures = groupOffsets.entrySet().stream()
+            .collect(Collectors.toMap(
+                entry -> CoordinatorKey.byGroupId(entry.getKey()),
+                Map.Entry::getValue
+            ));
+        return new ListShareGroupOffsetsResult(coordinatorFutures);
+    }
+
     /**
      * Helper to create a KafkaAdminClient with a custom HostResolver accessible to tests outside this package.
      */

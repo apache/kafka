@@ -245,6 +245,7 @@ public class AsyncKafkaConsumerTest {
         String clientId,
         boolean autoCommitEnabled) {
         long retryBackoffMs = 100L;
+        int requestTimeoutMs = 30000;
         int defaultApiTimeoutMs = 1000;
         return new AsyncKafkaConsumer<>(
             new LogContext(),
@@ -262,6 +263,7 @@ public class AsyncKafkaConsumerTest {
             subscriptions,
             metadata,
             retryBackoffMs,
+            requestTimeoutMs,
             defaultApiTimeoutMs,
             groupId,
             autoCommitEnabled);

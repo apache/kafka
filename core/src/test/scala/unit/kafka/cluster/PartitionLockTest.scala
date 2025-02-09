@@ -23,7 +23,6 @@ import java.util.concurrent._
 import java.util.concurrent.atomic.AtomicBoolean
 import kafka.log._
 import kafka.server._
-import kafka.server.metadata.MockConfigRepository
 import kafka.utils._
 import org.apache.kafka.common.TopicIdPartition
 import org.apache.kafka.common.config.TopicConfig
@@ -33,7 +32,7 @@ import org.apache.kafka.common.requests.{FetchRequest, LeaderAndIsrRequest}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
-import org.apache.kafka.metadata.LeaderAndIsr
+import org.apache.kafka.metadata.{LeaderAndIsr, MockConfigRepository}
 import org.apache.kafka.server.common.RequestLocal
 import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams}

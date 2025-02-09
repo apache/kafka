@@ -240,7 +240,7 @@ public class ShareConsumerImplTest {
         final String topicName = "foo";
         final int partition = 3;
         final TopicIdPartition tip = new TopicIdPartition(Uuid.randomUuid(), partition, topicName);
-        final ShareInFlightBatch<String, String> batch = new ShareInFlightBatch<>(tip);
+        final ShareInFlightBatch<String, String> batch = new ShareInFlightBatch<>(0, tip);
         batch.addRecord(new ConsumerRecord<>(topicName, partition, 2, "key1", "value1"));
         doAnswer(invocation -> {
             consumer.wakeup();
@@ -465,7 +465,7 @@ public class ShareConsumerImplTest {
 
         final TopicPartition tp = new TopicPartition("topic", 0);
         final TopicIdPartition tip = new TopicIdPartition(Uuid.randomUuid(), tp);
-        final ShareInFlightBatch<String, String> batch = new ShareInFlightBatch<>(tip);
+        final ShareInFlightBatch<String, String> batch = new ShareInFlightBatch<>(0, tip);
         batch.addRecord(new ConsumerRecord<>("topic", 0, 2, "key1", "value1"));
         final ShareFetch<String, String> fetch = ShareFetch.empty();
         fetch.add(tip, batch);
