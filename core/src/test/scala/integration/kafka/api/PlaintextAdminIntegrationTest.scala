@@ -25,7 +25,7 @@ import java.time.{Duration => JDuration}
 import java.util.Arrays.asList
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import java.util.concurrent.{CountDownLatch, ExecutionException, TimeUnit}
-import java.util.{Collections, Optional, Properties}
+import java.util.{Collections, Locale, Optional, Properties}
 import java.{time, util}
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
@@ -1915,7 +1915,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
         // Test that we can get information about the test consumer group.
         assertTrue(describeWithFakeGroupResult.describedGroups().containsKey(testGroupId))
-        var testGroupDescription = describeWithFakeGroupResult.describedGroups().get(testGroupId).get()
+        val testGroupDescription = describeWithFakeGroupResult.describedGroups().get(testGroupId).get()
         if (groupType == GroupType.CLASSIC) {
           assertTrue(testGroupDescription.groupEpoch.isEmpty)
           assertTrue(testGroupDescription.targetAssignmentEpoch.isEmpty)
@@ -1976,78 +1976,6 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         parts = client.listConsumerGroupOffsets(groupSpecs, options).partitionsToOffsetAndMetadata().get()
         assertTrue(parts.containsKey(testTopicPart0))
         assertEquals(1, parts.get(testTopicPart0).offset())
-
-        // Test delete non-exist consumer instance
-        val invalidInstanceId = "invalid-instance-id"
-        var removeMembersResult = client.removeMembersFromConsumerGroup(testGroupId, new RemoveMembersFromConsumerGroupOptions(
-          Collections.singleton(new MemberToRemove(invalidInstanceId))
-        ))
-
-        assertFutureThrows(removeMembersResult.all, classOf[UnknownMemberIdException])
-        val firstMemberFuture = removeMembersResult.memberResult(new MemberToRemove(invalidInstanceId))
-        assertFutureThrows(firstMemberFuture, classOf[UnknownMemberIdException])
-
-        // Test consumer group deletion
-        var deleteResult = client.deleteConsumerGroups(Seq(testGroupId, fakeGroupId).asJava)
-        assertEquals(2, deleteResult.deletedGroups().size())
-
-        // Deleting the fake group ID should get GroupIdNotFoundException.
-        assertTrue(deleteResult.deletedGroups().containsKey(fakeGroupId))
-        assertFutureThrows(deleteResult.deletedGroups().get(fakeGroupId),
-          classOf[GroupIdNotFoundException])
-
-        // Deleting the real group ID should get GroupNotEmptyException
-        assertTrue(deleteResult.deletedGroups().containsKey(testGroupId))
-        assertFutureThrows(deleteResult.deletedGroups().get(testGroupId),
-          classOf[GroupNotEmptyException])
-
-        // Stop the consumer threads and close consumers to prevent rejoining.
-        // dynamic member will be removed, leaving two static members in the group
-        backgroundConsumerSet.stop()
-
-        val describeTestGroupResult = client.describeConsumerGroups(Seq(testGroupId).asJava,
-          new DescribeConsumerGroupsOptions().includeAuthorizedOperations(true))
-        assertEquals(1, describeTestGroupResult.describedGroups().size())
-
-        testGroupDescription = describeTestGroupResult.describedGroups().get(testGroupId).get()
-        assertEquals(testGroupId, testGroupDescription.groupId)
-        assertFalse(testGroupDescription.isSimpleConsumerGroup)
-        assertEquals(groupInstanceSet.size - 1, testGroupDescription.members().size())
-
-        // Test delete one correct static member
-        removeMembersResult = client.removeMembersFromConsumerGroup(testGroupId,
-          new RemoveMembersFromConsumerGroupOptions(Collections.singleton(new MemberToRemove(testInstanceId1))))
-
-        assertNull(removeMembersResult.all().get())
-        assertNull(removeMembersResult.memberResult(new MemberToRemove(testInstanceId1)).get())
-
-        // Delete all active members remaining (a static member)
-        removeMembersResult = client.removeMembersFromConsumerGroup(testGroupId, new RemoveMembersFromConsumerGroupOptions())
-        assertNull(removeMembersResult.all().get())
-
-        // The group should contain no members now.
-        testGroupDescription = client.describeConsumerGroups(Seq(testGroupId).asJava,
-            new DescribeConsumerGroupsOptions().includeAuthorizedOperations(true)).describedGroups().get(testGroupId).get()
-        assertTrue(testGroupDescription.members().isEmpty)
-
-        // Consumer group deletion on empty group should succeed
-        deleteResult = client.deleteConsumerGroups(Seq(testGroupId).asJava)
-        assertEquals(1, deleteResult.deletedGroups().size())
-
-        assertTrue(deleteResult.deletedGroups().containsKey(testGroupId))
-        assertNull(deleteResult.deletedGroups().get(testGroupId).get())
-
-        // Test alterConsumerGroupOffsets
-        val alterConsumerGroupOffsetsResult = client.alterConsumerGroupOffsets(testGroupId,
-          Collections.singletonMap(testTopicPart0, new OffsetAndMetadata(0L)))
-        assertNull(alterConsumerGroupOffsetsResult.all().get())
-        assertNull(alterConsumerGroupOffsetsResult.partitionResult(testTopicPart0).get())
-
-        // Verify alterConsumerGroupOffsets success
-        TestUtils.waitUntilTrue(() => {
-          val parts = client.listConsumerGroupOffsets(testGroupId).partitionsToOffsetAndMetadata().get()
-          parts.containsKey(testTopicPart0) && (parts.get(testTopicPart0).offset() == 0)
-        }, s"Expected the offset for partition 0 to eventually become 0.")
       } finally {
         backgroundConsumerSet.close()
       }
@@ -2279,7 +2207,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
         // Test that we can get information about the test consumer group.
         assertTrue(describeWithFakeGroupResult.describedGroups().containsKey(testGroupId))
-        var testGroupDescription = describeWithFakeGroupResult.describedGroups().get(testGroupId).get()
+        val testGroupDescription = describeWithFakeGroupResult.describedGroups().get(testGroupId).get()
 
         assertEquals(testGroupId, testGroupDescription.groupId())
         assertFalse(testGroupDescription.isSimpleConsumerGroup)
@@ -2330,13 +2258,86 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         parts = client.listConsumerGroupOffsets(groupSpecs, options).partitionsToOffsetAndMetadata().get()
         assertTrue(parts.containsKey(testTopicPart0))
         assertEquals(1, parts.get(testTopicPart0).offset())
+      } finally {
+        backgroundConsumerSet.close()
+      }
+    } finally {
+      Utils.closeQuietly(client, "adminClient")
+    }
+  }
+
+
+  /**
+   * Test the consumer group APIs for member removal.
+   */
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testConsumerGroupWithMembersRemoval(quorum: String, groupProtocol: String): Unit = {
+    val config = createConfig
+    client = Admin.create(config)
+    try {
+      // Verify that initially there are no consumer groups to list.
+      val list1 = client.listConsumerGroups()
+      assertEquals(0, list1.all().get().size())
+      assertEquals(0, list1.errors().get().size())
+      assertEquals(0, list1.valid().get().size())
+      val testTopicName = "test_topic"
+      val testTopicName1 = testTopicName + "1"
+      val testTopicName2 = testTopicName + "2"
+      val testNumPartitions = 2
+
+      client.createTopics(util.Arrays.asList(
+        new NewTopic(testTopicName, testNumPartitions, 1.toShort),
+        new NewTopic(testTopicName1, testNumPartitions, 1.toShort),
+        new NewTopic(testTopicName2, testNumPartitions, 1.toShort)
+      )).all().get()
+      waitForTopics(client, List(testTopicName, testTopicName1, testTopicName2), List())
+
+      val producer = createProducer()
+      try {
+        producer.send(new ProducerRecord(testTopicName, 0, null, null)).get()
+      } finally {
+        Utils.closeQuietly(producer, "producer")
+      }
+
+      val testGroupId = "test_group_id"
+      val testClientId = "test_client_id"
+      val testInstanceId1 = "test_instance_id_1"
+      val testInstanceId2 = "test_instance_id_2"
+      val fakeGroupId = "fake_group_id"
+
+      // contains two static members and one dynamic member
+      val groupInstanceSet = Set(testInstanceId1, testInstanceId2, "")
+      val topicSet = Set(testTopicName, testTopicName1, testTopicName2)
+
+      // We need to disable the auto commit because after the members got removed from group, the offset commit
+      // will cause the member rejoining and the test will be flaky (check ConsumerCoordinator#OffsetCommitResponseHandler)
+      val defaultConsumerConfig = new Properties(consumerConfig)
+      defaultConsumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
+      defaultConsumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, testClientId)
+      // We need to set internal.leave.group.on.close to validate dynamic member removal, but it only works for ClassicConsumer
+      // After KIP-1092, we can control dynamic member removal for both ClassicConsumer and AsyncConsumer
+      defaultConsumerConfig.setProperty("internal.leave.group.on.close", "false")
+
+      val backgroundConsumerSet = new BackgroundConsumerSet(testGroupId, defaultConsumerConfig)
+      groupInstanceSet.zip(topicSet).foreach { case (groupInstanceId, topic) =>
+        val configOverrides = new Properties()
+        if (groupInstanceId != "") {
+          // static member
+          configOverrides.setProperty(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, groupInstanceId)
+        }
+        backgroundConsumerSet.addConsumer(topic, configOverrides)
+      }
+
+      try {
+        // Start consumer polling threads in the background
+        backgroundConsumerSet.start()
 
         // Test delete non-exist consumer instance
         val invalidInstanceId = "invalid-instance-id"
         var removeMembersResult = client.removeMembersFromConsumerGroup(testGroupId, new RemoveMembersFromConsumerGroupOptions(
           Collections.singleton(new MemberToRemove(invalidInstanceId))
         ))
-
         assertFutureThrows(removeMembersResult.all, classOf[UnknownMemberIdException])
         val firstMemberFuture = removeMembersResult.memberResult(new MemberToRemove(invalidInstanceId))
         assertFutureThrows(firstMemberFuture, classOf[UnknownMemberIdException])
@@ -2353,35 +2354,52 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         // Deleting the real group ID should get GroupNotEmptyException
         assertTrue(deleteResult.deletedGroups().containsKey(testGroupId))
         assertFutureThrows(deleteResult.deletedGroups().get(testGroupId),
-            classOf[GroupNotEmptyException])
+          classOf[GroupNotEmptyException])
 
-        // Stop the consumer threads and close consumers to prevent rejoining.
-        // dynamic member will be removed, leaving two static members in the group
+        // Stop the consumer threads and close consumers to prevent member rejoining.
         backgroundConsumerSet.stop()
 
-        val describeTestGroupResult = client.describeConsumerGroups(Seq(testGroupId).asJava,
+        // Check the members in the group after consumers have stopped
+        var describeTestGroupResult = client.describeConsumerGroups(Seq(testGroupId).asJava,
           new DescribeConsumerGroupsOptions().includeAuthorizedOperations(true))
         assertEquals(1, describeTestGroupResult.describedGroups().size())
 
-        testGroupDescription = describeTestGroupResult.describedGroups().get(testGroupId).get()
+        var testGroupDescription = describeTestGroupResult.describedGroups().get(testGroupId).get()
         assertEquals(testGroupId, testGroupDescription.groupId)
         assertFalse(testGroupDescription.isSimpleConsumerGroup)
-        assertEquals(groupInstanceSet.size - 1, testGroupDescription.members().size())
 
-        // Test delete one correct static member
+        // Although we set `internal.leave.group.on.close` in the consumer, it only works for ClassicConsumer.
+        // After KIP-1092, we can control dynamic member removal in consumer.close()
+        if (groupProtocol == GroupProtocol.CLASSIC.name.toLowerCase(Locale.ROOT)) {
+          assertEquals(3, testGroupDescription.members().size())
+        } else if (groupProtocol == GroupProtocol.CONSUMER.name.toLowerCase(Locale.ROOT)) {
+          assertEquals(2, testGroupDescription.members().size())
+        }
+
+        // Test delete one static member
         removeMembersResult = client.removeMembersFromConsumerGroup(testGroupId,
           new RemoveMembersFromConsumerGroupOptions(Collections.singleton(new MemberToRemove(testInstanceId1))))
 
         assertNull(removeMembersResult.all().get())
         assertNull(removeMembersResult.memberResult(new MemberToRemove(testInstanceId1)).get())
 
-        // Delete all active members remaining (a static member)
+        describeTestGroupResult = client.describeConsumerGroups(Seq(testGroupId).asJava,
+          new DescribeConsumerGroupsOptions().includeAuthorizedOperations(true))
+        testGroupDescription = describeTestGroupResult.describedGroups().get(testGroupId).get()
+
+        if (groupProtocol == GroupProtocol.CLASSIC.name.toLowerCase(Locale.ROOT)) {
+          assertEquals(2, testGroupDescription.members().size())
+        } else if (groupProtocol == GroupProtocol.CONSUMER.name.toLowerCase(Locale.ROOT)) {
+          assertEquals(1, testGroupDescription.members().size())
+        }
+
+        // Delete all active members remaining
         removeMembersResult = client.removeMembersFromConsumerGroup(testGroupId, new RemoveMembersFromConsumerGroupOptions())
         assertNull(removeMembersResult.all().get())
 
         // The group should contain no members now.
         testGroupDescription = client.describeConsumerGroups(Seq(testGroupId).asJava,
-            new DescribeConsumerGroupsOptions().includeAuthorizedOperations(true)).describedGroups().get(testGroupId).get()
+          new DescribeConsumerGroupsOptions().includeAuthorizedOperations(true)).describedGroups().get(testGroupId).get()
         assertTrue(testGroupDescription.members().isEmpty)
 
         // Consumer group deletion on empty group should succeed
@@ -2391,7 +2409,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         assertTrue(deleteResult.deletedGroups().containsKey(testGroupId))
         assertNull(deleteResult.deletedGroups().get(testGroupId).get())
 
-        // Test alterConsumerGroupOffsets
+        // Test alterConsumerGroupOffsets when group is empty
+        val testTopicPart0 = new TopicPartition(testTopicName, 0)
         val alterConsumerGroupOffsetsResult = client.alterConsumerGroupOffsets(testGroupId,
           Collections.singletonMap(testTopicPart0, new OffsetAndMetadata(0L)))
         assertNull(alterConsumerGroupOffsetsResult.all().get())
