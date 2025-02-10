@@ -16,12 +16,19 @@
  */
 package kafka.docker;
 
+import com.fasterxml.jackson.annotation.JsonAnyGetter;
+import com.fasterxml.jackson.annotation.JsonAnySetter;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class Log4jConfiguration {
     private Configuration configuration;
 
@@ -35,10 +42,13 @@ public class Log4jConfiguration {
     }
 }
 
+@JsonPropertyOrder({ "Properties", "Appenders", "Loggers" })
+@JsonIgnoreProperties(ignoreUnknown = true)
 class Configuration {
     private Properties properties;
     private Appenders appenders;
     private Loggers loggers;
+    private final Map<String, Object> additionalProperties = new LinkedHashMap<>();
 
     @JsonProperty("Properties")
     public Properties getProperties() {
@@ -66,180 +76,49 @@ class Configuration {
     public void setLoggers(Loggers loggers) {
         this.loggers = loggers;
     }
+
+    @JsonAnyGetter
+    public Map<String, Object> getAdditionalProperties() {
+        return additionalProperties;
+    }
+
+    @JsonAnySetter
+    public void setAdditionalProperties(String key, Object value) {
+        additionalProperties.put(key, value);
+    }
 }
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 class Properties {
-    private List<Property> property = Collections.emptyList();
+    private final Map<String, Object> properties = new LinkedHashMap<>();
 
-    @JsonProperty("Property")
-    public List<Property> getProperty() {
-        return property;
+    @JsonAnyGetter
+    public Map<String, Object> getProperties() {
+        return properties;
     }
 
-    public void setProperty(List<Property> property) {
-        this.property = property;
-    }
-}
-
-class Property {
-    private String name;
-    private String value;
-
-    public String getName() {
-        return name;
-    }
-
-    public void setName(String name) {
-        this.name = name;
-    }
-
-    public String getValue() {
-        return value;
-    }
-
-    public void setValue(String value) {
-        this.value = value;
+    @JsonAnySetter
+    public void setProperties(String key, Object value) {
+        properties.put(key, value);
     }
 }
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 class Appenders {
-    private Console console;
+    private final Map<String, Object> properties = new LinkedHashMap<>();
 
-    private List<RollingFile> rollingFile = Collections.emptyList();
-
-    @JsonProperty("Console")
-    public Console getConsole() {
-        return console;
+    @JsonAnyGetter
+    public Map<String, Object> getProperties() {
+        return properties;
     }
 
-    public void setConsole(Console console) {
-        this.console = console;
-    }
-
-    @JsonProperty("RollingFile")
-    public List<RollingFile> getRollingFile() {
-        return rollingFile;
-    }
-
-    public void setRollingFile(List<RollingFile> rollingFile) {
-        this.rollingFile = rollingFile;
+    @JsonAnySetter
+    public void setProperties(String key, Object value) {
+        properties.put(key, value);
     }
 }
 
-class Console {
-    private String name;
-    private String target;
-    private PatternLayout patternLayout;
-
-    public String getName() {
-        return name;
-    }
-
-    public void setName(String name) {
-        this.name = name;
-    }
-
-    public String getTarget() {
-        return target;
-    }
-
-    public void setTarget(String target) {
-        this.target = target;
-    }
-
-    @JsonProperty("PatternLayout")
-    public PatternLayout getPatternLayout() {
-        return patternLayout;
-    }
-
-    public void setPatternLayout(PatternLayout patternLayout) {
-        this.patternLayout = patternLayout;
-    }
-}
-
-class RollingFile {
-    private String name;
-    private String fileName;
-    private String filePattern;
-    private PatternLayout patternLayout;
-    private TimeBasedTriggeringPolicy timeBasedTriggeringPolicy;
-
-    public String getName() {
-        return name;
-    }
-
-    public void setName(String name) {
-        this.name = name;
-    }
-
-    public String getFileName() {
-        return fileName;
-    }
-
-    public void setFileName(String fileName) {
-        this.fileName = fileName;
-    }
-
-    public String getFilePattern() {
-        return filePattern;
-    }
-
-    public void setFilePattern(String filePattern) {
-        this.filePattern = filePattern;
-    }
-
-    @JsonProperty("PatternLayout")
-    public PatternLayout getPatternLayout() {
-        return patternLayout;
-    }
-
-    public void setPatternLayout(PatternLayout patternLayout) {
-        this.patternLayout = patternLayout;
-    }
-
-    @JsonProperty("TimeBasedTriggeringPolicy")
-    public TimeBasedTriggeringPolicy getTimeBasedTriggeringPolicy() {
-        return timeBasedTriggeringPolicy;
-    }
-
-    public void setTimeBasedTriggeringPolicy(TimeBasedTriggeringPolicy timeBasedTriggeringPolicy) {
-        this.timeBasedTriggeringPolicy = timeBasedTriggeringPolicy;
-    }
-}
-
-class PatternLayout {
-    private String pattern;
-
-    public String getPattern() {
-        return pattern;
-    }
-
-    public void setPattern(String pattern) {
-        this.pattern = pattern;
-    }
-}
-
-class TimeBasedTriggeringPolicy {
-    private boolean modulate;
-    private int interval;
-
-    public boolean isModulate() {
-        return modulate;
-    }
-
-    public void setModulate(boolean modulate) {
-        this.modulate = modulate;
-    }
-
-    public int getInterval() {
-        return interval;
-    }
-
-    public void setInterval(int interval) {
-        this.interval = interval;
-    }
-}
-
+@JsonIgnoreProperties(ignoreUnknown = true)
 class Loggers {
     private Root root;
     private List<Logger> logger = Collections.emptyList();
@@ -263,9 +142,10 @@ class Loggers {
     }
 }
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 class Root {
     private String level;
-    private List<AppenderRef> appenderRef = Collections.emptyList();
+    private final Map<String, Object> otherProperties = new LinkedHashMap<>();
 
     public String getLevel() {
         return level;
@@ -275,22 +155,25 @@ class Root {
         this.level = level;
     }
 
-    @JsonProperty("AppenderRef")
-    public List<AppenderRef> getAppenderRef() {
-        return appenderRef;
+    @JsonAnyGetter
+    public Map<String, Object> getOtherProperties() {
+        return otherProperties;
     }
 
-    public void setAppenderRef(List<AppenderRef> appenderRef) {
-        this.appenderRef = appenderRef;
+    @JsonAnySetter
+    public void setOtherProperties(String key, Object value) {
+        otherProperties.put(key, value);
     }
 }
 
+@JsonPropertyOrder({ "name", "level" })
+@JsonIgnoreProperties(ignoreUnknown = true)
 class Logger {
     private String name;
     private String level;
-    private Boolean additivity;
-    private AppenderRef appenderRef;
+    private final Map<String, Object> otherProperties = new LinkedHashMap<>();
 
+    @JsonProperty("name")
     public String getName() {
         return name;
     }
@@ -299,6 +182,7 @@ class Logger {
         this.name = name;
     }
 
+    @JsonProperty("level")
     public String getLevel() {
         return level;
     }
@@ -307,47 +191,31 @@ class Logger {
         this.level = level;
     }
 
-    public Boolean isAdditivity() {
-        return additivity;
+    @JsonAnyGetter
+    public Map<String, Object> getOtherProperties() {
+        return otherProperties;
     }
 
-    public void setAdditivity(boolean additivity) {
-        this.additivity = additivity;
-    }
-
-    @JsonProperty("AppenderRef")
-    public AppenderRef getAppenderRef() {
-        return appenderRef;
-    }
-
-    public void setAppenderRef(AppenderRef appenderRef) {
-        this.appenderRef = appenderRef;
+    @JsonAnySetter
+    public void setOtherProperties(String key, Object value) {
+        otherProperties.put(key, value);
     }
 
     @Override
-    public final boolean equals(Object o) {
-        if (!(o instanceof Logger logger)) return false;
-        return Objects.equals(name, logger.name) && Objects.equals(level, logger.level) && Objects.equals(additivity, logger.additivity) && Objects.equals(appenderRef, logger.appenderRef);
+    public boolean equals(Object o) {
+        if (o == null || getClass() != o.getClass()) return false;
+
+        Logger logger = (Logger) o;
+        return Objects.equals(name, logger.name) &&
+            Objects.equals(level, logger.level) &&
+            Objects.equals(otherProperties, logger.otherProperties);
     }
 
     @Override
     public int hashCode() {
         int result = Objects.hashCode(name);
         result = 31 * result + Objects.hashCode(level);
-        result = 31 * result + Objects.hashCode(additivity);
-        result = 31 * result + Objects.hashCode(appenderRef);
+        result = 31 * result + Objects.hashCode(otherProperties);
         return result;
-    }
-}
-
-class AppenderRef {
-    private String ref;
-
-    public String getRef() {
-        return ref;
-    }
-
-    public void setRef(String ref) {
-        this.ref = ref;
     }
 }
