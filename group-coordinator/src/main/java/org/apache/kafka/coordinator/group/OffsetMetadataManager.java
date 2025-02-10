@@ -17,7 +17,6 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.StaleMemberEpochException;
@@ -1101,22 +1100,6 @@ public class OffsetMetadataManager {
         } else {
             log.debug("Aborted transactional offset commits for producer id {}.", producerId);
         }
-    }
-
-    public Map<Uuid, List<Integer>> getGroupTopicPartitionMapping(String groupId) {
-        TimelineHashMap<String, TimelineHashMap<Integer, OffsetAndMetadata>> offsetsByTopic = offsets.offsetsByGroup.get(groupId);
-        HashMap<Uuid, List<Integer>> result = new HashMap<>();
-        if (offsetsByTopic == null) {
-            return Map.of();
-        }
-
-        offsetsByTopic.forEach((topic, offsetsByPartition) -> {
-            result.put(
-                groupMetadataManager.image().topics().getTopic(topic).id(),
-                new ArrayList<>(offsetsByPartition.keySet())
-            );
-        });
-        return result;
     }
 
     /**
