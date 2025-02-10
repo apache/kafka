@@ -32,7 +32,7 @@ Configuration:
         - ref: STDOUT
     Logger:
       - name: org.apache.kafka
-        level: INFOINFO
+        level: ERROR
       # We are testing for a particular INFO log message in CommonNameLoggingTrustManagerFactoryWrapper
       - name: org.apache.kafka.common.security.ssl.CommonNameLoggingTrustManagerFactoryWrapper
         level: INFO
