@@ -6001,51 +6001,56 @@ class ReplicaManagerTest {
       logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
       alterPartitionManager = alterPartitionManager)
 
-    val groupId = "grp"
-    val tp1 = new TopicIdPartition(Uuid.randomUuid, new TopicPartition("foo1", 0))
-    val partitionMaxBytes = new util.LinkedHashMap[TopicIdPartition, Integer]
-    partitionMaxBytes.put(tp1, 1000)
+    try {
+      val groupId = "grp"
+      val tp1 = new TopicIdPartition(Uuid.randomUuid, new TopicPartition("foo1", 0))
+      val partitionMaxBytes = new util.LinkedHashMap[TopicIdPartition, Integer]
+      partitionMaxBytes.put(tp1, 1000)
 
-    val sp1 = mock(classOf[SharePartition])
-    val sharePartitions = new util.LinkedHashMap[TopicIdPartition, SharePartition]
-    sharePartitions.put(tp1, sp1)
+      val sp1 = mock(classOf[SharePartition])
+      val sharePartitions = new util.LinkedHashMap[TopicIdPartition, SharePartition]
+      sharePartitions.put(tp1, sp1)
 
-    val future = new CompletableFuture[util.Map[TopicIdPartition, ShareFetchResponseData.PartitionData]]
-    val shareFetch = new ShareFetch(
-      new FetchParams(ApiKeys.SHARE_FETCH.latestVersion, FetchRequest.ORDINARY_CONSUMER_ID, -1, 500, 1, 1024 * 1024, FetchIsolation.HIGH_WATERMARK, Optional.empty, true),
-      groupId,
-      Uuid.randomUuid.toString,
-      future,
-      partitionMaxBytes,
-      500,
-      100,
-      brokerTopicStats)
+      val future = new CompletableFuture[util.Map[TopicIdPartition, ShareFetchResponseData.PartitionData]]
+      val shareFetch = new ShareFetch(
+        new FetchParams(ApiKeys.SHARE_FETCH.latestVersion, FetchRequest.ORDINARY_CONSUMER_ID, -1, 500, 1, 1024 * 1024, FetchIsolation.HIGH_WATERMARK, Optional.empty, true),
+        groupId,
+        Uuid.randomUuid.toString,
+        future,
+        partitionMaxBytes,
+        500,
+        100,
+        brokerTopicStats)
 
-    val delayedShareFetch = spy(new DelayedShareFetch(
-      shareFetch,
-      rm,
-      mock(classOf[BiConsumer[SharePartitionKey, Throwable]]),
-      sharePartitions))
+      val delayedShareFetch = spy(new DelayedShareFetch(
+        shareFetch,
+        rm,
+        mock(classOf[BiConsumer[SharePartitionKey, Throwable]]),
+        sharePartitions))
 
-    val delayedShareFetchWatchKeys : util.List[DelayedShareFetchKey] = new util.ArrayList[DelayedShareFetchKey]
-    partitionMaxBytes.keySet.forEach((topicIdPartition: TopicIdPartition) => delayedShareFetchWatchKeys.add(new DelayedShareFetchGroupKey(groupId, topicIdPartition.topicId, topicIdPartition.partition)))
+      val delayedShareFetchWatchKeys : util.List[DelayedShareFetchKey] = new util.ArrayList[DelayedShareFetchKey]
+      partitionMaxBytes.keySet.forEach((topicIdPartition: TopicIdPartition) => delayedShareFetchWatchKeys.add(new DelayedShareFetchGroupKey(groupId, topicIdPartition.topicId, topicIdPartition.partition)))
 
-    // You cannot acquire records for sp1, so request will be stored in purgatory waiting for timeout.
-    when(sp1.maybeAcquireFetchLock).thenReturn(false)
+      // You cannot acquire records for sp1, so request will be stored in purgatory waiting for timeout.
+      when(sp1.maybeAcquireFetchLock).thenReturn(false)
 
-    rm.addDelayedShareFetchRequest(delayedShareFetch = delayedShareFetch, delayedShareFetchKeys = delayedShareFetchWatchKeys)
-    verify(delayedShareFetch, times(0)).forceComplete()
-    assertEquals(1, rm.delayedShareFetchPurgatory.watched)
+      rm.addDelayedShareFetchRequest(delayedShareFetch = delayedShareFetch, delayedShareFetchKeys = delayedShareFetchWatchKeys)
+      verify(delayedShareFetch, times(0)).forceComplete()
+      assertEquals(1, rm.delayedShareFetchPurgatory.watched)
 
-    // Future is not complete initially.
-    assertFalse(future.isDone)
-    // Post timeout, share fetch request will timeout and the future should complete. The timeout is set at 500ms but
-    // kept a buffer of additional 500ms so the task can always timeout.
-    waitUntilTrue(() => future.isDone, "Processing in delayed share fetch purgatory never ended.", 1000)
-    verify(delayedShareFetch, times(1)).forceComplete()
-    assertFalse(future.isCompletedExceptionally)
-    // Since no partition could be acquired, the future should be empty.
-    assertEquals(0, future.join.size)
+      // Future is not complete initially.
+      assertFalse(future.isDone)
+      // Post timeout, share fetch request will timeout and the future should complete. The timeout is set at 500ms but
+      // kept a buffer of additional 500ms so the task can always timeout.
+      waitUntilTrue(() => future.isDone, "Processing in delayed share fetch purgatory never ended.", 1000)
+      verify(delayedShareFetch, times(1)).forceComplete()
+      assertFalse(future.isCompletedExceptionally)
+      // Since no partition could be acquired, the future should be empty.
+      assertEquals(0, future.join.size)
+    } finally {
+      rm.shutdown()
+    }
+
   }
 
   private def readFromLogWithOffsetOutOfRange(tp: TopicPartition): Seq[(TopicIdPartition, LogReadResult)] = {
