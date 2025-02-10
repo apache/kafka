@@ -696,7 +696,8 @@ class KRaftClusterTest {
             new AlterConfigOp(new ConfigEntry("max.connections.per.ip", "60"), OpType.SET))))))
         validateConfigs(admin, Map(new ConfigResource(Type.BROKER, "") -> Seq(
           ("log.roll.ms", "1234567"),
-          ("max.connections.per.ip", "60"))), exhaustive = true)
+          ("max.connections.per.ip", "60"),
+          ("min.insync.replicas", "1"))), exhaustive = true)
 
         admin.createTopics(util.Arrays.asList(
           new NewTopic("foo", 2, 3.toShort),

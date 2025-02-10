@@ -16,8 +16,9 @@
  */
 package kafka.server.metadata
 
+import kafka.server.ClientQuotaManager
 import org.apache.kafka.image.ClientQuotaDelta
-import org.junit.jupiter.api.Assertions.{assertDoesNotThrow, assertThrows}
+import org.junit.jupiter.api.Assertions.{assertDoesNotThrow, assertEquals, assertThrows}
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.function.Executable
 
@@ -32,5 +33,44 @@ class ClientQuotaMetadataManagerTest {
     assertDoesNotThrow { new Executable { def execute(): Unit = manager.handleIpQuota(DefaultIpEntity, new ClientQuotaDelta(null)) } }
     assertDoesNotThrow { new Executable { def execute(): Unit = manager.handleIpQuota(IpEntity("192.168.1.1"), new ClientQuotaDelta(null)) } }
     assertDoesNotThrow { new Executable { def execute(): Unit = manager.handleIpQuota(IpEntity("2001:db8::1"), new ClientQuotaDelta(null)) } }
+  }
+
+  @Test
+  def testTransferToClientQuotaEntity(): Unit = {
+    
+    assertThrows(classOf[IllegalStateException],() => ClientQuotaMetadataManager.transferToClientQuotaEntity(IpEntity("a")))
+    assertThrows(classOf[IllegalStateException],() => ClientQuotaMetadataManager.transferToClientQuotaEntity(DefaultIpEntity))
+    assertEquals(
+      (Some(ClientQuotaManager.UserEntity("user")), None),
+      ClientQuotaMetadataManager.transferToClientQuotaEntity(UserEntity("user"))
+    )
+    assertEquals(
+      (Some(ClientQuotaManager.DefaultUserEntity), None),
+      ClientQuotaMetadataManager.transferToClientQuotaEntity(DefaultUserEntity)
+    )
+    assertEquals(
+      (None, Some(ClientQuotaManager.ClientIdEntity("client"))),
+      ClientQuotaMetadataManager.transferToClientQuotaEntity(ClientIdEntity("client"))
+    )
+    assertEquals(
+      (None, Some(ClientQuotaManager.DefaultClientIdEntity)),
+      ClientQuotaMetadataManager.transferToClientQuotaEntity(DefaultClientIdEntity)
+    )
+    assertEquals(
+      (Some(ClientQuotaManager.UserEntity("user")), Some(ClientQuotaManager.ClientIdEntity("client"))),
+      ClientQuotaMetadataManager.transferToClientQuotaEntity(ExplicitUserExplicitClientIdEntity("user", "client"))
+    )
+    assertEquals(
+      (Some(ClientQuotaManager.UserEntity("user")), Some(ClientQuotaManager.DefaultClientIdEntity)),
+      ClientQuotaMetadataManager.transferToClientQuotaEntity(ExplicitUserDefaultClientIdEntity("user"))
+    )
+    assertEquals(
+      (Some(ClientQuotaManager.DefaultUserEntity), Some(ClientQuotaManager.ClientIdEntity("client"))),
+      ClientQuotaMetadataManager.transferToClientQuotaEntity(DefaultUserExplicitClientIdEntity("client"))
+    )
+    assertEquals(
+      (Some(ClientQuotaManager.DefaultUserEntity), Some(ClientQuotaManager.DefaultClientIdEntity)),
+      ClientQuotaMetadataManager.transferToClientQuotaEntity(DefaultUserDefaultClientIdEntity)
+    )
   }
 }

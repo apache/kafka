@@ -25,6 +25,7 @@ import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
 import org.apache.kafka.metadata.properties.MetaProperties;
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble;
 import org.apache.kafka.metadata.properties.MetaPropertiesVersion;
+import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.MetadataVersion;
 
 import java.io.File;
@@ -55,7 +56,15 @@ public class TestKitNodes {
         private BootstrapMetadata bootstrapMetadata;
 
         public Builder() {
-            this(BootstrapMetadata.fromVersion(MetadataVersion.latestTesting(), "testkit"));
+            this(BootstrapMetadata.fromVersions(
+                    MetadataVersion.latestTesting(),
+                    Feature.PRODUCTION_FEATURES.stream()
+                            .collect(Collectors.toMap(
+                                    Feature::featureName,
+                                    feature -> feature.defaultLevel(MetadataVersion.latestTesting()),
+                                    (existing, replacement) -> existing,
+                                    TreeMap::new)),
+                    "testkit"));
         }
 
         public Builder(BootstrapMetadata bootstrapMetadata) {

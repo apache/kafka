@@ -113,7 +113,7 @@ public abstract class GraphNode {
         this.valueChangingOperation = valueChangingOperation;
     }
 
-    public void keyChangingOperation(final boolean keyChangingOperation) {
+    public void setKeyChangingOperation(final boolean keyChangingOperation) {
         this.keyChangingOperation = keyChangingOperation;
     }
 

@@ -100,12 +100,12 @@ public abstract class AbstractStream<K, V> {
     }
 
     static <K, V, VOut> ValueMapperWithKey<K, V, VOut> withKey(final ValueMapper<V, VOut> valueMapper) {
-        Objects.requireNonNull(valueMapper, "valueMapper can't be null");
+        Objects.requireNonNull(valueMapper, "valueMapper cannot be null");
         return (readOnlyKey, value) -> valueMapper.apply(value);
     }
 
     static <K, VLeft, VRight, VOut> ValueJoinerWithKey<K, VLeft, VRight, VOut> toValueJoinerWithKey(final ValueJoiner<VLeft, VRight, VOut> valueJoiner) {
-        Objects.requireNonNull(valueJoiner, "joiner can't be null");
+        Objects.requireNonNull(valueJoiner, "joiner cannot be null");
         return (readOnlyKey, value1, value2) -> valueJoiner.apply(value1, value2);
     }
 
