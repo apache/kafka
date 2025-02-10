@@ -28,7 +28,7 @@ class KafkaTest(Test):
     setUp. The Zookeeper and Kafka services are available as the fields
     KafkaTest.zk and KafkaTest.kafka.
     """
-    def __init__(self, test_context, num_zk, num_brokers, topics=None, use_share_groups=False):
+    def __init__(self, test_context, num_zk, num_brokers, topics=None):
         super(KafkaTest, self).__init__(test_context)
         self.num_zk = num_zk
         self.num_brokers = num_brokers
@@ -39,8 +39,7 @@ class KafkaTest(Test):
         self.kafka = KafkaService(
             test_context, self.num_brokers,
             self.zk, topics=self.topics,
-            controller_num_nodes_override=self.num_zk, 
-            use_share_groups=use_share_groups)
+            controller_num_nodes_override=self.num_zk)
 
     def setUp(self):
         if self.zk:
