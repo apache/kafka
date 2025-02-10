@@ -2274,7 +2274,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
    */
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testConsumerGroupWithMembersRemoval(quorum: String, groupProtocol: String): Unit = {
+  def testConsumerGroupWithMemberRemoval(quorum: String, groupProtocol: String): Unit = {
     val config = createConfig
     client = Admin.create(config)
     try {
