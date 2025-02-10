@@ -24,6 +24,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.DescribeShareGroupOffsetsRequestData;
 import org.apache.kafka.common.message.DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup;
 import org.apache.kafka.common.message.DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestTopic;
+import org.apache.kafka.common.message.DescribeShareGroupOffsetsResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.DescribeShareGroupOffsetsRequest;
@@ -85,7 +86,9 @@ public class ListShareGroupOffsetsHandler extends AdminApiHandler.Batched<Coordi
         validateKeys(keys);
 
         List<DescribeShareGroupOffsetsRequestGroup> groups = new ArrayList<>(keys.size());
-        groupSpecs.forEach((groupId, spec) -> {
+        keys.forEach(coordinatorKey -> {
+            String groupId = coordinatorKey.idValue;
+            ListShareGroupOffsetsSpec spec = groupSpecs.get(groupId);
             DescribeShareGroupOffsetsRequestGroup requestGroup = new DescribeShareGroupOffsetsRequestGroup()
                 .setGroupId(groupId);
 
@@ -95,9 +98,9 @@ public class ListShareGroupOffsetsHandler extends AdminApiHandler.Batched<Coordi
             Map<String, DescribeShareGroupOffsetsRequestTopic> requestTopics = new HashMap<>();
             for (TopicPartition tp : spec.topicPartitions()) {
                 requestTopics.computeIfAbsent(tp.topic(), t ->
-                    new DescribeShareGroupOffsetsRequestTopic()
-                        .setTopicName(tp.topic())
-                        .setPartitions(new LinkedList<>()))
+                        new DescribeShareGroupOffsetsRequestTopic()
+                            .setTopicName(tp.topic())
+                            .setPartitions(new LinkedList<>()))
                     .partitions()
                     .add(tp.partition());
             }
@@ -125,20 +128,26 @@ public class ListShareGroupOffsetsHandler extends AdminApiHandler.Batched<Coordi
             if (response.hasGroupError(groupId)) {
                 handleGroupError(coordinatorKey, response.groupError(groupId), failed, unmapped);
             } else {
-                Map<TopicPartition, Long> data = new HashMap<>();
-                response.data().groups().forEach(describedGroup ->
-                    describedGroup.topics().forEach(describedTopic ->
-                        describedTopic.partitions().forEach(partition -> {
-                            final TopicPartition tp = new TopicPartition(describedTopic.topicName(), partition.partitionIndex());
-                            if (partition.errorCode() == Errors.NONE.code()) {
-                                data.put(tp, partition.startOffset());
+                Map<TopicPartition, Long> groupOffsetsListing = new HashMap<>();
+                response.data().groups().stream().filter(g -> g.groupId().equals(groupId)).forEach(groupResponse -> {
+                    for (DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic topicResponse : groupResponse.topics()) {
+                        for (DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition partitionResponse : topicResponse.partitions()) {
+                            TopicPartition tp = new TopicPartition(topicResponse.topicName(), partitionResponse.partitionIndex());
+                            if (partitionResponse.errorCode() == Errors.NONE.code()) {
+                                // Negative offset indicates there is no start offset for this partition
+                                if (partitionResponse.startOffset() < 0) {
+                                    groupOffsetsListing.put(tp, null);
+                                } else {
+                                    groupOffsetsListing.put(tp, partitionResponse.startOffset());
+                                }
                             } else {
-                                log.warn("Skipping return offset for {} due to error {}: {}.", tp, partition.errorCode(), partition.errorMessage());
+                                log.warn("Skipping return offset for {} due to error {}: {}.", tp, partitionResponse.errorCode(), partitionResponse.errorMessage());
                             }
-                        })
-                    )
-                );
-                completed.put(coordinatorKey, data);
+                        }
+                    }
+                });
+
+                completed.put(coordinatorKey, groupOffsetsListing);
             }
         }
         return new ApiResult<>(completed, failed, unmapped);

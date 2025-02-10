@@ -265,7 +265,7 @@ public interface GroupCoordinator {
      * @param request           The DescribeShareGroupOffsetsRequestGroup request.
      *
      * @return  A future yielding the results.
-     *          The error code(s) of the response are set to indicate the error(s) occurred during the execution.
+     *          The error codes of the response are set to indicate the errors occurred during the execution.
      */
     CompletableFuture<DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup> describeShareGroupOffsets(
         RequestContext context,
