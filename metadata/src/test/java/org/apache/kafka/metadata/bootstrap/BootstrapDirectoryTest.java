@@ -81,8 +81,7 @@ public class BootstrapDirectoryTest {
     @Test
     public void testReadFromConfigurationWithAncientVersion() throws Exception {
         try (BootstrapTestDirectory testDirectory = new BootstrapTestDirectory().createDirectory()) {
-            assertEquals(BootstrapMetadata.fromVersion(MetadataVersion.MINIMUM_VERSION,
-                    "the minimum version bootstrap with metadata.version 3.3-IV3"),
+            assertThrows(IllegalArgumentException.class, () ->
                 new BootstrapDirectory(testDirectory.path(), Optional.of("3.0")).read());
         }
     }

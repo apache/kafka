@@ -20,6 +20,7 @@ package org.apache.kafka.metadata.bootstrap;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.metadata.NoOpRecord;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersionTestUtils;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -125,13 +126,13 @@ public class BootstrapMetadataTest {
     static final List<ApiMessageAndVersion> RECORDS_WITH_OLD_METADATA_VERSION = Collections.singletonList(
             new ApiMessageAndVersion(new FeatureLevelRecord().
                 setName(FEATURE_NAME).
-                setFeatureLevel((short) 1), (short) 0));
+                setFeatureLevel(MetadataVersionTestUtils.IBP_3_0_IV1_FEATURE_LEVEL), (short) 0));
 
     @Test
     public void testFromRecordsListWithOldMetadataVersion() {
         RuntimeException exception = assertThrows(RuntimeException.class,
             () -> BootstrapMetadata.fromRecords(RECORDS_WITH_OLD_METADATA_VERSION, "quux"));
-        assertEquals("Bootstrap metadata.version before 3.3-IV0 are not supported. Can't load " +
-            "metadata from quux", exception.getMessage());
+        assertEquals("No MetadataVersion with feature level 1. Valid feature levels are from 7 to 25.",
+            exception.getMessage());
     }
 }

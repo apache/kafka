@@ -331,7 +331,8 @@ public enum MetadataVersion {
                 return metadataVersion;
             }
         }
-        throw new IllegalArgumentException("No MetadataVersion with feature level " + version);
+        throw new IllegalArgumentException("No MetadataVersion with feature level " + version + ". Valid feature levels are from "
+            + MINIMUM_VERSION.featureLevel + " to " + latestTesting().featureLevel + ".");
     }
 
     // Testing only
