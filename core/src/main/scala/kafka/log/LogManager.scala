@@ -808,7 +808,7 @@ class LogManager(logDirs: Seq[File],
   /**
    * Checkpoint recovery offsets for all the logs in logDir.
    *
-   * @param logDir the directory in which the logs to be checkpoint are
+   * @param logDir the directory in which the logs to be checkpointed are
    */
   // Only for testing
   private[log] def checkpointRecoveryOffsetsInDir(logDir: File): Unit = {
@@ -819,7 +819,7 @@ class LogManager(logDirs: Seq[File],
    * Checkpoint recovery offsets for all the provided logs.
    *
    * @param logDir the directory in which the logs are
-   * @param logsToCheckpoint the logs to be checkpoint
+   * @param logsToCheckpoint the logs to be checkpointed
    */
   private def checkpointRecoveryOffsetsInDir(logDir: File, logsToCheckpoint: Map[TopicPartition, UnifiedLog]): Unit = {
     try {
@@ -841,8 +841,8 @@ class LogManager(logDirs: Seq[File],
   /**
    * Checkpoint log start offsets for all the provided logs in the provided directory.
    *
-   * @param logDir the directory in which logs are checkpoint
-   * @param logsToCheckpoint the logs to be checkpoint
+   * @param logDir the directory in which logs are checkpointed
+   * @param logsToCheckpoint the logs to be checkpointed
    */
   private def checkpointLogStartOffsetsInDir(logDir: File, logsToCheckpoint: Map[TopicPartition, UnifiedLog]): Unit = {
     try {
