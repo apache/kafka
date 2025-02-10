@@ -753,9 +753,9 @@ class BrokerServer(
           }
         }
       }
-      if (lifecycleManager != null) {
+      if (lifecycleManager != null)
         lifecycleManager.beginShutdown()
-      }
+
       // Stop socket server to stop accepting any more connections and requests.
       // Socket server will be shutdown towards the end of the sequence.
       if (socketServer != null) {
@@ -807,8 +807,10 @@ class BrokerServer(
       if (clientToControllerChannelManager != null)
         CoreUtils.swallow(clientToControllerChannelManager.shutdown(), this)
 
-      if (logManager != null && lifecycleManager != null)
-        CoreUtils.swallow(logManager.shutdown(lifecycleManager.brokerEpoch), this)
+      if (logManager != null) {
+        val brokerEpoch = if (lifecycleManager != null) lifecycleManager.brokerEpoch else -1
+        CoreUtils.swallow(logManager.shutdown(brokerEpoch), this)
+      }
 
       // Close remote log manager to give a chance to any of its underlying clients
       // (especially in RemoteStorageManager and RemoteLogMetadataManager) to close gracefully.
@@ -828,9 +830,9 @@ class BrokerServer(
 
       isShuttingDown.set(false)
 
-      if (lifecycleManager != null) {
+      if (lifecycleManager != null)
         CoreUtils.swallow(lifecycleManager.close(), this)
-      }
+
       CoreUtils.swallow(config.dynamicConfig.clear(), this)
       Utils.closeQuietly(clientMetricsManager, "client metrics manager")
       sharedServer.stopForBroker()
