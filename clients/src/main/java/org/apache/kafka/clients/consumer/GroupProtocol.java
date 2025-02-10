@@ -23,7 +23,10 @@ public enum GroupProtocol {
     CLASSIC("CLASSIC"),
 
     /** Consumer group protocol */
-    CONSUMER("CONSUMER");
+    CONSUMER("CONSUMER"),
+
+    /** Share group protocol */
+    SHARE("SHARE");
 
     /**
      * String representation of the group protocol.
