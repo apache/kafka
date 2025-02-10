@@ -274,8 +274,8 @@ public class FeatureCommandTest {
             assertTrue(t.getMessage().contains("2 out of 2 operation(s) failed."));
         });
         assertEquals(format("`metadata` flag is deprecated and may be removed in a future release.%nCould not upgrade foo.bar to 6." +
-                " Invalid update version 7 for feature metadata.version. Can't upgrade to lower version.%n" +
-                "Could not upgrade metadata.version to 7. Invalid update version 7 for feature metadata.version. Can't upgrade to lower version."), upgradeOutput);
+            " Invalid update version 7 for feature metadata.version. Can't upgrade to lower version.%n" +
+            "Could not upgrade metadata.version to 7. Invalid update version 7 for feature metadata.version. Can't upgrade to lower version."), upgradeOutput);
     }
 
     @Test
@@ -318,8 +318,9 @@ public class FeatureCommandTest {
             Throwable t = assertThrows(TerseException.class, () -> FeatureCommand.handleDowngrade(new Namespace(namespace), buildAdminClient()));
             assertTrue(t.getMessage().contains("2 out of 2 operation(s) failed."));
         });
-        assertEquals(format("`metadata` flag is deprecated and may be removed in a future release.%nCan not downgrade foo.bar to 1. Invalid update version 15 for feature metadata.version." +
-            " Can't downgrade to newer version.%nCan not downgrade metadata.version to 15. Invalid update version 15 for feature metadata.version. Can't downgrade to newer version."), downgradeOutput);
+        assertEquals(format("`metadata` flag is deprecated and may be removed in a future release.%nCan not downgrade foo.bar to 1. Invalid update "
+            + "version 15 for feature metadata.version. Can't downgrade to newer version.%nCan not downgrade metadata.version to 15. Invalid update "
+            + "version 15 for feature metadata.version. Can't downgrade to newer version."), downgradeOutput);
     }
 
     @Test
