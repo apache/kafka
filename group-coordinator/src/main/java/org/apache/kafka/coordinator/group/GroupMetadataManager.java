@@ -122,7 +122,7 @@ import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsDelta;
-import org.apache.kafka.server.share.SharePartitionKey;
+import org.apache.kafka.image.TopicsImage;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
 import org.apache.kafka.timeline.TimelineHashSet;
@@ -6279,6 +6279,20 @@ public class GroupMetadataManager {
         List<CoordinatorRecord> records
     ) {
         group.createGroupTombstoneRecords(records);
+    }
+
+    public Map<String, Map<Uuid, List<Integer>>> sharePartitionKeysMap(List<ShareGroup> shareGroups, long committedOffset) {
+        Map<String, Map<Uuid, List<Integer>>> keyMap = new HashMap<>();
+        TopicsImage topicsImage = metadataImage.topics();
+        for (ShareGroup shareGroup : shareGroups) {
+            for (String topic : shareGroup.subscribedTopicNames().keySet()) {
+                TopicImage topicImage = topicsImage.getTopic(topic);
+                keyMap.computeIfAbsent(shareGroup.groupId(), k -> new HashMap<>())
+                    .put(topicImage.id(), topicImage.partitions().keySet().stream().toList());
+            }
+        }
+
+        return keyMap;
     }
 
     /**
