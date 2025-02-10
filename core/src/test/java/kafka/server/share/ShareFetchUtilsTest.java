@@ -379,16 +379,16 @@ public class ShareFetchUtilsTest {
         ShareFetch shareFetch = new ShareFetch(FETCH_PARAMS, groupId, memberId.toString(),
             new CompletableFuture<>(), partitionMaxBytes, BATCH_SIZE, 10, BROKER_TOPIC_STATS);
 
-        LinkedHashMap<Long, Integer> offsetValues = new LinkedHashMap<>();
-        offsetValues.put(0L, 1);
-        offsetValues.put(1L, 1);
-        offsetValues.put(2L, 1);
-        offsetValues.put(3L, 1);
-        Records records1 = createFileRecords(offsetValues);
+        LinkedHashMap<Long, Integer> recordsPerOffset = new LinkedHashMap<>();
+        recordsPerOffset.put(0L, 1);
+        recordsPerOffset.put(1L, 1);
+        recordsPerOffset.put(2L, 1);
+        recordsPerOffset.put(3L, 1);
+        Records records1 = createFileRecords(recordsPerOffset);
 
-        offsetValues.clear();
-        offsetValues.put(100L, 4);
-        Records records2 = createFileRecords(offsetValues);
+        recordsPerOffset.clear();
+        recordsPerOffset.put(100L, 4);
+        Records records2 = createFileRecords(recordsPerOffset);
 
         FetchPartitionData fetchPartitionData1 = new FetchPartitionData(Errors.NONE, 0L, 0L,
             records1, Optional.empty(), OptionalLong.empty(), Optional.empty(),
@@ -503,26 +503,16 @@ public class ShareFetchUtilsTest {
         acquiredRecords = List.of(new AcquiredRecords().setFirstOffset(8).setLastOffset(10).setDeliveryCount((short) 1));
         slicedRecords = ShareFetchUtils.maybeSliceFetchRecords(records, new ShareAcquiredRecords(acquiredRecords, 1));
         assertEquals(records, slicedRecords);
-
-        // Acquire subsets out of base offset bounds should return empty records.
-        acquiredRecords = List.of(new AcquiredRecords().setFirstOffset(2).setLastOffset(4).setDeliveryCount((short) 1));
-        slicedRecords = ShareFetchUtils.maybeSliceFetchRecords(records, new ShareAcquiredRecords(acquiredRecords, 1));
-        assertEquals(0, slicedRecords.sizeInBytes());
-
-        // Acquire subsets out of last offset bounds should return empty records.
-        acquiredRecords = List.of(new AcquiredRecords().setFirstOffset(15).setLastOffset(18).setDeliveryCount((short) 1));
-        slicedRecords = ShareFetchUtils.maybeSliceFetchRecords(records, new ShareAcquiredRecords(acquiredRecords, 1));
-        assertEquals(0, slicedRecords.sizeInBytes());
     }
 
     @Test
     public void testMaybeSliceFetchRecordsMultipleBatches() throws IOException {
         // Create 3 batches of records with 3, 2 and 4 records respectively.
-        LinkedHashMap<Long, Integer> offsetValues = new LinkedHashMap<>();
-        offsetValues.put(0L, 3);
-        offsetValues.put(3L, 2);
-        offsetValues.put(7L, 4); // Gap of 2 offsets between batches.
-        FileRecords records = createFileRecords(offsetValues);
+        LinkedHashMap<Long, Integer> recordsPerOffset = new LinkedHashMap<>();
+        recordsPerOffset.put(0L, 3);
+        recordsPerOffset.put(3L, 2);
+        recordsPerOffset.put(7L, 4); // Gap of 2 offsets between batches.
+        FileRecords records = createFileRecords(recordsPerOffset);
 
         // Acquire all offsets, should return same records.
         List<AcquiredRecords> acquiredRecords = List.of(new AcquiredRecords().setFirstOffset(0).setLastOffset(10).setDeliveryCount((short) 1));

@@ -41,6 +41,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -189,7 +190,8 @@ public class ShareFetchUtils {
     /**
      * Slice the fetch records based on the acquired records. The slicing is done based on the first
      * and last offset of the acquired records from the list. The slicing doesn't consider individual
-     * acquired batches rather the boundaries of the acquired list.
+     * acquired batches rather the boundaries of the acquired list. The method expects the acquired
+     * records list to be within the fetch records bounds.
      *
      * @param records The records to be sliced.
      * @param shareAcquiredRecords The share acquired records containing the non-empty acquired records.
@@ -204,53 +206,37 @@ public class ShareFetchUtils {
         // acquired records are non-empty.
         List<AcquiredRecords> acquiredRecords = shareAcquiredRecords.acquiredRecords();
         try {
+            final Iterator<FileChannelRecordBatch> iterator = fileRecords.batchIterator();
+            // Track the first overlapping batch with the first acquired offset.
+            FileChannelRecordBatch firstOverlapBatch = iterator.next();
+            // If there exists single fetch batch, then return the original records.
+            if (!iterator.hasNext()) {
+                return records;
+            }
+            // Find the first and last acquired offset to slice the records.
             final long firstAcquiredOffset = acquiredRecords.get(0).firstOffset();
             final long lastAcquiredOffset = acquiredRecords.get(acquiredRecords.size() - 1).lastOffset();
             int startPosition = 0;
             int size = 0;
-            // Track the previous batch to adjust the start position in case the first acquired offset
-            // is within the batch.
-            FileChannelRecordBatch previousBatch = null;
-            for (FileChannelRecordBatch batch : fileRecords.batches()) {
-                // If the batch base offset is less than the first acquired offset, then the start position
-                // should be updated to skip the batch.
-                if (batch.baseOffset() < firstAcquiredOffset) {
-                    startPosition += batch.sizeInBytes();
-                    previousBatch = batch;
+            while (iterator.hasNext()) {
+                FileChannelRecordBatch batch = iterator.next();
+                // Iterate until finds the first overlap batch with the first acquired offset. All the
+                // batches before this first overlap batch should be sliced hence increment the start
+                // position.
+                if (firstOverlapBatch.baseOffset() < firstAcquiredOffset && batch.baseOffset() <= firstAcquiredOffset) {
+                    startPosition += firstOverlapBatch.sizeInBytes();
+                    firstOverlapBatch = batch;
                     continue;
                 }
-                // If the first acquired offset is within the batch, then adjust the start position
-                // to not skip the previous batch i.e. if batch is from 10-15 and the first acquired
-                // offset is 12, then the start position should be adjusted to include the batch containing
-                // the first acquired offset. Though generally, the first acquired offset should be the
-                // first offset of the batch, but there can be cases where the batch is split because of
-                // initial load from persister which has subset of acknowledged records from the batch, etc.
-                // This adjustment should only be done once for the batch containing the first acquired offset,
-                // hence post the adjustment, the previous batch should be set to null.
-                if (previousBatch != null && batch.baseOffset() != firstAcquiredOffset) {
-                    startPosition -= previousBatch.sizeInBytes();
-                    size += previousBatch.sizeInBytes();
-                }
-                previousBatch = null;
-                // Consider the full batch size for slicing irrespective of the batch last offset i.e.
-                // if the batch last offset is greater than the last offset of the acquired records,
-                // we still consider the full batch size for slicing.
-                if (batch.baseOffset() <= lastAcquiredOffset) {
-                    size += batch.sizeInBytes();
-                } else {
+                // Break if traversed all the batches till the last acquired offset.
+                if (batch.baseOffset() > lastAcquiredOffset) {
                     break;
                 }
+                size += batch.sizeInBytes();
             }
-            // If the fetch resulted in single batch and the first acquired offset is not the base offset
-            // of the batch, then the position and size should be adjusted to include the batch. This
-            // can happen rarely when the batch is split because of initial load from persister or a
-            // specific offset was released by the client. In such cases, check the last offset of the
-            // previous batch to include the batch. As the last offset call on batch is expensive hence
-            // the code is optimized to avoid the last offset call unless required.
-            if (previousBatch != null && previousBatch.lastOffset() >= lastAcquiredOffset) {
-                startPosition -= previousBatch.sizeInBytes();
-                size += previousBatch.sizeInBytes();
-            }
+            // Include the first overlap batch as it's the last batch traversed which overlapped the first
+            // acquired offset.
+            size += firstOverlapBatch.sizeInBytes();
             // Check if we do not slicing i.e. neither start position nor size changed.
             if (startPosition == 0 && size == fileRecords.sizeInBytes()) {
                 return records;

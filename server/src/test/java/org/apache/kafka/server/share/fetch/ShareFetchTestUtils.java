@@ -92,13 +92,13 @@ public class ShareFetchTestUtils {
      * Create a file records with the given offset values, the number of records from each given start
      * offset.
      *
-     * @param offsetValues The offset values to create the file records with.
+     * @param recordsPerOffset The offset values and the number of records to create from given offset.
      * @return The file records.
      * @throws IOException If the file records cannot be created.
      */
-    public static FileRecords createFileRecords(Map<Long, Integer> offsetValues) throws IOException {
+    public static FileRecords createFileRecords(Map<Long, Integer> recordsPerOffset) throws IOException {
         FileRecords fileRecords = FileRecords.open(tempFile());
-        for (Entry<Long, Integer> entry : offsetValues.entrySet()) {
+        for (Entry<Long, Integer> entry : recordsPerOffset.entrySet()) {
             try (MemoryRecordsBuilder records = memoryRecordsBuilder(entry.getValue(), entry.getKey())) {
                 fileRecords.append(records.build());
             }
