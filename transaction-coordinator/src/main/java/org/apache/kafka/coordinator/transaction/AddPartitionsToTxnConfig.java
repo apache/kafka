@@ -28,9 +28,9 @@ public final class AddPartitionsToTxnConfig {
     // The default config values for the server-side add partition to transaction operations.
     public static final String ADD_PARTITIONS_TO_TXN_MAX_TIMEOUT_MS_CONFIG = "add.partitions.to.txn.max.timeout.ms";
     public static final int ADD_PARTITIONS_TO_TXN_MAX_TIMEOUT_MS_DEFAULT = 100;
-    public static final String ADD_PARTITIONS_TO_TXN_MAX_TIMEOUT_MS_DOC = "The maximum allowed timeout for server side " +
-            "on adding partitions to transactions. It applies to both the verification and actual add partition operations." +
-            "It will not be effective if it is larger than request.timeout.ms";
+    public static final String ADD_PARTITIONS_TO_TXN_MAX_TIMEOUT_MS_DOC = "The maximum allowed timeout for adding " +
+            "partitions to transactions on the server side. It only applies to the actual add partition operations, " +
+            "not the verification. It will not be effective if it is larger than request.timeout.ms";
     public static final String ADD_PARTITIONS_TO_TXN_RETRY_BACKOFF_MS_CONFIG = "add.partitions.to.txn.retry.backoff.ms";
     public static final int ADD_PARTITIONS_TO_TXN_RETRY_BACKOFF_MS_DEFAULT = 20;
     public static final String ADD_PARTITIONS_TO_TXN_RETRY_BACKOFF_MS_DOC = "The server-side retry backoff when the server attempts" +
