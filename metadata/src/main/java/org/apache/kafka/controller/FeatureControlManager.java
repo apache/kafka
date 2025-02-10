@@ -314,8 +314,8 @@ public class FeatureControlManager {
         try {
             newVersion = MetadataVersion.fromFeatureLevel(newVersionLevel);
         } catch (IllegalArgumentException e) {
-            return invalidMetadataVersion(newVersionLevel, "Unknown metadata.version. Note that the minimum metadata "
-                + "version is " + MetadataVersion.MINIMUM_VERSION);
+            return invalidMetadataVersion(newVersionLevel, "Valid versions are from "
+                + MetadataVersion.MINIMUM_VERSION.featureLevel() + " to " + MetadataVersion.latestTesting().featureLevel() + ".");
         }
 
         if (newVersion.isLessThan(currentVersion)) {

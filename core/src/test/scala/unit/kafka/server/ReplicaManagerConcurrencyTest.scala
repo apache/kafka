@@ -242,7 +242,10 @@ class ReplicaManagerConcurrencyTest extends Logging {
         try {
           assertEquals(1, results.size)
           val (topicIdPartition, result) = results.head
-          assertEquals(this.topicIdPartition, topicIdPartition)
+          assertEquals(this.topicIdPartition.topicId, topicIdPartition.topicId)
+          assertEquals(this.topicIdPartition.partitionId, topicIdPartition.partition)
+          assertEquals(this.topicIdPartition.topicId, topicIdPartition.topicId)
+          assertEquals(topicName, topicIdPartition.topic)
           assertEquals(Errors.NONE, result.error)
           future.complete(result)
         } catch {

@@ -362,7 +362,7 @@ public class FeatureControlManagerTest {
             setMetadataVersion(MetadataVersion.MINIMUM_VERSION).
             build();
         assertEquals(ControllerResult.of(Collections.emptyList(), new ApiError(Errors.INVALID_UPDATE_VERSION,
-            "Invalid metadata.version 6. Unknown metadata.version.")),
+            "Invalid metadata.version 6. Valid versions are from 7 to 25.")),
                 manager.updateFeatures(
                         singletonMap(MetadataVersion.FEATURE_NAME, MetadataVersionTestUtils.IBP_3_3_IV2_FEATURE_LEVEL),
                         singletonMap(MetadataVersion.FEATURE_NAME, FeatureUpdate.UpgradeType.UNSAFE_DOWNGRADE),

@@ -320,8 +320,8 @@ public enum MetadataVersion {
             key = String.join(".", Arrays.copyOfRange(versionSegments, 0, numSegments));
         }
         return Optional.ofNullable(IBP_VERSIONS.get(key)).orElseThrow(() ->
-            new IllegalArgumentException("Version " + versionString + " is not a valid version. Note that " + MINIMUM_VERSION
-                + " is the minimum supported version.")
+            new IllegalArgumentException("Version " + versionString + " is not a valid version. The minimum version is " + MINIMUM_VERSION
+                + " and the maximum version is " + latestTesting())
         );
     }
 

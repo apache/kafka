@@ -73,6 +73,7 @@ class PartitionLockTest extends Logging {
   var partition: Partition = _
 
   private val topicPartition = new TopicPartition("test-topic", 0)
+  private val topicId = Uuid.randomUuid()
 
   @BeforeEach
   def setUp(): Unit = {
@@ -331,7 +332,7 @@ class PartitionLockTest extends Logging {
       }
     }
 
-    val topicIdPartition = new TopicIdPartition(partition.topicId.getOrElse(Uuid.ZERO_UUID), topicPartition.partition)
+    val topicIdPartition = new TopicIdPartition(topicId, topicPartition.partition)
     when(offsetCheckpoints.fetch(
       ArgumentMatchers.anyString,
       ArgumentMatchers.eq(topicPartition)
@@ -341,7 +342,7 @@ class PartitionLockTest extends Logging {
       ArgumentMatchers.any[LeaderAndIsr]
     )).thenReturn(new CompletableFuture[LeaderAndIsr]())
 
-    partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
+    partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, Some(topicId))
 
     val controllerEpoch = 0
     val replicas = (0 to numReplicaFetchers).map(i => Integer.valueOf(brokerId + i)).toList.asJava
@@ -355,7 +356,7 @@ class PartitionLockTest extends Logging {
       .setIsr(isr)
       .setPartitionEpoch(1)
       .setReplicas(replicas)
-      .setIsNew(true), offsetCheckpoints, None), "Expected become leader transition to succeed")
+      .setIsNew(true), offsetCheckpoints, Some(topicId)), "Expected become leader transition to succeed")
 
     partition
   }
