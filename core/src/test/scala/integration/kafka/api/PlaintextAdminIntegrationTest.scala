@@ -1852,9 +1852,10 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       // will cause the member rejoining and the test will be flaky (check ConsumerCoordinator#OffsetCommitResponseHandler)
       val defaultConsumerConfig = new Properties(consumerConfig)
       defaultConsumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
+      defaultConsumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, testGroupId)
       defaultConsumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, testClientId)
 
-      val backgroundConsumerSet = new BackgroundConsumerSet(testGroupId, defaultConsumerConfig)
+      val backgroundConsumerSet = new BackgroundConsumerSet(defaultConsumerConfig)
       groupInstanceSet.zip(topicSet).foreach { case (groupInstanceId, topic) =>
         val configOverrides = new Properties()
         if (groupInstanceId != "") {
@@ -2114,9 +2115,10 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       // will cause the member rejoining and the test will be flaky (check ConsumerCoordinator#OffsetCommitResponseHandler)
       val defaultConsumerConfig = new Properties(consumerConfig)
       defaultConsumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
+      defaultConsumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, testGroupId)
       defaultConsumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, testClientId)
 
-      val backgroundConsumerSet = new BackgroundConsumerSet(testGroupId, defaultConsumerConfig)
+      val backgroundConsumerSet = new BackgroundConsumerSet(defaultConsumerConfig)
       groupInstanceSet.zip(topicSet).foreach { case (groupInstanceId, topic) =>
         val configOverrides = new Properties()
         if (groupInstanceId != "") {
@@ -2314,12 +2316,13 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       // will cause the member rejoining and the test will be flaky (check ConsumerCoordinator#OffsetCommitResponseHandler)
       val defaultConsumerConfig = new Properties(consumerConfig)
       defaultConsumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
+      defaultConsumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, testGroupId)
       defaultConsumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, testClientId)
       // We need to set internal.leave.group.on.close to validate dynamic member removal, but it only works for ClassicConsumer
       // After KIP-1092, we can control dynamic member removal for both ClassicConsumer and AsyncConsumer
       defaultConsumerConfig.setProperty("internal.leave.group.on.close", "false")
 
-      val backgroundConsumerSet = new BackgroundConsumerSet(testGroupId, defaultConsumerConfig)
+      val backgroundConsumerSet = new BackgroundConsumerSet(defaultConsumerConfig)
       groupInstanceSet.zip(topicSet).foreach { case (groupInstanceId, topic) =>
         val configOverrides = new Properties()
         if (groupInstanceId != "") {
@@ -3959,14 +3962,12 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       topicConfigs.get(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG))
   }
 
-  class BackgroundConsumerSet(testGroupId: String, defaultConsumerConfig: Properties) {
+  class BackgroundConsumerSet(defaultConsumerConfig: Properties) {
     private val consumerSet: scala.collection.mutable.Set[Consumer[Array[Byte], Array[Byte]]] = scala.collection.mutable.Set.empty
     private val consumerThreads: scala.collection.mutable.Set[Thread] = scala.collection.mutable.Set.empty
     private var startLatch: CountDownLatch = new CountDownLatch(0)
     private var stopLatch: CountDownLatch = new CountDownLatch(0)
     private var consumerThreadRunning = new AtomicBoolean(false)
-
-    defaultConsumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, testGroupId)
 
     def addConsumer(topic: String, configOverrides: Properties = new Properties()): Unit = {
       val newConsumerConfig = defaultConsumerConfig.clone().asInstanceOf[Properties]
