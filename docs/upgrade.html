@@ -233,12 +233,11 @@
                     <ul>
                         <li>Support for the new Consumer rebalance protocol (<a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-848%3A+The+Next+Generation+of+the+Consumer+Rebalance+Protocol">KIP-848</a>) is now production ready.
                             <ul>
-                                <li>The <code>group.protocol</code> configuration is added. It defaults to the old Classic protocol. You should simply change it to Consumer and restart your application to enable the new rebalance protocol.
+                                <li>The <code>group.protocol</code> configuration is added. It defaults to the old Classic protocol.
+                                    You should simply change it to Consumer and restart your application to enable the new rebalance protocol.
                                     This will internally make use of the improved consumer threading model.
                                 </li>
-                                <li>
-                                    The <code>group.remote.assignor</code> configuration is introduced as an optional config, to overwrite the default assignment strategy configured on the broker.
-                                </li>
+                                <li>The <code>group.remote.assignor</code> configuration is introduced as an optional config, to overwrite the default assignment strategy configured on the broker.</li>
                                 <li>Client-side assignors implementations are no longer supported.</li>
                                 <li>The following configs are not supported if using the new rebalance protocol:
                                     <ul>
@@ -253,7 +252,10 @@
                                     A command line tool option has been added to validate RE2J regular expressions to be provided as <code>SubscriptionPattern</code>. See <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=217387038#KIP848:TheNextGenerationoftheConsumerRebalanceProtocol---validate-regex">RE2J Validation Tool</a>
                                 </li>
                                 <li>New metrics have been added to the Consumer when using the new rebalance protocol, mainly providing visibility over the improved threading model. See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-1068%3A+New+metrics+for+the+new+KafkaConsumer">New Consumer Metrics</a></li>
-                                You can check <a href="https://cwiki.apache.org/confluence/display/KAFKA/The+Next+Generation+of+the+Consumer+Rebalance+Protocol+%28KIP-848%29+-+GA+Release+Notes">New Rebalance Protocol GA Release Notes</a> for more details.
+                                <li>
+                                    There is support for live upgrade of your consumer applications to the new protocol, as well as offline upgrade.
+                                    See <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=340036523#TheNextGenerationoftheConsumerRebalanceProtocol(KIP848)GAReleaseNotes-Upgradepath">Upgrade path</a> for more details.
+                                </li>
                             </ul>
                         </li>
                         <li>The <code>poll(long)</code> method was removed from the consumer. Please use <code>poll(Duration)</code> instead. Note that there is
