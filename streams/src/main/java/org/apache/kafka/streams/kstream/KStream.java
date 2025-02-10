@@ -540,7 +540,7 @@ public interface KStream<K, V> {
     void to(final String topic);
 
     /**
-     * See {@link #to(String).}
+     * See {@link #to(String)}.
      */
     void to(final String topic,
             final Produced<K, V> produced);
