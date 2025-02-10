@@ -96,6 +96,15 @@
         </li>
         <li>
             <p>
+                Remove broker protocol version-related configurations. These configurations were used in ZooKeeper mode to define communication protocol version between brokers.
+                In KRaft mode, Kafka uses <code>metadata.version</code> to control the feature level of the cluster, which can be managed using <code>bin/kafka-features.sh</code>.
+            </p>
+            <ul>
+                <li><code>inter.broker.protocol.version</code></li>
+            </ul>
+        </li>
+        <li>
+            <p>
                 Removed dynamic configurations which relies on ZooKeeper. In KRaft mode, to change these configurations,
                 you need to restart the broker/controller.
             </p>

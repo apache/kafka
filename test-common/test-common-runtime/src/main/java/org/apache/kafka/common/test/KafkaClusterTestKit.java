@@ -206,34 +206,41 @@ public class KafkaClusterTestKit implements AutoCloseable {
             }
         }
 
+        private Optional<File> maybeSetupJaasFile() throws Exception {
+            if (brokerSecurityProtocol.equals(SecurityProtocol.SASL_PLAINTEXT.name)) {
+                File file = JaasUtils.writeJaasContextsToFile(Set.of(
+                    new JaasUtils.JaasSection(JaasUtils.KAFKA_SERVER_CONTEXT_NAME,
+                        List.of(
+                            JaasModule.plainLoginModule(
+                                JaasUtils.KAFKA_PLAIN_ADMIN, 
+                                JaasUtils.KAFKA_PLAIN_ADMIN_PASSWORD,
+                                true,
+                                Map.of(
+                                    JaasUtils.KAFKA_PLAIN_USER1, JaasUtils.KAFKA_PLAIN_USER1_PASSWORD,
+                                    JaasUtils.KAFKA_PLAIN_ADMIN, JaasUtils.KAFKA_PLAIN_ADMIN_PASSWORD)
+                            )
+                        )
+                    )
+                ));
+                JaasUtils.refreshJavaLoginConfigParam(file);
+                return Optional.of(file);
+            }
+            return Optional.empty();
+        }
+
         public KafkaClusterTestKit build() throws Exception {
             Map<Integer, ControllerServer> controllers = new HashMap<>();
             Map<Integer, BrokerServer> brokers = new HashMap<>();
             Map<Integer, SharedServer> jointServers = new HashMap<>();
             File baseDirectory = null;
-            File jaasFile = null;
-
-            if (brokerSecurityProtocol.equals(SecurityProtocol.SASL_PLAINTEXT.name)) {
-                jaasFile = JaasUtils.writeJaasContextsToFile(Set.of(
-                    new JaasUtils.JaasSection(JaasUtils.KAFKA_SERVER_CONTEXT_NAME,
-                        List.of(
-                            JaasModule.plainLoginModule(
-                                JaasUtils.KAFKA_PLAIN_ADMIN, JaasUtils.KAFKA_PLAIN_ADMIN_PASSWORD,
-                                true,
-                                Map.of(
-                                    JaasUtils.KAFKA_PLAIN_USER1, JaasUtils.KAFKA_PLAIN_USER1_PASSWORD,
-                                    JaasUtils.KAFKA_PLAIN_ADMIN, JaasUtils.KAFKA_PLAIN_ADMIN_PASSWORD)
-                                )
-                        )
-                    )
-                ));
-                JaasUtils.refreshJavaLoginConfigParam(jaasFile);
-            }
-
+            Optional<File> jaasFile = maybeSetupJaasFile();
             try {
                 baseDirectory = new File(nodes.baseDirectory());
                 for (TestKitNode node : nodes.controllerNodes().values()) {
                     socketFactoryManager.getOrCreatePortForListener(node.id(), controllerListenerName);
+                }
+                for (TestKitNode node : nodes.brokerNodes().values()) {
+                    socketFactoryManager.getOrCreatePortForListener(node.id(), brokerListenerName);
                 }
                 for (TestKitNode node : nodes.controllerNodes().values()) {
                     setupNodeDirectories(baseDirectory, node.metadataDirectory(), Collections.emptyList());
@@ -308,7 +315,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     baseDirectory,
                     faultHandlerFactory,
                     socketFactoryManager,
-                    jaasFile == null ? Optional.empty() : Optional.of(jaasFile));
+                    jaasFile);
         }
 
         private String listeners(int node) {

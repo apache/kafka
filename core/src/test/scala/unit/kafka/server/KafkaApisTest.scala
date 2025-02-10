@@ -24,7 +24,7 @@ import kafka.network.RequestChannel
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.metadata.KRaftMetadataCache
 import kafka.server.share.SharePartitionManager
-import kafka.utils.{CoreUtils, Log4jController, Logging, TestUtils}
+import kafka.utils.{CoreUtils, LoggingController, Logging, TestUtils}
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry}
 import org.apache.kafka.common._
@@ -9759,7 +9759,7 @@ class KafkaApisTest extends Logging {
         setResourceName(brokerId.toString).
         setResourceType(BROKER_LOGGER.id()).
         setConfigs(new IAlterableConfigCollection(asList(new IAlterableConfig().
-          setName(Log4jController.ROOT_LOGGER).
+          setName(LoggingController.ROOT_LOGGER).
           setValue("TRACE")).iterator()))).iterator())),
         1.toShort))
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
