@@ -94,8 +94,8 @@
                                 <li>New config <code>group.coordinator.new.enable=true</code> is added, enabling it by default.</li>
                                 <li>New config <code>group.coordinator.rebalance.protocols=classic,consumer</code> is added. Both protocols supported by default.</li>
                                 <li>New config <code>group.coordinator.threads=1</code> to control the number of threads the coordinator uses. It defaults to 1, and it should be adjusted as needed.</li>
-                                You can check <a href="https://cwiki.apache.org/confluence/display/KAFKA/The+Next+Generation+of+the+Consumer+Rebalance+Protocol+%28KIP-848%29+-+GA+Release+Notes">New Rebalance Protocol GA Release Notes</a> for more details.
                             </ul>
+                            You can check <a href="https://cwiki.apache.org/confluence/display/KAFKA/The+Next+Generation+of+the+Consumer+Rebalance+Protocol+%28KIP-848%29+-+GA+Release+Notes">New Rebalance Protocol GA Release Notes</a> for more details.
                         </li>
                         <li>The new rebalance protocol (<a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-848%3A+The+Next+Generation+of+the+Consumer+Rebalance+Protocol">KIP-848</a>) is now production ready.
                             <ul>
@@ -106,11 +106,12 @@
                                         <li><code>group.consumer.session.timeout.ms</code></li>
                                     </ul>
                                 </li>
-                                <li>The <code>group.consumer.assignors</code> configuration is added to the broker with the supported partition assignment strategies.
-                                    It defaults to <code>org.apache.kafka.coordinator.group.assignor.UniformAssignor</code>, so this will be the assignor used unless the Consumer selects a different one.
+                                <li>The <code>group.consumer.assignors=uniform,range</code> configuration is added to the broker with the names of the supported partition assignment strategies,
+                                    defined in <code>org.apache.kafka.coordinator.group.assignor.UniformAssignor</code> and <code>org.apache.kafka.coordinator.group.assignor.RangeAssignor</code>.
+                                    Note that the first assignor from the list will be used by default (uniform) unless the Consumer selects a different one.
                                 </li>
-                                You can check <a href="https://cwiki.apache.org/confluence/display/KAFKA/The+Next+Generation+of+the+Consumer+Rebalance+Protocol+%28KIP-848%29+-+GA+Release+Notes">New Rebalance Protocol GA Release Notes</a> for more details.
                             </ul>
+                            You can check <a href="https://cwiki.apache.org/confluence/display/KAFKA/The+Next+Generation+of+the+Consumer+Rebalance+Protocol+%28KIP-848%29+-+GA+Release+Notes">New Rebalance Protocol GA Release Notes</a> for more details.
                         </li>
                         <li>The <code>delegation.token.master.key</code> configuration was removed.
                             Please use <code>delegation.token.secret.key</code> instead.
