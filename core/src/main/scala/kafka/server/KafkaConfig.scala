@@ -388,9 +388,6 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   val uncleanLeaderElectionCheckIntervalMs: Long = getLong(ReplicationConfigs.UNCLEAN_LEADER_ELECTION_INTERVAL_MS_CONFIG)
   def uncleanLeaderElectionEnable: java.lang.Boolean = getBoolean(ReplicationConfigs.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG)
 
-  // This will be removed soon. See KAFKA-18366.
-  val interBrokerProtocolVersion = MetadataVersion.MINIMUM_KRAFT_VERSION
-
   /** ********* Controlled shutdown configuration ***********/
   val controlledShutdownEnable = getBoolean(ServerConfigs.CONTROLLED_SHUTDOWN_ENABLE_CONFIG)
 
