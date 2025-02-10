@@ -2473,6 +2473,7 @@ project(':tools') {
     testImplementation libs.apachedsProtocolLdap
     testImplementation libs.apachedsLdifPartition
     testImplementation testLog4j2Libs
+    testImplementation libs.jqwik
 
     testRuntimeOnly runtimeTestLibs
     testRuntimeOnly libs.hamcrest
@@ -2489,6 +2490,12 @@ project(':tools') {
     from (configurations.releaseOnly)
     into "${layout.buildDirectory.get().asFile.path}/dependant-libs-${versions.scala}"
     duplicatesStrategy 'exclude'
+  }
+
+  test {
+    useJUnitPlatform {
+      includeEngines 'jqwik', 'junit-jupiter'
+    }
   }
 
   jar {
