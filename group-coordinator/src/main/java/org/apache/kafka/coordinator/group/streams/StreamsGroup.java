@@ -458,7 +458,7 @@ public class StreamsGroup implements Group {
     /**
      * Updates the target assignment of a member.
      *
-     * @param memberId            The member id.
+     * @param memberId            The member ID.
      * @param newTargetAssignment The new target assignment.
      */
     public void updateTargetAssignment(String memberId, TasksTuple newTargetAssignment) {
