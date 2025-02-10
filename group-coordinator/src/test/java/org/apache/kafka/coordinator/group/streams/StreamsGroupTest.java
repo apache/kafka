@@ -84,8 +84,6 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class StreamsGroupTest {
@@ -856,53 +854,6 @@ public class StreamsGroupTest {
         StreamsGroupDescribeResponseData.DescribedGroup actual = group.asDescribedGroup(1);
 
         assertEquals(expected, actual);
-    }
-
-    @Test
-    public void testStateTransitionMetrics() {
-        // Confirm metrics is not updated when a new StreamsGroup is created but only when the group transitions
-        // its state.
-        GroupCoordinatorMetricsShard metrics = mock(GroupCoordinatorMetricsShard.class);
-        StreamsGroup streamsGroup = new StreamsGroup(
-            LOG_CONTEXT,
-            new SnapshotRegistry(new LogContext()),
-            "group-id",
-            metrics
-        );
-
-        assertEquals(StreamsGroup.StreamsGroupState.EMPTY, streamsGroup.state());
-        verify(metrics, times(0)).onStreamsGroupStateTransition(null, StreamsGroup.StreamsGroupState.EMPTY);
-
-        StreamsGroupMember member = new StreamsGroupMember.Builder("member")
-            .setMemberEpoch(1)
-            .setPreviousMemberEpoch(0)
-            .setState(MemberState.STABLE)
-            .build();
-
-        streamsGroup.updateMember(member);
-
-        assertEquals(StreamsGroup.StreamsGroupState.NOT_READY, streamsGroup.state());
-        verify(metrics, times(1)).onStreamsGroupStateTransition(StreamsGroup.StreamsGroupState.EMPTY, StreamsGroup.StreamsGroupState.NOT_READY);
-
-        streamsGroup.setTopology(new StreamsTopology(1, Collections.emptyMap()));
-
-        assertEquals(StreamsGroup.StreamsGroupState.RECONCILING, streamsGroup.state());
-        verify(metrics, times(1)).onStreamsGroupStateTransition(StreamsGroup.StreamsGroupState.NOT_READY, StreamsGroup.StreamsGroupState.RECONCILING);
-
-        streamsGroup.setGroupEpoch(1);
-
-        assertEquals(StreamsGroup.StreamsGroupState.ASSIGNING, streamsGroup.state());
-        verify(metrics, times(1)).onStreamsGroupStateTransition(StreamsGroup.StreamsGroupState.RECONCILING, StreamsGroup.StreamsGroupState.ASSIGNING);
-
-        streamsGroup.setTargetAssignmentEpoch(1);
-
-        assertEquals(StreamsGroup.StreamsGroupState.STABLE, streamsGroup.state());
-        verify(metrics, times(1)).onStreamsGroupStateTransition(StreamsGroup.StreamsGroupState.ASSIGNING, StreamsGroup.StreamsGroupState.STABLE);
-
-        streamsGroup.removeMember("member");
-
-        assertEquals(StreamsGroup.StreamsGroupState.EMPTY, streamsGroup.state());
-        verify(metrics, times(1)).onStreamsGroupStateTransition(StreamsGroup.StreamsGroupState.STABLE, StreamsGroup.StreamsGroupState.EMPTY);
     }
 
     @Test

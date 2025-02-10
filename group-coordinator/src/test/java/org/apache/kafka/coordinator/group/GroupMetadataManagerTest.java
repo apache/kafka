@@ -94,8 +94,10 @@ import org.apache.kafka.coordinator.group.modern.share.ShareGroup;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupBuilder;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupMember;
 import org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers;
+import org.apache.kafka.coordinator.group.streams.StreamsGroup;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupBuilder;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
+import org.apache.kafka.coordinator.group.streams.StreamsTopology;
 import org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil;
 import org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.TaskRole;
 import org.apache.kafka.coordinator.group.streams.TasksTuple;
@@ -3733,6 +3735,76 @@ public class GroupMetadataManagerTest {
         )));
     }
 
+    @Test
+    public void testUpdateStreamsGroupSizeCounter() {
+        List<String> groupIds = new ArrayList<>();
+        IntStream.range(0, 5).forEach(i -> groupIds.add("group-" + i));
+        List<String> streamsMemberIds = List.of("streams-member-id-0", "streams-member-id-1", "streams-member-id-2", "streams-member-id-3");
+
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroup(new StreamsGroupBuilder(groupIds.get(0), 10)) // Empty group
+            .withStreamsGroup(new StreamsGroupBuilder(groupIds.get(1), 10) // Stable group
+                .withAssignmentEpoch(10)
+                .withTopology(new StreamsTopology(1, Map.of()))
+                .withMember(streamsGroupMemberBuilderWithDefaults(streamsMemberIds.get(0))
+                    .setMemberEpoch(10)
+                    .build()))
+            .withStreamsGroup(new StreamsGroupBuilder(groupIds.get(2), 10) // Assigning group
+                .withAssignmentEpoch(9)
+                .withTopology(new StreamsTopology(1, Map.of()))
+                .withMember(streamsGroupMemberBuilderWithDefaults(streamsMemberIds.get(1))
+                    .setMemberEpoch(9)
+                    .build()))
+            .withStreamsGroup(new StreamsGroupBuilder(groupIds.get(3), 10) // Reconciling group
+                .withAssignmentEpoch(10)
+                .withTopology(new StreamsTopology(1, Map.of()))
+                .withMember(streamsGroupMemberBuilderWithDefaults(streamsMemberIds.get(2))
+                    .setMemberEpoch(9)
+                    .build()))
+            .withStreamsGroup(new StreamsGroupBuilder(groupIds.get(4), 10) // NotReady group
+                .withAssignmentEpoch(10)
+                .withMember(streamsGroupMemberBuilderWithDefaults(streamsMemberIds.get(3))
+                    .build()))
+            .build();
+
+        context.groupMetadataManager.updateGroupSizeCounter();
+        verify(context.metrics, times(1)).setStreamsGroupGauges(eq(Utils.mkMap(
+            Utils.mkEntry(StreamsGroup.StreamsGroupState.EMPTY, 1L),
+            Utils.mkEntry(StreamsGroup.StreamsGroupState.ASSIGNING, 1L),
+            Utils.mkEntry(StreamsGroup.StreamsGroupState.RECONCILING, 1L),
+            Utils.mkEntry(StreamsGroup.StreamsGroupState.NOT_READY, 1L),
+            Utils.mkEntry(StreamsGroup.StreamsGroupState.STABLE, 1L)
+        )));
+
+        context.groupMetadataManager.getOrMaybeCreateStreamsGroup(groupIds.get(1), false)
+            .removeMember(streamsMemberIds.get(0));
+        context.groupMetadataManager.getOrMaybeCreateStreamsGroup(groupIds.get(3), false)
+            .updateMember(streamsGroupMemberBuilderWithDefaults(streamsMemberIds.get(2)).setMemberEpoch(10).build());
+
+        context.groupMetadataManager.updateGroupSizeCounter();
+        verify(context.metrics, times(1)).setStreamsGroupGauges(eq(Utils.mkMap(
+            Utils.mkEntry(StreamsGroup.StreamsGroupState.EMPTY, 2L),
+            Utils.mkEntry(StreamsGroup.StreamsGroupState.ASSIGNING, 1L),
+            Utils.mkEntry(StreamsGroup.StreamsGroupState.NOT_READY, 1L),
+            Utils.mkEntry(StreamsGroup.StreamsGroupState.STABLE, 1L)
+        )));
+    }
+
+    private StreamsGroupMember.Builder streamsGroupMemberBuilderWithDefaults(String memberId) {
+        return new StreamsGroupMember.Builder(memberId)
+            .setMemberEpoch(1)
+            .setPreviousMemberEpoch(0)
+            .setState(org.apache.kafka.coordinator.group.streams.MemberState.STABLE)
+            .setRackId(null)
+            .setInstanceId(null)
+            .setRebalanceTimeoutMs(1000)
+            .setAssignedTasks(TasksTuple.EMPTY)
+            .setTasksPendingRevocation(TasksTuple.EMPTY)
+            .setTopologyEpoch(1)
+            .setClientTags(Map.of())
+            .setUserEndpoint(new Endpoint().setHost("localhost").setPort(1500));
+    }
+    
     @Test
     public void testGenerateRecordsOnNewClassicGroup() throws Exception {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
@@ -15279,7 +15351,7 @@ public class GroupMetadataManagerTest {
 
         Map<String, org.apache.kafka.coordinator.group.streams.TopicMetadata> metadata = Map.of(
             "bar",
-            new org.apache.kafka.coordinator.group.streams.TopicMetadata(Uuid.randomUuid(), "bar", 10, Collections.emptyMap())
+            new org.apache.kafka.coordinator.group.streams.TopicMetadata(Uuid.randomUuid(), "bar", 10)
         );
 
         // The group is created if it does not exist.
@@ -15408,11 +15480,13 @@ public class GroupMetadataManagerTest {
 
         // The group and the topology are created if they do not exist.
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecord("bar", topology));
-        assertEquals(topology.epoch(), context.groupMetadataManager.streamsGroup("bar").topology().topologyEpoch());
-        assertEquals(topology.subtopologies().size(), context.groupMetadataManager.streamsGroup("bar").topology().subtopologies().size());
+        final Optional<StreamsTopology> actualTopology = context.groupMetadataManager.streamsGroup("bar").topology();
+        assertTrue(actualTopology.isPresent(), "topology should be set");
+        assertEquals(topology.epoch(), actualTopology.get().topologyEpoch());
+        assertEquals(topology.subtopologies().size(), actualTopology.get().subtopologies().size());
         assertEquals(
             topology.subtopologies().iterator().next(),
-            context.groupMetadataManager.streamsGroup("bar").topology().subtopologies().values().iterator().next()
+            actualTopology.get().subtopologies().values().iterator().next()
         );
     }
 
@@ -15421,18 +15495,17 @@ public class GroupMetadataManagerTest {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .build();
 
-        // The group still exists but the member is already gone. Replaying the
+        // The group still exists, but the member is already gone. Replaying the
         // StreamsGroupTopology tombstone should be a no-op.
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupEpochRecord("foo", 10));
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecordTombstone("foo"));
-        assertNull(context.groupMetadataManager.streamsGroup("foo").topology());
+        assertTrue(context.groupMetadataManager.streamsGroup("foo").topology().isEmpty());
 
         // The group may not exist at all. Replaying the StreamsGroupTopology tombstone
         // should be a no-op.
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecordTombstone("bar"));
         assertThrows(GroupIdNotFoundException.class, () -> context.groupMetadataManager.streamsGroup("bar"));
     }
-
 
     @Test
     public void testConsumerGroupHeartbeatOnShareGroup() {

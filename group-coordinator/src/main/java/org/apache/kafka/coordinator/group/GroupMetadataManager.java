@@ -718,6 +718,41 @@ public class GroupMetadataManager {
     }
 
     /**
+     * Gets or maybe creates a streams group without updating the groups map.
+     * The group will be materialized during the replay.
+     *
+     * @param groupId           The group id.
+     * @param createIfNotExists A boolean indicating whether the group should be
+     *                          created if it does not exist or is an empty classic group.
+     *
+     * @return A StreamsGroup.
+     * @throws GroupIdNotFoundException if the group does not exist and createIfNotExists is false or
+     *                                  if the group is not a streams group.
+     *
+     * Package private for testing.
+     */
+    StreamsGroup getOrMaybeCreateStreamsGroup(
+        String groupId,
+        boolean createIfNotExists
+    ) throws GroupIdNotFoundException {
+        Group group = groups.get(groupId);
+
+        if (group == null && !createIfNotExists) {
+            throw new GroupIdNotFoundException(String.format("Streams group %s not found.", groupId));
+        }
+
+        if (group == null) {
+            return new StreamsGroup(logContext, snapshotRegistry, groupId, metrics);
+        } else {
+            if (group.type() == STREAMS) {
+                return (StreamsGroup) group;
+            } else {
+                throw new GroupIdNotFoundException(String.format("Group %s is not a streams group.", groupId));
+            }
+        }
+    }
+    
+    /**
      * Gets a streams group by committed offset.
      *
      * @param groupId           The group id.
@@ -851,7 +886,6 @@ public class GroupMetadataManager {
         if (group == null) {
             StreamsGroup streamsGroup = new StreamsGroup(logContext, snapshotRegistry, groupId, metrics);
             groups.put(groupId, streamsGroup);
-            metrics.onStreamsGroupStateTransition(null, streamsGroup.state());
             return streamsGroup;
         } else if (group.type() == STREAMS) {
             return (StreamsGroup) group;
@@ -3781,8 +3815,8 @@ public class GroupMetadataManager {
         }
 
         Set<String> oldSubscribedTopicNames;
-        if (streamsGroup.topology() != null) {
-            oldSubscribedTopicNames = streamsGroup.topology().requiredTopics();
+        if (streamsGroup.topology().isPresent()) {
+            oldSubscribedTopicNames = streamsGroup.topology().get().requiredTopics();
         } else {
             oldSubscribedTopicNames = Collections.emptySet();
         }
@@ -4648,6 +4682,7 @@ public class GroupMetadataManager {
     public void updateGroupSizeCounter() {
         Map<ClassicGroupState, Long> classicGroupSizeCounter = new HashMap<>();
         Map<ConsumerGroup.ConsumerGroupState, Long> consumerGroupSizeCounter = new HashMap<>();
+        Map<StreamsGroup.StreamsGroupState, Long> streamsGroupSizeCounter = new HashMap<>();
         groups.forEach((__, group) -> {
             switch (group.type()) {
                 case CLASSIC:
@@ -4656,12 +4691,16 @@ public class GroupMetadataManager {
                 case CONSUMER:
                     consumerGroupSizeCounter.compute(((ConsumerGroup) group).state(), Utils::incValue);
                     break;
+                case STREAMS:
+                    streamsGroupSizeCounter.compute(((StreamsGroup) group).state(), Utils::incValue);
+                    break;
                 default:
                     break;
             }
         });
         metrics.setClassicGroupGauges(classicGroupSizeCounter);
         metrics.setConsumerGroupGauges(consumerGroupSizeCounter);
+        metrics.setStreamsGroupGauges(streamsGroupSizeCounter);
     }
 
     /**

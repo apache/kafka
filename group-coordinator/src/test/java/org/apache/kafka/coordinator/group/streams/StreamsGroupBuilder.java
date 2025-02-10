@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group.streams;
 
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -28,6 +29,7 @@ public class StreamsGroupBuilder {
     private final String groupId;
     private final int groupEpoch;
     private int assignmentEpoch;
+    private StreamsTopology topology;
     private final Map<String, StreamsGroupMember> members = new HashMap<>();
     private final Map<String, TasksTuple> assignments = new HashMap<>();
     private Map<String, TopicMetadata> partitionMetadata = new HashMap<>();
@@ -36,6 +38,7 @@ public class StreamsGroupBuilder {
         this.groupId = groupId;
         this.groupEpoch = groupEpoch;
         this.assignmentEpoch = 0;
+        this.topology = null;
     }
 
     public StreamsGroupBuilder withMember(StreamsGroupMember member) {
@@ -43,9 +46,13 @@ public class StreamsGroupBuilder {
         return this;
     }
 
-    public StreamsGroupBuilder withPartitionMetadata(
-        Map<String, TopicMetadata> partitionMetadata) {
+    public StreamsGroupBuilder withPartitionMetadata(Map<String, TopicMetadata> partitionMetadata) {
         this.partitionMetadata = partitionMetadata;
+        return this;
+    }
+
+    public StreamsGroupBuilder withTopology(StreamsTopology streamsTopology) {
+        this.topology = streamsTopology;
         return this;
     }
 
@@ -83,6 +90,16 @@ public class StreamsGroupBuilder {
             records.add(
                 StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(groupId, memberId, assignment))
         );
+
+        // Add topology record.
+        if (topology != null) {
+            records.add(StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecord(
+                groupId,
+                    new StreamsGroupTopologyValue()
+                        .setEpoch(topology.topologyEpoch())
+                        .setSubtopologies(topology.subtopologies().values().stream().sorted().toList()))
+            );
+        }
 
         // Add target assignment epoch.
         records.add(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentEpochRecord(groupId,

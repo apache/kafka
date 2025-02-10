@@ -466,6 +466,15 @@ public class StreamsGroup implements Group {
     }
 
     /**
+     * Removes the target assignment of a member.
+     *
+     * @param memberId The member id.
+     */
+    public void removeTargetAssignment(String memberId) {
+        targetAssignment.remove(memberId);
+    }
+
+    /**
      * @return An immutable map containing all the target assignment keyed by member ID.
      */
     public Map<String, TasksTuple> targetAssignment() {
@@ -779,11 +788,10 @@ public class StreamsGroup implements Group {
      * Updates the current state of the group.
      */
     private void maybeUpdateGroupState() {
-        StreamsGroupState previousState = state.get();
         StreamsGroupState newState = STABLE;
         if (members.isEmpty()) {
             newState = EMPTY;
-        } else if (topology() == null || configuredTopology().isEmpty() || !configuredTopology().get().isReady()) {
+        } else if (topology().isEmpty() || configuredTopology().isEmpty() || !configuredTopology().get().isReady()) {
             newState = NOT_READY;
         } else if (groupEpoch.get() > targetAssignmentEpoch.get()) {
             newState = ASSIGNING;
@@ -797,7 +805,6 @@ public class StreamsGroup implements Group {
         }
 
         state.set(newState);
-        metrics.onStreamsGroupStateTransition(previousState, newState);
     }
 
     private void maybeUpdateConfiguredTopology() {

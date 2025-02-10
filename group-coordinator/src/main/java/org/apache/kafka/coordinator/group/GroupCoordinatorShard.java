@@ -272,7 +272,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     static final String GROUP_EXPIRATION_KEY = "expire-group-metadata";
 
     /**
-     * The classic and consumer group size counter key to schedule a timer task.
+     * The classic, consumer and streams group size counter key to schedule a timer task.
      *
      * Visible for testing.
      */
