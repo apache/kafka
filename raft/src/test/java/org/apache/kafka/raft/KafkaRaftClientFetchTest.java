@@ -35,7 +35,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 public final class KafkaRaftClientFetchTest {
     @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
     void testRandomRecords(
-        @ForAll int seed
+        @ForAll long seed
     ) throws Exception {
         testFetchResponseWithInvalidRecord(InvalidMemoryRecordsProvider.buildRandomRecords(new Random(seed)));
     }

@@ -16,10 +16,10 @@
  */
 package org.apache.kafka.raft;
 
-import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
+import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
@@ -280,7 +280,7 @@ public class MockLog implements ReplicatedLog {
 
     @Override
     public LogAppendInfo appendAsLeader(Records records, int epoch) {
-        return append(records, OptionalInt.of(epoch));
+        return append(records, epoch, true);
     }
 
     private long appendBatch(LogBatch batch) {
@@ -293,11 +293,11 @@ public class MockLog implements ReplicatedLog {
     }
 
     @Override
-    public LogAppendInfo appendAsFollower(Records records) {
-        return append(records, OptionalInt.empty());
+    public LogAppendInfo appendAsFollower(Records records, int epoch) {
+        return append(records, epoch, false);
     }
 
-    private LogAppendInfo append(Records records, OptionalInt epoch) {
+    private LogAppendInfo append(Records records, int epoch, boolean isLeader) {
         if (records.sizeInBytes() == 0) {
             throw new IllegalArgumentException("Attempt to append an empty record set");
         }
@@ -306,7 +306,6 @@ public class MockLog implements ReplicatedLog {
         long lastOffset = baseOffset;
         boolean hasBatches = false;
         for (RecordBatch batch : records.batches()) {
-            hasBatches = true;
             if (batch.baseOffset() != endOffset().offset()) {
                 /* KafkaMetadataLog throws an kafka.common.UnexpectedAppendOffsetException this is the
                  * best we can do from this module.
@@ -318,9 +317,7 @@ public class MockLog implements ReplicatedLog {
                         endOffset().offset()
                     )
                 );
-            }
-
-            if (epoch.isPresent() && epoch.getAsInt() != batch.partitionLeaderEpoch()) {
+            } else if (isLeader && epoch != batch.partitionLeaderEpoch()) {
                 // the partition leader epoch is set and does not match the one set in the batch
                 throw new RuntimeException(
                     String.format(
@@ -329,20 +326,27 @@ public class MockLog implements ReplicatedLog {
                         batch.partitionLeaderEpoch()
                     )
                 );
+            } else if (!isLeader && batch.partitionLeaderEpoch() > epoch) {
+                /* To avoid inconsistent log replication, follower should only append record
+                 * batches with an epoch less than or equal to the leader epoch. There is more
+                 * details on this issue and scenario in KAFKA-18723.
+                 */
+                break;
             }
 
+            hasBatches = true;
             LogBatch logBatch = new LogBatch(
-                epoch.orElseGet(batch::partitionLeaderEpoch),
+                batch.partitionLeaderEpoch(),
                 batch.isControlBatch(),
                 buildEntries(batch, Record::offset)
             );
 
             if (logger.isDebugEnabled()) {
-                String nodeState = "Follower";
-                if (epoch.isPresent()) {
-                    nodeState = "Leader";
-                }
-                logger.debug("{} appending to the log {}", nodeState, logBatch);
+                logger.debug(
+                    "{} appending to the log {}",
+                    isLeader ? "Leader" : "Follower",
+                    logBatch
+                );
             }
 
             appendBatch(logBatch);
@@ -351,7 +355,7 @@ public class MockLog implements ReplicatedLog {
 
         if (!hasBatches) {
             // This emulates the default handling when records doesn't have enough bytes for a batch
-            throw new InvalidRecordException("Append failed unexpectedly");
+            throw new CorruptRecordException("Append failed unexpectedly");
         }
 
         return new LogAppendInfo(baseOffset, lastOffset);

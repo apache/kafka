@@ -537,15 +537,22 @@ class PartitionTest extends AbstractPartitionTest {
     // Write to the future replica as if the log had been compacted, and do not roll the segment
 
     val buffer = ByteBuffer.allocate(1024)
-    val builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, Compression.NONE,
-      TimestampType.CREATE_TIME, 0L, RecordBatch.NO_TIMESTAMP, 0)
+    val builder = MemoryRecords.builder(
+      buffer,
+      RecordBatch.CURRENT_MAGIC_VALUE,
+      Compression.NONE,
+      TimestampType.CREATE_TIME,
+      0L, // baseOffset
+      RecordBatch.NO_TIMESTAMP,
+      0 // partitionLeaderEpoch
+    )
     builder.appendWithOffset(2L, new SimpleRecord("k1".getBytes, "v3".getBytes))
     builder.appendWithOffset(5L, new SimpleRecord("k2".getBytes, "v6".getBytes))
     builder.appendWithOffset(6L, new SimpleRecord("k3".getBytes, "v7".getBytes))
     builder.appendWithOffset(7L, new SimpleRecord("k4".getBytes, "v8".getBytes))
 
     val futureLog = partition.futureLocalLogOrException
-    futureLog.appendAsFollower(builder.build())
+    futureLog.appendAsFollower(builder.build(), 0)
 
     assertTrue(partition.maybeReplaceCurrentWithFutureReplica())
   }
@@ -3641,9 +3648,9 @@ class PartitionTest extends AbstractPartitionTest {
     producerStateManager,
     _topicId = None) {
 
-    override def appendAsFollower(records: MemoryRecords): LogAppendInfo = {
+    override def appendAsFollower(records: MemoryRecords, epoch: Int): LogAppendInfo = {
       appendSemaphore.acquire()
-      val appendInfo = super.appendAsFollower(records)
+      val appendInfo = super.appendAsFollower(records, epoch)
       appendInfo
     }
   }

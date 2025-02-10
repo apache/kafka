@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.raft;
 
-import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.record.LegacyRecord;
 import org.apache.kafka.common.record.MemoryRecords;
@@ -34,9 +33,9 @@ import java.util.stream.Stream;
 public final class InvalidMemoryRecordsProvider implements ArgumentsProvider {
     // Use a baseOffset that not zero so that is less likely to match the LEO
     private static final long BASE_OFFSET = 1234;
-    private static final int EPOCH = 4321;
+    public static final int EPOCH = 4321;
 
-
+    // TODO: use jqwik support for random generators
     public static MemoryRecords buildRandomRecords(Random random) {
         int size = random.nextInt(255) + 1;
         byte[] bytes = new byte[size];
@@ -54,12 +53,12 @@ public final class InvalidMemoryRecordsProvider implements ArgumentsProvider {
     @Override
     public Stream<? extends Arguments> provideArguments(ExtensionContext context) {
         return Stream.of(
-            Arguments.of(MemoryRecords.readableRecords(notEnoughtBytes()), InvalidRecordException.class),
+            Arguments.of(MemoryRecords.readableRecords(notEnoughtBytes()), CorruptRecordException.class),
             Arguments.of(MemoryRecords.readableRecords(recordsSizeTooSmall()), CorruptRecordException.class),
-            Arguments.of(MemoryRecords.readableRecords(notEnoughBytesToMagic()), InvalidRecordException.class),
+            Arguments.of(MemoryRecords.readableRecords(notEnoughBytesToMagic()), CorruptRecordException.class),
             Arguments.of(MemoryRecords.readableRecords(negativeMagic()), CorruptRecordException.class),
             Arguments.of(MemoryRecords.readableRecords(largeMagic()), CorruptRecordException.class),
-            Arguments.of(MemoryRecords.readableRecords(lessBytesThanRecordSize()), InvalidRecordException.class)
+            Arguments.of(MemoryRecords.readableRecords(lessBytesThanRecordSize()), CorruptRecordException.class)
         );
     }
 

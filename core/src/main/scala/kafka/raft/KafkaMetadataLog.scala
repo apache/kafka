@@ -23,9 +23,9 @@ import kafka.raft.KafkaMetadataLog.RetentionSizeBreach
 import kafka.raft.KafkaMetadataLog.SnapshotDeletionReason
 import kafka.raft.KafkaMetadataLog.UnknownReason
 import kafka.utils.Logging
-import org.apache.kafka.common.InvalidRecordException
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.InvalidConfigurationException
+import org.apache.kafka.common.errors.CorruptRecordException
 import org.apache.kafka.common.record.{MemoryRecords, Records}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
@@ -103,17 +103,17 @@ final class KafkaMetadataLog private (
     )
   }
 
-  override def appendAsFollower(records: Records): LogAppendInfo = {
+  override def appendAsFollower(records: Records, epoch: Int): LogAppendInfo = {
     if (records.sizeInBytes == 0) {
       throw new IllegalArgumentException("Attempt to append an empty record set")
     }
 
-    handleAndConvertLogAppendInfo(log.appendAsFollower(records.asInstanceOf[MemoryRecords]))
+    handleAndConvertLogAppendInfo(log.appendAsFollower(records.asInstanceOf[MemoryRecords], epoch))
   }
 
   private def handleAndConvertLogAppendInfo(appendInfo: internals.log.LogAppendInfo): LogAppendInfo = {
     if (appendInfo.firstOffset == UnifiedLog.UnknownOffset) {
-      throw new InvalidRecordException(s"Append failed unexpectedly $appendInfo")
+      throw new CorruptRecordException(s"Append failed unexpectedly $appendInfo")
     } else {
       new LogAppendInfo(appendInfo.firstOffset, appendInfo.lastOffset)
     }

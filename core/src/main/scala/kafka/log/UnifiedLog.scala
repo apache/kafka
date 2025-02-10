@@ -678,6 +678,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    * Append this message set to the active segment of the local log, assigning offsets and Partition Leader Epochs
    *
    * @param records The records to append
+   * @param leaderEpoch the epoch of the replica appending
    * @param origin Declares the origin of the append which affects required validations
    * @param requestLocal request local instance
    * @throws KafkaStorageException If the append fails due to an I/O error.
@@ -708,14 +709,15 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    * Append this message set to the active segment of the local log without assigning offsets or Partition Leader Epochs
    *
    * @param records The records to append
+   * @param leaderEpoch the epoch of the replica appending
    * @throws KafkaStorageException If the append fails due to an I/O error.
    * @return Information about the appended messages including the first and last offset.
    */
-  def appendAsFollower(records: MemoryRecords): LogAppendInfo = {
+  def appendAsFollower(records: MemoryRecords, leaderEpoch: Int): LogAppendInfo = {
     append(records,
       origin = AppendOrigin.REPLICATION,
       validateAndAssignOffsets = false,
-      leaderEpoch = -1,
+      leaderEpoch = leaderEpoch,
       requestLocal = None,
       verificationGuard = VerificationGuard.SENTINEL,
       // disable to check the validation of record size since the record is already accepted by leader.
@@ -1105,6 +1107,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
           s"be 0, but it is ${batch.baseOffset}")
       }
 
+      // TODO: if the origin is replication, stop processing when the partition leader epoch is greater than the leader epoch
       // Only process batch if the its not a KRaft follower or the partition leader epoch is less than or equal to the
       // current leader epoch. TODO: explain this further
 
@@ -1310,7 +1313,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
           val asyncOffsetReadFutureHolder = remoteLogManager.get.asyncOffsetRead(topicPartition, targetTimestamp,
             logStartOffset, leaderEpochCache, () => searchOffsetInLocalLog(targetTimestamp, localLogStartOffset()))
-          
+
           new OffsetResultHolder(Optional.empty(), Optional.of(asyncOffsetReadFutureHolder))
         } else {
           new OffsetResultHolder(searchOffsetInLocalLog(targetTimestamp, logStartOffset).toJava)

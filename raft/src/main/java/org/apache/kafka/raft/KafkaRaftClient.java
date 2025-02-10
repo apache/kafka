@@ -1818,7 +1818,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             return;
         }
 
-        LogAppendInfo info = log.appendAsFollower(records);
+        LogAppendInfo info = log.appendAsFollower(records, quorum.epoch());
         if (quorum.isVoter() || followersAlwaysFlush) {
             // the leader only requires that voters have flushed their log before sending a Fetch
             // request. Because of reconfiguration some observers (that are getting added to the

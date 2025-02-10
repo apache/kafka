@@ -20,6 +20,7 @@ import kafka.log.UnifiedLog
 import kafka.server.{KafkaConfig, KafkaRaftServer}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.compress.Compression
+import org.apache.kafka.common.errors.CorruptRecordException
 import org.apache.kafka.common.errors.{InvalidConfigurationException, RecordTooLargeException}
 import org.apache.kafka.common.protocol
 import org.apache.kafka.common.protocol.{ObjectSerializationCache, Writable}
@@ -38,16 +39,19 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ArgumentsSource
 
+import net.jqwik.api.AfterFailureMode
+import net.jqwik.api.ForAll
+import net.jqwik.api.Property
+
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.file.{Files, Path}
 import java.util
+import java.util.Random
 import java.util.{Collections, Optional, Properties}
 import scala.jdk.CollectionConverters._
 import scala.util.Using
 
-// TODO: Test random memory records
-// TODO: check that we test the empty record case
 final class KafkaMetadataLogTest {
   import KafkaMetadataLogTest._
 
@@ -113,10 +117,55 @@ final class KafkaMetadataLogTest {
       classOf[RuntimeException],
       () => {
         log.appendAsFollower(
-          MemoryRecords.withRecords(initialOffset, Compression.NONE, currentEpoch, recordFoo)
+          MemoryRecords.withRecords(initialOffset, Compression.NONE, currentEpoch, recordFoo),
+          currentEpoch
         )
       }
     )
+  }
+
+  @Test
+  def testEmptyAppendNotAllowed(): Unit = {
+    val log = buildMetadataLog(tempDir, mockTime)
+
+    assertThrows(classOf[IllegalArgumentException], () => log.appendAsFollower(MemoryRecords.EMPTY, 1));
+    assertThrows(classOf[IllegalArgumentException], () => log.appendAsLeader(MemoryRecords.EMPTY, 1));
+  }
+
+  @ParameterizedTest
+  @ArgumentsSource(classOf[InvalidMemoryRecordsProvider])
+  def testInvalidMemoryRecords(records: MemoryRecords, expectedException: Class[Exception]): Unit = {
+    val log = buildMetadataLog(tempDir, mockTime)
+    val previousEndOffset = log.endOffset().offset()
+
+    assertThrows(
+      expectedException,
+      () => log.appendAsFollower(records, InvalidMemoryRecordsProvider.EPOCH)
+    );
+
+    assertEquals(previousEndOffset, log.endOffset().offset())
+  }
+
+  @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
+  def testRandomRecords(
+    @ForAll seed: Long
+  ): Unit = {
+    val tempDir = TestUtils.tempDir()
+    try {
+      val log = buildMetadataLog(tempDir, mockTime)
+      val previousEndOffset = log.endOffset().offset()
+
+      assertThrows(
+        classOf[CorruptRecordException],
+        () => log.appendAsFollower(
+          InvalidMemoryRecordsProvider.buildRandomRecords(new Random(seed)),
+          Int.MaxValue)
+      )
+
+      assertEquals(previousEndOffset, log.endOffset().offset())
+    } finally {
+      Utils.delete(tempDir)
+    }
   }
 
   @Test
@@ -967,20 +1016,6 @@ final class KafkaMetadataLogTest {
       latestSnapshotOffset >= log.startOffset,
       s"latest snapshot offset ($latestSnapshotOffset) must be >= log start offset (${log.startOffset})"
     )
-  }
-
-  @ParameterizedTest
-  @ArgumentsSource(classOf[InvalidMemoryRecordsProvider])
-  def testInvalidMemoryRecords(records: MemoryRecords, expectedException: Class[Exception]): Unit = {
-    val log = buildMetadataLog(tempDir, mockTime)
-    val previousEndOffset = log.endOffset().offset()
-
-    assertThrows(
-      expectedException,
-      () => log.appendAsFollower(records)
-    );
-
-    assertEquals(previousEndOffset, log.endOffset().offset())
   }
 }
 

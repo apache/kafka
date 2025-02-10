@@ -52,7 +52,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-// TODO: check that we test the empty record case
 // TODO: Test random memory records
 public class MockLogTest {
 
@@ -173,14 +172,17 @@ public class MockLogTest {
         assertThrows(
             RuntimeException.class,
             () -> log.appendAsLeader(
-                    MemoryRecords.withRecords(initialOffset, Compression.NONE, currentEpoch, recordFoo),
-                    currentEpoch)
+                MemoryRecords.withRecords(initialOffset, Compression.NONE, currentEpoch, recordFoo),
+                currentEpoch
+            )
         );
 
         assertThrows(
             RuntimeException.class,
             () -> log.appendAsFollower(
-                    MemoryRecords.withRecords(initialOffset, Compression.NONE, currentEpoch, recordFoo))
+                MemoryRecords.withRecords(initialOffset, Compression.NONE, currentEpoch, recordFoo),
+                currentEpoch
+            )
         );
     }
 
@@ -231,7 +233,10 @@ public class MockLogTest {
         }
         log.truncateToLatestSnapshot();
 
-        log.appendAsFollower(MemoryRecords.withRecords(initialOffset, Compression.NONE, epoch, recordFoo));
+        log.appendAsFollower(
+            MemoryRecords.withRecords(initialOffset, Compression.NONE, epoch, recordFoo),
+            epoch
+        );
 
         assertEquals(initialOffset, log.startOffset());
         assertEquals(initialOffset + 1, log.endOffset().offset());
@@ -378,8 +383,21 @@ public class MockLogTest {
 
     @Test
     public void testEmptyAppendNotAllowed() {
-        assertThrows(IllegalArgumentException.class, () -> log.appendAsFollower(MemoryRecords.EMPTY));
+        assertThrows(IllegalArgumentException.class, () -> log.appendAsFollower(MemoryRecords.EMPTY, 1));
         assertThrows(IllegalArgumentException.class, () -> log.appendAsLeader(MemoryRecords.EMPTY, 1));
+    }
+
+    @ParameterizedTest
+    @ArgumentsSource(InvalidMemoryRecordsProvider.class)
+    void testInvalidMemoryRecords(MemoryRecords records, Class<Exception> expectedException) {
+        long previousEndOffset = log.endOffset().offset();
+
+        assertThrows(
+            expectedException,
+            () -> log.appendAsFollower(records, InvalidMemoryRecordsProvider.EPOCH)
+        );
+
+        assertEquals(previousEndOffset, log.endOffset().offset());
     }
 
     @Test
@@ -393,12 +411,19 @@ public class MockLogTest {
         }
         log.truncateToLatestSnapshot();
 
-        log.appendAsFollower(MemoryRecords.withRecords(initialOffset, Compression.NONE, epoch, recordFoo));
+        log.appendAsFollower(
+            MemoryRecords.withRecords(initialOffset, Compression.NONE, epoch, recordFoo),
+            epoch
+        );
 
-        assertThrows(OffsetOutOfRangeException.class, () -> log.read(log.startOffset() - 1,
-            Isolation.UNCOMMITTED));
-        assertThrows(OffsetOutOfRangeException.class, () -> log.read(log.endOffset().offset() + 1,
-            Isolation.UNCOMMITTED));
+        assertThrows(
+            OffsetOutOfRangeException.class,
+            () -> log.read(log.startOffset() - 1, Isolation.UNCOMMITTED)
+        );
+        assertThrows(
+            OffsetOutOfRangeException.class,
+            () -> log.read(log.endOffset().offset() + 1, Isolation.UNCOMMITTED)
+        );
     }
 
     @Test
@@ -898,19 +923,6 @@ public class MockLogTest {
 
         ValidOffsetAndEpoch resultOffsetAndEpoch = log.validateOffsetAndEpoch(numberOfRecords - 1, epoch);
         assertEquals(ValidOffsetAndEpoch.Kind.VALID, resultOffsetAndEpoch.kind());
-    }
-
-    @ParameterizedTest
-    @ArgumentsSource(InvalidMemoryRecordsProvider.class)
-    void testInvalidMemoryRecords(MemoryRecords records, Class<Exception> expectedException) {
-        long previousEndOffset = log.endOffset().offset();
-
-        assertThrows(
-            expectedException,
-            () -> log.appendAsFollower(records)
-        );
-
-        assertEquals(previousEndOffset, log.endOffset().offset());
     }
 
     private Optional<OffsetRange> readOffsets(long startOffset, Isolation isolation) {
