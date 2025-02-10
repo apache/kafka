@@ -213,3 +213,4 @@ From KafkaConfig.scala
   val NewGroupCoordinatorEnableProp = "group.coordinator.new.enable"
 """
 
+
