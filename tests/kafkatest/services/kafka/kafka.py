@@ -295,11 +295,10 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
         # Set use_share_groups based on injected arguments.
         # If not specified, it is set to False
+        use_share_groups = False
         arg_name = 'use_share_groups'
         if context.injected_args is not None:
-            use_share_groups = context.injected_args.get(arg_name)
-        if use_share_groups is None:
-            use_share_groups = False
+            use_share_groups = context.injected_args.get(arg_name, False)
         
         # Assign the determined value.
         self.use_new_coordinator = use_new_coordinator
