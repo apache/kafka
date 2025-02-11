@@ -29,6 +29,14 @@ import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -849,7 +857,10 @@ public class ValuesTest {
 
     @Test
     public void shouldConvertTimeValues() {
-        java.util.Date current = new java.util.Date();
+        LocalDateTime localTime = LocalDateTime.now();
+        LocalTime localTimeTruncated = localTime.toLocalTime().truncatedTo(ChronoUnit.MILLIS);
+        ZoneOffset zoneOffset = ZoneId.systemDefault().getRules().getOffset(localTime);
+        java.util.Date current = new java.util.Date(localTime.toEpochSecond(zoneOffset) * 1000);
         long currentMillis = current.getTime() % MILLIS_PER_DAY;
 
         // java.util.Date - just copy
@@ -857,23 +868,28 @@ public class ValuesTest {
         assertEquals(current, t1);
 
         // java.util.Date as a Timestamp - discard the date and keep just day's milliseconds
-        t1 = Values.convertToTime(Timestamp.SCHEMA, current);
-        assertEquals(new java.util.Date(currentMillis), t1);
+        java.util.Date t2 = Values.convertToTime(Timestamp.SCHEMA, current);
+        assertEquals(new java.util.Date(currentMillis), t2);
 
-        // ISO8601 strings - currently broken because tokenization breaks at colon
+        // ISO8601 strings - accept a string matching pattern "HH:mm:ss.SSS'Z'"
+        java.util.Date t3 = Values.convertToTime(Time.SCHEMA, localTime.format(DateTimeFormatter.ofPattern(Values.ISO_8601_TIME_FORMAT_PATTERN)));
+        LocalTime time3 = LocalDateTime.ofInstant(Instant.ofEpochMilli(t3.getTime()), ZoneId.systemDefault()).toLocalTime();
+        assertEquals(localTimeTruncated, time3);
 
         // Millis as string
-        java.util.Date t3 = Values.convertToTime(Time.SCHEMA, Long.toString(currentMillis));
-        assertEquals(currentMillis, t3.getTime());
+        java.util.Date t4 = Values.convertToTime(Time.SCHEMA, Long.toString(currentMillis));
+        assertEquals(currentMillis, t4.getTime());
 
         // Millis as long
-        java.util.Date t4 = Values.convertToTime(Time.SCHEMA, currentMillis);
-        assertEquals(currentMillis, t4.getTime());
+        java.util.Date t5 = Values.convertToTime(Time.SCHEMA, currentMillis);
+        assertEquals(currentMillis, t5.getTime());
     }
 
     @Test
     public void shouldConvertDateValues() {
-        java.util.Date current = new java.util.Date();
+        LocalDateTime localTime = LocalDateTime.now();
+        ZoneOffset zoneOffset = ZoneId.systemDefault().getRules().getOffset(localTime);
+        java.util.Date current = new java.util.Date(localTime.toEpochSecond(zoneOffset) * 1000);
         long currentMillis = current.getTime() % MILLIS_PER_DAY;
         long days = current.getTime() / MILLIS_PER_DAY;
 
@@ -883,23 +899,30 @@ public class ValuesTest {
 
         // java.util.Date as a Timestamp - discard the day's milliseconds and keep the date
         java.util.Date currentDate = new java.util.Date(current.getTime() - currentMillis);
-        d1 = Values.convertToDate(Timestamp.SCHEMA, currentDate);
-        assertEquals(currentDate, d1);
+        java.util.Date d2 = Values.convertToDate(Timestamp.SCHEMA, currentDate);
+        assertEquals(currentDate, d2);
 
-        // ISO8601 strings - currently broken because tokenization breaks at colon
+        // ISO8601 strings - accept a string matching pattern "yyyy-MM-dd"
+        LocalDateTime localTimeTruncated = localTime.truncatedTo(ChronoUnit.DAYS);
+        java.util.Date d3 = Values.convertToDate(Date.SCHEMA, LocalDate.ofEpochDay(days).format(DateTimeFormatter.ISO_LOCAL_DATE));
+        LocalDateTime date3 = LocalDateTime.ofInstant(Instant.ofEpochMilli(d3.getTime()), ZoneId.systemDefault());
+        assertEquals(localTimeTruncated, date3);
 
         // Days as string
-        java.util.Date d3 = Values.convertToDate(Date.SCHEMA, Long.toString(days));
-        assertEquals(currentDate, d3);
+        java.util.Date d4 = Values.convertToDate(Date.SCHEMA, Long.toString(days));
+        assertEquals(currentDate, d4);
 
         // Days as long
-        java.util.Date d4 = Values.convertToDate(Date.SCHEMA, days);
-        assertEquals(currentDate, d4);
+        java.util.Date d5 = Values.convertToDate(Date.SCHEMA, days);
+        assertEquals(currentDate, d5);
     }
 
     @Test
     public void shouldConvertTimestampValues() {
-        java.util.Date current = new java.util.Date();
+        LocalDateTime localTime = LocalDateTime.now();
+        LocalDateTime localTimeTruncated = localTime.truncatedTo(ChronoUnit.MILLIS);
+        ZoneOffset zoneOffset = ZoneId.systemDefault().getRules().getOffset(localTime);
+        java.util.Date current = new java.util.Date(localTime.toEpochSecond(zoneOffset) * 1000);
         long currentMillis = current.getTime() % MILLIS_PER_DAY;
 
         // java.util.Date - just copy
@@ -912,18 +935,21 @@ public class ValuesTest {
         assertEquals(currentDate, ts1);
 
         // java.util.Date as a Time - discard the date and keep the day's milliseconds
-        ts1 = Values.convertToTimestamp(Time.SCHEMA, currentMillis);
-        assertEquals(new java.util.Date(currentMillis), ts1);
+        java.util.Date ts2 = Values.convertToTimestamp(Time.SCHEMA, currentMillis);
+        assertEquals(new java.util.Date(currentMillis), ts2);
 
-        // ISO8601 strings - currently broken because tokenization breaks at colon
+        // ISO8601 strings - accept a string matching pattern "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"
+        java.util.Date ts3 = Values.convertToTime(Time.SCHEMA, localTime.format(DateTimeFormatter.ofPattern(Values.ISO_8601_TIMESTAMP_FORMAT_PATTERN)));
+        LocalDateTime time3 = LocalDateTime.ofInstant(Instant.ofEpochMilli(ts3.getTime()), ZoneId.systemDefault());
+        assertEquals(localTimeTruncated, time3);
 
         // Millis as string
-        java.util.Date ts3 = Values.convertToTimestamp(Timestamp.SCHEMA, Long.toString(current.getTime()));
-        assertEquals(current, ts3);
+        java.util.Date ts4 = Values.convertToTimestamp(Timestamp.SCHEMA, Long.toString(current.getTime()));
+        assertEquals(current, ts4);
 
         // Millis as long
-        java.util.Date ts4 = Values.convertToTimestamp(Timestamp.SCHEMA, current.getTime());
-        assertEquals(current, ts4);
+        java.util.Date ts5 = Values.convertToTimestamp(Timestamp.SCHEMA, current.getTime());
+        assertEquals(current, ts5);
     }
 
     @Test
@@ -1153,6 +1179,17 @@ public class ValuesTest {
         assertEquals(new SchemaAndValue(Schema.FLOAT32_SCHEMA, 300.01f), Values.parseString("300.01"));
         assertEquals(new SchemaAndValue(Schema.INT32_SCHEMA, 66000), Values.parseString("66000.0"));
         assertEquals(new SchemaAndValue(Schema.FLOAT32_SCHEMA, 66000.0008f), Values.parseString("66000.0008"));
+    }
+
+    @Test
+    public void avoidCpuAndMemoryIssuesConvertingExtremeBigDecimals() {
+        String parsingBig = "1e+100000000"; // new BigDecimal().setScale(0, RoundingMode.FLOOR) takes around two minutes and uses 3GB;
+        BigDecimal valueBig = new BigDecimal(parsingBig);
+        assertEquals(new SchemaAndValue(Decimal.schema(-100000000), valueBig), Values.parseString(parsingBig), "parsing number that's too big");
+
+        String parsingSmall = "1e-100000000";
+        BigDecimal valueSmall = new BigDecimal(parsingSmall);
+        assertEquals(new SchemaAndValue(Schema.FLOAT32_SCHEMA, (float) valueSmall.doubleValue()), Values.parseString(parsingSmall), "parsing number that's too big, strictly this should return a bigdecimal");
     }
 
     protected void assertParsed(String input) {

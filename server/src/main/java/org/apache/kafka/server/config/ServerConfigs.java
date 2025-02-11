@@ -35,20 +35,9 @@ import static org.apache.kafka.common.config.ConfigDef.Type.STRING;
 
 public class ServerConfigs {
     /** ********* General Configuration ***********/
-    public static final String RESERVED_BROKER_MAX_ID_CONFIG = "reserved.broker.max.id";
-    public static final int RESERVED_BROKER_MAX_ID_DEFAULT = 1000;
-    public static final String RESERVED_BROKER_MAX_ID_DOC = "Max number that can be used for a broker.id";
-
-    public static final String BROKER_ID_GENERATION_ENABLE_CONFIG = "broker.id.generation.enable";
-    public static final boolean BROKER_ID_GENERATION_ENABLE_DEFAULT = true;
-    public static final String BROKER_ID_GENERATION_ENABLE_DOC = "Enable automatic broker id generation on the server. When enabled the value configured for " + RESERVED_BROKER_MAX_ID_CONFIG + " should be reviewed.";
-
-
     public static final String BROKER_ID_CONFIG = "broker.id";
     public static final int BROKER_ID_DEFAULT = -1;
-    public static final String BROKER_ID_DOC = "The broker id for this server. If unset, a unique broker id will be generated." +
-            "To avoid conflicts between ZooKeeper generated broker id's and user configured broker id's, generated broker ids " +
-            "start from " + RESERVED_BROKER_MAX_ID_CONFIG + " + 1.";
+    public static final String BROKER_ID_DOC = "The broker id for this server.";
 
     public static final String MESSAGE_MAX_BYTES_CONFIG = "message.max.bytes";
     public static final String MESSAGE_MAX_BYTES_DOC = TopicConfig.MAX_MESSAGE_BYTES_DOC +
@@ -131,8 +120,6 @@ public class ServerConfigs {
             "the StandardAuthorizer (which stores ACLs in the metadata log.) By default, all listeners included in controller.listener.names " +
             "will also be early start listeners. A listener should not appear in this list if it accepts external traffic.";
     public static final ConfigDef CONFIG_DEF =  new ConfigDef()
-            .define(BROKER_ID_GENERATION_ENABLE_CONFIG, BOOLEAN, BROKER_ID_GENERATION_ENABLE_DEFAULT, MEDIUM, BROKER_ID_GENERATION_ENABLE_DOC)
-            .define(RESERVED_BROKER_MAX_ID_CONFIG, INT, RESERVED_BROKER_MAX_ID_DEFAULT, atLeast(0), MEDIUM, RESERVED_BROKER_MAX_ID_DOC)
             .define(BROKER_ID_CONFIG, INT, BROKER_ID_DEFAULT, HIGH, BROKER_ID_DOC)
             .define(MESSAGE_MAX_BYTES_CONFIG, INT, LogConfig.DEFAULT_MAX_MESSAGE_BYTES, atLeast(0), HIGH, MESSAGE_MAX_BYTES_DOC)
             .define(NUM_IO_THREADS_CONFIG, INT, NUM_IO_THREADS_DEFAULT, atLeast(1), HIGH, NUM_IO_THREADS_DOC)

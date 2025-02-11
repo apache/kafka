@@ -16,21 +16,7 @@
 {
   "apiKey": 7,
   "type": "request",
-  "listeners": ["zkBroker", "controller"],
   "name": "ControlledShutdownRequest",
-  // Version 0 of ControlledShutdownRequest has a non-standard request header
-  // which does not include clientId.  Version 1 and later use the standard
-  // request header.
-  //
-  // Version 1 is the same as version 0.
-  //
-  // Version 2 adds BrokerEpoch.
-  "validVersions": "0-3",
-  "flexibleVersions": "3+",
-  "fields": [
-    { "name": "BrokerId", "type": "int32", "versions": "0+", "entityType": "brokerId",
-      "about": "The id of the broker for which controlled shutdown has been requested." },
-    { "name": "BrokerEpoch", "type": "int64", "versions": "2+", "default": "-1", "ignorable": true,
-      "about": "The broker epoch." }
-  ]
+  // This request was removed in Apache Kafka 4.0.
+  "validVersions": "none"
 }

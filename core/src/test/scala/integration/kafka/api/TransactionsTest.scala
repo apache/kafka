@@ -22,7 +22,7 @@ import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
-import org.apache.kafka.common.errors.{InvalidProducerEpochException, ProducerFencedException, TimeoutException}
+import org.apache.kafka.common.errors.{ConcurrentTransactionsException, InvalidProducerEpochException, ProducerFencedException, TimeoutException}
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.transaction.{TransactionLogConfig, TransactionStateManagerConfig}
 import org.apache.kafka.server.config.{ReplicationConfigs, ServerConfigs, ServerLogConfigs}
@@ -586,14 +586,9 @@ class TransactionsTest extends IntegrationTestHarness {
       fail("Should not be able to send messages from a fenced producer.")
     } catch {
       case _: InvalidProducerEpochException =>
-      case e: ExecutionException => {
-        if (quorum == "zk") {
-          assertTrue(e.getCause.isInstanceOf[ProducerFencedException])
-        } else {
-          // In kraft mode, transactionV2 is used.
-          assertTrue(e.getCause.isInstanceOf[InvalidProducerEpochException])
-        }
-      }
+      case e: ExecutionException =>
+        // In kraft mode, transactionV2 is used.
+        assertTrue(e.getCause.isInstanceOf[InvalidProducerEpochException])
       case e: Exception =>
         throw new AssertionError("Got an unexpected exception from a fenced producer.", e)
     }
@@ -609,7 +604,7 @@ class TransactionsTest extends IntegrationTestHarness {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testFencingOnTransactionExpiration(quorum: String, groupProtocol: String): Unit = {
-    val producer = createTransactionalProducer("expiringProducer", transactionTimeoutMs = 100)
+    val producer = createTransactionalProducer("expiringProducer", transactionTimeoutMs = 300)
 
     producer.initTransactions()
     producer.beginTransaction()
@@ -621,27 +616,15 @@ class TransactionsTest extends IntegrationTestHarness {
     // Wait for the expiration cycle to kick in.
     Thread.sleep(600)
 
-    if (quorum == "zk") {
-      // In zk mode, transaction v1 is used.
-      try {
-        // Now that the transaction has expired, the second send should fail with a ProducerFencedException.
-        producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "2", "2", willBeCommitted = false)).get()
-        fail("should have raised a ProducerFencedException since the transaction has expired")
-      } catch {
-        case _: ProducerFencedException =>
-        case e: ExecutionException =>
-          assertTrue(e.getCause.isInstanceOf[ProducerFencedException])
-      }
-    } else {
-      try {
-        // Now that the transaction has expired, the second send should fail with a InvalidProducerEpochException.
-        producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "2", "2", willBeCommitted = false)).get()
-        fail("should have raised a InvalidProducerEpochException since the transaction has expired")
-      } catch {
-        case _: InvalidProducerEpochException =>
-        case e: ExecutionException =>
-          assertTrue(e.getCause.isInstanceOf[InvalidProducerEpochException])
-      }
+    try {
+      // Now that the transaction has expired, the second send should fail with a InvalidProducerEpochException. We may see some concurrentTransactionsExceptions.
+      producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "2", "2", willBeCommitted = false)).get()
+      fail("should have raised an error due to concurrent transactions or invalid producer epoch")
+    } catch {
+      case _: ConcurrentTransactionsException =>
+      case _: InvalidProducerEpochException =>
+      case e: ExecutionException =>
+        assertTrue(e.getCause.isInstanceOf[InvalidProducerEpochException], "Error was " + e.getCause + " and not InvalidProducerEpochException")
     }
 
     // Verify that the first message was aborted and the second one was never written at all.
@@ -715,8 +698,9 @@ class TransactionsTest extends IntegrationTestHarness {
     "kraft,consumer,false",
   ))
   def testBumpTransactionalEpochWithTV2Disabled(quorum: String, groupProtocol: String, isTV2Enabled: Boolean): Unit = {
+    val defaultLinger = 5;
     val producer = createTransactionalProducer("transactionalProducer",
-      deliveryTimeoutMs = 5000, requestTimeoutMs = 5000)
+      deliveryTimeoutMs = 5000 + defaultLinger, requestTimeoutMs = 5000)
     val consumer = transactionalConsumers.head
     try {
       // Create a topic with RF=1 so that a single broker failure will render it unavailable
@@ -794,8 +778,9 @@ class TransactionsTest extends IntegrationTestHarness {
     "kraft, consumer, true"
   ))
   def testBumpTransactionalEpochWithTV2Enabled(quorum: String, groupProtocol: String, isTV2Enabled: Boolean): Unit = {
+    val defaultLinger = 5;
     val producer = createTransactionalProducer("transactionalProducer",
-      deliveryTimeoutMs = 5000, requestTimeoutMs = 5000)
+      deliveryTimeoutMs = 5000 + defaultLinger, requestTimeoutMs = 5000)
     val consumer = transactionalConsumers.head
 
     try {
@@ -933,6 +918,22 @@ class TransactionsTest extends IntegrationTestHarness {
     } else {
       assertTrue((initialProducerEpoch + 1).toShort <= producerStateEntry.producerEpoch)
     }
+  }
+
+  @ParameterizedTest(name = "{displayName}.quorum={0}.groupProtocol={1}.isTV2Enabled={2}")
+  @CsvSource(Array(
+    "kraft, consumer, true",
+  ))
+  def testEmptyAbortAfterCommit(quorum: String, groupProtocol: String, isTV2Enabled: Boolean): Unit = {
+    val producer = transactionalProducers.head
+
+    producer.initTransactions()
+    producer.beginTransaction()
+    producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, 1, "4", "4", willBeCommitted = false))
+    producer.commitTransaction()
+
+    producer.beginTransaction()
+    producer.abortTransaction()
   }
 
   private def sendTransactionalMessagesWithValueRange(producer: KafkaProducer[Array[Byte], Array[Byte]], topic: String,

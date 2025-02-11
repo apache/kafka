@@ -43,13 +43,12 @@ public class ControllerMetadataMetricsTest {
                     new HashSet<>(Arrays.asList(
                         "kafka.controller:type=KafkaController,name=ActiveBrokerCount",
                         "kafka.controller:type=KafkaController,name=FencedBrokerCount",
-                        "kafka.controller:type=KafkaController,name=MigratingZkBrokerCount",
                         "kafka.controller:type=KafkaController,name=GlobalPartitionCount",
                         "kafka.controller:type=KafkaController,name=GlobalTopicCount",
                         "kafka.controller:type=KafkaController,name=MetadataErrorCount",
                         "kafka.controller:type=KafkaController,name=OfflinePartitionsCount",
                         "kafka.controller:type=KafkaController,name=PreferredReplicaImbalanceCount",
-                        "kafka.controller:type=KafkaController,name=ZkMigrationState",
+                        "kafka.controller:type=KafkaController,name=IgnoredStaticVoters",
                         "kafka.controller:type=ControllerStats,name=UncleanLeaderElectionsPerSec"
                     )));
             }
@@ -188,6 +187,24 @@ public class ControllerMetadataMetricsTest {
             assertEquals(0, UncleanLeaderElectionsPerSec.count());
             metrics.updateUncleanLeaderElection(2);
             assertEquals(2, UncleanLeaderElectionsPerSec.count());
+        } finally {
+            registry.shutdown();
+        }
+    }
+
+    @Test
+    public void testIgnoredStaticVoters() {
+        MetricsRegistry registry = new MetricsRegistry();
+        try (ControllerMetadataMetrics metrics = new ControllerMetadataMetrics(Optional.of(registry))) {
+            @SuppressWarnings("unchecked")
+            Gauge<Integer> ignoredStaticVoters = (Gauge<Integer>) registry
+                .allMetrics()
+                .get(metricName("KafkaController", "IgnoredStaticVoters"));
+            assertEquals(0, ignoredStaticVoters.value());
+            metrics.setIgnoredStaticVoters(true);
+            assertEquals(1, ignoredStaticVoters.value());
+            metrics.setIgnoredStaticVoters(false);
+            assertEquals(0, ignoredStaticVoters.value());
         } finally {
             registry.shutdown();
         }

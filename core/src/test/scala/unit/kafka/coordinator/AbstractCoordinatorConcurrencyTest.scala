@@ -27,7 +27,6 @@ import kafka.log.{LogManager, UnifiedLog}
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.{KafkaConfig, _}
 import kafka.utils._
-import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{MemoryRecords, RecordBatch, RecordValidationStats}
@@ -50,7 +49,6 @@ abstract class AbstractCoordinatorConcurrencyTest[M <: CoordinatorMember] extend
   val serverProps = TestUtils.createBrokerConfig(0)
   val random = new Random
   var replicaManager: TestReplicaManager = _
-  var zkClient: KafkaZkClient = _
   var time: MockTime = _
   var timer: MockTimer = _
   var executor: ExecutorService = _
@@ -67,7 +65,6 @@ abstract class AbstractCoordinatorConcurrencyTest[M <: CoordinatorMember] extend
     val producePurgatory = new DelayedOperationPurgatory[DelayedProduce]("Produce", timer, 1, 1000, false, true)
     val watchKeys = Collections.newSetFromMap(new ConcurrentHashMap[TopicPartitionOperationKey, java.lang.Boolean]()).asScala
     replicaManager = TestReplicaManager(KafkaConfig.fromProps(serverProps), time, scheduler, timer, mockLogMger, mock(classOf[QuotaManagers], withSettings().stubOnly()), producePurgatory, watchKeys)
-    zkClient = mock(classOf[KafkaZkClient], withSettings().stubOnly())
   }
 
   @AfterEach
@@ -193,14 +190,13 @@ object AbstractCoordinatorConcurrencyTest {
       delayedProducePurgatoryParam = Some(producePurgatory),
       delayedFetchPurgatoryParam = Some(delayedFetchPurgatoryParam),
       delayedDeleteRecordsPurgatoryParam = Some(delayedDeleteRecordsPurgatoryParam),
-      delayedElectLeaderPurgatoryParam = Some(delayedElectLeaderPurgatoryParam),
       delayedRemoteFetchPurgatoryParam = Some(delayedRemoteFetchPurgatoryParam),
       delayedRemoteListOffsetsPurgatoryParam = Some(delayedRemoteListOffsetsPurgatoryParam),
       threadNamePrefix = Option(this.getClass.getName)) {
 
     @volatile var logs: mutable.Map[TopicPartition, (UnifiedLog, Long)] = _
 
-    override def maybeStartTransactionVerificationForPartition(
+    override def maybeSendPartitionToTransactionCoordinator(
       topicPartition: TopicPartition,
       transactionalId: String,
       producerId: Long,

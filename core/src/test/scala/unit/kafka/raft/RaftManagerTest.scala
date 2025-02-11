@@ -104,6 +104,7 @@ class RaftManagerTest {
       topicId,
       Time.SYSTEM,
       new Metrics(Time.SYSTEM),
+      new DefaultExternalKRaftMetrics(None, None),
       Option.empty,
       CompletableFuture.completedFuture(QuorumConfig.parseVoterConnections(config.quorumConfig.voters)),
       QuorumConfig.parseBootstrapServers(config.quorumConfig.bootstrapServers),

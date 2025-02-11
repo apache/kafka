@@ -212,8 +212,7 @@ public class ProduceRequestTest {
             .setAcks((short) 1)
             .setTimeoutMs(1000);
         // Can't create ProduceRequest instance with version within [3, 7)
-        for (short version = 3; version < 7; version++) {
-
+        for (short version = ApiKeys.PRODUCE.oldestVersion(); version < 7; version++) {
             ProduceRequest.Builder requestBuilder = new ProduceRequest.Builder(version, version, produceData);
             assertThrowsForAllVersions(requestBuilder, UnsupportedCompressionTypeException.class);
         }
@@ -275,6 +274,22 @@ public class ProduceRequestTest {
         final ProduceRequest request = builder.build();
         assertFalse(RequestUtils.hasTransactionalRecords(request));
         assertTrue(RequestTestUtils.hasIdempotentRecords(request));
+    }
+
+    @Test
+    public void testBuilderOldestAndLatestAllowed() {
+        ProduceRequest.Builder builder = ProduceRequest.builder(new ProduceRequestData()
+            .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
+                new ProduceRequestData.TopicProduceData()
+                    .setName("topic")
+                    .setPartitionData(Collections.singletonList(new ProduceRequestData.PartitionProduceData()
+                        .setIndex(1)
+                        .setRecords(MemoryRecords.withRecords(Compression.NONE, simpleRecord))))
+            ).iterator()))
+            .setAcks((short) -1)
+            .setTimeoutMs(10));
+        assertEquals(ApiKeys.PRODUCE.oldestVersion(), builder.oldestAllowedVersion());
+        assertEquals(ApiKeys.PRODUCE.latestVersion(), builder.latestAllowedVersion());
     }
 
     private static <T extends Throwable> void assertThrowsForAllVersions(ProduceRequest.Builder builder,

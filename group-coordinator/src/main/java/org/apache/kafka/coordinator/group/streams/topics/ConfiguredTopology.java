@@ -19,9 +19,11 @@ package org.apache.kafka.coordinator.group.streams.topics;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
 import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 
+import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.SortedMap;
 import java.util.stream.Collectors;
 
 /**
@@ -31,7 +33,8 @@ import java.util.stream.Collectors;
  * @param topologyEpoch               The epoch of the topology. Same as the topology epoch in the heartbeat request that last initialized
  *                                    the topology.
  * @param subtopologies               Contains the subtopologies that have been configured. This can be used by the task assignors, since it
- *                                    specifies the number of tasks available for every subtopology.
+ *                                    specifies the number of tasks available for every subtopology. Undefined if topology configuration
+ *                                    failed.
  * @param internalTopicsToBeCreated   Contains a list of internal topics that need to be created. This is used to create the topics in the
  *                                    broker.
  * @param topicConfigurationException If the topic configuration process failed, e.g. because expected topics are missing or have an
@@ -39,13 +42,16 @@ import java.util.stream.Collectors;
  *                                    reported back to the client.
  */
 public record ConfiguredTopology(int topologyEpoch,
-                                 Map<String, ConfiguredSubtopology> subtopologies,
+                                 Optional<SortedMap<String, ConfiguredSubtopology>> subtopologies,
                                  Map<String, CreatableTopic> internalTopicsToBeCreated,
                                  Optional<TopicConfigurationException> topicConfigurationException) {
 
     public ConfiguredTopology {
         if (topologyEpoch < 0) {
             throw new IllegalArgumentException("Topology epoch must be non-negative.");
+        }
+        if (topicConfigurationException.isEmpty() && subtopologies.isEmpty()) {
+            throw new IllegalArgumentException("Subtopologies must be present if topicConfigurationException is empty.");
         }
         Objects.requireNonNull(subtopologies, "subtopologies can't be null");
         Objects.requireNonNull(internalTopicsToBeCreated, "internalTopicsToBeCreated can't be null");
@@ -59,9 +65,11 @@ public record ConfiguredTopology(int topologyEpoch,
     public StreamsGroupDescribeResponseData.Topology asStreamsGroupDescribeTopology() {
         return new StreamsGroupDescribeResponseData.Topology()
             .setEpoch(topologyEpoch)
-            .setSubtopologies(subtopologies.entrySet().stream().map(
-                entry -> entry.getValue().asStreamsGroupDescribeSubtopology(entry.getKey())
-            ).collect(Collectors.toList()));
+            .setSubtopologies(
+                subtopologies.map(stringConfiguredSubtopologyMap -> stringConfiguredSubtopologyMap.entrySet().stream().map(
+                    entry -> entry.getValue().asStreamsGroupDescribeSubtopology(entry.getKey())
+                ).collect(Collectors.toList())).orElse(Collections.emptyList())
+            );
     }
 
 }

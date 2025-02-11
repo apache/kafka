@@ -20,6 +20,7 @@ package org.apache.kafka.image;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.metadata.ClearElrRecord;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.RemoveTopicRecord;
@@ -28,6 +29,7 @@ import org.apache.kafka.metadata.Replicas;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.immutable.ImmutableMap;
 
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -54,7 +56,7 @@ public final class TopicsDelta {
      */
     private final Set<Uuid> deletedTopicIds = new HashSet<>();
 
-    private final Set<Uuid> createdTopicIds = new HashSet<>();
+    private final Map<String, Uuid> createdTopics = new HashMap<>();
 
     public TopicsDelta(TopicsImage image) {
         this.image = image;
@@ -72,7 +74,7 @@ public final class TopicsDelta {
         TopicDelta delta = new TopicDelta(
             new TopicImage(record.name(), record.topicId(), Collections.emptyMap()));
         changedTopics.put(record.topicId(), delta);
-        createdTopicIds.add(record.topicId());
+        createdTopics.put(record.name(), record.topicId());
     }
 
     TopicDelta getOrCreateTopicDelta(Uuid id) {
@@ -92,6 +94,29 @@ public final class TopicsDelta {
     public void replay(PartitionChangeRecord record) {
         TopicDelta topicDelta = getOrCreateTopicDelta(record.topicId());
         topicDelta.replay(record);
+    }
+
+    public void replay(ClearElrRecord record) {
+        if (!record.topicName().isEmpty()) {
+            Uuid topicId;
+            if (image.getTopic(record.topicName()) != null) {
+                topicId = image.getTopic(record.topicName()).id();
+            } else {
+                topicId = createdTopics.get(record.topicName());
+            }
+            if (topicId == null) {
+                throw new RuntimeException("Unable to clear elr for topic with name " +
+                    record.topicName() + ": no such topic found.");
+            }
+            TopicDelta topicDelta = getOrCreateTopicDelta(topicId);
+            topicDelta.replay(record);
+        } else {
+            // Update all the existing topics
+            image.topicsById().forEach((topicId, image) -> {
+                TopicDelta topicDelta = getOrCreateTopicDelta(topicId);
+                topicDelta.replay(record);
+            });
+        }
     }
 
     public String replay(RemoveTopicRecord record) {
@@ -172,8 +197,8 @@ public final class TopicsDelta {
         return deletedTopicIds;
     }
 
-    public Set<Uuid> createdTopicIds() {
-        return createdTopicIds;
+    public Collection<Uuid> createdTopicIds() {
+        return createdTopics.values();
     }
 
     /**
@@ -231,7 +256,7 @@ public final class TopicsDelta {
         return "TopicsDelta(" +
             "changedTopics=" + changedTopics +
             ", deletedTopicIds=" + deletedTopicIds +
-            ", createdTopicIds=" + createdTopicIds +
+            ", createdTopics=" + createdTopics +
             ')';
     }
 }

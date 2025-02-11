@@ -180,7 +180,7 @@ Deletion of requested consumer groups ('my-group', 'my-other-group') was success
   --reset-offsets also has the following scenarios to choose from (at least one scenario must be selected):
   <ul>
     <li>
-      --to-datetime &lt;String: datetime&gt; : Reset offsets to offsets from datetime. Format: 'YYYY-MM-DDTHH:mm:SS.sss'
+      --to-datetime &lt;String: datetime&gt; : Reset offsets to offsets from datetime. Format: 'YYYY-MM-DDThh:mm:ss.sss'
     </li>
     <li>
       --to-earliest : Reset offsets to earliest offset.
@@ -1035,6 +1035,7 @@ $ bin/connect-mirror-maker.sh connect-mirror-maker.properties \
 
 <pre><code class="language-text"># MBean: kafka.connect.mirror:type=MirrorSourceConnector,target=([-.w]+),topic=([-.w]+),partition=([0-9]+)
 record-count            # number of records replicated source -> target
+record-rate             # average number of records/sec in replicated records
 record-age-ms           # age of records when they are replicated
 record-age-ms-min
 record-age-ms-max
@@ -1044,8 +1045,9 @@ replication-latency-ms-min
 replication-latency-ms-max
 replication-latency-ms-avg
 byte-rate               # average number of bytes/sec in replicated records
+byte-count              # number of bytes replicated source -> target
 
-# MBean: kafka.connect.mirror:type=MirrorCheckpointConnector,source=([-.w]+),target=([-.w]+)
+# MBean: kafka.connect.mirror:type=MirrorCheckpointConnector,source=([-.w]+),target=([-.w]+),group=([-.w]+),topic=([-.w]+),partition=([0-9]+)
 
 checkpoint-latency-ms   # time it takes to replicate consumer offsets
 checkpoint-latency-ms-min
@@ -1215,14 +1217,14 @@ $ bin/kafka-acls.sh \
 
   <h3 class="anchor-heading"><a id="java" class="anchor-link"></a><a href="#java">6.5 Java Version</a></h3>
 
-  Java 11, Java 17, Java 21 and Java 23 are supported.
+  Java 17 and Java 21 are fully supported while Java 11 is supported for a subset of modules (clients, streams and related).
+  Support for versions newer than the most recent LTS version are best-effort and the project typically only tests with the
+  most recent non LTS version.
+
   <p>
-  Note that Java 11 support for the broker and tools has been deprecated since Apache Kafka 3.7. Both will be removed in Apache Kafka 4.0.
-  <p>
-  Java 11 and later versions perform significantly better if TLS is enabled, so they are highly recommended (they also include a number of other
-  performance improvements: G1GC, CRC32C, Compact Strings, Thread-Local Handshakes and more).
-  <p>
-  From a security perspective, we recommend the latest released patch version as older freely available versions have disclosed security vulnerabilities.
+  We generally recommend running Apache Kafka with the most recent LTS release (Java 21 at the time of writing) for performance,
+  efficiency and support reasons. From a security perspective, we recommend the latest released patch version as older versions
+  typically have disclosed security vulnerabilities.
   <p>
   Typical arguments for running Kafka with OpenJDK-based Java implementations (including Oracle JDK) are:
 
@@ -1769,6 +1771,21 @@ NodeId	DirectoryId           	LogEndOffset	Lag	LastFetchTimestamp	LastCaughtUpTi
         <td>Last offset in a partition</td>
         <td>kafka.log:type=Log,name=LogEndOffset,topic=([-.\w]+),partition=([0-9]+)</td>
         <td>The last offset in a partition.</td>
+      </tr>
+      <tr>
+        <td>Remaining logs to recover</td>
+        <td>kafka.log:type=LogManager,name=remainingLogsToRecover</td>
+        <td>The number of remaining logs for each log.dir to be recovered.This metric provides an overview of the recovery progress for a given log directory.</td>
+      </tr>
+      <tr>
+        <td>Remaining segments to recover for the current recovery thread</td>
+        <td>kafka.log:type=LogManager,name=remainingSegmentsToRecover</td>
+        <td>The number of remaining segments assigned to the currently active recovery thread.</td>
+      </tr>
+      <tr>
+        <td>Log directory offline status</td>
+        <td>kafka.log:type=LogManager,name=LogDirectoryOffline</td>
+        <td>Indicates if a log directory is offline (1) or online (0).</td>
       </tr>
   </tbody></table>
 
@@ -2826,7 +2843,7 @@ All the following metrics have a recording level of <code>info</code>:
       <tr>
         <td>thread-state</td>
         <td>The state of the thread as a number (<code>ordinal()</code> of the corresponding enum).</td>
-        <td>kafka.streams:type=stream-thread-metrics,thread-id=([-.\w]+)</td>
+        <td>kafka.streams:type=stream-thread-metrics,thread-id=([-.\w]+),process-id=([-.\w]+)</td>
       </tr>
       <tr>
         <td>commit-latency-avg</td>
@@ -3475,7 +3492,7 @@ customized state stores; for built-in state stores, currently we have:
     </tr>
     <tr>
       <td>number-open-files</td>
-      <td>The number of current open files.</td>
+      <td>This metric will return constant -1 because the RocksDB's counter NO_FILE_CLOSES has been removed in RocksDB 9.7.3</td>
       <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
     </tr>
     <tr>
@@ -3857,7 +3874,7 @@ foo
 
   <ul>
     <li>Kafka server's <code>process.role</code> should be set to either <code>broker</code> or <code>controller</code> but not both. Combined mode can be used in development environments, but it should be avoided in critical deployment environments.</li>
-    <li>For redundancy, a Kafka cluster should use 3 or 5 controllers, depending on factors like cost and the number of concurrent failures your system should withstand without availability impact. In the rare case of a partial network failure it is possible for the cluster metadata quorum to become unavailable. This limitation will be addressed in a future release of Kafka.</li>
+    <li>For redundancy, a Kafka cluster should use 3 or more controllers, depending on factors like cost and the number of concurrent failures your system should withstand without availability impact. For the KRaft controller cluster to withstand <code>N</code> concurrent failures the controller cluster must include <code>2N + 1</code> controllers.</li>
     <li>The Kafka controllers store all the metadata for the cluster in memory and on disk. We believe that for a typical Kafka cluster 5GB of main memory and 5GB of disk space on the metadata log director is sufficient.</li>
   </ul>
 

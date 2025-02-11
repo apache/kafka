@@ -31,7 +31,6 @@ import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.RecordVersion;
 import org.apache.kafka.common.record.UnalignedRecords;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.ByteBufferChannel;
@@ -71,6 +70,7 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import static java.util.Arrays.asList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -152,6 +152,28 @@ public class TestUtils {
             }
         }
         return new MetadataSnapshot("kafka-cluster", nodesById, partsMetadatas, Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), null, Collections.emptyMap());
+    }
+
+    /**
+     * Asserts that there are no leaked threads with a specified name prefix and daemon status.
+     * This method checks all threads in the JVM, filters them by the provided thread name prefix
+     * and daemon status, and verifies that no matching threads are alive.
+     * If any matching threads are found, the test will fail.
+     *
+     * @param threadName The prefix of the thread names to check. Only threads whose names
+     *                   start with this prefix will be considered.
+     * @param isDaemon   The daemon status to check. Only threads with the specified
+     *                   daemon status (either true for daemon threads or false for non-daemon threads)
+     *                   will be considered.
+     *
+     * @throws AssertionError If any thread with the specified name prefix and daemon status is found and is alive.
+     */
+    public static void assertNoLeakedThreadsWithNameAndDaemonStatus(String threadName, boolean isDaemon) {
+        List<Thread> threads = Thread.getAllStackTraces().keySet().stream()
+                .filter(t -> t.isDaemon() == isDaemon && t.isAlive() && t.getName().startsWith(threadName))
+                .collect(Collectors.toList());
+        int threadCount = threads.size();
+        assertEquals(0, threadCount);
     }
 
     /**
@@ -665,7 +687,7 @@ public class TestUtils {
     ) {
         return createApiVersionsResponse(
                 throttleTimeMs,
-                ApiVersionsResponse.filterApis(RecordVersion.current(), listenerType, true, true),
+                ApiVersionsResponse.filterApis(listenerType, true, true),
                 Features.emptySupportedFeatures(),
                 false
         );
@@ -678,7 +700,7 @@ public class TestUtils {
     ) {
         return createApiVersionsResponse(
                 throttleTimeMs,
-                ApiVersionsResponse.filterApis(RecordVersion.current(), listenerType, enableUnstableLastVersion, true),
+                ApiVersionsResponse.filterApis(listenerType, enableUnstableLastVersion, true),
                 Features.emptySupportedFeatures(),
                 false
         );

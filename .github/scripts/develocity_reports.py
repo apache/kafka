@@ -806,6 +806,80 @@ class TestAnalyzer:
         
         logger.info(f"Updated cache with {len(builds)} builds")
 
+    def get_persistent_failing_tests(self, results: List[TestResult], 
+                                   min_failure_rate: float = 0.2,
+                                   min_executions: int = 5) -> Dict[str, Dict]:
+        """
+        Identify tests that have been consistently failing/flaky over time.
+        Groups by test class and includes individual test cases.
+        """
+        persistent_failures = {}
+        current_time = datetime.now(pytz.UTC)
+        chunk_start = current_time - timedelta(days=7)  # Last 7 days for test cases
+        
+        # Group results by class
+        class_groups = {}
+        for result in results:
+            class_name = result.name.split('#')[0]  # Get class name
+            if class_name not in class_groups:
+                class_groups[class_name] = []
+            class_groups[class_name].append(result)
+        
+        # Analyze each class and its test cases
+        for class_name, class_results in class_groups.items():
+            class_total = sum(r.outcome_distribution.total for r in class_results)
+            class_problems = sum(r.outcome_distribution.failed + r.outcome_distribution.flaky 
+                               for r in class_results)
+            
+            if class_total < min_executions:
+                continue
+            
+            class_failure_rate = class_problems / class_total if class_total > 0 else 0
+            
+            # Only include if class has significant failures
+            if class_failure_rate >= min_failure_rate:
+                try:
+                    # Get detailed test case information using the same method as other reports
+                    test_cases = self.get_test_case_details(
+                        class_name,
+                        "kafka",
+                        chunk_start,
+                        current_time,
+                        test_type="test"
+                    )
+                    
+                    failing_test_cases = {}
+                    for test_case in test_cases:
+                        total_runs = test_case.outcome_distribution.total
+                        if total_runs >= min_executions:
+                            problem_runs = (test_case.outcome_distribution.failed + 
+                                          test_case.outcome_distribution.flaky)
+                            failure_rate = problem_runs / total_runs if total_runs > 0 else 0
+                            
+                            if failure_rate >= min_failure_rate:
+                                # Extract just the method name
+                                method_name = test_case.name.split('.')[-1]
+                                failing_test_cases[method_name] = {
+                                    'result': test_case,
+                                    'failure_rate': failure_rate,
+                                    'total_executions': total_runs,
+                                    'failed_executions': problem_runs,
+                                    'timeline': sorted(test_case.timeline, key=lambda x: x.timestamp)
+                                }
+                    
+                    if failing_test_cases:  # Only include classes that have problematic test cases
+                        persistent_failures[class_name] = {
+                            'failure_rate': class_failure_rate,
+                            'total_executions': class_total,
+                            'failed_executions': class_problems,
+                            'test_cases': failing_test_cases
+                        }
+                        
+                except Exception as e:
+                    logger.error(f"Error getting test case details for {class_name}: {str(e)}")
+        
+        return persistent_failures
+
 def get_develocity_class_link(class_name: str, threshold_days: int, test_type: str = None) -> str:
     """
     Generate Develocity link for a test class
@@ -815,7 +889,7 @@ def get_develocity_class_link(class_name: str, threshold_days: int, test_type: s
         threshold_days: Number of days to look back in search
         test_type: Type of test (e.g., "quarantinedTest", "test")
     """
-    base_url = "https://ge.apache.org/scans/tests"
+    base_url = "https://develocity.apache.org/scans/tests"
     params = {
         "search.rootProjectNames": "kafka",
         "search.tags": "github,trunk",
@@ -839,7 +913,7 @@ def get_develocity_method_link(class_name: str, method_name: str, threshold_days
         threshold_days: Number of days to look back in search
         test_type: Type of test (e.g., "quarantinedTest", "test")
     """
-    base_url = "https://ge.apache.org/scans/tests"
+    base_url = "https://develocity.apache.org/scans/tests"
     
     # Extract just the method name without the class prefix
     if '.' in method_name:
@@ -911,14 +985,13 @@ def print_most_problematic_tests(problematic_tests: Dict[str, Dict], threshold_d
                                 key=lambda x: (x.outcome_distribution.failed + x.outcome_distribution.flaky) / x.outcome_distribution.total 
                                 if x.outcome_distribution.total > 0 else 0,
                                 reverse=True):
-            method_name = test_method.name.split('.')[-1]
             if test_method.timeline:
                 print(f"\n#### {method_name}")
                 print("Recent Executions:")
                 print("```")
                 print("Date/Time (UTC)      Outcome    Build ID")
                 print("-" * 44)
-                for entry in sorted(test_method.timeline, key=lambda x: x.timestamp)[-5:]:
+                for entry in sorted(test_method.timeline, key=lambda x: x.timestamp, reverse=True)[:5]:
                     date_str = entry.timestamp.strftime('%Y-%m-%d %H:%M')
                     print(f"{date_str:<17} {entry.outcome:<10} {entry.build_id}")
                 print("```")
@@ -947,7 +1020,7 @@ def print_flaky_regressions(flaky_regressions: Dict[str, Dict], threshold_days: 
         
         # Add recent execution details in sub-rows
         print("<tr><td colspan=\"5\">Recent Executions:</td></tr>")
-        for entry in sorted(details['recent_executions'], key=lambda x: x.timestamp)[-5:]:
+        for entry in sorted(details['recent_executions'], key=lambda x: x.timestamp, reverse=True)[:5]:
             date_str = entry.timestamp.strftime('%Y-%m-%d %H:%M')
             print(f"<tr><td></td><td colspan=\"4\">{date_str} - {entry.outcome}</td></tr>")
     print("</table>")
@@ -966,10 +1039,71 @@ def print_flaky_regressions(flaky_regressions: Dict[str, Dict], threshold_days: 
         print("```")
         print("Date/Time (UTC)      Outcome    Build ID")
         print("-" * 44)
-        for entry in sorted(details['recent_executions'], key=lambda x: x.timestamp)[-5:]:
+        for entry in sorted(details['recent_executions'], key=lambda x: x.timestamp, reverse=True)[:5]:
             date_str = entry.timestamp.strftime('%Y-%m-%d %H:%M')
             print(f"{date_str:<17} {entry.outcome:<10} {entry.build_id}")
         print("```")
+    
+    print("</details>")
+
+def print_persistent_failing_tests(persistent_failures: Dict[str, Dict], threshold_days: int):
+    """Print tests that have been consistently failing over time"""
+    print("\n## Persistently Failing/Flaky Tests")
+    if not persistent_failures:
+        print("No persistently failing tests found.")
+        return
+        
+    print(f"Found {len(persistent_failures)} tests that have been consistently failing or flaky.")
+    
+    # Print table with test details
+    print("\n<table>")
+    print("<tr><td>Test Class</td><td>Test Case</td><td>Failure Rate</td><td>Total Runs</td><td>Failed/Flaky</td><td>Link</td></tr>")
+    
+    for class_name, class_details in sorted(persistent_failures.items(),
+                                          key=lambda x: x[1]['failure_rate'],
+                                          reverse=True):
+        class_link = get_develocity_class_link(class_name, threshold_days)
+        
+        # Print class row
+        print(f"<tr><td colspan=\"5\">{class_name}</td>"
+              f"<td><a href=\"{class_link}\">↗️</a></td></tr>")
+              
+        # Print test case rows
+        for test_name, test_details in sorted(class_details['test_cases'].items(),
+                                            key=lambda x: x[1]['failure_rate'],
+                                            reverse=True):
+            test_link = get_develocity_method_link(class_name, test_name, threshold_days)
+            print(f"<tr><td></td>"
+                  f"<td>{test_name}</td>"
+                  f"<td>{test_details['failure_rate']:.2%}</td>"
+                  f"<td>{test_details['total_executions']}</td>"
+                  f"<td>{test_details['failed_executions']}</td>"
+                  f"<td><a href=\"{test_link}\">↗️</a></td></tr>")
+    print("</table>")
+    
+    # Print detailed history
+    print("\n<details>")
+    print("<summary>Detailed Execution History</summary>\n")
+    
+    for class_name, class_details in sorted(persistent_failures.items(),
+                                          key=lambda x: x[1]['failure_rate'],
+                                          reverse=True):
+        print(f"\n### {class_name}")
+        print(f"* Overall Failure Rate: {class_details['failure_rate']:.2%}")
+        print(f"* Total Executions: {class_details['total_executions']}")
+        print(f"* Failed/Flaky Executions: {class_details['failed_executions']}")
+        
+        for test_name, test_details in sorted(class_details['test_cases'].items(),
+                                            key=lambda x: x[1]['failure_rate'],
+                                            reverse=True):
+            print("\nRecent Executions:")
+            print("```")
+            print("Date/Time (UTC)      Outcome    Build ID")
+            print("-" * 44)
+            for entry in sorted(test_details['timeline'], key=lambda x: x.timestamp, reverse=True)[:5]:
+                date_str = entry.timestamp.strftime('%Y-%m-%d %H:%M')
+                print(f"{date_str:<17} {entry.outcome:<10} {entry.build_id}")
+            print("```")
     
     print("</details>")
 
@@ -1036,7 +1170,7 @@ def print_cleared_tests(cleared_tests: Dict[str, Dict], threshold_days: int, tes
             print("```")
             print("Date/Time (UTC)      Outcome    Build ID")
             print("-" * 44)
-            for entry in test_case['recent_executions']:
+            for entry in sorted(test_case['recent_executions'], key=lambda x: x.timestamp, reverse=True)[:5]:
                 date_str = entry.timestamp.strftime('%Y-%m-%d %H:%M')
                 print(f"{date_str:<17} {entry.outcome:<10} {entry.build_id}")
             print("```")
@@ -1052,7 +1186,7 @@ def main():
         exit(1)
 
     # Configuration
-    BASE_URL = "https://ge.apache.org"
+    BASE_URL = "https://develocity.apache.org"
     PROJECT = "kafka"
     QUARANTINE_THRESHOLD_DAYS = 7
     MIN_FAILURE_RATE = 0.1
@@ -1103,6 +1237,13 @@ def main():
             success_threshold=SUCCESS_THRESHOLD
         )
         
+        # Get persistent failing tests (add after getting regular_results)
+        persistent_failures = analyzer.get_persistent_failing_tests(
+            regular_results,
+            min_failure_rate=0.2,  # 20% failure rate threshold
+            min_executions=5
+        )
+        
         # Print report header
         print(f"\n# Flaky Test Report for {datetime.now(pytz.UTC).strftime('%Y-%m-%d')}")
         print(f"This report was run on {datetime.now(pytz.UTC).strftime('%Y-%m-%d %H:%M:%S')} UTC")
@@ -1110,6 +1251,7 @@ def main():
         # Print each section
         print_most_problematic_tests(problematic_tests, QUARANTINE_THRESHOLD_DAYS, test_type="quarantinedTest")
         print_flaky_regressions(flaky_regressions, QUARANTINE_THRESHOLD_DAYS)
+        print_persistent_failing_tests(persistent_failures, QUARANTINE_THRESHOLD_DAYS)
         print_cleared_tests(cleared_tests, QUARANTINE_THRESHOLD_DAYS, test_type="quarantinedTest")
 
     except Exception as e:

@@ -17,8 +17,12 @@
 
 package org.apache.kafka.coordinator.share;
 
+import org.apache.kafka.common.message.DeleteShareGroupStateRequestData;
+import org.apache.kafka.common.message.DeleteShareGroupStateResponseData;
 import org.apache.kafka.common.message.ReadShareGroupStateRequestData;
 import org.apache.kafka.common.message.ReadShareGroupStateResponseData;
+import org.apache.kafka.common.message.ReadShareGroupStateSummaryRequestData;
+import org.apache.kafka.common.message.ReadShareGroupStateSummaryResponseData;
 import org.apache.kafka.common.message.WriteShareGroupStateRequestData;
 import org.apache.kafka.common.message.WriteShareGroupStateResponseData;
 import org.apache.kafka.common.requests.RequestContext;
@@ -75,6 +79,22 @@ public interface ShareCoordinator {
      * @return completable future comprising read RPC response data
      */
     CompletableFuture<ReadShareGroupStateResponseData> readState(RequestContext context, ReadShareGroupStateRequestData request);
+
+    /**
+     * Handle read share state summary call
+     * @param context - represents the incoming read summary request context
+     * @param request - actual RPC request object
+     * @return completable future comprising ReadShareGroupStateSummaryRequestData
+     */
+    CompletableFuture<ReadShareGroupStateSummaryResponseData> readStateSummary(RequestContext context, ReadShareGroupStateSummaryRequestData request);
+
+    /**
+     * Handle delete share group state call
+     * @param context - represents the incoming delete share group request context
+     * @param request - actual RPC request object
+     * @return completable future representing delete share group RPC response data
+     */
+    CompletableFuture<DeleteShareGroupStateResponseData> deleteState(RequestContext context, DeleteShareGroupStateRequestData request);
 
     /**
      * Called when new coordinator is elected

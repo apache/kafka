@@ -486,18 +486,10 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
 }
 
 class DynamicConfigChangeUnitTest {
-  @Test
-  def testIpHandlerUnresolvableAddress(): Unit = {
-    val configHandler = new IpConfigHandler(null)
-    val props: Properties = new Properties()
-    props.put(QuotaConfig.IP_CONNECTION_RATE_OVERRIDE_CONFIG, "1")
-
-    assertThrows(classOf[IllegalArgumentException], () => configHandler.processConfigChanges("illegal-hostname", props))
-  }
 
   @Test
   def shouldParseReplicationQuotaProperties(): Unit = {
-    val configHandler: TopicConfigHandler = new TopicConfigHandler(null, null, null, null)
+    val configHandler: TopicConfigHandler = new TopicConfigHandler(null, null, null)
     val props: Properties = new Properties()
 
     //Given
@@ -510,7 +502,7 @@ class DynamicConfigChangeUnitTest {
 
   @Test
   def shouldParseWildcardReplicationQuotaProperties(): Unit = {
-    val configHandler: TopicConfigHandler = new TopicConfigHandler(null, null, null, null)
+    val configHandler: TopicConfigHandler = new TopicConfigHandler(null, null, null)
     val props: Properties = new Properties()
 
     //Given
@@ -530,7 +522,7 @@ class DynamicConfigChangeUnitTest {
         CoreUtils.propsWith(QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, value),
         102, QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG)
     }
-    val configHandler: TopicConfigHandler = new TopicConfigHandler(null, null, null, null)
+    val configHandler: TopicConfigHandler = new TopicConfigHandler(null, null, null)
     assertEquals(ReplicationQuotaManager.ALL_REPLICAS.asScala.map(_.toInt).toSeq, parse(configHandler, "* "))
     assertEquals(Seq(), parse(configHandler, " "))
     assertEquals(Seq(6), parse(configHandler, "6:102"))
@@ -540,7 +532,7 @@ class DynamicConfigChangeUnitTest {
 
   @Test
   def shouldParseReplicationQuotaReset(): Unit = {
-    val configHandler: TopicConfigHandler = new TopicConfigHandler(null, null, null, null)
+    val configHandler: TopicConfigHandler = new TopicConfigHandler(null, null, null)
     val props: Properties = new Properties()
 
     //Given
@@ -587,7 +579,7 @@ class DynamicConfigChangeUnitTest {
     doNothing().when(rlm).onLeadershipChange(leaderPartitionsArg.capture(), followerPartitionsArg.capture(), any())
 
     val isRemoteLogEnabledBeforeUpdate = false
-    val configHandler: TopicConfigHandler = new TopicConfigHandler(replicaManager, null, null, None)
+    val configHandler: TopicConfigHandler = new TopicConfigHandler(replicaManager, null, null)
     configHandler.maybeUpdateRemoteLogComponents(topic, Seq(log0, log1), isRemoteLogEnabledBeforeUpdate, false)
     assertEquals(Collections.singleton(partition0), leaderPartitionsArg.getValue)
     assertEquals(Collections.singleton(partition1), followerPartitionsArg.getValue)
@@ -611,7 +603,7 @@ class DynamicConfigChangeUnitTest {
     when(partition.isLeader).thenReturn(true)
 
     val isRemoteLogEnabledBeforeUpdate = true
-    val configHandler: TopicConfigHandler = new TopicConfigHandler(replicaManager, null, null, None)
+    val configHandler: TopicConfigHandler = new TopicConfigHandler(replicaManager, null, null)
     configHandler.maybeUpdateRemoteLogComponents(topic, Seq(log0), isRemoteLogEnabledBeforeUpdate, false)
     verify(rlm, never()).onLeadershipChange(any(), any(), any())
   }

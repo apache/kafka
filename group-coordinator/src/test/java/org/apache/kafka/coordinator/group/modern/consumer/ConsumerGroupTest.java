@@ -53,6 +53,7 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -80,8 +81,6 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
 
 public class ConsumerGroupTest {
 
@@ -425,7 +424,6 @@ public class ConsumerGroupTest {
 
     @Test
     public void testGroupState() {
-        Uuid fooTopicId = Uuid.randomUuid();
         ConsumerGroup consumerGroup = createConsumerGroup("foo");
         assertEquals(ConsumerGroup.ConsumerGroupState.EMPTY, consumerGroup.state());
 
@@ -1295,46 +1293,6 @@ public class ConsumerGroupTest {
     }
 
     @Test
-    public void testStateTransitionMetrics() {
-        // Confirm metrics is not updated when a new ConsumerGroup is created but only when the group transitions
-        // its state.
-        GroupCoordinatorMetricsShard metrics = mock(GroupCoordinatorMetricsShard.class);
-        ConsumerGroup consumerGroup = new ConsumerGroup(
-            new SnapshotRegistry(new LogContext()),
-            "group-id",
-            metrics
-        );
-
-        assertEquals(ConsumerGroup.ConsumerGroupState.EMPTY, consumerGroup.state());
-        verify(metrics, times(0)).onConsumerGroupStateTransition(null, ConsumerGroup.ConsumerGroupState.EMPTY);
-
-        ConsumerGroupMember member = new ConsumerGroupMember.Builder("member")
-            .setMemberEpoch(1)
-            .setPreviousMemberEpoch(0)
-            .build();
-
-        consumerGroup.updateMember(member);
-
-        assertEquals(ConsumerGroup.ConsumerGroupState.RECONCILING, consumerGroup.state());
-        verify(metrics, times(1)).onConsumerGroupStateTransition(ConsumerGroup.ConsumerGroupState.EMPTY, ConsumerGroup.ConsumerGroupState.RECONCILING);
-
-        consumerGroup.setGroupEpoch(1);
-
-        assertEquals(ConsumerGroup.ConsumerGroupState.ASSIGNING, consumerGroup.state());
-        verify(metrics, times(1)).onConsumerGroupStateTransition(ConsumerGroup.ConsumerGroupState.RECONCILING, ConsumerGroup.ConsumerGroupState.ASSIGNING);
-
-        consumerGroup.setTargetAssignmentEpoch(1);
-
-        assertEquals(ConsumerGroup.ConsumerGroupState.STABLE, consumerGroup.state());
-        verify(metrics, times(1)).onConsumerGroupStateTransition(ConsumerGroup.ConsumerGroupState.ASSIGNING, ConsumerGroup.ConsumerGroupState.STABLE);
-
-        consumerGroup.removeMember("member");
-
-        assertEquals(ConsumerGroup.ConsumerGroupState.EMPTY, consumerGroup.state());
-        verify(metrics, times(1)).onConsumerGroupStateTransition(ConsumerGroup.ConsumerGroupState.STABLE, ConsumerGroup.ConsumerGroupState.EMPTY);
-    }
-
-    @Test
     public void testIsInStatesCaseInsensitive() {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         GroupCoordinatorMetricsShard metricsShard = new GroupCoordinatorMetricsShard(
@@ -1435,8 +1393,8 @@ public class ConsumerGroupTest {
             .build();
         consumerGroup.updateMember(member2);
         assertEquals(1, consumerGroup.numClassicProtocolMembers());
-        assertFalse(consumerGroup.allMembersUseClassicProtocolExcept("member-1"));
-        assertTrue(consumerGroup.allMembersUseClassicProtocolExcept("member-2"));
+        assertFalse(consumerGroup.allMembersUseClassicProtocolExcept(member1));
+        assertTrue(consumerGroup.allMembersUseClassicProtocolExcept(member2));
 
         // The group has member 2 (using the consumer protocol) and member 3 (using the consumer protocol).
         consumerGroup.removeMember(member1.memberId());
@@ -1444,7 +1402,7 @@ public class ConsumerGroupTest {
             .build();
         consumerGroup.updateMember(member3);
         assertEquals(0, consumerGroup.numClassicProtocolMembers());
-        assertFalse(consumerGroup.allMembersUseClassicProtocolExcept("member-2"));
+        assertFalse(consumerGroup.allMembersUseClassicProtocolExcept(member2));
 
         // The group has member 2 (using the classic protocol).
         consumerGroup.removeMember(member2.memberId());
@@ -1454,6 +1412,66 @@ public class ConsumerGroupTest {
             .build();
         consumerGroup.updateMember(member2);
         assertEquals(1, consumerGroup.numClassicProtocolMembers());
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "5, 5, 0, 0, false", // remove no consumer protocol members
+        "5, 5, 0, 4, false", // remove 4 out of 5 consumer protocol members
+        "5, 5, 1, 4, false", // remove 4 out of 5 consumer protocol members and 1 classic protocol member
+        "5, 5, 0, 5, true", // remove 5 out of 5 consumer protocol members
+        "5, 5, 1, 5, true", // remove 5 out of 5 consumer protocol members and 1 classic protocol member
+        "5, 5, 5, 5, true", // an empty consumer group is considered to have only classic protocol members
+        "5, 0, 0, 0, true", // a consumer group with only classic protocol members, which should not happen
+        "5, 0, 1, 0, true", // a consumer group with only classic protocol members, which should not happen
+    })
+    public void testAllMembersUseClassicProtocolExcept(
+        int numClassicProtocolMembers,
+        int numConsumerProtocolMembers,
+        int numRemovedClassicProtocolMembers,
+        int numRemovedConsumerProtocolMembers,
+        boolean expectedResult
+    ) {
+        ConsumerGroup consumerGroup = createConsumerGroup("foo");
+        List<ConsumerGroupMemberMetadataValue.ClassicProtocol> protocols = new ArrayList<>();
+        protocols.add(new ConsumerGroupMemberMetadataValue.ClassicProtocol()
+            .setName("range")
+            .setMetadata(new byte[0]));
+
+        List<ConsumerGroupMember> classicProtocolMembers = new ArrayList<>();
+        List<ConsumerGroupMember> consumerProtocolMembers = new ArrayList<>();
+
+        // Add classic and consumer protocol members to the group
+        for (int i = 0; i < numClassicProtocolMembers; i++) {
+            ConsumerGroupMember member = new ConsumerGroupMember.Builder("classic-member-" + i)
+                .setClassicMemberMetadata(new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                    .setSupportedProtocols(protocols))
+                .build();
+            classicProtocolMembers.add(member);
+            consumerGroup.updateMember(member);
+        }
+
+        for (int i = 0; i < numConsumerProtocolMembers; i++) {
+            ConsumerGroupMember member = new ConsumerGroupMember.Builder("consumer-member-" + i)
+                .build();
+            consumerProtocolMembers.add(member);
+            consumerGroup.updateMember(member);
+        }
+
+        assertEquals(numClassicProtocolMembers, consumerGroup.numClassicProtocolMembers());
+
+        // Test allMembersUseClassicProtocolExcept
+        Set<ConsumerGroupMember> removedMembers = new HashSet<>();
+
+        for (int i = 0; i < numRemovedClassicProtocolMembers; i++) {
+            removedMembers.add(classicProtocolMembers.get(i));
+        }
+
+        for (int i = 0; i < numRemovedConsumerProtocolMembers; i++) {
+            removedMembers.add(consumerProtocolMembers.get(i));
+        }
+
+        assertEquals(expectedResult, consumerGroup.allMembersUseClassicProtocolExcept(removedMembers));
     }
 
     @Test

@@ -54,7 +54,7 @@ public class ShareGroupCommandOptions extends CommandDefaultOptions {
         "To define the scope use --all-topics or --topic.";
     private static final String DRY_RUN_DOC = "Only show results without executing changes on share groups. Supported operations: reset-offsets.";
     private static final String EXECUTE_DOC = "Execute operation. Supported operations: reset-offsets.";
-    private static final String RESET_TO_DATETIME_DOC = "Reset offsets to offset from datetime. Format: 'YYYY-MM-DDTHH:mm:SS.sss'";
+    private static final String RESET_TO_DATETIME_DOC = "Reset offsets to offset from datetime. Format: 'YYYY-MM-DDThh:mm:ss.sss'";
     private static final String RESET_TO_EARLIEST_DOC = "Reset offsets to earliest offset.";
     private static final String RESET_TO_LATEST_DOC = "Reset offsets to latest offset.";
     private static final String MEMBERS_DOC = "Describe members of the group. This option may be used with the '--describe' option only.";

@@ -40,11 +40,10 @@ import org.apache.kafka.common.TopicPartitionReplica;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
+import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
-import org.apache.kafka.common.test.api.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
-import org.apache.kafka.common.test.api.ClusterTestExtensions;
 import org.apache.kafka.common.test.api.ClusterTests;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.Time;
@@ -55,7 +54,6 @@ import org.apache.kafka.tools.TerseException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 
 import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.time.Duration;
 import java.util.AbstractMap;
@@ -85,7 +83,6 @@ import static org.apache.kafka.server.common.MetadataVersion.IBP_3_3_IV0;
 import static org.apache.kafka.server.config.QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG;
 import static org.apache.kafka.server.config.QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG;
 import static org.apache.kafka.server.config.ReplicationConfigs.AUTO_LEADER_REBALANCE_ENABLE_CONFIG;
-import static org.apache.kafka.server.config.ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG;
 import static org.apache.kafka.server.config.ReplicationConfigs.REPLICA_FETCH_BACKOFF_MS_CONFIG;
 import static org.apache.kafka.server.config.ReplicationConfigs.REPLICA_LAG_TIME_MAX_MS_CONFIG;
 import static org.apache.kafka.tools.ToolsTestUtils.assignThrottledPartitionReplicas;
@@ -112,7 +109,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
     @ClusterConfigProperty(id = 3, key = "broker.rack", value = "rack1"),
     @ClusterConfigProperty(id = 4, key = "broker.rack", value = "rack1"),
 })
-@ExtendWith(ClusterTestExtensions.class)
 public class ReassignPartitionsCommandTest {
     private final ClusterInstance clusterInstance;
     private final Map<Integer, Map<String, Long>> unthrottledBrokerConfigs = IntStream
@@ -140,29 +136,6 @@ public class ReassignPartitionsCommandTest {
         // the `AlterPartition` API. In this case, the controller will register individual
         // watches for each reassigning partition so that the reassignment can be
         // completed as soon as the ISR is expanded.
-        createTopics();
-        executeAndVerifyReassignment();
-    }
-
-    @ClusterTests({
-        @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, serverProperties = {
-            @ClusterConfigProperty(id = 1, key = INTER_BROKER_PROTOCOL_VERSION_CONFIG, value = "3.3-IV0"),
-            @ClusterConfigProperty(id = 2, key = INTER_BROKER_PROTOCOL_VERSION_CONFIG, value = "3.3-IV0"),
-            @ClusterConfigProperty(id = 3, key = INTER_BROKER_PROTOCOL_VERSION_CONFIG, value = "3.3-IV0"),
-        })
-    })
-    public void testReassignmentCompletionDuringPartialUpgrade() throws Exception {
-        // Test reassignment during a partial upgrade when some brokers are relying on
-        // `AlterPartition` and some rely on the old notification logic through Zookeeper.
-        // In this test case, broker 0 starts up first on the latest IBP and is typically
-        // elected as controller. The three remaining brokers start up on the older IBP.
-        // We want to ensure that reassignment can still complete through the ISR change
-        // notification path even though the controller expects `AlterPartition`.
-
-        // Override change notification settings so that test is not delayed by ISR
-        // change notification delay
-        // ZkAlterPartitionManager.DefaultIsrPropagationConfig_$eq(new IsrChangePropagationConfig(500, 100, 500));
-
         createTopics();
         executeAndVerifyReassignment();
     }

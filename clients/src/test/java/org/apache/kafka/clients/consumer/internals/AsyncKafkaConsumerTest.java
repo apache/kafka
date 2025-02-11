@@ -168,6 +168,7 @@ public class AsyncKafkaConsumerTest {
 
     private AsyncKafkaConsumer<String, String> consumer = null;
     private Time time = new MockTime(0);
+    private final Metrics metrics = new Metrics();
     private final FetchCollector<String, String> fetchCollector = mock(FetchCollector.class);
     private final ApplicationEventHandler applicationEventHandler = mock(ApplicationEventHandler.class);
     private final ConsumerMetadata metadata = mock(ConsumerMetadata.class);
@@ -244,11 +245,12 @@ public class AsyncKafkaConsumerTest {
         String clientId,
         boolean autoCommitEnabled) {
         long retryBackoffMs = 100L;
+        int requestTimeoutMs = 30000;
         int defaultApiTimeoutMs = 1000;
         return new AsyncKafkaConsumer<>(
             new LogContext(),
             clientId,
-            new Deserializers<>(new StringDeserializer(), new StringDeserializer()),
+            new Deserializers<>(new StringDeserializer(), new StringDeserializer(), metrics),
             fetchBuffer,
             fetchCollector,
             interceptors,
@@ -257,10 +259,11 @@ public class AsyncKafkaConsumerTest {
             backgroundEventQueue,
             backgroundEventReaper,
             rebalanceListenerInvoker,
-            new Metrics(),
+            metrics,
             subscriptions,
             metadata,
             retryBackoffMs,
+            requestTimeoutMs,
             defaultApiTimeoutMs,
             groupId,
             autoCommitEnabled);
@@ -671,7 +674,7 @@ public class AsyncKafkaConsumerTest {
 
         consumer = spy(newConsumer(
             mock(FetchBuffer.class),
-            new ConsumerInterceptors<>(Collections.emptyList()),
+            new ConsumerInterceptors<>(Collections.emptyList(), metrics),
             invoker,
             subscriptions,
             "group-id",
@@ -1543,7 +1546,7 @@ public class AsyncKafkaConsumerTest {
         SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
         consumer = newConsumer(
                 mock(FetchBuffer.class),
-                new ConsumerInterceptors<>(Collections.emptyList()),
+                new ConsumerInterceptors<>(Collections.emptyList(), metrics),
                 mock(ConsumerRebalanceListenerInvoker.class),
                 subscriptions,
                 "group-id",

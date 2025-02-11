@@ -21,7 +21,7 @@ import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.protocol.{ByteBufferAccessor, MessageUtil}
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.coordinator.transaction.generated.{TransactionLogKey, TransactionLogValue}
+import org.apache.kafka.coordinator.transaction.generated.{CoordinatorRecordType, TransactionLogKey, TransactionLogValue}
 import org.apache.kafka.server.common.TransactionVersion
 
 import scala.collection.mutable
@@ -51,8 +51,7 @@ object TransactionLog {
     * @return key bytes
     */
   private[transaction] def keyToBytes(transactionalId: String): Array[Byte] = {
-    MessageUtil.toVersionPrefixedBytes(TransactionLogKey.HIGHEST_SUPPORTED_VERSION,
-      new TransactionLogKey().setTransactionalId(transactionalId))
+    MessageUtil.toCoordinatorTypePrefixedBytes(new TransactionLogKey().setTransactionalId(transactionalId))
   }
 
   /**
@@ -95,8 +94,8 @@ object TransactionLog {
     */
   def readTxnRecordKey(buffer: ByteBuffer): BaseKey = {
     val version = buffer.getShort
-    if (version >= TransactionLogKey.LOWEST_SUPPORTED_VERSION && version <= TransactionLogKey.HIGHEST_SUPPORTED_VERSION) {
-      val value = new TransactionLogKey(new ByteBufferAccessor(buffer), version)
+    if (version == CoordinatorRecordType.TRANSACTION_LOG.id) {
+      val value = new TransactionLogKey(new ByteBufferAccessor(buffer), 0.toShort)
       TxnKey(
         version = version,
         transactionalId = value.transactionalId

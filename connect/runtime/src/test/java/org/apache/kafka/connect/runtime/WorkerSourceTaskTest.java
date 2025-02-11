@@ -54,7 +54,6 @@ import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.TopicAdmin;
 import org.apache.kafka.connect.util.TopicCreationGroup;
 
-import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -231,7 +230,7 @@ public class WorkerSourceTaskTest {
     }
 
     private void createWorkerTask() {
-        createWorkerTask(TargetState.STARTED, RetryWithToleranceOperatorTest.noopOperator());
+        createWorkerTask(TargetState.STARTED, RetryWithToleranceOperatorTest.noneOperator());
     }
 
     private void createWorkerTaskWithErrorToleration() {
@@ -239,7 +238,7 @@ public class WorkerSourceTaskTest {
     }
 
     private void createWorkerTask(TargetState initialState) {
-        createWorkerTask(initialState, RetryWithToleranceOperatorTest.noopOperator());
+        createWorkerTask(initialState, RetryWithToleranceOperatorTest.noneOperator());
     }
 
     private void createWorkerTask(TargetState initialState, RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator) {
@@ -1011,8 +1010,8 @@ public class WorkerSourceTaskTest {
 
         try (LogCaptureAppender committerAppender = LogCaptureAppender.createAndRegister(SourceTaskOffsetCommitter.class);
              LogCaptureAppender taskAppender = LogCaptureAppender.createAndRegister(WorkerSourceTask.class)) {
-            committerAppender.setClassLogger(SourceTaskOffsetCommitter.class, Level.TRACE);
-            taskAppender.setClassLogger(WorkerSourceTask.class, Level.TRACE);
+            committerAppender.setClassLogger(SourceTaskOffsetCommitter.class, org.apache.logging.log4j.Level.TRACE);
+            taskAppender.setClassLogger(WorkerSourceTask.class, org.apache.logging.log4j.Level.TRACE);
             SourceTaskOffsetCommitter.commit(workerTask);
             assertEquals(Collections.emptyList(), taskAppender.getMessages());
 
