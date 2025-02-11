@@ -32,6 +32,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -153,14 +154,14 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
         Map<String, List<TargetPartition>> memberToPartitionsSubscription,
         Map<TargetPartition, List<String>> currentAssignment) {
 
-        // exhaustive set of all subscribed topic partitions
-        Set<TargetPartition> targetPartitions = new HashSet<>();
+        // Exhaustive set of all subscribed topic partitions.
+        Set<TargetPartition> targetPartitions = new LinkedHashSet<>();
         memberToPartitionsSubscription.values().forEach(targetPartitions::addAll);
 
-        // Create an inverted map for partition to members subscription.
-        Map<TargetPartition, List<String>> partitionToMemberSubscription = new HashMap<>();
+        // Create a map for topic to members subscription.
+        Map<Uuid, Set<String>> topicToMemberSubscription = new HashMap<>();
         memberToPartitionsSubscription.forEach((member, partitions) ->
-            partitions.forEach(partition -> partitionToMemberSubscription.computeIfAbsent(partition, k -> new ArrayList<>()).add(member)));
+            partitions.forEach(partition -> topicToMemberSubscription.computeIfAbsent(partition.topicId(), k -> new LinkedHashSet<>()).add(member)));
 
         Map<TargetPartition, List<String>> newAssignment = new HashMap<>();
         // Step 1: Hash member IDs to partitions.
@@ -169,13 +170,14 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
 
         // Step 2: Round-robin assignment for unassigned partitions which do not have members already assigned in the current assignment.
         Set<TargetPartition> assignedPartitions = new HashSet<>(newAssignment.keySet());
-        List<TargetPartition> unassignedPartitions = targetPartitions.stream()
-            .filter(targetPartition -> !assignedPartitions.contains(targetPartition))
-            .filter(targetPartition -> !currentAssignment.containsKey(targetPartition))
-            .toList();
+        Map<Uuid, List<TargetPartition>> unassignedPartitions = new HashMap<>();
+        targetPartitions.forEach(targetPartition -> {
+            if (!assignedPartitions.contains(targetPartition) && !currentAssignment.containsKey(targetPartition))
+                unassignedPartitions.computeIfAbsent(targetPartition.topicId(), k -> new ArrayList<>()).add(targetPartition);
+        });
 
-        unassignedPartitions.forEach(unassignedPartition ->
-            roundRobinAssignment(partitionToMemberSubscription.get(unassignedPartition), Collections.singletonList(unassignedPartition), newAssignment));
+        unassignedPartitions.keySet().forEach(unassignedTopic ->
+            roundRobinAssignment(topicToMemberSubscription.get(unassignedTopic), unassignedPartitions.get(unassignedTopic), newAssignment));
 
         // Step 3: Combine current and new assignment and only consider the hash based assignment for the current assignment.
         Map<TargetPartition, List<String>> currentAssignmentByHash = computePartitionsAssignmentByHash(currentAssignment);
@@ -184,7 +186,7 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
         // When combining current assignment, we need to consider the member subscription in current assignment and
         // the subscription being used for new assignment.
         currentAssignmentByHash.forEach((targetPartition, members) -> members.forEach(member -> {
-            if (partitionToMemberSubscription.get(targetPartition).contains(member))
+            if (topicToMemberSubscription.get(targetPartition.topicId()).contains(member))
                 finalAssignment.computeIfAbsent(member, k -> new HashSet<>()).add(targetPartition);
         }));
         newAssignment.forEach((targetPartition, members) -> members.forEach(member ->
@@ -204,7 +206,7 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
         return new GroupAssignment(members);
     }
 
-    Map<TargetPartition, List<String>> computePartitionsAssignmentByHash(
+    private Map<TargetPartition, List<String>> computePartitionsAssignmentByHash(
         Map<TargetPartition, List<String>> currentAssignment) {
         List<TargetPartition> targetPartitions = currentAssignment.keySet().stream().toList();
         Set<String> members = new HashSet<>();
@@ -214,7 +216,8 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
         return hashAssignment;
     }
 
-    private void memberHashAssignment(
+    // Visible for testing.
+    void memberHashAssignment(
         List<TargetPartition> targetPartitions,
         Collection<String> memberIds,
         Map<TargetPartition, List<String>> assignment) {
@@ -225,7 +228,8 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
         }
     }
 
-    private void roundRobinAssignment(
+    // Visible for testing.
+    void roundRobinAssignment(
         Collection<String> members,
         List<TargetPartition> partitions,
         Map<TargetPartition, List<String>> assignment) {
