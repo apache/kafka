@@ -46,6 +46,9 @@ Configuration:
         AppenderRef:
           - ref: FileAppender
 
+      - name: org.apache.kafka.clients.consumer
+        level: TRACE
+
       - name: org.apache.kafka.server.log.remote.metadata.storage
         level: INFO
         AppenderRef:
