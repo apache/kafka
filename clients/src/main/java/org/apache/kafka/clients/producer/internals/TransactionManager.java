@@ -722,7 +722,6 @@ public class TransactionManager {
                 || exception instanceof InvalidPidMappingException) {
             transitionToFatalError(exception);
         } else if (isTransactional()) {
-            log.error("State when in error: " + currentState.toString() + ", exception: " + exception.toString());
             if (needToTriggerEpochBumpFromClient() && !isCompleting()) {
                 clientSideEpochBumpRequired = true;
             }
