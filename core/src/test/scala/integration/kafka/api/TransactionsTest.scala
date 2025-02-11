@@ -21,7 +21,7 @@ import kafka.utils.TestUtils.{consumeRecords, waitUntilTrue}
 import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors.{ConcurrentTransactionsException, InvalidProducerEpochException, ProducerFencedException, TimeoutException}
 import org.apache.kafka.common.test.api.Flaky
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
@@ -738,6 +738,19 @@ class TransactionsTest extends IntegrationTestHarness {
       restartDeadBrokers()
 
       org.apache.kafka.test.TestUtils.assertFutureThrows(failedFuture, classOf[TimeoutException])
+      // Ensure the producer transitions to abortable_error state.
+      TestUtils.waitUntilTrue(() => {
+        var failed = false
+        try {
+          producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(testTopic, 0, "3", "3", willBeCommitted = false))
+        } catch {
+          case e: Exception =>
+            if (e.isInstanceOf[KafkaException])
+              failed = true
+        }
+        failed
+      }, "The send request never failed as expected.")
+      assertThrows(classOf[KafkaException], () => producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(testTopic, 0, "3", "3", willBeCommitted = false)))
       producer.abortTransaction()
 
       producer.beginTransaction()
@@ -760,7 +773,7 @@ class TransactionsTest extends IntegrationTestHarness {
       producerStateEntry =
         brokers(partitionLeader).logManager.getLog(new TopicPartition(testTopic, 0)).get.producerStateManager.activeProducers.get(producerId)
       assertNotNull(producerStateEntry)
-      assertTrue(producerStateEntry.producerEpoch > initialProducerEpoch)
+      assertTrue(producerStateEntry.producerEpoch > initialProducerEpoch, "InitialProduceEpoch: " + initialProducerEpoch + " ProducerStateEntry: " + producerStateEntry)
     } finally {
       producer.close(Duration.ZERO)
     }
