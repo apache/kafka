@@ -184,7 +184,7 @@ public class CommitRequestManagerTest {
 
         Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
         offsets.put(new TopicPartition("t1", 0), new OffsetAndMetadata(0));
-        commitRequestManager.commitAsync(Optional.of(offsets));
+        commitRequestManager.commitAsync(offsets);
         assertPoll(false, 0, commitRequestManager);
     }
 
@@ -195,7 +195,7 @@ public class CommitRequestManagerTest {
 
         Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
         offsets.put(new TopicPartition("t1", 0), new OffsetAndMetadata(0));
-        commitRequestManager.commitAsync(Optional.of(offsets));
+        commitRequestManager.commitAsync(offsets);
         assertPoll(false, 0, commitRequestManager);
         assertPoll(true, 1, commitRequestManager);
     }
@@ -207,7 +207,7 @@ public class CommitRequestManagerTest {
 
         Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
         offsets.put(new TopicPartition("t1", 0), new OffsetAndMetadata(0));
-        commitRequestManager.commitAsync(Optional.of(offsets));
+        commitRequestManager.commitAsync(offsets);
         assertPoll(1, commitRequestManager);
     }
 
@@ -285,7 +285,7 @@ public class CommitRequestManagerTest {
         Map<TopicPartition, OffsetAndMetadata> offsets = Collections.singletonMap(
             new TopicPartition("topic", 1),
             new OffsetAndMetadata(0));
-        commitRequestManager.commitAsync(Optional.of(offsets));
+        commitRequestManager.commitAsync(offsets);
         assertEquals(1, commitRequestManager.unsentOffsetCommitRequests().size());
         assertEquals(1, commitRequestManager.poll(time.milliseconds()).unsentRequests.size());
         assertTrue(commitRequestManager.unsentOffsetCommitRequests().isEmpty());
@@ -369,7 +369,7 @@ public class CommitRequestManagerTest {
         Map<TopicPartition, OffsetAndMetadata> offsets = Map.of(tp, offsetAndMetadata);
 
         CommitRequestManager commitRequestManager = create(true, 100);
-        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = commitRequestManager.commitAsync(Optional.of(offsets));
+        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = commitRequestManager.commitAsync(offsets);
         assertEquals(1, commitRequestManager.unsentOffsetCommitRequests().size());
         List<NetworkClientDelegate.FutureCompletionHandler> pollResults = assertPoll(1, commitRequestManager);
         pollResults.forEach(v -> v.onComplete(mockOffsetCommitResponse(
@@ -395,7 +395,7 @@ public class CommitRequestManagerTest {
         doReturn(offsets).when(subscriptionState).allConsumed();
 
         CommitRequestManager commitRequestManager = create(true, 100);
-        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = commitRequestManager.commitAsync(Optional.empty());
+        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = commitRequestManager.commitAsync(offsets);
         assertEquals(1, commitRequestManager.unsentOffsetCommitRequests().size());
         List<NetworkClientDelegate.FutureCompletionHandler> pollResults = assertPoll(1, commitRequestManager);
         pollResults.forEach(v -> v.onComplete(mockOffsetCommitResponse(
@@ -404,7 +404,6 @@ public class CommitRequestManagerTest {
             (short) 1,
             Errors.NONE)));
 
-        verify(subscriptionState).allConsumed();
         verify(metadata).updateLastSeenEpochIfNewer(tp, 1);
         assertTrue(future.isDone());
         Map<TopicPartition, OffsetAndMetadata> commitOffsets = assertDoesNotThrow(() -> future.get());
@@ -417,9 +416,8 @@ public class CommitRequestManagerTest {
         doReturn(Map.of()).when(subscriptionState).allConsumed();
 
         CommitRequestManager commitRequestManager = create(true, 100);
-        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = commitRequestManager.commitAsync(Optional.empty());
+        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = commitRequestManager.commitAsync(Collections.emptyMap());
 
-        verify(subscriptionState).allConsumed();
         assertTrue(future.isDone());
         Map<TopicPartition, OffsetAndMetadata> commitOffsets = assertDoesNotThrow(() -> future.get());
         assertTrue(commitOffsets.isEmpty());
@@ -580,7 +578,7 @@ public class CommitRequestManagerTest {
             new OffsetAndMetadata(0));
 
         // Async commit that won't be retried.
-        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> commitResult = commitRequestManager.commitAsync(Optional.of(offsets));
+        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> commitResult = commitRequestManager.commitAsync(offsets);
 
         NetworkClientDelegate.PollResult res = commitRequestManager.poll(time.milliseconds());
         assertEquals(1, res.unsentRequests.size());
@@ -938,7 +936,7 @@ public class CommitRequestManagerTest {
             new OffsetAndMetadata(0));
 
         // Send async commit (not expected to be retried).
-        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> commitResult = commitRequestManager.commitAsync(Optional.of(offsets));
+        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> commitResult = commitRequestManager.commitAsync(offsets);
         completeOffsetCommitRequestWithError(commitRequestManager, error);
         NetworkClientDelegate.PollResult res = commitRequestManager.poll(time.milliseconds());
         assertEquals(0, res.unsentRequests.size());
@@ -1025,7 +1023,7 @@ public class CommitRequestManagerTest {
 
         // Send async commit request that fails with retriable error (not expected to be retried).
         Errors retriableError = Errors.COORDINATOR_NOT_AVAILABLE;
-        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> commitResult = commitRequestManager.commitAsync(Optional.of(offsets));
+        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> commitResult = commitRequestManager.commitAsync(offsets);
         completeOffsetCommitRequestWithError(commitRequestManager, retriableError);
         NetworkClientDelegate.PollResult res = commitRequestManager.poll(time.milliseconds());
         assertEquals(0, res.unsentRequests.size());
@@ -1331,7 +1329,7 @@ public class CommitRequestManagerTest {
                 new OffsetAndMetadata(0));
 
         long commitCreationTimeMs = time.milliseconds();
-        commitRequestManager.commitAsync(Optional.of(offsets));
+        commitRequestManager.commitAsync(offsets);
 
         NetworkClientDelegate.PollResult res = commitRequestManager.poll(time.milliseconds());
         assertEquals(1, res.unsentRequests.size());
@@ -1505,7 +1503,7 @@ public class CommitRequestManagerTest {
         Map<TopicPartition, OffsetAndMetadata> offsets = Collections.singletonMap(new TopicPartition("topic", 1),
             new OffsetAndMetadata(0));
 
-        commitRequestManager.commitAsync(Optional.of(offsets));
+        commitRequestManager.commitAsync(offsets);
         commitRequestManager.signalClose();
         NetworkClientDelegate.PollResult res = commitRequestManager.poll(time.milliseconds());
         assertEquals(1, res.unsentRequests.size());

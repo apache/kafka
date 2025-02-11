@@ -488,10 +488,10 @@ public class ApplicationEventProcessorTest {
     @MethodSource("offsetsGenerator")
     public void testAsyncCommitEventWithOffsets(Optional<Map<TopicPartition, OffsetAndMetadata>> offsets) {
         AsyncCommitEvent event = new AsyncCommitEvent(offsets);
-        Optional<Map<TopicPartition, OffsetAndMetadata>> actualOffsets = offsets.isEmpty() ? Optional.of(Collections.emptyMap()) : offsets;
+        Map<TopicPartition, OffsetAndMetadata> actualOffsets = offsets.orElse(Collections.emptyMap());
 
         setupProcessor(true);
-        doReturn(CompletableFuture.completedFuture(offsets.orElse(Map.of()))).when(commitRequestManager).commitAsync(actualOffsets);
+        doReturn(CompletableFuture.completedFuture(actualOffsets)).when(commitRequestManager).commitAsync(actualOffsets);
         doReturn(Collections.emptyMap()).when(subscriptionState).allConsumed();
 
         processor.process(event);

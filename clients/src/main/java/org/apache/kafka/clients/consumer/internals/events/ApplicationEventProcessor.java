@@ -240,8 +240,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
 
         try {
             CommitRequestManager manager = requestManagers.commitRequestManager.get();
-            Optional<Map<TopicPartition, OffsetAndMetadata>> offsets = event.offsets().isEmpty() ?
-                Optional.of(subscriptions.allConsumed()) : event.offsets();
+            Map<TopicPartition, OffsetAndMetadata> offsets = event.offsets().orElseGet(subscriptions::allConsumed);
             event.markOffsetsReady();
             CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = manager.commitAsync(offsets);
             future.whenComplete(complete(event.future()));

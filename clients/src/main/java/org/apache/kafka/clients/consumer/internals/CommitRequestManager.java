@@ -387,14 +387,13 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
      * exceptionally depending on the response. If the request fails with a retriable error, the
      * future will be completed with a {@link RetriableCommitFailedException}.
      */
-    public CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> commitAsync(final Optional<Map<TopicPartition, OffsetAndMetadata>> offsets) {
-        Map<TopicPartition, OffsetAndMetadata> commitOffsets = offsets.orElseGet(subscriptions::allConsumed);
-        if (commitOffsets.isEmpty()) {
+    public CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> commitAsync(final Map<TopicPartition, OffsetAndMetadata> offsets) {
+        if (offsets.isEmpty()) {
             log.debug("Skipping commit of empty offsets");
             return CompletableFuture.completedFuture(Map.of());
         }
-        maybeUpdateLastSeenEpochIfNewer(commitOffsets);
-        OffsetCommitRequestState commitRequest = createOffsetCommitRequest(commitOffsets, Long.MAX_VALUE);
+        maybeUpdateLastSeenEpochIfNewer(offsets);
+        OffsetCommitRequestState commitRequest = createOffsetCommitRequest(offsets, Long.MAX_VALUE);
         pendingRequests.addOffsetCommitRequest(commitRequest);
 
         CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> asyncCommitResult = new CompletableFuture<>();
@@ -402,7 +401,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             if (error != null) {
                 asyncCommitResult.completeExceptionally(commitAsyncExceptionForError(error));
             } else {
-                asyncCommitResult.complete(commitOffsets);
+                asyncCommitResult.complete(offsets);
             }
         });
         return asyncCommitResult;
