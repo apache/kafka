@@ -134,7 +134,7 @@ public class BrokerRegistrationTrackerTest {
             setIncarnationId(INCARNATION_ID).
             setLogDirs(Collections.emptyList()));
         ctx.onMetadataUpdate(delta);
-        // No calls are made because MetadataVersion is 3.0-IV1 initially
+        // No calls are made because MetadataVersion is older than IBP_3_7_IV2 initially
         assertEquals(0, ctx.numCalls.get());
 
         delta = ctx.newDelta();

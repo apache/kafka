@@ -295,11 +295,6 @@ public enum Feature {
         }
 
         for (MetadataVersion metadataVersion: MetadataVersion.values()) {
-            // Only checking the kraft metadata versions.
-            if (metadataVersion.compareTo(MetadataVersion.MINIMUM_VERSION) < 0) {
-                continue;
-            }
-
             defaultVersion = feature.defaultVersion(metadataVersion);
             for (Map.Entry<String, Short> dependency: defaultVersion.dependencies().entrySet()) {
                 String dependencyFeatureName = dependency.getKey();

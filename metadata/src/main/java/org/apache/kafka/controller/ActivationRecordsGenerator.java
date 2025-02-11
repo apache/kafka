@@ -153,7 +153,7 @@ public class ActivationRecordsGenerator {
      * </p>
      * If the log is empty, write the bootstrap records. If the log is not empty, do some validation and
      * possibly write some records to put the log into a valid state. For bootstrap records, if KIP-868
-     * metadata transactions are supported, ues them. Otherwise, write the bootstrap records as an
+     * metadata transactions are supported, use them. Otherwise, write the bootstrap records as an
      * atomic batch. The single atomic batch can be problematic if the bootstrap records are too large
      * (e.g., lots of SCRAM credentials). If ZK migrations are enabled, the activation records will
      * include a ZkMigrationState record regardless of whether the log was empty or not.

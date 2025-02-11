@@ -221,8 +221,6 @@ class DefaultAlterPartitionManager(
       .setBrokerEpoch(brokerEpoch)
 
     inflightAlterPartitionItems.groupBy(_.topicIdPartition.topicId).foreach { case (topicId, items) =>
-      // Both the topic name and the topic id are set here because at this stage
-      // we don't know which version of the request will be used.
       val topicData = new AlterPartitionRequestData.TopicData().setTopicId(topicId)
       message.topics.add(topicData)
 
