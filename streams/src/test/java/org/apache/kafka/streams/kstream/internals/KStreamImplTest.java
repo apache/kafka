@@ -1630,7 +1630,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.process(processorSupplier, (String[]) null));
-        assertThat(exception.getMessage(), equalTo("stateStoreNames can't be a null array"));
+        assertThat(exception.getMessage(), equalTo("stateStoreNames cannot be a null array"));
     }
 
     @Test
@@ -1638,7 +1638,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.process(processorSupplier, (String) null));
-        assertThat(exception.getMessage(), equalTo("stateStoreNames can't be null"));
+        assertThat(exception.getMessage(), equalTo("state store name cannot be null"));
     }
 
     @Test
@@ -1646,7 +1646,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.process(processorSupplier, Named.as("processor"), (String[]) null));
-        assertThat(exception.getMessage(), equalTo("stateStoreNames can't be a null array"));
+        assertThat(exception.getMessage(), equalTo("stateStoreNames cannot be a null array"));
     }
 
     @Test
@@ -1654,7 +1654,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.process(processorSupplier, Named.as("processor"), (String) null));
-        assertThat(exception.getMessage(), equalTo("stateStoreNames can't be null"));
+        assertThat(exception.getMessage(), equalTo("state store name cannot be null"));
     }
 
     @Test
@@ -1662,7 +1662,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.process(processorSupplier, (Named) null));
-        assertThat(exception.getMessage(), equalTo("named can't be null"));
+        assertThat(exception.getMessage(), equalTo("named cannot be null"));
     }
 
     @Test
@@ -1670,7 +1670,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.process(processorSupplier, (Named) null, "storeName"));
-        assertThat(exception.getMessage(), equalTo("named can't be null"));
+        assertThat(exception.getMessage(), equalTo("named cannot be null"));
     }
 
     @Test
@@ -1713,7 +1713,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.processValues(fixedKeyProcessorSupplier, (String[]) null));
-        assertThat(exception.getMessage(), equalTo("stateStoreNames can't be a null array"));
+        assertThat(exception.getMessage(), equalTo("stateStoreNames cannot be a null array"));
     }
 
     @Test
@@ -1721,7 +1721,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.processValues(fixedKeyProcessorSupplier, (String) null));
-        assertThat(exception.getMessage(), equalTo("stateStoreNames can't be null"));
+        assertThat(exception.getMessage(), equalTo("state store name cannot be null"));
     }
 
     @Test
@@ -1729,7 +1729,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.processValues(fixedKeyProcessorSupplier, Named.as("processor"), (String[]) null));
-        assertThat(exception.getMessage(), equalTo("stateStoreNames can't be a null array"));
+        assertThat(exception.getMessage(), equalTo("stateStoreNames cannot be a null array"));
     }
 
     @Test
@@ -1737,7 +1737,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.processValues(fixedKeyProcessorSupplier, Named.as("processor"), (String) null));
-        assertThat(exception.getMessage(), equalTo("stateStoreNames can't be null"));
+        assertThat(exception.getMessage(), equalTo("state store name cannot be null"));
     }
 
     @Test
@@ -1745,7 +1745,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.processValues(fixedKeyProcessorSupplier, (Named) null));
-        assertThat(exception.getMessage(), equalTo("named can't be null"));
+        assertThat(exception.getMessage(), equalTo("named cannot be null"));
     }
 
     @Test
@@ -1753,7 +1753,7 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.processValues(fixedKeyProcessorSupplier, (Named) null, "storeName"));
-        assertThat(exception.getMessage(), equalTo("named can't be null"));
+        assertThat(exception.getMessage(), equalTo("named cannot be null"));
     }
 
     @Test
