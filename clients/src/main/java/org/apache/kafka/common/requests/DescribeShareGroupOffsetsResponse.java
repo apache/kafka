@@ -17,11 +17,8 @@
 
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.message.DescribeShareGroupOffsetsResponseData;
 import org.apache.kafka.common.message.DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup;
-import org.apache.kafka.common.message.DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition;
-import org.apache.kafka.common.message.DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
@@ -34,66 +31,42 @@ import java.util.Map;
 
 public class DescribeShareGroupOffsetsResponse extends AbstractResponse {
     private final DescribeShareGroupOffsetsResponseData data;
-    private final Map<String, Errors> groupLevelErrors = new HashMap<>();
+    private final Map<String, Throwable> groupLevelErrors = new HashMap<>();
 
     public DescribeShareGroupOffsetsResponse(DescribeShareGroupOffsetsResponseData data) {
         super(ApiKeys.DESCRIBE_SHARE_GROUP_OFFSETS);
         this.data = data;
         for (DescribeShareGroupOffsetsResponseGroup group : data.groups()) {
-            this.groupLevelErrors.put(group.groupId(), Errors.forCode(group.errorCode()));
+            if (group.errorCode() != Errors.NONE.code()) {
+                this.groupLevelErrors.put(group.groupId(), Errors.forCode(group.errorCode()).exception(group.errorMessage()));
+            }
         }
     }
 
+    // Builds a response with the same group-level error for all groups and empty topics lists for all groups
     public DescribeShareGroupOffsetsResponse(int throttleTimeMs,
-                                             Map<String, Throwable> errorsMap,
-                                             Map<String, Map<TopicIdPartition, DescribeShareGroupOffsetsResponsePartition>> responseData) {
+                                             List<String> groupIds,
+                                             Throwable allGroupsException) {
         super(ApiKeys.DESCRIBE_SHARE_GROUP_OFFSETS);
+        short errorCode = Errors.forException(allGroupsException).code();
         List<DescribeShareGroupOffsetsResponseGroup> groupList = new ArrayList<>();
-        for (Map.Entry<String, Map<TopicIdPartition, DescribeShareGroupOffsetsResponsePartition>> groupEntry : responseData.entrySet()) {
-            String groupId = groupEntry.getKey();
-            Map<TopicIdPartition, DescribeShareGroupOffsetsResponsePartition> partitionDataMap = groupEntry.getValue();
-            Map<String, DescribeShareGroupOffsetsResponseTopic> topicDataMap = new HashMap<>();
-            for (Map.Entry<TopicIdPartition, DescribeShareGroupOffsetsResponsePartition> partitionEntry : partitionDataMap.entrySet()) {
-                String topicName = partitionEntry.getKey().topic();
-                DescribeShareGroupOffsetsResponseTopic topicData =
-                    topicDataMap.getOrDefault(topicName,
-                        new DescribeShareGroupOffsetsResponseTopic()
-                            .setTopicName(topicName)
-                            .setTopicId(partitionEntry.getKey().topicId()));
-                if (partitionEntry.getValue().errorCode() == Errors.NONE.code()) {
-                    topicData.partitions().add(new DescribeShareGroupOffsetsResponsePartition()
-                        .setPartitionIndex(partitionEntry.getKey().partition())
-                        .setStartOffset(partitionEntry.getValue().startOffset())
-                        .setLeaderEpoch(partitionEntry.getValue().leaderEpoch()));
-                } else {
-                    topicData.partitions().add(new DescribeShareGroupOffsetsResponsePartition()
-                        .setPartitionIndex(partitionEntry.getKey().partition())
-                        .setErrorCode(partitionEntry.getValue().errorCode())
-                        .setErrorMessage(partitionEntry.getValue().errorMessage()));
-                }
-            }
-            short errorCode = Errors.forException(errorsMap.get(groupId)).code();
+        groupIds.forEach(groupId -> {
             groupList.add(new DescribeShareGroupOffsetsResponseGroup()
                 .setGroupId(groupId)
-                .setTopics(new ArrayList<>(topicDataMap.values()))
                 .setErrorCode(errorCode)
-                .setErrorMessage(errorCode == Errors.UNKNOWN_SERVER_ERROR.code() ? Errors.forCode(errorCode).message() : errorsMap.get(groupId).getMessage()));
-            groupLevelErrors.put(groupId, Errors.forException(errorsMap.get(groupId)));
-        }
+                .setErrorMessage(errorCode == Errors.UNKNOWN_SERVER_ERROR.code() ? Errors.forCode(errorCode).message() : allGroupsException.getMessage()));
+            groupLevelErrors.put(groupId, allGroupsException);
+        });
         this.data = new DescribeShareGroupOffsetsResponseData()
             .setThrottleTimeMs(throttleTimeMs)
             .setGroups(groupList);
     }
 
     public boolean hasGroupError(String groupId) {
-        Errors groupError = groupLevelErrors.get(groupId);
-        if (groupError != null) {
-            return groupError != Errors.NONE;
-        }
-        return false;
+        return groupLevelErrors.containsKey(groupId);
     }
 
-    public Errors groupError(String groupId) {
+    public Throwable groupError(String groupId) {
         return groupLevelErrors.get(groupId);
     }
 
@@ -105,9 +78,7 @@ public class DescribeShareGroupOffsetsResponse extends AbstractResponse {
     @Override
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> counts = new HashMap<>();
-        for (Map.Entry<String, Errors> entry: groupLevelErrors.entrySet()) {
-            updateErrorCounts(counts, entry.getValue());
-        }
+        groupLevelErrors.values().forEach(exception -> updateErrorCounts(counts, Errors.forException(exception)));
         for (DescribeShareGroupOffsetsResponseGroup group : data.groups()) {
             group.topics().forEach(topic ->
                 topic.partitions().forEach(partition ->

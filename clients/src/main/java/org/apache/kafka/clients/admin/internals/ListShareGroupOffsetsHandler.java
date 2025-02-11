@@ -73,14 +73,6 @@ public class ListShareGroupOffsetsHandler extends AdminApiHandler.Batched<Coordi
         return lookupStrategy;
     }
 
-    private void validateKeys(Set<CoordinatorKey> groupIds) {
-        Set<CoordinatorKey> keys = coordinatorKeys(groupSpecs.keySet());
-        if (!keys.containsAll(groupIds)) {
-            throw new IllegalArgumentException("Received unexpected group ids " + groupIds +
-                " (expected one of " + keys + ")");
-        }
-    }
-
     @Override
     public DescribeShareGroupOffsetsRequest.Builder buildBatchedRequest(int coordinatorId, Set<CoordinatorKey> keys) {
         validateKeys(keys);
@@ -159,16 +151,25 @@ public class ListShareGroupOffsetsHandler extends AdminApiHandler.Batched<Coordi
             .collect(Collectors.toSet());
     }
 
+    private void validateKeys(Set<CoordinatorKey> groupIds) {
+        Set<CoordinatorKey> keys = coordinatorKeys(groupSpecs.keySet());
+        if (!keys.containsAll(groupIds)) {
+            throw new IllegalArgumentException("Received unexpected group ids " + groupIds +
+                " (expected one of " + keys + ")");
+        }
+    }
+
     private void handleGroupError(CoordinatorKey groupId,
-                                  Errors error,
+                                  Throwable exception,
                                   Map<CoordinatorKey, Throwable> failed,
                                   List<CoordinatorKey> groupsToUnmap) {
+        Errors error = Errors.forException(exception);
         switch (error) {
             case GROUP_AUTHORIZATION_FAILED:
             case UNKNOWN_MEMBER_ID:
             case STALE_MEMBER_EPOCH:
                 log.debug("`DescribeShareGroupOffsets` request for group id {} failed due to error {}", groupId.idValue, error);
-                failed.put(groupId, error.exception());
+                failed.put(groupId, exception);
                 break;
 
             case COORDINATOR_LOAD_IN_PROGRESS:
@@ -188,7 +189,7 @@ public class ListShareGroupOffsetsHandler extends AdminApiHandler.Batched<Coordi
 
             default:
                 log.error("`DescribeShareGroupOffsets` request for group id {} failed due to unexpected error {}", groupId.idValue, error);
-                failed.put(groupId, error.exception());
+                failed.put(groupId, exception);
         }
     }
 }

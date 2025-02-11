@@ -17,19 +17,15 @@
 
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.message.DescribeShareGroupOffsetsRequestData;
 import org.apache.kafka.common.message.DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup;
 import org.apache.kafka.common.message.DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup;
-import org.apache.kafka.common.message.DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 
 import java.nio.ByteBuffer;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Collectors;
 
 public class DescribeShareGroupOffsetsRequest extends AbstractRequest {
@@ -78,15 +74,7 @@ public class DescribeShareGroupOffsetsRequest extends AbstractRequest {
     @Override
     public DescribeShareGroupOffsetsResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         // Sets the exception as the group-level error code for all groups, with empty partitions data for all groups
-        Map<TopicIdPartition, DescribeShareGroupOffsetsResponsePartition> responsePartitions = new HashMap<>();
-        List<String> groupIds = groupIds();
-        Map<String, Throwable> errorsMap = new HashMap<>(groupIds.size());
-        Map<String, Map<TopicIdPartition, DescribeShareGroupOffsetsResponsePartition>> partitionMap = new HashMap<>(groupIds.size());
-        for (String g : groupIds) {
-            errorsMap.put(g, e);
-            partitionMap.put(g, responsePartitions);
-        }
-        return new DescribeShareGroupOffsetsResponse(throttleTimeMs, errorsMap, partitionMap);
+        return new DescribeShareGroupOffsetsResponse(throttleTimeMs, groupIds(), e);
     }
 
     @Override
