@@ -133,11 +133,11 @@ class ShareConsumerTest(VerifiableShareConsumerTest):
         self.await_acknowledged_messages(consumer, min_messages=total_messages, timeout_sec=self.default_timeout_sec)
 
         assert consumer.total_consumed() >= producer.num_acked
-        assert consumer.total_acknowledged() == producer.num_acked
+        assert consumer.total_acknowledged_successfully() == producer.num_acked
 
         for event_handler in consumer.event_handlers.values():
             assert event_handler.total_consumed > 0
-            assert event_handler.total_acknowledged > 0
+            assert event_handler.total_acknowledged_successfully > 0
 
         producer.stop()
         consumer.stop_all()
@@ -161,11 +161,11 @@ class ShareConsumerTest(VerifiableShareConsumerTest):
         self.await_acknowledged_messages(consumer, min_messages=total_messages, timeout_sec=self.default_timeout_sec)
 
         assert consumer.total_consumed() >= producer.num_acked
-        assert consumer.total_acknowledged() == producer.num_acked
+        assert consumer.total_acknowledged_successfully() == producer.num_acked
 
         for event_handler in consumer.event_handlers.values():
             assert event_handler.total_consumed > 0
-            assert event_handler.total_acknowledged > 0
+            assert event_handler.total_acknowledged_successfully > 0
             for topic_partition in self.get_topic_partitions(self.TOPIC2):
                 assert topic_partition in event_handler.consumed_per_partition
                 assert event_handler.consumed_per_partition[topic_partition] > 0

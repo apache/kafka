@@ -507,7 +507,15 @@ class BrokerServer(
           config,
           sharedServer.metadataPublishingFaultHandler,
           "broker",
-          clientQuotaMetadataManager),
+          clientQuotaMetadataManager,
+        ),
+        new DynamicTopicClusterQuotaPublisher(
+          clusterId,
+          config,
+          sharedServer.metadataPublishingFaultHandler,
+          "broker",
+          quotaManagers,
+        ),
         new ScramPublisher(
           config,
           sharedServer.metadataPublishingFaultHandler,
