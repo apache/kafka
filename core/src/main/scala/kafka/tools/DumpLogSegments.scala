@@ -21,7 +21,6 @@ import com.fasterxml.jackson.databind.JsonNode
 
 import java.io._
 import com.fasterxml.jackson.databind.node.{IntNode, JsonNodeFactory, ObjectNode, TextNode}
-import kafka.log._
 import kafka.utils.CoreUtils
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.message.ConsumerProtocolAssignment
@@ -49,7 +48,7 @@ import org.apache.kafka.metadata.bootstrap.BootstrapDirectory
 import org.apache.kafka.snapshot.Snapshots
 import org.apache.kafka.server.log.remote.metadata.storage.serialization.RemoteLogMetadataSerde
 import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
-import org.apache.kafka.storage.internals.log.{CorruptSnapshotException, LogFileUtils, OffsetIndex, ProducerStateManager, TimeIndex, TransactionIndex}
+import org.apache.kafka.storage.internals.log.{CorruptSnapshotException, LogFileUtils, OffsetIndex, ProducerStateManager, TimeIndex, TransactionIndex, UnifiedLog => JUnifiedLog}
 import org.apache.kafka.tools.api.{Decoder, StringDecoder}
 
 import java.nio.ByteBuffer
@@ -77,16 +76,16 @@ object DumpLogSegments {
       val filename = file.getName
       val suffix = filename.substring(filename.lastIndexOf("."))
       suffix match {
-        case UnifiedLog.LogFileSuffix | Snapshots.SUFFIX =>
+        case JUnifiedLog.LOG_FILE_SUFFIX | Snapshots.SUFFIX =>
           dumpLog(file, opts.shouldPrintDataLog, nonConsecutivePairsForLogFilesMap, opts.isDeepIteration,
             opts.messageParser, opts.skipRecordMetadata, opts.maxBytes)
-        case UnifiedLog.IndexFileSuffix =>
+        case JUnifiedLog.INDEX_FILE_SUFFIX =>
           dumpIndex(file, opts.indexSanityOnly, opts.verifyOnly, misMatchesForIndexFilesMap, opts.maxMessageSize)
-        case UnifiedLog.TimeIndexFileSuffix =>
+        case JUnifiedLog.TIME_INDEX_FILE_SUFFIX =>
           dumpTimeIndex(file, opts.indexSanityOnly, opts.verifyOnly, timeIndexDumpErrors)
         case LogFileUtils.PRODUCER_SNAPSHOT_FILE_SUFFIX =>
           dumpProducerIdSnapshot(file)
-        case UnifiedLog.TxnIndexFileSuffix =>
+        case JUnifiedLog.TXN_INDEX_FILE_SUFFIX =>
           dumpTxnIndex(file)
         case _ =>
           System.err.println(s"Ignoring unknown file $file")
@@ -111,7 +110,7 @@ object DumpLogSegments {
   }
 
   private def dumpTxnIndex(file: File): Unit = {
-    val index = new TransactionIndex(UnifiedLog.offsetFromFile(file), file)
+    val index = new TransactionIndex(JUnifiedLog.offsetFromFile(file), file)
     for (abortedTxn <- index.allAbortedTxns.asScala) {
       println(s"version: ${abortedTxn.version} producerId: ${abortedTxn.producerId} firstOffset: ${abortedTxn.firstOffset} " +
         s"lastOffset: ${abortedTxn.lastOffset} lastStableOffset: ${abortedTxn.lastStableOffset}")
@@ -144,7 +143,7 @@ object DumpLogSegments {
                                misMatchesForIndexFilesMap: mutable.Map[String, List[(Long, Long)]],
                                maxMessageSize: Int): Unit = {
     val startOffset = file.getName.split("\\.")(0).toLong
-    val logFile = new File(file.getAbsoluteFile.getParent, file.getName.split("\\.")(0) + UnifiedLog.LogFileSuffix)
+    val logFile = new File(file.getAbsoluteFile.getParent, file.getName.split("\\.")(0) + JUnifiedLog.LOG_FILE_SUFFIX)
     val fileRecords = FileRecords.open(logFile, false)
     val index = new OffsetIndex(file, startOffset, -1, false)
 
@@ -185,9 +184,9 @@ object DumpLogSegments {
                                    verifyOnly: Boolean,
                                    timeIndexDumpErrors: TimeIndexDumpErrors): Unit = {
     val startOffset = file.getName.split("\\.")(0).toLong
-    val logFile = new File(file.getAbsoluteFile.getParent, file.getName.split("\\.")(0) + UnifiedLog.LogFileSuffix)
+    val logFile = new File(file.getAbsoluteFile.getParent, file.getName.split("\\.")(0) + JUnifiedLog.LOG_FILE_SUFFIX)
     val fileRecords = FileRecords.open(logFile, false)
-    val indexFile = new File(file.getAbsoluteFile.getParent, file.getName.split("\\.")(0) + UnifiedLog.IndexFileSuffix)
+    val indexFile = new File(file.getAbsoluteFile.getParent, file.getName.split("\\.")(0) + JUnifiedLog.INDEX_FILE_SUFFIX)
     val index = new OffsetIndex(indexFile, startOffset, -1, false)
     val timeIndex = new TimeIndex(file, startOffset, -1, false)
 
@@ -268,7 +267,7 @@ object DumpLogSegments {
                       parser: MessageParser[_, _],
                       skipRecordMetadata: Boolean,
                       maxBytes: Int): Unit = {
-    if (file.getName.endsWith(UnifiedLog.LogFileSuffix)) {
+    if (file.getName.endsWith(JUnifiedLog.LOG_FILE_SUFFIX)) {
       val startOffset = file.getName.split("\\.")(0).toLong
       println(s"Log starting offset: $startOffset")
     } else if (file.getName.endsWith(Snapshots.SUFFIX)) {

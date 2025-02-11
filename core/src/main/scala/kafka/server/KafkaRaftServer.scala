@@ -18,7 +18,6 @@ package kafka.server
 
 import java.io.File
 import java.util.concurrent.CompletableFuture
-import kafka.log.UnifiedLog
 import kafka.utils.{CoreUtils, Logging, Mx4jLoader}
 import org.apache.kafka.common.config.{ConfigDef, ConfigResource}
 import org.apache.kafka.common.internals.Topic
@@ -31,7 +30,7 @@ import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsem
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.server.{ProcessRole, ServerSocketFactory}
 import org.apache.kafka.server.config.ServerTopicConfigSynonyms
-import org.apache.kafka.storage.internals.log.LogConfig
+import org.apache.kafka.storage.internals.log.{LogConfig, UnifiedLog}
 import org.slf4j.Logger
 
 import java.util
