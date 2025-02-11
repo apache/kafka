@@ -28,7 +28,7 @@ import java.util.concurrent.TimeUnit;
 import static org.apache.kafka.server.log.remote.storage.LocalTieredStorageEvent.EventType.DELETE_SEGMENT;
 
 public abstract class BaseDeleteSegmentsTest extends TieredStorageTestHarness {
-    
+
     @Override
     public int brokerCount() {
         return 1;
