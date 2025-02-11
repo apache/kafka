@@ -20,7 +20,6 @@ from ducktape.tests.test import Test
 from ducktape.mark.resource import cluster
 
 from kafkatest.services.kafka import config_property
-from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService, quorum
 from kafkatest.services.log_compaction_tester import LogCompactionTester
 
