@@ -1355,7 +1355,7 @@ public class ReplicationControlManager {
      * Generate the appropriate records to handle a broker being fenced.
      *
      * First, we remove this broker from any ISR. Then we generate a
-     * FenceBrokerRecord.
+     * BrokerRegistrationChangeRecord.
      *
      * @param brokerId      The broker id.
      * @param records       The record list to append to.
@@ -1397,7 +1397,7 @@ public class ReplicationControlManager {
     /**
      * Generate the appropriate records to handle a broker becoming unfenced.
      *
-     * First, we create an UnfenceBrokerRecord. Then, we check if there are any
+     * First, we create a BrokerRegistrationChangeRecord. Then, we check if there are any
      * partitions that don't currently have a leader that should be led by the newly
      * unfenced broker.
      *
