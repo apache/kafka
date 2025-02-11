@@ -560,13 +560,15 @@ object TestUtils extends Logging {
                            keyDeserializer: Deserializer[K] = new ByteArrayDeserializer,
                            valueDeserializer: Deserializer[V] = new ByteArrayDeserializer): Consumer[K, V] = {
     val consumerProps = new Properties
+    if (!groupProtocol.name.equalsIgnoreCase(GroupProtocol.SHARE.name)) {
+      consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, autoOffsetReset)
+      consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, enableAutoCommit.toString)
+      consumerProps.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, if (readCommitted) "read_committed" else "read_uncommitted")
+    }
     consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     consumerProps.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.toString)
-    consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, autoOffsetReset)
     consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, groupId)
-    consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, enableAutoCommit.toString)
     consumerProps.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, maxPollRecords.toString)
-    consumerProps.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, if (readCommitted) "read_committed" else "read_uncommitted")
     consumerProps ++= JaasTestUtils.consumerSecurityConfigs(securityProtocol, OptionConverters.toJava(trustStoreFile), OptionConverters.toJava(saslProperties))
     new KafkaConsumer[K, V](consumerProps, keyDeserializer, valueDeserializer)
   }
