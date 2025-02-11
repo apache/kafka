@@ -42,7 +42,6 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -258,8 +257,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
 
         try {
             CommitRequestManager manager = requestManagers.commitRequestManager.get();
-            Optional<Map<TopicPartition, OffsetAndMetadata>> offsets = event.offsets().isEmpty() ?
-                Optional.of(subscriptions.allConsumed()) : event.offsets();
+            Map<TopicPartition, OffsetAndMetadata> offsets = event.offsets().orElseGet(subscriptions::allConsumed);
             event.markOffsetsReady();
             CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = manager.commitSync(offsets, event.deadlineMs());
             future.whenComplete(complete(event.future()));

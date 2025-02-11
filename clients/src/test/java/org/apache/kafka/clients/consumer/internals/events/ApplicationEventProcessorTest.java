@@ -447,7 +447,7 @@ public class ApplicationEventProcessorTest {
     @MethodSource("offsetsGenerator")
     public void testSyncCommitEvent(Optional<Map<TopicPartition, OffsetAndMetadata>> offsets) {
         SyncCommitEvent event = new SyncCommitEvent(offsets, 12345);
-        Optional<Map<TopicPartition, OffsetAndMetadata>> actualOffsets = offsets.isEmpty() ? Optional.of(Collections.emptyMap()) : offsets;
+        Map<TopicPartition, OffsetAndMetadata> actualOffsets = offsets.orElse(Collections.emptyMap());
 
         setupProcessor(true);
         doReturn(CompletableFuture.completedFuture(offsets.orElse(Map.of()))).when(commitRequestManager).commitSync(actualOffsets, 12345);
@@ -457,7 +457,7 @@ public class ApplicationEventProcessorTest {
         verify(commitRequestManager).commitSync(actualOffsets, 12345);
         Map<TopicPartition, OffsetAndMetadata> committedOffsets = assertDoesNotThrow(() -> event.future().get());
         assertTrue(event.offsetsReady.isDone());
-        assertEquals(offsets.orElse(Map.of()), committedOffsets);
+        assertEquals(actualOffsets, committedOffsets);
     }
 
     @Test
@@ -479,7 +479,7 @@ public class ApplicationEventProcessorTest {
         doReturn(future).when(commitRequestManager).commitSync(any(), anyLong());
         processor.process(event);
 
-        verify(commitRequestManager).commitSync(Optional.empty(), 12345);
+        verify(commitRequestManager).commitSync(Collections.emptyMap(), 12345);
         assertTrue(event.offsetsReady.isDone());
         assertFutureThrows(IllegalStateException.class, event.future());
     }
@@ -522,7 +522,7 @@ public class ApplicationEventProcessorTest {
         doReturn(future).when(commitRequestManager).commitAsync(any());
         processor.process(event);
 
-        verify(commitRequestManager).commitAsync(Optional.empty());
+        verify(commitRequestManager).commitAsync(Collections.emptyMap());
         assertTrue(event.offsetsReady.isDone());
         assertFutureThrows(IllegalStateException.class, event.future());
     }
