@@ -463,7 +463,7 @@ public class InternalTopologyBuilder {
                                 final Deserializer<?> valDeserializer,
                                 final String... topics) {
         verifyName(name);
-        Objects.requireNonNull(topics, "topics cannot be null");
+        Objects.requireNonNull(topics, "topics cannot be a null array");
         if (topics.length == 0) {
             throw new TopologyException("topics cannot be empty");
         }
@@ -561,18 +561,18 @@ public class InternalTopologyBuilder {
     }
 
     private void verifyParents(final String processorName, final String... predecessorNames) {
-        Objects.requireNonNull(predecessorNames, "predecessorNames must not be null");
+        Objects.requireNonNull(predecessorNames, "predecessorNames cannot be a null array");
         if (predecessorNames.length == 0) {
             throw new TopologyException("predecessorNames cannot be empty");
         }
 
         for (final String predecessor : predecessorNames) {
-            Objects.requireNonNull(predecessor, "predecessor name cannot be null");
+            Objects.requireNonNull(predecessor, "parent name cannot be null");
             if (!nodeFactories.containsKey(predecessor)) {
                 if (predecessor.equals(processorName)) {
-                    throw new TopologyException("Predecessor " + predecessor + " is unknown (self-reference).");
+                    throw new TopologyException("Parent node " + predecessor + " is unknown (self-reference).");
                 }
-                throw new TopologyException("Predecessor " + predecessor + " is unknown.");
+                throw new TopologyException("Parent node " + predecessor + " is unknown.");
             }
             if (nodeToSinkTopic.containsKey(predecessor)) {
                 throw new TopologyException("Sink " + predecessor + " cannot be used a parent.");
@@ -582,6 +582,7 @@ public class InternalTopologyBuilder {
 
     public final void addStateStore(final StoreBuilder<?> storeBuilder,
                                     final String... processorNames) {
+        Objects.requireNonNull(storeBuilder, "storeBuilder cannot be null");
         addStateStore(StoreBuilderWrapper.wrapStoreBuilder(storeBuilder), false, processorNames);
     }
 
@@ -593,21 +594,24 @@ public class InternalTopologyBuilder {
     public final void addStateStore(final StoreFactory storeFactory,
                                     final boolean allowOverride,
                                     final String... processorNames) {
-        Objects.requireNonNull(storeFactory, "stateStoreFactory can't be null");
-        final StoreFactory stateFactory = stateFactories.get(storeFactory.storeName());
+        Objects.requireNonNull(storeFactory, "stateStoreFactory cannot be null");
+        final String storeName = storeFactory.storeName();
+        Objects.requireNonNull(storeName, "state store name cannot be null");
+
+        final StoreFactory stateFactory = stateFactories.get(storeName);
         if (!allowOverride && stateFactory != null && !stateFactory.isCompatibleWith(storeFactory)) {
-            throw new TopologyException("A different StateStore has already been added with the name " + storeFactory.storeName());
+            throw new TopologyException("A different StateStore has already been added with the name " + storeName);
         }
-        if (globalStateBuilders.containsKey(storeFactory.storeName())) {
-            throw new TopologyException("A different GlobalStateStore has already been added with the name " + storeFactory.storeName());
+        if (globalStateBuilders.containsKey(storeName)) {
+            throw new TopologyException("A different GlobalStateStore has already been added with the name " + storeName);
         }
 
-        stateFactories.put(storeFactory.storeName(), storeFactory);
+        stateFactories.put(storeName, storeFactory);
 
         if (processorNames != null) {
             for (final String processorName : processorNames) {
                 Objects.requireNonNull(processorName, "processor cannot not be null");
-                connectProcessorAndStateStore(processorName, storeFactory.storeName());
+                connectProcessorAndStateStore(processorName, storeName);
             }
         }
 
@@ -709,7 +713,7 @@ public class InternalTopologyBuilder {
     public final void connectProcessorAndStateStores(final String processorName,
                                                      final String... stateStoreNames) {
         Objects.requireNonNull(processorName, "processorName cannot be null");
-        Objects.requireNonNull(stateStoreNames, "stateStoreNames cannot  null");
+        Objects.requireNonNull(stateStoreNames, "stateStoreNames cannot be a null array");
         if (stateStoreNames.length == 0) {
             throw new TopologyException("stateStoreNames cannot be empty");
         }
