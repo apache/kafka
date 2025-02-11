@@ -183,6 +183,9 @@
     <suppress checks="JavaNCSS"
               files="(DistributedHerder|Worker)Test.java"/>
 
+    <suppress checks="ParameterNumber"
+              files="WorkerSinkTaskTest.java"/>
+
     <!-- Raft -->
     <suppress checks="NPathComplexity"
               files="(DynamicVoter|RecordsIterator).java"/>
@@ -347,6 +350,8 @@
               files="(ShareCoordinatorServiceTest|DefaultStatePersisterTest|PersisterStateManagerTest).java"/>
     <suppress checks="CyclomaticComplexity"
               files="ShareCoordinatorShard.java"/>
+    <suppress checks="ClassFanOutComplexity"
+              files="(PersisterStateManagerTest|DefaultStatePersisterTest).java"/>
 
     <!-- storage -->
     <suppress checks="CyclomaticComplexity"

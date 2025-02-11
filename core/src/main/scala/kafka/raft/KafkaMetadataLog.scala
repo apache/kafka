@@ -42,7 +42,7 @@ import org.apache.kafka.snapshot.RawSnapshotWriter
 import org.apache.kafka.snapshot.SnapshotPath
 import org.apache.kafka.snapshot.Snapshots
 import org.apache.kafka.storage.internals
-import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, LogDirFailureChannel, LogStartOffsetIncrementReason, ProducerStateManagerConfig}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, LogDirFailureChannel, LogStartOffsetIncrementReason, ProducerStateManagerConfig, UnifiedLog => JUnifiedLog}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 
 import java.io.File
@@ -112,7 +112,7 @@ final class KafkaMetadataLog private (
   }
 
   private def handleAndConvertLogAppendInfo(appendInfo: internals.log.LogAppendInfo): LogAppendInfo = {
-    if (appendInfo.firstOffset == UnifiedLog.UnknownOffset) {
+    if (appendInfo.firstOffset == JUnifiedLog.UNKNOWN_OFFSET) {
       throw new CorruptRecordException(s"Append failed unexpectedly $appendInfo")
     } else {
       new LogAppendInfo(appendInfo.firstOffset, appendInfo.lastOffset)

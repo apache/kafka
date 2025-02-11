@@ -29,7 +29,7 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
 import org.apache.kafka.server.util.MockTime
-import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, CleanerConfig, LocalLog, LogAppendInfo, LogCleaningAbortedException, LogConfig, LogDirFailureChannel, LogFileUtils, LogLoader, LogSegment, LogSegments, LogStartOffsetIncrementReason, OffsetMap, ProducerStateManager, ProducerStateManagerConfig}
+import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, CleanerConfig, LocalLog, LogAppendInfo, LogCleaningAbortedException, LogConfig, LogDirFailureChannel, LogFileUtils, LogLoader, LogSegment, LogSegments, LogStartOffsetIncrementReason, OffsetMap, ProducerStateManager, ProducerStateManagerConfig, UnifiedLog => JUnifiedLog}
 import org.apache.kafka.storage.internals.utils.Throttler
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions._
@@ -42,7 +42,7 @@ import java.io.{File, RandomAccessFile}
 import java.nio._
 import java.nio.charset.StandardCharsets
 import java.nio.file.Paths
-import java.util.Properties
+import java.util.{Optional, Properties}
 import java.util.concurrent.{ConcurrentHashMap, CountDownLatch, TimeUnit}
 import scala.collection._
 import scala.jdk.CollectionConverters._
@@ -183,13 +183,13 @@ class LogCleanerTest extends Logging {
     logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, 1024 : java.lang.Integer)
     logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT + "," + TopicConfig.CLEANUP_POLICY_DELETE)
     val config = LogConfig.fromProps(logConfig.originals, logProps)
-    val topicPartition = UnifiedLog.parseTopicPartitionName(dir)
+    val topicPartition = JUnifiedLog.parseTopicPartitionName(dir)
     val logDirFailureChannel = new LogDirFailureChannel(10)
     val maxTransactionTimeoutMs = 5 * 60 * 1000
     val producerIdExpirationCheckIntervalMs = TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT
     val logSegments = new LogSegments(topicPartition)
-    val leaderEpochCache = UnifiedLog.createLeaderEpochCache(
-      dir, topicPartition, logDirFailureChannel, None, time.scheduler)
+    val leaderEpochCache = JUnifiedLog.createLeaderEpochCache(
+      dir, topicPartition, logDirFailureChannel, Optional.empty, time.scheduler)
     val producerStateManager = new ProducerStateManager(topicPartition, dir,
       maxTransactionTimeoutMs, producerStateManagerConfig, time)
     val offsets = new LogLoader(
@@ -1709,7 +1709,7 @@ class LogCleanerTest extends Logging {
 
     // 1) Simulate recovery just after .cleaned file is created, before rename to .swap
     //    On recovery, clean operation is aborted. All messages should be present in the log
-    log.logSegments.asScala.head.changeFileSuffixes("", UnifiedLog.CleanedFileSuffix)
+    log.logSegments.asScala.head.changeFileSuffixes("", JUnifiedLog.CLEANED_FILE_SUFFIX)
     for (file <- dir.listFiles if file.getName.endsWith(LogFileUtils.DELETED_FILE_SUFFIX)) {
       Utils.atomicMoveWithFallback(file.toPath, Paths.get(Utils.replaceSuffix(file.getPath, LogFileUtils.DELETED_FILE_SUFFIX, "")), false)
     }
@@ -1725,8 +1725,8 @@ class LogCleanerTest extends Logging {
 
     // 2) Simulate recovery just after .cleaned file is created, and a subset of them are renamed to .swap
     //    On recovery, clean operation is aborted. All messages should be present in the log
-    log.logSegments.asScala.head.changeFileSuffixes("", UnifiedLog.CleanedFileSuffix)
-    log.logSegments.asScala.head.log.renameTo(new File(Utils.replaceSuffix(log.logSegments.asScala.head.log.file.getPath, UnifiedLog.CleanedFileSuffix, UnifiedLog.SwapFileSuffix)))
+    log.logSegments.asScala.head.changeFileSuffixes("", JUnifiedLog.CLEANED_FILE_SUFFIX)
+    log.logSegments.asScala.head.log.renameTo(new File(Utils.replaceSuffix(log.logSegments.asScala.head.log.file.getPath, JUnifiedLog.CLEANED_FILE_SUFFIX, JUnifiedLog.SWAP_FILE_SUFFIX)))
     for (file <- dir.listFiles if file.getName.endsWith(LogFileUtils.DELETED_FILE_SUFFIX)) {
       Utils.atomicMoveWithFallback(file.toPath, Paths.get(Utils.replaceSuffix(file.getPath, LogFileUtils.DELETED_FILE_SUFFIX, "")), false)
     }
@@ -1742,7 +1742,7 @@ class LogCleanerTest extends Logging {
 
     // 3) Simulate recovery just after swap file is created, before old segment files are
     //    renamed to .deleted. Clean operation is resumed during recovery.
-    log.logSegments.asScala.head.changeFileSuffixes("", UnifiedLog.SwapFileSuffix)
+    log.logSegments.asScala.head.changeFileSuffixes("", JUnifiedLog.SWAP_FILE_SUFFIX)
     for (file <- dir.listFiles if file.getName.endsWith(LogFileUtils.DELETED_FILE_SUFFIX)) {
       Utils.atomicMoveWithFallback(file.toPath, Paths.get(Utils.replaceSuffix(file.getPath, LogFileUtils.DELETED_FILE_SUFFIX, "")), false)
     }
@@ -1763,7 +1763,7 @@ class LogCleanerTest extends Logging {
 
     // 4) Simulate recovery after swap file is created and old segments files are renamed
     //    to .deleted. Clean operation is resumed during recovery.
-    log.logSegments.asScala.head.changeFileSuffixes("", UnifiedLog.SwapFileSuffix)
+    log.logSegments.asScala.head.changeFileSuffixes("", JUnifiedLog.SWAP_FILE_SUFFIX)
     log = recoverAndCheck(config, cleanedKeys)
 
     // add some more messages and clean the log again
@@ -1781,7 +1781,7 @@ class LogCleanerTest extends Logging {
 
     // 5) Simulate recovery after a subset of swap files are renamed to regular files and old segments files are renamed
     //    to .deleted. Clean operation is resumed during recovery.
-    log.logSegments.asScala.head.timeIndex.file.renameTo(new File(Utils.replaceSuffix(log.logSegments.asScala.head.timeIndex.file.getPath, "", UnifiedLog.SwapFileSuffix)))
+    log.logSegments.asScala.head.timeIndex.file.renameTo(new File(Utils.replaceSuffix(log.logSegments.asScala.head.timeIndex.file.getPath, "", JUnifiedLog.SWAP_FILE_SUFFIX)))
     log = recoverAndCheck(config, cleanedKeys)
 
     // add some more messages and clean the log again

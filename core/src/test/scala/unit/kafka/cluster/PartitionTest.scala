@@ -60,7 +60,7 @@ import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams, Unexpec
 import org.apache.kafka.server.util.{KafkaScheduler, MockTime}
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpoints
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
-import org.apache.kafka.storage.internals.log.{AppendOrigin, CleanerConfig, EpochEntry, LocalLog, LogAppendInfo, LogDirFailureChannel, LogLoader, LogOffsetMetadata, LogReadInfo, LogSegments, LogStartOffsetIncrementReason, ProducerStateManager, ProducerStateManagerConfig, VerificationGuard}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, CleanerConfig, EpochEntry, LocalLog, LogAppendInfo, LogDirFailureChannel, LogLoader, LogOffsetMetadata, LogReadInfo, LogSegments, LogStartOffsetIncrementReason, ProducerStateManager, ProducerStateManagerConfig, UnifiedLog => JUnifiedLog, VerificationGuard}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
@@ -446,8 +446,8 @@ class PartitionTest extends AbstractPartitionTest {
         val log = super.createLog(isNew, isFutureReplica, offsetCheckpoints, None, None)
         val logDirFailureChannel = new LogDirFailureChannel(1)
         val segments = new LogSegments(log.topicPartition)
-        val leaderEpochCache = UnifiedLog.createLeaderEpochCache(
-          log.dir, log.topicPartition, logDirFailureChannel, None, time.scheduler)
+        val leaderEpochCache = JUnifiedLog.createLeaderEpochCache(
+          log.dir, log.topicPartition, logDirFailureChannel, Optional.empty, time.scheduler)
         val maxTransactionTimeoutMs = 5 * 60 * 1000
         val producerStateManagerConfig = new ProducerStateManagerConfig(TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_DEFAULT, true)
         val producerStateManager = new ProducerStateManager(
@@ -1075,7 +1075,7 @@ class PartitionTest extends AbstractPartitionTest {
       new SimpleRecord("k3".getBytes, "v3".getBytes)),
       baseOffset = 0L,
       producerId = 2L)
-    val verificationGuard = partition.maybeStartTransactionVerification(2L, 0, 0)
+    val verificationGuard = partition.maybeStartTransactionVerification(2L, 0, 0, true)
     partition.appendRecordsToLeader(records, origin = AppendOrigin.CLIENT, requiredAcks = 0, RequestLocal.withThreadConfinedCaching, verificationGuard)
 
     def fetchOffset(isolationLevel: Option[IsolationLevel], timestamp: Long): TimestampAndOffset = {
@@ -1390,8 +1390,8 @@ class PartitionTest extends AbstractPartitionTest {
 
     assertReplicaState(partition, remoteBrokerId,
       lastCaughtUpTimeMs = initializeTimeMs,
-      logStartOffset = UnifiedLog.UnknownOffset,
-      logEndOffset = UnifiedLog.UnknownOffset
+      logStartOffset = JUnifiedLog.UNKNOWN_OFFSET,
+      logEndOffset = JUnifiedLog.UNKNOWN_OFFSET
     )
 
     time.sleep(500)
@@ -1489,8 +1489,8 @@ class PartitionTest extends AbstractPartitionTest {
 
     assertReplicaState(partition, remoteBrokerId,
       lastCaughtUpTimeMs = 0L,
-      logStartOffset = UnifiedLog.UnknownOffset,
-      logEndOffset = UnifiedLog.UnknownOffset
+      logStartOffset = JUnifiedLog.UNKNOWN_OFFSET,
+      logEndOffset = JUnifiedLog.UNKNOWN_OFFSET
     )
 
     fetchFollower(partition, replicaId = remoteBrokerId, fetchOffset = 10L)
@@ -1541,8 +1541,8 @@ class PartitionTest extends AbstractPartitionTest {
 
     assertReplicaState(partition, remoteBrokerId,
       lastCaughtUpTimeMs = 0L,
-      logStartOffset = UnifiedLog.UnknownOffset,
-      logEndOffset = UnifiedLog.UnknownOffset
+      logStartOffset = JUnifiedLog.UNKNOWN_OFFSET,
+      logEndOffset = JUnifiedLog.UNKNOWN_OFFSET
     )
 
     fetchFollower(partition, replicaId = remoteBrokerId, fetchOffset = 3L)
@@ -1605,8 +1605,8 @@ class PartitionTest extends AbstractPartitionTest {
 
     assertReplicaState(partition, remoteBrokerId,
       lastCaughtUpTimeMs = 0L,
-      logStartOffset = UnifiedLog.UnknownOffset,
-      logEndOffset = UnifiedLog.UnknownOffset
+      logStartOffset = JUnifiedLog.UNKNOWN_OFFSET,
+      logEndOffset = JUnifiedLog.UNKNOWN_OFFSET
     )
 
     fetchFollower(partition, replicaId = remoteBrokerId, fetchOffset = 10L)
@@ -2198,8 +2198,8 @@ class PartitionTest extends AbstractPartitionTest {
 
     assertReplicaState(partition, remoteBrokerId2,
       lastCaughtUpTimeMs = initializeTimeMs,
-      logStartOffset = UnifiedLog.UnknownOffset,
-      logEndOffset = UnifiedLog.UnknownOffset
+      logStartOffset = JUnifiedLog.UNKNOWN_OFFSET,
+      logEndOffset = JUnifiedLog.UNKNOWN_OFFSET
     )
 
     // On initialization, the replica is considered caught up and should not be removed
@@ -2317,8 +2317,8 @@ class PartitionTest extends AbstractPartitionTest {
 
     assertReplicaState(partition, remoteBrokerId,
       lastCaughtUpTimeMs = initializeTimeMs,
-      logStartOffset = UnifiedLog.UnknownOffset,
-      logEndOffset = UnifiedLog.UnknownOffset
+      logStartOffset = JUnifiedLog.UNKNOWN_OFFSET,
+      logEndOffset = JUnifiedLog.UNKNOWN_OFFSET
     )
 
     // Shrink the ISR
@@ -2376,8 +2376,8 @@ class PartitionTest extends AbstractPartitionTest {
 
     assertReplicaState(partition, remoteBrokerId,
       lastCaughtUpTimeMs = initializeTimeMs,
-      logStartOffset = UnifiedLog.UnknownOffset,
-      logEndOffset = UnifiedLog.UnknownOffset
+      logStartOffset = JUnifiedLog.UNKNOWN_OFFSET,
+      logEndOffset = JUnifiedLog.UNKNOWN_OFFSET
     )
 
     // There is a short delay before the first fetch. The follower is not yet caught up to the log end.
@@ -2436,8 +2436,8 @@ class PartitionTest extends AbstractPartitionTest {
 
     assertReplicaState(partition, remoteBrokerId,
       lastCaughtUpTimeMs = initializeTimeMs,
-      logStartOffset = UnifiedLog.UnknownOffset,
-      logEndOffset = UnifiedLog.UnknownOffset
+      logStartOffset = JUnifiedLog.UNKNOWN_OFFSET,
+      logEndOffset = JUnifiedLog.UNKNOWN_OFFSET
     )
 
     // The follower catches up to the log end immediately.
@@ -2483,8 +2483,8 @@ class PartitionTest extends AbstractPartitionTest {
 
     assertReplicaState(partition, remoteBrokerId,
       lastCaughtUpTimeMs = initializeTimeMs,
-      logStartOffset = UnifiedLog.UnknownOffset,
-      logEndOffset = UnifiedLog.UnknownOffset
+      logStartOffset = JUnifiedLog.UNKNOWN_OFFSET,
+      logEndOffset = JUnifiedLog.UNKNOWN_OFFSET
     )
 
     time.sleep(30001)
@@ -2570,8 +2570,8 @@ class PartitionTest extends AbstractPartitionTest {
 
     assertReplicaState(partition, remoteBrokerId,
       lastCaughtUpTimeMs = 0L,
-      logStartOffset = UnifiedLog.UnknownOffset,
-      logEndOffset = UnifiedLog.UnknownOffset
+      logStartOffset = JUnifiedLog.UNKNOWN_OFFSET,
+      logEndOffset = JUnifiedLog.UNKNOWN_OFFSET
     )
 
     // This will attempt to expand the ISR
@@ -3108,8 +3108,8 @@ class PartitionTest extends AbstractPartitionTest {
     // in the ISR.
     assertReplicaState(partition, followerId,
       lastCaughtUpTimeMs = 0L,
-      logStartOffset = UnifiedLog.UnknownOffset,
-      logEndOffset = UnifiedLog.UnknownOffset
+      logStartOffset = JUnifiedLog.UNKNOWN_OFFSET,
+      logEndOffset = JUnifiedLog.UNKNOWN_OFFSET
     )
 
     // Follower fetches and updates its replica state.
@@ -3617,7 +3617,7 @@ class PartitionTest extends AbstractPartitionTest {
     assertThrows(classOf[InvalidTxnStateException], () => partition.appendRecordsToLeader(transactionRecords(), origin = AppendOrigin.CLIENT, requiredAcks = 1, RequestLocal.withThreadConfinedCaching))
 
     // Before appendRecordsToLeader is called, ReplicaManager will call maybeStartTransactionVerification. We should get a non-sentinel VerificationGuard.
-    val verificationGuard = partition.maybeStartTransactionVerification(producerId, 3, 0)
+    val verificationGuard = partition.maybeStartTransactionVerification(producerId, 3, 0, true)
     assertNotEquals(VerificationGuard.SENTINEL, verificationGuard)
 
     // With the wrong VerificationGuard, append should fail.
@@ -3625,12 +3625,12 @@ class PartitionTest extends AbstractPartitionTest {
       origin = AppendOrigin.CLIENT, requiredAcks = 1, RequestLocal.withThreadConfinedCaching, new VerificationGuard()))
 
     // We should return the same VerificationGuard when we still need to verify. Append should proceed.
-    val verificationGuard2 = partition.maybeStartTransactionVerification(producerId, 3, 0)
+    val verificationGuard2 = partition.maybeStartTransactionVerification(producerId, 3, 0, true)
     assertEquals(verificationGuard, verificationGuard2)
     partition.appendRecordsToLeader(transactionRecords(), origin = AppendOrigin.CLIENT, requiredAcks = 1, RequestLocal.withThreadConfinedCaching, verificationGuard)
 
     // We should no longer need a VerificationGuard. Future appends without VerificationGuard will also succeed.
-    val verificationGuard3 = partition.maybeStartTransactionVerification(producerId, 3, 0)
+    val verificationGuard3 = partition.maybeStartTransactionVerification(producerId, 3, 0, true)
     assertEquals(VerificationGuard.SENTINEL, verificationGuard3)
     partition.appendRecordsToLeader(transactionRecords(), origin = AppendOrigin.CLIENT, requiredAcks = 1, RequestLocal.withThreadConfinedCaching)
   }

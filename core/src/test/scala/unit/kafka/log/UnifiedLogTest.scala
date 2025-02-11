@@ -42,7 +42,7 @@ import org.apache.kafka.server.storage.log.{FetchIsolation, UnexpectedAppendOffs
 import org.apache.kafka.server.util.{KafkaScheduler, MockTime, Scheduler}
 import org.apache.kafka.storage.internals.checkpoint.{LeaderEpochCheckpointFile, PartitionMetadataFile}
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
-import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, EpochEntry, LogConfig, LogFileUtils, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogSegment, LogSegments, LogStartOffsetIncrementReason, OffsetResultHolder, OffsetsOutOfOrderException, ProducerStateManager, ProducerStateManagerConfig, RecordValidationException, VerificationGuard}
+import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, EpochEntry, LogConfig, LogFileUtils, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogSegment, LogSegments, LogStartOffsetIncrementReason, OffsetResultHolder, OffsetsOutOfOrderException, ProducerStateManager, ProducerStateManagerConfig, RecordValidationException, UnifiedLog => JUnifiedLog, VerificationGuard}
 import org.apache.kafka.storage.internals.utils.Throttler
 import org.apache.kafka.storage.log.metrics.{BrokerTopicMetrics, BrokerTopicStats}
 import org.junit.jupiter.api.Assertions._
@@ -525,13 +525,6 @@ class UnifiedLogTest {
     log.updateHighWatermark(log.logEndOffset)
     assertEquals(log.logEndOffset, log.lastStableOffset)
     assertLsoBoundedFetches()
-  }
-
-  @Test
-  def testOffsetFromProducerSnapshotFile(): Unit = {
-    val offset = 23423423L
-    val snapshotFile = LogFileUtils.producerSnapshotFile(tmpDir, offset)
-    assertEquals(offset, UnifiedLog.offsetFromFile(snapshotFile))
   }
 
   /**
@@ -2581,8 +2574,8 @@ class UnifiedLogTest {
     assertEquals(Some(5), log.latestEpoch)
 
     // Ensure that after a directory rename, the epoch cache is written to the right location
-    val tp = UnifiedLog.parseTopicPartitionName(log.dir)
-    log.renameDir(UnifiedLog.logDeleteDirName(tp), true)
+    val tp = JUnifiedLog.parseTopicPartitionName(log.dir)
+    log.renameDir(JUnifiedLog.logDeleteDirName(tp), true)
     log.appendAsLeader(TestUtils.records(List(new SimpleRecord("foo".getBytes()))), leaderEpoch = 10)
     assertEquals(Some(10), log.latestEpoch)
     assertTrue(LeaderEpochCheckpointFile.newFile(log.dir).exists())
@@ -2602,8 +2595,8 @@ class UnifiedLogTest {
     assertEquals(Some(5), log.latestEpoch)
 
     // Ensure that after a directory rename, the partition metadata file is written to the right location.
-    val tp = UnifiedLog.parseTopicPartitionName(log.dir)
-    log.renameDir(UnifiedLog.logDeleteDirName(tp), true)
+    val tp = JUnifiedLog.parseTopicPartitionName(log.dir)
+    log.renameDir(JUnifiedLog.logDeleteDirName(tp), true)
     log.appendAsLeader(TestUtils.records(List(new SimpleRecord("foo".getBytes()))), leaderEpoch = 10)
     assertEquals(Some(10), log.latestEpoch)
     assertTrue(PartitionMetadataFile.newFile(log.dir).exists())
@@ -2625,8 +2618,8 @@ class UnifiedLogTest {
     log.partitionMetadataFile.get.record(topicId)
 
     // Ensure that after a directory rename, the partition metadata file is written to the right location.
-    val tp = UnifiedLog.parseTopicPartitionName(log.dir)
-    log.renameDir(UnifiedLog.logDeleteDirName(tp), true)
+    val tp = JUnifiedLog.parseTopicPartitionName(log.dir)
+    log.renameDir(JUnifiedLog.logDeleteDirName(tp), true)
     assertTrue(PartitionMetadataFile.newFile(log.dir).exists())
     assertFalse(PartitionMetadataFile.newFile(this.logDir).exists())
 
@@ -3630,7 +3623,7 @@ class UnifiedLogTest {
 
   @Test
   def testLoadPartitionDirWithNoSegmentsShouldNotThrow(): Unit = {
-    val dirName = UnifiedLog.logDeleteDirName(new TopicPartition("foo", 3))
+    val dirName = JUnifiedLog.logDeleteDirName(new TopicPartition("foo", 3))
     val logDir = new File(tmpDir, dirName)
     logDir.mkdirs()
     val logConfig = LogTestUtils.createLogConfig()
@@ -3723,6 +3716,7 @@ class UnifiedLogTest {
     assertThrows(classOf[OffsetOutOfRangeException], () => log.maybeIncrementLogStartOffset(26L, LogStartOffsetIncrementReason.ClientRecordDeletion))
   }
 
+  @Test
   def testBackgroundDeletionWithIOException(): Unit = {
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024)
     val log = createLog(logDir, logConfig)
@@ -3782,6 +3776,7 @@ class UnifiedLogTest {
     assertEquals(None, log.maybeUpdateHighWatermark(101L))
   }
 
+  @Test
   def testEnableRemoteLogStorageOnCompactedTopics(): Unit = {
       var logConfig = LogTestUtils.createLogConfig()
       var log = createLog(logDir, logConfig)
@@ -3971,7 +3966,7 @@ class UnifiedLogTest {
       new SimpleRecord("2".getBytes)
     )
 
-    val verificationGuard = log.maybeStartTransactionVerification(producerId, sequence, producerEpoch)
+    val verificationGuard = log.maybeStartTransactionVerification(producerId, sequence, producerEpoch, true)
     assertNotEquals(VerificationGuard.SENTINEL, verificationGuard)
 
     log.appendAsLeader(idempotentRecords, origin = appendOrigin, leaderEpoch = 0)
@@ -3988,7 +3983,7 @@ class UnifiedLogTest {
     assertEquals(VerificationGuard.SENTINEL, log.verificationGuard(producerId))
 
     // A subsequent maybeStartTransactionVerification will be empty since we are already verified.
-    assertEquals(VerificationGuard.SENTINEL, log.maybeStartTransactionVerification(producerId, sequence, producerEpoch))
+    assertEquals(VerificationGuard.SENTINEL, log.maybeStartTransactionVerification(producerId, sequence, producerEpoch, true))
 
     val endTransactionMarkerRecord = MemoryRecords.withEndTransactionMarker(
       producerId,
@@ -4004,14 +3999,15 @@ class UnifiedLogTest {
       sequence = sequence + 1
 
     // A new maybeStartTransactionVerification will not be empty, as we need to verify the next transaction.
-    val newVerificationGuard = log.maybeStartTransactionVerification(producerId, sequence, producerEpoch)
+    val newVerificationGuard = log.maybeStartTransactionVerification(producerId, sequence, producerEpoch, true)
     assertNotEquals(VerificationGuard.SENTINEL, newVerificationGuard)
     assertNotEquals(verificationGuard, newVerificationGuard)
     assertFalse(verificationGuard.verify(newVerificationGuard))
   }
 
-  @Test
-  def testEmptyTransactionStillClearsVerificationGuard(): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testEmptyTransactionStillClearsVerificationGuard(supportsEpochBump: Boolean): Unit = {
     val producerStateManagerConfig = new ProducerStateManagerConfig(86400000, true)
 
     val producerId = 23L
@@ -4019,12 +4015,13 @@ class UnifiedLogTest {
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 2048 * 5)
     val log = createLog(logDir, logConfig, producerStateManagerConfig = producerStateManagerConfig)
 
-    val verificationGuard = log.maybeStartTransactionVerification(producerId, 0, producerEpoch)
+    val verificationGuard = log.maybeStartTransactionVerification(producerId, 0, producerEpoch, supportsEpochBump)
     assertNotEquals(VerificationGuard.SENTINEL, verificationGuard)
 
+    val endMarkerProducerEpoch = if (supportsEpochBump) (producerEpoch + 1).toShort else producerEpoch
     val endTransactionMarkerRecord = MemoryRecords.withEndTransactionMarker(
       producerId,
-      producerEpoch,
+      endMarkerProducerEpoch,
       new EndTransactionMarker(ControlRecordType.COMMIT, 0)
     )
 
@@ -4034,7 +4031,7 @@ class UnifiedLogTest {
   }
 
   @Test
-  def testDisabledVerificationClearsVerificationGuard(): Unit = {
+  def testNextTransactionVerificationGuardNotCleared(): Unit = {
     val producerStateManagerConfig = new ProducerStateManagerConfig(86400000, true)
 
     val producerId = 23L
@@ -4042,7 +4039,32 @@ class UnifiedLogTest {
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 2048 * 5)
     val log = createLog(logDir, logConfig, producerStateManagerConfig = producerStateManagerConfig)
 
-    val verificationGuard = log.maybeStartTransactionVerification(producerId, 0, producerEpoch)
+    val verificationGuard = log.maybeStartTransactionVerification(producerId, 0, producerEpoch, true)
+    assertNotEquals(VerificationGuard.SENTINEL, verificationGuard)
+
+    // If the producer epoch is the same on the EndTxn marker, the verification must be for the next transaction, so we shouldn't clear it.
+    val endTransactionMarkerRecord = MemoryRecords.withEndTransactionMarker(
+      producerId,
+      producerEpoch,
+      new EndTransactionMarker(ControlRecordType.COMMIT, 0)
+    )
+
+    log.appendAsLeader(endTransactionMarkerRecord, origin = AppendOrigin.COORDINATOR, leaderEpoch = 0)
+    assertFalse(log.hasOngoingTransaction(producerId, producerEpoch))
+    assertEquals(verificationGuard, log.verificationGuard(producerId))
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testDisabledVerificationClearsVerificationGuard(supportsEpochBump: Boolean): Unit = {
+    val producerStateManagerConfig = new ProducerStateManagerConfig(86400000, true)
+
+    val producerId = 23L
+    val producerEpoch = 1.toShort
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 2048 * 5)
+    val log = createLog(logDir, logConfig, producerStateManagerConfig = producerStateManagerConfig)
+
+    val verificationGuard = log.maybeStartTransactionVerification(producerId, 0, producerEpoch, supportsEpochBump)
     assertNotEquals(VerificationGuard.SENTINEL, verificationGuard)
 
     producerStateManagerConfig.setTransactionVerificationEnabled(false)
@@ -4085,7 +4107,7 @@ class UnifiedLogTest {
     assertFalse(log.hasOngoingTransaction(producerId, producerEpoch))
     assertEquals(VerificationGuard.SENTINEL, log.verificationGuard(producerId))
 
-    val verificationGuard = log.maybeStartTransactionVerification(producerId, sequence, producerEpoch)
+    val verificationGuard = log.maybeStartTransactionVerification(producerId, sequence, producerEpoch, true)
     assertNotEquals(VerificationGuard.SENTINEL, verificationGuard)
 
     log.appendAsLeader(transactionalRecords, leaderEpoch = 0, verificationGuard = verificationGuard)
@@ -4114,45 +4136,9 @@ class UnifiedLogTest {
       new SimpleRecord("2".getBytes)
     )
 
-    val verificationGuard = log.maybeStartTransactionVerification(producerId, sequence, producerEpoch)
+    val verificationGuard = log.maybeStartTransactionVerification(producerId, sequence, producerEpoch, true)
     // Append should not throw error.
     log.appendAsLeader(transactionalRecords, leaderEpoch = 0, verificationGuard = verificationGuard)
-  }
-
-  @Test
-  def testPreviousTransactionOngoing(): Unit = {
-    val producerStateManagerConfig = new ProducerStateManagerConfig(86400000, true)
-
-    val producerId = 23L
-    val producerEpoch = 1.toShort
-    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 2048 * 5)
-    val log = createLog(logDir, logConfig, producerStateManagerConfig = producerStateManagerConfig)
-
-    val verificationGuard = log.maybeStartTransactionVerification(producerId, 0, producerEpoch)
-    assertNotEquals(VerificationGuard.SENTINEL, verificationGuard)
-
-    val transactionalRecords = MemoryRecords.withTransactionalRecords(
-      Compression.NONE,
-      producerId,
-      producerEpoch,
-      0,
-      new SimpleRecord("1".getBytes),
-      new SimpleRecord("2".getBytes)
-    )
-    log.appendAsLeader(transactionalRecords, origin = AppendOrigin.CLIENT, leaderEpoch = 0, verificationGuard = verificationGuard)
-
-    assertThrows(classOf[ConcurrentTransactionsException], () => log.maybeStartTransactionVerification(producerId, 0, (producerEpoch + 1).toShort))
-    assertNotEquals(VerificationGuard.SENTINEL, verificationGuard)
-
-    val endTransactionMarkerRecord = MemoryRecords.withEndTransactionMarker(
-      producerId,
-      producerEpoch,
-      new EndTransactionMarker(ControlRecordType.COMMIT, 0)
-    )
-
-    log.appendAsLeader(endTransactionMarkerRecord, origin = AppendOrigin.COORDINATOR, leaderEpoch = 0)
-    val verificationGuard2 = log.maybeStartTransactionVerification(producerId, 0, (producerEpoch + 1).toShort)
-    assertNotEquals(VerificationGuard.SENTINEL, verificationGuard2)
   }
 
   @Test

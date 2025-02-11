@@ -14,29 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.security;
+package org.apache.kafka.storage.internals.log;
 
-import org.apache.kafka.common.config.types.Password;
+import java.util.List;
 
-import java.security.GeneralSecurityException;
+public class LogMetricNames {
 
-public interface PasswordEncoder {
-    /**
-     * A password encoder that does not modify the given password. This is used in KRaft mode only.
-     */
-    PasswordEncoder NOOP = new PasswordEncoder() {
+    public static final String NUM_LOG_SEGMENTS = "NumLogSegments";
+    public static final String LOG_START_OFFSET = "LogStartOffset";
+    public static final String LOG_END_OFFSET = "LogEndOffset";
+    public static final String SIZE = "Size";
 
-        @Override
-        public String encode(Password password) {
-            return password.value();
-        }
-
-        @Override
-        public Password decode(String encodedPassword) {
-            return new Password(encodedPassword);
-        }
-    };
-
-    String encode(Password password) throws GeneralSecurityException;
-    Password decode(String encodedPassword) throws GeneralSecurityException;
+    public static final List<String> ALL_METRIC_NAMES = List.of(NUM_LOG_SEGMENTS, LOG_START_OFFSET, LOG_END_OFFSET, SIZE);
 }
