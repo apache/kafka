@@ -58,7 +58,7 @@ import org.apache.kafka.server.share.fetch.{DelayedShareFetchKey, DelayedShareFe
 import org.apache.kafka.server.storage.log.{FetchParams, FetchPartitionData}
 import org.apache.kafka.server.util.{Scheduler, ShutdownableThread}
 import org.apache.kafka.storage.internals.checkpoint.{LazyOffsetCheckpoints, OffsetCheckpointFile, OffsetCheckpoints}
-import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, LeaderHwChange, LogAppendInfo, LogConfig, LogDirFailureChannel, LogOffsetMetadata, LogReadInfo, OffsetResultHolder, RecordValidationException, RemoteLogReadResult, RemoteStorageFetchInfo, VerificationGuard}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, LeaderHwChange, LogAppendInfo, LogConfig, LogDirFailureChannel, LogOffsetMetadata, LogReadInfo, OffsetResultHolder, RecordValidationException, RemoteLogReadResult, RemoteStorageFetchInfo, UnifiedLog => JUnifiedLog, VerificationGuard}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 
 import java.io.File
@@ -244,10 +244,10 @@ object ReplicaManager {
   def createLogReadResult(e: Throwable): LogReadResult = {
     LogReadResult(info = new FetchDataInfo(LogOffsetMetadata.UNKNOWN_OFFSET_METADATA, MemoryRecords.EMPTY),
       divergingEpoch = None,
-      highWatermark = UnifiedLog.UnknownOffset,
-      leaderLogStartOffset = UnifiedLog.UnknownOffset,
-      leaderLogEndOffset = UnifiedLog.UnknownOffset,
-      followerLogStartOffset = UnifiedLog.UnknownOffset,
+      highWatermark = JUnifiedLog.UNKNOWN_OFFSET,
+      leaderLogStartOffset = JUnifiedLog.UNKNOWN_OFFSET,
+      leaderLogEndOffset = JUnifiedLog.UNKNOWN_OFFSET,
+      followerLogStartOffset = JUnifiedLog.UNKNOWN_OFFSET,
       fetchTimeMs = -1L,
       lastStableOffset = None,
       exception = Some(e))
@@ -1084,7 +1084,7 @@ class ReplicaManager(val config: KafkaConfig,
           /* If the topic name is exceptionally long, we can't support altering the log directory.
            * See KAFKA-4893 for details.
            * TODO: fix this by implementing topic IDs. */
-          if (UnifiedLog.logFutureDirName(topicPartition).length > 255)
+          if (JUnifiedLog.logFutureDirName(topicPartition).length > 255)
             throw new InvalidTopicException("The topic name is too long.")
           if (!logManager.isLogDirOnline(destinationDir))
             throw new KafkaStorageException(s"Log directory $destinationDir is offline")
@@ -1746,10 +1746,10 @@ class ReplicaManager(val config: KafkaConfig,
 
           LogReadResult(info = new FetchDataInfo(LogOffsetMetadata.UNKNOWN_OFFSET_METADATA, MemoryRecords.EMPTY),
             divergingEpoch = None,
-            highWatermark = UnifiedLog.UnknownOffset,
-            leaderLogStartOffset = UnifiedLog.UnknownOffset,
-            leaderLogEndOffset = UnifiedLog.UnknownOffset,
-            followerLogStartOffset = UnifiedLog.UnknownOffset,
+            highWatermark = JUnifiedLog.UNKNOWN_OFFSET,
+            leaderLogStartOffset = JUnifiedLog.UNKNOWN_OFFSET,
+            leaderLogEndOffset = JUnifiedLog.UNKNOWN_OFFSET,
+            followerLogStartOffset = JUnifiedLog.UNKNOWN_OFFSET,
             fetchTimeMs = -1L,
             lastStableOffset = None,
             exception = Some(e)
