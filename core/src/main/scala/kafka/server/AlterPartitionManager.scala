@@ -209,8 +209,7 @@ class DefaultAlterPartitionManager(
    * supported by the controller. The final decision is taken when the AlterPartitionRequest
    * is built in the network client based on the advertised api versions of the controller.
    *
-   * @return A tuple containing the AlterPartitionRequest.Builder and a mapping from
-   *         topic id to topic name. This mapping is used in the response handling.
+   * @return an AlterPartitionRequest.Builder with the provided parameters.
    */
   private def buildRequest(
     inflightAlterPartitionItems: Seq[AlterPartitionItem],

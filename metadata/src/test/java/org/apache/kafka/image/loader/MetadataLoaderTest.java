@@ -66,8 +66,8 @@ import java.util.stream.Collectors;
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.server.common.MetadataVersion.IBP_3_3_IV3;
-import static org.apache.kafka.server.common.MetadataVersion.IBP_3_4_IV0;
 import static org.apache.kafka.server.common.MetadataVersion.IBP_3_5_IV0;
+import static org.apache.kafka.server.common.MetadataVersion.MINIMUM_VERSION;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -310,7 +310,7 @@ public class MetadataLoaderTest {
                 singletonList(singletonList(new ApiMessageAndVersion(
                     new FeatureLevelRecord().
                         setName(MetadataVersion.FEATURE_NAME).
-                        setFeatureLevel(IBP_3_3_IV3.featureLevel()), (short) 0))));
+                        setFeatureLevel(MINIMUM_VERSION.featureLevel()), (short) 0))));
             assertFalse(snapshotReader.closed);
             loader.handleLoadSnapshot(snapshotReader);
             loader.waitForAllEventsToBeHandled();
@@ -319,7 +319,7 @@ public class MetadataLoaderTest {
             loader.removeAndClosePublisher(publishers.get(0)).get();
         }
         assertTrue(publishers.get(0).closed);
-        assertEquals(IBP_3_3_IV3,
+        assertEquals(MINIMUM_VERSION,
                 publishers.get(0).latestImage.features().metadataVersion());
         assertTrue(publishers.get(1).closed);
         assertNull(publishers.get(1).latestImage);
@@ -511,7 +511,7 @@ public class MetadataLoaderTest {
                 new MetadataProvenance(200, 100, 4000, true), asList(
                     singletonList(new ApiMessageAndVersion(new FeatureLevelRecord().
                         setName(MetadataVersion.FEATURE_NAME).
-                        setFeatureLevel(IBP_3_3_IV3.featureLevel()), (short) 0)),
+                        setFeatureLevel(MINIMUM_VERSION.featureLevel()), (short) 0)),
                     singletonList(new ApiMessageAndVersion(new TopicRecord().
                         setName("foo").
                         setTopicId(Uuid.fromString("Uum7sfhHQP-obSvfywmNUA")), (short) 0))
@@ -581,7 +581,7 @@ public class MetadataLoaderTest {
                 new MetadataProvenance(offset, 100, 4000, true), asList(
                         singletonList(new ApiMessageAndVersion(new FeatureLevelRecord().
                                 setName(MetadataVersion.FEATURE_NAME).
-                                setFeatureLevel(IBP_3_3_IV3.featureLevel()), (short) 0)),
+                                setFeatureLevel(MINIMUM_VERSION.featureLevel()), (short) 0)),
                         singletonList(new ApiMessageAndVersion(new TopicRecord().
                                 setName("foo").
                                 setTopicId(Uuid.fromString("Uum7sfhHQP-obSvfywmNUA")), (short) 0))
@@ -597,7 +597,7 @@ public class MetadataLoaderTest {
                 new MetadataProvenance(offset, 100, 4000, true), asList(
                         singletonList(new ApiMessageAndVersion(new FeatureLevelRecord().
                                 setName(MetadataVersion.FEATURE_NAME).
-                                setFeatureLevel(IBP_3_4_IV0.featureLevel()), (short) 0)),
+                                setFeatureLevel(MetadataVersion.latestProduction().featureLevel()), (short) 0)),
                         singletonList(new ApiMessageAndVersion(new TopicRecord().
                                 setName("bar").
                                 setTopicId(Uuid.fromString("VcL2Mw-cT4aL6XV9VujzoQ")), (short) 0))
@@ -625,13 +625,13 @@ public class MetadataLoaderTest {
 
             loadTestSnapshot(loader, 200);
             assertEquals(200L, loader.lastAppliedOffset());
-            assertEquals(IBP_3_3_IV3.featureLevel(),
+            assertEquals(MINIMUM_VERSION.featureLevel(),
                 loader.metrics().currentMetadataVersion().featureLevel());
             assertFalse(publishers.get(0).latestDelta.image().isEmpty());
 
             loadTestSnapshot2(loader, 400);
             assertEquals(400L, loader.lastAppliedOffset());
-            assertEquals(IBP_3_4_IV0.featureLevel(),
+            assertEquals(MetadataVersion.latestProduction().featureLevel(),
                 loader.metrics().currentMetadataVersion().featureLevel());
 
             // Make sure the topic in the initial snapshot was overwritten by loading the new snapshot.

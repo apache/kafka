@@ -17,6 +17,7 @@ import org.apache.kafka.common.message.ApiVersionsResponseData.SupportedFeatureK
 import org.apache.kafka.common.requests.ApiVersionsRequest
 import org.apache.kafka.common.requests.ApiVersionsResponse
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
+import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.config.ServerConfigs
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertNull}
 import org.junit.jupiter.api.Test
@@ -40,14 +41,14 @@ class ApiVersionsResponseIntegrationTest extends BaseRequestTest {
   @Test
   def testSendV3ApiVersionsRequest(): Unit = {
     val response = sendApiVersionsRequest(3)
-    assertFeatureHasMinVersion("metadata.version", response.data().supportedFeatures(), 7)
+    assertFeatureHasMinVersion("metadata.version", response.data().supportedFeatures(), MetadataVersion.MINIMUM_VERSION.featureLevel())
     assertFeatureMissing("kraft.version", response.data().supportedFeatures())
   }
 
   @Test
   def testSendV4ApiVersionsRequest(): Unit = {
     val response = sendApiVersionsRequest(4)
-    assertFeatureHasMinVersion("metadata.version", response.data().supportedFeatures(), 7)
+    assertFeatureHasMinVersion("metadata.version", response.data().supportedFeatures(), MetadataVersion.MINIMUM_VERSION.featureLevel())
     assertFeatureHasMinVersion("kraft.version", response.data().supportedFeatures(), 0)
   }
 

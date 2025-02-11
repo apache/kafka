@@ -18,7 +18,6 @@
 package kafka.server
 
 import java.util.Collections
-import java.util.stream.{Stream => JStream}
 import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.errors.{AuthenticationException, OperationNotAttemptedException, UnknownServerException, UnsupportedVersionException}
@@ -37,8 +36,7 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.Arguments
-import org.junit.jupiter.params.provider.MethodSource
+import org.junit.jupiter.params.provider.EnumSource
 import org.mockito.ArgumentMatcher
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.{mock, reset, times, verify}
@@ -111,7 +109,7 @@ class AlterPartitionManagerTest {
   }
 
   @ParameterizedTest
-  @MethodSource(Array("provideLeaderRecoveryState"))
+  @EnumSource(classOf[LeaderRecoveryState])
   def testBasicSentLeaderRecoveryState(leaderRecoveryState: LeaderRecoveryState): Unit = {
     val requestCapture = ArgumentCaptor.forClass(classOf[AbstractRequest.Builder[AlterPartitionRequest]])
 
@@ -531,14 +529,5 @@ class AlterPartitionManagerTest {
               .setLeaderId(leaderId)
               .setIsr(isr.map(Integer.valueOf).asJava)
               .setErrorCode(error.code))))))
-  }
-}
-
-object AlterPartitionManagerTest {
-  def provideLeaderRecoveryState(): JStream[Arguments] = {
-    JStream.of(
-      Arguments.of(LeaderRecoveryState.RECOVERED),
-      Arguments.of(LeaderRecoveryState.RECOVERING)
-    )
   }
 }

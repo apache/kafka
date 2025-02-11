@@ -33,7 +33,7 @@ class MetadataVersionTest {
     @Test
     public void testFeatureLevels() {
         for (int i = MINIMUM_VERSION.ordinal(); i < MetadataVersion.VERSIONS.length; i++) {
-            int expectedLevel = i + 7;
+            int expectedLevel = i + MINIMUM_VERSION.featureLevel();
             assertEquals(expectedLevel, MetadataVersion.VERSIONS[i].featureLevel());
         }
     }
