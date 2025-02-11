@@ -51,7 +51,7 @@ import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.network.metrics.RequestChannelMetrics
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.server.authorizer.{AuthorizableRequestContext, Authorizer => JAuthorizer}
-import org.apache.kafka.server.common.{ControllerRequestCompletionHandler, MetadataVersion}
+import org.apache.kafka.server.common.ControllerRequestCompletionHandler
 import org.apache.kafka.server.config.{DelegationTokenManagerConfigs, KRaftConfigs, ReplicationConfigs, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.MockTime
@@ -959,7 +959,6 @@ object TestUtils extends Logging {
                        configRepository: ConfigRepository = new MockConfigRepository,
                        cleanerConfig: CleanerConfig = new CleanerConfig(false),
                        time: MockTime = new MockTime(),
-                       interBrokerProtocolVersion: MetadataVersion = MetadataVersion.latestTesting,
                        recoveryThreadsPerDataDir: Int = 4,
                        transactionVerificationEnabled: Boolean = false,
                        log: Option[UnifiedLog] = None,
@@ -982,7 +981,6 @@ object TestUtils extends Logging {
                    time = time,
                    brokerTopicStats = new BrokerTopicStats,
                    logDirFailureChannel = new LogDirFailureChannel(logDirs.size),
-                   interBrokerProtocolVersion = interBrokerProtocolVersion,
                    remoteStorageSystemEnable = remoteStorageSystemEnable,
                    initialTaskDelayMs = initialTaskDelayMs)
 

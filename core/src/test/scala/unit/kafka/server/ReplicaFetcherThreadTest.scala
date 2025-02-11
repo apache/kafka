@@ -90,7 +90,7 @@ class ReplicaFetcherThreadTest {
     val logContext = new LogContext(s"[ReplicaFetcher replicaId=${brokerConfig.brokerId}, leaderId=${leaderEndpointBlockingSend.brokerEndPoint().id}, fetcherId=$fetcherId] ")
     val fetchSessionHandler = new FetchSessionHandler(logContext, leaderEndpointBlockingSend.brokerEndPoint().id)
     val leader = new RemoteLeaderEndPoint(logContext.logPrefix, leaderEndpointBlockingSend, fetchSessionHandler,
-      brokerConfig, replicaMgr, quota, () => brokerConfig.interBrokerProtocolVersion, () => 1)
+      brokerConfig, replicaMgr, quota, () => MetadataVersion.MINIMUM_KRAFT_VERSION, () => 1)
     new ReplicaFetcherThread(name,
       leader,
       brokerConfig,
@@ -280,9 +280,9 @@ class ReplicaFetcherThreadTest {
     val logContext = new LogContext(s"[ReplicaFetcher replicaId=${config.brokerId}, leaderId=${brokerEndPoint.id}, fetcherId=0] ")
     val fetchSessionHandler = new FetchSessionHandler(logContext, brokerEndPoint.id)
     val leader = new RemoteLeaderEndPoint(logContext.logPrefix, mockNetwork, fetchSessionHandler, config,
-      replicaManager, quota, () => config.interBrokerProtocolVersion, () => 1)
+      replicaManager, quota, () => MetadataVersion.MINIMUM_KRAFT_VERSION, () => 1)
     val thread = new ReplicaFetcherThread("bob", leader, config, failedPartitions,
-      replicaManager, quota, logContext.logPrefix, () => config.interBrokerProtocolVersion) {
+      replicaManager, quota, logContext.logPrefix, () => MetadataVersion.MINIMUM_KRAFT_VERSION) {
       override def processPartitionData(topicPartition: TopicPartition, fetchOffset: Long, partitionData: FetchData): Option[LogAppendInfo] = None
     }
     thread.addPartitions(Map(t1p0 -> initialFetchState(Some(topicId1), initialLEO), t1p1 -> initialFetchState(Some(topicId1), initialLEO)))
@@ -396,7 +396,7 @@ class ReplicaFetcherThreadTest {
       config,
       replicaManager,
       quota,
-      () => config.interBrokerProtocolVersion,
+      () => MetadataVersion.MINIMUM_KRAFT_VERSION,
       () => 1
     )
 
@@ -408,7 +408,7 @@ class ReplicaFetcherThreadTest {
       replicaManager,
       quota,
       logContext.logPrefix,
-      () => config.interBrokerProtocolVersion
+      () => MetadataVersion.MINIMUM_KRAFT_VERSION
     )
 
     thread.addPartitions(Map(
@@ -488,7 +488,7 @@ class ReplicaFetcherThreadTest {
       config,
       replicaManager,
       quota,
-      () => config.interBrokerProtocolVersion,
+      () => MetadataVersion.MINIMUM_KRAFT_VERSION,
       () => 1
     )
 
@@ -500,7 +500,7 @@ class ReplicaFetcherThreadTest {
       replicaManager,
       quota,
       logContext.logPrefix,
-      () => config.interBrokerProtocolVersion
+      () => MetadataVersion.MINIMUM_KRAFT_VERSION
     )
 
     thread.addPartitions(Map(
@@ -597,7 +597,7 @@ class ReplicaFetcherThreadTest {
     val logContext = new LogContext(s"[ReplicaFetcher replicaId=${config.brokerId}, leaderId=${brokerEndPoint.id}, fetcherId=0] ")
     val fetchSessionHandler = new FetchSessionHandler(logContext, brokerEndPoint.id)
     val leader = new RemoteLeaderEndPoint(logContext.logPrefix, mockBlockingSend, fetchSessionHandler, config,
-      replicaManager, replicaQuota, () => config.interBrokerProtocolVersion, () => 1)
+      replicaManager, replicaQuota, () => MetadataVersion.MINIMUM_KRAFT_VERSION, () => 1)
     val thread = new ReplicaFetcherThread("bob",
       leader,
       config,
@@ -605,7 +605,7 @@ class ReplicaFetcherThreadTest {
       replicaManager,
       replicaQuota,
       logContext.logPrefix,
-      () => config.interBrokerProtocolVersion)
+      () => MetadataVersion.MINIMUM_KRAFT_VERSION)
 
     val leaderEpoch = 1
 

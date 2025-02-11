@@ -1075,6 +1075,7 @@ project(':core') {
     implementation libs.jacksonModuleScala
     implementation libs.jacksonDataformatCsv
     implementation libs.jacksonJDK8Datatypes
+    implementation libs.jacksonDatabindYaml
     implementation libs.joptSimple
     implementation libs.jose4j
     implementation libs.metrics
@@ -1527,7 +1528,7 @@ project(':group-coordinator') {
 
 
 project(':test-common:test-common-internal-api') {
-  // Interfaces, config classes, and other test APIs. Java 17 only
+  // Interfaces, config classes, and other test APIs. Java 17 is the minimum Java version.
   base {
     archivesName = "kafka-test-common-internal-api"
   }
@@ -1554,7 +1555,7 @@ project(':test-common:test-common-internal-api') {
 }
 
 project(':test-common:test-common-util') {
-  // Runtime-only JUnit extensions for entire project. Java 11 only
+  // Runtime-only JUnit extensions for entire project. Java 11 is the minimum Java version required.
   base {
     archivesName = "kafka-test-common-util"
   }
@@ -1577,7 +1578,7 @@ project(':test-common:test-common-util') {
 }
 
 project(':test-common:test-common-runtime') {
-  // Runtime-only JUnit extensions for integration tests. Java 17 only
+  // Runtime-only JUnit extensions for integration tests. Java 17 is the minimum Java version.
   base {
     archivesName = "kafka-test-common-runtime"
   }
@@ -1800,7 +1801,7 @@ project(':examples') {
   }
 
   checkstyle {
-    configProperties = checkstyleConfigProperties("import-control-core.xml")
+    configProperties = checkstyleConfigProperties("import-control-examples.xml")
   }
 }
 

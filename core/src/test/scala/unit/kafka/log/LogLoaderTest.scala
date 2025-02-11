@@ -122,7 +122,6 @@ class LogLoaderTest {
         maxTransactionTimeoutMs = maxTransactionTimeoutMs,
         producerStateManagerConfig = producerStateManagerConfig,
         producerIdExpirationCheckIntervalMs = producerIdExpirationCheckIntervalMs,
-        interBrokerProtocolVersion = config.interBrokerProtocolVersion,
         scheduler = time.scheduler,
         brokerTopicStats = new BrokerTopicStats(),
         logDirFailureChannel = logDirFailureChannel,

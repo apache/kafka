@@ -22,7 +22,7 @@ import kafka.raft.KafkaRaftManager
 import kafka.server.QuotaFactory.QuotaManagers
 
 import scala.collection.immutable
-import kafka.server.metadata.{AclPublisher, ClientQuotaMetadataManager, DelegationTokenPublisher, DynamicClientQuotaPublisher, DynamicConfigPublisher, KRaftMetadataCache, KRaftMetadataCachePublisher, ScramPublisher}
+import kafka.server.metadata.{AclPublisher, ClientQuotaMetadataManager, DelegationTokenPublisher, DynamicClientQuotaPublisher, DynamicConfigPublisher, DynamicTopicClusterQuotaPublisher, KRaftMetadataCache, KRaftMetadataCachePublisher, ScramPublisher}
 import kafka.utils.{CoreUtils, Logging}
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.network.ListenerName
@@ -332,7 +332,17 @@ class ControllerServer(
         config,
         sharedServer.metadataPublishingFaultHandler,
         "controller",
-        clientQuotaMetadataManager))
+        clientQuotaMetadataManager
+      ))
+
+      // Set up the DynamicTopicClusterQuotaPublisher. This will enable quotas for the cluster and topics.
+      metadataPublishers.add(new DynamicTopicClusterQuotaPublisher(
+        clusterId,
+        config,
+        sharedServer.metadataPublishingFaultHandler,
+        "controller",
+        quotaManagers,
+      ))
 
       // Set up the SCRAM publisher.
       metadataPublishers.add(new ScramPublisher(

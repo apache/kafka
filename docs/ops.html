@@ -1217,14 +1217,14 @@ $ bin/kafka-acls.sh \
 
   <h3 class="anchor-heading"><a id="java" class="anchor-link"></a><a href="#java">6.5 Java Version</a></h3>
 
-  Java 11, Java 17, Java 21 and Java 23 are supported.
+  Java 17 and Java 21 are fully supported while Java 11 is supported for a subset of modules (clients, streams and related).
+  Support for versions newer than the most recent LTS version are best-effort and the project typically only tests with the
+  most recent non LTS version.
+
   <p>
-  Note that Java 11 support for the broker and tools has been deprecated since Apache Kafka 3.7. Both will be removed in Apache Kafka 4.0.
-  <p>
-  Java 11 and later versions perform significantly better if TLS is enabled, so they are highly recommended (they also include a number of other
-  performance improvements: G1GC, CRC32C, Compact Strings, Thread-Local Handshakes and more).
-  <p>
-  From a security perspective, we recommend the latest released patch version as older freely available versions have disclosed security vulnerabilities.
+  We generally recommend running Apache Kafka with the most recent LTS release (Java 21 at the time of writing) for performance,
+  efficiency and support reasons. From a security perspective, we recommend the latest released patch version as older versions
+  typically have disclosed security vulnerabilities.
   <p>
   Typical arguments for running Kafka with OpenJDK-based Java implementations (including Oracle JDK) are:
 

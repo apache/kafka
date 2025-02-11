@@ -28,7 +28,6 @@ import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.image.{TopicImage, TopicsImage}
 import org.apache.kafka.metadata.{ConfigRepository, LeaderRecoveryState, MockConfigRepository, PartitionRegistration}
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
-import org.apache.kafka.server.common.MetadataVersion
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.ArgumentMatchers.any
@@ -1337,7 +1336,6 @@ class LogManagerTest {
       time = Time.SYSTEM,
       brokerTopicStats = new BrokerTopicStats,
       logDirFailureChannel = new LogDirFailureChannel(1),
-      interBrokerProtocolVersion = MetadataVersion.latestTesting,
       remoteStorageSystemEnable = false,
       initialTaskDelayMs = 0)
 
