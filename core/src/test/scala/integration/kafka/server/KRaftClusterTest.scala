@@ -962,11 +962,16 @@ class KRaftClusterTest {
           s"Leader ID ${quorumInfo.leaderId} was not a controller ID.")
 
         // Try to bring down the raft client in the active controller node to force the leader election.
+        // Stop raft client but not the controller, because we would like to get NOT_LEADER_OR_FOLLOWER error first.
+        // If the controller is shutdown, the client can't send request to the original leader.
         cluster.controllers().get(quorumInfo.leaderId).sharedServer.raftManager.client.shutdown(1000)
         // Send another describe metadata quorum request, it'll get NOT_LEADER_OR_FOLLOWER error first and then re-retrieve the metadata update
         // and send to the correct active controller.
-        val quorumInfo2 = admin.describeMetadataQuorum(new DescribeMetadataQuorumOptions)
-          .quorumInfo().get()
+        val quorumInfo2Future = admin.describeMetadataQuorum(new DescribeMetadataQuorumOptions).quorumInfo
+        // If raft client finishes shutdown before returning NOT_LEADER_OR_FOLLOWER error, the request will not be handled.
+        // This makes test fail. Shutdown the controller to make sure the request is handled by another controller.
+        cluster.controllers.get(quorumInfo.leaderId).shutdown()
+        val quorumInfo2 = quorumInfo2Future.get
         // Make sure the leader has changed
         assertTrue(quorumInfo.leaderId() != quorumInfo2.leaderId())
 
