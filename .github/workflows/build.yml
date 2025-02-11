@@ -174,7 +174,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        java: [ 23, 17 ]  # If we change these, make sure to adjust ci-complete.yml
+        # If we change these, make sure to adjust ci-complete.yml
+        java: [ 23, 17 ]
         run-flaky: [ true, false ]
         run-new: [ true, false ]
         exclude:
