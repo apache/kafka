@@ -598,9 +598,8 @@ public class PartitionChangeBuilderTest {
         );
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testChangeInLeadershipDoesNotChangeRecoveryState(boolean isLeaderRecoverySupported) {
+    @Test
+    public void testChangeInLeadershipDoesNotChangeRecoveryState() {
         final byte noChange = (byte) -1;
         int leaderId = 1;
         LeaderRecoveryState recoveryState = LeaderRecoveryState.RECOVERING;
@@ -618,7 +617,7 @@ public class PartitionChangeBuilderTest {
             setPartitionEpoch(200).
             build();
 
-        MetadataVersion metadataVersion = MetadataVersion.IBP_3_3_IV3;
+        MetadataVersion metadataVersion = MetadataVersion.MINIMUM_VERSION;
 
         // Change the partition so that there is no leader
         PartitionChangeBuilder offlineBuilder = new PartitionChangeBuilder(
@@ -669,7 +668,6 @@ public class PartitionChangeBuilderTest {
 
     @Test
     void testUncleanSetsLeaderRecoveringState() {
-        final byte noChange = (byte) -1;
         int leaderId = 1;
         PartitionRegistration registration = new PartitionRegistration.Builder().
             setReplicas(new int[] {leaderId, leaderId + 1, leaderId + 2}).
@@ -685,7 +683,7 @@ public class PartitionChangeBuilderTest {
             setPartitionEpoch(200).
             build();
 
-        MetadataVersion metadataVersion = MetadataVersion.IBP_3_3_IV3;
+        MetadataVersion metadataVersion = MetadataVersion.MINIMUM_VERSION;
 
         // Change the partition using unclean leader election
         PartitionChangeBuilder onlineBuilder = new PartitionChangeBuilder(
@@ -759,7 +757,7 @@ public class PartitionChangeBuilderTest {
             topicId,
             0,
             isValidLeader,
-            MetadataVersion.IBP_3_3_IV3,
+            MetadataVersion.MINIMUM_VERSION,
             2
         );
 

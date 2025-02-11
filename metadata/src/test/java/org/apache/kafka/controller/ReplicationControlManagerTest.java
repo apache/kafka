@@ -2849,7 +2849,7 @@ public class ReplicationControlManagerTest {
     @Test
     public void testProcessBrokerHeartbeatInControlledShutdown() {
         ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().
-                setMetadataVersion(MetadataVersion.IBP_3_3_IV3).
+                setMetadataVersion(MetadataVersion.MINIMUM_VERSION).
                 build();
         ctx.registerBrokers(0, 1, 2);
         ctx.unfenceBrokers(0, 1, 2);

@@ -759,7 +759,7 @@ public class QuorumControllerTest {
                     new BrokerRegistrationRequestData().
                         setBrokerId(brokerId).
                         setClusterId(active.clusterId()).
-                        setFeatures(brokerFeatures(MetadataVersion.IBP_3_3_IV3, MetadataVersion.IBP_3_7_IV0)).
+                        setFeatures(brokerFeatures(MetadataVersion.MINIMUM_VERSION, MetadataVersion.IBP_3_7_IV0)).
                         setIncarnationId(Uuid.randomUuid()).
                         setListeners(listeners));
                 brokerEpochs.put(brokerId, reply.get().epoch());
@@ -817,7 +817,7 @@ public class QuorumControllerTest {
                     new BrokerRegistrationRequestData().
                         setBrokerId(brokerId).
                         setClusterId(active.clusterId()).
-                        setFeatures(brokerFeatures(MetadataVersion.IBP_3_3_IV3, MetadataVersion.IBP_3_7_IV0)).
+                        setFeatures(brokerFeatures(MetadataVersion.MINIMUM_VERSION, MetadataVersion.IBP_3_7_IV0)).
                         setIncarnationId(Uuid.randomUuid()).
                         setListeners(listeners));
                 brokerEpochs.put(brokerId, reply.get().epoch());
@@ -1497,7 +1497,7 @@ public class QuorumControllerTest {
             Arrays.asList(
                 new ApiMessageAndVersion(new FeatureLevelRecord().
                         setName(MetadataVersion.FEATURE_NAME).
-                        setFeatureLevel(MetadataVersion.IBP_3_3_IV3.featureLevel()),
+                        setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel()),
                         (short) 0),
                 new ApiMessageAndVersion(new ConfigRecord().
                         setResourceType(BROKER.id()).
@@ -1524,7 +1524,7 @@ public class QuorumControllerTest {
             TestUtils.waitForCondition(() -> {
                 FinalizedControllerFeatures features = active.finalizedFeatures(ctx).get();
                 Optional<Short> metadataVersionOpt = features.get(MetadataVersion.FEATURE_NAME);
-                return Optional.of(MetadataVersion.IBP_3_3_IV3.featureLevel()).equals(metadataVersionOpt);
+                return Optional.of(MetadataVersion.MINIMUM_VERSION.featureLevel()).equals(metadataVersionOpt);
             }, "Failed to see expected metadata.version from bootstrap metadata");
 
             TestUtils.waitForCondition(() -> {
