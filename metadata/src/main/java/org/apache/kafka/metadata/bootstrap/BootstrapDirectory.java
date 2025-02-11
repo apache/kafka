@@ -31,7 +31,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
-import java.util.Optional;
 
 import static java.nio.file.StandardCopyOption.ATOMIC_MOVE;
 import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
@@ -44,21 +43,16 @@ public class BootstrapDirectory {
     public static final String BINARY_BOOTSTRAP_FILENAME = "bootstrap.checkpoint";
 
     private final String directoryPath;
-    private final Optional<String> ibp;
 
     /**
      * Create a new BootstrapDirectory object.
      *
      * @param directoryPath     The path to the directory with the bootstrap file.
-     * @param ibp               The configured value of inter.broker.protocol, or the empty string
-     *                          if it is not configured.
      */
     public BootstrapDirectory(
-        String directoryPath,
-        Optional<String> ibp
+        String directoryPath
     ) {
         this.directoryPath = Objects.requireNonNull(directoryPath);
-        this.ibp = Objects.requireNonNull(ibp);
     }
 
     public BootstrapMetadata read() throws Exception {
@@ -80,11 +74,7 @@ public class BootstrapDirectory {
     }
 
     BootstrapMetadata readFromConfiguration() {
-        if (ibp.isEmpty()) {
-            return BootstrapMetadata.fromVersion(MetadataVersion.latestProduction(), "the default bootstrap");
-        }
-        MetadataVersion version = MetadataVersion.fromVersionString(ibp.get());
-        return BootstrapMetadata.fromVersion(version, "the configured bootstrap with metadata.version " + version);
+        return BootstrapMetadata.fromVersion(MetadataVersion.latestProduction(), "the default bootstrap");
     }
 
     BootstrapMetadata readFromBinaryFile(String binaryPath) throws Exception {

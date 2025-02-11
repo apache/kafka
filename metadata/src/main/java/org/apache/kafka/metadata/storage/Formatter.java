@@ -431,7 +431,7 @@ public class Formatter {
                     directoryTypes.get(writeLogDir).description(), writeLogDir,
                     MetadataVersion.FEATURE_NAME, releaseVersion);
                 Files.createDirectories(Paths.get(writeLogDir));
-                BootstrapDirectory bootstrapDirectory = new BootstrapDirectory(writeLogDir, Optional.empty());
+                BootstrapDirectory bootstrapDirectory = new BootstrapDirectory(writeLogDir);
                 bootstrapDirectory.writeBinaryFile(bootstrapMetadata);
                 if (directoryTypes.get(writeLogDir).isDynamicMetadataDirectory()) {
                     writeDynamicQuorumSnapshot(writeLogDir,
