@@ -32,15 +32,15 @@ import java.util.regex.Pattern;
  * We consider a version newer than another if it is lower in the enum list (to avoid depending on lexicographic order)
  * <br>
  * Since the api protocol may change more than once within the same release and to facilitate people deploying code from
- * trunk, we have the concept of internal versions (first introduced during the 0.10.0 development cycle). For example,
- * the first time we introduce a version change in a release, say 0.10.0, we will add a config value "0.10.0-IV0" and a
- * corresponding enum constant IBP_0_10_0-IV0. We will also add a config value "0.10.0" that will be mapped to the
- * latest internal version object, which is IBP_0_10_0-IV0. When we change the protocol a second time while developing
- * 0.10.0, we will add a new config value "0.10.0-IV1" and a corresponding enum constant IBP_0_10_0-IV1. We will change
- * the config value "0.10.0" to map to the latest internal version IBP_0_10_0-IV1. The config value of
- * "0.10.0-IV0" is still mapped to IBP_0_10_0-IV0. This way, if people are deploying from trunk, they can use
- * "0.10.0-IV0" and "0.10.0-IV1" to upgrade one internal version at a time. For most people who just want to use
- * released version, they can use "0.10.0" when upgrading to the 0.10.0 release.
+ * trunk, we have the concept of internal versions (first introduced during the 1.0 development cycle). For example,
+ * the first time we introduce a version change in a release, say 1.0, we will add a config value "1.0-IV0" and a
+ * corresponding enum constant IBP_1_0-IV0. We will also add a config value "1.0" that will be mapped to the
+ * latest internal version object, which is IBP_1_0-IV0. When we change the protocol a second time while developing
+ * 1.0, we will add a new config value "1.0-IV1" and a corresponding enum constant IBP_1_0-IV1. We will change
+ * the config value "1.0" to map to the latest internal version IBP_1_0-IV1. The config value of
+ * "1.0-IV0" is still mapped to IBP_1_0-IV0. This way, if people are deploying from trunk, they can use
+ * "1.0-IV0" and "1.0-IV1" to upgrade one internal version at a time. For most people who just want to use
+ * released version, they can use "1.0" when upgrading to the 1.0 release.
  */
 public enum MetadataVersion {
 
@@ -305,14 +305,14 @@ public enum MetadataVersion {
     }
 
     /**
-     * Return an `MetadataVersion` instance for `versionString`, which can be in a variety of formats (e.g. "0.8.0", "0.8.0.x",
-     * "0.10.0", "0.10.0-IV1"). `IllegalArgumentException` is thrown if `versionString` cannot be mapped to an `MetadataVersion`.
-     * Note that 'misconfigured' values such as "1.0.1" will be parsed to `IBP_1_0_IV0` as we ignore anything after the first
-     * two digits for versions that don't start with "0."
+     * Return an `MetadataVersion` instance for `versionString`, which can be in a variety of formats (e.g. "3.8", "3.8.x",
+     * "3.8.0", "3.8-IV0"). `IllegalArgumentException` is thrown if `versionString` cannot be mapped to an `MetadataVersion`.
+     * Note that 'misconfigured' values such as "3.8.1" will be parsed to `IBP_3_8_IV0` as we ignore anything after the first
+     * two segments.
      */
     public static MetadataVersion fromVersionString(String versionString) {
         String[] versionSegments = versionString.split(Pattern.quote("."));
-        int numSegments = (versionString.startsWith("0.")) ? 3 : 2;
+        int numSegments = 2;
         String key;
         if (numSegments >= versionSegments.length) {
             key = versionString;
