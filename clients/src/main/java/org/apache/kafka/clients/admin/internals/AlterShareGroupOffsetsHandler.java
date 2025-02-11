@@ -164,6 +164,8 @@ public class AlterShareGroupOffsetsHandler extends AdminApiHandler.Batched<Coord
             case NON_EMPTY_GROUP:
             case INVALID_REQUEST:
             case UNKNOWN_SERVER_ERROR:
+            case KAFKA_STORAGE_ERROR:
+            case GROUP_AUTHORIZATION_FAILED:
                 log.debug("AlterShareGroupOffsets request for group id {} and partition {} failed due" +
                         " to error {}.", groupId.idValue, topicPartition, error);
                 partitionResults.put(topicPartition, error);
