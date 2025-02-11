@@ -323,9 +323,9 @@ public class BlockingConnectorTest {
         normalConnectorHandle.expectedCommits(NUM_RECORDS_PRODUCED);
 
         Map<String, String> props = new HashMap<>();
-        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getName());
+        props.put(CONNECTOR_CLASS_CONFIG, TestableSourceConnector.class.getName());
         props.put(TASKS_MAX_CONFIG, "1");
-        props.put(MonitorableSourceConnector.TOPIC_CONFIG, TEST_TOPIC);
+        props.put(TestableSourceConnector.TOPIC_CONFIG, TEST_TOPIC);
         log.info("Creating normal connector");
         try {
             connect.configureConnector(NORMAL_CONNECTOR_NAME, props);

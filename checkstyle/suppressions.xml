@@ -183,6 +183,9 @@
     <suppress checks="JavaNCSS"
               files="(DistributedHerder|Worker)Test.java"/>
 
+    <suppress checks="ParameterNumber"
+              files="WorkerSinkTaskTest.java"/>
+
     <!-- Raft -->
     <suppress checks="NPathComplexity"
               files="(DynamicVoter|RecordsIterator).java"/>

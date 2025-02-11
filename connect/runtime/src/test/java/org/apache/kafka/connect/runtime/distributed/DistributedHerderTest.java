@@ -312,6 +312,7 @@ public class DistributedHerderTest {
     public void setUp() throws Exception {
         time = new MockTime();
         metrics = new MockConnectMetrics(time);
+        when(worker.metrics()).thenReturn(metrics);
         AutoCloseable uponShutdown = shutdownCalled::countDown;
 
         // Default to the old protocol unless specified otherwise
