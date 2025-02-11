@@ -83,7 +83,7 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
 
         // The current assignment from topic partition to members.
         Map<TargetPartition, List<String>> currentAssignment = currentAssignment(groupSpec);
-        return newAssignmentHomogeneous(groupSpec, targetPartitions, currentAssignment);
+        return newAssignmentHomogeneous(groupSpec, subscribeTopicIds, targetPartitions, currentAssignment);
     }
 
     private GroupAssignment assignHeterogeneous(
@@ -122,6 +122,7 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
 
     private GroupAssignment newAssignmentHomogeneous(
         GroupSpec groupSpec,
+        Set<Uuid> subscribeTopicIds,
         List<TargetPartition> targetPartitions,
         Map<TargetPartition, List<String>> currentAssignment) {
 
@@ -138,12 +139,18 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
 
         roundRobinAssignment(groupSpec.memberIds(), unassignedPartitions, newAssignment);
 
-        // Step 3: Combine current and new assignment and only consider the hash based assignment for the current assignment.
-        Map<TargetPartition, List<String>> currentAssignmentByHash = computePartitionsAssignmentByHash(currentAssignment);
+        // Step 3: We combine current assignment and new assignment.
+        // However, if any partitions are assigned members by step 1 in new assignment, and also have members in the current assignment assigned by 2,
+        // the members assigned in the current assignment by step 2 are ignored.
+        Map<TargetPartition, List<String>> currentAssignmentFiltered = filterCurrentAssignment(currentAssignment, assignedPartitions);
         Map<String, Set<TargetPartition>> finalAssignment = new HashMap<>();
 
-        currentAssignmentByHash.forEach((targetPartition, members) -> members.forEach(member ->
-            finalAssignment.computeIfAbsent(member, k -> new HashSet<>()).add(targetPartition)));
+        // When combining current assignment, we need to only consider the topics in current assignment that are also being
+        // subscribed in the new assignment as well.
+        currentAssignmentFiltered.forEach((targetPartition, members) -> {
+            if (subscribeTopicIds.contains(targetPartition.topicId))
+                members.forEach(member -> finalAssignment.computeIfAbsent(member, k -> new HashSet<>()).add(targetPartition));
+        });
         newAssignment.forEach((targetPartition, members) -> members.forEach(member ->
             finalAssignment.computeIfAbsent(member, k -> new HashSet<>()).add(targetPartition)));
 
@@ -179,13 +186,15 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
         unassignedPartitions.keySet().forEach(unassignedTopic ->
             roundRobinAssignment(topicToMemberSubscription.get(unassignedTopic), unassignedPartitions.get(unassignedTopic), newAssignment));
 
-        // Step 3: Combine current and new assignment and only consider the hash based assignment for the current assignment.
-        Map<TargetPartition, List<String>> currentAssignmentByHash = computePartitionsAssignmentByHash(currentAssignment);
+        // Step 3: We combine current assignment and new assignment.
+        // However, if any partitions are assigned members by step 1 in new assignment, and also have members in the current assignment assigned by 2,
+        // the members assigned in the current assignment by step 2 are ignored.
+        Map<TargetPartition, List<String>> currentAssignmentFiltered = filterCurrentAssignment(currentAssignment, assignedPartitions);
         Map<String, Set<TargetPartition>> finalAssignment = new HashMap<>();
 
-        // When combining current assignment, we need to consider the member subscription in current assignment and
-        // the subscription being used for new assignment.
-        currentAssignmentByHash.forEach((targetPartition, members) -> members.forEach(member -> {
+        // When combining current assignment, we need to only consider the member topic subscription in current assignment
+        // which is being subscribed in the new assignment as well.
+        currentAssignmentFiltered.forEach((targetPartition, members) -> members.forEach(member -> {
             if (topicToMemberSubscription.get(targetPartition.topicId()).contains(member))
                 finalAssignment.computeIfAbsent(member, k -> new HashSet<>()).add(targetPartition);
         }));
@@ -206,14 +215,31 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
         return new GroupAssignment(members);
     }
 
-    private Map<TargetPartition, List<String>> computePartitionsAssignmentByHash(
-        Map<TargetPartition, List<String>> currentAssignment) {
+    private Map<TargetPartition, List<String>> filterCurrentAssignment(
+        Map<TargetPartition, List<String>> currentAssignment,
+        Set<TargetPartition> assignedPartitions) {
+        // topic partitions which were a part of current assignment.
         List<TargetPartition> targetPartitions = currentAssignment.keySet().stream().toList();
+        // members which were a part of current assignment.
         Set<String> members = new HashSet<>();
         currentAssignment.values().forEach(members::addAll);
+        // Computing hash based assignment that would have occurred for the current assignment.
         Map<TargetPartition, List<String>> hashAssignment = new HashMap<>();
         memberHashAssignment(targetPartitions, members, hashAssignment);
-        return hashAssignment;
+
+        Map<TargetPartition, List<String>> filteredCurrentAssignment = new HashMap<>();
+        currentAssignment.forEach((targetPartition, assignedMembers) -> {
+            if (!assignedPartitions.contains(targetPartition)) {
+                filteredCurrentAssignment.put(targetPartition, assignedMembers);
+            } else {
+                assignedMembers.forEach(assignedMember -> {
+                    // only adding members which were added by step 1 for the current assignment for the assigned partitions.
+                    if (hashAssignment.getOrDefault(targetPartition, Collections.emptyList()).contains(assignedMember))
+                        filteredCurrentAssignment.computeIfAbsent(targetPartition, k -> new ArrayList<>()).add(assignedMember);
+                });
+            }
+        });
+        return filteredCurrentAssignment;
     }
 
     // Visible for testing.
