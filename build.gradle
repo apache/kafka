@@ -2474,9 +2474,9 @@ project(':tools') {
     testImplementation libs.apachedsLdifPartition
     testImplementation testLog4j2Libs
     testImplementation libs.jqwik
+    testImplementation libs.hamcrest
 
     testRuntimeOnly runtimeTestLibs
-    testRuntimeOnly libs.hamcrest
   }
 
   javadoc {

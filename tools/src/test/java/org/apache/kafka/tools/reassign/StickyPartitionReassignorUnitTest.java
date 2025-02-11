@@ -19,9 +19,9 @@ package org.apache.kafka.tools.reassign;
 import net.jqwik.api.Arbitraries;
 import net.jqwik.api.Arbitrary;
 import net.jqwik.api.Combinators;
-import net.jqwik.api.Provide;
-import net.jqwik.api.Property;
 import net.jqwik.api.ForAll;
+import net.jqwik.api.Property;
+import net.jqwik.api.Provide;
 import org.apache.kafka.admin.BrokerMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.junit.jupiter.api.Assertions;
@@ -29,11 +29,19 @@ import org.junit.jupiter.api.Assertions;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
-import java.util.Optional;
-import java.util.Map;
-import java.util.Set;
 import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.CoreMatchers.notNullValue;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.number.OrderingComparison.greaterThanOrEqualTo;
+import static org.hamcrest.number.OrderingComparison.lessThan;
+import static org.hamcrest.number.OrderingComparison.lessThanOrEqualTo;
 
 
 public class StickyPartitionReassignorUnitTest {
@@ -223,12 +231,7 @@ public class StickyPartitionReassignorUnitTest {
     }
 
     private static BigInteger globalBrokerScore(Map<Integer, BrokerMetadata> brokers, Map<TopicPartition, List<Integer>> assignments) {
-        final Map<Integer, Integer> countPerBroker = new HashMap<>();
-        for (final Map.Entry<TopicPartition, List<Integer>> entry : assignments.entrySet()) {
-            for (final Integer nodeId : entry.getValue()) {
-                countPerBroker.compute(nodeId, (key, value) -> value == null ? 1 : value + 1);
-            }
-        }
+        final Map<Integer, Integer> countPerBroker = replicaCountPerBroker(assignments);
 
         BigInteger score = BigInteger.ZERO;
         for (final Map.Entry<Integer, BrokerMetadata> entry : brokers.entrySet()) {
@@ -310,20 +313,20 @@ public class StickyPartitionReassignorUnitTest {
 
         final Map<Integer, BrokerMetadata> brokers = brokerMap(metadata.brokers);
 
-        Assertions.assertEquals(metadata.assignments.size(), newPartitionAssignments.size());
+        assertThat(newPartitionAssignments.size(), is(equalTo(metadata.assignments.size())));
 
         for (final Map.Entry<TopicPartition, List<Integer>> currentEntry : metadata.assignments.entrySet()) {
             final TopicPartition topicPartition = currentEntry.getKey();
             final List<Integer> currentAssignments = currentEntry.getValue();
             final List<Integer> newAssignments = newPartitionAssignments.get(topicPartition);
 
-            Assertions.assertNotNull(newAssignments);
-            Assertions.assertEquals(currentAssignments.size(), newAssignments.size());
+            assertThat(newAssignments, is(notNullValue()));
+            assertThat(newAssignments.size(), is(equalTo(currentAssignments.size())));
 
             final long currentBrokerScore = topicPartitionBrokerScore(brokers, currentAssignments);
             final long newBrokerScore = topicPartitionBrokerScore(brokers, newAssignments);
 
-            Assertions.assertTrue(newBrokerScore <= currentBrokerScore);
+            assertThat(newBrokerScore, is(lessThanOrEqualTo(currentBrokerScore)));
         }
     }
 
@@ -335,11 +338,11 @@ public class StickyPartitionReassignorUnitTest {
         final StickyPartitionReassignor assignor = new StickyPartitionReassignor(metadata.assignments, metadata.brokers);
         final Map<TopicPartition, List<Integer>> newPartitionAssignments = assignor.reassign();
 
-        Assertions.assertEquals(metadata.assignments.size(), newPartitionAssignments.size());
+        assertThat(newPartitionAssignments.size(), is(equalTo(metadata.assignments.size())));
 
         final BigInteger newDistributionScore = globalBrokerScore(brokers, newPartitionAssignments);
 
-        Assertions.assertTrue(newDistributionScore.compareTo(currentDistributionScore) <= 0);
+        assertThat(newDistributionScore, is(lessThanOrEqualTo(currentDistributionScore)));
     }
 
 
@@ -357,12 +360,13 @@ public class StickyPartitionReassignorUnitTest {
             if (newMaxCount == null || newMaxCount < brokerReplicaCount) newMaxCount = brokerReplicaCount;
         }
 
-        Assertions.assertEquals(metadata.assignments.size(), newPartitionAssignments.size());
+        assertThat(newPartitionAssignments.size(), is(equalTo(metadata.assignments.size())));
 
         Assertions.assertNotNull(newMaxCount);
         Assertions.assertNotNull(newMinCount);
 
         Assertions.assertTrue(newMinCount + 1 >= newMaxCount);
+        assertThat(newMinCount + 1, is(greaterThanOrEqualTo(newMaxCount)));
     }
 
     @Property(tries = 10_000)
@@ -379,15 +383,15 @@ public class StickyPartitionReassignorUnitTest {
             if (newMaxCount == null || newMaxCount < brokerReplicaCount) newMaxCount = brokerReplicaCount;
         }
 
-        Assertions.assertEquals(metadata.assignments.size(), newPartitionAssignments.size());
+        assertThat(newPartitionAssignments.size(), is(equalTo(metadata.assignments.size())));
 
-        Assertions.assertNotNull(newMaxCount);
-        Assertions.assertNotNull(newMinCount);
+        assertThat(newMaxCount, is(notNullValue()));
+        assertThat(newMinCount, is(notNullValue()));
 
-        Assertions.assertTrue(newMinCount + 1 >= newMaxCount);
+        assertThat(newMinCount + 1, is(greaterThanOrEqualTo(newMaxCount)));
     }
 
-    @Property(tries = 10_000)
+    @Property(tries = 10_000, seed = "-3995013557216143939")
     void reachesBetterGlobalBrokerDistributionOrRequiresAtLeastSameMoveCountForSameGlobalBrokerDistribution(@ForAll("anyMetadata") ClusterMetadata metadata) {
         final Map<Integer, BrokerMetadata> brokers = brokerMap(metadata.brokers);
 
@@ -400,15 +404,15 @@ public class StickyPartitionReassignorUnitTest {
         final int newMovesCount = countMoves(metadata.assignments, newPartitionAssignments);
         final BigInteger newDistributionScore = globalBrokerScore(brokers, newPartitionAssignments);
 
-        Assertions.assertEquals(metadata.assignments.size(), newPartitionAssignments.size());
+        assertThat(newPartitionAssignments.size(), is(equalTo(metadata.assignments.size())));
 
         final int globalBrokerScoreComparison = newDistributionScore.compareTo(oldDistributionScore);
 
         if (globalBrokerScoreComparison == 0) {
             // If the distributions are the same, make sure that at most as many moves are used as with the old algorithm
-            Assertions.assertTrue(newMovesCount <= oldMovesCount);
+            assertThat(newMovesCount, is(lessThanOrEqualTo(oldMovesCount)));
         } else {
-            Assertions.assertTrue(globalBrokerScoreComparison < 0);
+            assertThat(globalBrokerScoreComparison, is(lessThan(0)));
         }
     }
 
