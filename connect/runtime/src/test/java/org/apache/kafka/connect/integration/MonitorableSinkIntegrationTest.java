@@ -102,7 +102,7 @@ public class MonitorableSinkIntegrationTest {
                 "Connector task was not assigned a partition.");
 
         // check connector metric
-        Map<MetricName, KafkaMetric> metrics = connect.herder().worker().metrics().metrics().metrics();
+        Map<MetricName, KafkaMetric> metrics = connect.connectMetrics().metrics().metrics();
         MetricName connectorMetric = MonitorableSinkConnector.metricsName;
         assertTrue(metrics.containsKey(connectorMetric));
         assertEquals(CONNECTOR_NAME, connectorMetric.tags().get("connector"));
@@ -118,7 +118,7 @@ public class MonitorableSinkIntegrationTest {
         connectorHandle.taskHandle(TASK_ID).awaitRecords(CONSUME_MAX_DURATION_MS);
 
         // check task metric
-        metrics = connect.herder().worker().metrics().metrics().metrics();
+        metrics = connect.connectMetrics().metrics().metrics();
         MetricName taskMetric = MonitorableSinkConnector.MonitorableSinkTask.metricsName;
         assertTrue(metrics.containsKey(taskMetric));
         assertEquals(CONNECTOR_NAME, taskMetric.tags().get("connector"));
@@ -130,7 +130,7 @@ public class MonitorableSinkIntegrationTest {
                 "Connector wasn't deleted in time.");
 
         // verify connector and task metrics have been deleted
-        metrics = connect.herder().worker().metrics().metrics().metrics();
+        metrics = connect.connectMetrics().metrics().metrics();
         assertFalse(metrics.containsKey(connectorMetric));
         assertFalse(metrics.containsKey(taskMetric));
     }

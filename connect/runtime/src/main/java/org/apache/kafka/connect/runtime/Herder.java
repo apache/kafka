@@ -382,10 +382,10 @@ public interface Herder {
     void setClusterLoggerLevel(String namespace, String level);
 
     /**
-     * Get the worker for this herder
-     * @return the worker
+     * Get the ConnectMetrics from the worker for this herder
+     * @return the ConnectMetrics
      */
-    Worker worker();
+    ConnectMetrics connectMetrics();
 
     enum ConfigReloadAction {
         NONE,

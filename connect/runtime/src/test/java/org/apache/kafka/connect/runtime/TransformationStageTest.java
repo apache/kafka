@@ -54,10 +54,8 @@ public class TransformationStageTest {
         when(predicatePlugin.get()).thenReturn(predicate);
         Plugin<Transformation<SourceRecord>> transformationPlugin = mock(Plugin.class);
         Transformation<SourceRecord> transformation = mock(Transformation.class);
-        if ((predicateResult && !negate) || (!predicateResult && negate)) {
-            when(transformationPlugin.get()).thenReturn(transformation);
-        }
         if (expectedResult == transformed) {
+            when(transformationPlugin.get()).thenReturn(transformation);
             when(transformation.apply(any())).thenReturn(transformed);
         }
         TransformationStage<SourceRecord> stage = new TransformationStage<>(

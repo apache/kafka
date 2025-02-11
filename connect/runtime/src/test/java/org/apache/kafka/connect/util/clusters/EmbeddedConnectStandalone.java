@@ -18,6 +18,7 @@ package org.apache.kafka.connect.util.clusters;
 
 import org.apache.kafka.connect.cli.ConnectStandalone;
 import org.apache.kafka.connect.runtime.Connect;
+import org.apache.kafka.connect.runtime.ConnectMetrics;
 import org.apache.kafka.connect.runtime.standalone.StandaloneHerder;
 import org.apache.kafka.test.TestUtils;
 
@@ -138,8 +139,8 @@ public class EmbeddedConnectStandalone extends EmbeddedConnect {
         return result;
     }
 
-    public StandaloneHerder herder() {
-        return connect.herder();
+    public ConnectMetrics connectMetrics() {
+        return connect.herder().connectMetrics();
     }
 
     public static class Builder extends EmbeddedConnectBuilder<EmbeddedConnectStandalone, Builder> {

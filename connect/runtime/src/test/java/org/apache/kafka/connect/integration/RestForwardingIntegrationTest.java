@@ -22,7 +22,6 @@ import org.apache.kafka.common.network.ConnectionMode;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.MockConnectMetrics;
-import org.apache.kafka.connect.runtime.Worker;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.runtime.distributed.NotLeaderException;
@@ -95,8 +94,6 @@ public class RestForwardingIntegrationTest {
     private ConnectRestServer leaderServer;
     @Mock
     private Herder leaderHerder;
-    @Mock
-    private Worker worker;
 
     private SslContextFactory.Client factory;
     private CloseableHttpClient httpClient;
@@ -172,8 +169,7 @@ public class RestForwardingIntegrationTest {
         followerServer = new ConnectRestServer(null, followerClient, followerConfig.originals());
         followerServer.initializeServer();
         when(followerHerder.plugins()).thenReturn(plugins);
-        doReturn(new MockConnectMetrics()).when(worker).metrics();
-        doReturn(worker).when(followerHerder).worker();
+        doReturn(new MockConnectMetrics()).when(followerHerder).connectMetrics();
         followerServer.initializeResources(followerHerder);
 
         // Leader worker setup
@@ -181,8 +177,7 @@ public class RestForwardingIntegrationTest {
         leaderServer = new ConnectRestServer(null, leaderClient, leaderConfig.originals());
         leaderServer.initializeServer();
         when(leaderHerder.plugins()).thenReturn(plugins);
-        doReturn(new MockConnectMetrics()).when(worker).metrics();
-        doReturn(worker).when(leaderHerder).worker();
+        doReturn(new MockConnectMetrics()).when(leaderHerder).connectMetrics();
         leaderServer.initializeResources(leaderHerder);
 
         // External client setup

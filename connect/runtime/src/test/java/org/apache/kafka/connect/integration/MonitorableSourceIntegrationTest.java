@@ -104,14 +104,14 @@ public class MonitorableSourceIntegrationTest {
         connectorHandle.taskHandle(TASK_ID).awaitCommits(TimeUnit.MINUTES.toMillis(1));
 
         // check connector metric
-        Map<MetricName, KafkaMetric> metrics = connect.herder().worker().metrics().metrics().metrics();
+        Map<MetricName, KafkaMetric> metrics = connect.connectMetrics().metrics().metrics();
         MetricName connectorMetric = MonitorableSourceConnector.metricsName;
         assertTrue(metrics.containsKey(connectorMetric));
         assertEquals(CONNECTOR_NAME, connectorMetric.tags().get("connector"));
         assertEquals(MonitorableSourceConnector.VALUE, metrics.get(connectorMetric).metricValue());
 
         // check task metric
-        metrics = connect.herder().worker().metrics().metrics().metrics();
+        metrics = connect.connectMetrics().metrics().metrics();
         MetricName taskMetric = MonitorableSourceConnector.MonitorableSourceTask.metricsName;
         assertTrue(metrics.containsKey(taskMetric));
         assertEquals(CONNECTOR_NAME, taskMetric.tags().get("connector"));
@@ -123,7 +123,7 @@ public class MonitorableSourceIntegrationTest {
                 "Connector wasn't deleted in time.");
 
         // verify the connector and task metrics have been deleted
-        metrics = connect.herder().worker().metrics().metrics().metrics();
+        metrics = connect.connectMetrics().metrics().metrics();
         assertFalse(metrics.containsKey(connectorMetric));
         assertFalse(metrics.containsKey(taskMetric));
     }

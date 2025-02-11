@@ -175,7 +175,7 @@ public class ConnectMetrics {
         AppInfoParser.unregisterAppInfo(JMX_PREFIX, workerId, metrics);
     }
 
-    PluginMetricsImpl connectorPluginMetrics(String connectorId) {
+    public PluginMetricsImpl connectorPluginMetrics(String connectorId) {
         return new PluginMetricsImpl(metrics, connectorPluginTags(connectorId));
     }
 

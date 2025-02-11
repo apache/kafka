@@ -17,7 +17,6 @@
 package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.common.metrics.PluginMetrics;
-import org.apache.kafka.common.metrics.internals.PluginMetricsImpl;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.ConnectorContext;
@@ -83,7 +82,6 @@ public class WorkerConnector implements Runnable {
     private State state;
     private final CloseableOffsetStorageReader offsetStorageReader;
     private final ConnectorOffsetBackingStore offsetStore;
-    private final PluginMetricsImpl pluginMetrics;
 
     public WorkerConnector(String connName,
                            Connector connector,
@@ -110,7 +108,6 @@ public class WorkerConnector implements Runnable {
         this.externalFailure = null;
         this.stopping = false;
         this.cancelled = false;
-        this.pluginMetrics = connectMetrics.connectorPluginMetrics(connName);
     }
 
     public ClassLoader loader() {
@@ -195,12 +192,12 @@ public class WorkerConnector implements Runnable {
             log.debug("{} Initializing connector {}", this, connName);
             if (isSinkConnector()) {
                 SinkConnectorConfig.validate(config);
-                connector.initialize(new WorkerSinkConnectorContext(pluginMetrics));
+                connector.initialize(new WorkerSinkConnectorContext());
             } else {
                 Objects.requireNonNull(offsetStore, "Offset store cannot be null for source connectors");
                 Objects.requireNonNull(offsetStorageReader, "Offset reader cannot be null for source connectors");
                 offsetStore.start();
-                connector.initialize(new WorkerSourceConnectorContext(offsetStorageReader, pluginMetrics));
+                connector.initialize(new WorkerSourceConnectorContext(offsetStorageReader));
             }
         } catch (Throwable t) {
             log.error("{} Error initializing connector", this, t);
@@ -328,7 +325,6 @@ public class WorkerConnector implements Runnable {
             if (offsetStore != null) {
                 Utils.closeQuietly(offsetStore::stop, "offset backing store for " + connName);
             }
-            Utils.closeQuietly(pluginMetrics, "plugin metrics");
         }
     }
 
@@ -587,40 +583,27 @@ public class WorkerConnector implements Runnable {
             onFailure(e);
             WorkerConnector.this.ctx.raiseError(e);
         }
-    }
-
-    private class WorkerSinkConnectorContext extends WorkerConnectorContext implements SinkConnectorContext {
-
-        private final PluginMetrics pluginMetrics;
-
-        WorkerSinkConnectorContext(PluginMetrics pluginMetrics) {
-            this.pluginMetrics = pluginMetrics;
-        }
 
         @Override
         public PluginMetrics pluginMetrics() {
-            return pluginMetrics;
+            return WorkerConnector.this.ctx.pluginMetrics();
         }
+    }
+
+    private class WorkerSinkConnectorContext extends WorkerConnectorContext implements SinkConnectorContext {
     }
 
     private class WorkerSourceConnectorContext extends WorkerConnectorContext implements SourceConnectorContext {
 
         private final OffsetStorageReader offsetStorageReader;
-        private final PluginMetrics pluginMetrics;
 
-        WorkerSourceConnectorContext(OffsetStorageReader offsetStorageReader, PluginMetrics pluginMetrics) {
+        WorkerSourceConnectorContext(OffsetStorageReader offsetStorageReader) {
             this.offsetStorageReader = offsetStorageReader;
-            this.pluginMetrics = pluginMetrics;
         }
 
         @Override
         public OffsetStorageReader offsetStorageReader() {
             return offsetStorageReader;
-        }
-
-        @Override
-        public PluginMetrics pluginMetrics() {
-            return pluginMetrics;
         }
     }
 }

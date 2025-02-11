@@ -393,8 +393,8 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     }
 
     @Override
-    public Worker worker() {
-        return worker;
+    public ConnectMetrics connectMetrics() {
+        return worker.metrics();
     }
 
     protected Map<String, ConfigValue> validateSinkConnectorConfig(SinkConnector connector, ConfigDef configDef, Map<String, String> config) {

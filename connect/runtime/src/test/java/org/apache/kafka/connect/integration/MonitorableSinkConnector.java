@@ -28,8 +28,8 @@ import java.util.Map;
 
 public class MonitorableSinkConnector extends TestableSinkConnector {
 
-    public static MetricName metricsName = null;
     public static final String VALUE = "started";
+    public static MetricName metricsName = null;
 
     @Override
     public void start(Map<String, String> props) {
@@ -59,8 +59,8 @@ public class MonitorableSinkConnector extends TestableSinkConnector {
 
         @Override
         public void put(Collection<SinkRecord> records) {
+            super.put(records);
             for (SinkRecord ignore : records) {
-                taskHandle.record();
                 count++;
             }
         }

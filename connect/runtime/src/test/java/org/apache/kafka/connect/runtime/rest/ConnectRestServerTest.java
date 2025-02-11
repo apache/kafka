@@ -23,12 +23,10 @@ import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Monitorable;
 import org.apache.kafka.common.metrics.PluginMetrics;
 import org.apache.kafka.common.utils.LogCaptureAppender;
-import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.rest.ConnectRestExtension;
 import org.apache.kafka.connect.rest.ConnectRestExtensionContext;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.MockConnectMetrics;
-import org.apache.kafka.connect.runtime.Worker;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.isolation.PluginsTest;
 import org.apache.kafka.connect.runtime.rest.entities.LoggerLevel;
@@ -66,6 +64,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import jakarta.ws.rs.core.MediaType;
@@ -75,7 +74,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -89,7 +87,6 @@ public class ConnectRestServerTest {
     @Mock private RestClient restClient;
     @Mock private Herder herder;
     @Mock private Plugins plugins;
-    @Mock private Worker worker;
     private ConnectRestServer server;
     private CloseableHttpClient httpClient;
     private final Collection<CloseableHttpResponse> responses = new ArrayList<>();
@@ -99,8 +96,7 @@ public class ConnectRestServerTest {
     @BeforeEach
     public void setUp() {
         httpClient = HttpClients.createMinimal();
-        doReturn(new MockConnectMetrics()).when(worker).metrics();
-        doReturn(worker).when(herder).worker();
+        doReturn(new MockConnectMetrics()).when(herder).connectMetrics();
     }
 
     @AfterEach
@@ -136,7 +132,6 @@ public class ConnectRestServerTest {
     public void testAdvertisedUri() {
         // Clear stubs not needed by this test
         reset(herder);
-        reset(worker);
 
         // Advertised URI from listeners without protocol
         Map<String, String> configMap = new HashMap<>(baseServerProps());
@@ -418,18 +413,18 @@ public class ConnectRestServerTest {
         configMap.put(RestServerConfig.REST_EXTENSION_CLASSES_CONFIG, MonitorableConnectRestExtension.class.getName());
 
         doReturn(plugins).when(herder).plugins();
-        doReturn(Collections.singletonList(new MonitorableConnectRestExtension())).when(plugins).newPlugins(any(), any(), any());
+        doReturn(List.of(new MonitorableConnectRestExtension())).when(plugins).newPlugins(any(), any(), eq(ConnectRestExtension.class));
+
         server = new ConnectRestServer(null, restClient, configMap);
+        server.initializeServer();
+        server.initializeResources(herder);
 
-        // the call throws because of mocks but the ConnectRestExtension should have been initialized
-        assertThrows(ConnectException.class, () -> server.initializeResources(herder));
-
-        Map<MetricName, KafkaMetric> metrics = herder.worker().metrics().metrics().metrics();
+        Map<MetricName, KafkaMetric> metrics = herder.connectMetrics().metrics().metrics();
         assertTrue(metrics.containsKey(MonitorableConnectRestExtension.metricName));
         assertTrue((boolean) metrics.get(MonitorableConnectRestExtension.metricName).metricValue());
 
         server.stop();
-        metrics = herder.worker().metrics().metrics().metrics();
+        metrics = herder.connectMetrics().metrics().metrics();
         assertFalse(metrics.containsKey(MonitorableConnectRestExtension.metricName));
     }
 

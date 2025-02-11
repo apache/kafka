@@ -511,7 +511,7 @@ public abstract class RestServer {
                     config,
                     ConnectRestExtension.class
                 ),
-                herder.worker().metrics().metrics(),
+                herder.connectMetrics().metrics(),
                 RestServerConfig.REST_EXTENSION_CLASSES_CONFIG);
 
         long herderRequestTimeoutMs = DEFAULT_REST_REQUEST_TIMEOUT_MS;
