@@ -207,7 +207,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                  consumer_group_migration_policy=None,
                  dynamicRaftQuorum=False,
                  use_transactions_v2=False,
-                 use_share_groups=None,
+                 use_share_groups=None
                  ):
         """
         :param context: test context
@@ -761,7 +761,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         #load template configs as dictionary
         config_template = self.render('kafka.properties', node=node, broker_id=self.idx(node),
                                       security_config=self.security_config, num_nodes=self.num_nodes,
-                                      listener_security_config=self.listener_security_config)
+                                      listener_security_config=self.listener_security_config,
+                                      use_share_groups=self.use_share_groups)
 
         configs = dict( l.rstrip().split('=', 1) for l in config_template.split('\n')
                         if not l.startswith("#") and "=" in l )
@@ -794,8 +795,6 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             override_configs[config_property.SHARE_GROUP_ENABLE] = str(self.use_share_groups)
             override_configs[config_property.UNSTABLE_API_VERSIONS_ENABLE] = str(self.use_share_groups)
             override_configs[config_property.GROUP_COORDINATOR_REBALANCE_PROTOCOLS] = 'classic,consumer,share'
-            override_configs[config_property.SHARE_COORDINATOR_STATE_TOPIC_REPLICATION_FACTOR] = str(min(self.num_nodes, 3))
-            override_configs[config_property.SHARE_COORDINATOR_STATE_TOPIC_MIN_ISR] = '1'
 
         #update template configs with test override configs
         configs.update(override_configs)
