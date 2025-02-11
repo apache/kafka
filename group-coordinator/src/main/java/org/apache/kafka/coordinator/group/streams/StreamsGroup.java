@@ -454,15 +454,6 @@ public class StreamsGroup implements Group {
         return Collections.unmodifiableMap(members);
     }
 
-    public boolean membersStable() {
-        for (StreamsGroupMember member : members.values()) {
-            if (member.state() != MemberState.STABLE) {
-                return false;
-            }
-        }
-        return true;
-    }
-
     /**
      * @return An immutable Map containing all the static members keyed by instance id.
      */
