@@ -203,9 +203,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                     Map<TopicIdPartition, Acknowledgements> nodeAcksFromFetchMap = fetchAcknowledgementsToSend.get(nodeId);
                     if (nodeAcksFromFetchMap != null) {
                         nodeAcksFromFetchMap.forEach((tip, acks) -> {
-                            Optional<Node> leaderNode = metadata.currentLeader(tip.topicPartition()).leader;
-                            
-                            if (leaderNode.isPresent() && leaderNode.get().id() == nodeId) {
+                            if (isNodeLeader(nodeId, tip)) {
                                 metricsManager.recordAcknowledgementSent(acks.size());
                                 fetchAcknowledgementsInFlight.computeIfAbsent(node.id(), k -> new HashMap<>()).put(tip, acks);
 
@@ -608,7 +606,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         sessionHandlers.forEach((nodeId, sessionHandler) -> {
             Node node = cluster.nodeById(nodeId);
             if (node != null) {
-                //Add piggyback acks for node if any
+                //Add any waiting piggyback acknowledgements for the node.
                 Map<TopicIdPartition, Acknowledgements> fetchAcks = fetchAcknowledgementsToSend.remove(nodeId);
                 if (fetchAcks != null) {
                     fetchAcks.forEach((tip, acks) -> {
@@ -665,17 +663,22 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         return closeFuture;
     }
 
+    /**
+     *
+     * @return True if nodeId is the leader or if leader information is not present for the topicIdPartition.
+     * Returns false if nodeId is not the leader for the given topicIdPartition
+     */
     private boolean isNodeLeader(int nodeId, TopicIdPartition topicIdPartition) {
         Optional<Node> leaderNode = metadata.currentLeader(topicIdPartition.topicPartition()).leader;
         if (leaderNode.isPresent()) {
             if (leaderNode.get().id() != nodeId) {
-                log.debug("Node {} is no longer the leader for topic ID partition {}, failing acknowledgements", nodeId, topicIdPartition);
+                log.debug("Node {} is no longer the leader for partition {}, failing acknowledgements", nodeId, topicIdPartition);
                 return false;
             }
         } else {
-            log.debug("No leader found for topic ID partition {}", topicIdPartition);
+            log.debug("No leader found for partition {}", topicIdPartition);
             metadata.requestUpdate(false);
-            return false;
+            return true;
         }
         return true;
     }

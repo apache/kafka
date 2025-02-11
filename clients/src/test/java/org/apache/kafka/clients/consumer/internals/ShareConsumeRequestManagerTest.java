@@ -849,7 +849,12 @@ public class ShareConsumeRequestManagerTest {
         acknowledgements.add(2L, AcknowledgeType.ACCEPT);
         acknowledgements.add(3L, AcknowledgeType.REJECT);
 
-        assignFromSubscribed(singleton(tp1));
+        subscriptions.subscribeToShareGroup(Collections.singleton(topicName2));
+        subscriptions.assignFromSubscribed(Collections.singleton(t2p0));
+
+        client.updateMetadata(
+                RequestTestUtils.metadataUpdateWithIds(1, singletonMap(topicName2, 1),
+                        tp -> validLeaderEpoch, topicIds, false));
 
         shareConsumeRequestManager.commitAsync(Collections.singletonMap(tip0, new NodeAcknowledgements(0, acknowledgements)));
 
@@ -861,6 +866,81 @@ public class ShareConsumeRequestManagerTest {
         // We should send a fetch to the newly subscribed partition.
         assertEquals(1, sendFetches());
 
+    }
+
+    @Test
+    public void testCommitSyncWithSubscriptionChange() {
+        buildRequestManager();
+
+        assignFromSubscribed(singleton(tp0));
+
+        assertEquals(1, sendFetches());
+        assertFalse(shareConsumeRequestManager.hasCompletedFetches());
+
+        client.prepareResponse(fullFetchResponse(tip0, records, acquiredRecords, Errors.NONE));
+        networkClientDelegate.poll(time.timer(0));
+        assertTrue(shareConsumeRequestManager.hasCompletedFetches());
+
+        Acknowledgements acknowledgements = Acknowledgements.empty();
+        acknowledgements.add(1L, AcknowledgeType.ACCEPT);
+        acknowledgements.add(2L, AcknowledgeType.ACCEPT);
+        acknowledgements.add(3L, AcknowledgeType.REJECT);
+
+        subscriptions.subscribeToShareGroup(Collections.singleton(topicName2));
+        subscriptions.assignFromSubscribed(Collections.singleton(t2p0));
+
+        client.updateMetadata(
+                RequestTestUtils.metadataUpdateWithIds(1, singletonMap(topicName2, 1),
+                        tp -> validLeaderEpoch, topicIds, false));
+
+        shareConsumeRequestManager.commitSync(Collections.singletonMap(tip0, new NodeAcknowledgements(0, acknowledgements)),
+                calculateDeadlineMs(time.timer(100)));
+
+        assertEquals(1, shareConsumeRequestManager.sendAcknowledgements());
+
+        client.prepareResponse(fullAcknowledgeResponse(tip1, Errors.NONE));
+        networkClientDelegate.poll(time.timer(0));
+
+        // We should send a fetch to the newly subscribed partition.
+        assertEquals(1, sendFetches());
+
+    }
+
+    @Test
+    public void testCloseWithSubscriptionChange() {
+        buildRequestManager();
+
+        assignFromSubscribed(singleton(tp0));
+
+        assertEquals(1, sendFetches());
+        assertFalse(shareConsumeRequestManager.hasCompletedFetches());
+
+        client.prepareResponse(fullFetchResponse(tip0, records, acquiredRecords, Errors.NONE));
+        networkClientDelegate.poll(time.timer(0));
+        assertTrue(shareConsumeRequestManager.hasCompletedFetches());
+
+        Acknowledgements acknowledgements = Acknowledgements.empty();
+        acknowledgements.add(1L, AcknowledgeType.ACCEPT);
+        acknowledgements.add(2L, AcknowledgeType.ACCEPT);
+        acknowledgements.add(3L, AcknowledgeType.REJECT);
+
+        subscriptions.subscribeToShareGroup(Collections.singleton(topicName2));
+        subscriptions.assignFromSubscribed(Collections.singleton(t2p0));
+
+        client.updateMetadata(
+                RequestTestUtils.metadataUpdateWithIds(1, singletonMap(topicName2, 1),
+                        tp -> validLeaderEpoch, topicIds, false));
+
+        shareConsumeRequestManager.acknowledgeOnClose(Collections.singletonMap(tip0, new NodeAcknowledgements(0, acknowledgements)),
+                calculateDeadlineMs(time.timer(100)));
+
+        assertEquals(1, shareConsumeRequestManager.sendAcknowledgements());
+
+        client.prepareResponse(fullAcknowledgeResponse(tip1, Errors.NONE));
+        networkClientDelegate.poll(time.timer(0));
+
+        // As we are closing, we would not send any more fetches.
+        assertEquals(0, sendFetches());
     }
 
     @Test
@@ -885,7 +965,12 @@ public class ShareConsumeRequestManagerTest {
         shareConsumeRequestManager.fetch(Collections.singletonMap(tip0, new NodeAcknowledgements(0, acknowledgements)));
         fetchRecords();
         // Subscription changes.
-        assignFromSubscribed(singleton(tp1));
+        subscriptions.subscribeToShareGroup(Collections.singleton(topicName2));
+        subscriptions.assignFromSubscribed(Collections.singleton(t2p0));
+
+        client.updateMetadata(
+                RequestTestUtils.metadataUpdateWithIds(1, singletonMap(topicName2, 1),
+                        tp -> validLeaderEpoch, topicIds, false));
 
         assertEquals(1, sendFetches());
         assertFalse(shareConsumeRequestManager.hasCompletedFetches());
@@ -2021,7 +2106,7 @@ public class ShareConsumeRequestManagerTest {
     }
 
     @Test
-    void testLeadershipChangeAfterFetchBeforeClose() throws ExecutionException, InterruptedException {
+    void testLeadershipChangeAfterFetchBeforeClose() {
         buildRequestManager();
         shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
 
