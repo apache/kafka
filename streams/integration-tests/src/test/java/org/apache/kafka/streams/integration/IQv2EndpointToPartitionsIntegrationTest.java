@@ -25,6 +25,7 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetadata;
+import org.apache.kafka.streams.ThreadMetadata;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
@@ -68,8 +69,6 @@ public class IQv2EndpointToPartitionsIntegrationTest {
     private static final int NUM_BROKERS = 3;
     private static final Logger LOG = LoggerFactory.getLogger(IQv2EndpointToPartitionsIntegrationTest.class);
 
-
-
     public void startCluster(final int standbyConfig) throws IOException {
         final Properties properties = new Properties();
         properties.put(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer,streams");
@@ -97,7 +96,6 @@ public class IQv2EndpointToPartitionsIntegrationTest {
             IntegrationTestUtils.purgeLocalStreamsState(streamsSecondApplicationProperties);
         }
     }
-
 
     @ParameterizedTest(name = "{3}")
     @MethodSource("groupProtocolParameters")
@@ -132,21 +130,19 @@ public class IQv2EndpointToPartitionsIntegrationTest {
             final Topology topology = complexTopology();
             try (final KafkaStreams streamsOne = new KafkaStreams(topology, streamsApplicationProperties)) {
                 IntegrationTestUtils.startApplicationAndWaitUntilRunning(streamsOne);
-                List<StreamsMetadata> streamsMetadataAllClients = new ArrayList<>(streamsOne.metadataForAllStreamsClients());
+                final List<StreamsMetadata> streamsMetadataAllClients = new ArrayList<>(streamsOne.metadataForAllStreamsClients());
                 assertEquals(1, streamsMetadataAllClients.size());
                 final StreamsMetadata streamsOneMetadataOne = streamsMetadataAllClients.get(0);
                 final Set<TopicPartition> topicPartitions = streamsOneMetadataOne.topicPartitions();
                 assertEquals(2020, streamsOneMetadataOne.hostInfo().port());
                 assertEquals(4, topicPartitions.size());
-                // Only one KS client instance should be no standby assigned
                 assertEquals(0, streamsOneMetadataOne.standbyTopicPartitions().size());
 
                 final long repartitionTopicTaskCount = topicPartitions.stream().filter(tp -> tp.topic().contains("-repartition")).count();
                 final long sourceTopicTaskCount = topicPartitions.stream().filter(tp -> tp.topic().contains("-input-two")).count();
                 assertEquals(2, repartitionTopicTaskCount);
                 assertEquals(2, sourceTopicTaskCount);
-
-                LOG.info("StreamsMetadata with one running streams client -> topicPartitions for streamsOne: {}", streamsOneMetadataOne.topicPartitions());
+                final int expectedStandbyTopicPartitionCount = usingStandbyReplicas ? 1 : 0;
 
                 try (final KafkaStreams streamsTwo = new KafkaStreams(topology, streamsSecondApplicationProperties)) {
                     streamsTwo.start();
@@ -154,34 +150,41 @@ public class IQv2EndpointToPartitionsIntegrationTest {
                             IntegrationTestUtils.DEFAULT_TIMEOUT,
                             () -> "Kafka Streams one or two never transitioned to a RUNNING state.");
 
-                    waitForCondition(() -> streamsTwo.metadataForAllStreamsClients().size() == 2,
-                            IntegrationTestUtils.DEFAULT_TIMEOUT * 2,
-                            () -> "Never got metadata for 2 streams client");
-                    
-                    streamsMetadataAllClients = new ArrayList<>(streamsTwo.metadataForAllStreamsClients());
-                    assertEquals(2, streamsMetadataAllClients.size());
-                    final StreamsMetadata streamsOneMetadataOneUpdated = streamsMetadataAllClients.get(0);
+                    waitForCondition(() ->  {
+                        final ThreadMetadata threadMetadata = streamsOne.metadataForLocalThreads().iterator().next();
+                        return threadMetadata.activeTasks().size() == 2 && threadMetadata.standbyTasks().size() == expectedStandbyTopicPartitionCount;
+                    }, TestUtils.DEFAULT_MAX_WAIT_MS,
+                            "KafkaStreams one never released active tasks and received standby task");
 
+                    waitForCondition(() -> {
+                        final ThreadMetadata threadMetadata = streamsTwo.metadataForLocalThreads().iterator().next();
+                        return threadMetadata.activeTasks().size() == 2 && threadMetadata.standbyTasks().size() == expectedStandbyTopicPartitionCount;
+                    }, TestUtils.DEFAULT_MAX_WAIT_MS,
+                            "KafkaStreams two never received active tasks and standby");
+
+                    waitForCondition(() -> {
+                        final List<StreamsMetadata> metadata = new ArrayList<>(streamsTwo.metadataForAllStreamsClients());
+                        return metadata.size() == 2 &&
+                               metadata.get(0).standbyTopicPartitions().size() == expectedStandbyTopicPartitionCount &&
+                               metadata.get(1).standbyTopicPartitions().size() == expectedStandbyTopicPartitionCount;
+                    }, TestUtils.DEFAULT_MAX_WAIT_MS,
+                            "Kafka Streams clients 1 and 2 never got metadata about standby tasks");
+
+                    final List<StreamsMetadata> allClientMetadataUpdated = new ArrayList<>(streamsTwo.metadataForAllStreamsClients());
+                    final StreamsMetadata streamsOneMetadataOneUpdated = allClientMetadataUpdated.get(0);
                     final Set<TopicPartition> streamsOneTopicPartitions = streamsOneMetadataOneUpdated.topicPartitions();
-                    LOG.info("StreamsMetadata with two running streams clients -> topicPartitions for streamsOne: {}", streamsOneTopicPartitions);
                     assertEquals(2020, streamsOneMetadataOneUpdated.hostInfo().port());
                     assertEquals(2, streamsOneTopicPartitions.size());
-                    final int standbyTopicPartitionCount = usingStandbyReplicas ? 1 : 0;
-                    
-                    assertEquals(standbyTopicPartitionCount, streamsOneMetadataOneUpdated.standbyTopicPartitions().size());
-
                     final long streamsOneRepartitionTopicTaskCount = streamsOneTopicPartitions.stream().filter(tp -> tp.topic().contains("-repartition")).count();
                     final long streamsOneSourceTopicTaskCount = streamsOneTopicPartitions.stream().filter(tp -> tp.topic().contains("-input-two")).count();
                     assertEquals(1, streamsOneRepartitionTopicTaskCount);
                     assertEquals(1, streamsOneSourceTopicTaskCount);
 
-                    final StreamsMetadata streamsOneMetadataTwo = streamsMetadataAllClients.get(1);
+                    final StreamsMetadata streamsOneMetadataTwo = allClientMetadataUpdated.get(1);
                     final Set<TopicPartition> streamsTwoTopicPartitions = streamsOneMetadataTwo.topicPartitions();
-                    LOG.info("StreamsMetadata topicPartitions for streamsTwo: {}", streamsTwoTopicPartitions);
                     assertEquals(3030, streamsOneMetadataTwo.hostInfo().port());
                     assertEquals(2, streamsTwoTopicPartitions.size());
-                    assertEquals(standbyTopicPartitionCount, streamsOneMetadataTwo.standbyTopicPartitions().size());
-
+                    assertEquals(expectedStandbyTopicPartitionCount, streamsOneMetadataTwo.standbyTopicPartitions().size());
                     final long streamsTwoRepartitionTopicTaskCount = streamsTwoTopicPartitions.stream().filter(tp -> tp.topic().contains("-repartition")).count();
                     final long streamsTwoSourceTopicTaskCount = streamsTwoTopicPartitions.stream().filter(tp -> tp.topic().contains("-input-two")).count();
                     assertEquals(1, streamsTwoRepartitionTopicTaskCount);
