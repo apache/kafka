@@ -105,6 +105,7 @@ jobs:
           gradle-cache-write-only: ${{ inputs.is-trunk }}
           develocity-access-key: ${{ secrets.DEVELOCITY_ACCESS_KEY }}
       - name: Compile and validate
+        id: compile-validate
         env:
           SCAN_ARG: ${{ inputs.is-public-fork && '--no-scan' || '--scan' }}
         # Gradle flags
@@ -113,7 +114,7 @@ jobs:
         # --scan:         Publish the build scan. This will only work on PRs from apache/kafka and trunk
         # --no-scan:      For public fork PRs, we won't attempt to publish the scan
         run: |
-          ./gradlew --build-cache --info $SCAN_ARG check siteDocTar -x test
+          ./gradlew --build-cache --info $SCAN_ARG check siteDocTar javadoc -x test |& tee gradle-output.log
       - name: Archive check reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -143,7 +144,20 @@ jobs:
             find ./site-docs/generated -type f -exec grep -L "." {} \; >&2
             exit 1
           fi
-
+      - name: Check Javadoc errors
+        if: failure()
+        # Check for Javadoc errors in Gradle output logs
+        run: |
+          grep -B 1 -A 5 "error:" gradle-output.log > javadoc_errors.log || true
+          find . -name "*.out" -o -name "*.log" -not -name "gradle-output.log" | xargs grep -B 1 -A 5 "error:" >> javadoc_errors.log || true
+          while IFS= read -r line; do
+            if [[ -n "$line" && "$line" != "--" ]]; then
+              echo "::error::$line"
+            fi
+          done < javadoc_errors.log
+          if [ -s javadoc_errors.log ]; then
+            exit 1
+          fi
   test:
     needs: [validate, load-catalog]
     if: ${{ ! needs.validate.outputs.is-draft }}
