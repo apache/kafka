@@ -1096,6 +1096,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     var shallowOffsetOfMaxTimestamp = -1L
     var readFirstMessage = false
     var lastOffsetOfFirstBatch = -1L
+    var skipRemainingBatches = false
 
     records.batches.forEach { batch =>
       if (origin == AppendOrigin.RAFT_LEADER && batch.partitionLeaderEpoch != leaderEpoch) {
@@ -1110,54 +1111,61 @@ class UnifiedLog(@volatile var logStartOffset: Long,
       // TODO: if the origin is replication, stop processing when the partition leader epoch is greater than the leader epoch
       // Only process batch if the its not a KRaft follower or the partition leader epoch is less than or equal to the
       // current leader epoch. TODO: explain this further
+      skipRemainingBatches = skipRemainingBatches || hasInvalidPartitionLeaderEpoch(batch, origin, leaderEpoch);
+      if (skipRemainingBatches) {
+        info(s"Skipping batch $batch because origin is $origin and leader epoch is $leaderEpoch")
+      } else {
+        // update the first offset if on the first message. For magic versions older than 2, we use the last offset
+        // to avoid the need to decompress the data (the last offset can be obtained directly from the wrapper message).
+        // For magic version 2, we can get the first offset directly from the batch header.
+        // When appending to the leader, we will update LogAppendInfo.baseOffset with the correct value. In the follower
+        // case, validation will be more lenient.
+        // Also indicate whether we have the accurate first offset or not
+        if (!readFirstMessage) {
+          if (batch.magic >= RecordBatch.MAGIC_VALUE_V2) {
+            firstOffset = batch.baseOffset
+          }
+          lastOffsetOfFirstBatch = batch.lastOffset
+          readFirstMessage = true
+        }
 
-      // update the first offset if on the first message. For magic versions older than 2, we use the last offset
-      // to avoid the need to decompress the data (the last offset can be obtained directly from the wrapper message).
-      // For magic version 2, we can get the first offset directly from the batch header.
-      // When appending to the leader, we will update LogAppendInfo.baseOffset with the correct value. In the follower
-      // case, validation will be more lenient.
-      // Also indicate whether we have the accurate first offset or not
-      if (!readFirstMessage) {
-        if (batch.magic >= RecordBatch.MAGIC_VALUE_V2)
-          firstOffset = batch.baseOffset
-        lastOffsetOfFirstBatch = batch.lastOffset
-        readFirstMessage = true
+        // check that offsets are monotonically increasing
+        if (lastOffset >= batch.lastOffset) {
+          monotonic = false
+        }
+
+        // update the last offset seen
+        lastOffset = batch.lastOffset
+        lastLeaderEpoch = batch.partitionLeaderEpoch
+
+        // Check if the message sizes are valid.
+        val batchSize = batch.sizeInBytes
+        if (!ignoreRecordSize && batchSize > config.maxMessageSize) {
+          brokerTopicStats.topicStats(topicPartition.topic).bytesRejectedRate.mark(records.sizeInBytes)
+          brokerTopicStats.allTopicsStats.bytesRejectedRate.mark(records.sizeInBytes)
+          throw new RecordTooLargeException(s"The record batch size in the append to $topicPartition is $batchSize bytes " +
+            s"which exceeds the maximum configured value of ${config.maxMessageSize}.")
+        }
+
+        // check the validity of the message by checking CRC
+        if (!batch.isValid) {
+          brokerTopicStats.allTopicsStats.invalidMessageCrcRecordsPerSec.mark()
+          throw new CorruptRecordException(s"Record is corrupt (stored crc = ${batch.checksum()}) in topic partition $topicPartition.")
+        }
+
+        if (batch.maxTimestamp > maxTimestamp) {
+          maxTimestamp = batch.maxTimestamp
+          shallowOffsetOfMaxTimestamp = lastOffset
+        }
+
+        validBytesCount += batchSize
+
+        val batchCompression = CompressionType.forId(batch.compressionType.id)
+        // sourceCompression is only used on the leader path, which only contains one batch if version is v2 or messages are compressed
+        if (batchCompression != CompressionType.NONE) {
+          sourceCompression = batchCompression
+        }
       }
-
-      // check that offsets are monotonically increasing
-      if (lastOffset >= batch.lastOffset)
-        monotonic = false
-
-      // update the last offset seen
-      lastOffset = batch.lastOffset
-      lastLeaderEpoch = batch.partitionLeaderEpoch
-
-      // Check if the message sizes are valid.
-      val batchSize = batch.sizeInBytes
-      if (!ignoreRecordSize && batchSize > config.maxMessageSize) {
-        brokerTopicStats.topicStats(topicPartition.topic).bytesRejectedRate.mark(records.sizeInBytes)
-        brokerTopicStats.allTopicsStats.bytesRejectedRate.mark(records.sizeInBytes)
-        throw new RecordTooLargeException(s"The record batch size in the append to $topicPartition is $batchSize bytes " +
-          s"which exceeds the maximum configured value of ${config.maxMessageSize}.")
-      }
-
-      // check the validity of the message by checking CRC
-      if (!batch.isValid) {
-        brokerTopicStats.allTopicsStats.invalidMessageCrcRecordsPerSec.mark()
-        throw new CorruptRecordException(s"Record is corrupt (stored crc = ${batch.checksum()}) in topic partition $topicPartition.")
-      }
-
-      if (batch.maxTimestamp > maxTimestamp) {
-        maxTimestamp = batch.maxTimestamp
-        shallowOffsetOfMaxTimestamp = lastOffset
-      }
-
-      validBytesCount += batchSize
-
-      val batchCompression = CompressionType.forId(batch.compressionType.id)
-      // sourceCompression is only used on the leader path, which only contains one batch if version is v2 or messages are compressed
-      if (batchCompression != CompressionType.NONE)
-        sourceCompression = batchCompression
     }
 
     if (requireOffsetsMonotonic && !monotonic)
@@ -1172,6 +1180,19 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     new LogAppendInfo(firstOffset, lastOffset, lastLeaderEpochOpt, maxTimestamp,
       RecordBatch.NO_TIMESTAMP, logStartOffset, RecordValidationStats.EMPTY, sourceCompression,
       validBytesCount, lastOffsetOfFirstBatch, Collections.emptyList[RecordError], LeaderHwChange.NONE)
+  }
+
+  /**
+   * TODO: document this
+   */
+  private def hasInvalidPartitionLeaderEpoch(
+    batch: MutableRecordBatch,
+    origin: AppendOrigin,
+    leaderEpoch: Int
+  ): Boolean = {
+    origin == AppendOrigin.REPLICATION &&
+    batch.partitionLeaderEpoch() != RecordBatch.NO_PARTITION_LEADER_EPOCH &&
+    batch.partitionLeaderEpoch() > leaderEpoch
   }
 
   /**

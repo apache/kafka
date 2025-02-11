@@ -279,9 +279,22 @@ class ReplicaFetcherThreadTest {
     val fetchSessionHandler = new FetchSessionHandler(logContext, brokerEndPoint.id)
     val leader = new RemoteLeaderEndPoint(logContext.logPrefix, mockNetwork, fetchSessionHandler, config,
       replicaManager, quota, () => config.interBrokerProtocolVersion, () => 1)
-    val thread = new ReplicaFetcherThread("bob", leader, config, failedPartitions,
-      replicaManager, quota, logContext.logPrefix, () => config.interBrokerProtocolVersion) {
-      override def processPartitionData(topicPartition: TopicPartition, fetchOffset: Long, partitionData: FetchData): Option[LogAppendInfo] = None
+    val thread = new ReplicaFetcherThread(
+      "bob",
+      leader,
+      config,
+      failedPartitions,
+      replicaManager,
+      quota,
+      logContext.logPrefix,
+      () => config.interBrokerProtocolVersion
+    ) {
+      override def processPartitionData(
+        topicPartition: TopicPartition,
+        fetchOffset: Long,
+        maxEpoch: Int,
+        partitionData: FetchData
+      ): Option[LogAppendInfo] = None
     }
     thread.addPartitions(Map(t1p0 -> initialFetchState(Some(topicId1), initialLEO), t1p1 -> initialFetchState(Some(topicId1), initialLEO)))
     val partitions = Set(t1p0, t1p1)
@@ -377,7 +390,7 @@ class ReplicaFetcherThreadTest {
     when(replicaManager.getPartitionOrException(t1p0)).thenReturn(partition)
 
     when(partition.localLogOrException).thenReturn(log)
-    when(partition.appendRecordsToFollowerOrFutureReplica(any(), any())).thenReturn(None)
+    when(partition.appendRecordsToFollowerOrFutureReplica(any(), any(), any())).thenReturn(None)
 
     val logContext = new LogContext(s"[ReplicaFetcher replicaId=${config.brokerId}, leaderId=${brokerEndPoint.id}, fetcherId=0] ")
 
@@ -458,7 +471,7 @@ class ReplicaFetcherThreadTest {
     when(replicaManager.brokerTopicStats).thenReturn(mock(classOf[BrokerTopicStats]))
 
     when(partition.localLogOrException).thenReturn(log)
-    when(partition.appendRecordsToFollowerOrFutureReplica(any(), any())).thenReturn(Some(new LogAppendInfo(
+    when(partition.appendRecordsToFollowerOrFutureReplica(any(), any(), any())).thenReturn(Some(new LogAppendInfo(
       -1,
       0,
       OptionalInt.empty,
@@ -677,7 +690,7 @@ class ReplicaFetcherThreadTest {
 
     val partition: Partition = mock(classOf[Partition])
     when(partition.localLogOrException).thenReturn(log)
-    when(partition.appendRecordsToFollowerOrFutureReplica(any[MemoryRecords], any[Boolean])).thenReturn(appendInfo)
+    when(partition.appendRecordsToFollowerOrFutureReplica(any[MemoryRecords], any[Boolean], any[Int])).thenReturn(appendInfo)
 
     // Capture the argument at the time of invocation.
     val completeDelayedFetchRequestsArgument = mutable.Buffer.empty[TopicPartition]
@@ -708,8 +721,8 @@ class ReplicaFetcherThreadTest {
       .setRecords(records)
       .setHighWatermark(highWatermarkReceivedFromLeader)
 
-    thread.processPartitionData(tp0, 0, partitionData.setPartitionIndex(0))
-    thread.processPartitionData(tp1, 0, partitionData.setPartitionIndex(1))
+    thread.processPartitionData(tp0, 0, Int.MaxValue, partitionData.setPartitionIndex(0))
+    thread.processPartitionData(tp1, 0, Int.MaxValue, partitionData.setPartitionIndex(1))
     verify(replicaManager, times(0)).completeDelayedFetchRequests(any[Seq[TopicPartition]])
 
     thread.doWork()
@@ -759,7 +772,7 @@ class ReplicaFetcherThreadTest {
     when(partition.localLogOrException).thenReturn(log)
     when(partition.isReassigning).thenReturn(isReassigning)
     when(partition.isAddingLocalReplica).thenReturn(isReassigning)
-    when(partition.appendRecordsToFollowerOrFutureReplica(records, isFuture = false)).thenReturn(None)
+    when(partition.appendRecordsToFollowerOrFutureReplica(records, isFuture = false, Int.MaxValue)).thenReturn(None)
 
     val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
     when(replicaManager.getPartitionOrException(any[TopicPartition])).thenReturn(partition)
@@ -783,7 +796,7 @@ class ReplicaFetcherThreadTest {
       .setLastStableOffset(0)
       .setLogStartOffset(0)
       .setRecords(records)
-    thread.processPartitionData(t1p0, 0, partitionData)
+    thread.processPartitionData(t1p0, 0, Int.MaxValue, partitionData)
 
     if (isReassigning)
       assertEquals(records.sizeInBytes(), brokerTopicStats.allTopicsStats.reassignmentBytesInPerSec.get.count())

@@ -66,9 +66,12 @@ class MockFetcherThread(val mockLeader: MockLeaderEndPoint,
     partitions
   }
 
-  override def processPartitionData(topicPartition: TopicPartition,
-                                    fetchOffset: Long,
-                                    partitionData: FetchData): Option[LogAppendInfo] = {
+  override def processPartitionData(
+    topicPartition: TopicPartition,
+    fetchOffset: Long,
+    maxEpoch: Int,
+    partitionData: FetchData
+  ): Option[LogAppendInfo] = {
     val state = replicaPartitionState(topicPartition)
 
     if (leader.isTruncationOnFetchSupported && FetchResponse.isDivergingEpoch(partitionData)) {
@@ -89,6 +92,7 @@ class MockFetcherThread(val mockLeader: MockLeaderEndPoint,
     var lastEpoch: OptionalInt = OptionalInt.empty()
 
     for (batch <- batches) {
+      // TODO: this should filter batches based on the maxEpoch
       batch.ensureValid()
       if (batch.maxTimestamp > maxTimestamp) {
         maxTimestamp = batch.maxTimestamp

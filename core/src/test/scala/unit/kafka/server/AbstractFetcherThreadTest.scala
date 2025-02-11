@@ -904,11 +904,16 @@ class AbstractFetcherThreadTest {
     val mockLeaderEndpoint = new MockLeaderEndPoint(truncateOnFetch = truncateOnFetch, version = version)
     val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint)
     val fetcherForAppend = new MockFetcherThread(mockLeaderEndpoint, mockTierStateMachine, failedPartitions = failedPartitions) {
-      override def processPartitionData(topicPartition: TopicPartition, fetchOffset: Long, partitionData: FetchData): Option[LogAppendInfo] = {
+      override def processPartitionData(
+        topicPartition: TopicPartition,
+        fetchOffset: Long,
+        maxEpoch: Int,
+        partitionData: FetchData
+      ): Option[LogAppendInfo] = {
         if (topicPartition == partition1) {
           throw new KafkaException()
         } else {
-          super.processPartitionData(topicPartition, fetchOffset, partitionData)
+          super.processPartitionData(topicPartition, fetchOffset, maxEpoch, partitionData)
         }
       }
     }
@@ -1013,9 +1018,14 @@ class AbstractFetcherThreadTest {
     val mockLeaderEndpoint = new MockLeaderEndPoint(truncateOnFetch = truncateOnFetch, version = version)
     val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint)
     val fetcher = new MockFetcherThread(mockLeaderEndpoint, mockTierStateMachine) {
-      override def processPartitionData(topicPartition: TopicPartition, fetchOffset: Long, partitionData: FetchData): Option[LogAppendInfo] = {
+      override def processPartitionData(
+        topicPartition: TopicPartition,
+        fetchOffset: Long,
+        maxEpoch: Int,
+        partitionData: FetchData
+      ): Option[LogAppendInfo] = {
         processPartitionDataCalls += 1
-        super.processPartitionData(topicPartition, fetchOffset, partitionData)
+        super.processPartitionData(topicPartition, fetchOffset, maxEpoch, partitionData)
       }
 
       override def truncate(topicPartition: TopicPartition, truncationState: OffsetTruncationState): Unit = {
