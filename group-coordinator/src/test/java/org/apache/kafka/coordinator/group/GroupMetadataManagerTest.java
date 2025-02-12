@@ -16354,7 +16354,7 @@ public class GroupMetadataManagerTest {
         Map<String, Map<Uuid, List<Integer>>> keyMap = context.groupMetadataManager.sharePartitionKeysMap(List.of(shareGroup));
         assertEquals(1, keyMap.size());
         assertEquals(2, keyMap.get("share-group").size());
-        for(Uuid topic:List.of(t1Uuid, t2Uuid)) {
+        for (Uuid topic : List.of(t1Uuid, t2Uuid)) {
             assertEquals(2, keyMap.get("share-group").get(topic).size());
             assertTrue(keyMap.get("share-group").get(topic).contains(0));
             assertTrue(keyMap.get("share-group").get(topic).contains(1));

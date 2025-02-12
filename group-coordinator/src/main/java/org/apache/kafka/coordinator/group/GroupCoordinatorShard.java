@@ -488,11 +488,21 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      * @throws ApiException
      */
     public Map<String, Map<Uuid, List<Integer>>> sharePartitions(List<String> groupIds, long committedOffset) throws ApiException {
-        List<ShareGroup> shareGroups = groupIds.stream()
-            .map(groupMetadataManager::group)
-            .filter(group -> group.type().equals(Group.GroupType.SHARE))
-            .map(group -> (ShareGroup) group)
-            .toList();
+        List<ShareGroup> shareGroups = new ArrayList<>();
+        for (String groupId : groupIds) {
+            try {
+                Group group = groupMetadataManager.group(groupId);
+                if (group instanceof ShareGroup) {
+                    shareGroups.add((ShareGroup) group);
+                }
+            } catch (ApiException exception) {
+                // We needn't do anything more than logging here as deleteGroups
+                // method is handling these cases.
+                // Even if some groups cannot be found, we
+                // must check the entre list.
+                log.error("Failed to find group {}", groupId, exception);
+            }
+        }
 
         return groupMetadataManager.sharePartitionKeysMap(shareGroups);
     }

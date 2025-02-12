@@ -885,7 +885,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                         ));
                 });
             // deleteShareGroups has its own exceptionally block so we don't need one here.
-            // This is inline with the existing deleteGroups call.
+            // This is in line with the existing deleteGroups call.
 
             futures.add(shareFuture);
         });
@@ -920,7 +920,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
     private CompletableFuture<Map<String, Errors>> performShareGroupsDeletion(
         Map<String, Map<Uuid, List<Integer>>> keys
     ) {
-        List<CompletableFuture<Map.Entry<String, DeleteShareGroupStateResult>>> futures = new ArrayList<>();
+        List<CompletableFuture<AbstractMap.SimpleEntry<String, DeleteShareGroupStateResult>>> futures = new ArrayList<>();
         for (Map.Entry<String, Map<Uuid, List<Integer>>> groupEntry : keys.entrySet()) {
             List<TopicData<PartitionIdData>> topicData = new ArrayList<>();
             for (Map.Entry<Uuid, List<Integer>> topicEntry : groupEntry.getValue().entrySet()) {
@@ -938,11 +938,13 @@ public class GroupCoordinatorService implements GroupCoordinator {
         return persisterDeleteToGroupDeleteResult(futures);
     }
 
-    private CompletableFuture<Map<String, Errors>> persisterDeleteToGroupDeleteResult(List<CompletableFuture<Map.Entry<String, DeleteShareGroupStateResult>>> futures) {
+    private CompletableFuture<Map<String, Errors>> persisterDeleteToGroupDeleteResult(
+        List<CompletableFuture<AbstractMap.SimpleEntry<String, DeleteShareGroupStateResult>>> futures
+    ) {
         return CompletableFuture.allOf(futures.toArray(new CompletableFuture[]{}))
             .thenCompose(v -> {
                 Map<String, Errors> groupIds = new HashMap<>();
-                for (CompletableFuture<Map.Entry<String, DeleteShareGroupStateResult>> future : futures) {
+                for (CompletableFuture<AbstractMap.SimpleEntry<String, DeleteShareGroupStateResult>> future : futures) {
                     Map.Entry<String, DeleteShareGroupStateResult> entry = future.getNow(null);  // safe as within allOff
                     groupIds.putIfAbsent(entry.getKey(), Errors.NONE);
                     for (TopicData<PartitionErrorData> topicData : entry.getValue().topicsData()) {
@@ -962,16 +964,43 @@ public class GroupCoordinatorService implements GroupCoordinator {
             });
     }
 
-    private CompletableFuture<Map.Entry<String, DeleteShareGroupStateResult>> deleteShareGroup(String groupId, List<TopicData<PartitionIdData>> topicData) {
+    private CompletableFuture<AbstractMap.SimpleEntry<String, DeleteShareGroupStateResult>> deleteShareGroup(
+        String groupId,
+        List<TopicData<PartitionIdData>> topicData
+    ) {
         return persister.deleteState(
-            new DeleteShareGroupStateParameters.Builder()
-                .setGroupTopicPartitionData(new GroupTopicPartitionData.Builder<PartitionIdData>()
-                    .setGroupId(groupId)
-                    .setTopicsData(topicData)
+                new DeleteShareGroupStateParameters.Builder()
+                    .setGroupTopicPartitionData(new GroupTopicPartitionData.Builder<PartitionIdData>()
+                        .setGroupId(groupId)
+                        .setTopicsData(topicData)
+                        .build()
+                    )
                     .build()
-                )
-                .build()
-        ).thenCompose(result -> CompletableFuture.completedFuture(new AbstractMap.SimpleEntry<>(groupId, result)));
+            )
+            .thenCompose(result -> CompletableFuture.completedFuture(new AbstractMap.SimpleEntry<>(groupId, result)))
+            .exceptionally(exception -> {
+                // In case the deleteState call fails,
+                // we should construct the appropriate response here
+                // so that the subsequent callbacks don't see runtime exceptions.
+                log.error("Unable to delete share group partition(s) - {}, {}", groupId, topicData);
+                List<TopicData<PartitionErrorData>> respTopicData = topicData.stream()
+                    .map(reqTopicData -> new TopicData<>(
+                            reqTopicData.topicId(),
+                            reqTopicData.partitions().stream()
+                                .map(reqPartData -> {
+                                    Errors err = Errors.forException(exception);
+                                    return PartitionFactory.newPartitionErrorData(reqPartData.partition(), err.code(), err.message());
+                                })
+                                .toList()
+                        )
+                    )
+                    .toList();
+
+                return new AbstractMap.SimpleEntry<>(groupId, new DeleteShareGroupStateResult.Builder()
+                    .setTopicsData(respTopicData)
+                    .build()
+                );
+            });
     }
 
     /**
