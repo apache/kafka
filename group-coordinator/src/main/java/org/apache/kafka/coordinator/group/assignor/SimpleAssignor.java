@@ -110,9 +110,8 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
     // Get the current assignment for subscribed topic partitions to share group members.
     private Map<TargetPartition, List<String>> currentAssignment(GroupSpec groupSpec) {
         Map<TargetPartition, List<String>> assignment = new HashMap<>();
-        Collection<String> members = groupSpec.memberIds();
 
-        for (String member : members) {
+        for (String member : groupSpec.memberIds()) {
             Map<Uuid, Set<Integer>> assignedTopicPartitions = groupSpec.memberAssignment(member).partitions();
             assignedTopicPartitions.forEach((topicId, partitions) -> partitions.forEach(
                 partition -> assignment.computeIfAbsent(new TargetPartition(topicId, partition), k -> new ArrayList<>()).add(member)));
@@ -180,7 +179,7 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
             memberHashAssignment(partitions, Collections.singletonList(member), newAssignment));
 
         // Step 2: Round-robin assignment for unassigned partitions which do not have members already assigned in the current assignment.
-        Set<TargetPartition> assignedPartitions = new HashSet<>(newAssignment.keySet());
+        Set<TargetPartition> assignedPartitions = new LinkedHashSet<>(newAssignment.keySet());
         Map<Uuid, List<TargetPartition>> unassignedPartitions = new HashMap<>();
         targetPartitions.forEach(targetPartition -> {
             if (!assignedPartitions.contains(targetPartition) && !currentAssignment.containsKey(targetPartition))
@@ -231,7 +230,7 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
         // topic partitions which were a part of current assignment.
         List<TargetPartition> targetPartitions = currentAssignment.keySet().stream().toList();
         // members which were a part of current assignment.
-        Set<String> members = new HashSet<>();
+        Set<String> members = new LinkedHashSet<>();
         currentAssignment.values().forEach(members::addAll);
         // Computing hash based assignment that would have occurred for the current assignment.
         Map<TargetPartition, List<String>> hashAssignment = new HashMap<>();
