@@ -42,23 +42,23 @@ Configuration:
         - ref: STDOUT
     Logger:
       - name: org.apache.kafka.server.log.remote.storage
-        level: DEBUG
+        level: INFO
         AppenderRef:
           - ref: FileAppender
 
       - name: org.apache.kafka.server.log.remote.metadata.storage
-        level: DEBUG
+        level: INFO
         AppenderRef:
           - ref: FileAppender
 
       - name: org.apache.kafka.clients.consumer
-        level: DEBUG
+        level: INFO
 
       - name: org.apache.kafka.clients.consumer.internals.AbstractFetch
-        level: TRACE
+        level: DEBUG
 
       - name: org.apache.kafka.clients.consumer.internals.FetchCollector
-        level: TRACE
+        level: DEBUG
 
       - name: kafka.log.remote
         level: INFO
