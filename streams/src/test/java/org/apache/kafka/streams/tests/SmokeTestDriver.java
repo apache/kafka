@@ -539,11 +539,12 @@ public class SmokeTestDriver extends SmokeTestUtil {
         final Map<String, LinkedList<ConsumerRecord<String, Number>>> observedInputEvents = events.get("data");
         final Map<String, LinkedList<ConsumerRecord<String, Number>>> outputEvents = events.getOrDefault(topic, emptyMap());
         if (outputEvents.isEmpty()) {
-            resultStream.println("missing result data; topic '" + topic + "' is empty, expected " + inputData.size() + " keys");
+            resultStream.println("fail: missing result data; topic '" + topic + "' is empty, expected " + inputData.size() + " keys");
             return false;
         } else {
             if (outputEvents.size() < inputData.size()) {
-                resultStream.println("missing result data; got " + inputData.size() + " keys, expected: " + outputEvents.size() + " keys");
+                resultStream.println("fail: missing result data; got " + inputData.size() + " keys, expected: " + outputEvents.size() + " keys");
+                return false;
             }
 
             if (outputEvents.size() != inputData.size()) {
@@ -632,16 +633,16 @@ public class SmokeTestDriver extends SmokeTestUtil {
                                       final Map<String, Set<Integer>> allData,
                                       final Map<String, LinkedList<ConsumerRecord<String, Number>>> taggEvents,
                                       final boolean printResults) {
-        resultStream.println("verifying tagg");
+        resultStream.println("verifying topic tagg");
         if (taggEvents == null) {
-            resultStream.println("missing result data; tagg is missing, expected: " + allData.size() + " keys");
+            resultStream.println("fail: missing result data; tagg is missing, expected: " + allData.size() + " keys");
             return false;
         } else if (taggEvents.isEmpty()) {
-            resultStream.println("missing result data; tagg is empty, expected: " + allData.size() + " keys");
+            resultStream.println("fail: missing result data; tagg is empty, expected: " + allData.size() + " keys");
             return false;
         } else {
             if (taggEvents.size() < allData.size()) {
-                resultStream.println("missing result data; got " + taggEvents.size() + " keys, expected: " + allData.size() + " keys");
+                resultStream.println("fail: missing result data; got " + taggEvents.size() + " keys, expected: " + allData.size() + " keys");
             }
 
             // generate expected answer
