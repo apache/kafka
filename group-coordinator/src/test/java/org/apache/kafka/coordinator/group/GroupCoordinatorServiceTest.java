@@ -1594,6 +1594,12 @@ public class GroupCoordinatorServiceTest {
             result1.duplicate()
         ));
 
+        when(runtime.scheduleReadOperation(
+            ArgumentMatchers.eq("delete-share-groups"),
+            ArgumentMatchers.any(),
+            ArgumentMatchers.any()
+        )).thenReturn(CompletableFuture.completedFuture(Map.of()));
+
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("delete-groups"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 2)),
@@ -1639,6 +1645,12 @@ public class GroupCoordinatorServiceTest {
             .setRuntime(runtime)
             .setMetrics(mock(GroupCoordinatorMetrics.class))
             .build(true);
+
+        when(runtime.scheduleReadOperation(
+            ArgumentMatchers.eq("delete-share-groups"),
+            ArgumentMatchers.any(),
+            ArgumentMatchers.any()
+        )).thenReturn(CompletableFuture.completedFuture(Map.of()));
 
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("delete-groups"),
