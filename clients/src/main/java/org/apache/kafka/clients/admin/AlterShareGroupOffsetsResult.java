@@ -72,10 +72,10 @@ public class AlterShareGroupOffsetsResult {
     public KafkaFuture<Void> all() {
         return this.future.thenApply(topicPartitionErrorsMap ->  {
             List<TopicPartition> partitionsFailed = topicPartitionErrorsMap.entrySet()
-                    .stream()
-                    .filter(e -> e.getValue() != Errors.NONE)
-                    .map(Map.Entry::getKey)
-                    .collect(Collectors.toList());
+                .stream()
+                .filter(e -> e.getValue() != Errors.NONE)
+                .map(Map.Entry::getKey)
+                .collect(Collectors.toList());
             for (Errors error : topicPartitionErrorsMap.values()) {
                 if (error != Errors.NONE) {
                     throw error.exception(
