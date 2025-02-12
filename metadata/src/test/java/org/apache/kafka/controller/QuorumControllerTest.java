@@ -115,7 +115,6 @@ import org.apache.kafka.snapshot.Snapshots;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -179,21 +178,9 @@ public class QuorumControllerTest {
     static final BootstrapMetadata SIMPLE_BOOTSTRAP = BootstrapMetadata.
             fromVersion(MetadataVersion.IBP_3_7_IV0, "test-provided bootstrap");
 
-    @Test
-    public void testNewTest() {
-
-    }
-
-    @Tag("flaky")
-    @Test
-    public void testNewFlakyTest() {
-
-    }
-
     /**
      * Test setting some configuration values and reading them back.
      */
-    @Tag("flaky")
     @Test
     public void testConfigurationOperations() throws Throwable {
         try (
