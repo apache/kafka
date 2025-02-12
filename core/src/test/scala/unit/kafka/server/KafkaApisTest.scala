@@ -19,12 +19,11 @@ package kafka.server
 
 import kafka.cluster.Partition
 import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
-import kafka.log.UnifiedLog
 import kafka.network.RequestChannel
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.metadata.KRaftMetadataCache
 import kafka.server.share.SharePartitionManager
-import kafka.utils.{CoreUtils, Log4jController, Logging, TestUtils}
+import kafka.utils.{CoreUtils, LoggingController, Logging, TestUtils}
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry}
 import org.apache.kafka.common._
@@ -94,7 +93,7 @@ import org.apache.kafka.server.share.context.{FinalContext, ShareSessionContext}
 import org.apache.kafka.server.share.session.{ShareSession, ShareSessionKey}
 import org.apache.kafka.server.storage.log.{FetchParams, FetchPartitionData}
 import org.apache.kafka.server.util.{FutureUtils, MockTime}
-import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, UnifiedLog}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
@@ -158,11 +157,12 @@ class KafkaApisTest extends Logging {
     metrics.close()
   }
 
-  def createKafkaApis(interBrokerProtocolVersion: MetadataVersion = MetadataVersion.latestTesting,
-                      authorizer: Option[Authorizer] = None,
-                      configRepository: ConfigRepository = new MockConfigRepository(),
-                      overrideProperties: Map[String, String] = Map.empty,
-                      featureVersions: Seq[FeatureVersion] = Seq.empty): KafkaApis = {
+  def createKafkaApis(
+    authorizer: Option[Authorizer] = None,
+    configRepository: ConfigRepository = new MockConfigRepository(),
+    overrideProperties: Map[String, String] = Map.empty,
+    featureVersions: Seq[FeatureVersion] = Seq.empty
+  ): KafkaApis = {
 
     val properties = TestUtils.createBrokerConfig(brokerId)
     properties.put(KRaftConfigs.NODE_ID_CONFIG, brokerId.toString)
@@ -171,7 +171,6 @@ class KafkaApisTest extends Logging {
     properties.put(QuorumConfig.QUORUM_VOTERS_CONFIG, s"$voterId@localhost:9093")
 
     overrideProperties.foreach( p => properties.put(p._1, p._2))
-    TestUtils.setIbpVersion(properties, interBrokerProtocolVersion)
     val config = new KafkaConfig(properties)
 
     val listenerType = ListenerType.BROKER
@@ -3847,7 +3846,7 @@ class KafkaApisTest extends Logging {
       any[Seq[(TopicIdPartition, FetchPartitionData)] => Unit]()
     )).thenAnswer(invocation => {
       val callback = invocation.getArgument(3).asInstanceOf[Seq[(TopicIdPartition, FetchPartitionData)] => Unit]
-      callback(Seq(tidp -> new FetchPartitionData(Errors.NOT_LEADER_OR_FOLLOWER, UnifiedLog.UnknownOffset, UnifiedLog.UnknownOffset, MemoryRecords.EMPTY,
+      callback(Seq(tidp -> new FetchPartitionData(Errors.NOT_LEADER_OR_FOLLOWER, UnifiedLog.UNKNOWN_OFFSET, UnifiedLog.UNKNOWN_OFFSET, MemoryRecords.EMPTY,
         Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)))
     })
 
@@ -9759,7 +9758,7 @@ class KafkaApisTest extends Logging {
         setResourceName(brokerId.toString).
         setResourceType(BROKER_LOGGER.id()).
         setConfigs(new IAlterableConfigCollection(asList(new IAlterableConfig().
-          setName(Log4jController.ROOT_LOGGER).
+          setName(LoggingController.ROOT_LOGGER).
           setValue("TRACE")).iterator()))).iterator())),
         1.toShort))
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
