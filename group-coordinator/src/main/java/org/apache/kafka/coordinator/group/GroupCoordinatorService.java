@@ -864,7 +864,14 @@ public class GroupCoordinatorService implements GroupCoordinator {
                         (error, __) -> DeleteGroupsRequest.getErrorResultCollection(retainedGroupIds, error),
                         log
                     ));
-                });
+                })
+                .exceptionally(exception -> handleOperationException(
+                    "delete-groups",
+                    groupList,
+                    exception,
+                    (error, __) -> DeleteGroupsRequest.getErrorResultCollection(groupList, error),
+                    log
+                ));
 
             futures.add(shareFuture);
         });
@@ -878,10 +885,22 @@ public class GroupCoordinatorService implements GroupCoordinator {
     private CompletableFuture<Map<String, Errors>> deleteShareGroups(TopicPartition topicPartition, List<String> groupList) {
         // topicPartition refers to internal topic __consumer_offsets
         return runtime.scheduleReadOperation(
-            "delete-share-groups",
-            topicPartition,
-            (coordinator, offset) -> coordinator.deleteShareGroups(groupList, offset)
-        ).thenCompose(this::performShareGroupsDeletion);
+                "delete-share-groups",
+                topicPartition,
+                (coordinator, offset) -> coordinator.deleteShareGroups(groupList, offset)
+            )
+            .thenCompose(this::performShareGroupsDeletion)
+            .exceptionally(exception -> handleOperationException(
+                "delete-share-groups",
+                groupList,
+                exception,
+                (error, __) -> {
+                    Map<String, Errors> errors = new HashMap<>();
+                    groupList.forEach(group -> errors.put(group, error));
+                    return errors;
+                },
+                log
+            ));
     }
 
     private CompletableFuture<Map<String, Errors>> performShareGroupsDeletion(
