@@ -835,35 +835,54 @@ public class GroupCoordinatorService implements GroupCoordinator {
 
         groupsByTopicPartition.forEach((topicPartition, groupList) -> {
             CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> shareFuture = deleteShareGroups(topicPartition, groupList)
-                .thenApply(groupErrMap -> {
+                .thenCompose(groupErrMap -> {
                     DeleteGroupsResponseData.DeletableGroupResultCollection collection = new DeleteGroupsResponseData.DeletableGroupResultCollection();
-                    groupErrMap.forEach((groupId, error) -> collection.add(new DeleteGroupsResponseData.DeletableGroupResult()
-                        .setGroupId(groupId)
-                        .setErrorCode(error.code())));
-                    return collection;
-                })
-                .thenCompose(shareGroupsDeleteResult -> {
-                    Set<String> groupSet = new HashSet<>(groupList);
-                    shareGroupsDeleteResult.forEach(deleteResult -> {
-                        if (deleteResult.errorCode() != Errors.NONE.code()) {
-                            // should we delete share groups which have errors?
-                            groupSet.remove(deleteResult.groupId());
+                    List<String> errGroupIds = new ArrayList<>();
+                    groupErrMap.forEach((groupId, error) -> {
+                        if (error.code() != Errors.NONE.code()) {
+                            log.error("Error deleting share group {} due to error {}", groupId, error);
+                            errGroupIds.add(groupId);
+                            collection.add(
+                                new DeleteGroupsResponseData.DeletableGroupResult()
+                                    .setGroupId(groupId)
+                                    .setErrorCode(error.code())
+                            );
                         }
                     });
 
+                    Set<String> groupSet = new HashSet<>(groupList);
+                    // Remove all share group ids which have errored out
+                    // when deleting with persister.
+                    errGroupIds.forEach(groupSet::remove);
+
+                    // If no non-share groupIds or non-error share group ids present
+                    // return.
+                    if (groupSet.isEmpty()) {
+                        return CompletableFuture.completedFuture(collection);
+                    }
+
+                    // Let us invoke the standard procedure of any non-share
+                    // groups or successfully deleted share groups remaining.
                     List<String> retainedGroupIds = groupSet.stream().toList();
                     return runtime.scheduleWriteOperation(
-                        "delete-groups",
-                        topicPartition,
-                        Duration.ofMillis(config.offsetCommitTimeoutMs()),
-                        coordinator -> coordinator.deleteGroups(context, retainedGroupIds)
-                    ).exceptionally(exception -> handleOperationException(
-                        "delete-groups",
-                        groupList,
-                        exception,
-                        (error, __) -> DeleteGroupsRequest.getErrorResultCollection(retainedGroupIds, error),
-                        log
-                    ));
+                            "delete-groups",
+                            topicPartition,
+                            Duration.ofMillis(config.offsetCommitTimeoutMs()),
+                            coordinator -> coordinator.deleteGroups(context, retainedGroupIds)
+                        ).thenApply(deletedCollection -> {
+                            deletedCollection.forEach(item -> collection.add(item.duplicate()));
+                            return collection;
+                        })
+                        .exceptionally(exception -> handleOperationException(
+                            "delete-groups",
+                            groupList,
+                            exception,
+                            (error, __) -> {
+                                DeleteGroupsRequest.getErrorResultCollection(retainedGroupIds, error).forEach(item -> collection.add(item.duplicate()));
+                                return collection;
+                            },
+                            log
+                        ));
                 })
                 .exceptionally(exception -> handleOperationException(
                     "delete-groups",
@@ -937,7 +956,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                             .findAny();
 
                         errItem.ifPresent(val -> {
-                                log.error("Received error while deleting share group {} - {}: {}", entry.getKey(), val.errorCode(), val.errorMessage());
+                                log.error("Received error while deleting share group {} - {}", entry.getKey(), val);
                                 groupIds.put(entry.getKey(), Errors.forCode(val.errorCode()));
                             }
                         );
