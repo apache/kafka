@@ -99,14 +99,14 @@ public abstract class AbstractStream<K, V> {
         return (key, value2, value1) -> joiner.apply(key, value1, value2);
     }
 
-    static <K, V, VOut> ValueMapperWithKey<K, V, VOut> withKey(final ValueMapper<V, VOut> valueMapper) {
-        Objects.requireNonNull(valueMapper, "valueMapper cannot be null");
-        return (readOnlyKey, value) -> valueMapper.apply(value);
+    static <K, V, VOut> ValueMapperWithKey<K, V, VOut> withKey(final ValueMapper<V, VOut> mapper) {
+        Objects.requireNonNull(mapper, "mapper cannot be null");
+        return (readOnlyKey, value) -> mapper.apply(value);
     }
 
-    static <K, VLeft, VRight, VOut> ValueJoinerWithKey<K, VLeft, VRight, VOut> toValueJoinerWithKey(final ValueJoiner<VLeft, VRight, VOut> valueJoiner) {
-        Objects.requireNonNull(valueJoiner, "joiner cannot be null");
-        return (readOnlyKey, value1, value2) -> valueJoiner.apply(value1, value2);
+    static <K, VLeft, VRight, VOut> ValueJoinerWithKey<K, VLeft, VRight, VOut> toValueJoinerWithKey(final ValueJoiner<VLeft, VRight, VOut> joiner) {
+        Objects.requireNonNull(joiner, "joiner cannot be null");
+        return (readOnlyKey, value1, value2) -> joiner.apply(value1, value2);
     }
 
     // for testing only
