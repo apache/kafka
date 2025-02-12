@@ -195,7 +195,7 @@ public class SinkConnectorConfig extends ConnectorConfig {
                 .stream()
                 .filter(topic -> !topic.isEmpty())
                 .distinct()
-                .collect(Collectors.toList());
+                .toList();
     }
 
     public String dlqTopicName() {

@@ -44,7 +44,7 @@ public class ShareCoordinatorRecordHelpers {
                         .setLastOffset(batch.lastOffset())
                         .setDeliveryCount(batch.deliveryCount())
                         .setDeliveryState(batch.deliveryState()))
-                    .collect(Collectors.toList())),
+                    .toList()),
                 (short) 0
             )
         );
@@ -66,7 +66,7 @@ public class ShareCoordinatorRecordHelpers {
                         .setLastOffset(batch.lastOffset())
                         .setDeliveryCount(batch.deliveryCount())
                         .setDeliveryState(batch.deliveryState()))
-                    .collect(Collectors.toList())),
+                    .toList()),
                 (short) 0
             )
         );

@@ -595,7 +595,7 @@ public class MirrorConnectorsIntegrationBaseTest {
                 .stream()
                 .filter(Optional::isPresent)
                 .map(Optional::get)
-                .collect(Collectors.toList());
+                .toList();
         assertTrue(offsetSyncTopic.isEmpty());
 
         primaryClient.close();
@@ -1125,7 +1125,7 @@ public class MirrorConnectorsIntegrationBaseTest {
                             MirrorUtils.wrapOffset(alteredOffset)
                     );
                 }).filter(Objects::nonNull)
-                .collect(Collectors.toList());
+                .toList();
 
         connectCluster.alterConnectorOffsets(connectorName, new ConnectorOffsets(alteredOffsetContents));
     }
@@ -1144,7 +1144,7 @@ public class MirrorConnectorsIntegrationBaseTest {
 
                     return new ConnectorOffset(connectorOffset.partition(), null);
                 }).filter(Objects::nonNull)
-                .collect(Collectors.toList());
+                .toList();
 
         connectCluster.alterConnectorOffsets(connectorName, new ConnectorOffsets(alteredOffsetContents));
     }

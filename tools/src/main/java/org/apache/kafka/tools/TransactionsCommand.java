@@ -335,7 +335,7 @@ public abstract class TransactionsCommand {
                     String.valueOf(producerState.lastTimestamp()),
                     currentTransactionStartOffsetColumnValue
                 );
-            }).collect(Collectors.toList());
+            }).toList();
 
             ToolsUtils.prettyPrintTable(HEADERS, rows, out);
         }

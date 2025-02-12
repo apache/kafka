@@ -49,10 +49,10 @@ public class ReadShareGroupStateResult implements PersisterResult {
                                                 partitionResult.errorMessage(),
                                                 partitionResult.stateBatches().stream()
                                                         .map(PersisterStateBatch::from)
-                                                        .collect(Collectors.toList())
+                                                        .toList()
                                         ))
-                                        .collect(Collectors.toList())))
-                        .collect(Collectors.toList()))
+                                        .toList()))
+                        .toList())
                 .build();
     }
 

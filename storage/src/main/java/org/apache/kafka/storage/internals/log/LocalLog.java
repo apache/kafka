@@ -1012,7 +1012,7 @@ public class LocalLog {
         List<LogSegment> sortedOldSegments = oldSegments.stream()
                 .filter(seg -> existingSegments.contains(seg.baseOffset()))
                 .sorted(Comparator.comparingLong(LogSegment::baseOffset))
-                .collect(Collectors.toList());
+                .toList();
 
         // need to do this in two phases to be crash safe AND do the deletion asynchronously
         // if we crash in the middle of this we complete the swap in loadSegments()

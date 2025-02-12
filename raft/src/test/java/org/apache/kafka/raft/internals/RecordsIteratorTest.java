@@ -357,7 +357,7 @@ public final class RecordsIteratorTest {
             List<String> records = random
                 .ints(numberOfRecords, 0, 10)
                 .mapToObj(String::valueOf)
-                .collect(Collectors.toList());
+                .toList();
 
             batches.add(new TestBatch<>(baseOffset, epoch, appendTimestamp, records));
             baseOffset += records.size();

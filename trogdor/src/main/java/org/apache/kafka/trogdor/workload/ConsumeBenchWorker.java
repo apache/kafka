@@ -132,7 +132,7 @@ public class ConsumeBenchWorker implements TaskWorker {
                 }
             } else {
                 List<TopicPartition> partitions = populatePartitionsByTopic(consumer.consumer(), partitionsByTopic)
-                    .values().stream().flatMap(List::stream).collect(Collectors.toList());
+                    .values().stream().flatMap(List::stream).toList();
                 tasks.add(new ConsumeMessages(consumer, spec.recordProcessor(), partitions));
 
                 for (int i = 0; i < consumerCount - 1; i++) {
@@ -182,7 +182,7 @@ public class ConsumeBenchWorker implements TaskWorker {
                 if (partitions.isEmpty()) {
                     List<TopicPartition> fetchedPartitions = consumer.partitionsFor(topicName).stream()
                         .map(partitionInfo -> new TopicPartition(partitionInfo.topic(), partitionInfo.partition()))
-                        .collect(Collectors.toList());
+                        .toList();
                     partitions.addAll(fetchedPartitions);
                 }
 
@@ -550,7 +550,7 @@ public class ConsumeBenchWorker implements TaskWorker {
             this.consumerLock.lock();
             try {
                 return consumer.assignment().stream()
-                    .map(TopicPartition::toString).collect(Collectors.toList());
+                    .map(TopicPartition::toString).toList();
             } finally {
                 this.consumerLock.unlock();
             }

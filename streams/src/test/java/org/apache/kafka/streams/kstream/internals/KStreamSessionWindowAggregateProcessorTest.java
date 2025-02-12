@@ -473,7 +473,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
                 appender.getEvents().stream()
                     .filter(e -> e.getLevel().equals("WARN"))
                     .map(Event::getMessage)
-                    .collect(Collectors.toList()),
+                    .toList(),
                 hasItem("Skipping record due to null key. topic=[topic] partition=[-3] offset=[-2]")
             );
         }

@@ -94,6 +94,6 @@ public class StreamsGroupDescribeRequest extends AbstractRequest {
             .map(groupId -> new StreamsGroupDescribeResponseData.DescribedGroup()
                 .setGroupId(groupId)
                 .setErrorCode(error.code())
-            ).collect(Collectors.toList());
+            ).toList();
     }
 }

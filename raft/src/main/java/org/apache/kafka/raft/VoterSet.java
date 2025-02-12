@@ -277,7 +277,7 @@ public final class VoterSet {
             .values()
             .stream()
             .map(voterConvertor)
-            .collect(Collectors.toList());
+            .toList();
 
         return new VotersRecord()
             .setVersion(version)

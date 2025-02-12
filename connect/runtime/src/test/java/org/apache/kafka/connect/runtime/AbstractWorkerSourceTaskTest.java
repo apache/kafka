@@ -534,7 +534,7 @@ public class AbstractWorkerSourceTaskTest {
         assertEquals(Arrays.asList(TOPIC, OTHER_TOPIC), newTopicCaptor.getAllValues()
             .stream()
             .map(NewTopic::name)
-            .collect(Collectors.toList()));
+            .toList());
     }
 
     @Test
@@ -771,7 +771,7 @@ public class AbstractWorkerSourceTaskTest {
 
         RetryWithToleranceOperator<RetriableException> retryWithToleranceOperator = RetryWithToleranceOperatorTest.noneOperator();
         List<Object> results = Stream.of(record1, record2, record3)
-                .collect(Collectors.toList());
+                .toList();
         TransformationChain<RetriableException, SourceRecord> chain = WorkerTestUtils.getTransformationChain(
                 retryWithToleranceOperator,
                 results);
@@ -806,7 +806,7 @@ public class AbstractWorkerSourceTaskTest {
 
         RetryWithToleranceOperator<RetriableException> retryWithToleranceOperator = RetryWithToleranceOperatorTest.allOperator();
         List<Object> results = Stream.of(record1, record2, record3)
-                .collect(Collectors.toList());
+                .toList();
         TransformationChain<RetriableException, SourceRecord> chain = WorkerTestUtils.getTransformationChain(
                 retryWithToleranceOperator,
                 results);

@@ -713,7 +713,7 @@ public class ReassignPartitionsUnitTest {
                 leaderThrottles,
                 Collections.singletonMap("bar", "followerBar"));
             List<ConfigResource> topics = Stream.of("bar", "foo").map(
-                id -> new ConfigResource(ConfigResource.Type.TOPIC, id)).collect(Collectors.toList());
+                id -> new ConfigResource(ConfigResource.Type.TOPIC, id)).toList();
             Map<ConfigResource, Config> results = adminClient.describeConfigs(topics).all().get();
             verifyTopicThrottleResults(results.get(topics.get(0)), "leaderBar", "followerBar");
             verifyTopicThrottleResults(results.get(topics.get(1)), "leaderFoo", "");

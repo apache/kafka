@@ -304,7 +304,7 @@ public class MiniKdc {
                 byte keyVersion = (byte) encryptionKey.getKeyVersion();
                 return new KeytabEntry(principalWithRealm, 1, timestamp, keyVersion, encryptionKey);
             });
-        }).collect(Collectors.toList());
+        }).toList();
         keytab.setEntries(entries);
         keytab.write(keytabFile);
     }

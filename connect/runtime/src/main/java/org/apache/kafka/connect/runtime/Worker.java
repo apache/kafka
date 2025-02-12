@@ -761,7 +761,7 @@ public final class Worker {
                     Collection<String> transactionalIds = IntStream.range(0, numTasks)
                             .mapToObj(i -> new ConnectorTaskId(connName, i))
                             .map(this::taskTransactionalId)
-                            .collect(Collectors.toList());
+                            .toList();
                     FenceProducersOptions fencingOptions = new FenceProducersOptions()
                             .timeoutMs((int) RestServer.DEFAULT_REST_REQUEST_TIMEOUT_MS);
                     return admin.fenceProducers(transactionalIds, fencingOptions).all().whenComplete((ignored, error) -> {
@@ -974,7 +974,7 @@ public final class Worker {
         );
         List<ConfigValue> configValues = connectorClientConfigOverridePolicy.validate(connectorClientConfigRequest);
         List<ConfigValue> errorConfigs = configValues.stream().
-            filter(configValue -> configValue.errorMessages().size() > 0).collect(Collectors.toList());
+            filter(configValue -> configValue.errorMessages().size() > 0).toList();
         // These should be caught when the herder validates the connector configuration, but just in case
         if (errorConfigs.size() > 0) {
             throw new ConnectException("Client Config Overrides not allowed " + errorConfigs);
@@ -1287,7 +1287,7 @@ public final class Worker {
                 Set<Map<String, Object>> connectorPartitions = offsetStore.connectorPartitions(connName);
                 List<ConnectorOffset> connectorOffsets = offsetReader.offsets(connectorPartitions).entrySet().stream()
                         .map(entry -> new ConnectorOffset(entry.getKey(), entry.getValue()))
-                        .collect(Collectors.toList());
+                        .toList();
                 cb.onCompletion(null, new ConnectorOffsets(connectorOffsets));
             } catch (Throwable t) {
                 log.error("Failed to retrieve offsets for source connector {}", connName, t);

@@ -44,7 +44,7 @@ public class JsonArray implements JsonValue {
                 Spliterators.spliteratorUnknownSize(node.elements(), Spliterator.ORDERED),
                 false);
         Stream<JsonValue> results = nodeStream.map(JsonValue::apply);
-        return results.collect(Collectors.toList()).iterator();
+        return results.toList().iterator();
     }
 
     @Override

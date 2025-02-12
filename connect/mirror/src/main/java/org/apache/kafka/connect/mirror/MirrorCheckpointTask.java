@@ -183,7 +183,7 @@ public class MirrorCheckpointTask extends SourceTask {
             checkpointStore.update(group, newCheckpoints);
             return newCheckpoints.values().stream()
                 .map(x -> checkpointRecord(x, timestamp))
-                .collect(Collectors.toList());
+                .toList();
         } catch (ExecutionException e) {
             log.error("Error querying offsets for consumer group {} on cluster {}.",  group, sourceClusterAlias, e);
             return Collections.emptyList();

@@ -350,7 +350,7 @@ public class RebalanceSourceConnectorsIntegrationTest {
 
     private static String formatAssignment(Map<String, Collection<String>> assignment) {
         StringBuilder result = new StringBuilder();
-        for (String worker : assignment.keySet().stream().sorted().collect(Collectors.toList())) {
+        for (String worker : assignment.keySet().stream().sorted().toList()) {
             result.append(String.format("\n%s=%s", worker, assignment.getOrDefault(worker,
                     Collections.emptyList())));
         }

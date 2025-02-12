@@ -143,7 +143,7 @@ public class AdminClientTestUtils {
     public static ListGroupsResult listGroupsResult(GroupListing... groups) {
         return new ListGroupsResult(
             KafkaFuture.completedFuture(Arrays.stream(groups)
-                .collect(Collectors.toList())));
+                .toList()));
     }
 
     public static ListGroupsResult listGroupsResult(KafkaException exception) {
@@ -167,7 +167,7 @@ public class AdminClientTestUtils {
         return new ListClientMetricsResourcesResult(
                 KafkaFuture.completedFuture(Arrays.stream(names)
                         .map(ClientMetricsResourceListing::new)
-                        .collect(Collectors.toList())));
+                        .toList()));
     }
 
     public static ListClientMetricsResourcesResult listClientMetricsResourcesResult(KafkaException exception) {

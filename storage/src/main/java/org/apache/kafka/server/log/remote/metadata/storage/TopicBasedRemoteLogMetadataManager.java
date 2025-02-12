@@ -532,7 +532,7 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
                         .stream()
                         .filter(entry -> !entry.isDefault())
                         .map(entry -> entry.name() + "=" + entry.value())
-                        .collect(Collectors.toList());
+                        .toList();
                 log.info("Topic {} created. TopicId: {}, numPartitions: {}, replicationFactor: {}, config: {}",
                         topic, result.topicId(topic).get(), result.numPartitions(topic).get(),
                         result.replicationFactor(topic).get(), overriddenConfigs);

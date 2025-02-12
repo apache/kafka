@@ -146,7 +146,7 @@ public class ShareGroupCommand {
                     .timeoutMs(opts.options.valueOf(opts.timeoutMsOpt).intValue())
                     .withTypes(Set.of(GroupType.SHARE)));
                 Collection<GroupListing> listings = result.all().get();
-                return listings.stream().map(GroupListing::groupId).collect(Collectors.toList());
+                return listings.stream().map(GroupListing::groupId).toList();
             } catch (InterruptedException | ExecutionException e) {
                 throw new RuntimeException(e);
             }

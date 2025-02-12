@@ -172,7 +172,7 @@ public class DelegatingClassLoader extends URLClassLoader {
             }
 
             if (loader == null) {
-                List<String> availableVersions = loaders.keySet().stream().map(PluginDesc::version).collect(Collectors.toList());
+                List<String> availableVersions = loaders.keySet().stream().map(PluginDesc::version).toList();
                 throw new VersionedPluginLoadingException(String.format(
                         "Plugin %s not found that matches the version range %s, available versions: %s",
                         pluginName,
@@ -241,7 +241,7 @@ public class DelegatingClassLoader extends URLClassLoader {
                 .filter(pluginDesc -> pluginDesc.location().equals("classpath"))
                 .map(PluginDesc::version)
                 .distinct()
-                .collect(Collectors.toList());
+                .toList();
 
         if (classpathPlugins.size() > 1) {
             throw new VersionedPluginLoadingException(String.format(

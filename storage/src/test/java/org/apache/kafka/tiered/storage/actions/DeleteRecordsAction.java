@@ -64,7 +64,7 @@ public final class DeleteRecordsAction implements TieredStorageTestAction {
                         spec.getTopicPartition(),
                         false,
                         spec.getEventCount()))
-                .collect(Collectors.toList());
+                .toList();
 
         Map<TopicPartition, RecordsToDelete> recordsToDeleteMap =
                 Collections.singletonMap(partition, RecordsToDelete.beforeOffset(beforeOffset));

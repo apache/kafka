@@ -99,7 +99,7 @@ public class UpdateFeaturesRequest extends AbstractRequest {
     public Collection<FeatureUpdateItem> featureUpdates() {
         return data.featureUpdates().stream()
             .map(update -> getFeature(update.feature()))
-            .collect(Collectors.toList());
+            .toList();
     }
 
     @Override

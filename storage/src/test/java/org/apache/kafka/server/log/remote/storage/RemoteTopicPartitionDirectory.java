@@ -106,7 +106,7 @@ public final class RemoteTopicPartitionDirectory {
 
         return uuids.stream()
                 .map(uuid -> RemoteLogSegmentFileset.openExistingFileset(this, uuid))
-                .collect(Collectors.toList());
+                .toList();
     }
 
     /**

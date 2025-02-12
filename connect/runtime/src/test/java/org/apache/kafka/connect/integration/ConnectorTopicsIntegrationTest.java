@@ -260,7 +260,7 @@ public class ConnectorTopicsIntegrationTest {
         }
         List<TopicPartition> partitions = partitionInfos.stream()
                 .map(info -> new TopicPartition(info.topic(), info.partition()))
-                .collect(Collectors.toList());
+                .toList();
         verifiableConsumer.assign(partitions);
 
         // Based on the implementation of {@link org.apache.kafka.connect.util.KafkaBasedLog#readToLogEnd}

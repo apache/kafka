@@ -571,7 +571,7 @@ public class RemoteLogManager implements Closeable {
                 .map(metadata ->
                         new RemoteLogSegmentMetadataUpdate(metadata.remoteLogSegmentId(), time.milliseconds(),
                                 metadata.customMetadata(), RemoteLogSegmentState.DELETE_SEGMENT_STARTED, brokerId))
-                .collect(Collectors.toList());
+                .toList();
         publishEvents(deleteSegmentStartedEvents).get();
 
         // KAFKA-15313: Delete remote log segments partition asynchronously when a partition is deleted.
@@ -586,7 +586,7 @@ public class RemoteLogManager implements Closeable {
                 .map(metadata ->
                         new RemoteLogSegmentMetadataUpdate(metadata.remoteLogSegmentId(), time.milliseconds(),
                                 metadata.customMetadata(), RemoteLogSegmentState.DELETE_SEGMENT_FINISHED, brokerId))
-                .collect(Collectors.toList());
+                .toList();
         publishEvents(deleteSegmentFinishedEvents).get();
     }
 
@@ -1777,7 +1777,7 @@ public class RemoteLogManager implements Closeable {
 
         Consumer<List<AbortedTxn>> accumulator =
                 abortedTxns -> abortedTransactions.addAll(abortedTxns.stream()
-                        .map(AbortedTxn::asAbortedTransaction).collect(Collectors.toList()));
+                        .map(AbortedTxn::asAbortedTransaction).toList());
 
         long startTimeNs = time.nanoseconds();
         collectAbortedTransactions(startOffset, upperBoundOffset, segmentMetadata, accumulator, log);

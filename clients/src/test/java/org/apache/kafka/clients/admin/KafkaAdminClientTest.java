@@ -492,7 +492,7 @@ public class KafkaAdminClientTest {
             List<ClientTelemetryReporter> telemetryReporterList = admin.metrics.reporters().stream()
                     .filter(r -> r instanceof ClientTelemetryReporter)
                     .map(r -> (ClientTelemetryReporter) r)
-                    .collect(Collectors.toList());
+                    .toList();
 
             assertEquals(telemetryReporterList.size(), 1);
         }
@@ -506,7 +506,7 @@ public class KafkaAdminClientTest {
             List<ClientTelemetryReporter> telemetryReporterList = admin.metrics.reporters().stream()
                     .filter(r -> r instanceof ClientTelemetryReporter)
                     .map(r -> (ClientTelemetryReporter) r)
-                    .collect(Collectors.toList());
+                    .toList();
 
             assertTrue(telemetryReporterList.isEmpty());
         }
@@ -593,7 +593,7 @@ public class KafkaAdminClientTest {
                                 .setPartitionIndex(partition)
                                 .setErrorCode(error.code())
                         ).iterator()))
-                ).collect(Collectors.toList()).iterator()))
+                ).toList().iterator()))
         );
     }
 
@@ -699,7 +699,7 @@ public class KafkaAdminClientTest {
                         .setHost(node.host())
                         .setPort(node.port())
                         .setNodeId(node.id()))
-                .collect(Collectors.toList());
+                .toList();
         data.setCoordinators(coordinators);
         return new FindCoordinatorResponse(data);
     }
@@ -718,9 +718,9 @@ public class KafkaAdminClientTest {
                     .setPartitionIndex(pInfo.partition())
                     .setLeaderId(pInfo.leader().id())
                     .setLeaderEpoch(234)
-                    .setReplicaNodes(Arrays.stream(pInfo.replicas()).map(Node::id).collect(Collectors.toList()))
-                    .setIsrNodes(Arrays.stream(pInfo.inSyncReplicas()).map(Node::id).collect(Collectors.toList()))
-                    .setOfflineReplicas(Arrays.stream(pInfo.offlineReplicas()).map(Node::id).collect(Collectors.toList()));
+                    .setReplicaNodes(Arrays.stream(pInfo.replicas()).map(Node::id).toList())
+                    .setIsrNodes(Arrays.stream(pInfo.inSyncReplicas()).map(Node::id).toList())
+                    .setOfflineReplicas(Arrays.stream(pInfo.offlineReplicas()).map(Node::id).toList());
                 pms.add(pm);
             }
             MetadataResponseTopic tm = new MetadataResponseTopic()
@@ -744,7 +744,7 @@ public class KafkaAdminClientTest {
                                                                                 List<TopicPartition> topicPartitions) {
         final ByteBuffer memberAssignment = ConsumerProtocol.serializeAssignment(new ConsumerPartitionAssignor.Assignment(topicPartitions));
         List<DescribedGroupMember> describedGroupMembers = groupInstances.stream().map(groupInstance -> DescribeGroupsResponse.groupMember(JoinGroupRequest.UNKNOWN_MEMBER_ID,
-                groupInstance, "clientId0", "clientHost", new byte[memberAssignment.remaining()], null)).collect(Collectors.toList());
+                groupInstance, "clientId0", "clientHost", new byte[memberAssignment.remaining()], null)).toList();
         DescribeGroupsResponseData data = new DescribeGroupsResponseData();
         data.groups().add(DescribeGroupsResponse.groupMetadata(
                 groupId,
@@ -4292,9 +4292,9 @@ public class KafkaAdminClientTest {
             OffsetFetchRequestData data = ((OffsetFetchRequest.Builder) clientRequest.requestBuilder()).data;
             assertTrue(data.requireStable());
             assertEquals(Collections.singletonList(GROUP_ID),
-                    data.groups().stream().map(OffsetFetchRequestGroup::groupId).collect(Collectors.toList()));
+                    data.groups().stream().map(OffsetFetchRequestGroup::groupId).toList());
             assertEquals(Collections.singletonList("A"),
-                    data.groups().get(0).topics().stream().map(OffsetFetchRequestTopics::name).collect(Collectors.toList()));
+                    data.groups().get(0).topics().stream().map(OffsetFetchRequestTopics::name).toList());
             assertEquals(Collections.singletonList(0),
                     data.groups().get(0).topics().get(0).partitionIndexes());
         }
@@ -4948,7 +4948,7 @@ public class KafkaAdminClientTest {
                                     .setPartitionIndex(0)
                                     .setErrorCode(Errors.GROUP_SUBSCRIBED_TO_TOPIC.code())
                             ).iterator()))
-                    ).collect(Collectors.toList()).iterator()))
+                    ).toList().iterator()))
                 )
             );
 
@@ -6055,7 +6055,7 @@ public class KafkaAdminClientTest {
 
             // Test the "removeAll" scenario
             final List<TopicPartition> topicPartitions = Stream.of(1, 2, 3).map(partition -> new TopicPartition("my_topic", partition))
-                    .collect(Collectors.toList());
+                    .toList();
             // construct the DescribeGroupsResponse
             DescribeGroupsResponseData data = prepareDescribeGroupsResponseData(GROUP_ID, asList(instanceOne, instanceTwo), topicPartitions);
 
@@ -8013,7 +8013,7 @@ public class KafkaAdminClientTest {
             AlterUserScramCredentialsResponseData responseData = new AlterUserScramCredentialsResponseData();
             responseData.setResults(Stream.of(user0Name, user1Name, user2Name).map(u ->
                     new AlterUserScramCredentialsResponseData.AlterUserScramCredentialsResult()
-                    .setUser(u).setErrorCode(Errors.NONE.code())).collect(Collectors.toList()));
+                    .setUser(u).setErrorCode(Errors.NONE.code())).toList());
 
             env.kafkaClient().prepareResponse(new AlterUserScramCredentialsResponse(responseData));
 
@@ -8044,7 +8044,7 @@ public class KafkaAdminClientTest {
                     .setPartitions(Arrays.stream(partitions).boxed().map(partitionId ->
                         new AlterReplicaLogDirPartitionResult()
                             .setPartitionIndex(partitionId)
-                            .setErrorCode(error.code())).collect(Collectors.toList())))));
+                            .setErrorCode(error.code())).toList()))));
     }
 
     @Test
@@ -8600,7 +8600,7 @@ public class KafkaAdminClientTest {
                 .setLastSequence(producerState.lastSequence())
                 .setLastTimestamp(producerState.lastTimestamp())
                 .setCurrentTxnStartOffset(producerState.currentTransactionStartOffset().orElse(-1L))
-        ).collect(Collectors.toList()));
+        ).toList());
 
         return new DescribeProducersResponse(response);
     }
@@ -9205,7 +9205,7 @@ public class KafkaAdminClientTest {
             DescribeShareGroupOffsetsRequestData data = ((DescribeShareGroupOffsetsRequest.Builder) clientRequest.requestBuilder()).build().data();
             assertEquals(GROUP_ID, data.groupId());
             assertEquals(Collections.singletonList("A"),
-                data.topics().stream().map(DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestTopic::topicName).collect(Collectors.toList()));
+                data.topics().stream().map(DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestTopic::topicName).toList());
         }
     }
     

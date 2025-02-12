@@ -59,7 +59,7 @@ public class JsonObject implements JsonValue {
         Stream<Map.Entry<String, JsonValue>> results = stream.map(entry ->
                 new AbstractMap.SimpleEntry<>(entry.getKey(), JsonValue.apply(entry.getValue()))
         );
-        return results.collect(Collectors.toList()).iterator();
+        return results.toList().iterator();
     }
 
     @Override

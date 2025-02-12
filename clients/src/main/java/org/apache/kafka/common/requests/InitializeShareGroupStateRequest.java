@@ -70,7 +70,7 @@ public class InitializeShareGroupStateRequest extends AbstractRequest {
                                 .map(partitionData -> new InitializeShareGroupStateResponseData.PartitionResult()
                                         .setPartition(partitionData.partition())
                                         .setErrorCode(Errors.forException(e).code()))
-                                .collect(Collectors.toList()))));
+                                .toList())));
         return new InitializeShareGroupStateResponse(new InitializeShareGroupStateResponseData()
                 .setResults(results));
     }

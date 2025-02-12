@@ -75,13 +75,13 @@ public class TopicsImageZonalOutageBenchmark {
         Set<Uuid> perturbedTopics = new HashSet<>();
         builtupTopicsImage.topicsById().forEach((topicId, topicImage) ->
             topicImage.partitions().forEach((partitionNumber, partitionRegistration) -> {
-                List<Integer> newIsr = Arrays.stream(partitionRegistration.isr).boxed().filter(n -> n != 0).collect(Collectors.toList());
+                List<Integer> newIsr = Arrays.stream(partitionRegistration.isr).boxed().filter(n -> n != 0).toList();
                 if (newIsr.size() < replicationFactor) {
                     perturbedTopics.add(topicId);
                     topicsDelta.replay(new PartitionRecord().
                         setPartitionId(partitionNumber).
                         setTopicId(topicId).
-                        setReplicas(Arrays.stream(partitionRegistration.replicas).boxed().collect(Collectors.toList())).
+                        setReplicas(Arrays.stream(partitionRegistration.replicas).boxed().toList()).
                         setIsr(newIsr).
                         setRemovingReplicas(Collections.emptyList()).
                         setAddingReplicas(Collections.emptyList()).

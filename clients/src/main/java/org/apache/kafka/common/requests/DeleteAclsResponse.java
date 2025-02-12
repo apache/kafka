@@ -111,7 +111,7 @@ public class DeleteAclsResponse extends AbstractResponse {
         ApiError error = result.exception().map(ApiError::fromThrowable).orElse(ApiError.NONE);
         List<DeleteAclsMatchingAcl> matchingAcls = result.aclBindingDeleteResults().stream()
             .map(DeleteAclsResponse::matchingAcl)
-            .collect(Collectors.toList());
+            .toList();
         return new DeleteAclsFilterResult()
             .setErrorCode(error.error().code())
             .setErrorMessage(error.message())

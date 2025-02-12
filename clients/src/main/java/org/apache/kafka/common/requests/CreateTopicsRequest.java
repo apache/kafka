@@ -50,7 +50,7 @@ public class CreateTopicsRequest extends AbstractRequest {
                     topic.numPartitions() == CreateTopicsRequest.NO_NUM_PARTITIONS
                         || topic.replicationFactor() == CreateTopicsRequest.NO_REPLICATION_FACTOR)
                 .map(CreatableTopic::name)
-                .collect(Collectors.toList());
+                .toList();
 
             if (!topicsWithDefaults.isEmpty() && version < 4) {
                 throw new UnsupportedVersionException("Creating topics with default "

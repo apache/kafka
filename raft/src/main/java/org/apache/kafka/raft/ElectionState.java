@@ -130,7 +130,7 @@ public final class ElectionState {
             List<QuorumStateData.Voter> dataVoters = voters
                 .stream()
                 .map(voterId -> new QuorumStateData.Voter().setVoterId(voterId))
-                .collect(Collectors.toList());
+                .toList();
             data.setCurrentVoters(dataVoters);
         } else if (version == 1) {
             data.setVotedDirectoryId(

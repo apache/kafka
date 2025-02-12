@@ -41,7 +41,7 @@ public abstract class AbstractConnectorClientConfigOverridePolicy implements Con
     @Override
     public final List<ConfigValue> validate(ConnectorClientConfigRequest connectorClientConfigRequest) {
         Map<String, Object> inputConfig = connectorClientConfigRequest.clientProps();
-        return inputConfig.entrySet().stream().map(this::configValue).collect(Collectors.toList());
+        return inputConfig.entrySet().stream().map(this::configValue).toList();
     }
 
     protected ConfigValue configValue(Map.Entry<String, Object> configEntry) {

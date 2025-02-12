@@ -237,7 +237,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                 }
             };
             return new UnsentRequest(requestBuilder, Optional.of(target)).whenComplete(responseHandler);
-        }).collect(Collectors.toList());
+        }).toList();
 
         return new PollResult(requests);
     }
@@ -715,7 +715,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                 List<Node> leaderNodes = response.data().nodeEndpoints().stream()
                     .map(e -> new Node(e.nodeId(), e.host(), e.port(), e.rack()))
                     .filter(e -> !e.equals(Node.noNode()))
-                    .collect(Collectors.toList());
+                    .toList();
                 metadata.updatePartitionLeadership(partitionsWithUpdatedLeaderInfo, leaderNodes);
             }
 
@@ -856,7 +856,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                 List<Node> leaderNodes = response.data().nodeEndpoints().stream()
                     .map(e -> new Node(e.nodeId(), e.host(), e.port(), e.rack()))
                     .filter(e -> !e.equals(Node.noNode()))
-                    .collect(Collectors.toList());
+                    .toList();
                 metadata.updatePartitionLeadership(partitionsWithUpdatedLeaderInfo, leaderNodes);
             }
 

@@ -71,7 +71,7 @@ public class ReadShareGroupStateSummaryRequest extends AbstractRequest {
                         .setPartition(partitionData.partition())
                         .setErrorCode(Errors.forException(e).code())
                         .setErrorMessage(Errors.forException(e).message()))
-                    .collect(Collectors.toList()))));
+                    .toList())));
         return new ReadShareGroupStateSummaryResponse(new ReadShareGroupStateSummaryResponseData()
             .setResults(results));
     }

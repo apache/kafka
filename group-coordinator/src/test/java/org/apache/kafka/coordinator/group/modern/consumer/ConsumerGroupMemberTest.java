@@ -319,7 +319,7 @@ public class ConsumerGroupMemberTest {
                             .setTopicId(item.getKey())
                             .setTopicName("topic4")
                             .setPartitions(new ArrayList<>(item.getValue()))
-                    ).collect(Collectors.toList()))
+                    ).toList())
             )
             .setMemberType(withClassicMemberMetadata ? (byte) 0 : (byte) 1);
 

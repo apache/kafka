@@ -99,12 +99,12 @@ public class PluginsRecommenders {
                 return Collections.emptyList();
             }
             List<Object> sourceConnectors = plugins.sourceConnectors(connectorClassOrAlias).stream()
-                    .map(PluginDesc::version).distinct().collect(Collectors.toList());
+                    .map(PluginDesc::version).distinct().toList();
             if (!sourceConnectors.isEmpty()) {
                 return sourceConnectors;
             }
             return plugins.sinkConnectors(connectorClassOrAlias).stream()
-                    .map(PluginDesc::version).distinct().collect(Collectors.toList());
+                    .map(PluginDesc::version).distinct().toList();
         }
 
         @Override
@@ -122,7 +122,7 @@ public class PluginsRecommenders {
                 return Collections.emptyList();
             }
             return plugins.converters().stream()
-                    .map(PluginDesc::pluginClass).distinct().collect(Collectors.toList());
+                    .map(PluginDesc::pluginClass).distinct().toList();
         }
 
         @Override
@@ -139,7 +139,7 @@ public class PluginsRecommenders {
                 return Collections.emptyList();
             }
             return plugins.headerConverters().stream()
-                    .map(PluginDesc::pluginClass).distinct().collect(Collectors.toList());
+                    .map(PluginDesc::pluginClass).distinct().toList();
         }
 
         @Override
@@ -152,7 +152,7 @@ public class PluginsRecommenders {
 
         protected Function<String, List<Object>> recommendations() {
             return converterClass -> plugins.converters(converterClass).stream()
-                    .map(PluginDesc::version).distinct().collect(Collectors.toList());
+                    .map(PluginDesc::version).distinct().toList();
         }
 
         protected abstract String converterConfig();
@@ -203,7 +203,7 @@ public class PluginsRecommenders {
         @Override
         protected Function<String, List<Object>> recommendations() {
             return converterClass -> plugins.headerConverters(converterClass).stream()
-                    .map(PluginDesc::version).distinct().collect(Collectors.toList());
+                    .map(PluginDesc::version).distinct().toList();
         }
     }
 
@@ -230,7 +230,7 @@ public class PluginsRecommenders {
 
             Class classOrAlias = (Class) parsedConfig.get(classOrAliasConfig);
             return plugins().apply(classOrAlias.getName())
-                    .stream().map(PluginDesc::version).distinct().collect(Collectors.toList());
+                    .stream().map(PluginDesc::version).distinct().toList();
         }
 
         @Override

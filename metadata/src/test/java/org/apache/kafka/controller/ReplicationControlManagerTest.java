@@ -1428,7 +1428,7 @@ public class ReplicationControlManagerTest {
         assertEquals(partitionControl.leader, partitionData.leaderId());
         assertEquals(partitionControl.leaderEpoch, partitionData.leaderEpoch());
         assertEquals(partitionControl.partitionEpoch, partitionData.partitionEpoch());
-        List<Integer> expectedIsr = IntStream.of(partitionControl.isr).boxed().collect(Collectors.toList());
+        List<Integer> expectedIsr = IntStream.of(partitionControl.isr).boxed().toList();
         assertEquals(expectedIsr, partitionData.isr());
     }
 
@@ -2826,7 +2826,7 @@ public class ReplicationControlManagerTest {
                         .setErrorCode(error.error().code())
                         .setErrorMessage(error.message());
                 })
-                .collect(Collectors.toList()));
+                .toList());
             response.replicaElectionResults().add(electionResult);
         });
 
@@ -3088,7 +3088,7 @@ public class ReplicationControlManagerTest {
 
     private static List<BrokerState> isrWithDefaultEpoch(Integer... isr) {
         return Arrays.stream(isr).map(brokerId -> brokerState(brokerId, defaultBrokerEpoch(brokerId)))
-            .collect(Collectors.toList());
+            .toList();
     }
 
     @Test
@@ -3272,7 +3272,7 @@ public class ReplicationControlManagerTest {
     }
 
     private static List<ApiMessageAndVersion> filter(List<ApiMessageAndVersion> records, Class<? extends ApiMessage> clazz) {
-        return records.stream().filter(r -> clazz.equals(r.message().getClass())).collect(Collectors.toList());
+        return records.stream().filter(r -> clazz.equals(r.message().getClass())).toList();
     }
 
     @ParameterizedTest

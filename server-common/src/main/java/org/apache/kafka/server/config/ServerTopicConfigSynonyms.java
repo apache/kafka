@@ -134,7 +134,7 @@ public final class ServerTopicConfigSynonyms {
     private static Entry<String, List<ConfigSynonym>> listWithLogPrefix(String topicConfigName, ConfigSynonym... synonyms) {
         List<ConfigSynonym> synonymsWithPrefix = Arrays.stream(synonyms)
             .map(s -> new ConfigSynonym(LOG_PREFIX + s.name(), s.converter()))
-            .collect(Collectors.toList());
+            .toList();
         return Utils.mkEntry(topicConfigName, synonymsWithPrefix);
     }
 

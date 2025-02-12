@@ -74,7 +74,7 @@ public class AlterConsumerGroupOffsetsResult {
                 .stream()
                 .filter(e -> e.getValue() != Errors.NONE)
                 .map(Map.Entry::getKey)
-                .collect(Collectors.toList());
+                .toList();
             for (Errors error : topicPartitionErrorsMap.values()) {
                 if (error != Errors.NONE) {
                     throw error.exception(

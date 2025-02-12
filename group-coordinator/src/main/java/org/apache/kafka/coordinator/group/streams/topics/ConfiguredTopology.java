@@ -68,7 +68,7 @@ public record ConfiguredTopology(int topologyEpoch,
             .setSubtopologies(
                 subtopologies.map(stringConfiguredSubtopologyMap -> stringConfiguredSubtopologyMap.entrySet().stream().map(
                     entry -> entry.getValue().asStreamsGroupDescribeSubtopology(entry.getKey())
-                ).collect(Collectors.toList())).orElse(Collections.emptyList())
+                ).toList()).orElse(Collections.emptyList())
             );
     }
 

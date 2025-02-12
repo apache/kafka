@@ -69,7 +69,7 @@ public final class LocalTieredStorageHistory {
             matchingTypeEvents = new ArrayList<>(matchingTypeEvents);
         }
 
-        return matchingTypeEvents.stream().filter(matches(topicPartition)).collect(Collectors.toList());
+        return matchingTypeEvents.stream().filter(matches(topicPartition)).toList();
     }
 
     /**

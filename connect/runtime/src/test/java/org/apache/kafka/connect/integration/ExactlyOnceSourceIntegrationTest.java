@@ -457,7 +457,7 @@ public class ExactlyOnceSourceIntegrationTest {
         assertEquals(expectedOffsetSeqnos, actualOffsetSeqnos.subList(0, expectedOffsetSeqnos.size()),
                 "Committed offsets should match connector-defined transaction boundaries");
 
-        List<Long> expectedRecordSeqnos = LongStream.range(1, MINIMUM_MESSAGES + 1).boxed().collect(Collectors.toList());
+        List<Long> expectedRecordSeqnos = LongStream.range(1, MINIMUM_MESSAGES + 1).boxed().toList();
         long priorBoundary = 1;
         long nextBoundary = 2;
         while (priorBoundary < expectedRecordSeqnos.get(expectedRecordSeqnos.size() - 1)) {
@@ -1024,7 +1024,7 @@ public class ExactlyOnceSourceIntegrationTest {
         parsedValues.replaceAll((task, values) -> {
             Long committedValue = lastCommittedValues.get(task);
             assertNotNull(committedValue, "No committed offset found for task " + task);
-            return values.stream().filter(v -> v <= committedValue).collect(Collectors.toList());
+            return values.stream().filter(v -> v <= committedValue).toList();
         });
         assertSeqnos(parsedValues, numTasks);
     }
@@ -1199,7 +1199,7 @@ public class ExactlyOnceSourceIntegrationTest {
                 .mapToObj(i -> transactionalProducer(
                         "simulated-task-producer-" + CONNECTOR_NAME + "-" + i,
                         Worker.taskTransactionalId(CLUSTER_GROUP_ID, CONNECTOR_NAME, i)
-                )).collect(Collectors.toList());
+                )).toList();
 
         producers.forEach(KafkaProducer::initTransactions);
 
@@ -1250,7 +1250,7 @@ public class ExactlyOnceSourceIntegrationTest {
 
         @Override
         public List<Map<String, String>> taskConfigs(int maxTasks) {
-            return IntStream.range(0, maxTasks).mapToObj(i -> props).collect(Collectors.toList());
+            return IntStream.range(0, maxTasks).mapToObj(i -> props).toList();
         }
 
         @Override

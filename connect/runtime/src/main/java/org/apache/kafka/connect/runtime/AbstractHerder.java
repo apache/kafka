@@ -366,7 +366,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     public ActiveTopicsInfo connectorActiveTopics(String connName) {
         Collection<String> topics = statusBackingStore.getAllTopics(connName).stream()
                 .map(TopicStatus::topic)
-                .collect(Collectors.toList());
+                .toList();
         return new ActiveTopicsInfo(connName, topics);
     }
 
@@ -642,7 +642,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                             taskStatus.trace()
                     );
                 })
-                .collect(Collectors.toList());
+                .toList();
         // Construct the response from the various states
         Map<String, String> conf = rawConfig(connectorName);
         ConnectorStateInfo stateInfo = new ConnectorStateInfo(
@@ -806,7 +806,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         }
         validatedConfig.get(CONNECTOR_CLASS_CONFIG).addErrorMessage(e.getMessage());
         validatedConfig.get(CONNECTOR_VERSION).addErrorMessage(e.getMessage());
-        validatedConfig.get(CONNECTOR_VERSION).recommendedValues(e.availableVersions().stream().map(v -> (Object) v).collect(Collectors.toList()));
+        validatedConfig.get(CONNECTOR_VERSION).recommendedValues(e.availableVersions().stream().map(v -> (Object) v).toList());
         addNullValuedErrors(connectorProps, validatedConfig);
         return generateResult(connType, configDef.configKeys(), new ArrayList<>(validatedConfig.values()), new ArrayList<>(configDef.groups()));
     }

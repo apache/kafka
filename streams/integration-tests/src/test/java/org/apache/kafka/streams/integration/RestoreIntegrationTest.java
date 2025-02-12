@@ -571,7 +571,7 @@ public class RestoreIntegrationTest {
 
         final List<KeyValue<Integer, Integer>> sampleData = IntStream.range(0, 100)
                                                                      .mapToObj(i -> new KeyValue<>(i, i))
-                                                                     .collect(Collectors.toList());
+                                                                     .toList();
 
         sendEvents(inputTopic, sampleData);
 

@@ -150,7 +150,7 @@ public class DefaultStatePersister implements Persister {
                                     partitionResult.partition(),
                                     partitionResult.errorCode(),
                                     partitionResult.errorMessage()))
-                                .collect(Collectors.toList());
+                                .toList();
                         } catch (Exception e) {
                             log.error("Unexpected exception while writing data to share coordinator", e);
                             return Collections.singletonList(PartitionFactory.newPartitionErrorData(
@@ -161,10 +161,10 @@ public class DefaultStatePersister implements Persister {
                         }
                     })
                     .flatMap(List::stream)
-                    .collect(Collectors.toList());
+                    .toList();
                 return new TopicData<>(topicId, partitionErrData);
             })
-            .collect(Collectors.toList());
+            .toList();
         return new WriteShareGroupStateResult.Builder()
             .setTopicsData(topicsData)
             .build();
@@ -248,9 +248,9 @@ public class DefaultStatePersister implements Persister {
                                     partitionResult.startOffset(),
                                     partitionResult.errorCode(),
                                     partitionResult.errorMessage(),
-                                    partitionResult.stateBatches().stream().map(PersisterStateBatch::from).collect(Collectors.toList())
+                                    partitionResult.stateBatches().stream().map(PersisterStateBatch::from).toList()
                                 ))
-                                .collect(Collectors.toList());
+                                .toList();
                         } catch (Exception e) {
                             log.error("Unexpected exception while getting data from share coordinator", e);
                             return Collections.singletonList(PartitionFactory.newPartitionAllData(
@@ -264,10 +264,10 @@ public class DefaultStatePersister implements Persister {
                         }
                     })
                     .flatMap(List::stream)
-                    .collect(Collectors.toList());
+                    .toList();
                 return new TopicData<>(topicId, partitionAllData);
             })
-            .collect(Collectors.toList());
+            .toList();
         return new ReadShareGroupStateResult.Builder()
             .setTopicsData(topicsData)
             .build();
@@ -403,7 +403,7 @@ public class DefaultStatePersister implements Persister {
                                     partitionResult.startOffset(),
                                     partitionResult.errorCode(),
                                     partitionResult.errorMessage()))
-                                .collect(Collectors.toList());
+                                .toList();
                         } catch (Exception e) {
                             log.error("Unexpected exception while getting data from share coordinator", e);
                             return Collections.singletonList(PartitionFactory.newPartitionStateSummaryData(
@@ -415,10 +415,10 @@ public class DefaultStatePersister implements Persister {
                         }
                     })
                     .flatMap(List::stream)
-                    .collect(Collectors.toList());
+                    .toList();
                 return new TopicData<>(topicId, partitionStateErrorData);
             })
-            .collect(Collectors.toList());
+            .toList();
         return new ReadShareGroupStateSummaryResult.Builder()
             .setTopicsData(topicsData)
             .build();
@@ -464,10 +464,10 @@ public class DefaultStatePersister implements Persister {
                         }
                     })
                     .flatMap(List::stream)
-                    .collect(Collectors.toList());
+                    .toList();
                 return new TopicData<>(topicId, partitionErrorData);
             })
-            .collect(Collectors.toList());
+            .toList();
         return new DeleteShareGroupStateResult.Builder()
             .setTopicsData(topicsData)
             .build();

@@ -72,11 +72,11 @@ public class ConsumerGroupServiceTest {
 
     public static final int NUM_PARTITIONS = 10;
 
-    private static final List<String> TOPICS = IntStream.range(0, 5).mapToObj(i -> "testTopic" + i).collect(Collectors.toList());
+    private static final List<String> TOPICS = IntStream.range(0, 5).mapToObj(i -> "testTopic" + i).toList();
 
     private static final List<TopicPartition> TOPIC_PARTITIONS = TOPICS.stream()
             .flatMap(topic -> IntStream.range(0, NUM_PARTITIONS).mapToObj(i -> new TopicPartition(topic, i)))
-            .collect(Collectors.toList());
+            .toList();
 
     private final Admin admin = mock(Admin.class);
 
@@ -303,7 +303,7 @@ public class ConsumerGroupServiceTest {
         topics.forEach(topic -> {
             List<TopicPartitionInfo> partitions = IntStream.range(0, NUM_PARTITIONS)
                     .mapToObj(i -> new TopicPartitionInfo(i, null, Collections.emptyList(), Collections.emptyList()))
-                    .collect(Collectors.toList());
+                    .toList();
             topicDescriptions.put(topic, new TopicDescription(topic, false, partitions));
         });
         return AdminClientTestUtils.describeTopicsResult(topicDescriptions);

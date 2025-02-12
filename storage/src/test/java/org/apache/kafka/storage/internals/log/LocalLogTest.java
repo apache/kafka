@@ -101,7 +101,7 @@ class LocalLogTest {
     }
 
     private List<SimpleRecord> kvsToRecords(List<KeyValue> keyValues) {
-        return keyValues.stream().map(KeyValue::toRecord).collect(Collectors.toList());
+        return keyValues.stream().map(KeyValue::toRecord).toList();
     }
 
     private List<KeyValue> recordsToKvs(Iterable<Record> records) {
@@ -497,7 +497,7 @@ class LocalLogTest {
     private List<Long> nonActiveBaseOffsetsFrom(long startOffset) {
         return log.segments().nonActiveLogSegmentsFrom(startOffset).stream()
                 .map(LogSegment::baseOffset)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     private String topicPartitionName(String topic, String partition) {
@@ -653,12 +653,12 @@ class LocalLogTest {
         List<KeyValue> keyValues2 = List.of(new KeyValue("k2", "v2"));
         appendRecords(keyValues2.stream()
                 .map(kv -> kv.toRecord(MOCK_TIME.milliseconds() + 10))
-                .collect(Collectors.toList()),
+                .toList(),
                 1L);
         assertEquals(2, log.logEndOffset(), "Expect two records in the log");
         FetchDataInfo readResult = readRecords(0L);
         assertEquals(2L, Utils.toList(readResult.records.records()).size());
-        assertEquals(Stream.concat(keyValues1.stream(), keyValues2.stream()).collect(Collectors.toList()), recordsToKvs(readResult.records.records()));
+        assertEquals(Stream.concat(keyValues1.stream(), keyValues2.stream()).toList(), recordsToKvs(readResult.records.records()));
 
         // roll so that active segment is empty
         log.roll(0L);

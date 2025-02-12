@@ -81,12 +81,12 @@ public class ShareGroupOffset {
 
     public static ShareGroupOffset fromRecord(ShareSnapshotValue record) {
         return new ShareGroupOffset(record.snapshotEpoch(), record.stateEpoch(), record.leaderEpoch(), record.startOffset(), record.stateBatches().stream()
-            .map(ShareGroupOffset::toPersisterOffsetsStateBatch).collect(Collectors.toList()));
+            .map(ShareGroupOffset::toPersisterOffsetsStateBatch).toList());
     }
 
     public static ShareGroupOffset fromRecord(ShareUpdateValue record) {
         return new ShareGroupOffset(record.snapshotEpoch(), -1, record.leaderEpoch(), record.startOffset(), record.stateBatches().stream()
-            .map(ShareGroupOffset::toPersisterOffsetsStateBatch).collect(Collectors.toList()));
+            .map(ShareGroupOffset::toPersisterOffsetsStateBatch).toList());
     }
 
     public static ShareGroupOffset fromRequest(WriteShareGroupStateRequestData.PartitionData data) {
@@ -100,7 +100,7 @@ public class ShareGroupOffset {
             data.startOffset(),
             data.stateBatches().stream()
                 .map(PersisterStateBatch::from)
-                .collect(Collectors.toList()));
+                .toList());
     }
 
     public LinkedHashSet<PersisterStateBatch> stateBatchAsSet() {

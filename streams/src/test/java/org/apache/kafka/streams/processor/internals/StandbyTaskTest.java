@@ -604,6 +604,6 @@ public class StandbyTaskTest {
     }
 
     private List<MetricName> getTaskMetrics() {
-        return streamsMetrics.metrics().keySet().stream().filter(m -> m.tags().containsKey("task-id")).collect(Collectors.toList());
+        return streamsMetrics.metrics().keySet().stream().filter(m -> m.tags().containsKey("task-id")).toList();
     }
 }

@@ -142,7 +142,7 @@ public class RetryWithToleranceOperator<T> implements AutoCloseable {
         List<Future<RecordMetadata>> futures = reporters.stream()
                 .map(r -> r.report(context))
                 .filter(f -> !f.isDone())
-                .collect(Collectors.toList());
+                .toList();
         if (futures.isEmpty()) {
             return CompletableFuture.completedFuture(null);
         }

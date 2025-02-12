@@ -651,7 +651,7 @@ public final class LocalTieredStorageTest {
         }
 
         void deleteAll() throws IOException {
-            List<Path> paths = Files.list(segmentPath).collect(Collectors.toList());
+            List<Path> paths = Files.list(segmentPath).toList();
             for (final Path path : paths) {
                 Files.delete(path);
             }

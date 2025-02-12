@@ -50,7 +50,7 @@ public class RestartPlan {
                         .stream()
                         .filter(this::isRestarting)
                         .map(taskState -> new ConnectorTaskId(request.connectorName(), taskState.id()))
-                        .collect(Collectors.toList())
+                        .toList()
         );
     }
 

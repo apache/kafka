@@ -366,7 +366,7 @@ public final class TieredStorageTestBuilder {
                         .map(spec ->
                                 new OffloadedSegmentSpec(spec.getSourceBrokerId(), topicPartition, spec.getBaseOffset(),
                                         spec.getRecords()))
-                        .collect(Collectors.toList());
+                        .toList();
                 ProduceAction action = new ProduceAction(topicPartition, offloadedSegmentSpecs, recordsToProduce,
                         producableSpec.getBatchSize(), producableSpec.getEarliestLocalLogOffset());
                 actions.add(action);
@@ -416,7 +416,7 @@ public final class TieredStorageTestBuilder {
                             .map(spec -> new RemoteDeleteSegmentSpec(spec.getSourceBrokerId(), partition,
                                     spec.getEventType(), spec.getEventCount()));
                 })
-                .collect(Collectors.toList());
+                .toList();
         deleteSegmentSpecList.forEach(spec -> deletables.remove(spec.getTopicPartition()));
         return deleteSegmentSpecList;
     }

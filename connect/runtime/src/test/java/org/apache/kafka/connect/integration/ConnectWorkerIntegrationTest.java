@@ -1444,7 +1444,7 @@ public class ConnectWorkerIntegrationTest {
         public List<Map<String, String>> taskConfigs(int maxTasks) {
             return IntStream.range(0, maxTasks)
                     .mapToObj(i -> Collections.<String, String>emptyMap())
-                    .collect(Collectors.toList());
+                    .toList();
         }
 
         @Override

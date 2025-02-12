@@ -41,8 +41,8 @@ public class ReadShareGroupStateParameters implements PersisterParameters {
                         .map(readStateData -> new TopicData<>(readStateData.topicId(),
                                 readStateData.partitions().stream()
                                         .map(partitionData -> PartitionFactory.newPartitionIdLeaderEpochData(partitionData.partition(), partitionData.leaderEpoch()))
-                                        .collect(Collectors.toList())))
-                        .collect(Collectors.toList())))
+                                        .toList()))
+                        .toList()))
                 .build();
     }
 

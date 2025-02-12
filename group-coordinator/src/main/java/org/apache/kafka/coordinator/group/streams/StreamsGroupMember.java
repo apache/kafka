@@ -341,7 +341,7 @@ public record StreamsGroupMember(String memberId,
                 entry -> new StreamsGroupDescribeResponseData.KeyValue()
                     .setKey(entry.getKey())
                     .setValue(entry.getValue())
-            ).collect(Collectors.toList()))
+            ).toList())
             .setProcessId(processId)
             .setTopologyEpoch(topologyEpoch)
             .setUserEndpoint(

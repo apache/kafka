@@ -96,7 +96,7 @@ public class DeleteAclsRequest extends AbstractRequest {
     }
 
     public List<AclBindingFilter> filters() {
-        return data.filters().stream().map(DeleteAclsRequest::aclBindingFilter).collect(Collectors.toList());
+        return data.filters().stream().map(DeleteAclsRequest::aclBindingFilter).toList();
     }
 
     @Override

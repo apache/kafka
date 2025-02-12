@@ -143,7 +143,7 @@ public class PartitionChangeBuilder {
             targetIsrWithEpoch
               .stream()
               .map(BrokerState::brokerId)
-              .collect(Collectors.toList())
+              .toList()
         );
     }
 
@@ -334,7 +334,7 @@ public class PartitionChangeBuilder {
             if (targetElr.contains(electionResult.node)) {
                 targetIsr = Collections.singletonList(electionResult.node);
                 targetElr = targetElr.stream().filter(replica -> replica != electionResult.node)
-                    .collect(Collectors.toList());
+                    .toList();
                 log.trace("Setting new leader for topicId {}, partition {} to {} using ELR",
                         topicId, partitionId, electionResult.node);
             } else if (electionResult.unclean) {
@@ -558,7 +558,7 @@ public class PartitionChangeBuilder {
         targetElr = candidateSet.stream()
             .filter(replica -> !targetIsrSet.contains(replica))
             .filter(replica -> uncleanShutdownReplicas == null || !uncleanShutdownReplicas.contains(replica))
-            .collect(Collectors.toList());
+            .toList();
 
         // Calculate the new last known ELR. Includes any ISR members since the ISR size drops below min ISR.
         // In order to reduce the metadata usage, the last known ELR excludes the members in ELR and current ISR.
@@ -566,7 +566,7 @@ public class PartitionChangeBuilder {
         targetLastKnownElr = candidateSet.stream()
             .filter(replica -> !targetIsrSet.contains(replica))
             .filter(replica -> !targetElr.contains(replica))
-            .collect(Collectors.toList());
+            .toList();
     }
 
     @Override

@@ -371,7 +371,7 @@ public class TestPlugins {
                 .filter(Objects::nonNull)
                 .map(TestPlugin::className)
                 .distinct()
-                .collect(Collectors.toList());
+                .toList();
     }
 
     private static TestPlugin[] defaultPlugins() {
@@ -423,7 +423,7 @@ public class TestPlugins {
             classFiles = stream
                     .sorted(Comparator.reverseOrder())
                     .map(Path::toFile)
-                    .collect(Collectors.toList());
+                    .toList();
         }
         for (File classFile : classFiles) {
             if (!classFile.delete()) {
@@ -451,7 +451,7 @@ public class TestPlugins {
                     .filter(Files::isRegularFile)
                     .map(Path::toFile)
                     .filter(file -> file.getName().endsWith(".java"))
-                    .collect(Collectors.toList());
+                    .toList();
         }
         StringWriter writer = new StringWriter();
         List<String> options = Arrays.asList(
@@ -480,7 +480,7 @@ public class TestPlugins {
                     .filter(Files::isRegularFile)
                     .filter(path -> !path.toFile().getName().endsWith(".java"))
                     .filter(path -> !removeRuntimeClasses.test(path.toFile().getName()))
-                    .collect(Collectors.toList());
+                    .toList();
         }
         for (Path path : paths) {
             try (InputStream in = new BufferedInputStream(Files.newInputStream(path))) {

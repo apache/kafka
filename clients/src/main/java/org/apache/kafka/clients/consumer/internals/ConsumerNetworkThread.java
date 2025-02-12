@@ -358,7 +358,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
                 .filter(e -> e instanceof CompletableApplicationEvent<?>)
                 .map(e -> (CompletableApplicationEvent<?>) e)
                 .filter(CompletableApplicationEvent::requireSubscriptionMetadata)
-                .collect(Collectors.toList());
+                .toList();
         
         if (subscriptionMetadataEvent.isEmpty())
             return;

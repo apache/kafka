@@ -390,7 +390,7 @@ public class FormatterTest {
                     testEnv.directory(0),
                     MetadataVersion.FEATURE_NAME,
                     MetadataVersion.latestTesting())),
-                formatter1.outputLines().stream().sorted().collect(Collectors.toList()));
+                formatter1.outputLines().stream().sorted().toList());
             MetaPropertiesEnsemble ensemble = new MetaPropertiesEnsemble.Loader().
                 addLogDirs(testEnv.directories).
                 load();
@@ -472,7 +472,7 @@ public class FormatterTest {
                         testEnv.directory(0),
                         MetadataVersion.FEATURE_NAME,
                         MetadataVersion.latestTesting())),
-                formatter1.outputLines().stream().sorted().collect(Collectors.toList()));
+                formatter1.outputLines().stream().sorted().toList());
             MetaPropertiesEnsemble ensemble = new MetaPropertiesEnsemble.Loader().
                 addLogDirs(testEnv.directories).
                 load();

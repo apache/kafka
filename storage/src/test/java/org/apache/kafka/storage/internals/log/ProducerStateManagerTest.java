@@ -930,7 +930,7 @@ public class ProducerStateManagerTest {
                 .stream()
                 .map(file -> file.offset)
                 .sorted()
-                .collect(Collectors.toList()));
+                .toList());
     }
 
     @Test
@@ -948,7 +948,7 @@ public class ProducerStateManagerTest {
                 .stream()
                 .map(file -> file.offset)
                 .sorted()
-                .collect(Collectors.toList()));
+                .toList());
 
     }
 

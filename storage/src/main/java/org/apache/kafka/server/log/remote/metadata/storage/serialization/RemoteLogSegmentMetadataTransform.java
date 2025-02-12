@@ -56,7 +56,7 @@ public class RemoteLogSegmentMetadataTransform implements RemoteLogMetadataTrans
                    .map(entry -> new RemoteLogSegmentMetadataRecord.SegmentLeaderEpochEntry()
                            .setLeaderEpoch(entry.getKey())
                            .setOffset(entry.getValue()))
-                   .collect(Collectors.toList());
+                   .toList();
     }
 
     private RemoteLogSegmentMetadataRecord.RemoteLogSegmentIdEntry createRemoteLogSegmentIdEntry(RemoteLogSegmentMetadata data) {

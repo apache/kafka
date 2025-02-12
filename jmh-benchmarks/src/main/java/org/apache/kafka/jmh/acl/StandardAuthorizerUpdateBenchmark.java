@@ -98,7 +98,7 @@ public class StandardAuthorizerUpdateBenchmark {
                 return aclsForResource(resourcePattern);
             })
             .flatMap(Collection::stream)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     private List<StandardAclWithId> aclsForResource(ResourcePattern pattern) {
@@ -109,7 +109,7 @@ public class StandardAuthorizerUpdateBenchmark {
                 return new StandardAcl(pattern.resourceType(), pattern.name(), pattern.patternType(), p, h, READ, ALLOW);
             })
             .map(this::withId)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     private StandardAclWithId withId(StandardAcl acl) {

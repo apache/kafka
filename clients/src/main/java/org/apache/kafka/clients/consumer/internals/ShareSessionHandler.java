@@ -168,7 +168,7 @@ public class ShareSessionHandler {
         Map<TopicIdPartition, List<ShareFetchRequestData.AcknowledgementBatch>> acknowledgementBatches = new HashMap<>();
         nextAcknowledgements.forEach((partition, acknowledgements) -> acknowledgementBatches.put(partition, acknowledgements.getAcknowledgementBatches()
                 .stream().map(AcknowledgementBatch::toShareFetchRequest)
-                .collect(Collectors.toList())));
+                .toList()));
 
         nextPartitions = new LinkedHashMap<>();
         nextAcknowledgements = new LinkedHashMap<>();
@@ -191,7 +191,7 @@ public class ShareSessionHandler {
         nextAcknowledgements.forEach((partition, acknowledgements) ->
                 acknowledgementBatches.put(partition, acknowledgements.getAcknowledgementBatches()
                         .stream().map(AcknowledgementBatch::toShareAcknowledgeRequest)
-                        .collect(Collectors.toList())));
+                        .toList()));
 
         nextAcknowledgements = new LinkedHashMap<>();
 

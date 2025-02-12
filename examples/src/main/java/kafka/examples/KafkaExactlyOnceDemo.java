@@ -95,7 +95,7 @@ public class KafkaExactlyOnceDemo {
                         INPUT_TOPIC,
                         OUTPUT_TOPIC,
                         processorsLatch))
-                .collect(Collectors.toList());
+                .toList();
             processors.forEach(ExactlyOnceMessageProcessor::start);
             if (!processorsLatch.await(2, TimeUnit.MINUTES)) {
                 Utils.printErr("Timeout after 2 minutes waiting for record copy");

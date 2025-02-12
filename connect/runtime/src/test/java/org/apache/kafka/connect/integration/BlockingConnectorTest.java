@@ -672,7 +672,7 @@ public class BlockingConnectorTest {
         public List<Map<String, String>> taskConfigs(int maxTasks) {
             return IntStream.range(0, maxTasks)
                 .mapToObj(i -> new HashMap<>(props))
-                .collect(Collectors.toList());
+                .toList();
         }
 
         @Override
@@ -789,7 +789,7 @@ public class BlockingConnectorTest {
         public List<Map<String, String>> taskConfigs(int maxTasks) {
             return IntStream.range(0, maxTasks)
                 .mapToObj(i -> new HashMap<>(props))
-                .collect(Collectors.toList());
+                .toList();
         }
 
         @Override

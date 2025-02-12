@@ -285,7 +285,7 @@ public class MemoryRecordsBuilderTest {
                 new LeaderChangeMessage()
                     .setLeaderId(leaderId)
                     .setVoters(voters.stream().map(
-                        voterId -> new Voter().setVoterId(voterId)).collect(Collectors.toList())));
+                        voterId -> new Voter().setVoterId(voterId)).toList()));
 
             MemoryRecords built = builder.build();
             List<Record> records = TestUtils.toList(built.records());
@@ -293,7 +293,7 @@ public class MemoryRecordsBuilderTest {
             LeaderChangeMessage leaderChangeMessage = ControlRecordUtils.deserializeLeaderChangeMessage(records.get(0));
 
             assertEquals(leaderId, leaderChangeMessage.leaderId());
-            assertEquals(voters, leaderChangeMessage.voters().stream().map(Voter::voterId).collect(Collectors.toList()));
+            assertEquals(voters, leaderChangeMessage.voters().stream().map(Voter::voterId).toList());
         }
     }
 

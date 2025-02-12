@@ -127,7 +127,7 @@ public class MirrorConnectorsWithCustomForwardingAdminIntegrationTest extends Mi
                             new ResourcePatternFilter(ResourceType.TOPIC, topic, PatternType.ANY),
                             AccessControlEntryFilter.ANY
                     )
-            ).collect(Collectors.toList());
+            ).toList();
             adminClient.deleteAcls(aclBindingFilters);
         }
     }

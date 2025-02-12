@@ -77,7 +77,7 @@ public class TransactionsWithTieredStoreTest extends TransactionsTest {
         CollectionConverters.asJava(topicPartitions).forEach(topicPartition -> {
             List<BrokerLocalStorage> localStorages = CollectionConverters.asJava(brokers()).stream()
                     .map(b -> new BrokerLocalStorage(b.config().brokerId(), CollectionConverters.asJava(b.config().logDirs().toSet()), STORAGE_WAIT_TIMEOUT_SEC))
-                    .collect(Collectors.toList());
+                    .toList();
             localStorages
                     .stream()
                     // Select brokers which are assigned a replica of the topic-partition

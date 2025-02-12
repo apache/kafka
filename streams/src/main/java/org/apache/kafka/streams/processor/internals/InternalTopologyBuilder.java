@@ -778,7 +778,7 @@ public class InternalTopologyBuilder {
                                 .flatMap(sourceNodeName -> nodeToSourceTopics.getOrDefault(sourceNodeName,
                                         Collections.emptyList()).stream())
                                 .collect(Collectors.toSet())
-                        ).collect(Collectors.toList());
+                        ).toList();
         for (final Set<String> copartition : allCopartitionedSourceTopics) {
             final Map<String, Integer> numberOfPartitionsPerTopic = new HashMap<>();
             copartition.forEach(topic -> {
@@ -1357,7 +1357,7 @@ public class InternalTopologyBuilder {
         final List<Duration> resetDuration = durationResetPatterns.entrySet().stream()
             .filter(e -> e.getKey().matcher(topic).matches())
             .map(Map.Entry::getValue)
-            .collect(Collectors.toList());
+            .toList();
 
         if (resetDuration.size() > 1) {
             throw new IllegalStateException("Found more than one reset duration for topic: " + topic);
@@ -1397,7 +1397,7 @@ public class InternalTopologyBuilder {
                              .stream()
                              .flatMap(node -> maybeDecorateInternalSourceTopics(nodeToSourceTopics.get(node)).stream())
                              .collect(Collectors.toSet())
-                ).collect(Collectors.toList());
+                ).toList();
 
         final Map<String, Set<String>> topicsToCopartitionGroup = new LinkedHashMap<>();
         for (final Set<String> topics : copartitionSourceTopics) {
@@ -2265,7 +2265,7 @@ public class InternalTopologyBuilder {
      * @return a copy of the string representation of any pattern subscribed source nodes
      */
     public synchronized List<String> allSourcePatternStrings() {
-        return nodeToSourcePatterns.values().stream().map(Pattern::pattern).collect(Collectors.toList());
+        return nodeToSourcePatterns.values().stream().map(Pattern::pattern).toList();
     }
 
     public boolean hasNamedTopology() {

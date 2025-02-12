@@ -679,7 +679,7 @@ public class ResetConsumerGroupOffsetTest {
     private void produceMessages(ClusterInstance cluster, String topic, int numMessages) {
         List<ProducerRecord<byte[], byte[]>> records = IntStream.range(0, numMessages)
                 .mapToObj(i -> new ProducerRecord<byte[], byte[]>(topic, new byte[100 * 1000]))
-                .collect(Collectors.toList());
+                .toList();
         produceMessages(cluster, records);
     }
 
@@ -749,7 +749,7 @@ public class ResetConsumerGroupOffsetTest {
     private static List<String> generateIds(String name) {
         return IntStream.rangeClosed(1, 2)
                 .mapToObj(id -> name + id)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     private void produceConsumeAndShutdown(ClusterInstance cluster,

@@ -71,7 +71,7 @@ public class StateQueryResult<R> {
                 .stream()
                 .filter(QueryResult::isSuccess)
                 .filter(r -> r.getResult() != null)
-                .collect(Collectors.toList());
+                .toList();
 
         if (nonempty.size() > 1) {
             throw new IllegalArgumentException(

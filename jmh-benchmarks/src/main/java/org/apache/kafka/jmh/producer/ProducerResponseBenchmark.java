@@ -57,7 +57,7 @@ public class ProducerResponseBenchmark {
                 0,
                 IntStream.range(0, NUMBER_OF_RECORDS)
                     .mapToObj(ProduceResponse.RecordError::new)
-                    .collect(Collectors.toList()))
+                    .toList())
         ))
         .collect(Collectors.toMap(AbstractMap.SimpleEntry::getKey, AbstractMap.SimpleEntry::getValue));
 

@@ -3684,7 +3684,7 @@ public class FetchRequestManagerTest {
     }
 
     private <T> List<Long> collectRecordOffsets(List<ConsumerRecord<T, T>> records) {
-        return records.stream().map(ConsumerRecord::offset).collect(Collectors.toList());
+        return records.stream().map(ConsumerRecord::offset).toList();
     }
 
     private class TestableFetchRequestManager<K, V> extends FetchRequestManager {

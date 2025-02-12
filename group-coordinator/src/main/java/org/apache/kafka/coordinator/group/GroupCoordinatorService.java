@@ -572,7 +572,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                              .setMemberId(member.memberId())
                              .setGroupInstanceId(member.groupInstanceId())
                              .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code()))
-                         .collect(Collectors.toList());
+                         .toList();
                     return new LeaveGroupResponseData()
                         .setMembers(memberResponses);
                 } else {

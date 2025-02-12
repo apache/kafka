@@ -134,7 +134,7 @@ public class DescribeAclsResponse extends AbstractResponse {
     }
 
     public static List<AclBinding> aclBindings(List<DescribeAclsResource> resources) {
-        return resources.stream().flatMap(DescribeAclsResponse::aclBindings).collect(Collectors.toList());
+        return resources.stream().flatMap(DescribeAclsResponse::aclBindings).toList();
     }
 
     public static List<DescribeAclsResource> aclsResources(Iterable<AclBinding> acls) {

@@ -86,7 +86,7 @@ public class CreateAclsRequestTest {
     private static CreateAclsRequestData data(final AclBinding... acls) {
         List<CreateAclsRequestData.AclCreation> aclCreations = Arrays.stream(acls)
             .map(CreateAclsRequest::aclCreation)
-            .collect(Collectors.toList());
+            .toList();
         return new CreateAclsRequestData().setCreations(aclCreations);
     }
 }

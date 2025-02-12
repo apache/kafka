@@ -620,7 +620,7 @@ public class MirrorSourceConnectorTest {
         List<ConfigValue> results = new MirrorSourceConnector().validate(props)
                 .configValues().stream()
                 .filter(cv -> name.equals(cv.name()))
-                .collect(Collectors.toList());
+                .toList();
 
         assertTrue(results.size() <= 1, "Connector produced multiple config values for '" + name + "' property");
 

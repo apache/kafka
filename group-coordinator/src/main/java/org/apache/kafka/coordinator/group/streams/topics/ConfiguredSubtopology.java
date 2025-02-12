@@ -51,12 +51,12 @@ public record ConfiguredSubtopology(Set<String> sourceTopics,
     public StreamsGroupDescribeResponseData.Subtopology asStreamsGroupDescribeSubtopology(String subtopologyId) {
         return new StreamsGroupDescribeResponseData.Subtopology()
             .setSubtopologyId(subtopologyId)
-            .setSourceTopics(sourceTopics.stream().sorted().collect(Collectors.toList()))
-            .setRepartitionSinkTopics(repartitionSinkTopics.stream().sorted().collect(Collectors.toList()))
+            .setSourceTopics(sourceTopics.stream().sorted().toList())
+            .setRepartitionSinkTopics(repartitionSinkTopics.stream().sorted().toList())
             .setRepartitionSourceTopics(repartitionSourceTopics.values().stream()
-                .map(ConfiguredInternalTopic::asStreamsGroupDescribeTopicInfo).sorted().collect(Collectors.toList()))
+                .map(ConfiguredInternalTopic::asStreamsGroupDescribeTopicInfo).sorted().toList())
             .setStateChangelogTopics(stateChangelogTopics.values().stream()
-                .map(ConfiguredInternalTopic::asStreamsGroupDescribeTopicInfo).sorted().collect(Collectors.toList()));
+                .map(ConfiguredInternalTopic::asStreamsGroupDescribeTopicInfo).sorted().toList());
     }
 
 }

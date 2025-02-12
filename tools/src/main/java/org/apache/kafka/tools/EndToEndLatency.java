@@ -156,7 +156,7 @@ public class EndToEndLatency {
                 .partitionsFor(topic)
                 .stream()
                 .map(p -> new TopicPartition(p.topic(), p.partition()))
-                .collect(Collectors.toList());
+                .toList();
         consumer.assign(topicPartitions);
         consumer.seekToEnd(topicPartitions);
         consumer.assignment().forEach(consumer::position);

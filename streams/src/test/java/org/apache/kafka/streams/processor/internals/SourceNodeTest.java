@@ -125,7 +125,7 @@ public class SourceNodeTest {
             metrics.getSensor(sensorNamePrefix + ".node." + context.currentNode().name() + ".s.process");
         final SensorAccessor sensorAccessor = new SensorAccessor(processSensor);
         assertThat(
-            sensorAccessor.parents().stream().map(Sensor::name).collect(Collectors.toList()),
+            sensorAccessor.parents().stream().map(Sensor::name).toList(),
             contains(sensorNamePrefix + ".s.process")
         );
     }

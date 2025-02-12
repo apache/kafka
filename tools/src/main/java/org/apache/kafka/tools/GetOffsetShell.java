@@ -319,7 +319,7 @@ public class GetOffsetShell {
             } catch (TerseException e) {
                 throw new RuntimeException(e);
             }
-        }).collect(Collectors.toList());
+        }).toList();
 
         return new CompositeTopicPartitionFilter(rules);
     }
@@ -367,7 +367,7 @@ public class GetOffsetShell {
                 topic -> topic.getValue().partitions().stream().map(
                         tp -> new TopicPartition(topic.getKey(), tp.partition())
                 ).filter(topicPartitionFilter::isTopicPartitionAllowed)
-        ).collect(Collectors.toList());
+        ).toList();
     }
 
     private TopicPartitionFilter parseRuleSpec(String ruleSpec) throws TerseException, RuntimeException {

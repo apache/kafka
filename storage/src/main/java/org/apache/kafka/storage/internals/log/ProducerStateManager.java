@@ -701,7 +701,7 @@ public class ProducerStateManager {
         if (dir.exists() && dir.isDirectory()) {
             try (Stream<Path> paths = Files.list(dir.toPath())) {
                 return paths.filter(ProducerStateManager::isSnapshotFile)
-                        .map(path -> new SnapshotFile(path.toFile())).collect(Collectors.toList());
+                        .map(path -> new SnapshotFile(path.toFile())).toList();
             }
         } else {
             return Collections.emptyList();

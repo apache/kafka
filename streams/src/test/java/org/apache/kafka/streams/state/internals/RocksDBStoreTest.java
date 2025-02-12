@@ -1285,7 +1285,7 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
 
     private List<KeyValue<String, String>> getDeserializedList(final KeyValueIterator<Bytes, byte[]> iter) {
         final List<KeyValue<Bytes, byte[]>> bytes = Utils.toList(iter);
-        return bytes.stream().map(kv -> new KeyValue<>(kv.key.toString(), stringDeserializer.deserialize(null, kv.value))).collect(Collectors.toList());
+        return bytes.stream().map(kv -> new KeyValue<>(kv.key.toString(), stringDeserializer.deserialize(null, kv.value))).toList();
     }
 
     private Statistics getStatistics(final RocksDBStore rocksDBStore) throws Exception {

@@ -61,7 +61,7 @@ public final class DeleteTopicAction implements TieredStorageTestAction {
                         spec.getTopicPartition(),
                         false,
                         spec.getEventCount()))
-                .collect(Collectors.toList());
+                .toList();
         if (shouldDelete) {
             context.deleteTopic(topic);
         }

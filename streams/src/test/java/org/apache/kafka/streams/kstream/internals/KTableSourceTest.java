@@ -154,7 +154,7 @@ public class KTableSourceTest {
                 appender.getEvents().stream()
                     .filter(e -> e.getLevel().equals("WARN"))
                     .map(Event::getMessage)
-                    .collect(Collectors.toList()),
+                    .toList(),
                 hasItem("Skipping record due to null key. topic=[topic] partition=[0] offset=[0]")
             );
         }
@@ -184,7 +184,7 @@ public class KTableSourceTest {
                 appender.getEvents().stream()
                     .filter(e -> e.getLevel().equals("WARN"))
                     .map(Event::getMessage)
-                    .collect(Collectors.toList()),
+                    .toList(),
                 hasItem("Detected out-of-order KTable update for store, old timestamp=[10] new timestamp=[5]. topic=[topic] partition=[0] offset=[1].")
             );
         }

@@ -256,7 +256,7 @@ public class DedicatedMirrorIntegrationTest {
                     .stream()
                     .filter(Optional::isPresent)
                     .map(Optional::get)
-                    .collect(Collectors.toList());
+                    .toList();
 
             assertTrue(offsetSyncTopic.isEmpty());
         }

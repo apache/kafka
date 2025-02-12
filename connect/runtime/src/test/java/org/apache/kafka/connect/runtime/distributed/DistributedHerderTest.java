@@ -3284,7 +3284,7 @@ public class DistributedHerderTest {
         tasksPerConnector.forEach((connector, numStackedRequests) -> {
             List<FutureCallback<Void>> connectorFencingRequests = IntStream.range(0, numStackedRequests)
                     .mapToObj(i -> new FutureCallback<Void>())
-                    .collect(Collectors.toList());
+                    .toList();
 
             connectorFencingRequests.forEach(fencing ->
                     herder.fenceZombieSourceTasks(connector, fencing)

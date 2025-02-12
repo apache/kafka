@@ -156,7 +156,7 @@ public class WorkerErrantRecordReporter implements ErrantRecordReporter {
                 .map(futures::remove)
                 .filter(Objects::nonNull)
                 .flatMap(List::stream)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     public synchronized void maybeThrowAsyncError() {

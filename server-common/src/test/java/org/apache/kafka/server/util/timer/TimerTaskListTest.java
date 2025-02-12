@@ -57,7 +57,7 @@ public class TimerTaskListTest {
             list1.add(new TimerTaskEntry(task, 10L));
             assertEquals(i, sharedCounter.get());
             return task;
-        }).collect(Collectors.toList());
+        }).toList();
 
         assertEquals(tasks.size(), sharedCounter.get());
 

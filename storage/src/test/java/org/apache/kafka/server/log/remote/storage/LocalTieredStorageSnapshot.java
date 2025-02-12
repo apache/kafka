@@ -45,14 +45,14 @@ public final class LocalTieredStorageSnapshot {
     public List<TopicPartition> getTopicPartitions() {
         final List<TopicPartition> topicPartitions = snapshot.topicIdPartitions.stream()
                 .map(TopicIdPartition::topicPartition)
-                .collect(Collectors.toList());
+                .toList();
         return Collections.unmodifiableList(topicPartitions);
     }
 
     public List<RemoteLogSegmentFileset> getFilesets(final TopicPartition topicPartition) {
         return snapshot.records.values().stream()
                 .filter(fileset -> fileset.getRemoteLogSegmentId().topicIdPartition().topicPartition().equals(topicPartition))
-                .collect(Collectors.toList());
+                .toList();
     }
 
     public int size() {

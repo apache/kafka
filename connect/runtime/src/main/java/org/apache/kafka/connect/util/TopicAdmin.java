@@ -626,14 +626,14 @@ public class TopicAdmin implements AutoCloseable {
                                           .filter(Objects::nonNull)
                                           .map(String::trim)
                                           .filter(s -> !s.isEmpty())
-                                          .collect(Collectors.toList());
+                                          .toList();
         if (topics.isEmpty()) {
             return Collections.emptyMap();
         }
         String topicNameList = String.join(", ", topics);
         Collection<ConfigResource> resources = topics.stream()
                                                      .map(t -> new ConfigResource(ConfigResource.Type.TOPIC, t))
-                                                     .collect(Collectors.toList());
+                                                     .toList();
 
         Map<ConfigResource, KafkaFuture<Config>> newResults = admin.describeConfigs(resources, new DescribeConfigsOptions()).values();
 

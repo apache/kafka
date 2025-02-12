@@ -167,7 +167,7 @@ public class OffsetFetchRequest extends AbstractRequest {
                                 new OffsetFetchRequestTopic()
                                     .setName(t.name())
                                     .setPartitionIndexes(t.partitionIndexes()))
-                            .collect(Collectors.toList());
+                            .toList();
                     }
                     normalizedData = new OffsetFetchRequestData()
                         .setGroupId(groupName)
@@ -278,7 +278,7 @@ public class OffsetFetchRequest extends AbstractRequest {
         return data.groups()
             .stream()
             .map(OffsetFetchRequestGroup::groupId)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     private OffsetFetchRequest(OffsetFetchRequestData data, short version) {
@@ -342,7 +342,7 @@ public class OffsetFetchRequest extends AbstractRequest {
             .groups()
             .stream()
             .filter(g -> g.groupId().equals(groupId))
-            .collect(Collectors.toList())
+            .toList()
             .get(0);
         return group.topics() == ALL_TOPIC_PARTITIONS_BATCH;
     }

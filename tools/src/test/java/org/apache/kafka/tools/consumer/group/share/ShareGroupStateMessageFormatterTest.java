@@ -110,7 +110,7 @@ public class ShareGroupStateMessageFormatterTest {
                     .setLastOffset(batch.lastOffset())
                     .setDeliveryState(batch.deliveryState())
                     .setDeliveryCount(batch.deliveryCount()))
-                .collect(Collectors.toList())
+                .toList()
         );
 
     private static final ShareUpdateKey SHARE_UPDATE_KEY = new ShareUpdateKey()
@@ -129,7 +129,7 @@ public class ShareGroupStateMessageFormatterTest {
                     .setLastOffset(batch.lastOffset())
                     .setDeliveryState(batch.deliveryState())
                     .setDeliveryCount(batch.deliveryCount()))
-                .collect(Collectors.toList())
+                .toList()
         );
 
     private static Stream<Arguments> parameters() {

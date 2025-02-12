@@ -612,7 +612,7 @@ public class LogValidator {
 
     private static void processRecordErrors(List<ApiRecordError> recordErrors) {
         if (!recordErrors.isEmpty()) {
-            List<RecordError> errors = recordErrors.stream().map(e -> e.recordError).collect(Collectors.toList());
+            List<RecordError> errors = recordErrors.stream().map(e -> e.recordError).toList();
             if (recordErrors.stream().anyMatch(e -> e.apiError == Errors.INVALID_TIMESTAMP)) {
                 throw new RecordValidationException(new InvalidTimestampException(
                     "One or more records have been rejected due to invalid timestamp"), errors);

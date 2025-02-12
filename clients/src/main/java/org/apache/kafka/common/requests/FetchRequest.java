@@ -354,7 +354,7 @@ public class FetchRequest extends AbstractRequest {
         if (version() < 13) {
             data.topics().forEach(topic -> {
                 List<FetchResponseData.PartitionData> partitionResponses = topic.partitions().stream().map(partition ->
-                        FetchResponse.partitionResponse(partition.partition(), error)).collect(Collectors.toList());
+                        FetchResponse.partitionResponse(partition.partition(), error)).toList();
                 topicResponseList.add(new FetchResponseData.FetchableTopicResponse()
                         .setTopic(topic.topic())
                         .setTopicId(topic.topicId())

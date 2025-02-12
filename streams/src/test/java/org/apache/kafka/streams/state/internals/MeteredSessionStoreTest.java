@@ -749,6 +749,6 @@ public class MeteredSessionStoreTest {
                       .keySet()
                       .stream()
                       .filter(name -> name.group().equals(STORE_LEVEL_GROUP) && name.tags().equals(tags))
-                      .collect(Collectors.toList());
+                      .toList();
     }
 }

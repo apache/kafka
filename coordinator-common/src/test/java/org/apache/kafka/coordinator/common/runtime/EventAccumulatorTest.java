@@ -211,7 +211,7 @@ public class EventAccumulatorTest {
             .anyOf(futures.toArray(new CompletableFuture[0]))
             .get(5, TimeUnit.SECONDS));
 
-        futures = futures.stream().filter(future -> !future.isDone()).collect(Collectors.toList());
+        futures = futures.stream().filter(future -> !future.isDone()).toList();
         assertEquals(2, futures.size());
 
         // Processing of event0 is done.
@@ -222,7 +222,7 @@ public class EventAccumulatorTest {
             .anyOf(futures.toArray(new CompletableFuture[0]))
             .get(5, TimeUnit.SECONDS));
 
-        futures = futures.stream().filter(future -> !future.isDone()).collect(Collectors.toList());
+        futures = futures.stream().filter(future -> !future.isDone()).toList();
         assertEquals(1, futures.size());
 
         // Processing of event1 is done.
@@ -233,7 +233,7 @@ public class EventAccumulatorTest {
             .anyOf(futures.toArray(new CompletableFuture[0]))
             .get(5, TimeUnit.SECONDS));
 
-        futures = futures.stream().filter(future -> !future.isDone()).collect(Collectors.toList());
+        futures = futures.stream().filter(future -> !future.isDone()).toList();
         assertEquals(0, futures.size());
 
         // Processing of event2 is done.

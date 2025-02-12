@@ -53,8 +53,8 @@ public class DeleteTopicsRequestTest {
                 assertEquals(topics, requestWithNamesSerialized.data().topicNames());
             } else {
                 // topics in TopicNames are moved to new topics field
-                assertEquals(topics, requestWithNames.data().topics().stream().map(DeleteTopicState::name).collect(Collectors.toList()));
-                assertEquals(topics, requestWithNamesSerialized.data().topics().stream().map(DeleteTopicState::name).collect(Collectors.toList()));
+                assertEquals(topics, requestWithNames.data().topics().stream().map(DeleteTopicState::name).toList());
+                assertEquals(topics, requestWithNamesSerialized.data().topics().stream().map(DeleteTopicState::name).toList());
             }
         }
     }

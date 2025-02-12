@@ -211,7 +211,7 @@ public abstract class AbstractResetIntegrationTest {
 
         final List<String> internalTopics = cluster.getAllTopicsInCluster().stream()
                 .filter(StreamsResetter::matchesInternalTopicFormat)
-                .collect(Collectors.toList());
+                .toList();
         cleanGlobal(false,
                 "--internal-topics",
                 String.join(",", internalTopics.subList(1, internalTopics.size())),

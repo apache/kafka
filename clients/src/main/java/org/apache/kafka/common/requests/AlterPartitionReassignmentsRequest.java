@@ -78,7 +78,7 @@ public class AlterPartitionReassignmentsRequest extends AbstractRequest {
                             .setPartitionIndex(partition.partitionIndex())
                             .setErrorCode(apiError.error().code())
                             .setErrorMessage(apiError.message())
-            ).collect(Collectors.toList());
+            ).toList();
             topicResponses.add(
                     new ReassignableTopicResponse()
                             .setName(topic.name())

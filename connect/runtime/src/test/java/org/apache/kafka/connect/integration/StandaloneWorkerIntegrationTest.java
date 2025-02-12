@@ -155,7 +155,7 @@ public class StandaloneWorkerIntegrationTest {
             assertTrue(affectedLoggers.contains(namespace));
             List<String> invalidAffectedLoggers = affectedLoggers.stream()
                     .filter(l -> !l.startsWith(namespace))
-                    .collect(Collectors.toList());
+                    .toList();
             assertEquals(
                     Collections.emptyList(),
                     invalidAffectedLoggers,

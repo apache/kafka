@@ -111,7 +111,7 @@ public class MetadataBatchLoaderTest {
     static List<ApiMessageAndVersion> noOpRecords(int n) {
         return IntStream.range(0, n)
                 .mapToObj(__ -> new ApiMessageAndVersion(new NoOpRecord(), (short) 0))
-                .collect(Collectors.toList());
+                .toList();
     }
 
 

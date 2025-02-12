@@ -72,7 +72,7 @@ public final class LocalTieredStorageOutput<K, V> implements LocalTieredStorageT
                         .stream()
                         .map(record -> new Tuple2<>(record.offset(),
                                 "(" + des(keyDe, record.key()) + ", " + des(valueDe, record.value()) + ")"))
-                        .collect(Collectors.toList());
+                        .toList();
                 output += row(segFilename, offsetKeyValues.get(0).t1, offsetKeyValues.get(0).t2);
                 if (offsetKeyValues.size() > 1) {
                     offsetKeyValues.subList(1, records.size()).forEach(offsetKeyValue ->

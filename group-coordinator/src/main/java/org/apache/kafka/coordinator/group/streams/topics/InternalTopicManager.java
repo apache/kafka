@@ -304,6 +304,6 @@ public class InternalTopicManager {
                 copartitionGroup.repartitionSourceTopics().stream()
                     .map(i -> subtopology.repartitionSourceTopics().get(i).name())
             ).collect(Collectors.toSet())
-        ).collect(Collectors.toList());
+        ).toList();
     }
 }

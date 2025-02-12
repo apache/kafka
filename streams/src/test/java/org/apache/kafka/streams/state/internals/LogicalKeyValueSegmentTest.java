@@ -500,6 +500,6 @@ public class LogicalKeyValueSegmentTest {
 
     private static List<KeyValue<String, String>> getDeserializedList(final KeyValueIterator<Bytes, byte[]> iter) {
         final List<KeyValue<Bytes, byte[]>> bytes = Utils.toList(iter);
-        return bytes.stream().map(kv -> new KeyValue<>(kv.key.toString(), STRING_DESERIALIZER.deserialize(null, kv.value))).collect(Collectors.toList());
+        return bytes.stream().map(kv -> new KeyValue<>(kv.key.toString(), STRING_DESERIALIZER.deserialize(null, kv.value))).toList();
     }
 }

@@ -823,7 +823,7 @@ public class IntegrationTestUtils {
                 final List<T> accumulatedActual = accumData
                     .stream()
                     .filter(expectedRecords::contains)
-                    .collect(Collectors.toList());
+                    .toList();
 
                 // still need to check that for each key, the ordering is expected
                 final Map<K, List<T>> finalAccumData = new HashMap<>();
@@ -1299,7 +1299,7 @@ public class IntegrationTestUtils {
             final Collection<TopicPartition> partitions = consumer.partitionsFor(topicName)
                 .stream()
                 .map(info -> new TopicPartition(topicName, info.partition()))
-                .collect(Collectors.toList());
+                .toList();
             final Map<TopicPartition, Long> beginningOffsets = consumer.beginningOffsets(partitions);
             final Map<TopicPartition, Long> endOffsets = consumer.endOffsets(partitions);
 

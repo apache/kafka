@@ -178,7 +178,7 @@ public class ClientQuotaControlManager {
                 validatedEntityMap.entrySet().stream().map(mapEntry -> new EntityData()
                         .setEntityType(mapEntry.getKey())
                         .setEntityName(mapEntry.getValue()))
-                        .collect(Collectors.toList());
+                        .toList();
 
         List<ApiMessageAndVersion> newRecords = new ArrayList<>(newQuotaConfigs.size());
         Map<String, Double> currentQuotas = clientQuotaData.containsKey(entity) ?

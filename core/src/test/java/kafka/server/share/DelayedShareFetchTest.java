@@ -875,7 +875,7 @@ public class DelayedShareFetchTest {
             shareFetch.fetchParams(),
             CollectionConverters.asScala(
                 sharePartitions.keySet().stream().map(topicIdPartition ->
-                    new Tuple2<>(topicIdPartition, expectedReadPartitionInfo.get(topicIdPartition))).collect(Collectors.toList())
+                    new Tuple2<>(topicIdPartition, expectedReadPartitionInfo.get(topicIdPartition))).toList()
             ),
             QuotaFactory.UNBOUNDED_QUOTA,
             true);
@@ -964,7 +964,7 @@ public class DelayedShareFetchTest {
             shareFetch.fetchParams(),
             CollectionConverters.asScala(
                 acquirableTopicPartitions.stream().map(topicIdPartition ->
-                    new Tuple2<>(topicIdPartition, expectedReadPartitionInfo.get(topicIdPartition))).collect(Collectors.toList())
+                    new Tuple2<>(topicIdPartition, expectedReadPartitionInfo.get(topicIdPartition))).toList()
             ),
             QuotaFactory.UNBOUNDED_QUOTA,
             true);
@@ -1039,7 +1039,7 @@ public class DelayedShareFetchTest {
             shareFetch.fetchParams(),
             CollectionConverters.asScala(
                 fetchableTopicPartitions.stream().map(topicIdPartition ->
-                    new Tuple2<>(topicIdPartition, expectedReadPartitionInfo.get(topicIdPartition))).collect(Collectors.toList())
+                    new Tuple2<>(topicIdPartition, expectedReadPartitionInfo.get(topicIdPartition))).toList()
             ),
             QuotaFactory.UNBOUNDED_QUOTA,
             true);

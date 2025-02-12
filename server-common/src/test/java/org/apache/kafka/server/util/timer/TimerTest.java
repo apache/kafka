@@ -89,7 +89,7 @@ public class TimerTest {
             CountDownLatch latch = new CountDownLatch(1);
             timer.add(new TestTask(i, i, latch, output));
             return latch;
-        }).collect(Collectors.toList());
+        }).toList();
 
         timer.advanceClock(0L);
 
@@ -149,7 +149,7 @@ public class TimerTest {
             }
         });
 
-        assertEquals(ids, output.stream().sorted().collect(Collectors.toList()),
+        assertEquals(ids, output.stream().sorted().toList(),
             "output should match");
     }
 }

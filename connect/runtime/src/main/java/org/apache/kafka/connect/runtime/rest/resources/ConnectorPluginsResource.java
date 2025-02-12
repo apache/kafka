@@ -146,7 +146,7 @@ public class ConnectorPluginsResource {
             if (connectorsOnly) {
                 return Collections.unmodifiableList(connectorPlugins.stream()
                         .filter(p -> PluginType.SINK.toString().equals(p.type()) || PluginType.SOURCE.toString().equals(p.type()))
-                        .collect(Collectors.toList()));
+                        .toList());
             } else {
                 return List.copyOf(connectorPlugins);
             }

@@ -208,7 +208,7 @@ public class RecordAccumulatorTest {
         List<TopicPartition> topicPartitionsInBatch = new ArrayList<>();
         for (Map.Entry<Integer, List<ProducerBatch>> entry : nodeBatches.entrySet()) {
             List<ProducerBatch> tpBatchList = entry.getValue();
-            List<TopicPartition> tpList = tpBatchList.stream().map(producerBatch -> producerBatch.topicPartition).collect(Collectors.toList());
+            List<TopicPartition> tpList = tpBatchList.stream().map(producerBatch -> producerBatch.topicPartition).toList();
             topicPartitionsInBatch.addAll(tpList);
         }
 

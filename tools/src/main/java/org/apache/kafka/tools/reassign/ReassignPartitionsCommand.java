@@ -322,7 +322,7 @@ public class ReassignPartitionsCommand {
                     currentReassignments.get(part).replicas(),
                     targetReplicas,
                     false));
-        }).collect(Collectors.toList());
+        }).toList();
 
         Set<String> topicNamesToLookUp = notFoundReassignments.stream()
             .map(e -> e.getKey())
@@ -367,7 +367,7 @@ public class ReassignPartitionsCommand {
                 throw new ExecutionException("Too few partitions found", new UnknownTopicOrPartitionException());
             }
             return new PartitionReassignmentState(
-                topicDescription.partitions().get(partition).replicas().stream().map(Node::id).collect(Collectors.toList()),
+                topicDescription.partitions().get(partition).replicas().stream().map(Node::id).toList(),
                 targetReplicas,
                 true);
         } catch (ExecutionException t) {
@@ -514,7 +514,7 @@ public class ReassignPartitionsCommand {
         brokers.forEach(brokerId -> configOps.put(
             new ConfigResource(ConfigResource.Type.BROKER, brokerId.toString()),
             BROKER_LEVEL_THROTTLES.stream().map(throttle -> new AlterConfigOp(
-                new ConfigEntry(throttle, null), AlterConfigOp.OpType.DELETE)).collect(Collectors.toList())
+                new ConfigEntry(throttle, null), AlterConfigOp.OpType.DELETE)).toList()
         ));
         adminClient.incrementalAlterConfigs(configOps).all().get();
     }
@@ -529,7 +529,7 @@ public class ReassignPartitionsCommand {
         Map<ConfigResource, Collection<AlterConfigOp>> configOps = topics.stream().collect(Collectors.toMap(
             topicName -> new ConfigResource(ConfigResource.Type.TOPIC, topicName),
             topicName -> TOPIC_LEVEL_THROTTLES.stream().map(throttle -> new AlterConfigOp(new ConfigEntry(throttle, null),
-                AlterConfigOp.OpType.DELETE)).collect(Collectors.toList())
+                AlterConfigOp.OpType.DELETE)).toList()
         ));
 
         adminClient.incrementalAlterConfigs(configOps).all().get();
@@ -624,7 +624,7 @@ public class ReassignPartitionsCommand {
         describeTopics(adminClient, new HashSet<>(topics)).forEach((topicName, topicDescription) ->
             topicDescription.partitions().forEach(info -> res.put(
                 new TopicPartition(topicName, info.partition()),
-                info.replicas().stream().map(Node::id).collect(Collectors.toList())
+                info.replicas().stream().map(Node::id).toList()
             )
         ));
         return res;
@@ -646,7 +646,7 @@ public class ReassignPartitionsCommand {
             topicDescription.partitions().forEach(info -> {
                 TopicPartition tp = new TopicPartition(topicName, info.partition());
                 if (partitions.contains(tp))
-                    res.put(tp, info.replicas().stream().map(Node::id).collect(Collectors.toList()));
+                    res.put(tp, info.replicas().stream().map(Node::id).toList());
             })
         );
 
@@ -677,7 +677,7 @@ public class ReassignPartitionsCommand {
             .map(node -> (enableRackAwareness && node.rack() != null)
                 ? new BrokerMetadata(node.id(), Optional.of(node.rack()))
                 : new BrokerMetadata(node.id(), Optional.empty())
-            ).collect(Collectors.toList());
+            ).toList();
 
         long numRackless = results.stream().filter(m -> m.rack.isEmpty()).count();
         if (enableRackAwareness && numRackless != 0 && numRackless != results.size()) {
@@ -700,7 +700,7 @@ public class ReassignPartitionsCommand {
      */
     static Entry<List<Integer>, List<String>> parseGenerateAssignmentArgs(String reassignmentJson,
                                                                            String brokerList) throws JsonMappingException {
-        List<Integer> brokerListToReassign = Arrays.stream(brokerList.split(",")).map(Integer::parseInt).collect(Collectors.toList());
+        List<Integer> brokerListToReassign = Arrays.stream(brokerList.split(",")).map(Integer::parseInt).toList();
         Set<Integer> duplicateReassignments = ToolsUtils.duplicates(brokerListToReassign);
         if (!duplicateReassignments.isEmpty())
             throw new AdminCommandFailedException(String.format("Broker list contains duplicate entries: %s", duplicateReassignments));
@@ -1192,7 +1192,7 @@ public class ReassignPartitionsCommand {
         if (partitionsToBeReassigned.stream().anyMatch(t -> t.getValue().isEmpty())) {
             throw new AdminCommandFailedException("Partition replica list cannot be empty");
         }
-        Set<TopicPartition> duplicateReassignedPartitions = ToolsUtils.duplicates(partitionsToBeReassigned.stream().map(t -> t.getKey()).collect(Collectors.toList()));
+        Set<TopicPartition> duplicateReassignedPartitions = ToolsUtils.duplicates(partitionsToBeReassigned.stream().map(t -> t.getKey()).toList());
         if (!duplicateReassignedPartitions.isEmpty()) {
             throw new AdminCommandFailedException(String.format(
                 "Partition reassignment contains duplicate topic partitions: %s",
@@ -1202,7 +1202,7 @@ public class ReassignPartitionsCommand {
         List<Entry<TopicPartition, Set<Integer>>> duplicateEntries = partitionsToBeReassigned.stream()
             .map(t -> new SimpleImmutableEntry<>(t.getKey(), ToolsUtils.duplicates(t.getValue())))
             .filter(t -> !t.getValue().isEmpty())
-            .collect(Collectors.toList());
+            .toList();
         if (!duplicateEntries.isEmpty()) {
             String duplicatesMsg = duplicateEntries.stream().map(t ->
                 String.format("%s contains multiple entries for %s",
@@ -1289,7 +1289,7 @@ public class ReassignPartitionsCommand {
             data.put("replicas", replicas);
             data.put("log_dirs", replicas.stream()
                 .map(r -> replicaLogDirAssignment.getOrDefault(new TopicPartitionReplica(tp.topic(), tp.partition(), r), ANY_LOG_DIR))
-                .collect(Collectors.toList()));
+                .toList());
 
             partitions.add(data);
         });
@@ -1366,7 +1366,7 @@ public class ReassignPartitionsCommand {
                         if (logDirsOpts.isPresent())
                             newLogDirs = logDirsOpts.get().to(STRING_LIST);
                         else
-                            newLogDirs = newReplicas.stream().map(r -> ANY_LOG_DIR).collect(Collectors.toList());
+                            newLogDirs = newReplicas.stream().map(r -> ANY_LOG_DIR).toList();
                         if (newReplicas.size() != newLogDirs.size())
                             throw new AdminCommandFailedException("Size of replicas list " + newReplicas + " is different from " +
                                 "size of log dirs list " + newLogDirs + " for partition " + new TopicPartition(topic, partition));
@@ -1401,7 +1401,7 @@ public class ReassignPartitionsCommand {
 
         List<OptionSpec<?>> allActions = validActions.stream()
             .filter(a -> opts.options.has(a))
-            .collect(Collectors.toList());
+            .toList();
 
         if (allActions.size() != 1) {
             CommandLineUtils.printUsageAndExit(opts.parser, String.format("Command must include exactly one action: %s",

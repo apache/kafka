@@ -127,7 +127,7 @@ public class ReplicaVerificationTool {
 
                 List<TopicDescription> filteredTopicMetadata = topicsMetadata.stream().filter(
                     topicMetadata -> options.topicsIncludeFilter().isTopicAllowed(topicMetadata.name(), false)
-                ).collect(Collectors.toList());
+                ).toList();
 
                 if (filteredTopicMetadata.isEmpty()) {
                     LOG.error("No topics found. {} if specified, is either filtering out all topics or there is no topic.", options.topicsIncludeOpt);
@@ -140,7 +140,7 @@ public class ReplicaVerificationTool {
                             node -> new TopicPartitionReplica(topicMetadata.name(), partitionMetadata.partition(), node.id())
                         )
                     )
-                ).collect(Collectors.toList());
+                ).toList();
                 LOG.debug("Selected topic partitions: {}", topicPartitionReplicas);
 
                 Map<Integer, List<TopicPartition>> brokerToTopicPartitions = topicPartitionReplicas.stream()
@@ -167,7 +167,7 @@ public class ReplicaVerificationTool {
                     .flatMap(topicMetadata -> topicMetadata.partitions().stream()
                         .map(partitionMetadata -> new TopicPartition(topicMetadata.name(), partitionMetadata.partition()))
                     )
-                    .collect(Collectors.toList());
+                    .toList();
 
                 Properties consumerProps = consumerConfig(brokerList);
 
@@ -196,7 +196,7 @@ public class ReplicaVerificationTool {
                             counter.incrementAndGet()
                         );
                     })
-                    .collect(Collectors.toList());
+                    .toList();
 
                 Runtime.getRuntime().addShutdownHook(new Thread(() -> {
                     LOG.info("Stopping all fetchers");

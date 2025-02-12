@@ -94,6 +94,6 @@ public class ConsumerGroupDescribeRequest extends AbstractRequest {
             .map(groupId -> new ConsumerGroupDescribeResponseData.DescribedGroup()
                 .setGroupId(groupId)
                 .setErrorCode(error.code())
-            ).collect(Collectors.toList());
+            ).toList();
     }
 }

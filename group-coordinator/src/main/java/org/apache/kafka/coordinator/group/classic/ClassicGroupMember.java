@@ -430,7 +430,7 @@ public class ClassicGroupMember {
             ", protocolType='" + protocolType + '\'' +
             ", supportedProtocols=" + supportedProtocols.stream()
                 .map(JoinGroupRequestProtocol::name)
-                .collect(Collectors.toList()) +
+                .toList() +
             ')';
     }
 }

@@ -595,7 +595,7 @@ public class ConnectPluginPathTest {
             int returnCode = ConnectPluginPath.mainNoExit(
                     Arrays.stream(args)
                             .map(Object::toString)
-                            .collect(Collectors.toList())
+                            .toList()
                             .toArray(new String[]{}),
                     new PrintStream(out, true, "utf-8"),
                     new PrintStream(err, true, "utf-8"));

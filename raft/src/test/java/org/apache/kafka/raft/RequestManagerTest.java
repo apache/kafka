@@ -281,6 +281,6 @@ public class RequestManagerTest {
         return IntStream.iterate(-2, id -> id - 1)
             .limit(numberOfNodes)
             .mapToObj(id -> new Node(id, String.format("mock-boot-host%d", id), 1234))
-            .collect(Collectors.toList());
+            .toList();
     }
 }

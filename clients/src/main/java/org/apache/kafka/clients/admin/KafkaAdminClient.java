@@ -2073,7 +2073,7 @@ public class KafkaAdminClient extends AdminClient {
                 return new DeleteTopicsRequest.Builder(
                         new DeleteTopicsRequestData()
                                 .setTopics(topicIds.stream().map(
-                                    topic -> new DeleteTopicState().setTopicId(topic)).collect(Collectors.toList()))
+                                    topic -> new DeleteTopicState().setTopicId(topic)).toList())
                                 .setTimeoutMs(timeoutMs));
             }
 
@@ -2780,7 +2780,7 @@ public class KafkaAdminClient extends AdminClient {
                                     .setResourceName(config.name())
                                     .setResourceType(config.type().id())
                                     .setConfigurationKeys(null))
-                            .collect(Collectors.toList()))
+                            .toList())
                         .setIncludeSynonyms(options.includeSynonyms())
                         .setIncludeDocumentation(options.includeDocumentation()));
                 }
@@ -2845,10 +2845,10 @@ public class KafkaAdminClient extends AdminClient {
                 config.isSensitive(),
                 config.readOnly(),
                 (config.synonyms().stream().map(synonym -> new ConfigEntry.ConfigSynonym(synonym.name(), synonym.value(),
-                        DescribeConfigsResponse.ConfigSource.forId(synonym.source()).source()))).collect(Collectors.toList()),
+                        DescribeConfigsResponse.ConfigSource.forId(synonym.source()).source()))).toList(),
                 DescribeConfigsResponse.ConfigType.forId(config.configType()).type(),
                 config.documentation()
-        )).collect(Collectors.toList()));
+        )).toList());
     }
 
     private ConfigEntry.ConfigSource configSource(DescribeConfigsResponse.ConfigSource source) {
@@ -3201,7 +3201,7 @@ public class KafkaAdminClient extends AdminClient {
             List<CreatePartitionsAssignment> assignments = newAssignments == null ? null :
                 newAssignments.stream()
                     .map(brokerIds -> new CreatePartitionsAssignment().setBrokerIds(brokerIds))
-                    .collect(Collectors.toList());
+                    .toList();
             topics.add(new CreatePartitionsTopic()
                 .setName(topic)
                 .setCount(newPartition.totalCount())
@@ -3528,11 +3528,11 @@ public class KafkaAdminClient extends AdminClient {
                             List<String> groupTypes = options.types()
                                 .stream()
                                 .map(GroupType::toString)
-                                .collect(Collectors.toList());
+                                .toList();
                             List<String> groupStates = options.groupStates()
                                 .stream()
                                 .map(GroupState::toString)
-                                .collect(Collectors.toList());
+                                .toList();
                             return new ListGroupsRequest.Builder(new ListGroupsRequestData()
                                 .setTypesFilter(groupTypes)
                                 .setStatesFilter(groupStates)
@@ -3686,11 +3686,11 @@ public class KafkaAdminClient extends AdminClient {
                             List<String> states = options.groupStates()
                                     .stream()
                                     .map(GroupState::toString)
-                                    .collect(Collectors.toList());
+                                    .toList();
                             List<String> groupTypes = options.types()
                                     .stream()
                                     .map(GroupType::toString)
-                                    .collect(Collectors.toList());
+                                    .toList();
                             return new ListGroupsRequest.Builder(new ListGroupsRequestData()
                                 .setStatesFilter(states)
                                 .setTypesFilter(groupTypes)
@@ -4132,7 +4132,7 @@ public class KafkaAdminClient extends AdminClient {
                     member.groupInstanceId().map(id -> new MemberIdentity().setGroupInstanceId(id))
                     .orElseGet(() -> new MemberIdentity().setMemberId(member.consumerId()))
                     .setReason(reason)
-                ).collect(Collectors.toList());
+                ).toList();
 
                 future.complete(membersToRemove);
             }
@@ -4173,7 +4173,7 @@ public class KafkaAdminClient extends AdminClient {
             memFuture = new KafkaFutureImpl<>();
             memFuture.complete(options.members().stream()
                     .map(m -> m.toMemberIdentity().setReason(reason))
-                    .collect(Collectors.toList()));
+                    .toList());
         }
 
         memFuture.whenComplete((members, ex) -> {
@@ -4390,12 +4390,12 @@ public class KafkaAdminClient extends AdminClient {
                                 .filter(a -> a instanceof UserScramCredentialUpsertion)
                                 .filter(a -> !userIllegalAlterationExceptions.containsKey(a.user()))
                                 .map(a -> userInsertions.get(a.user()).get(((UserScramCredentialUpsertion) a).credentialInfo().mechanism()))
-                                .collect(Collectors.toList()))
+                                .toList())
                         .setDeletions(alterations.stream()
                                 .filter(a -> a instanceof UserScramCredentialDeletion)
                                 .filter(a -> !userIllegalAlterationExceptions.containsKey(a.user()))
                                 .map(d -> getScramCredentialDeletion((UserScramCredentialDeletion) d))
-                                .collect(Collectors.toList())));
+                                .toList()));
             }
 
             @Override
@@ -4628,16 +4628,16 @@ public class KafkaAdminClient extends AdminClient {
             private QuorumInfo createQuorumResult(final DescribeQuorumResponseData.PartitionData partition, DescribeQuorumResponseData.NodeCollection nodeCollection) {
                 List<QuorumInfo.ReplicaState> voters = partition.currentVoters().stream()
                     .map(this::translateReplicaState)
-                    .collect(Collectors.toList());
+                    .toList();
 
                 List<QuorumInfo.ReplicaState> observers = partition.observers().stream()
                     .map(this::translateReplicaState)
-                    .collect(Collectors.toList());
+                    .toList();
 
                 Map<Integer, QuorumInfo.Node> nodes = nodeCollection.stream().map(n -> {
                     List<RaftVoterEndpoint> endpoints = n.listeners().stream()
                         .map(l -> new RaftVoterEndpoint(l.name(), l.host(), l.port()))
-                        .collect(Collectors.toList());
+                        .toList();
 
                     return new QuorumInfo.Node(n.nodeId(), endpoints);
                 }).collect(Collectors.toMap(QuorumInfo.Node::nodeId, Function.identity()));

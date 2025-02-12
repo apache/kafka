@@ -524,7 +524,7 @@ public class TopicCommandTest {
     }
 
     private List<Integer> getPartitionReplicas(List<TopicPartitionInfo> partitions, int partitionNumber) {
-        return partitions.get(partitionNumber).replicas().stream().map(Node::id).collect(Collectors.toList());
+        return partitions.get(partitionNumber).replicas().stream().map(Node::id).toList();
     }
 
     @ClusterTemplate("generate")
@@ -811,7 +811,7 @@ public class TopicCommandTest {
                     .stream()
                     .collect(Collectors.toMap(
                             info -> info.partition(),
-                            info -> info.replicas().stream().map(Node::id).collect(Collectors.toList())));
+                            info -> info.replicas().stream().map(Node::id).toList()));
             checkReplicaDistribution(assignment, rackInfo, rackInfo.size(), numPartitions,
                     replicationFactor, true, true, true);
 
@@ -832,7 +832,7 @@ public class TopicCommandTest {
 
             assignment = adminClient.describeTopics(Collections.singletonList(testTopicName))
                     .allTopicNames().get().get(testTopicName).partitions().stream()
-                    .collect(Collectors.toMap(info -> info.partition(), info -> info.replicas().stream().map(Node::id).collect(Collectors.toList())));
+                    .collect(Collectors.toMap(info -> info.partition(), info -> info.replicas().stream().map(Node::id).toList()));
             checkReplicaDistribution(assignment, rackInfo, rackInfo.size(), alteredNumPartitions, replicationFactor,
                     true, true, true);
 
@@ -1173,7 +1173,7 @@ public class TopicCommandTest {
             TopicDescription testTopicDesc = adminClient.describeTopics(Collections.singleton(testTopicName)).allTopicNames().get().get(testTopicName);
             TopicPartitionInfo firstPartition = testTopicDesc.partitions().get(0);
 
-            List<Integer> replicasOfFirstPartition = firstPartition.replicas().stream().map(Node::id).collect(Collectors.toList());
+            List<Integer> replicasOfFirstPartition = firstPartition.replicas().stream().map(Node::id).toList();
             List<Integer> replicasDiff = new ArrayList<>(brokerIds);
             replicasDiff.removeAll(replicasOfFirstPartition);
             Integer targetReplica = replicasDiff.get(0);
@@ -1421,7 +1421,7 @@ public class TopicCommandTest {
 
             List<Integer> partitionRackMapValueSize = partitionRackMap.values().stream()
                     .map(value -> (int) value.stream().distinct().count())
-                    .collect(Collectors.toList());
+                    .toList();
 
             List<Integer> expected = Collections.nCopies(numPartitions, replicationFactor);
             assertEquals(expected, partitionRackMapValueSize, "More than one replica of the same partition is assigned to the same rack");
@@ -1481,7 +1481,7 @@ public class TopicCommandTest {
                     rack = brokerRackMapping.get(brokerId);
                     List<String> partitionRackValues = Stream.of(Collections.singletonList(rack), partitionRackMap.getOrDefault(partitionId, Collections.emptyList()))
                             .flatMap(List::stream)
-                            .collect(Collectors.toList());
+                            .toList();
                     partitionRackMap.put(partitionId, partitionRackValues);
                 } else {
                     System.err.printf("No mapping found for %s in `brokerRackMapping`%n", brokerId);

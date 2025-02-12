@@ -79,7 +79,7 @@ public class ListPartitionReassignmentsRequest extends AbstractRequest {
                         new OngoingTopicReassignment()
                                 .setName(topic.name())
                                 .setPartitions(topic.partitionIndexes().stream().map(partitionIndex ->
-                                        new OngoingPartitionReassignment().setPartitionIndex(partitionIndex)).collect(Collectors.toList()))
+                                        new OngoingPartitionReassignment().setPartitionIndex(partitionIndex)).toList())
                 );
             }
         }

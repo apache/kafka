@@ -50,7 +50,7 @@ public class PredicateDoc {
             }
         })
         .sorted(Comparator.comparing(docInfo -> docInfo.predicateName))
-        .collect(Collectors.toList());
+        .toList();
 
     private static String toHtml() {
         StringBuilder b = new StringBuilder();

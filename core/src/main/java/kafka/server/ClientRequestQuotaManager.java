@@ -73,9 +73,7 @@ public class ClientRequestQuotaManager extends ClientQuotaManager {
      */
     public int maybeRecordAndGetThrottleTimeMs(RequestChannel.Request request, long timeMs) {
         if (quotasEnabled()) {
-            request.setRecordNetworkThreadTimeCallback(timeNanos -> {
-                recordNoThrottle(request.session(), request.header().clientId(), nanosToPercentage(Long.parseLong(timeNanos.toString())));
-            });
+            request.setRecordNetworkThreadTimeCallback(timeNanos -> recordNoThrottle(request.session(), request.header().clientId(), nanosToPercentage(Long.parseLong(timeNanos.toString()))));
             return recordAndGetThrottleTimeMs(request.session(), request.header().clientId(), nanosToPercentage(request.requestThreadTimeNanos()), timeMs);
         } else {
             return 0;
@@ -84,9 +82,7 @@ public class ClientRequestQuotaManager extends ClientQuotaManager {
 
     public void maybeRecordExempt(RequestChannel.Request request) {
         if (quotasEnabled()) {
-            request.setRecordNetworkThreadTimeCallback(timeNanos -> {
-                recordExempt(nanosToPercentage(Long.parseLong(timeNanos.toString())));
-            });
+            request.setRecordNetworkThreadTimeCallback(timeNanos -> recordExempt(nanosToPercentage(Long.parseLong(timeNanos.toString()))));
             recordExempt(nanosToPercentage(request.requestThreadTimeNanos()));
         }
     }

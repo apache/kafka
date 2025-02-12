@@ -440,7 +440,7 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
         processStreamThread(thread -> allTopologyTasks.addAll(
             thread.readyOnlyAllTasks().stream()
                 .filter(t -> topologyName.equals(t.id().topologyName()))
-                .collect(Collectors.toList())));
+                .toList()));
         return allLocalStorePartitionLags(allTopologyTasks);
     }
 }

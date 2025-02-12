@@ -70,7 +70,7 @@ public class DescribeShareGroupOffsetsRequest extends AbstractRequest {
                                 .map(partitionData -> new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition()
                                         .setPartitionIndex(partitionData)
                                         .setErrorCode(Errors.forException(e).code()))
-                                .collect(Collectors.toList()))));
+                                .toList())));
         return new DescribeShareGroupOffsetsResponse(new DescribeShareGroupOffsetsResponseData()
                 .setResponses(results));
     }
@@ -102,8 +102,8 @@ public class DescribeShareGroupOffsetsRequest extends AbstractRequest {
                                 .setErrorCode(error.code())
                                 .setErrorMessage(error.message())
                                 .setStartOffset(0)
-                        ).collect(Collectors.toList())
+                        ).toList()
                     )
-            ).collect(Collectors.toList());
+            ).toList();
     }
 }

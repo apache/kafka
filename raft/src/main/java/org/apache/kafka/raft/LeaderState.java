@@ -290,7 +290,7 @@ public class LeaderState<T> implements EpochState {
     private static List<Voter> convertToVoters(Set<Integer> voterIds) {
         return voterIds.stream()
             .map(follower -> new Voter().setVoterId(follower))
-            .collect(Collectors.toList());
+            .toList();
     }
 
     public void appendStartOfEpochControlRecords(VoterSet.VoterNode localVoterNode, long currentTimeMs) {
@@ -619,7 +619,7 @@ public class LeaderState<T> implements EpochState {
         return followersByDescendingFetchOffset()
             .filter(state -> !state.matchesKey(localReplicaKey))
             .map(state -> state.replicaKey)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     private Stream<ReplicaState> followersByDescendingFetchOffset() {

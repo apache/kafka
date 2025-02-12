@@ -194,7 +194,7 @@ public class OptimizedKTableIntegrationTest {
             INPUT_TOPIC_NAME,
             IntStream.range(start, endExclusive)
                 .mapToObj(i -> KeyValue.pair(key, i))
-                .collect(Collectors.toList()),
+                .toList(),
             producerProps,
             mockTime);
     }

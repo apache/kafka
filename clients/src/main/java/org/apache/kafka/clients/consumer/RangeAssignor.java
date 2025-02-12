@@ -127,7 +127,7 @@ public class RangeAssignor extends AbstractPartitionAssignor {
         List<TopicAssignmentState> topicAssignmentStates = partitionsPerTopic.entrySet().stream()
                 .filter(e -> !e.getValue().isEmpty())
                 .map(e -> new TopicAssignmentState(e.getKey(), e.getValue(), consumersPerTopic.get(e.getKey()), consumerRacks))
-                .collect(Collectors.toList());
+                .toList();
 
         Map<String, List<TopicPartition>> assignment = new HashMap<>();
         subscriptions.keySet().forEach(memberId -> assignment.put(memberId, new ArrayList<>()));
@@ -159,7 +159,7 @@ public class RangeAssignor extends AbstractPartitionAssignor {
             List<TopicPartition> assignablePartitions = assignmentState.unassignedPartitions.stream()
                     .filter(tp -> mayAssign.apply(consumer, tp))
                     .limit(assignmentState.maxAssignable(consumer))
-                    .collect(Collectors.toList());
+                    .toList();
             if (assignablePartitions.isEmpty())
                 continue;
 

@@ -71,7 +71,7 @@ public class ReplicaSelectorTest {
                 replicaInfo(new Node(2, "host2", 1234, "rack-b"), 3, 3),
                 replicaInfo(new Node(3, "host3", 1234, "rack-b"), 4, 2)
 
-        ).collect(Collectors.toList());
+        ).toList();
     }
 
     static ReplicaView replicaInfo(Node node, long logOffset, long timeSinceLastCaughtUpMs) {

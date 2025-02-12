@@ -378,7 +378,7 @@ public enum ApiKeys {
     private static EnumSet<ApiKeys> filterApisForListener(ApiMessageType.ListenerType listener) {
         List<ApiKeys> apis = Arrays.stream(ApiKeys.values())
             .filter(apiKey -> apiKey.inScope(listener))
-            .collect(Collectors.toList());
+            .toList();
         return EnumSet.copyOf(apis);
     }
 }

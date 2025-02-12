@@ -156,7 +156,7 @@ public class StreamsProducer {
                                   final String name) {
         final List<MetricName> found = metrics.keySet().stream()
             .filter(n -> n.name().equals(name))
-            .collect(Collectors.toList());
+            .toList();
         if (found.isEmpty()) {
             return 0.0;
         }

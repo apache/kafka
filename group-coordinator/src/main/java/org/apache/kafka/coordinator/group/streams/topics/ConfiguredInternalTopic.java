@@ -62,7 +62,7 @@ public record ConfiguredInternalTopic(String name,
                         y -> new StreamsGroupDescribeResponseData.KeyValue()
                             .setKey(y.getKey())
                             .setValue(y.getValue())
-                    ).collect(Collectors.toList()) : null
+                    ).toList() : null
             );
     }
 

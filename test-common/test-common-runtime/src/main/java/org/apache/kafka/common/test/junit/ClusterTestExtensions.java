@@ -216,7 +216,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
             .mapToObj(__ -> generateClusterConfigurations(context, annot.value()).stream())
             .flatMap(Function.identity())
             .flatMap(config -> config.clusterTypes().stream().map(type -> invocationContextForClusterType(type, baseDisplayName, config)))
-            .collect(Collectors.toList());
+            .toList();
 
         if (contexts.isEmpty()) {
             throw new IllegalStateException("ClusterConfig generator method should provide at least one config");
@@ -245,7 +245,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
             .mapToObj(__ -> Arrays.stream(clusterTests))
             .flatMap(Function.identity())
             .flatMap(clusterTest -> processClusterTestInternal(context, clusterTest, defaults).stream())
-            .collect(Collectors.toList());
+            .toList();
 
         if (ret.isEmpty()) {
             throw new IllegalStateException("processClusterTests method should provide at least one config");
@@ -291,7 +291,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
 
         return Arrays.stream(types)
             .map(type -> invocationContextForClusterType(type, context.getRequiredTestMethod().getName(), config))
-            .collect(Collectors.toList());
+            .toList();
     }
 
     private ClusterTestDefaults getClusterTestDefaults(Class<?> testClass) {

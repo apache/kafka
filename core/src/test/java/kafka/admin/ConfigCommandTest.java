@@ -1430,7 +1430,7 @@ public class ConfigCommandTest {
 
     @SafeVarargs
     public static List<String> concat(List<String>... lists) {
-        return Stream.of(lists).flatMap(List::stream).collect(Collectors.toList());
+        return Stream.of(lists).flatMap(List::stream).toList();
     }
 
     @SafeVarargs

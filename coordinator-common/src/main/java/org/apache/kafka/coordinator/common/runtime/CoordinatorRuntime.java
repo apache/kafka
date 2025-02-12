@@ -2187,7 +2187,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             .keySet()
             .stream()
             .map(tp -> scheduleWriteOperation(name, tp, timeout, op))
-            .collect(Collectors.toList());
+            .toList();
     }
 
     /**
@@ -2324,7 +2324,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             .keySet()
             .stream()
             .map(tp -> scheduleReadOperation(name, tp, op))
-            .collect(Collectors.toList());
+            .toList();
     }
 
     /**

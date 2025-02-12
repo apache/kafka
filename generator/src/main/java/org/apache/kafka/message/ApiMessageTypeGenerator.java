@@ -217,7 +217,7 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
             } else {
                 listeners = apiData.requestSpec.listeners().stream()
                     .map(RequestListenerType::name)
-                    .collect(Collectors.toList());
+                    .toList();
             }
 
             buffer.printf("%s(\"%s\", (short) %d, %s, %s, (short) %d, (short) %d, (short) %d, (short) %d, %s, %s)%s%n",

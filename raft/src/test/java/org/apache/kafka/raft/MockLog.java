@@ -380,7 +380,7 @@ public class MockLog implements ReplicatedLog {
 
         return batches.stream()
             .filter(batch -> batch.lastOffset() >= startOffset && batch.lastOffset() < maxOffset)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     private void verifyOffsetInRange(long offset) {

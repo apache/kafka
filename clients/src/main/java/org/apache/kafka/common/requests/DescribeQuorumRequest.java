@@ -95,7 +95,7 @@ public class DescribeQuorumRequest extends AbstractRequest {
                                                 .setPartitionIndex(requestPartition.partitionIndex())
                                                 .setErrorCode(errorCode)
                                                 .setErrorMessage(errorMessage)
-                    ).collect(Collectors.toList())));
+                    ).toList()));
         }
 
         return new DescribeQuorumResponseData().setTopics(topicResponses);

@@ -263,7 +263,7 @@ public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarnes
             // Restart one broker of the ELR and it should be the leader.
 
             int expectLeader = topicPartitionInfo.elr().stream()
-                .filter(node -> node.id() != expectLastKnownLeader).collect(Collectors.toList()).get(0).id();
+                .filter(node -> node.id() != expectLastKnownLeader).toList().get(0).id();
 
             startBroker(expectLeader);
             waitForIsrAndElr((isrSize, elrSize) -> {

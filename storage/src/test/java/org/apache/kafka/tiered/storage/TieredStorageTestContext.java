@@ -141,7 +141,7 @@ public final class TieredStorageTestContext implements AutoCloseable {
             List<List<Integer>> newAssignments = assignment.entrySet().stream()
                     .sorted(Map.Entry.comparingByKey())
                     .map(Map.Entry::getValue)
-                    .collect(Collectors.toList());
+                    .toList();
             newPartitions = NewPartitions.increaseTo(spec.getPartitionCount(), newAssignments);
         }
         Map<String, NewPartitions> partitionsMap = Collections.singletonMap(spec.getTopicName(), newPartitions);

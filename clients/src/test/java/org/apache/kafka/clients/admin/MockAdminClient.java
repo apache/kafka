@@ -725,7 +725,7 @@ public class MockAdminClient extends AdminClient {
     @Override
     public synchronized ListGroupsResult listGroups(ListGroupsOptions options) {
         KafkaFutureImpl<Collection<Object>> future = new KafkaFutureImpl<>();
-        future.complete(groupConfigs.keySet().stream().map(g -> new GroupListing(g, Optional.of(GroupType.CONSUMER), ConsumerProtocol.PROTOCOL_TYPE, Optional.of(GroupState.STABLE))).collect(Collectors.toList()));
+        future.complete(groupConfigs.keySet().stream().map(g -> new GroupListing(g, Optional.of(GroupType.CONSUMER), ConsumerProtocol.PROTOCOL_TYPE, Optional.of(GroupState.STABLE))).toList());
         return new ListGroupsResult(future);
     }
 
@@ -737,7 +737,7 @@ public class MockAdminClient extends AdminClient {
     @Override
     public synchronized ListConsumerGroupsResult listConsumerGroups(ListConsumerGroupsOptions options) {
         KafkaFutureImpl<Collection<Object>> future = new KafkaFutureImpl<>();
-        future.complete(groupConfigs.keySet().stream().map(g -> new ConsumerGroupListing(g, false)).collect(Collectors.toList()));
+        future.complete(groupConfigs.keySet().stream().map(g -> new ConsumerGroupListing(g, false)).toList());
         return new ListConsumerGroupsResult(future);
     }
 
@@ -1370,7 +1370,7 @@ public class MockAdminClient extends AdminClient {
     @Override
     public ListClientMetricsResourcesResult listClientMetricsResources(ListClientMetricsResourcesOptions options) {
         KafkaFutureImpl<Collection<ClientMetricsResourceListing>> future = new KafkaFutureImpl<>();
-        future.complete(clientMetricsConfigs.keySet().stream().map(ClientMetricsResourceListing::new).collect(Collectors.toList()));
+        future.complete(clientMetricsConfigs.keySet().stream().map(ClientMetricsResourceListing::new).toList());
         return new ListClientMetricsResourcesResult(future);
     }
 

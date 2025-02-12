@@ -60,7 +60,7 @@ public final class ReassignReplicaAction implements TieredStorageTestAction {
                 List<Integer> actualReplicaIds = description.partitions().get(partition).replicas()
                         .stream()
                         .map(Node::id)
-                        .collect(Collectors.toList());
+                        .toList();
                 return replicaIds.equals(actualReplicaIds);
             } catch (ExecutionException e) {
                 if (e.getCause() instanceof UnknownTopicOrPartitionException) {

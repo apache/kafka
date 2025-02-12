@@ -171,7 +171,7 @@ public class TestUtils {
     public static void assertNoLeakedThreadsWithNameAndDaemonStatus(String threadName, boolean isDaemon) {
         List<Thread> threads = Thread.getAllStackTraces().keySet().stream()
                 .filter(t -> t.isDaemon() == isDaemon && t.isAlive() && t.getName().startsWith(threadName))
-                .collect(Collectors.toList());
+                .toList();
         int threadCount = threads.size();
         assertEquals(0, threadCount);
     }

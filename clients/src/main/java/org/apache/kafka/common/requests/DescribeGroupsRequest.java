@@ -87,6 +87,6 @@ public class DescribeGroupsRequest extends AbstractRequest {
                 .setGroupId(groupId)
                 .setErrorCode(error.code())
             )
-            .collect(Collectors.toList());
+            .toList();
     }
 }

@@ -79,7 +79,7 @@ public class ProduceRequest extends AbstractRequest {
             return "(type=ProduceRequest" +
                     ", acks=" + data.acks() +
                     ", timeout=" + data.timeoutMs() +
-                    ", partitionRecords=(" + data.topicData().stream().flatMap(d -> d.partitionData().stream()).collect(Collectors.toList()) +
+                    ", partitionRecords=(" + data.topicData().stream().flatMap(d -> d.partitionData().stream()).toList() +
                     "), transactionalId='" + (data.transactionalId() != null ? data.transactionalId() : "") +
                     "'";
         }

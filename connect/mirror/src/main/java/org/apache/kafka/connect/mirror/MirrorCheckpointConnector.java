@@ -154,7 +154,7 @@ public class MirrorCheckpointConnector extends SourceConnector {
         List<List<String>> groupsPartitioned = ConnectorUtils.groupPartitions(new ArrayList<>(knownConsumerGroups), numTasks);
         return IntStream.range(0, numTasks)
                 .mapToObj(i -> config.taskConfigForConsumerGroups(groupsPartitioned.get(i), i))
-                .collect(Collectors.toList());
+                .toList();
     }
 
     @Override
@@ -227,7 +227,7 @@ public class MirrorCheckpointConnector extends SourceConnector {
         List<String> filteredGroups = listConsumerGroups().stream()
                 .map(ConsumerGroupListing::groupId)
                 .filter(this::shouldReplicateByGroupFilter)
-                .collect(Collectors.toList());
+                .toList();
 
         Set<String> checkpointGroups = new HashSet<>();
         Set<String> irrelevantGroups = new HashSet<>();

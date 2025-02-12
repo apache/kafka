@@ -245,7 +245,7 @@ public class TestableSourceConnector extends SampleSourceConnector {
                             maybeDefineTransactionBoundary(record);
                             return record;
                         })
-                        .collect(Collectors.toList());
+                        .toList();
             }
             return null;
         }

@@ -168,7 +168,7 @@ public class JoinStoreIntegrationTest {
                     "join-store-integration-test-changelog-cleanup-policy-join-store-other-join-store-changelog"
                 )
                 .map(name -> new ConfigResource(Type.TOPIC, name))
-                .collect(Collectors.toList());
+                .toList();
 
             final Map<ConfigResource, org.apache.kafka.clients.admin.Config> topicConfig
                 = admin.describeConfigs(changelogTopics).all().get();

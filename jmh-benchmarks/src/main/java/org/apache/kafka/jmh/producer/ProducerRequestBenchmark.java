@@ -57,9 +57,9 @@ public class ProducerRequestBenchmark {
                 .setIndex(partitionIndex)
                 .setRecords(MemoryRecords.withRecords(Compression.NONE, IntStream.range(0, NUMBER_OF_RECORDS)
                     .mapToObj(recordIndex -> new SimpleRecord(100, "hello0".getBytes(StandardCharsets.UTF_8)))
-                    .collect(Collectors.toList())
+                    .toList()
                     .toArray(new SimpleRecord[0]))))
-                .collect(Collectors.toList()))
+                .toList())
     );
     private static final ProduceRequestData PRODUCE_REQUEST_DATA = new ProduceRequestData()
             .setTimeoutMs(100)

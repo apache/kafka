@@ -92,7 +92,7 @@ public class ToolsUtils {
     ) {
         List<Integer> columnLengths = headers.stream()
             .map(String::length)
-            .collect(Collectors.toList());
+            .toList();
 
         for (List<String> row : rows) {
             for (int i = 0; i < headers.size(); i++) {

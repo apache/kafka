@@ -86,7 +86,7 @@ public class Utils {
                 short replicationFactor = -1;
                 List<NewTopic> newTopics = Arrays.stream(topicNames)
                     .map(name -> new NewTopic(name, numPartitions, replicationFactor))
-                    .collect(Collectors.toList());
+                    .toList();
                 try {
                     admin.createTopics(newTopics).all().get();
                     printOut("Created topics: %s", Arrays.toString(topicNames));

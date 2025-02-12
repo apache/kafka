@@ -427,7 +427,7 @@ public class RackAwareTaskAssignor {
             .filter(task -> !destination.hasAssignedTask(task))
             .filter(task -> moveStandbyTask.canMove(source, destination, task, clientStates))
             .sorted()
-            .collect(Collectors.toList());
+            .toList();
 
         final long startTime = time.milliseconds();
         final List<ProcessId> clientList = new ArrayList<>(clientStates.keySet());
@@ -467,7 +467,7 @@ public class RackAwareTaskAssignor {
                     final List<TaskId> taskIdList = Stream.concat(movable1.stream(),
                             movable2.stream())
                         .sorted()
-                        .collect(Collectors.toList());
+                        .toList();
 
                     final List<ProcessId> clients = Stream.of(clientList.get(i), clientList.get(j))
                         .sorted().collect(

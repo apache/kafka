@@ -230,8 +230,8 @@ public class MetadataQuorumCommand {
                 lastFetchTimestamp,
                 lastCaughtUpTimestamp,
                 status
-            ).map(r -> r.toString()).collect(Collectors.toList());
-        }).collect(Collectors.toList());
+            ).map(r -> r.toString()).toList();
+        }).toList();
     }
 
     // visible for testing
@@ -291,7 +291,7 @@ public class MetadataQuorumCommand {
         List<Node> currentVoterList = replicas.stream().map(voter -> new Node(
             voter.replicaId(),
             voter.replicaDirectoryId(),
-            getEndpoints(quorumInfo.nodes().get(voter.replicaId())))).collect(Collectors.toList());
+            getEndpoints(quorumInfo.nodes().get(voter.replicaId())))).toList();
         return currentVoterList.stream().map(Objects::toString).collect(Collectors.joining(", ", "[", "]"));
     }
 

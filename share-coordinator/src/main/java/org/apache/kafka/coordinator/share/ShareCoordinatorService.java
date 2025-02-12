@@ -819,9 +819,9 @@ public class ShareCoordinatorService implements ShareCoordinator {
                 resultData.setPartitions(topicData.partitions().stream()
                     .map(partitionData -> ReadShareGroupStateResponse.toErrorResponsePartitionResult(
                         partitionData.partition(), error, errorMessage
-                    )).collect(Collectors.toList()));
+                    )).toList());
                 return resultData;
-            }).collect(Collectors.toList()));
+            }).toList());
     }
 
     private ReadShareGroupStateSummaryResponseData generateErrorReadStateSummaryResponse(
@@ -836,9 +836,9 @@ public class ShareCoordinatorService implements ShareCoordinator {
                 resultData.setPartitions(topicData.partitions().stream()
                     .map(partitionData -> ReadShareGroupStateSummaryResponse.toErrorResponsePartitionResult(
                         partitionData.partition(), error, errorMessage
-                    )).collect(Collectors.toList()));
+                    )).toList());
                 return resultData;
-            }).collect(Collectors.toList()));
+            }).toList());
     }
 
     private WriteShareGroupStateResponseData generateErrorWriteStateResponse(
@@ -854,9 +854,9 @@ public class ShareCoordinatorService implements ShareCoordinator {
                     resultData.setPartitions(topicData.partitions().stream()
                         .map(partitionData -> WriteShareGroupStateResponse.toErrorResponsePartitionResult(
                             partitionData.partition(), error, errorMessage
-                        )).collect(Collectors.toList()));
+                        )).toList());
                     return resultData;
-                }).collect(Collectors.toList()));
+                }).toList());
     }
 
     private DeleteShareGroupStateResponseData generateErrorDeleteStateResponse(
@@ -871,9 +871,9 @@ public class ShareCoordinatorService implements ShareCoordinator {
                 resultData.setPartitions(topicData.partitions().stream()
                     .map(partitionData -> DeleteShareGroupStateResponse.toErrorResponsePartitionResult(
                         partitionData.partition(), error, errorMessage
-                    )).collect(Collectors.toList()));
+                    )).toList());
                 return resultData;
-            }).collect(Collectors.toList()));
+            }).toList());
     }
 
     private static boolean isGroupIdEmpty(String groupId) {

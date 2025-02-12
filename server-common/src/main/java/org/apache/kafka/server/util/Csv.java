@@ -51,7 +51,7 @@ public class Csv {
         if (csvList == null || csvList.isEmpty()) {
             return Collections.emptyList();
         } else {
-            return Stream.of(csvList.split("\\s*,\\s*")).filter(v -> !v.isEmpty()).collect(Collectors.toList());
+            return Stream.of(csvList.split("\\s*,\\s*")).filter(v -> !v.isEmpty()).toList();
         }
     }
 }

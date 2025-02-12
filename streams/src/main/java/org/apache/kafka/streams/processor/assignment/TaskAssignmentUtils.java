@@ -447,7 +447,7 @@ public final class TaskAssignmentUtils {
                 })
                 .map(AssignedTask::id)
                 .sorted()
-                .collect(Collectors.toList());
+                .toList();
         };
 
         final long startTime = System.currentTimeMillis();
@@ -483,10 +483,10 @@ public final class TaskAssignmentUtils {
 
                     final List<TaskId> moveableTaskIds = Stream.concat(movable1.stream(), movable2.stream())
                         .sorted()
-                        .collect(Collectors.toList());
+                        .toList();
                     final List<ProcessId> clientsInTaskRedistributionAttempt = Stream.of(clientId1, clientId2)
                         .sorted()
-                        .collect(Collectors.toList());
+                        .toList();
 
                     final AssignmentGraph assignmentGraph = buildTaskGraph(
                         kafkaStreamsAssignments,
@@ -939,7 +939,7 @@ public final class TaskAssignmentUtils {
                 if (tags != null) {
                     tagSet.addAll(tags.entrySet().stream()
                         .map(entry -> KeyValue.pair(entry.getKey(), entry.getValue()))
-                        .collect(Collectors.toList())
+                        .toList()
                     );
                 }
             };

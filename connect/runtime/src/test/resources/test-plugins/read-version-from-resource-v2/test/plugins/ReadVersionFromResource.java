@@ -50,7 +50,7 @@ public class ReadVersionFromResource implements Converter, Versioned {
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream))) {
             return reader.lines()
                     .filter(s -> !s.isEmpty() && !s.startsWith("#"))
-                    .collect(Collectors.toList())
+                    .toList()
                     .get(0);
         }
     }

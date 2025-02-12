@@ -657,11 +657,11 @@ public class IncrementalCooperativeAssignorTest {
         int num = 2;
         List<WorkerLoad> existingAssignment = IntStream.range(0, 3)
                 .mapToObj(i -> workerLoad("worker" + i, i * num, num, i * num, num))
-                .collect(Collectors.toList());
+                .toList();
 
         List<WorkerLoad> expectedAssignment = existingAssignment.stream()
                 .map(wl -> new WorkerLoad.Builder(wl.worker()).withCopies(wl.connectors(), wl.tasks()).build())
-                .collect(Collectors.toList());
+                .toList();
         expectedAssignment.get(0).connectors().addAll(Arrays.asList("connector6", "connector9"));
         expectedAssignment.get(1).connectors().addAll(Arrays.asList("connector7", "connector10"));
         expectedAssignment.get(2).connectors().add("connector8");
@@ -676,11 +676,11 @@ public class IncrementalCooperativeAssignorTest {
         int num = 2;
         List<WorkerLoad> existingAssignment = IntStream.range(0, 3)
                 .mapToObj(i -> workerLoad("worker" + i, i * num, num, i * num, num))
-                .collect(Collectors.toList());
+                .toList();
 
         List<WorkerLoad> expectedAssignment = existingAssignment.stream()
                 .map(wl -> new WorkerLoad.Builder(wl.worker()).withCopies(wl.connectors(), wl.tasks()).build())
-                .collect(Collectors.toList());
+                .toList();
 
         expectedAssignment.get(0).connectors().addAll(Arrays.asList("connector6", "connector9"));
         expectedAssignment.get(1).connectors().addAll(Arrays.asList("connector7", "connector10"));
@@ -1363,7 +1363,7 @@ public class IncrementalCooperativeAssignorTest {
     private static List<String> newConnectors(int start, int end) {
         return IntStream.range(start, end)
                 .mapToObj(i -> "connector" + i)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     private static List<ConnectorTaskId> newTasks(int start, int end) {
@@ -1373,7 +1373,7 @@ public class IncrementalCooperativeAssignorTest {
     private static List<ConnectorTaskId> newTasks(String connectorName, int start, int end) {
         return IntStream.range(start, end)
                 .mapToObj(i -> new ConnectorTaskId(connectorName, i))
-                .collect(Collectors.toList());
+                .toList();
     }
 
     private void addNewConnector(String connector, int taskCount) {
@@ -1482,7 +1482,7 @@ public class IncrementalCooperativeAssignorTest {
         List<Integer> expectedAllocations = IntStream.of(rawExpectedAllocations)
                 .boxed()
                 .sorted()
-                .collect(Collectors.toList());
+                .toList();
         List<Integer> actualAllocations = allocations(allocation);
         assertEquals(expectedAllocations,
             actualAllocations,
@@ -1494,7 +1494,7 @@ public class IncrementalCooperativeAssignorTest {
                 .map(allocation)
                 .map(Collection::size)
                 .sorted()
-                .collect(Collectors.toList());
+                .toList();
     }
 
     private void assertNoRevocations() {

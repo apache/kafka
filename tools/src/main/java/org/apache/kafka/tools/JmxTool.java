@@ -419,7 +419,7 @@ public class JmxTool {
                             } catch (MalformedObjectNameException e) {
                                 throw new RuntimeException(e);
                             }
-                        }).collect(Collectors.toList());
+                        }).toList();
             } else {
                 List<ObjectName> listWithNull = new ArrayList<>();
                 listWithNull.add(null);

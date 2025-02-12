@@ -144,7 +144,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         public Collection<SocketServer> controllerSocketServers() {
             return controllers().values().stream()
                 .map(ControllerServer::socketServer)
-                .collect(Collectors.toList());
+                .toList();
         }
 
         @Override

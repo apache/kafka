@@ -353,7 +353,7 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
                                                 niceValue,
                                                 pr.headers());
                 })
-                .collect(Collectors.toList());
+                .toList();
 
         assertThat(collected, is(asList(
             new ProducerRecord<>(APP_ID + "-" + testName + "-changelog",

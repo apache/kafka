@@ -56,7 +56,7 @@ public class LeaderAndIsr {
                 leader,
                 leaderEpoch,
                 leaderRecoveryState,
-                isr.stream().map(brokerId -> new BrokerState().setBrokerId(brokerId)).collect(Collectors.toList()),
+                isr.stream().map(brokerId -> new BrokerState().setBrokerId(brokerId)).toList(),
                 partitionEpoch
         );
     }
@@ -130,7 +130,7 @@ public class LeaderAndIsr {
     public List<Integer> isr() {
         return isrWithBrokerEpoch.stream()
                 .map(BrokerState::brokerId)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     public boolean equalsAllowStalePartitionEpoch(LeaderAndIsr other) {

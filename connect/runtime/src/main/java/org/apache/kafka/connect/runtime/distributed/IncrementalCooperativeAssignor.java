@@ -552,7 +552,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         return candidateWorkersForReassignment.stream()
                 .map(activeWorkers::get)
                 .filter(Objects::nonNull)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     private Map<String, ExtendedAssignment> fillAssignments(Collection<String> members, short error,
@@ -833,12 +833,12 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                 .map(e -> new WorkerLoad.Builder(e.getKey()).with(
                         e.getValue().connectors().stream()
                                 .filter(v -> !ignore.connectors().contains(v))
-                                .collect(Collectors.toList()),
+                                .toList(),
                         e.getValue().tasks().stream()
                                 .filter(v -> !ignore.tasks().contains(v))
-                                .collect(Collectors.toList())
+                                .toList()
                         ).build()
-                ).collect(Collectors.toList());
+                ).toList();
     }
 
     private static void addAll(Map<String, ConnectorsAndTasks.Builder> base, Map<String, ConnectorsAndTasks> toAdd) {
@@ -855,7 +855,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
     private static List<WorkerLoad> workerLoads(Map<String, ConnectorsAndTasks> memberAssignments) {
         return memberAssignments.entrySet().stream()
                 .map(e -> new WorkerLoad.Builder(e.getKey()).with(e.getValue().connectors(), e.getValue().tasks()).build())
-                .collect(Collectors.toList());
+                .toList();
     }
 
     private static void removeAll(List<WorkerLoad> workerLoads, Map<String, ConnectorsAndTasks> toRemove) {

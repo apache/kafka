@@ -236,7 +236,7 @@ public class ExtendedAssignment extends ConnectProtocol.Assignment {
                            taskAssignment.set(CONNECTOR_KEY_NAME, connectorEntry.getKey());
                            taskAssignment.set(TASKS_KEY_NAME, connectorEntry.getValue().toArray());
                            return taskAssignment;
-                       }).collect(Collectors.toList());
+                       }).toList();
     }
 
     private static Collection<String> extractConnectors(Struct struct, String key) {

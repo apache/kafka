@@ -328,11 +328,11 @@ public class LogConfig extends AbstractConfig {
         this.minCleanableRatio = getDouble(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG);
         this.compact = getList(TopicConfig.CLEANUP_POLICY_CONFIG).stream()
                 .map(c -> c.toLowerCase(Locale.ROOT))
-                .collect(Collectors.toList())
+                .toList()
                 .contains(TopicConfig.CLEANUP_POLICY_COMPACT);
         this.delete = getList(TopicConfig.CLEANUP_POLICY_CONFIG).stream()
                 .map(c -> c.toLowerCase(Locale.ROOT))
-                .collect(Collectors.toList())
+                .toList()
                 .contains(TopicConfig.CLEANUP_POLICY_DELETE);
         this.uncleanLeaderElectionEnable = getBoolean(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG);
         this.minInSyncReplicas = getInt(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG);
@@ -453,7 +453,7 @@ public class LogConfig extends AbstractConfig {
     }
 
     public static List<String> configNames() {
-        return CONFIG.names().stream().sorted().collect(Collectors.toList());
+        return CONFIG.names().stream().sorted().toList();
     }
 
     public static Optional<String> serverConfigName(String configName) {

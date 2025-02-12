@@ -46,7 +46,7 @@ public final class ExpectTopicIdToMatchInRemoteStorageAction implements TieredSt
             List<TopicPartition> partitions = snapshot.getTopicPartitions()
                     .stream()
                     .filter(tp -> tp.topic().equals(topic))
-                    .collect(Collectors.toList());
+                    .toList();
             partitions.forEach(partition ->
                 snapshot.getFilesets(partition)
                         .forEach(fileset -> assertEquals(topicId, fileset.getRemoteLogSegmentId().id()))

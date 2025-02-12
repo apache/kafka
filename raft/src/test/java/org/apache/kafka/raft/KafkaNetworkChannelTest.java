@@ -115,7 +115,7 @@ public class KafkaNetworkChannelTest {
         List<ApiVersionsResponseData.ApiVersion> supportedApis = RAFT_APIS
             .stream()
             .map(ApiVersionsResponse::toApiVersion)
-            .collect(Collectors.toList());
+            .toList();
         client.setNodeApiVersions(NodeApiVersions.create(supportedApis));
     }
 

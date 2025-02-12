@@ -786,7 +786,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
         List<ConnectorTaskId> tasksToStop = localTasks.stream()
                 .filter(taskId -> connectors.contains(taskId.connector()))
-                .collect(Collectors.toList());
+                .toList();
 
         if (tasksToStop.isEmpty()) {
             // The rest of the method would essentially be a no-op so this isn't strictly necessary,
@@ -1571,7 +1571,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         final Collection<ConnectorTaskId> assignedIdsToRestart = plan.taskIdsToRestart()
                 .stream()
                 .filter(taskId -> currentAssignments.tasks().contains(taskId))
-                .collect(Collectors.toList());
+                .toList();
         final boolean restartConnector = plan.shouldRestartConnector() && currentAssignments.connectors().contains(connectorName);
         final boolean restartTasks = !assignedIdsToRestart.isEmpty();
         if (restartConnector) {

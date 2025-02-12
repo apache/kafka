@@ -44,9 +44,9 @@ public class WriteShareGroupStateParameters implements PersisterParameters {
                                                 partitionData.leaderEpoch(),
                                                 partitionData.stateBatches().stream()
                                                         .map(PersisterStateBatch::from)
-                                                        .collect(Collectors.toList())))
-                                        .collect(Collectors.toList())))
-                        .collect(Collectors.toList())))
+                                                        .toList()))
+                                        .toList()))
+                        .toList()))
                 .build();
     }
 

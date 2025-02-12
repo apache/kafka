@@ -157,7 +157,7 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
                    .map(entry -> new TxnOffsetCommitRequestTopic()
                                      .setName(entry.getKey())
                                      .setPartitions(entry.getValue()))
-                   .collect(Collectors.toList());
+                   .toList();
     }
 
     @Override

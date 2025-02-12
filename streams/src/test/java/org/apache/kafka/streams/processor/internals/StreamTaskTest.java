@@ -3046,7 +3046,7 @@ public class StreamTaskTest {
     }
 
     private List<MetricName> getTaskMetrics() {
-        return metrics.metrics().keySet().stream().filter(m -> m.tags().containsKey("task-id")).collect(Collectors.toList());
+        return metrics.metrics().keySet().stream().filter(m -> m.tags().containsKey("task-id")).toList();
     }
 
     private StreamTask createOptimizedStatefulTask(final StreamsConfig config, final Consumer<byte[], byte[]> consumer) {

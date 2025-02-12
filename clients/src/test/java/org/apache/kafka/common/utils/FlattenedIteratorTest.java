@@ -41,7 +41,7 @@ public class FlattenedIteratorTest {
         List<String> flattened = new ArrayList<>();
         flattenedIterable.forEach(flattened::add);
 
-        assertEquals(list.stream().flatMap(Collection::stream).collect(Collectors.toList()), flattened);
+        assertEquals(list.stream().flatMap(Collection::stream).toList(), flattened);
 
         // Ensure we can iterate multiple times
         List<String> flattened2 = new ArrayList<>();
@@ -82,7 +82,7 @@ public class FlattenedIteratorTest {
         List<String> flattened = new ArrayList<>();
         flattenedIterable.forEach(flattened::add);
 
-        assertEquals(list.stream().flatMap(Collection::stream).collect(Collectors.toList()), flattened);
+        assertEquals(list.stream().flatMap(Collection::stream).toList(), flattened);
     }
 
     @Test
@@ -96,7 +96,7 @@ public class FlattenedIteratorTest {
         List<String> flattened = new ArrayList<>();
         flattenedIterable.forEach(flattened::add);
 
-        assertEquals(list.stream().flatMap(Collection::stream).collect(Collectors.toList()), flattened);
+        assertEquals(list.stream().flatMap(Collection::stream).toList(), flattened);
     }
 
     @Test
@@ -110,7 +110,7 @@ public class FlattenedIteratorTest {
         List<String> flattened = new ArrayList<>();
         flattenedIterable.forEach(flattened::add);
 
-        assertEquals(list.stream().flatMap(Collection::stream).collect(Collectors.toList()), flattened);
+        assertEquals(list.stream().flatMap(Collection::stream).toList(), flattened);
     }
 
 }

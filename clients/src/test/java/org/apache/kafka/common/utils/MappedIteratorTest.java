@@ -38,7 +38,7 @@ public class MappedIteratorTest {
         List<Integer> mapped = new ArrayList<>();
         mappedIterable.forEach(mapped::add);
 
-        assertEquals(list.stream().map(mapper).collect(Collectors.toList()), mapped);
+        assertEquals(list.stream().map(mapper).toList(), mapped);
 
         // Ensure that we can iterate a second time
         List<Integer> mapped2 = new ArrayList<>();

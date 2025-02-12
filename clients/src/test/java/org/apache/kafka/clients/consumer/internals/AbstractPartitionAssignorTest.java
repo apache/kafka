@@ -181,7 +181,7 @@ public class AbstractPartitionAssignorTest {
                                             List<String> consumerOwnedPartitions,
                                             List<String> expectedAssignments,
                                             int numPartitionsWithRackMismatch) {
-        List<String> consumers = IntStream.range(0, consumerRacks.size()).mapToObj(i -> "consumer" + i).collect(Collectors.toList());
+        List<String> consumers = IntStream.range(0, consumerRacks.size()).mapToObj(i -> "consumer" + i).toList();
         List<Subscription> subscriptions = subscriptions(consumerTopics, consumerRacks, consumerOwnedPartitions);
         Map<String, List<PartitionInfo>> partitionsPerTopic = partitionsPerTopic(numPartitionsPerTopic, replicationFactor, brokerRacks);
 

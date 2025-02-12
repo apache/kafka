@@ -85,7 +85,7 @@ public class HasHeaderKeyTest {
 
     private SourceRecord recordWithHeaders(String... headers) {
         return new SourceRecord(null, null, null, null, null, null, null, null, null,
-                Arrays.stream(headers).map(TestHeader::new).collect(Collectors.toList()));
+                Arrays.stream(headers).map(TestHeader::new).toList());
     }
 
     private static class TestHeader implements Header {

@@ -62,7 +62,7 @@ public class KTableKTableRightJoinTest {
                 appender.getEvents().stream()
                     .filter(e -> e.getLevel().equals("WARN"))
                     .map(Event::getMessage)
-                    .collect(Collectors.toList()),
+                    .toList(),
                 hasItem("Skipping record due to null key. topic=[left] partition=[-1] offset=[-2]")
             );
         }

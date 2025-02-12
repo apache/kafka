@@ -128,7 +128,7 @@ public class ClientMetricsCommand {
             Collection<AlterConfigOp> alterEntries = configsToBeSet.entrySet().stream()
                     .map(entry -> new AlterConfigOp(new ConfigEntry(entry.getKey(), entry.getValue()),
                             entry.getValue().isEmpty() ? AlterConfigOp.OpType.DELETE : AlterConfigOp.OpType.SET))
-                    .collect(Collectors.toList());
+                    .toList();
             adminClient.incrementalAlterConfigs(Collections.singletonMap(configResource, alterEntries), alterOptions).all()
                     .get(30, TimeUnit.SECONDS);
 
@@ -142,7 +142,7 @@ public class ClientMetricsCommand {
             ConfigResource configResource = new ConfigResource(ConfigResource.Type.CLIENT_METRICS, entityName);
             AlterConfigsOptions alterOptions = new AlterConfigsOptions().timeoutMs(30000).validateOnly(false);
             Collection<AlterConfigOp> alterEntries = oldConfigs.stream()
-                    .map(entry -> new AlterConfigOp(entry, AlterConfigOp.OpType.DELETE)).collect(Collectors.toList());
+                    .map(entry -> new AlterConfigOp(entry, AlterConfigOp.OpType.DELETE)).toList();
             adminClient.incrementalAlterConfigs(Collections.singletonMap(configResource, alterEntries), alterOptions)
                     .all().get(30, TimeUnit.SECONDS);
 
@@ -158,7 +158,7 @@ public class ClientMetricsCommand {
             } else {
                 Collection<ClientMetricsResourceListing> resources = adminClient.listClientMetricsResources()
                         .all().get(30, TimeUnit.SECONDS);
-                entities = resources.stream().map(ClientMetricsResourceListing::name).collect(Collectors.toList());
+                entities = resources.stream().map(ClientMetricsResourceListing::name).toList();
             }
 
             for (String entity : entities) {

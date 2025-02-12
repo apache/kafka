@@ -85,7 +85,7 @@ public final class ProduceAction implements TieredStorageTestAction {
                         spec.getTopicPartition(),
                         spec.getBaseOffset(),
                         false))
-                .collect(Collectors.toList());
+                .toList();
 
         // Retrieve the offset of the next record which would be consumed from the topic-partition
         // before records are produced. This allows consuming only the newly produced records afterwards.
@@ -140,7 +140,7 @@ public final class ProduceAction implements TieredStorageTestAction {
 
         List<ProducerRecord<String, String>> producerRecords = offloadedSegmentSpecs.stream()
                 .flatMap(spec -> spec.getRecords().stream())
-                .collect(Collectors.toList());
+                .toList();
         compareRecords(discoveredRecords, producerRecords, topicPartition);
     }
 

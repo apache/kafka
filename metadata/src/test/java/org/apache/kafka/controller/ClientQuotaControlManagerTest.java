@@ -253,7 +253,7 @@ public class ClientQuotaControlManagerTest {
                                           Consumer<ClientQuotaAlteration> acceptor) {
         Collection<ClientQuotaAlteration.Op> ops = quota.entrySet().stream()
                 .map(quotaEntry -> new ClientQuotaAlteration.Op(quotaEntry.getKey(), quotaEntry.getValue()))
-                .collect(Collectors.toList());
+                .toList();
         acceptor.accept(new ClientQuotaAlteration(entity, ops));
     }
 

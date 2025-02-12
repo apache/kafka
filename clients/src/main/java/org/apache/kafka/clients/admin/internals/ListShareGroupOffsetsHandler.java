@@ -79,7 +79,7 @@ public class ListShareGroupOffsetsHandler extends AdminApiHandler.Batched<Coordi
                     " when building `DescribeShareGroupOffsets` request");
             }
             return key.idValue;
-        }).collect(Collectors.toList());
+        }).toList();
         // The DescribeShareGroupOffsetsRequest only includes a single group ID at this point, which is likely a mistake to be fixing a follow-on PR.
         String groupId = groupIds.isEmpty() ? null : groupIds.get(0);
         if (groupId == null) {
@@ -91,7 +91,7 @@ public class ListShareGroupOffsetsHandler extends AdminApiHandler.Batched<Coordi
                 topicPartition -> new DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestTopic()
                     .setTopicName(topicPartition.topic())
                     .setPartitions(List.of(topicPartition.partition()))
-            ).collect(Collectors.toList());
+            ).toList();
         DescribeShareGroupOffsetsRequestData data = new DescribeShareGroupOffsetsRequestData()
             .setGroupId(groupId)
             .setTopics(topics);
@@ -118,8 +118,8 @@ public class ListShareGroupOffsetsHandler extends AdminApiHandler.Batched<Coordi
                                 log.error("Skipping return offset for topic {} partition {} due to error {}.", describedTopic.topicName(), partition.partitionIndex(), Errors.forCode(partition.errorCode()));
                             return data;
                         }
-                    ).collect(Collectors.toList())
-            ).collect(Collectors.toList());
+                    ).toList()
+            ).toList();
             completed.put(groupId, data);
         }
         return new ApiResult<>(completed, failed, Collections.emptyList());

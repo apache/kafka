@@ -142,7 +142,7 @@ public abstract class TopicCommand {
                 .map(String::trim)
                 .mapToInt(Integer::parseInt)
                 .boxed()
-                .collect(Collectors.toList());
+                .toList();
             Collection<Integer> duplicateBrokers = ToolsUtils.duplicates(brokerList);
             if (!duplicateBrokers.isEmpty()) {
                 throw new AdminCommandFailedException("Partition replica lists may not contain duplicate entries: " +
@@ -164,7 +164,7 @@ public abstract class TopicCommand {
         List<List<String>> configsToBeAdded = opts.topicConfig().orElse(Collections.emptyList())
             .stream()
             .map(s -> Arrays.asList(s.split("\\s*=\\s*")))
-            .collect(Collectors.toList());
+            .toList();
 
         if (!configsToBeAdded.stream().allMatch(config -> config.size() == 2)) {
             throw new IllegalArgumentException("requirement failed: Invalid topic config: all configs to be added must be in the format \"key=val\".");
@@ -219,11 +219,11 @@ public abstract class TopicCommand {
             IncludeList topicsFilter = new IncludeList(topicIncludeList.get());
             return allTopics.stream()
                 .filter(topic -> topicsFilter.isTopicAllowed(topic, excludeInternalTopics))
-                .collect(Collectors.toList());
+                .toList();
         } else {
             return allTopics.stream()
                 .filter(topic -> !(Topic.isInternal(topic) && excludeInternalTopics))
-                .collect(Collectors.toList());
+                .toList();
         }
     }
 
@@ -590,15 +590,15 @@ public abstract class TopicCommand {
 
             List<String> topicNames = topicDescriptions.stream()
                 .map(org.apache.kafka.clients.admin.TopicDescription::name)
-                .collect(Collectors.toList());
+                .toList();
             Map<ConfigResource, KafkaFuture<Config>> allConfigs = adminClient.describeConfigs(
                 topicNames.stream()
                     .map(name -> new ConfigResource(ConfigResource.Type.TOPIC, name))
-                    .collect(Collectors.toList())
+                    .toList()
             ).values();
             List<Integer> liveBrokers = adminClient.describeCluster().nodes().get().stream()
                 .map(Node::id)
-                .collect(Collectors.toList());
+                .toList();
             DescribeOptions describeOptions = new DescribeOptions(opts, new HashSet<>(liveBrokers));
             Set<TopicPartition> topicPartitions = topicDescriptions
                 .stream()
@@ -661,7 +661,7 @@ public abstract class TopicCommand {
             }
 
             Set<String> allTopics = adminClient.listTopics(listTopicsOptions).names().get();
-            return doGetTopics(allTopics.stream().sorted().collect(Collectors.toList()), topicIncludeList, excludeInternalTopics);
+            return doGetTopics(allTopics.stream().sorted().toList(), topicIncludeList, excludeInternalTopics);
         }
 
         public List<Uuid> getTopicIds(Uuid topicIdIncludeList, boolean excludeInternalTopics) throws ExecutionException, InterruptedException {
@@ -670,7 +670,7 @@ public abstract class TopicCommand {
             List<Uuid> allTopicIds = allTopics.listings().get().stream()
                 .map(TopicListing::topicId)
                 .sorted()
-                .collect(Collectors.toList());
+                .toList();
             return allTopicIds.contains(topicIdIncludeList) ?
                 Collections.singletonList(topicIdIncludeList) :
                 Collections.emptyList();

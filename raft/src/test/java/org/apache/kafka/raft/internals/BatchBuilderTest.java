@@ -87,7 +87,7 @@ class BatchBuilderTest {
 
         List<String> builtRecords = Utils.toList(batch).stream()
             .map(record -> Utils.utf8(record.value()))
-            .collect(Collectors.toList());
+            .toList();
         assertEquals(records, builtRecords);
     }
 

@@ -166,7 +166,7 @@ public class ClusterMetadataAuthorizerTest {
     );
 
     static final List<AclBindingFilter> TEST_FILTERS = TEST_BINDINGS.stream().
-        map(AclBinding::toFilter).collect(Collectors.toList());
+        map(AclBinding::toFilter).toList();
 
     @Test
     public void testCreateAcls() throws Exception {

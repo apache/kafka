@@ -118,7 +118,7 @@ public class AclCommand {
                 ResourcePattern resource = entry.getKey();
                 Set<AccessControlEntry> acls = entry.getValue();
                 System.out.println("Adding ACLs for resource `" + resource + "`: " + NL + " " + acls.stream().map(a -> "\t" + a).collect(Collectors.joining(NL)) + NL);
-                Collection<AclBinding> aclBindings = acls.stream().map(acl -> new AclBinding(resource, acl)).collect(Collectors.toList());
+                Collection<AclBinding> aclBindings = acls.stream().map(acl -> new AclBinding(resource, acl)).toList();
                 admin.createAcls(aclBindings).all().get();
             }
         }
@@ -179,7 +179,7 @@ public class AclCommand {
             if (acls.isEmpty()) {
                 adminClient.deleteAcls(Collections.singletonList(new AclBindingFilter(filter, AccessControlEntryFilter.ANY))).all().get();
             } else {
-                List<AclBindingFilter> aclBindingFilters = acls.stream().map(acl -> new AclBindingFilter(filter, acl.toFilter())).collect(Collectors.toList());
+                List<AclBindingFilter> aclBindingFilters = acls.stream().map(acl -> new AclBindingFilter(filter, acl.toFilter())).toList();
                 adminClient.deleteAcls(aclBindingFilters).all().get();
             }
         }
@@ -596,7 +596,7 @@ public class AclCommand {
             List<PatternType> values = Arrays.asList(PatternType.values());
             List<PatternType> filteredValues = values.stream()
                     .filter(type -> type != PatternType.UNKNOWN)
-                    .collect(Collectors.toList());
+                    .toList();
             return filteredValues.stream()
                     .map(Object::toString)
                     .collect(Collectors.joining("|"));

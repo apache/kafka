@@ -217,7 +217,7 @@ public class MirrorSourceConnector extends SourceConnector {
         }
         return IntStream.range(0, numTasks)
                 .mapToObj(i -> config.taskConfigForTopicPartitions(roundRobinByTask.get(i), i))
-                .collect(Collectors.toList());
+                .toList();
     }
 
     @Override
@@ -329,7 +329,7 @@ public class MirrorSourceConnector extends SourceConnector {
             .collect(Collectors.toSet());
         return describeTopics(sourceAdminClient, topics).stream()
             .flatMap(MirrorSourceConnector::expandTopicDescription)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     // visible for testing
@@ -341,7 +341,7 @@ public class MirrorSourceConnector extends SourceConnector {
             .collect(Collectors.toSet());
         return describeTopics(targetAdminClient, topics).stream()
                 .flatMap(MirrorSourceConnector::expandTopicDescription)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     // visible for testing
@@ -428,7 +428,7 @@ public class MirrorSourceConnector extends SourceConnector {
             .filter(this::shouldReplicateAcl)
             .filter(x -> shouldReplicateTopic(x.pattern().name()))
             .map(this::targetAclBinding)
-            .collect(Collectors.toList());
+            .toList();
         updateTopicAcls(filteredBindings);
     }
 
@@ -675,7 +675,7 @@ public class MirrorSourceConnector extends SourceConnector {
             .filter(x -> !x.isReadOnly() && !x.isSensitive())
             .filter(x -> x.source() != ConfigEntry.ConfigSource.STATIC_BROKER_CONFIG)
             .filter(x -> shouldReplicateTopicConfigurationProperty(x.name()))
-            .collect(Collectors.toList());
+            .toList();
         return new Config(entries);
     }
 

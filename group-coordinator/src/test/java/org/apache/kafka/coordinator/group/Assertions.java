@@ -115,12 +115,12 @@ public class Assertions {
                     slice
                         .stream()
                         .sorted(Comparator.comparing(Object::toString))
-                        .collect(Collectors.toList()),
+                        .toList(),
                     actualRecords
                         .subList(j, j + slice.size())
                         .stream()
                         .sorted(Comparator.comparing(Object::toString))
-                        .collect(Collectors.toList())
+                        .toList()
                 );
 
                 j += slice.size();

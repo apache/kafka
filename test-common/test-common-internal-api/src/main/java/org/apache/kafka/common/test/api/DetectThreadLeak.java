@@ -45,6 +45,6 @@ public interface DetectThreadLeak {
         return () -> Thread.getAllStackTraces().keySet()
                 .stream().filter(predicate)
                 .filter(t -> !before.contains(t.getId()))
-                .collect(Collectors.toList());
+                .toList();
     }
 }

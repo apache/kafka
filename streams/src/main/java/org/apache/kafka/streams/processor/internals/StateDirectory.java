@@ -738,7 +738,7 @@ public class StateDirectory implements AutoCloseable {
                     final File[] taskDirs = namedTopologyDir.listFiles(filter);
                     if (taskDirs != null) {
                         taskDirectories.addAll(Arrays.stream(taskDirs)
-                            .map(f -> new TaskDirectory(f, namedTopology)).collect(Collectors.toList()));
+                            .map(f -> new TaskDirectory(f, namedTopology)).toList());
                     }
                 }
             } else {
@@ -746,7 +746,7 @@ public class StateDirectory implements AutoCloseable {
                     stateDir.listFiles(filter);
                 if (taskDirs != null) {
                     taskDirectories.addAll(Arrays.stream(taskDirs)
-                                               .map(f -> new TaskDirectory(f, null)).collect(Collectors.toList()));
+                                               .map(f -> new TaskDirectory(f, null)).toList());
                 }
             }
         }

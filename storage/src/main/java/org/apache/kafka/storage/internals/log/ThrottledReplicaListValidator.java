@@ -36,7 +36,7 @@ public class ThrottledReplicaListValidator implements Validator {
     @Override
     public void ensureValid(String name, Object value) {
         if (value instanceof java.util.List<?>) {
-            List<String> proposed = ((List<?>) value).stream().map(element -> element.toString().trim()).collect(Collectors.toList());
+            List<String> proposed = ((List<?>) value).stream().map(element -> element.toString().trim()).toList();
             if (!(proposed.stream().allMatch(s -> s.matches("([0-9]+:[0-9]+)?"))
                     || String.join("", proposed).equals("*")))
                 throw new ConfigException(name, value, name +

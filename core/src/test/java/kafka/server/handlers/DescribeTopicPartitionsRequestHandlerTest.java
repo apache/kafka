@@ -132,7 +132,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
                         return AuthorizationResult.ALLOWED;
                     else
                         return AuthorizationResult.DENIED;
-                }).collect(Collectors.toList());
+                }).toList();
             });
 
         // 2. Set up MetadataCache
@@ -329,7 +329,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
                         return AuthorizationResult.ALLOWED;
                     else
                         return AuthorizationResult.DENIED;
-                }).collect(Collectors.toList());
+                }).toList();
             });
 
         // 2. Set up MetadataCache

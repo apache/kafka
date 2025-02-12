@@ -52,7 +52,7 @@ public class RemoteLogSegmentMetadataSnapshotTransform implements RemoteLogMetad
                            .map(entry -> new RemoteLogSegmentMetadataSnapshotRecord.SegmentLeaderEpochEntry()
                            .setLeaderEpoch(entry.getKey())
                            .setOffset(entry.getValue()))
-                           .collect(Collectors.toList());
+                           .toList();
     }
 
     @Override

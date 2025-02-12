@@ -1273,7 +1273,7 @@ public class PersisterStateManager {
                                     .setLastOffset(batch.lastOffset())
                                     .setDeliveryState(batch.deliveryState())
                                     .setDeliveryCount(batch.deliveryCount()))
-                                .collect(Collectors.toList()))
+                                .toList())
                     );
             });
 
@@ -1283,7 +1283,7 @@ public class PersisterStateManager {
                     .map(entry -> new WriteShareGroupStateRequestData.WriteStateData()
                         .setTopicId(entry.getKey())
                         .setPartitions(entry.getValue()))
-                    .collect(Collectors.toList())));
+                    .toList()));
         }
 
         private static AbstractRequest.Builder<? extends AbstractRequest> coalesceReads(String groupId, List<? extends PersisterStateManagerHandler> handlers) {
@@ -1305,7 +1305,7 @@ public class PersisterStateManager {
                     .map(entry -> new ReadShareGroupStateRequestData.ReadStateData()
                         .setTopicId(entry.getKey())
                         .setPartitions(entry.getValue()))
-                    .collect(Collectors.toList())));
+                    .toList()));
         }
 
         private static AbstractRequest.Builder<? extends AbstractRequest> coalesceReadSummaries(String groupId, List<? extends PersisterStateManagerHandler> handlers) {
@@ -1327,7 +1327,7 @@ public class PersisterStateManager {
                     .map(entry -> new ReadShareGroupStateSummaryRequestData.ReadStateSummaryData()
                         .setTopicId(entry.getKey())
                         .setPartitions(entry.getValue()))
-                    .collect(Collectors.toList())),
+                    .toList()),
                 true
             );
         }

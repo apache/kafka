@@ -218,7 +218,7 @@ public final class BrokerLocalStorage {
         File topicPartitionDir = files[0];
         return Arrays.stream(Objects.requireNonNull(topicPartitionDir.listFiles()))
                 .map(File::getName)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     private static final class OffsetHolder {

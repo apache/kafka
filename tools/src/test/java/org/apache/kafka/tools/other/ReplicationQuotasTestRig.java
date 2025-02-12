@@ -287,7 +287,7 @@ public class ReplicationQuotasTestRig {
 
             Map<Integer, List<Integer>> curAssignment = actual.stream().collect(Collectors.toMap(
                 TopicPartitionInfo::partition,
-                p -> p.replicas().stream().map(Node::id).collect(Collectors.toList())
+                p -> p.replicas().stream().map(Node::id).toList()
             ));
 
             //Long stats

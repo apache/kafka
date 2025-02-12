@@ -102,7 +102,7 @@ public class TieredStorageTestUtils {
                 })
                 .sorted(Comparator.comparingLong(records -> records.get(0).offset()))
                 .flatMap(Collection::stream)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     public static Properties createPropsForRemoteStorage(String testClassName,

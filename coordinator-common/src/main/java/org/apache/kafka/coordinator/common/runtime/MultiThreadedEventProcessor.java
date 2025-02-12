@@ -108,7 +108,7 @@ public final class MultiThreadedEventProcessor implements CoordinatorEventProces
             new EventProcessorThread(
                 threadPrefix + threadId
             )
-        ).collect(Collectors.toList());
+        ).toList();
         this.threads.forEach(EventProcessorThread::start);
     }
 

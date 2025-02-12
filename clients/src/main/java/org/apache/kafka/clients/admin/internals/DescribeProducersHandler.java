@@ -197,7 +197,7 @@ public class DescribeProducersHandler extends AdminApiHandler.Batched<TopicParti
                             coordinatorEpoch,
                             currentTransactionFirstOffset
                         );
-                    }).collect(Collectors.toList());
+                    }).toList();
 
                 completed.put(topicPartition, new PartitionProducerState(activeProducers));
             }

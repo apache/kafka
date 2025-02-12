@@ -811,7 +811,7 @@ public class EosIntegrationTest {
 
         final int startKey = 1;
         final int endKey = 30001;
-        final List<KeyValue<Integer, Integer>> recordBatch1 = IntStream.range(startKey, endKey - 1000).mapToObj(i -> KeyValue.pair(i, 0)).collect(Collectors.toList());
+        final List<KeyValue<Integer, Integer>> recordBatch1 = IntStream.range(startKey, endKey - 1000).mapToObj(i -> KeyValue.pair(i, 0)).toList();
         IntegrationTestUtils.produceKeyValuesSynchronously(MULTI_PARTITION_INPUT_TOPIC,
             recordBatch1,
             TestUtils.producerConfig(CLUSTER.bootstrapServers(),
@@ -897,7 +897,7 @@ public class EosIntegrationTest {
             IntegerDeserializer.class
         );
         throwException.set(true);
-        final List<KeyValue<Integer, Integer>> recordBatch2 = IntStream.range(endKey - 1000, endKey).mapToObj(i -> KeyValue.pair(i, 0)).collect(Collectors.toList());
+        final List<KeyValue<Integer, Integer>> recordBatch2 = IntStream.range(endKey - 1000, endKey).mapToObj(i -> KeyValue.pair(i, 0)).toList();
         IntegrationTestUtils.produceKeyValuesSynchronously(MULTI_PARTITION_INPUT_TOPIC,
             recordBatch2,
             TestUtils.producerConfig(CLUSTER.bootstrapServers(),

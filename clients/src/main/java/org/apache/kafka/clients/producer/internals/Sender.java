@@ -614,7 +614,7 @@ public class Sender implements Runnable {
                             p.recordErrors()
                                 .stream()
                                 .map(e -> new ProduceResponse.RecordError(e.batchIndex(), e.batchIndexErrorMessage()))
-                                .collect(Collectors.toList()),
+                                .toList(),
                             p.errorMessage(),
                             p.currentLeader());
                     ProducerBatch batch = batches.get(tp);

@@ -512,7 +512,7 @@ public class GroupMetadataManager {
         return groupStream
             .filter(combinedFilter)
             .map(group -> group.asListedGroup(committedOffset))
-            .collect(Collectors.toList());
+            .toList();
     }
 
     /**
@@ -610,7 +610,7 @@ public class GroupMetadataManager {
                         .setProtocolData(group.protocolName().get())
                         .setMembers(group.allMembers().stream()
                             .map(member -> member.describe(group.protocolName().get()))
-                            .collect(Collectors.toList())
+                            .toList()
                         )
                     );
                 } else {
@@ -620,7 +620,7 @@ public class GroupMetadataManager {
                         .setProtocolType(group.protocolType().orElse(""))
                         .setMembers(group.allMembers().stream()
                             .map(ClassicGroupMember::describeNoMetadata)
-                            .collect(Collectors.toList())
+                            .toList()
                         )
                     );
                 }
@@ -1595,7 +1595,7 @@ public class GroupMetadataManager {
             .map(keyValue -> new ConsumerGroupHeartbeatResponseData.TopicPartitions()
                 .setTopicId(keyValue.getKey())
                 .setPartitions(new ArrayList<>(keyValue.getValue())))
-            .collect(Collectors.toList());
+            .toList();
     }
 
     private List<ShareGroupHeartbeatResponseData.TopicPartitions> fromShareGroupAssignmentMap(
@@ -1605,7 +1605,7 @@ public class GroupMetadataManager {
             .map(keyValue -> new ShareGroupHeartbeatResponseData.TopicPartitions()
                 .setTopicId(keyValue.getKey())
                 .setPartitions(new ArrayList<>(keyValue.getValue())))
-            .collect(Collectors.toList());
+            .toList();
     }
 
     /**
@@ -6192,7 +6192,7 @@ public class GroupMetadataManager {
         List<String> validLeaveGroupMembers = memberResponses.stream()
             .filter(response -> response.errorCode() == Errors.NONE.code())
             .map(MemberResponse::memberId)
-            .collect(Collectors.toList());
+            .toList();
 
         String reason = "explicit `LeaveGroup` request for (" + String.join(", ", validLeaveGroupMembers) + ") members.";
         CoordinatorResult<Void, CoordinatorRecord> coordinatorResult = EMPTY_RESULT;

@@ -101,7 +101,7 @@ public class DescribeUserScramCredentialsResult {
             } else {
                 retval.complete(data.results().stream()
                         .filter(result -> result.errorCode() != Errors.RESOURCE_NOT_FOUND.code())
-                        .map(result -> result.user()).collect(Collectors.toList()));
+                        .map(result -> result.user()).toList());
             }
         });
         return retval;
@@ -145,6 +145,6 @@ public class DescribeUserScramCredentialsResult {
             DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult userResult) {
         return userResult.credentialInfos().stream().map(c ->
                 new ScramCredentialInfo(ScramMechanism.fromType(c.mechanism()), c.iterations()))
-                .collect(Collectors.toList());
+                .toList();
     }
 }
