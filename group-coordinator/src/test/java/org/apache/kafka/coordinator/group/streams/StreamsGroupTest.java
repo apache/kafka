@@ -906,6 +906,36 @@ public class StreamsGroupTest {
     }
 
     @Test
+    public void testSetTopologyUpdatesStateAndConfiguredTopologyWithPreviousCallToSetMetadata() {
+        Uuid topicUuid = Uuid.randomUuid();
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(LOG_CONTEXT);
+        GroupCoordinatorMetricsShard metricsShard = mock(GroupCoordinatorMetricsShard.class);
+        StreamsGroup streamsGroup = new StreamsGroup(LOG_CONTEXT, snapshotRegistry, "test-group", metricsShard);
+
+        assertEquals(StreamsGroup.StreamsGroupState.EMPTY, streamsGroup.state());
+
+        Map<String, TopicMetadata> partitionMetadata = new HashMap<>();
+        partitionMetadata.put("topic1", new TopicMetadata(topicUuid, "topic1", 1));
+
+        try (MockedStatic<InternalTopicManager> mocked = mockStatic(InternalTopicManager.class)) {
+            streamsGroup.setPartitionMetadata(partitionMetadata);
+            mocked.verify(() -> InternalTopicManager.configureTopics(any(), any(), any()), never());
+        }
+
+        assertTrue(streamsGroup.configuredTopology().isEmpty(), "Configured topology should not be present");
+        assertEquals(partitionMetadata, streamsGroup.partitionMetadata());
+
+        StreamsTopology topology = new StreamsTopology(1, Collections.emptyMap());
+        ConfiguredTopology topo = mock(ConfiguredTopology.class);
+        when(topo.isReady()).thenReturn(true);
+        try (MockedStatic<InternalTopicManager> mocked = mockStatic(InternalTopicManager.class)) {
+            mocked.when(() -> InternalTopicManager.configureTopics(any(), eq(topology), eq(partitionMetadata))).thenReturn(topo);
+            streamsGroup.setTopology(topology);
+            mocked.verify(() -> InternalTopicManager.configureTopics(any(), eq(topology), eq(partitionMetadata)));
+        }
+    }
+
+    @Test
     public void testSetPartitionMetadataUpdatesStateAndConfiguredTopology() {
         Uuid topicUuid = Uuid.randomUuid();
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(LOG_CONTEXT);
