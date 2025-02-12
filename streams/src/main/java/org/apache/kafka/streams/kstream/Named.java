@@ -27,14 +27,13 @@ public class Named implements NamedOperation<Named> {
     protected String name;
 
     protected Named(final Named named) {
-        this(Objects.requireNonNull(named, "named can't be null").name);
+        this(Objects.requireNonNull(named, "named cannot be null").name);
     }
 
     protected Named(final String name) {
+        Objects.requireNonNull(name, "name cannot be null");
+        validate(name);
         this.name = name;
-        if (name != null) {
-            validate(name);
-        }
     }
 
     /**
@@ -46,7 +45,6 @@ public class Named implements NamedOperation<Named> {
      * @throws TopologyException if an invalid name is specified; valid characters are ASCII alphanumerics, '.', '_' and '-'.
      */
     public static Named as(final String name) {
-        Objects.requireNonNull(name, "name can't be null");
         return new Named(name);
     }
 
