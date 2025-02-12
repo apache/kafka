@@ -43,6 +43,8 @@ jobs:
       - name: Setup Python
         uses: ./.github/actions/setup-python
       - name: Check Format
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           python .github/scripts/pr-format.py ${{ github.event.pull_request.number }}
 
