@@ -65,7 +65,6 @@ import java.util.stream.Collectors;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
-import static org.apache.kafka.server.common.MetadataVersion.IBP_3_3_IV3;
 import static org.apache.kafka.server.common.MetadataVersion.IBP_3_5_IV0;
 import static org.apache.kafka.server.common.MetadataVersion.MINIMUM_VERSION;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -349,11 +348,11 @@ public class MetadataLoaderTest {
             assertEquals(300L, loader.lastAppliedOffset());
             assertEquals(new SnapshotManifest(new MetadataProvenance(300, 100, 4000, true), 3000000L),
                 publishers.get(0).latestSnapshotManifest);
-            assertEquals(MetadataVersion.MINIMUM_VERSION,
+            assertEquals(MINIMUM_VERSION,
                 loader.metrics().currentMetadataVersion());
         }
         assertTrue(publishers.get(0).closed);
-        assertEquals(IBP_3_3_IV3,
+        assertEquals(MINIMUM_VERSION,
                 publishers.get(0).latestImage.features().metadataVersion());
         assertTrue(publishers.get(0).latestImage.isEmpty());
         faultHandler.maybeRethrowFirstException();
@@ -489,7 +488,7 @@ public class MetadataLoaderTest {
                 .numBytes(10)
                 .build(),
             publishers.get(0).latestLogDeltaManifest);
-        assertEquals(MetadataVersion.IBP_3_3_IV3,
+        assertEquals(MINIMUM_VERSION,
             publishers.get(0).latestImage.features().metadataVersion());
         faultHandler.maybeRethrowFirstException();
     }
@@ -531,7 +530,7 @@ public class MetadataLoaderTest {
         for (int i = 0; i < 2; i++) {
             assertTrue(publishers.get(i).closed);
             assertTrue(publishers.get(i).closed);
-            assertEquals(IBP_3_3_IV3,
+            assertEquals(MINIMUM_VERSION,
                     publishers.get(i).latestImage.features().metadataVersion());
         }
         faultHandler.maybeRethrowFirstException();
