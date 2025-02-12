@@ -495,10 +495,13 @@ public class ClusterControlManager {
         FinalizedControllerFeatures finalizedFeatures,
         BrokerRegistrationRequestData.Feature feature
     ) {
-        // The default value for MetadataVersion changes over time while other features start at `0`
-        int defaultVersion = feature.name().equals(MetadataVersion.FEATURE_NAME) ?
-            MetadataVersion.MINIMUM_VERSION.featureLevel() : 0;
-        short finalized = finalizedFeatures.versionOrDefault(feature.name(), (short) defaultVersion);
+        // MetadataVersion has no default while the other features default to `0`
+        short finalized;
+        if (feature.name().equals(MetadataVersion.FEATURE_NAME))
+            finalized = finalizedFeatures.get(feature.name()).orElseThrow(() -> new RuntimeException());
+        else
+            finalized = finalizedFeatures.versionOrDefault(feature.name(), (short) 0);
+
         if (!VersionRange.of(feature.minSupportedVersion(), feature.maxSupportedVersion()).contains(finalized)) {
             throw new UnsupportedVersionException("Unable to register because the broker " +
                 "does not support finalized version " + finalized + " of " + feature.name() +
