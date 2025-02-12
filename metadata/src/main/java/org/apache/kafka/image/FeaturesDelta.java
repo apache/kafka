@@ -30,6 +30,7 @@ import java.util.Optional;
  * Represents changes to the cluster in the metadata image.
  */
 public final class FeaturesDelta {
+    private static final short MINIMUM_PERSISTED_FEATURE_LEVEL = 4;
     private final FeaturesImage image;
 
     private final Map<String, Optional<Short>> changes = new HashMap<>();
@@ -58,7 +59,14 @@ public final class FeaturesDelta {
 
     public void replay(FeatureLevelRecord record) {
         if (record.name().equals(MetadataVersion.FEATURE_NAME)) {
-            metadataVersionChange = MetadataVersion.fromFeatureLevel(record.featureLevel());
+            // Support for the `metadata.version` feature flag was added in IBP_3_3_IV0, so it's possible (but unlikely) that we read
+            // records with a feature level that is no longer supported for clusters that used a pre-release version of 3.3.0.
+            // We automatically fallback to IBP_3_3_IV3 in that case. We use explicit versions instead of `MINIMUM_VERSION` because
+            // we want to force an explicit decision if we change `MetadataVersion.MINIMUM_VERSION` in the future.
+            if (record.featureLevel() >= MINIMUM_PERSISTED_FEATURE_LEVEL && record.featureLevel() <= MetadataVersion.IBP_3_3_IV3.featureLevel())
+                metadataVersionChange = MetadataVersion.IBP_3_3_IV3;
+            else
+                metadataVersionChange = MetadataVersion.fromFeatureLevel(record.featureLevel());
         } else {
             if (record.featureLevel() == 0) {
                 changes.put(record.name(), Optional.empty());
