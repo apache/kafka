@@ -362,8 +362,8 @@ public class SimpleAssignorTest {
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
         expectedAssignment.put(MEMBER_A, mkAssignment(
             mkTopicAssignment(TOPIC_1_UUID, 0, 1, 2),
-            mkTopicAssignment(TOPIC_2_UUID, 0, 1)
-        ));
+            mkTopicAssignment(TOPIC_2_UUID, 0, 1)));
+        expectedAssignment.put(MEMBER_B, mkAssignment());
 
         assertAssignment(expectedAssignment, computedAssignment);
     }
