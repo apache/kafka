@@ -485,9 +485,8 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      * @param groupIds - A list of groupIds as string
      * @param committedOffset - The last committedOffset for the internal topic partition
      * @return A map representing the share partition structure.
-     * @throws ApiException
      */
-    public Map<String, Map<Uuid, List<Integer>>> sharePartitions(List<String> groupIds, long committedOffset) throws ApiException {
+    public Map<String, Map<Uuid, List<Integer>>> sharePartitions(List<String> groupIds, long committedOffset) {
         List<ShareGroup> shareGroups = new ArrayList<>();
         for (String groupId : groupIds) {
             try {
@@ -499,7 +498,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 // We needn't do anything more than logging here as deleteGroups
                 // method is handling these cases.
                 // Even if some groups cannot be found, we
-                // must check the entre list.
+                // must check the entire list.
                 log.error("Failed to find group {}", groupId, exception);
             }
         }
