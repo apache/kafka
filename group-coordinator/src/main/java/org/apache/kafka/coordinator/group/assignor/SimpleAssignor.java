@@ -104,7 +104,7 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
 
         // The current assignment from topic partition to members.
         Map<TargetPartition, List<String>> currentAssignment = currentAssignment(groupSpec);
-        return newAssignmentHeterogeneous(memberToPartitionsSubscription, currentAssignment);
+        return newAssignmentHeterogeneous(groupSpec, memberToPartitionsSubscription, currentAssignment);
     }
 
     // Get the current assignment for subscribed topic partitions to share group members.
@@ -154,10 +154,11 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
         newAssignment.forEach((targetPartition, members) -> members.forEach(member ->
             finalAssignment.computeIfAbsent(member, k -> new HashSet<>()).add(targetPartition)));
 
-        return groupAssignment(finalAssignment);
+        return groupAssignment(finalAssignment, groupSpec.memberIds());
     }
 
     private GroupAssignment newAssignmentHeterogeneous(
+        GroupSpec groupSpec,
         Map<String, List<TargetPartition>> memberToPartitionsSubscription,
         Map<TargetPartition, List<String>> currentAssignment) {
 
@@ -201,17 +202,23 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
         newAssignment.forEach((targetPartition, members) -> members.forEach(member ->
             finalAssignment.computeIfAbsent(member, k -> new HashSet<>()).add(targetPartition)));
 
-        return groupAssignment(finalAssignment);
+        return groupAssignment(finalAssignment, groupSpec.memberIds());
     }
 
     private GroupAssignment groupAssignment(
-        Map<String, Set<TargetPartition>> assignmentByMember) {
+        Map<String, Set<TargetPartition>> assignmentByMember,
+        Collection<String> allGroupMembers) {
         Map<String, MemberAssignment> members = new HashMap<>();
         for (Map.Entry<String, Set<TargetPartition>> entry : assignmentByMember.entrySet()) {
             Map<Uuid, Set<Integer>> targetPartitions = new HashMap<>();
             entry.getValue().forEach(targetPartition -> targetPartitions.computeIfAbsent(targetPartition.topicId(), k -> new HashSet<>()).add(targetPartition.partition()));
             members.put(entry.getKey(), new MemberAssignmentImpl(targetPartitions));
         }
+        allGroupMembers.forEach(member -> {
+            if (!members.containsKey(member))
+                members.put(member, new MemberAssignmentImpl(new HashMap<>()));
+        });
+
         return new GroupAssignment(members);
     }
 
