@@ -47,13 +47,13 @@
         </li>
         <li>
             Apache Kafka 4.0 ships with a brand-new group coordinator implementation (See <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=217387038#KIP848:TheNextGenerationoftheConsumerRebalanceProtocol-GroupCoordinator">here</a>.
-            Functionally speaking, it implements all the same APIs. However, the group coordinator runs in its own-dedicated threads.
+            Functionally speaking, it implements all the same APIs. However, the group coordinator runs in its own dedicated threads.
             The number of threads can be defined with the <code>group.coordinator.threads</code> configuration. It defaults to 1 and
-            must certainly be adjusted for production deployment.
+            must certainly be adjusted for production deployments.
         </li>
         <li>
             The Next Generation of the Consumer Rebalance Protocol (<a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-848%3A+The+Next+Generation+of+the+Consumer+Rebalance+Protocol">KIP-848</a>)
-            is not Generally Available (GA) in Apache Kafka 4.0. Check <a href="/{version}/documentation.html#consumer_rebalance_protocol">here</a> for details.
+            is now Generally Available (GA) in Apache Kafka 4.0. Check <a href="/{version}/documentation.html#consumer_rebalance_protocol">here</a> for details.
         </li>
         <li>A number of deprecated classes, methods, configurations and tools have been removed.
             <ul>
