@@ -1866,6 +1866,145 @@ public class GroupCoordinatorServiceTest {
         verify(persister, times(2)).deleteState(any());
     }
 
+    @Test
+    public void testDeleteShareGroupCoordinatorReadError() throws Exception {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        Persister persister = mock(Persister.class);
+        GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
+            .setConfig(createConfig())
+            .setRuntime(runtime)
+            .setMetrics(mock(GroupCoordinatorMetrics.class))
+            .setPersister(persister)
+            .build();
+        service.startup(() -> 3);
+
+        DeleteGroupsResponseData.DeletableGroupResultCollection resultCollection1 =
+            new DeleteGroupsResponseData.DeletableGroupResultCollection();
+        // share group err
+        DeleteGroupsResponseData.DeletableGroupResult result1 = new DeleteGroupsResponseData.DeletableGroupResult()
+            .setGroupId("share-group-id-1")
+            .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code());
+        resultCollection1.add(result1);
+
+        DeleteGroupsResponseData.DeletableGroupResultCollection expectedResultCollection =
+            new DeleteGroupsResponseData.DeletableGroupResultCollection();
+        expectedResultCollection.add(
+            result1.duplicate()
+        );
+
+        when(runtime.scheduleReadOperation(
+            ArgumentMatchers.eq("delete-share-groups"),
+            ArgumentMatchers.any(),
+            ArgumentMatchers.any()
+        ))
+            .thenReturn(CompletableFuture.failedFuture(
+                    Errors.COORDINATOR_NOT_AVAILABLE.exception()
+                )
+            );
+
+        // share-group-id-1
+        when(runtime.scheduleWriteOperation(
+            ArgumentMatchers.eq("delete-groups"),
+            ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 1)),
+            ArgumentMatchers.eq(Duration.ofMillis(5000)),
+            ArgumentMatchers.any()
+        )).thenReturn(CompletableFuture.completedFuture(resultCollection1));
+
+        List<String> groupIds = List.of("share-group-id-1");
+        CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> future =
+            service.deleteGroups(requestContext(ApiKeys.DELETE_GROUPS), groupIds, BufferSupplier.NO_CACHING);
+
+        try {
+            future.getNow(null);
+        } catch (Exception e) {
+            fail(e);
+        }
+        assertEquals(expectedResultCollection, future.get());
+        verify(persister, times(0)).deleteState(any());
+    }
+
+    @Test
+    public void testDeleteShareGroupCoordinatorWriteError() throws Exception {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        Persister persister = mock(Persister.class);
+        GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
+            .setConfig(createConfig())
+            .setRuntime(runtime)
+            .setMetrics(mock(GroupCoordinatorMetrics.class))
+            .setPersister(persister)
+            .build();
+        service.startup(() -> 3);
+
+        DeleteGroupsResponseData.DeletableGroupResultCollection resultCollection1 =
+            new DeleteGroupsResponseData.DeletableGroupResultCollection();
+        // share group err
+        DeleteGroupsResponseData.DeletableGroupResult result1 = new DeleteGroupsResponseData.DeletableGroupResult()
+            .setGroupId("share-group-id-1")
+            .setErrorCode(Errors.CLUSTER_AUTHORIZATION_FAILED.code());
+        resultCollection1.add(result1);
+
+        DeleteGroupsResponseData.DeletableGroupResultCollection expectedResultCollection =
+            new DeleteGroupsResponseData.DeletableGroupResultCollection();
+        expectedResultCollection.add(
+            result1.duplicate()
+        );
+
+        Uuid shareGroupTopicId = Uuid.randomUuid();
+        when(runtime.scheduleReadOperation(
+            ArgumentMatchers.eq("delete-share-groups"),
+            ArgumentMatchers.any(),
+            ArgumentMatchers.any()
+        ))
+            .thenReturn(CompletableFuture.completedFuture(
+                    Map.of(
+                        "share-group-id-1",
+                        Map.of(
+                            shareGroupTopicId,
+                            List.of(0, 1)
+                        )
+                    )
+                )
+            );
+
+        // share-group-id-1
+        when(runtime.scheduleWriteOperation(
+            ArgumentMatchers.eq("delete-groups"),
+            ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 1)),
+            ArgumentMatchers.eq(Duration.ofMillis(5000)),
+            ArgumentMatchers.any()
+        )).thenReturn(CompletableFuture.failedFuture(Errors.CLUSTER_AUTHORIZATION_FAILED.exception()));
+
+        when(persister.deleteState(
+            any()
+        ))
+            .thenReturn(CompletableFuture.completedFuture(new DeleteShareGroupStateResult.Builder()
+                    .setTopicsData(List.of(
+                            new TopicData<>(
+                                shareGroupTopicId,
+                                List.of(
+                                    PartitionFactory.newPartitionErrorData(0, Errors.NONE.code(), Errors.NONE.message()),
+                                    PartitionFactory.newPartitionErrorData(1, Errors.NONE.code(), Errors.NONE.message())
+                                )
+                            )
+                        )
+                    )
+                    .build()
+                )
+            );
+
+        List<String> groupIds = List.of("share-group-id-1");
+        CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> future =
+            service.deleteGroups(requestContext(ApiKeys.DELETE_GROUPS), groupIds, BufferSupplier.NO_CACHING);
+
+        try {
+            future.getNow(null);
+        } catch (Exception e) {
+            fail(e);
+        }
+        assertEquals(expectedResultCollection, future.get());
+        verify(persister, times(1)).deleteState(any());
+    }
+
     @ParameterizedTest
     @MethodSource("testGroupHeartbeatWithExceptionSource")
     public void testDeleteGroupsWithException(
