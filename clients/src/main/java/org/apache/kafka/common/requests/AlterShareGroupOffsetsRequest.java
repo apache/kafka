@@ -46,7 +46,7 @@ public class AlterShareGroupOffsetsRequest extends AbstractRequest {
         }
 
         public Builder(AlterShareGroupOffsetsRequestData data, boolean enableUnstableLastVersion) {
-            super(ApiKeys.DELETE_SHARE_GROUP_STATE, enableUnstableLastVersion);
+            super(ApiKeys.ALTER_SHARE_GROUP_OFFSETS, enableUnstableLastVersion);
             this.data = data;
         }
 

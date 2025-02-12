@@ -52,7 +52,7 @@ public class AlterShareGroupOffsetsResult {
                 result.completeExceptionally(throwable);
             } else if (!topicPartitions.containsKey(partition)) {
                 result.completeExceptionally(new IllegalArgumentException(
-                        "Alter offset for partition \"" + partition + "\" was not attempted"));
+                    "Alter offset for partition \"" + partition + "\" was not attempted"));
             } else {
                 final Errors error = topicPartitions.get(partition);
                 if (error == Errors.NONE) {
