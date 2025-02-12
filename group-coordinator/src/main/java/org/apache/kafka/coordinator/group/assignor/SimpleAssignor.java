@@ -149,7 +149,10 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
         // subscribed in the new assignment as well.
         currentAssignmentFiltered.forEach((targetPartition, members) -> {
             if (subscribeTopicIds.contains(targetPartition.topicId))
-                members.forEach(member -> finalAssignment.computeIfAbsent(member, k -> new HashSet<>()).add(targetPartition));
+                members.forEach(member -> {
+                    if (groupSpec.memberIds().contains(member))
+                        finalAssignment.computeIfAbsent(member, k -> new HashSet<>()).add(targetPartition);
+                });
         });
         newAssignment.forEach((targetPartition, members) -> members.forEach(member ->
             finalAssignment.computeIfAbsent(member, k -> new HashSet<>()).add(targetPartition)));
@@ -196,7 +199,7 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
         // When combining current assignment, we need to only consider the member topic subscription in current assignment
         // which is being subscribed in the new assignment as well.
         currentAssignmentFiltered.forEach((targetPartition, members) -> members.forEach(member -> {
-            if (topicToMemberSubscription.get(targetPartition.topicId()).contains(member))
+            if (topicToMemberSubscription.getOrDefault(targetPartition.topicId(), Collections.emptySet()).contains(member))
                 finalAssignment.computeIfAbsent(member, k -> new HashSet<>()).add(targetPartition);
         }));
         newAssignment.forEach((targetPartition, members) -> members.forEach(member ->
