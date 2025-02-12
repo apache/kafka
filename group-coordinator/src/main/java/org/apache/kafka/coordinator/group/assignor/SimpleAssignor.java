@@ -247,11 +247,12 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
         List<TargetPartition> targetPartitions,
         Collection<String> memberIds,
         Map<TargetPartition, List<String>> assignment) {
-        for (String memberId : memberIds) {
-            int topicPartitionIndex = Math.abs(memberId.hashCode() % targetPartitions.size());
-            TargetPartition topicPartition = targetPartitions.get(topicPartitionIndex);
-            assignment.computeIfAbsent(topicPartition, k -> new ArrayList<>()).add(memberId);
-        }
+        if (!targetPartitions.isEmpty())
+            for (String memberId : memberIds) {
+                int topicPartitionIndex = Math.abs(memberId.hashCode() % targetPartitions.size());
+                TargetPartition topicPartition = targetPartitions.get(topicPartitionIndex);
+                assignment.computeIfAbsent(topicPartition, k -> new ArrayList<>()).add(memberId);
+            }
     }
 
     // Visible for testing.
