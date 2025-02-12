@@ -23,12 +23,16 @@ import org.apache.kafka.streams.internals.AutoOffsetResetInternal;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.processor.ConnectedStoreProvider;
+import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
+import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.StoreDelegatingProcessorSupplier;
 import org.apache.kafka.streams.query.StateQueryRequest;
@@ -37,6 +41,8 @@ import org.apache.kafka.streams.state.StoreBuilder;
 import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Pattern;
+
+import static org.apache.kafka.streams.internals.ApiUtils.checkSupplier;
 
 /**
  * A logical representation of a {@code ProcessorTopology}.
@@ -80,13 +86,13 @@ public class Topology {
     }
 
     @Deprecated
-    private static AutoOffsetResetInternal convertOldToNew(final Topology.AutoOffsetReset resetPolicy) {
+    private static AutoOffsetResetInternal convertOldToNew(final AutoOffsetReset resetPolicy) {
         if (resetPolicy == null) {
             return null;
         }
 
         return new AutoOffsetResetInternal(
-            resetPolicy == org.apache.kafka.streams.Topology.AutoOffsetReset.EARLIEST
+            resetPolicy == AutoOffsetReset.EARLIEST
                 ? org.apache.kafka.streams.AutoOffsetReset.earliest()
                 : org.apache.kafka.streams.AutoOffsetReset.latest()
         );
@@ -572,25 +578,58 @@ public class Topology {
     /**
      * Add a {@link Processor processor} that receives and processed records from one or more parent processors or
      * {@link #addSource(String, String...) sources}.
+     * The {@link Processor} can emit any number of result records via {@link ProcessorContext#forward(Record)}.
      * Any record output by this processor will be forwarded to its child processors and
      * {@link #addSink(String, String, String...) sinks}.
      *
      * <p>By default, the processor is stateless.
-     * There is three different {@link StateStore state stores}, which can be connected to a processor:
+     * There is two different {@link StateStore state stores}, which can be added to the {@link Topology} and directly
+     * connected to a processor, making the processor stateful:
      * <ul>
      *   <li>{@link #addStateStore(StoreBuilder, String...) state stores} for processing (i.e., read/write access)</li>
      *   <li>{@link #addReadOnlyStateStore(StoreBuilder, String, TimestampExtractor, Deserializer, Deserializer, String, String, ProcessorSupplier) read-only state stores}</li>
-     *   <li>{@link #addGlobalStore(StoreBuilder, String, Deserializer, Deserializer, String, String, ProcessorSupplier) global state stores} (read-only)</li>
      * </ul>
      *
+     * It a (read-only) state store is not directly added to a processing, it can also be
+     * {@link #connectProcessorAndStateStores(String, String...) connected} later.
      * If the {@code supplier} provides state stores via {@link ConnectedStoreProvider#stores()}, the corresponding
      * {@link StoreBuilder StoreBuilders} will be {@link #addStateStore(StoreBuilder, String...) added to the topology
      * and connected} to this processor automatically.
+     * Additionally, even if a processor is stateless, it can still access all
+     * {@link StreamsBuilder#addGlobalStore global state stores} (read-only).
+     * There is no need to connect global stores to processors.
+     *
+     * <p>All state stores which are connected to a processor and all global stores, can be accessed via
+     * {@link ProcessorContext#getStateStore(String) context.getStateStore(String)}
+     * using the context provided via
+     * {@link Processor#init(ProcessorContext) Processor#init()}:
+     *
+     * <pre>{@code
+     * public class MyProcessor implements Processor<String, Integer, String, Integer> {
+     *     private ProcessorContext<String, Integer> context;
+     *     private KeyValueStore<String, String> store;
+     *
+     *     @Override
+     *     void init(final ProcessorContext<String, Integer> context) {
+     *         this.context = context;
+     *         this.store = context.getStateStore("myStore");
+     *     }
+     *
+     *     @Override
+     *     void process(final Record<String, Integer> record) {
+     *         // can access this.context and this.store
+     *     }
+     * }
+     * }</pre>
+     *
+     * Furthermore, the provided {@link ProcessorContext} gives access to topology, runtime, and
+     * {@link RecordMetadata record metadata}, and allows to schedule {@link Punctuator punctuations} and to
+     * <em>request</em> offset commits.
      *
      * @param name
      *        the unique name of the processor used to reference this node when adding other processor or
      *        {@link #addSink(String, String, String...) sink} children
-     * @param supplier
+     * @param processorSupplier
      *        the supplier used to obtain {@link Processor} instances
      * @param parentNames
      *        the name of one or more processors or {@link #addSource(String, String...) sources},
@@ -601,13 +640,17 @@ public class Topology {
      * @throws TopologyException
      *         if the provided processor name is not unique, or
      *         if a parent processor/source name is unknown or specifies a sink
+     * @throws NullPointerException
+     *         if {@code name}, {@code processorSupplier}, or {@code parentNames} is {@code null}, or
+     *         {@code parentNames} contains a {@code null} parent name
      *
      * @see org.apache.kafka.streams.processor.api.ContextualProcessor ContextualProcessor
      */
     public synchronized <KIn, VIn, KOut, VOut> Topology addProcessor(final String name,
-                                                                     final ProcessorSupplier<KIn, VIn, KOut, VOut> supplier,
+                                                                     final ProcessorSupplier<KIn, VIn, KOut, VOut> processorSupplier,
                                                                      final String... parentNames) {
-        final ProcessorSupplier<KIn, VIn, KOut, VOut> wrapped = internalTopologyBuilder.wrapProcessorSupplier(name, supplier);
+        checkSupplier(processorSupplier);
+        final ProcessorSupplier<KIn, VIn, KOut, VOut> wrapped = internalTopologyBuilder.wrapProcessorSupplier(name, processorSupplier);
         internalTopologyBuilder.addProcessor(name, wrapped, parentNames);
         final Set<StoreBuilder<?>> stores = wrapped.stores();
 
@@ -663,6 +706,9 @@ public class Topology {
      * @throws TopologyException
      *         if the {@link StoreBuilder#name() state store} was already added, or
      *         if a processor name is unknown or specifies a source or sink
+     * @throws NullPointerException
+     *         if {@code storeBuilder} or {@code parentNames} is {@code null}, or
+     *         {@code parentNames} contains a {@code null} parent name
      */
     public synchronized <S extends StateStore> Topology addStateStore(final StoreBuilder<S> storeBuilder,
                                                                       final String... processorNames) {
@@ -730,6 +776,9 @@ public class Topology {
      *         if the source topic has already been registered by another
      *         {@link #addSink(String, String, String...) source}, read-only state store, or
      *         {@link #addGlobalStore(StoreBuilder, String, Deserializer, Deserializer, String, String, ProcessorSupplier) global state store}
+     * @throws NullPointerException
+     *         if {@code storeBuilder}, {@code sourceName}, {@code topic}, {@code processorName}, or
+     *         {@code stateUpdateSupplier} is {@code null}
      */
     public synchronized <K, V, S extends StateStore> Topology addReadOnlyStateStore(
         final StoreBuilder<S> storeBuilder,
@@ -842,6 +891,9 @@ public class Topology {
      *         {@link #addSink(String, String, String...) source},
      *         {@link #addReadOnlyStateStore(StoreBuilder, String, Deserializer, Deserializer, String, String, ProcessorSupplier) read-only state store}, or
      *         global state store
+     * @throws NullPointerException
+     *         if {@code storeBuilder}, {@code sourceName}, {@code topic}, {@code processorName}, or
+     *         {@code stateUpdateSupplier} is {@code null}
      */
     public synchronized <K, V, S extends StateStore> Topology addGlobalStore(
         final StoreBuilder<S> storeBuilder,
@@ -911,6 +963,9 @@ public class Topology {
      * @throws TopologyException
      *         if the processor name or a state store name is unknown, or
      *         if the processor name specifies a source or sink
+     * @throws NullPointerException
+     *         if {@code processorName} or {@code stateStoreNames} is {@code null}, or if {@code stateStoreNames}
+     *         contains a {@code null} state store name
      */
     public synchronized Topology connectProcessorAndStateStores(final String processorName,
                                                                 final String... stateStoreNames) {
