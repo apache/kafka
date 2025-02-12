@@ -282,7 +282,7 @@ public class StickyPartitionReassignorUnitTest {
 
 
     @Property(tries = 10_000)
-    void topicPartitionRackDistributionIsSameOrBetterThanBefore(@ForAll("metadataRackAware") ClusterMetadata metadata) {
+    void topicPartitionRackDistributionIsNotWorseThanBefore(@ForAll("metadataRackAware") ClusterMetadata metadata) {
         final StickyPartitionReassignor assignor = new StickyPartitionReassignor(metadata.assignments, metadata.brokers);
         final Map<TopicPartition, List<Integer>> newPartitionAssignments = assignor.reassign();
 
@@ -307,7 +307,7 @@ public class StickyPartitionReassignorUnitTest {
     }
 
     @Property(tries = 10_000)
-    void topicPartitionBrokerDistributionIsSameOrBetterThanBefore(@ForAll("anyMetadata") ClusterMetadata metadata) {
+    void topicPartitionBrokerDistributionIsNotWorseThanBefore(@ForAll("anyMetadata") ClusterMetadata metadata) {
         final StickyPartitionReassignor assignor = new StickyPartitionReassignor(metadata.assignments, metadata.brokers);
         final Map<TopicPartition, List<Integer>> newPartitionAssignments = assignor.reassign();
 
@@ -331,7 +331,7 @@ public class StickyPartitionReassignorUnitTest {
     }
 
     @Property(tries = 10_000)
-    void globalBrokerDistributionIsSameOrBetterThanBefore(@ForAll("anyMetadata") ClusterMetadata metadata) {
+    void globalBrokerDistributionIsNotWorseThanBefore(@ForAll("anyMetadata") ClusterMetadata metadata) {
         final Map<Integer, BrokerMetadata> brokers = brokerMap(metadata.brokers);
         final BigInteger currentDistributionScore = globalBrokerScore(brokers, metadata.assignments);
 
@@ -365,7 +365,6 @@ public class StickyPartitionReassignorUnitTest {
         Assertions.assertNotNull(newMaxCount);
         Assertions.assertNotNull(newMinCount);
 
-        Assertions.assertTrue(newMinCount + 1 >= newMaxCount);
         assertThat(newMinCount + 1, is(greaterThanOrEqualTo(newMaxCount)));
     }
 
@@ -391,7 +390,7 @@ public class StickyPartitionReassignorUnitTest {
         assertThat(newMinCount + 1, is(greaterThanOrEqualTo(newMaxCount)));
     }
 
-    @Property(tries = 10_000, seed = "-3995013557216143939")
+    @Property(tries = 10_000)
     void reachesBetterGlobalBrokerDistributionOrRequiresAtLeastSameMoveCountForSameGlobalBrokerDistribution(@ForAll("anyMetadata") ClusterMetadata metadata) {
         final Map<Integer, BrokerMetadata> brokers = brokerMap(metadata.brokers);
 
