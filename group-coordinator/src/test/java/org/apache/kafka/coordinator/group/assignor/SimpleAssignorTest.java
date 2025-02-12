@@ -56,11 +56,9 @@ public class SimpleAssignorTest {
     private static final Uuid TOPIC_3_UUID = Uuid.randomUuid();
     private static final Uuid TOPIC_4_UUID = Uuid.randomUuid();
     private static final String TOPIC_1_NAME = "topic1";
-    private static final String TOPIC_2_NAME = "topic2";
     private static final String TOPIC_3_NAME = "topic3";
     private static final String MEMBER_A = "A";
     private static final String MEMBER_B = "B";
-    private static final String MEMBER_C = "C";
 
     private final SimpleAssignor assignor = new SimpleAssignor();
 
@@ -217,9 +215,8 @@ public class SimpleAssignorTest {
         );
 
         // Hashcode of MEMBER_A is 65. Hashcode of MEMBER_B is 66.
-        // Step 1 -> T1:0 -> MEMBER_A and T1:1 -> MEMBER_B by hash assignment.
-        // Step 2 -> T1:2, T3:1 -> MEMBER_A and T3:0 -> MEMBER_B by round-robin assignment.
-        // Step 3 -> no new assignment gets added by current assignment since it is empty.
+        // T1:0 -> MEMBER_A and T1:1 -> MEMBER_B by hash assignment.
+        // T1:2, T3:1 -> MEMBER_A and T3:0 -> MEMBER_B by round-robin assignment.
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
         expectedAssignment.put(MEMBER_A, mkAssignment(
             mkTopicAssignment(TOPIC_1_UUID, 0, 2),
@@ -274,10 +271,11 @@ public class SimpleAssignorTest {
             Assignment.EMPTY
         ));
 
+        String memberC = "C";
         Set<Uuid> memberCTopicsSubscription = new LinkedHashSet<>();
         memberCTopicsSubscription.add(TOPIC_2_UUID);
         memberCTopicsSubscription.add(TOPIC_3_UUID);
-        members.put(MEMBER_C, new MemberSubscriptionAndAssignmentImpl(
+        members.put(memberC, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             Optional.empty(),
             memberCTopicsSubscription,
@@ -297,9 +295,8 @@ public class SimpleAssignorTest {
         );
 
         // Hashcode of MEMBER_A is 65. Hashcode of MEMBER_B is 66. Hashcode of MEMBER_C is 67.
-        // Step 1 -> T2:2 -> member_A, T3:0 -> member_B, T2:2 -> member_C by hash assignment.
-        // Step 2 -> T1:0, T1:1, T1:2, T2:0 -> member_A, T3:1, -> member_B, T2:1 -> member_C by round-robin assignment.
-        // Step 3 -> no new assignment gets added by current assignment since it is empty.
+        // T2:2 -> member_A, T3:0 -> member_B, T2:2 -> member_C by hash assignment.
+        // T1:0, T1:1, T1:2, T2:0 -> member_A, T3:1, -> member_B, T2:1 -> member_C by round-robin assignment.
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
         expectedAssignment.put(MEMBER_A, mkAssignment(
             mkTopicAssignment(TOPIC_1_UUID, 0, 1, 2),
@@ -308,7 +305,7 @@ public class SimpleAssignorTest {
         expectedAssignment.put(MEMBER_B, mkAssignment(
             mkTopicAssignment(TOPIC_3_UUID, 0, 1)
         ));
-        expectedAssignment.put(MEMBER_C, mkAssignment(
+        expectedAssignment.put(memberC, mkAssignment(
             mkTopicAssignment(TOPIC_2_UUID, 1, 2)
         ));
 
@@ -422,150 +419,6 @@ public class SimpleAssignorTest {
         expectedAssignment.put(partition4, Collections.singletonList(member1));
 
         assertAssignment(expectedAssignment, assignment);
-    }
-
-    @Test
-    public void testAssignWithCurrentAssignmentHomogeneous() {
-        // Current assignment setup
-        Map<Uuid, TopicMetadata> topicMetadata1 = new HashMap<>();
-        topicMetadata1.put(TOPIC_1_UUID, new TopicMetadata(
-            TOPIC_1_UUID,
-            TOPIC_1_NAME,
-            3
-        ));
-        topicMetadata1.put(TOPIC_2_UUID, new TopicMetadata(
-            TOPIC_2_UUID,
-            TOPIC_2_NAME,
-            2
-        ));
-
-        Map<String, MemberSubscriptionAndAssignmentImpl> members1 = new TreeMap<>();
-
-        Set<Uuid> topicsSubscription1 = new LinkedHashSet<>();
-        topicsSubscription1.add(TOPIC_1_UUID);
-        topicsSubscription1.add(TOPIC_2_UUID);
-
-        members1.put(MEMBER_A, new MemberSubscriptionAndAssignmentImpl(
-            Optional.empty(),
-            Optional.empty(),
-            topicsSubscription1,
-            Assignment.EMPTY
-        ));
-
-        members1.put(MEMBER_B, new MemberSubscriptionAndAssignmentImpl(
-            Optional.empty(),
-            Optional.empty(),
-            topicsSubscription1,
-            Assignment.EMPTY
-        ));
-
-        GroupSpec groupSpec1 = new GroupSpecImpl(
-            members1,
-            HOMOGENEOUS,
-            Collections.emptyMap()
-        );
-        SubscribedTopicDescriberImpl subscribedTopicMetadata1 = new SubscribedTopicDescriberImpl(topicMetadata1);
-
-        GroupAssignment computedAssignment1 = assignor.assign(
-            groupSpec1,
-            subscribedTopicMetadata1
-        );
-
-        // Hashcode of MEMBER_A is 65. Hashcode of MEMBER_B is 66.
-        // Step 1 -> T1:0 -> MEMBER_A and T1:1 -> MEMBER_B by hash assignment.
-        // Step 2 -> T1:2, T2:1 -> MEMBER_A and T2:0 -> MEMBER_B by round-robin assignment.
-        // Step 3 -> no new assignment gets added by current assignment since it is empty.
-        Map<String, Map<Uuid, Set<Integer>>> expectedAssignment1 = new HashMap<>();
-        expectedAssignment1.put(MEMBER_A, mkAssignment(
-            mkTopicAssignment(TOPIC_1_UUID, 0, 2),
-            mkTopicAssignment(TOPIC_2_UUID, 1)
-        ));
-        expectedAssignment1.put(MEMBER_B, mkAssignment(
-            mkTopicAssignment(TOPIC_1_UUID, 1),
-            mkTopicAssignment(TOPIC_2_UUID, 0)
-        ));
-
-        // T1: 3 partitions + T2: 2 partitions = 5 partitions
-        assertEveryPartitionGetsAssignment(5, computedAssignment1);
-        assertAssignment(expectedAssignment1, computedAssignment1);
-
-        // New assignment setup
-        Map<Uuid, TopicMetadata> topicMetadata2 = new HashMap<>();
-        topicMetadata2.put(TOPIC_2_UUID, new TopicMetadata(
-            TOPIC_2_UUID,
-            TOPIC_2_NAME,
-            2
-        ));
-        topicMetadata2.put(TOPIC_3_UUID, new TopicMetadata(
-            TOPIC_3_UUID,
-            TOPIC_3_NAME,
-            3
-        ));
-
-        Map<String, MemberSubscriptionAndAssignmentImpl> members2 = new TreeMap<>();
-
-        Set<Uuid> topicsSubscription2 = new LinkedHashSet<>();
-        topicsSubscription2.add(TOPIC_2_UUID);
-        topicsSubscription2.add(TOPIC_3_UUID);
-
-        members2.put(MEMBER_A, new MemberSubscriptionAndAssignmentImpl(
-            Optional.empty(),
-            Optional.empty(),
-            topicsSubscription2,
-            // Utilizing the assignment from current assignment
-            new Assignment(mkAssignment(
-                mkTopicAssignment(TOPIC_1_UUID, 0, 2),
-                mkTopicAssignment(TOPIC_2_UUID, 1)))
-        ));
-
-        members2.put(MEMBER_B, new MemberSubscriptionAndAssignmentImpl(
-            Optional.empty(),
-            Optional.empty(),
-            topicsSubscription2,
-            new Assignment(mkAssignment(
-                mkTopicAssignment(TOPIC_1_UUID, 1),
-                mkTopicAssignment(TOPIC_2_UUID, 0)))
-        ));
-
-        members2.put(MEMBER_C, new MemberSubscriptionAndAssignmentImpl(
-            Optional.empty(),
-            Optional.empty(),
-            topicsSubscription2,
-            Assignment.EMPTY
-        ));
-
-        GroupSpec groupSpec2 = new GroupSpecImpl(
-            members2,
-            HOMOGENEOUS,
-            Collections.emptyMap()
-        );
-        SubscribedTopicDescriberImpl subscribedTopicMetadata2 = new SubscribedTopicDescriberImpl(topicMetadata2);
-
-        GroupAssignment computedAssignment2 = assignor.assign(
-            groupSpec2,
-            subscribedTopicMetadata2
-        );
-
-        // Hashcode of MEMBER_A is 65. Hashcode of MEMBER_B is 66. Hashcode of MEMBER_C is 67.
-        // Step 1 -> T2:0 -> MEMBER_A, T2:1 -> MEMBER_B, T3:0 -> MEMBER_C by hash assignment
-        // Step 2 -> T3:1 -> MEMBER_A, T3:2 -> MEMBER_B by round-robin assignment
-        // Step 3 -> no new assignment gets added by current assignment.
-        Map<String, Map<Uuid, Set<Integer>>> expectedAssignment2 = new HashMap<>();
-        expectedAssignment2.put(MEMBER_A, mkAssignment(
-            mkTopicAssignment(TOPIC_2_UUID, 0),
-            mkTopicAssignment(TOPIC_3_UUID, 1)
-        ));
-        expectedAssignment2.put(MEMBER_B, mkAssignment(
-            mkTopicAssignment(TOPIC_2_UUID, 1),
-            mkTopicAssignment(TOPIC_3_UUID, 2)
-        ));
-        expectedAssignment2.put(MEMBER_C, mkAssignment(
-            mkTopicAssignment(TOPIC_3_UUID, 0)
-        ));
-
-        // T2: 2 partitions + T3: 3 partitions = 5 partitions
-        assertEveryPartitionGetsAssignment(5, computedAssignment2);
-        assertAssignment(expectedAssignment2, computedAssignment2);
     }
 
     private void assertAssignment(
