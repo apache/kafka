@@ -883,14 +883,9 @@ public class GroupCoordinatorService implements GroupCoordinator {
                             },
                             log
                         ));
-                })
-                .exceptionally(exception -> handleOperationException(
-                    "delete-groups",
-                    groupList,
-                    exception,
-                    (error, __) -> DeleteGroupsRequest.getErrorResultCollection(groupList, error),
-                    log
-                ));
+                });
+            // deleteShareGroups has its own exceptionally block so we don't need one here.
+            // This is inline with the existing deleteGroups call.
 
             futures.add(shareFuture);
         });
@@ -906,7 +901,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         return runtime.scheduleReadOperation(
                 "delete-share-groups",
                 topicPartition,
-                (coordinator, offset) -> coordinator.deleteShareGroups(groupList, offset)
+                (coordinator, offset) -> coordinator.sharePartitions(groupList, offset)
             )
             .thenCompose(this::performShareGroupsDeletion)
             .exceptionally(exception -> handleOperationException(

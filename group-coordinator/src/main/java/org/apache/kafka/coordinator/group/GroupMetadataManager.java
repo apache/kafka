@@ -137,6 +137,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -6281,13 +6282,22 @@ public class GroupMetadataManager {
         group.createGroupTombstoneRecords(records);
     }
 
-    public Map<String, Map<Uuid, List<Integer>>> sharePartitionKeysMap(List<ShareGroup> shareGroups, long committedOffset) {
-        Map<String, Map<Uuid, List<Integer>>> keyMap = new HashMap<>();
+    /**
+     * Returns all share partitions keys as a map from the input list of share groups.
+     * @param shareGroups - A list representing share groups.
+     * @return Map representing the share partition keys for all the groups in the input.
+     */
+    public Map<String, Map<Uuid, List<Integer>>> sharePartitionKeysMap(List<ShareGroup> shareGroups) {
+        Map<String, Map<Uuid, List<Integer>>> keyMap = new LinkedHashMap<>();
+        if (metadataImage == null) {
+            return Map.of();
+        }
         TopicsImage topicsImage = metadataImage.topics();
         for (ShareGroup shareGroup : shareGroups) {
+            String groupId = shareGroup.groupId();
             for (String topic : shareGroup.subscribedTopicNames().keySet()) {
                 TopicImage topicImage = topicsImage.getTopic(topic);
-                keyMap.computeIfAbsent(shareGroup.groupId(), k -> new HashMap<>())
+                keyMap.computeIfAbsent(groupId, k -> new LinkedHashMap<>())
                     .put(topicImage.id(), topicImage.partitions().keySet().stream().toList());
             }
         }

@@ -83,6 +83,7 @@ import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
 import org.apache.kafka.coordinator.group.modern.Assignment;
 import org.apache.kafka.coordinator.group.modern.MemberAssignmentImpl;
 import org.apache.kafka.coordinator.group.modern.MemberState;
+import org.apache.kafka.coordinator.group.modern.SubscriptionCount;
 import org.apache.kafka.coordinator.group.modern.TopicMetadata;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupBuilder;
@@ -95,6 +96,10 @@ import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
 
+import org.apache.kafka.image.TopicImage;
+import org.apache.kafka.image.TopicsImage;
+import org.apache.kafka.metadata.PartitionRegistration;
+import org.apache.kafka.timeline.SnapshotRegistry;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -157,6 +162,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -16292,6 +16298,79 @@ public class GroupMetadataManagerTest {
             ),
             result.records()
         );
+    }
+
+    @Test
+    public void testSharePartitionKeyMap() {
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+        assignor.prepareGroupAssignment(new GroupAssignment(Collections.emptyMap()));
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
+            .build();
+
+        MetadataImage image = mock(MetadataImage.class);
+        TopicsImage topicsImage = mock(TopicsImage.class);
+        TopicImage t1image = mock(TopicImage.class);
+        TopicImage t2image = mock(TopicImage.class);
+        when(topicsImage.getTopic(anyString()))
+            .thenReturn(t1image)
+            .thenReturn(t2image);
+
+        ShareGroup shareGroup = mock(ShareGroup.class);
+        when(shareGroup.subscribedTopicNames())
+            .thenReturn(Map.of(
+                    "t1", mock(SubscriptionCount.class),
+                    "t2", mock(SubscriptionCount.class)
+                )
+            );
+
+        when(shareGroup.groupId())
+            .thenReturn("share-group");
+        when(image.topics())
+            .thenReturn(topicsImage);
+        when(image.provenance())
+            .thenReturn(new MetadataProvenance(-1, -1, -1, true));
+
+        when(t1image.partitions())
+            .thenReturn(
+                Map.of(
+                    0, mock(PartitionRegistration.class),
+                    1, mock(PartitionRegistration.class)
+                )
+            );
+        Uuid t1Uuid = Uuid.randomUuid();
+        when(t1image.id()).thenReturn(t1Uuid);
+
+        when(t2image.partitions())
+            .thenReturn(
+                Map.of(
+                    0, mock(PartitionRegistration.class),
+                    1, mock(PartitionRegistration.class)
+                )
+            );
+        Uuid t2Uuid = Uuid.randomUuid();
+        when(t2image.id()).thenReturn(t2Uuid);
+
+        context.groupMetadataManager.onNewMetadataImage(image, mock(MetadataDelta.class));
+        assertEquals(
+            Map.of(
+                "share-group", Map.of(
+                    t1Uuid, List.of(0, 1),
+                    t2Uuid, List.of(0, 1)
+                )
+            ),
+            context.groupMetadataManager.sharePartitionKeysMap(List.of(
+                shareGroup
+            ))
+        );
+
+        verify(image, times(1)).topics();
+        verify(t1image, times(1)).id();
+        verify(t2image, times(1)).id();
+        verify(t1image, times(1)).partitions();
+        verify(t2image, times(1)).partitions();
+        verify(shareGroup, times(1)).groupId();
+        verify(shareGroup, times(1)).subscribedTopicNames();
     }
 
     private static void checkJoinGroupResponse(

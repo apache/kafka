@@ -479,14 +479,22 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         return new CoordinatorResult<>(records, resultCollection);
     }
 
-    public Map<String, Map<Uuid, List<Integer>>> deleteShareGroups(List<String> groupIds, long committedOffset) throws ApiException {
+    /**
+     * Method returns all share partition keys corresponding to a list of groupIds.
+     * The groupIds are first filtered by type to restrict the list to share groups.
+     * @param groupIds - A list of groupIds as string
+     * @param committedOffset - The last committedOffset for the internal topic partition
+     * @return A map representing the share partition structure.
+     * @throws ApiException
+     */
+    public Map<String, Map<Uuid, List<Integer>>> sharePartitions(List<String> groupIds, long committedOffset) throws ApiException {
         List<ShareGroup> shareGroups = groupIds.stream()
             .map(groupMetadataManager::group)
             .filter(group -> group.type().equals(Group.GroupType.SHARE))
             .map(group -> (ShareGroup) group)
             .toList();
 
-        return groupMetadataManager.sharePartitionKeysMap(shareGroups, committedOffset);
+        return groupMetadataManager.sharePartitionKeysMap(shareGroups);
     }
 
     /**

@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.DeleteGroupsResponseData;
@@ -63,19 +64,25 @@ import org.apache.kafka.coordinator.group.generated.ShareGroupMemberMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataValue;
+import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
+import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup;
+import org.apache.kafka.coordinator.group.modern.share.ShareGroup;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
+import org.apache.kafka.timeline.SnapshotRegistry;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
+import org.mockito.Mockito;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import static org.apache.kafka.coordinator.common.runtime.TestUtil.requestContext;
@@ -1351,5 +1358,61 @@ public class GroupCoordinatorShardTest {
         ));
 
         verify(groupMetadataManager, times(1)).replay(key, null);
+    }
+
+    @Test
+    public void testSharePartitions() {
+        GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
+        OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
+        CoordinatorMetrics coordinatorMetrics = mock(CoordinatorMetrics.class);
+        CoordinatorMetricsShard metricsShard = mock(CoordinatorMetricsShard.class);
+        GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
+            new LogContext(),
+            groupMetadataManager,
+            offsetMetadataManager,
+            Time.SYSTEM,
+            new MockCoordinatorTimer<>(Time.SYSTEM),
+            mock(GroupCoordinatorConfig.class),
+            coordinatorMetrics,
+            metricsShard
+        );
+
+        ShareGroup shareGroup = new ShareGroup(new SnapshotRegistry(mock(LogContext.class)), "share-group");
+        Group nonShareGroup = new ConsumerGroup(new SnapshotRegistry(mock(LogContext.class)), "non-share-group", mock(GroupCoordinatorMetricsShard.class));
+
+        when(groupMetadataManager.group(eq("share-group")))
+            .thenReturn(shareGroup);
+
+        when(groupMetadataManager.group(eq("non-share-group")))
+            .thenReturn(nonShareGroup);
+
+        Map<String, Map<Uuid, List<Integer>>> expected = Map.of(
+            "share-group",
+            Map.of(
+                Uuid.randomUuid(),
+                List.of(0, 1)
+            )
+        );
+
+        when(groupMetadataManager.sharePartitionKeysMap(eq(List.of(shareGroup))))
+            .thenReturn(
+                expected
+            );
+
+        assertEquals(expected, coordinator.sharePartitions(List.of("share-group", "non-share-group"), 0));
+        verify(groupMetadataManager, times(1)).group(eq("share-group"));
+        verify(groupMetadataManager, times(1)).group(eq("non-share-group"));
+        verify(groupMetadataManager, times(1)).sharePartitionKeysMap(eq(List.of(shareGroup)));
+
+        // empty list
+        Mockito.reset(groupMetadataManager);
+        assertEquals(
+            Map.of(),
+            coordinator.sharePartitions(List.of(), 0)
+        );
+
+        verify(groupMetadataManager, times(0)).group(eq("share-group"));
+        verify(groupMetadataManager, times(0)).group(eq("non-share-group"));
+        verify(groupMetadataManager, times(0)).sharePartitionKeysMap(eq(List.of(shareGroup)));
     }
 }
