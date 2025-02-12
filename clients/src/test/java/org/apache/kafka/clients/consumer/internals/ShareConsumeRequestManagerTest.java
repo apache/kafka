@@ -859,7 +859,7 @@ public class ShareConsumeRequestManagerTest {
 
         assertEquals(1, shareConsumeRequestManager.sendAcknowledgements());
 
-        client.prepareResponse(fullAcknowledgeResponse(tip1, Errors.NONE));
+        client.prepareResponse(fullAcknowledgeResponse(t2ip0, Errors.NONE));
         networkClientDelegate.poll(time.timer(0));
 
         // We should send a fetch to the newly subscribed partition.
@@ -897,12 +897,11 @@ public class ShareConsumeRequestManagerTest {
 
         assertEquals(1, shareConsumeRequestManager.sendAcknowledgements());
 
-        client.prepareResponse(fullAcknowledgeResponse(tip1, Errors.NONE));
+        client.prepareResponse(fullAcknowledgeResponse(t2ip0, Errors.NONE));
         networkClientDelegate.poll(time.timer(0));
 
         // We should send a fetch to the newly subscribed partition.
         assertEquals(1, sendFetches());
-
     }
 
     @Test
@@ -935,7 +934,7 @@ public class ShareConsumeRequestManagerTest {
 
         assertEquals(1, shareConsumeRequestManager.sendAcknowledgements());
 
-        client.prepareResponse(fullAcknowledgeResponse(tip1, Errors.NONE));
+        client.prepareResponse(fullAcknowledgeResponse(t2ip0, Errors.NONE));
         networkClientDelegate.poll(time.timer(0));
 
         // As we are closing, we would not send any more fetches.

@@ -203,7 +203,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                     Map<TopicIdPartition, Acknowledgements> nodeAcksFromFetchMap = fetchAcknowledgementsToSend.get(nodeId);
                     if (nodeAcksFromFetchMap != null) {
                         nodeAcksFromFetchMap.forEach((tip, acks) -> {
-                            if (isNodeLeader(nodeId, tip)) {
+                            if (!isLeaderKnownToHaveChanged(nodeId, tip)) {
                                 metricsManager.recordAcknowledgementSent(acks.size());
                                 fetchAcknowledgementsInFlight.computeIfAbsent(node.id(), k -> new HashMap<>()).put(tip, acks);
 
@@ -481,7 +481,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                 for (TopicIdPartition tip : sessionHandler.sessionPartitions()) {
                     NodeAcknowledgements nodeAcknowledgements = acknowledgementsMap.get(tip);
                     if ((nodeAcknowledgements != null) && (nodeAcknowledgements.nodeId() == node.id())) {
-                        if (isNodeLeader(node.id(), tip)) {
+                        if (!isLeaderKnownToHaveChanged(node.id(), tip)) {
                             acknowledgementsMapForNode.put(tip, nodeAcknowledgements.acknowledgements());
 
                             metricsManager.recordAcknowledgementSent(nodeAcknowledgements.acknowledgements().size());
@@ -534,7 +534,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                 for (TopicIdPartition tip : sessionHandler.sessionPartitions()) {
                     NodeAcknowledgements nodeAcknowledgements = acknowledgementsMap.get(tip);
                     if ((nodeAcknowledgements != null) && (nodeAcknowledgements.nodeId() == node.id())) {
-                        if (isNodeLeader(node.id(), tip)) {
+                        if (!isLeaderKnownToHaveChanged(node.id(), tip)) {
                             Acknowledgements acknowledgements = nodeAcknowledgements.acknowledgements();
                             acknowledgementsMapForNode.put(tip, acknowledgements);
 
@@ -591,7 +591,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         Map<Integer, Map<TopicIdPartition, Acknowledgements>> acknowledgementsMapAllNodes = new HashMap<>();
 
         acknowledgementsMap.forEach((tip, nodeAcks) -> {
-            if (isNodeLeader(nodeAcks.nodeId(), tip)) {
+            if (!isLeaderKnownToHaveChanged(nodeAcks.nodeId(), tip)) {
                 Map<TopicIdPartition, Acknowledgements> acksMap = acknowledgementsMapAllNodes.computeIfAbsent(nodeAcks.nodeId(), k -> new HashMap<>());
                 Acknowledgements prevAcks = acksMap.putIfAbsent(tip, nodeAcks.acknowledgements());
                 if (prevAcks != null) {
@@ -610,7 +610,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                 Map<TopicIdPartition, Acknowledgements> fetchAcks = fetchAcknowledgementsToSend.remove(nodeId);
                 if (fetchAcks != null) {
                     fetchAcks.forEach((tip, acks) -> {
-                        if (isNodeLeader(nodeId, tip)) {
+                        if (!isLeaderKnownToHaveChanged(nodeId, tip)) {
                             Map<TopicIdPartition, Acknowledgements> acksMap = acknowledgementsMapAllNodes.computeIfAbsent(nodeId, k -> new HashMap<>());
                             Acknowledgements prevAcks = acksMap.putIfAbsent(tip, acks);
                             if (prevAcks != null) {
@@ -664,23 +664,25 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
     }
 
     /**
-     *
-     * @return True if nodeId is the leader or if leader information is not present for the topicIdPartition.
-     * Returns false if nodeId is not the leader for the given topicIdPartition
+     * The method checks whether the leader for a topicIdPartition has changed.
+     * @param nodeId The previous leader for the partition.
+     * @param topicIdPartition The TopicIdPartition to check.
+     * @return Returns true if leader information is available and leader has changed.
+     * If the leader information is not available or if the leader has not changed, it returns false.
      */
-    private boolean isNodeLeader(int nodeId, TopicIdPartition topicIdPartition) {
+    private boolean isLeaderKnownToHaveChanged(int nodeId, TopicIdPartition topicIdPartition) {
         Optional<Node> leaderNode = metadata.currentLeader(topicIdPartition.topicPartition()).leader;
         if (leaderNode.isPresent()) {
             if (leaderNode.get().id() != nodeId) {
                 log.debug("Node {} is no longer the leader for partition {}, failing acknowledgements", nodeId, topicIdPartition);
-                return false;
+                return true;
             }
         } else {
             log.debug("No leader found for partition {}", topicIdPartition);
             metadata.requestUpdate(false);
-            return true;
+            return false;
         }
-        return true;
+        return false;
     }
 
     private void handleShareFetchSuccess(Node fetchTarget,
