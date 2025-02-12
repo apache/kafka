@@ -1100,9 +1100,12 @@ class UnifiedLog(@volatile var logStartOffset: Long,
           s"be 0, but it is ${batch.baseOffset}")
       }
 
-      // TODO: if the origin is replication, stop processing when the partition leader epoch is greater than the leader epoch
-      // Only process batch if the its not a KRaft follower or the partition leader epoch is less than or equal to the
-      // current leader epoch. TODO: explain this further
+      /* During replication of uncommitted data it is possible for the remote replica to send record batches after it lost
+       * leadership. This can happend if sending FETCH responses is slowed because there is a race between sending the FETCH
+       * response and the replica truncating and appending to the log. The replicating replica resolves this issue by only
+       * persisting up to the partition leader epoch of the leader when the FETCH request was handled. See KAFKA-18723 for
+       * more details.
+       */
       skipRemainingBatches = skipRemainingBatches || hasInvalidPartitionLeaderEpoch(batch, origin, leaderEpoch);
       if (skipRemainingBatches) {
         info(s"Skipping batch $batch because origin is $origin and leader epoch is $leaderEpoch")
@@ -1175,7 +1178,13 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   }
 
   /**
-   * TODO: document this
+   * Return true if the record batch should not be appending to the log.
+   *
+   * @param batch the batch to validate
+   * @param origin the reason for appending the record batch
+   * @param leaderEpoch the epoch to compare
+   * @return true if the append reason is replication and the partition leader epoch is greater
+   *         than the leader epoch, otherwise false
    */
   private def hasInvalidPartitionLeaderEpoch(
     batch: MutableRecordBatch,
