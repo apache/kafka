@@ -95,11 +95,10 @@ import org.apache.kafka.coordinator.group.modern.share.ShareGroupMember;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
-
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsImage;
 import org.apache.kafka.metadata.PartitionRegistration;
-import org.apache.kafka.timeline.SnapshotRegistry;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
