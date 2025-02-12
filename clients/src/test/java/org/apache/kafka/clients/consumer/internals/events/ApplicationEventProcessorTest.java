@@ -169,11 +169,9 @@ public class ApplicationEventProcessorTest {
         doReturn(true).when(subscriptionState).assignFromUser(Collections.singleton(tp));
         processor.process(event);
         if (withGroupId) {
-            verify(commitRequestManager).updateAutoCommitTimer(currentTimeMs);
-            verify(commitRequestManager).maybeAutoCommitAsync();
+            verify(commitRequestManager).updateTimerAndMaybeCommit(currentTimeMs);
         } else {
-            verify(commitRequestManager, never()).updateAutoCommitTimer(currentTimeMs);
-            verify(commitRequestManager, never()).maybeAutoCommitAsync();
+            verify(commitRequestManager, never()).updateTimerAndMaybeCommit(currentTimeMs);
         }
         verify(metadata).requestUpdateForNewTopics();
         verify(subscriptionState).assignFromUser(Collections.singleton(tp));
@@ -242,7 +240,7 @@ public class ApplicationEventProcessorTest {
         setupProcessor(true);
         when(heartbeatRequestManager.membershipManager()).thenReturn(membershipManager);
         processor.process(event);
-        verify(commitRequestManager).updateAutoCommitTimer(12345);
+        verify(commitRequestManager).updateTimerAndMaybeCommit(12345);
         verify(membershipManager).onConsumerPoll();
         verify(heartbeatRequestManager).resetPollTimer(12345);
     }
@@ -455,8 +453,8 @@ public class ApplicationEventProcessorTest {
 
         processor.process(event);
         verify(commitRequestManager).commitSync(actualOffsets, 12345);
-        Map<TopicPartition, OffsetAndMetadata> committedOffsets = assertDoesNotThrow(() -> event.future().get());
         assertTrue(event.offsetsReady.isDone());
+        Map<TopicPartition, OffsetAndMetadata> committedOffsets = assertDoesNotThrow(() -> event.future().get());
         assertEquals(actualOffsets, committedOffsets);
     }
 
@@ -496,8 +494,8 @@ public class ApplicationEventProcessorTest {
 
         processor.process(event);
         verify(commitRequestManager).commitAsync(actualOffsets);
-        Map<TopicPartition, OffsetAndMetadata> committedOffsets = assertDoesNotThrow(() -> event.future().get());
         assertTrue(event.offsetsReady.isDone());
+        Map<TopicPartition, OffsetAndMetadata> committedOffsets = assertDoesNotThrow(() -> event.future().get());
         assertEquals(offsets.orElse(Map.of()), committedOffsets);
     }
 

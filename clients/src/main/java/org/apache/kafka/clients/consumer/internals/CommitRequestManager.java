@@ -263,7 +263,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
      * In that case, the next auto-commit request will be sent on the next call to poll, after a
      * response for the in-flight is received.
      */
-    public void maybeAutoCommitAsync() {
+    void maybeAutoCommitAsync() {
         if (autoCommitEnabled() && autoCommitState.get().shouldAutoCommit()) {
             OffsetCommitRequestState requestState = createOffsetCommitRequest(
                 subscriptions.allConsumed(),
@@ -563,7 +563,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         return error instanceof StaleMemberEpochException && memberInfo.memberEpoch.isPresent();
     }
 
-    public void updateAutoCommitTimer(final long currentTimeMs) {
+    void updateAutoCommitTimer(final long currentTimeMs) {
         this.autoCommitState.ifPresent(t -> t.updateTimer(currentTimeMs));
     }
 
@@ -632,6 +632,11 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             if (offsetAndMetadata != null)
                 offsetAndMetadata.leaderEpoch().ifPresent(epoch -> metadata.updateLastSeenEpochIfNewer(topicPartition, epoch));
         });
+    }
+
+    public void updateTimerAndMaybeCommit(final long currentTimeMs) {
+        updateAutoCommitTimer(currentTimeMs);
+        maybeAutoCommitAsync();
     }
 
     class OffsetCommitRequestState extends RetriableRequestState {

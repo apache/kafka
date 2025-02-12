@@ -220,11 +220,9 @@ public class CommitRequestManagerTest {
         CommitRequestManager commitRequestManager = create(true, 100);
         assertPoll(0, commitRequestManager);
 
-        commitRequestManager.updateAutoCommitTimer(time.milliseconds());
-        commitRequestManager.maybeAutoCommitAsync();
+        commitRequestManager.updateTimerAndMaybeCommit(time.milliseconds());
         time.sleep(100);
-        commitRequestManager.updateAutoCommitTimer(time.milliseconds());
-        commitRequestManager.maybeAutoCommitAsync();
+        commitRequestManager.updateTimerAndMaybeCommit(time.milliseconds());
         List<NetworkClientDelegate.FutureCompletionHandler> pollResults = assertPoll(1, commitRequestManager);
         pollResults.forEach(v -> v.onComplete(mockOffsetCommitResponse(
                 "t1",
@@ -423,8 +421,7 @@ public class CommitRequestManagerTest {
         subscriptionState.assignFromUser(Collections.singleton(tp));
         subscriptionState.seek(tp, 100);
         time.sleep(commitInterval);
-        commitRequestManager.updateAutoCommitTimer(time.milliseconds());
-        commitRequestManager.maybeAutoCommitAsync();
+        commitRequestManager.updateTimerAndMaybeCommit(time.milliseconds());
         List<NetworkClientDelegate.FutureCompletionHandler> futures = assertPoll(1, commitRequestManager);
         // Complete the autocommit request exceptionally. It should fail right away, without retry.
         futures.get(0).onComplete(mockOffsetCommitResponse(
@@ -437,17 +434,14 @@ public class CommitRequestManagerTest {
         // (making sure we wait for the backoff, to check that the failed request is not being
         // retried).
         time.sleep(retryBackoffMs);
-        commitRequestManager.updateAutoCommitTimer(time.milliseconds());
-        commitRequestManager.maybeAutoCommitAsync();
+        commitRequestManager.updateTimerAndMaybeCommit(time.milliseconds());
         assertPoll(0, commitRequestManager);
-        commitRequestManager.updateAutoCommitTimer(time.milliseconds());
-        commitRequestManager.maybeAutoCommitAsync();
+        commitRequestManager.updateTimerAndMaybeCommit(time.milliseconds());
 
         // Only when polling after the auto-commit interval, a new auto-commit request should be
         // generated.
         time.sleep(commitInterval);
-        commitRequestManager.updateAutoCommitTimer(time.milliseconds());
-        commitRequestManager.maybeAutoCommitAsync();
+        commitRequestManager.updateTimerAndMaybeCommit(time.milliseconds());
         futures = assertPoll(1, commitRequestManager);
         assertEmptyPendingRequests(commitRequestManager);
         futures.get(0).onComplete(mockOffsetCommitResponse(
@@ -551,8 +545,7 @@ public class CommitRequestManagerTest {
         assertEquals(0, res.unsentRequests.size(), "No request should be generated until the " +
             "interval expires");
         time.sleep(100);
-        commitRequestManager.updateAutoCommitTimer(time.milliseconds());
-        commitRequestManager.maybeAutoCommitAsync();
+        commitRequestManager.updateTimerAndMaybeCommit(time.milliseconds());
         res = commitRequestManager.poll(time.milliseconds());
         assertEquals(1, res.unsentRequests.size());
 
@@ -590,13 +583,11 @@ public class CommitRequestManagerTest {
 
         CommitRequestManager commitRequestManager = create(true, 100);
         time.sleep(100);
-        commitRequestManager.updateAutoCommitTimer(time.milliseconds());
-        commitRequestManager.maybeAutoCommitAsync();
+        commitRequestManager.updateTimerAndMaybeCommit(time.milliseconds());
         List<NetworkClientDelegate.FutureCompletionHandler> futures = assertPoll(1, commitRequestManager);
 
         time.sleep(100);
-        commitRequestManager.updateAutoCommitTimer(time.milliseconds());
-        commitRequestManager.maybeAutoCommitAsync();
+        commitRequestManager.updateTimerAndMaybeCommit(time.milliseconds());
         // We want to make sure we don't resend autocommit if the previous request has not been
         // completed, even if the interval expired
         assertPoll(0, commitRequestManager);
@@ -618,8 +609,7 @@ public class CommitRequestManagerTest {
         // Send auto-commit request on the interval.
         CommitRequestManager commitRequestManager = create(true, 100);
         time.sleep(100);
-        commitRequestManager.updateAutoCommitTimer(time.milliseconds());
-        commitRequestManager.maybeAutoCommitAsync();
+        commitRequestManager.updateTimerAndMaybeCommit(time.milliseconds());
         NetworkClientDelegate.PollResult res = commitRequestManager.poll(time.milliseconds());
         assertEquals(1, res.unsentRequests.size());
         NetworkClientDelegate.FutureCompletionHandler autoCommitOnInterval =
@@ -645,8 +635,7 @@ public class CommitRequestManagerTest {
 
         CommitRequestManager commitRequestManager = create(true, 100);
         time.sleep(100);
-        commitRequestManager.updateAutoCommitTimer(time.milliseconds());
-        commitRequestManager.maybeAutoCommitAsync();
+        commitRequestManager.updateTimerAndMaybeCommit(time.milliseconds());
         List<NetworkClientDelegate.FutureCompletionHandler> futures = assertPoll(1, commitRequestManager);
 
         // complete the unsent request to trigger interceptor
@@ -664,8 +653,7 @@ public class CommitRequestManagerTest {
 
         CommitRequestManager commitRequestManager = create(true, 100);
         time.sleep(100);
-        commitRequestManager.updateAutoCommitTimer(time.milliseconds());
-        commitRequestManager.maybeAutoCommitAsync();
+        commitRequestManager.updateTimerAndMaybeCommit(time.milliseconds());
         List<NetworkClientDelegate.FutureCompletionHandler> futures = assertPoll(1, commitRequestManager);
 
         // complete the unsent request to trigger interceptor
@@ -679,8 +667,7 @@ public class CommitRequestManagerTest {
     public void testAutoCommitEmptyOffsetsDoesNotGenerateRequest() {
         CommitRequestManager commitRequestManager = create(true, 100);
         time.sleep(100);
-        commitRequestManager.updateAutoCommitTimer(time.milliseconds());
-        commitRequestManager.maybeAutoCommitAsync();
+        commitRequestManager.updateTimerAndMaybeCommit(time.milliseconds());
         assertTrue(commitRequestManager.pendingRequests.unsentOffsetCommits.isEmpty());
         verify(commitRequestManager).resetAutoCommitTimer();
     }
@@ -693,15 +680,13 @@ public class CommitRequestManagerTest {
 
         // Auto-commit of empty offsets
         time.sleep(100);
-        commitRequestManager.updateAutoCommitTimer(time.milliseconds());
-        commitRequestManager.maybeAutoCommitAsync();
+        commitRequestManager.updateTimerAndMaybeCommit(time.milliseconds());
 
         // Next auto-commit consumed offsets (not empty). Should generate a request, ensuring
         // that the previous auto-commit of empty did not leave the inflight request flag on
         subscriptionState.seek(t1p, 100);
         time.sleep(100);
-        commitRequestManager.updateAutoCommitTimer(time.milliseconds());
-        commitRequestManager.maybeAutoCommitAsync();
+        commitRequestManager.updateTimerAndMaybeCommit(time.milliseconds());
         assertEquals(1, commitRequestManager.pendingRequests.unsentOffsetCommits.size());
 
         verify(commitRequestManager, times(2)).resetAutoCommitTimer();
@@ -717,8 +702,7 @@ public class CommitRequestManagerTest {
 
         // Send auto-commit request that will remain in-flight without a response
         time.sleep(100);
-        commitRequestManager.updateAutoCommitTimer(time.milliseconds());
-        commitRequestManager.maybeAutoCommitAsync();
+        commitRequestManager.updateTimerAndMaybeCommit(time.milliseconds());
         List<NetworkClientDelegate.FutureCompletionHandler> futures = assertPoll(1, commitRequestManager);
         assertEquals(1, futures.size());
         NetworkClientDelegate.FutureCompletionHandler inflightCommitResult = futures.get(0);
@@ -729,8 +713,7 @@ public class CommitRequestManagerTest {
         // should not be reset either, to ensure that the next auto-commit is sent out as soon as
         // the inflight receives a response.
         time.sleep(100);
-        commitRequestManager.updateAutoCommitTimer(time.milliseconds());
-        commitRequestManager.maybeAutoCommitAsync();
+        commitRequestManager.updateTimerAndMaybeCommit(time.milliseconds());
         assertPoll(0, commitRequestManager);
         verify(commitRequestManager, never()).resetAutoCommitTimer();
 

@@ -303,8 +303,7 @@ public class RequestManagers implements Closeable {
                         subscriptions,
                         metadata,
                         time,
-                        metrics,
-                        config.getBoolean(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG));
+                        metrics);
 
                 // Update the group member ID label in the client telemetry reporter.
                 // According to KIP-1082, the consumer will generate the member ID as the incarnation ID of the process.

@@ -206,13 +206,13 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     }
 
     private void process(final PollEvent event) {
-        // To ensure certain positions before reconciliation, we only trigger a full process of reconciling by PollEvent
+        // Trigger a reconciliation that can safely commit offsets if needed to revoke partitions,
+        // as we're processing before any new fetching starts in the app thread
         requestManagers.consumerMembershipManager.ifPresent(consumerMembershipManager ->
             consumerMembershipManager.maybeReconcile(true));
         if (requestManagers.commitRequestManager.isPresent()) {
             CommitRequestManager commitRequestManager = requestManagers.commitRequestManager.get();
-            commitRequestManager.updateAutoCommitTimer(event.pollTimeMs());
-            commitRequestManager.maybeAutoCommitAsync();
+            commitRequestManager.updateTimerAndMaybeCommit(event.pollTimeMs());
             requestManagers.consumerHeartbeatRequestManager.ifPresent(hrm -> {
                 hrm.membershipManager().onConsumerPoll();
                 hrm.resetPollTimer(event.pollTimeMs());
@@ -284,8 +284,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     private void process(final AssignmentChangeEvent event) {
         if (requestManagers.commitRequestManager.isPresent()) {
             CommitRequestManager manager = requestManagers.commitRequestManager.get();
-            manager.updateAutoCommitTimer(event.currentTimeMs());
-            manager.maybeAutoCommitAsync();
+            manager.updateTimerAndMaybeCommit(event.currentTimeMs());
         }
 
         log.info("Assigned to partition(s): {}", event.partitions().stream().map(TopicPartition::toString).collect(Collectors.joining(", ")));

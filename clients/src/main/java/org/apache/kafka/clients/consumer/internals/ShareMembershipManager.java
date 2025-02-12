@@ -83,16 +83,14 @@ public class ShareMembershipManager extends AbstractMembershipManager<ShareGroup
                                   SubscriptionState subscriptions,
                                   ConsumerMetadata metadata,
                                   Time time,
-                                  Metrics metrics,
-                                  boolean autoCommitEnabled) {
+                                  Metrics metrics) {
         this(logContext,
                 groupId,
                 rackId,
                 subscriptions,
                 metadata,
                 time,
-                new ShareRebalanceMetricsManager(metrics),
-                autoCommitEnabled);
+                new ShareRebalanceMetricsManager(metrics));
     }
 
     // Visible for testing
@@ -102,15 +100,14 @@ public class ShareMembershipManager extends AbstractMembershipManager<ShareGroup
                            SubscriptionState subscriptions,
                            ConsumerMetadata metadata,
                            Time time,
-                           ShareRebalanceMetricsManager metricsManager,
-                           boolean autoCommitEnabled) {
+                           ShareRebalanceMetricsManager metricsManager) {
         super(groupId,
                 subscriptions,
                 metadata,
                 logContext.logger(ShareMembershipManager.class),
                 time,
                 metricsManager,
-                autoCommitEnabled);
+                false);
         this.rackId = rackId;
     }
 
@@ -119,12 +116,6 @@ public class ShareMembershipManager extends AbstractMembershipManager<ShareGroup
      */
     public String rackId() {
         return rackId;
-    }
-
-    @Override
-    public NetworkClientDelegate.PollResult poll(long currentTimeMs) {
-        maybeReconcile(true);
-        return NetworkClientDelegate.PollResult.EMPTY;
     }
 
     /**
