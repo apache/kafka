@@ -198,6 +198,7 @@ class BrokerMetadataPublisherTest {
       Some(mock(classOf[ShareCoordinator])),
       mock(classOf[DynamicConfigPublisher]),
       mock(classOf[DynamicClientQuotaPublisher]),
+      mock(classOf[DynamicTopicClusterQuotaPublisher]),
       mock(classOf[ScramPublisher]),
       mock(classOf[DelegationTokenPublisher]),
       mock(classOf[AclPublisher]),

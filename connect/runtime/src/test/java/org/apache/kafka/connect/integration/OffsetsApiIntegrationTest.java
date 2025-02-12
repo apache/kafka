@@ -58,7 +58,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import jakarta.ws.rs.core.Response;
 
 import static jakarta.ws.rs.core.Response.Status.INTERNAL_SERVER_ERROR;
-import static org.apache.kafka.connect.integration.MonitorableSourceConnector.TOPIC_CONFIG;
+import static org.apache.kafka.connect.integration.TestableSourceConnector.TOPIC_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
 import static org.apache.kafka.connect.runtime.SinkConnectorConfig.TOPICS_CONFIG;
@@ -277,7 +277,7 @@ public class OffsetsApiIntegrationTest {
                 "Source connector offsets should reflect the expected number of records produced");
 
         // Each task should produce more records
-        connectorConfigs.put(MonitorableSourceConnector.MAX_MESSAGES_PRODUCED_CONFIG, String.valueOf(2 * NUM_RECORDS_PER_PARTITION));
+        connectorConfigs.put(TestableSourceConnector.MAX_MESSAGES_PRODUCED_CONFIG, String.valueOf(2 * NUM_RECORDS_PER_PARTITION));
         connect.configureConnector(connectorName, connectorConfigs);
 
         verifyExpectedSourceConnectorOffsets(connectorName, NUM_TASKS, 2 * NUM_RECORDS_PER_PARTITION,
@@ -300,7 +300,7 @@ public class OffsetsApiIntegrationTest {
                 "Connector tasks did not start in time.");
 
         List<ConnectorOffset> offsets = new ArrayList<>();
-        // The MonitorableSourceConnector has a source partition per task
+        // The TestableSourceConnector has a source partition per task
         for (int i = 0; i < NUM_TASKS; i++) {
             offsets.add(
                     new ConnectorOffset(Collections.singletonMap("task.id", connectorName + "-" + i),
@@ -415,7 +415,7 @@ public class OffsetsApiIntegrationTest {
                 "Sink connector consumer group offsets should reflect the altered offsets");
 
         // Update the connector's configs; this time expect SinkConnector::alterOffsets to return true
-        connectorConfigs.put(MonitorableSinkConnector.ALTER_OFFSETS_RESULT, "true");
+        connectorConfigs.put(TestableSinkConnector.ALTER_OFFSETS_RESULT, "true");
         connect.configureConnector(connectorName, connectorConfigs);
 
         // Alter offsets again while the connector is still in a stopped state
@@ -598,7 +598,7 @@ public class OffsetsApiIntegrationTest {
         );
 
         List<ConnectorOffset> offsetsToAlter = new ArrayList<>();
-        // The MonitorableSourceConnector has a source partition per task
+        // The TestableSourceConnector has a source partition per task
         for (int i = 0; i < NUM_TASKS; i++) {
             offsetsToAlter.add(
                     new ConnectorOffset(Collections.singletonMap("task.id", connectorName + "-" + i),
@@ -614,12 +614,12 @@ public class OffsetsApiIntegrationTest {
                 "Source connector offsets should reflect the altered offsets");
 
         // Update the connector's configs; this time expect SourceConnector::alterOffsets to return true
-        connectorConfigs.put(MonitorableSourceConnector.ALTER_OFFSETS_RESULT, "true");
+        connectorConfigs.put(TestableSourceConnector.ALTER_OFFSETS_RESULT, "true");
         connect.configureConnector(connectorName, connectorConfigs);
 
         // Alter offsets again while connector is in stopped state
         offsetsToAlter = new ArrayList<>();
-        // The MonitorableSourceConnector has a source partition per task
+        // The TestableSourceConnector has a source partition per task
         for (int i = 0; i < NUM_TASKS; i++) {
             offsetsToAlter.add(
                     new ConnectorOffset(Collections.singletonMap("task.id", connectorName + "-" + i),
@@ -908,7 +908,7 @@ public class OffsetsApiIntegrationTest {
 
     private Map<String, String> baseSinkConnectorConfigs() {
         Map<String, String> configs = new HashMap<>();
-        configs.put(CONNECTOR_CLASS_CONFIG, MonitorableSinkConnector.class.getSimpleName());
+        configs.put(CONNECTOR_CLASS_CONFIG, TestableSinkConnector.class.getSimpleName());
         configs.put(TASKS_MAX_CONFIG, String.valueOf(NUM_TASKS));
         configs.put(TOPICS_CONFIG, topic);
         configs.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
@@ -918,11 +918,11 @@ public class OffsetsApiIntegrationTest {
 
     private Map<String, String> baseSourceConnectorConfigs() {
         Map<String, String> props = new HashMap<>();
-        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getSimpleName());
+        props.put(CONNECTOR_CLASS_CONFIG, TestableSourceConnector.class.getSimpleName());
         props.put(TASKS_MAX_CONFIG, String.valueOf(NUM_TASKS));
         props.put(TOPIC_CONFIG, topic);
-        props.put(MonitorableSourceConnector.MESSAGES_PER_POLL_CONFIG, "3");
-        props.put(MonitorableSourceConnector.MAX_MESSAGES_PRODUCED_CONFIG, String.valueOf(NUM_RECORDS_PER_PARTITION));
+        props.put(TestableSourceConnector.MESSAGES_PER_POLL_CONFIG, "3");
+        props.put(TestableSourceConnector.MAX_MESSAGES_PRODUCED_CONFIG, String.valueOf(NUM_RECORDS_PER_PARTITION));
         props.put(ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
         props.put(ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
         props.put(DEFAULT_TOPIC_CREATION_PREFIX + REPLICATION_FACTOR_CONFIG, "1");
@@ -1044,7 +1044,7 @@ public class OffsetsApiIntegrationTest {
      * Verify whether the actual offsets for a source connector match the expected offsets. The verification is done using the
      * <strong><em>GET /connectors/{connector}/offsets</em></strong> REST API which is repeatedly queried until the offsets match
      * or the {@link #OFFSET_READ_TIMEOUT_MS timeout} is reached. Note that this assumes that the source connector is a
-     * {@link MonitorableSourceConnector}
+     * {@link TestableSourceConnector}
      *
      * @param connectorName the name of the source connector whose offsets are to be verified
      * @param numTasks the number of tasks for the source connector
@@ -1057,7 +1057,7 @@ public class OffsetsApiIntegrationTest {
                                                       int expectedOffset, String conditionDetails) throws InterruptedException {
         waitForCondition(() -> {
             ConnectorOffsets offsets = connect.connectorOffsets(connectorName);
-            // The MonitorableSourceConnector has a source partition per task
+            // The TestableSourceConnector has a source partition per task
             if (offsets.offsets().size() != numTasks) {
                 return false;
             }

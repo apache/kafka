@@ -18,19 +18,36 @@ package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.metrics.KafkaMetric;
+import org.apache.kafka.common.metrics.Measurable;
+import org.apache.kafka.common.metrics.Monitorable;
+import org.apache.kafka.common.metrics.PluginMetrics;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.internals.PluginMetricsImpl;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroupId;
+import org.apache.kafka.connect.source.SourceRecord;
+import org.apache.kafka.connect.storage.Converter;
+import org.apache.kafka.connect.storage.HeaderConverter;
+import org.apache.kafka.connect.transforms.Transformation;
+import org.apache.kafka.connect.transforms.predicates.Predicate;
+import org.apache.kafka.connect.util.ConnectorTaskId;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
-import java.util.Collections;
+import java.io.IOException;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -43,12 +60,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ConnectMetricsTest {
 
-    private static final Map<String, String> DEFAULT_WORKER_CONFIG = new HashMap<>();
-
-    static {
-        DEFAULT_WORKER_CONFIG.put(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
-        DEFAULT_WORKER_CONFIG.put(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
-    }
+    private static final Map<String, String> DEFAULT_WORKER_CONFIG = Map.of(
+        WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter",
+        WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
+    private static final ConnectorTaskId CONNECTOR_TASK_ID = new ConnectorTaskId("connector", 0);
+    private static final Map<String, String> TAGS = Map.of("t1", "v1");
 
     private ConnectMetrics metrics;
 
@@ -171,6 +187,221 @@ public class ConnectMetricsTest {
         cm.stop();
     }
 
+    @Test
+    public void testConnectorPluginMetrics() throws Exception {
+        try (PluginMetricsImpl pluginMetrics = metrics.connectorPluginMetrics(CONNECTOR_TASK_ID.connector())) {
+            MetricName metricName = pluginMetrics.metricName("name", "description", TAGS);
+            Map<String, String> expectedTags = new LinkedHashMap<>();
+            expectedTags.put("connector", CONNECTOR_TASK_ID.connector());
+            expectedTags.putAll(TAGS);
+            assertEquals(expectedTags, metricName.tags());
+        }
+    }
+
+    @Test
+    public void testTaskPluginMetrics() throws Exception {
+        try (PluginMetricsImpl pluginMetrics = metrics.taskPluginMetrics(CONNECTOR_TASK_ID)) {
+            MetricName metricName = pluginMetrics.metricName("name", "description", TAGS);
+            Map<String, String> expectedTags = new LinkedHashMap<>();
+            expectedTags.put("connector", CONNECTOR_TASK_ID.connector());
+            expectedTags.put("task", String.valueOf(CONNECTOR_TASK_ID.task()));
+            expectedTags.putAll(TAGS);
+            assertEquals(expectedTags, metricName.tags());
+        }
+    }
+
+    static final class MonitorableConverter implements Converter, HeaderConverter, Monitorable {
+
+        private int calls = 0;
+        private PluginMetrics pluginMetrics = null;
+        private MetricName metricName = null;
+
+        @Override
+        public void withPluginMetrics(PluginMetrics pluginMetrics) {
+            this.pluginMetrics = pluginMetrics;
+            metricName = pluginMetrics.metricName("name", "description", TAGS);
+            pluginMetrics.addMetric(metricName, (Measurable) (config, now) -> calls);
+        }
+
+        @Override
+        public void configure(Map<String, ?> configs, boolean isKey) { }
+
+        @Override
+        public byte[] fromConnectData(String topic, Schema schema, Object value) {
+            calls++;
+            return new byte[0];
+        }
+
+        @Override
+        public SchemaAndValue toConnectData(String topic, byte[] value) {
+            calls++;
+            return null;
+        }
+
+        @Override
+        public ConfigDef config() {
+            return Converter.super.config();
+        }
+
+        @Override
+        public void configure(Map<String, ?> configs) { }
+
+        @Override
+        public SchemaAndValue toConnectHeader(String topic, String headerKey, byte[] value) {
+            calls++;
+            return null;
+        }
+
+        @Override
+        public byte[] fromConnectHeader(String topic, String headerKey, Schema schema, Object value) {
+            calls++;
+            return new byte[0];
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testWrapConverter(boolean isKey) throws IOException {
+        try (MonitorableConverter converter = new MonitorableConverter()) {
+            metrics.wrap(converter, CONNECTOR_TASK_ID, isKey);
+            assertNotNull(converter.pluginMetrics);
+            MetricName metricName = converter.metricName;
+            Map<String, String> expectedTags = new LinkedHashMap<>();
+            expectedTags.put("connector", CONNECTOR_TASK_ID.connector());
+            expectedTags.put("task", String.valueOf(CONNECTOR_TASK_ID.task()));
+            expectedTags.put("converter", isKey ? "key" : "value");
+            expectedTags.putAll(TAGS);
+            assertEquals(expectedTags, metricName.tags());
+            KafkaMetric metric = metrics.metrics().metrics().get(metricName);
+            assertEquals(0.0, (double) metric.metricValue());
+            converter.toConnectData("topic", new byte[]{});
+            assertEquals(1.0, (double) metric.metricValue());
+            converter.fromConnectData("topic", null, null);
+            assertEquals(2.0, (double) metric.metricValue());
+        }
+    }
+
+    @Test
+    public void testWrapHeaderConverter() throws IOException {
+        try (MonitorableConverter converter = new MonitorableConverter()) {
+            metrics.wrap(converter, CONNECTOR_TASK_ID);
+            assertNotNull(converter.pluginMetrics);
+            MetricName metricName = converter.metricName;
+            Map<String, String> expectedTags = new LinkedHashMap<>();
+            expectedTags.put("connector", CONNECTOR_TASK_ID.connector());
+            expectedTags.put("task", String.valueOf(CONNECTOR_TASK_ID.task()));
+            expectedTags.put("converter", "header");
+            expectedTags.putAll(TAGS);
+            assertEquals(expectedTags, metricName.tags());
+            KafkaMetric metric = metrics.metrics().metrics().get(metricName);
+            assertEquals(0.0, (double) metric.metricValue());
+            converter.toConnectHeader("topic", "header", new byte[]{});
+            assertEquals(1.0, (double) metric.metricValue());
+            converter.fromConnectHeader("topic", "header", null, null);
+            assertEquals(2.0, (double) metric.metricValue());
+        }
+    }
+
+    static final class MonitorableTransformation implements Transformation<SourceRecord>, Monitorable {
+
+        private int calls = 0;
+        private PluginMetrics pluginMetrics = null;
+        private MetricName metricName = null;
+
+        @Override
+        public void withPluginMetrics(PluginMetrics pluginMetrics) {
+            this.pluginMetrics = pluginMetrics;
+            metricName = pluginMetrics.metricName("name", "description", TAGS);
+            pluginMetrics.addMetric(metricName, (Measurable) (config, now) -> calls);
+        }
+
+        @Override
+        public void configure(Map<String, ?> configs) { }
+
+        @Override
+        public SourceRecord apply(SourceRecord record) {
+            calls++;
+            return null;
+        }
+
+        @Override
+        public ConfigDef config() {
+            return null;
+        }
+
+        @Override
+        public void close() { }
+    }
+
+    @Test
+    public void testWrapTransformation() {
+        try (MonitorableTransformation transformation = new MonitorableTransformation()) {
+            metrics.wrap(transformation, CONNECTOR_TASK_ID, "alias");
+            assertNotNull(transformation.pluginMetrics);
+            MetricName metricName = transformation.metricName;
+            Map<String, String> expectedTags = new LinkedHashMap<>();
+            expectedTags.put("connector", CONNECTOR_TASK_ID.connector());
+            expectedTags.put("task", String.valueOf(CONNECTOR_TASK_ID.task()));
+            expectedTags.put("transformation", "alias");
+            expectedTags.putAll(TAGS);
+            assertEquals(expectedTags, metricName.tags());
+            KafkaMetric metric = metrics.metrics().metrics().get(metricName);
+            assertEquals(0.0, (double) metric.metricValue());
+            transformation.apply(null);
+            assertEquals(1.0, (double) metric.metricValue());
+        }
+    }
+
+    static final class MonitorablePredicate implements Predicate<SourceRecord>, Monitorable {
+
+        private int calls = 0;
+        private PluginMetrics pluginMetrics = null;
+        private MetricName metricName = null;
+
+        @Override
+        public void withPluginMetrics(PluginMetrics pluginMetrics) {
+            this.pluginMetrics = pluginMetrics;
+            metricName = pluginMetrics.metricName("name", "description", TAGS);
+            pluginMetrics.addMetric(metricName, (Measurable) (config, now) -> calls);
+        }
+
+        @Override
+        public void configure(Map<String, ?> configs) { }
+
+        @Override
+        public ConfigDef config() {
+            return null;
+        }
+
+        @Override
+        public boolean test(SourceRecord record) {
+            calls++;
+            return false;
+        }
+
+        @Override
+        public void close() { }
+    }
+
+    @Test
+    public void testWrapPredicate() {
+        try (MonitorablePredicate predicate = new MonitorablePredicate()) {
+            metrics.wrap(predicate, CONNECTOR_TASK_ID, "alias");
+            assertNotNull(predicate.pluginMetrics);
+            MetricName metricName = predicate.metricName;
+            Map<String, String> expectedTags = new LinkedHashMap<>();
+            expectedTags.put("connector", CONNECTOR_TASK_ID.connector());
+            expectedTags.put("task", String.valueOf(CONNECTOR_TASK_ID.task()));
+            expectedTags.put("predicate", "alias");
+            expectedTags.putAll(TAGS);
+            assertEquals(expectedTags, metricName.tags());
+            KafkaMetric metric = metrics.metrics().metrics().get(metricName);
+            assertEquals(0.0, (double) metric.metricValue());
+            predicate.test(null);
+            assertEquals(1.0, (double) metric.metricValue());
+        }
+    }
+
     private Sensor addToGroup(ConnectMetrics connectMetrics, boolean shouldClose) {
         ConnectMetricsRegistry registry = connectMetrics.registry();
         ConnectMetrics.MetricGroup metricGroup = connectMetrics.group(registry.taskGroupName(),
@@ -188,6 +419,6 @@ public class ConnectMetricsTest {
     }
 
     static MetricName metricName(String name) {
-        return new MetricName(name, "test_group", "metrics for testing", Collections.emptyMap());
+        return new MetricName(name, "test_group", "metrics for testing", Map.of());
     }
 }

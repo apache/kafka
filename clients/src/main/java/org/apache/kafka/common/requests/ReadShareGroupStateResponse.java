@@ -18,12 +18,14 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.message.ReadShareGroupStateRequestData;
 import org.apache.kafka.common.message.ReadShareGroupStateResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -111,5 +113,17 @@ public class ReadShareGroupStateResponse extends AbstractResponse {
         return new ReadShareGroupStateResponseData.ReadStateResult()
                 .setTopicId(topicId)
                 .setPartitions(partitionResults);
+    }
+
+    public static ReadShareGroupStateResponseData toGlobalErrorResponse(ReadShareGroupStateRequestData request, Errors error) {
+        List<ReadShareGroupStateResponseData.ReadStateResult> readStateResults = new ArrayList<>();
+        request.topics().forEach(topicData -> {
+            List<ReadShareGroupStateResponseData.PartitionResult> partitionResults = new ArrayList<>();
+            topicData.partitions().forEach(partitionData -> partitionResults.add(
+                toErrorResponsePartitionResult(partitionData.partition(), error, error.message()))
+            );
+            readStateResults.add(toResponseReadStateResult(topicData.topicId(), partitionResults));
+        });
+        return new ReadShareGroupStateResponseData().setResults(readStateResults);
     }
 }
