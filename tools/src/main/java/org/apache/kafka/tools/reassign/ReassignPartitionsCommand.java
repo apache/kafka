@@ -164,7 +164,8 @@ public class ReassignPartitionsCommand {
             generateAssignment(adminClient,
                 Utils.readFileAsString(opts.options.valueOf(opts.topicsToMoveJsonFileOpt)),
                 opts.options.valueOf(opts.brokerListOpt),
-                !opts.options.has(opts.disableRackAware));
+                !opts.options.has(opts.disableRackAware),
+                opts.options.has(opts.sticky));
         } else if (opts.options.has(opts.executeOpt)) {
             executeAssignment(adminClient,
                 opts.options.has(opts.additionalOpt),
@@ -546,10 +547,11 @@ public class ReassignPartitionsCommand {
      * @return                      A tuple containing the proposed assignment and the
      *                              current assignment.
      */
-    public static Entry<Map<TopicPartition, List<Integer>>, Map<TopicPartition, List<Integer>>> generateAssignment(Admin adminClient,
+    private static Entry<Map<TopicPartition, List<Integer>>, Map<TopicPartition, List<Integer>>> generateAssignment(Admin adminClient,
                                                                                                              String reassignmentJson,
                                                                                                              String brokerListString,
-                                                                                                             Boolean enableRackAwareness
+                                                                                                             Boolean enableRackAwareness,
+                                                                                                             Boolean sticky
     ) throws ExecutionException, InterruptedException, JsonProcessingException {
         Entry<List<Integer>, List<String>> t0 = parseGenerateAssignmentArgs(reassignmentJson, brokerListString);
 
@@ -558,7 +560,13 @@ public class ReassignPartitionsCommand {
 
         Map<TopicPartition, List<Integer>> currentAssignments = getReplicaAssignmentForTopics(adminClient, topicsToReassign);
         List<BrokerMetadata> brokerMetadatas = getBrokerMetadata(adminClient, brokersToReassign, enableRackAwareness);
-        Map<TopicPartition, List<Integer>> proposedAssignments = calculateAssignment(currentAssignments, brokerMetadatas);
+        Map<TopicPartition, List<Integer>> proposedAssignments;
+        if (sticky) {
+           final StickyPartitionReassignor assignor = new StickyPartitionReassignor(currentAssignments, brokerMetadatas);
+            proposedAssignments = assignor.reassign();
+        } else {
+            proposedAssignments = calculateAssignment(currentAssignments, brokerMetadatas);
+        }
         System.out.printf("Current partition replica assignment%n%s%n%n",
             formatAsReassignmentJson(currentAssignments, Collections.emptyMap()));
         System.out.printf("Proposed partition reassignment configuration%n%s%n",
