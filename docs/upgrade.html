@@ -45,6 +45,16 @@
             latest Kafka releases.
             <!--#include virtual="zk2kraft.html" -->
         </li>
+        <li>
+            Apache Kafka 4.0 ships with a brand-new group coordinator implementation (See <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=217387038#KIP848:TheNextGenerationoftheConsumerRebalanceProtocol-GroupCoordinator">here</a>.
+            Functionally speaking, it implements all the same APIs. However, the group coordinator runs in its own-dedicated threads.
+            The number of threads can be defined with the <code>group.coordinator.threads</code> configuration. It defaults to 1 and
+            must certainly be adjusted for production deployment.
+        </li>
+        <li>
+            The Next Generation of the Consumer Rebalance Protocol (<a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-848%3A+The+Next+Generation+of+the+Consumer+Rebalance+Protocol">KIP-848</a>)
+            is not Generally Available (GA) in Apache Kafka 4.0. Check <a href="/{version}/documentation.html#consumer_rebalance_protocol">here</a> for details.
+        </li>
         <li>A number of deprecated classes, methods, configurations and tools have been removed.
             <ul>
                 <li><b>Common</b>
@@ -89,30 +99,6 @@
                 </li>
                 <li><b>Broker</b>
                     <ul>
-                        <li>The new group coordinator (<a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-848%3A+The+Next+Generation+of+the+Consumer+Rebalance+Protocol">KIP-848</a>) is now production ready.
-                            <ul>
-                                <li>New config <code>group.coordinator.new.enable=true</code> is added, enabling it by default.</li>
-                                <li>New config <code>group.coordinator.rebalance.protocols=classic,consumer</code> is added. Both protocols supported by default.</li>
-                                <li>New config <code>group.coordinator.threads=1</code> to control the number of threads the coordinator uses. It defaults to 1, and it should be adjusted as needed.</li>
-                            </ul>
-                            You can check <a href="https://cwiki.apache.org/confluence/display/KAFKA/The+Next+Generation+of+the+Consumer+Rebalance+Protocol+%28KIP-848%29+-+GA+Release+Notes">New Rebalance Protocol GA Release Notes</a> for more details.
-                        </li>
-                        <li>The new rebalance protocol (<a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-848%3A+The+Next+Generation+of+the+Consumer+Rebalance+Protocol">KIP-848</a>) is now production ready.
-                            <ul>
-                                <li>In addition to the new coordinator config for the supported protocols, a new feature flag group.version has been added. It is set automatically to support the new protocol when upgrading to 4.0.</li>
-                                <li>The consumer heartbeat interval and session timeout are controlled by the broker now with the new configs:
-                                    <ul>
-                                        <li><code>group.consumer.heartbeat.interval.ms</code></li>
-                                        <li><code>group.consumer.session.timeout.ms</code></li>
-                                    </ul>
-                                </li>
-                                <li>The <code>group.consumer.assignors=uniform,range</code> configuration is added to the broker with the names of the supported partition assignment strategies,
-                                    defined in <code>org.apache.kafka.coordinator.group.assignor.UniformAssignor</code> and <code>org.apache.kafka.coordinator.group.assignor.RangeAssignor</code>.
-                                    Note that the first assignor from the list will be used by default (uniform) unless the Consumer selects a different one.
-                                </li>
-                            </ul>
-                            You can check <a href="https://cwiki.apache.org/confluence/display/KAFKA/The+Next+Generation+of+the+Consumer+Rebalance+Protocol+%28KIP-848%29+-+GA+Release+Notes">New Rebalance Protocol GA Release Notes</a> for more details.
-                        </li>
                         <li>The <code>delegation.token.master.key</code> configuration was removed.
                             Please use <code>delegation.token.secret.key</code> instead.
                         </li>
@@ -231,33 +217,6 @@
                 </li>
                 <li><b>Consumer</b>
                     <ul>
-                        <li>Support for the new Consumer rebalance protocol (<a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-848%3A+The+Next+Generation+of+the+Consumer+Rebalance+Protocol">KIP-848</a>) is now production ready.
-                            <ul>
-                                <li>The <code>group.protocol</code> configuration is added. It defaults to the old Classic protocol.
-                                    You should simply change it to Consumer and restart your application to enable the new rebalance protocol.
-                                    This will internally make use of the improved consumer threading model.
-                                </li>
-                                <li>The <code>group.remote.assignor</code> configuration is introduced as an optional config, to overwrite the default assignment strategy configured on the broker.</li>
-                                <li>Client-side assignors implementations are no longer supported.</li>
-                                <li>The following configs are not supported if using the new rebalance protocol:
-                                    <ul>
-                                        <li><code>heartbeat.interval.ms</code></li>
-                                        <li><code>session.timeout.ms</code></li>
-                                        <li><code>partition.assignment.strategy</code></li>
-                                    </ul>
-                                </li>
-                                <li>The Consumer APIs <code>enforceRebalance(String)</code> and <code>enforceRebalance()</code> have been deprecated when using the new rebalance protocol.</li>
-                                <li>Two new Consumer APIs are added, to allow subscription to a RE2J regex with broker-side resolution:
-                                    <code>subscribe(SubscriptionPattern)</code> and <code>subscribe(SubscriptionPattern, ConsumerRebalanceListener)</code>.
-                                    A command line tool option has been added to validate RE2J regular expressions to be provided as <code>SubscriptionPattern</code>. See <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=217387038#KIP848:TheNextGenerationoftheConsumerRebalanceProtocol---validate-regex">RE2J Validation Tool</a>
-                                </li>
-                                <li>New metrics have been added to the Consumer when using the new rebalance protocol, mainly providing visibility over the improved threading model. See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-1068%3A+New+metrics+for+the+new+KafkaConsumer">New Consumer Metrics</a></li>
-                                <li>
-                                    There is support for live upgrade of your consumer applications to the new protocol, as well as offline upgrade.
-                                    See <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=340036523#TheNextGenerationoftheConsumerRebalanceProtocol(KIP848)GAReleaseNotes-Upgradepath">Upgrade path</a> for more details.
-                                </li>
-                            </ul>
-                        </li>
                         <li>The <code>poll(long)</code> method was removed from the consumer. Please use <code>poll(Duration)</code> instead. Note that there is
                             a difference in behavior between the two methods. The <code>poll(Duration)</code> method does not block beyond the timeout awaiting
                             partition assignment, whereas the earlier <code>poll(long)</code> method used to wait beyond the timeout.
@@ -333,7 +292,7 @@
 			    See <a href="https://issues.apache.org/jira/browse/KAFKA-17531">KAFKA-17531</a> for details.
                         </li>
                         <li>
-			    The most important changes are highlighted in the <a href=""/{{version}}/documentation/streams/upgrade-guide.html#streams_api_changes_400">Kafka Streams upgrade guide</a>.
+			    The most important changes are highlighted in the <a href="/{{version}}/documentation/streams/upgrade-guide.html#streams_api_changes_400">Kafka Streams upgrade guide</a>.
                         </li>
                         <li>
 			    For a full list of changes, see <a href="https://issues.apache.org/jira/browse/KAFKA-12822">KAFKA-12822</a>.
