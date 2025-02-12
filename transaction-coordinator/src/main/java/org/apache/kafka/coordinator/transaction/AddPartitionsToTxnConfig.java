@@ -26,9 +26,9 @@ import static org.apache.kafka.common.config.ConfigDef.Type.INT;
 
 public final class AddPartitionsToTxnConfig {
     // The default config values for the server-side add partition to transaction operations.
-    public static final String ADD_PARTITIONS_TO_TXN_MAX_TIMEOUT_MS_CONFIG = "add.partitions.to.txn.max.timeout.ms";
-    public static final int ADD_PARTITIONS_TO_TXN_MAX_TIMEOUT_MS_DEFAULT = 100;
-    public static final String ADD_PARTITIONS_TO_TXN_MAX_TIMEOUT_MS_DOC = "The maximum allowed timeout for adding " +
+    public static final String ADD_PARTITIONS_TO_TXN_RETRY_BACKOFF_MAX_MS_CONFIG = "add.partitions.to.txn.retry.backoff.max.ms";
+    public static final int ADD_PARTITIONS_TO_TXN_RETRY_BACKOFF_MAX_MS_DEFAULT = 100;
+    public static final String ADD_PARTITIONS_TO_TXN_RETRY_BACKOFF_MAX_MS_DOC = "The maximum allowed timeout for adding " +
             "partitions to transactions on the server side. It only applies to the actual add partition operations, " +
             "not the verification. It will not be effective if it is larger than request.timeout.ms";
     public static final String ADD_PARTITIONS_TO_TXN_RETRY_BACKOFF_MS_CONFIG = "add.partitions.to.txn.retry.backoff.ms";
@@ -37,18 +37,18 @@ public final class AddPartitionsToTxnConfig {
         "to add the partition to the transaction";
 
     public static final ConfigDef CONFIG_DEF =  new ConfigDef()
-        .define(ADD_PARTITIONS_TO_TXN_MAX_TIMEOUT_MS_CONFIG, INT, ADD_PARTITIONS_TO_TXN_MAX_TIMEOUT_MS_DEFAULT, atLeast(0), HIGH, ADD_PARTITIONS_TO_TXN_MAX_TIMEOUT_MS_DOC)
+        .define(ADD_PARTITIONS_TO_TXN_RETRY_BACKOFF_MAX_MS_CONFIG, INT, ADD_PARTITIONS_TO_TXN_RETRY_BACKOFF_MAX_MS_DEFAULT, atLeast(0), HIGH, ADD_PARTITIONS_TO_TXN_RETRY_BACKOFF_MAX_MS_DOC)
         .define(ADD_PARTITIONS_TO_TXN_RETRY_BACKOFF_MS_CONFIG, INT, ADD_PARTITIONS_TO_TXN_RETRY_BACKOFF_MS_DEFAULT, atLeast(1), HIGH, ADD_PARTITIONS_TO_TXN_RETRY_BACKOFF_MS_DOC);
 
-    private final int addPartitionsToTxnMaxTimeoutMs;
+    private final int addPartitionsToTxnRetryBackoffMaxMs;
     private final int addPartitionsToTxnRetryBackoffMs;
 
     public AddPartitionsToTxnConfig(AbstractConfig config) {
-        addPartitionsToTxnMaxTimeoutMs = config.getInt(AddPartitionsToTxnConfig.ADD_PARTITIONS_TO_TXN_MAX_TIMEOUT_MS_CONFIG);
+        addPartitionsToTxnRetryBackoffMaxMs = config.getInt(AddPartitionsToTxnConfig.ADD_PARTITIONS_TO_TXN_RETRY_BACKOFF_MAX_MS_CONFIG);
         addPartitionsToTxnRetryBackoffMs = config.getInt(AddPartitionsToTxnConfig.ADD_PARTITIONS_TO_TXN_RETRY_BACKOFF_MS_CONFIG);
     }
-    public int addPartitionsToTxnMaxTimeoutMs() {
-        return addPartitionsToTxnMaxTimeoutMs;
+    public int addPartitionsToTxnRetryBackoffMaxMs() {
+        return addPartitionsToTxnRetryBackoffMaxMs;
     }
     public int addPartitionsToTxnRetryBackoffMs() {
         return addPartitionsToTxnRetryBackoffMs;
