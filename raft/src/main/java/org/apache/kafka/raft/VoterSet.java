@@ -343,6 +343,10 @@ public final class VoterSet {
             return voterKey;
         }
 
+        public int voterId() {
+            return voterKey.id();
+        }
+
         /**
          * Returns if the provided replica key matches this voter node.
          *
