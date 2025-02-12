@@ -1210,7 +1210,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     );
                     return null;
                 }
-            ).toArray(new CompletableFuture[0])
+            ).toArray(new CompletableFuture<?>[0])
         ).get();
     }
 
