@@ -63,7 +63,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
     private static final int MEMBER_EPOCH = 1;
     private static final String INSTANCE_ID = "instance-id";
     private static final UUID PROCESS_ID = UUID.randomUUID();
-    private static final Optional<StreamsRebalanceData.HostInfo> ENDPOINT = Optional.of(new StreamsRebalanceData.HostInfo("localhost", 8080));
+    private static final StreamsRebalanceData.HostInfo ENDPOINT = new StreamsRebalanceData.HostInfo("localhost", 8080);
     private static final String SOURCE_TOPIC_1 = "sourceTopic1";
     private static final String SOURCE_TOPIC_2 = "sourceTopic2";
     private static final Set<String> SOURCE_TOPICS = Set.of(SOURCE_TOPIC_1, SOURCE_TOPIC_2);
@@ -108,7 +108,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
 
     private final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
         PROCESS_ID,
-        ENDPOINT,
+        Optional.of(ENDPOINT),
         SUBTOPOLOGIES,
         CLIENT_TAGS
     );
@@ -179,9 +179,8 @@ class StreamsGroupHeartbeatRequestManagerTest {
         assertEquals(MEMBER_EPOCH, request.data().memberEpoch());
         assertEquals(INSTANCE_ID, request.data().instanceId());
         assertEquals(PROCESS_ID.toString(), request.data().processId());
-        assertTrue(ENDPOINT.isPresent());
-        assertEquals(ENDPOINT.get().host(), request.data().userEndpoint().host());
-        assertEquals(ENDPOINT.get().port(), request.data().userEndpoint().port());
+        assertEquals(ENDPOINT.host(), request.data().userEndpoint().host());
+        assertEquals(ENDPOINT.port(), request.data().userEndpoint().port());
         assertEquals(1, request.data().clientTags().size());
         assertEquals("clientTag1", request.data().clientTags().get(0).key());
         assertEquals("value2", request.data().clientTags().get(0).value());
