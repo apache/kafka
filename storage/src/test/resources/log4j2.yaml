@@ -55,3 +55,6 @@ Configuration:
         level: INFO
         AppenderRef:
           - ref: FileAppender
+
+      - name: org.apache.kafka.clients.consumer.internals.AbstractFetch
+        level: DEBUG

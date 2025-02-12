@@ -62,7 +62,7 @@ runs:
         -PmaxQuarantineTestRetries=3 -PmaxQuarantineTestRetryFailures=0 \
         -Pkafka.test.catalog.file=$TEST_CATALOG \
         -PcommitId=xxxxxxxxxxxxxxxx \
-        :storage:$TEST_TASK
+        :core:$TEST_TASK :storage:$TEST_TASK
         exitcode="$?"
         echo "exitcode=$exitcode" >> $GITHUB_OUTPUT
     - name: Archive build scan (${{ inputs.test-task }})
