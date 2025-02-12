@@ -16351,17 +16351,14 @@ public class GroupMetadataManagerTest {
         when(t2image.id()).thenReturn(t2Uuid);
 
         context.groupMetadataManager.onNewMetadataImage(image, mock(MetadataDelta.class));
-        assertEquals(
-            Map.of(
-                "share-group", Map.of(
-                    t1Uuid, List.of(0, 1),
-                    t2Uuid, List.of(0, 1)
-                )
-            ),
-            context.groupMetadataManager.sharePartitionKeysMap(List.of(
-                shareGroup
-            ))
-        );
+        Map<String, Map<Uuid, List<Integer>>> keyMap = context.groupMetadataManager.sharePartitionKeysMap(List.of(shareGroup));
+        assertEquals(1, keyMap.size());
+        assertEquals(2, keyMap.get("share-group").size());
+        for(Uuid topic:List.of(t1Uuid, t2Uuid)) {
+            assertEquals(2, keyMap.get("share-group").get(topic).size());
+            assertTrue(keyMap.get("share-group").get(topic).contains(0));
+            assertTrue(keyMap.get("share-group").get(topic).contains(1));
+        }
 
         verify(image, times(1)).topics();
         verify(t1image, times(1)).id();

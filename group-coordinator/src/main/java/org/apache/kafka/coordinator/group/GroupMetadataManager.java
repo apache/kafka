@@ -6288,7 +6288,7 @@ public class GroupMetadataManager {
      * @return Map representing the share partition keys for all the groups in the input.
      */
     public Map<String, Map<Uuid, List<Integer>>> sharePartitionKeysMap(List<ShareGroup> shareGroups) {
-        Map<String, Map<Uuid, List<Integer>>> keyMap = new LinkedHashMap<>();
+        Map<String, Map<Uuid, List<Integer>>> keyMap = new HashMap<>();
         if (metadataImage == null) {
             return Map.of();
         }
@@ -6297,7 +6297,7 @@ public class GroupMetadataManager {
             String groupId = shareGroup.groupId();
             for (String topic : shareGroup.subscribedTopicNames().keySet()) {
                 TopicImage topicImage = topicsImage.getTopic(topic);
-                keyMap.computeIfAbsent(groupId, k -> new LinkedHashMap<>())
+                keyMap.computeIfAbsent(groupId, k -> new HashMap<>())
                     .put(topicImage.id(), topicImage.partitions().keySet().stream().toList());
             }
         }
