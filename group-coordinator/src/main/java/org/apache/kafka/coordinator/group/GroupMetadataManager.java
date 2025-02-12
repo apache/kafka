@@ -761,7 +761,7 @@ public class GroupMetadataManager {
      * @return A StreamsGroup.
      * @throws GroupIdNotFoundException if the group does not exist or is not a streams group.
      */
-    public StreamsGroup streamsGroup(
+    private StreamsGroup streamsGroup(
         String groupId,
         long committedOffset
     ) throws GroupIdNotFoundException {
@@ -873,7 +873,7 @@ public class GroupMetadataManager {
      * @throws IllegalStateException    if the group does not have the expected type.
      * Package private for testing.
      */
-    StreamsGroup getOrMaybeCreatePersistedStreamsGroup(
+    private StreamsGroup getOrMaybeCreatePersistedStreamsGroup(
         String groupId,
         boolean createIfNotExists
     ) throws GroupIdNotFoundException, IllegalStateException {
@@ -3275,7 +3275,7 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Fences a member from a streams group and maybe downgrade the streams group to a classic group.
+     * Fences a member from a streams group.
      *
      * @param group     The group.
      * @param member    The member.
@@ -3289,7 +3289,8 @@ public class GroupMetadataManager {
         T response
     ) {
         List<CoordinatorRecord> records = new ArrayList<>();
-        removeStreamsMember(records, group.groupId(), member.memberId());
+
+        records.addAll(removeStreamsMember(group.groupId(), member.memberId()));
 
         // We bump the group epoch.
         int groupEpoch = group.groupEpoch() + 1;
@@ -3301,16 +3302,17 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Write tombstones for the member. The order matters here.
+     * Write tombstones for the member.
      *
-     * @param records       The list of records to append the member assignment tombstone records.
      * @param groupId       The group id.
      * @param memberId      The member id.
      */
-    private void removeStreamsMember(List<CoordinatorRecord> records, String groupId, String memberId) {
-        records.add(newStreamsGroupCurrentAssignmentTombstoneRecord(groupId, memberId));
-        records.add(newStreamsGroupTargetAssignmentTombstoneRecord(groupId, memberId));
-        records.add(newStreamsGroupMemberTombstoneRecord(groupId, memberId));
+    private List<CoordinatorRecord> removeStreamsMember(String groupId, String memberId) {
+        return List.of(
+            newStreamsGroupCurrentAssignmentTombstoneRecord(groupId, memberId),
+            newStreamsGroupTargetAssignmentTombstoneRecord(groupId, memberId),
+            newStreamsGroupMemberTombstoneRecord(groupId, memberId)
+        );
     }
 
     /**
@@ -3381,7 +3383,13 @@ public class GroupMetadataManager {
         String groupId,
         String memberId
     ) {
-        scheduleStreamsGroupSessionTimeout(groupId, memberId, streamsGroupSessionTimeoutMs);
+        timer.schedule(
+            groupSessionTimeoutKey(groupId, memberId),
+            streamsGroupSessionTimeoutMs,
+            TimeUnit.MILLISECONDS,
+            true,
+            () -> streamsGroupFenceMemberOperation(groupId, memberId, "the member session expired.")
+        );
     }
 
     /**
@@ -3551,27 +3559,6 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Schedules (or reschedules) the session timeout for the member.
-     *
-     * @param groupId           The group id.
-     * @param memberId          The member id.
-     * @param sessionTimeoutMs  The session timeout.
-     */
-    private void scheduleStreamsGroupSessionTimeout(
-        String groupId,
-        String memberId,
-        int sessionTimeoutMs
-    ) {
-        timer.schedule(
-            groupSessionTimeoutKey(groupId, memberId),
-            sessionTimeoutMs,
-            TimeUnit.MILLISECONDS,
-            true,
-            () -> streamsGroupFenceMemberOperation(groupId, memberId, "the member session expired.")
-        );
-    }
-
-    /**
      * Cancels the session timeout of the member.
      *
      * @param groupId       The group id.
@@ -3598,7 +3585,7 @@ public class GroupMetadataManager {
         int memberEpoch,
         int rebalanceTimeoutMs
     ) {
-        String key = consumerGroupRebalanceTimeoutKey(groupId, memberId);
+        String key = groupRebalanceTimeoutKey(groupId, memberId);
         timer.schedule(key, rebalanceTimeoutMs, TimeUnit.MILLISECONDS, true, () -> {
             try {
                 ConsumerGroup group = consumerGroup(groupId);
@@ -3641,7 +3628,7 @@ public class GroupMetadataManager {
         int memberEpoch,
         int rebalanceTimeoutMs
     ) {
-        String key = streamsGroupRebalanceTimeoutKey(groupId, memberId);
+        String key = groupRebalanceTimeoutKey(groupId, memberId);
         timer.schedule(key, rebalanceTimeoutMs, TimeUnit.MILLISECONDS, true, () -> {
             try {
                 StreamsGroup group = streamsGroup(groupId);
@@ -3655,7 +3642,7 @@ public class GroupMetadataManager {
                     return streamsGroupFenceMember(group, member, null);
                 } else {
                     log.debug("[GroupId {}] Ignoring rebalance timeout for {} because the member " +
-                        "left the epoch {}.", groupId, memberId, memberEpoch);
+                        "is not in epoch {} anymore.", groupId, memberId, memberEpoch);
                     return new CoordinatorResult<>(Collections.emptyList());
                 }
             } catch (GroupIdNotFoundException ex) {
@@ -3680,7 +3667,7 @@ public class GroupMetadataManager {
         String groupId,
         String memberId
     ) {
-        timer.cancel(consumerGroupRebalanceTimeoutKey(groupId, memberId));
+        timer.cancel(groupRebalanceTimeoutKey(groupId, memberId));
     }
 
     /**
@@ -3827,6 +3814,7 @@ public class GroupMetadataManager {
             updateGroupsByTopics(groupId, oldSubscribedTopicNames, newSubscribedTopicNames);
         } else {
             updateGroupsByTopics(groupId, oldSubscribedTopicNames, Collections.emptySet());
+            streamsGroup.setTopology(null);
         }
     }
 
@@ -4239,11 +4227,6 @@ public class GroupMetadataManager {
             if (!streamsGroup.members().isEmpty()) {
                 throw new IllegalStateException("Received a tombstone record to delete group " + groupId
                     + " but the group still has " + streamsGroup.members().size() + " members.");
-            }
-            if (!streamsGroup.targetAssignment().isEmpty()) {
-                throw new IllegalStateException("Received a tombstone record to delete group " + groupId
-                    + " but the target assignment still has " + streamsGroup.targetAssignment().size()
-                    + " members.");
             }
             if (streamsGroup.assignmentEpoch() != -1) {
                 throw new IllegalStateException("Received a tombstone record to delete group " + groupId
@@ -4835,11 +4818,7 @@ public class GroupMetadataManager {
         return "session-timeout-" + groupId + "-" + memberId;
     }
 
-    public static String consumerGroupRebalanceTimeoutKey(String groupId, String memberId) {
-        return "rebalance-timeout-" + groupId + "-" + memberId;
-    }
-
-    public static String streamsGroupRebalanceTimeoutKey(String groupId, String memberId) {
+    public static String groupRebalanceTimeoutKey(String groupId, String memberId) {
         return "rebalance-timeout-" + groupId + "-" + memberId;
     }
 

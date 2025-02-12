@@ -265,7 +265,7 @@ public class StreamsGroup implements Group {
     }
 
     public void setTopology(StreamsTopology topology) {
-        this.topology.set(Optional.of(topology));
+        this.topology.set(Optional.ofNullable(topology));
         maybeUpdateConfiguredTopology();
         maybeUpdateGroupState();
     }

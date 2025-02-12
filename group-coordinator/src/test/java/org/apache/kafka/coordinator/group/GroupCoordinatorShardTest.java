@@ -860,7 +860,6 @@ public class GroupCoordinatorShardTest {
             coordinatorMetrics,
             metricsShard
         );
-
         StreamsGroupMetadataKey key = new StreamsGroupMetadataKey();
         StreamsGroupMetadataValue value = new StreamsGroupMetadataValue();
 
@@ -869,7 +868,7 @@ public class GroupCoordinatorShardTest {
             new ApiMessageAndVersion(value, (short) 0)
         ));
 
-        verify(groupMetadataManager, times(1)).replay(key, value);
+        verify(groupMetadataManager).replay(key, value);
     }
 
     @Test
@@ -895,7 +894,7 @@ public class GroupCoordinatorShardTest {
             key
         ));
 
-        verify(groupMetadataManager, times(1)).replay(key, null);
+        verify(groupMetadataManager).replay(key, null);
     }
 
 
@@ -924,7 +923,7 @@ public class GroupCoordinatorShardTest {
             new ApiMessageAndVersion(value, (short) 0)
         ));
 
-        verify(groupMetadataManager, times(1)).replay(key, value);
+        verify(groupMetadataManager).replay(key, value);
     }
 
     @Test
@@ -950,7 +949,7 @@ public class GroupCoordinatorShardTest {
             key
         ));
 
-        verify(groupMetadataManager, times(1)).replay(key, null);
+        verify(groupMetadataManager).replay(key, null);
     }
 
     @Test
@@ -978,7 +977,7 @@ public class GroupCoordinatorShardTest {
             new ApiMessageAndVersion(value, (short) 0)
         ));
 
-        verify(groupMetadataManager, times(1)).replay(key, value);
+        verify(groupMetadataManager).replay(key, value);
     }
 
     @Test
@@ -1004,7 +1003,7 @@ public class GroupCoordinatorShardTest {
             key
         ));
 
-        verify(groupMetadataManager, times(1)).replay(key, null);
+        verify(groupMetadataManager).replay(key, null);
     }
 
     @Test
@@ -1032,7 +1031,7 @@ public class GroupCoordinatorShardTest {
             new ApiMessageAndVersion(value, (short) 0)
         ));
 
-        verify(groupMetadataManager, times(1)).replay(key, value);
+        verify(groupMetadataManager).replay(key, value);
     }
 
     @Test
@@ -1058,7 +1057,7 @@ public class GroupCoordinatorShardTest {
             key
         ));
 
-        verify(groupMetadataManager, times(1)).replay(key, null);
+        verify(groupMetadataManager).replay(key, null);
     }
 
     @Test
@@ -1086,7 +1085,7 @@ public class GroupCoordinatorShardTest {
             new ApiMessageAndVersion(value, (short) 0)
         ));
 
-        verify(groupMetadataManager, times(1)).replay(key, value);
+        verify(groupMetadataManager).replay(key, value);
     }
 
     @Test
@@ -1112,7 +1111,7 @@ public class GroupCoordinatorShardTest {
             key
         ));
 
-        verify(groupMetadataManager, times(1)).replay(key, null);
+        verify(groupMetadataManager).replay(key, null);
     }
 
     @Test
@@ -1140,7 +1139,7 @@ public class GroupCoordinatorShardTest {
             new ApiMessageAndVersion(value, (short) 0)
         ));
 
-        verify(groupMetadataManager, times(1)).replay(key, value);
+        verify(groupMetadataManager).replay(key, value);
     }
 
     @Test
@@ -1166,7 +1165,7 @@ public class GroupCoordinatorShardTest {
             key
         ));
 
-        verify(groupMetadataManager, times(1)).replay(key, null);
+        verify(groupMetadataManager).replay(key, null);
     }
 
     @Test
@@ -1194,7 +1193,7 @@ public class GroupCoordinatorShardTest {
             new ApiMessageAndVersion(value, (short) 0)
         ));
 
-        verify(groupMetadataManager, times(1)).replay(key, value);
+        verify(groupMetadataManager).replay(key, value);
     }
 
     @Test
@@ -1220,7 +1219,7 @@ public class GroupCoordinatorShardTest {
             key
         ));
 
-        verify(groupMetadataManager, times(1)).replay(key, null);
+        verify(groupMetadataManager).replay(key, null);
     }
     
     @Test

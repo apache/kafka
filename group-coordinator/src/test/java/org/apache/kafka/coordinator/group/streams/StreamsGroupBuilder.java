@@ -28,16 +28,16 @@ public class StreamsGroupBuilder {
 
     private final String groupId;
     private final int groupEpoch;
-    private int assignmentEpoch;
+    private int targetAssignmentEpoch;
     private StreamsTopology topology;
     private final Map<String, StreamsGroupMember> members = new HashMap<>();
-    private final Map<String, TasksTuple> assignments = new HashMap<>();
+    private final Map<String, TasksTuple> targetAssignments = new HashMap<>();
     private Map<String, TopicMetadata> partitionMetadata = new HashMap<>();
 
     public StreamsGroupBuilder(String groupId, int groupEpoch) {
         this.groupId = groupId;
         this.groupEpoch = groupEpoch;
-        this.assignmentEpoch = 0;
+        this.targetAssignmentEpoch = 0;
         this.topology = null;
     }
 
@@ -56,13 +56,13 @@ public class StreamsGroupBuilder {
         return this;
     }
 
-    public StreamsGroupBuilder withAssignment(String memberId, TasksTuple assignment) {
-        this.assignments.put(memberId, assignment);
+    public StreamsGroupBuilder withTargetAssignment(String memberId, TasksTuple targetAssignment) {
+        this.targetAssignments.put(memberId, targetAssignment);
         return this;
     }
 
-    public StreamsGroupBuilder withAssignmentEpoch(int assignmentEpoch) {
-        this.assignmentEpoch = assignmentEpoch;
+    public StreamsGroupBuilder withTargetAssignmentEpoch(int targetAssignmentEpoch) {
+        this.targetAssignmentEpoch = targetAssignmentEpoch;
         return this;
     }
 
@@ -86,7 +86,7 @@ public class StreamsGroupBuilder {
             StreamsCoordinatorRecordHelpers.newStreamsGroupEpochRecord(groupId, groupEpoch));
 
         // Add target assignment records.
-        assignments.forEach((memberId, assignment) ->
+        targetAssignments.forEach((memberId, assignment) ->
             records.add(
                 StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(groupId, memberId, assignment))
         );
@@ -103,7 +103,7 @@ public class StreamsGroupBuilder {
 
         // Add target assignment epoch.
         records.add(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentEpochRecord(groupId,
-            assignmentEpoch));
+            targetAssignmentEpoch));
 
         // Add current assignment records for members.
         members.forEach((memberId, member) ->
