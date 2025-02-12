@@ -31,9 +31,10 @@ public class Named implements NamedOperation<Named> {
     }
 
     protected Named(final String name) {
-        Objects.requireNonNull(name, "name cannot be null");
-        validate(name);
         this.name = name;
+        if (name != null) {
+            validate(name);
+        }
     }
 
     /**
@@ -45,11 +46,13 @@ public class Named implements NamedOperation<Named> {
      * @throws TopologyException if an invalid name is specified; valid characters are ASCII alphanumerics, '.', '_' and '-'.
      */
     public static Named as(final String name) {
+        Objects.requireNonNull(name, "name cannot be null");
         return new Named(name);
     }
 
     @Override
     public Named withName(final String name) {
+        Objects.requireNonNull(name, "name cannot be null");
         return new Named(name);
     }
 
