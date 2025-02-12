@@ -135,15 +135,19 @@ public class ServerLogConfigs {
 
     public static final String MIN_IN_SYNC_REPLICAS_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG);
     public static final int MIN_IN_SYNC_REPLICAS_DEFAULT = 1;
-    public static final String MIN_IN_SYNC_REPLICAS_DOC = "When a producer sets acks to \"all\" (or \"-1\"), " +
-            "<code>min.insync.replicas</code> specifies the minimum number of replicas that must acknowledge " +
-            "a write for the write to be considered successful. If this minimum cannot be met, " +
-            "then the producer will raise an exception (either <code>NotEnoughReplicas</code> or " +
-            "<code>NotEnoughReplicasAfterAppend</code>).<br>When used together, <code>min.insync.replicas</code> and acks " +
-            "allow you to enforce greater durability guarantees. A typical scenario would be to " +
-            "create a topic with a replication factor of 3, set <code>min.insync.replicas</code> to 2, and " +
-            "produce with acks of \"all\". This will ensure that the producer raises an exception " +
-            "if a majority of replicas do not receive a write.";
+    public static final String MIN_IN_SYNC_REPLICAS_DOC = 
+        "Defines the minimum number of replica brokers that must acknowledge a write operation " +
+        "when the producer uses acks='all'. This setting helps ensure data durability by: \n" +
+        "\n" +
+        "1. Requiring at least this many replicas to be in-sync for writes to succeed\n" +
+        "2. Failing write operations with NotEnoughReplicas if there aren't enough in-sync replicas\n" +
+        "\n" +
+        "Example: With replication.factor=3 and min.insync.replicas=2:\n" +
+        "- Writes succeed if at least 2 replicas acknowledge\n" +
+        "- Writes fail if fewer than 2 replicas are available\n" +
+        "\n" +
+        "This provides a balance between durability and availability - higher values increase " +
+        "durability but may reduce availability during broker failures.";
 
     public static final String CREATE_TOPIC_POLICY_CLASS_NAME_CONFIG = "create.topic.policy.class.name";
     public static final String CREATE_TOPIC_POLICY_CLASS_NAME_DOC = "The create topic policy class that should be used for validation. The class should " +
