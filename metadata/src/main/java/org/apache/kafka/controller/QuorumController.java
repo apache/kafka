@@ -127,7 +127,6 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 
 import org.slf4j.Logger;
 
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumSet;
@@ -1643,11 +1642,7 @@ public final class QuorumController implements Controller {
      */
     private void registerWriteNoOpRecord(long maxIdleIntervalNs) {
         periodicControl.registerTask(new PeriodicTask("writeNoOpRecord",
-            () -> {
-                ArrayList<ApiMessageAndVersion> records = new ArrayList<>(1);
-                records.add(new ApiMessageAndVersion(new NoOpRecord(), (short) 0));
-                return ControllerResult.of(records, false);
-            },
+            () -> ControllerResult.of(List.of(new ApiMessageAndVersion(new NoOpRecord(), (short) 0)), false),
             maxIdleIntervalNs,
             EnumSet.noneOf(PeriodicTaskFlag.class)));
     }
