@@ -168,7 +168,7 @@ jobs:
           fi
 
   test:
-    needs: [configure, load-catalog]
+    needs: [configure, validate, load-catalog]
     if: ${{ ! needs.configure.outputs.is-draft }}
     runs-on: ubuntu-latest
     strategy:
