@@ -424,11 +424,6 @@ public class TestingMetricsInterceptingAdminClient extends AdminClient {
     }
 
     @Override
-    public AlterShareGroupOffsetsResult alterShareGroupOffsets(final String groupId, final Map<TopicPartition, Long> offsets) {
-        return adminDelegate.alterShareGroupOffsets(groupId, offsets);
-    }
-
-    @Override
     public ListShareGroupOffsetsResult listShareGroupOffsets(final Map<String, ListShareGroupOffsetsSpec> groupSpecs, final ListShareGroupOffsetsOptions options) {
         return adminDelegate.listShareGroupOffsets(groupSpecs, options);
     }

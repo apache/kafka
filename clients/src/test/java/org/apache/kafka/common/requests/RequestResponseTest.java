@@ -3715,14 +3715,14 @@ public class RequestResponseTest {
     private AlterShareGroupOffsetsRequest createAlterShareGroupOffsetsRequest(short version) {
         AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestTopicCollection alterShareGroupOffsetsRequestTopics = new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestTopicCollection();
         alterShareGroupOffsetsRequestTopics.add(new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestTopic()
-                .setTopicName("topic")
-                .setPartitions(List.of(new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestPartition()
-                        .setPartitionIndex(0)
-                        .setStartOffset(0)))
+            .setTopicName("topic")
+            .setPartitions(List.of(new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestPartition()
+                .setPartitionIndex(0)
+                .setStartOffset(0)))
         );
         AlterShareGroupOffsetsRequestData data = new AlterShareGroupOffsetsRequestData()
-                .setGroupId("group")
-                .setTopics(alterShareGroupOffsetsRequestTopics);
+            .setGroupId("group")
+            .setTopics(alterShareGroupOffsetsRequestTopics);
         return new AlterShareGroupOffsetsRequest.Builder(data).build(version);
     }
 
@@ -3741,12 +3741,12 @@ public class RequestResponseTest {
 
     private AlterShareGroupOffsetsResponse createAlterShareGroupOffsetsResponse() {
         AlterShareGroupOffsetsResponseData data = new AlterShareGroupOffsetsResponseData()
-                .setResponses(List.of(new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic()
-                .setPartitions(List.of(new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition()
-                        .setPartitionIndex(0)
-                        .setErrorCode(Errors.NONE.code())))
-                .setTopicName("topic")
-                .setTopicId(Uuid.randomUuid())));
+            .setResponses(List.of(new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic()
+            .setPartitions(List.of(new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition()
+                .setPartitionIndex(0)
+                .setErrorCode(Errors.NONE.code())))
+            .setTopicName("topic")
+            .setTopicId(Uuid.randomUuid())));
         return new AlterShareGroupOffsetsResponse(data);
     }
 

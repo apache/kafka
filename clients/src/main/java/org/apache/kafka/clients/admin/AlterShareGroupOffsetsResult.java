@@ -79,7 +79,7 @@ public class AlterShareGroupOffsetsResult {
             for (Errors error : topicPartitionErrorsMap.values()) {
                 if (error != Errors.NONE) {
                     throw error.exception(
-                            "Failed altering share group offsets for the following partitions: " + partitionsFailed);
+                        "Failed altering share group offsets for the following partitions: " + partitionsFailed);
                 }
             }
             return null;

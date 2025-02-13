@@ -61,7 +61,7 @@ public class AlterShareGroupOffsetsResponse extends AbstractResponse {
 
     public static AlterShareGroupOffsetsResponse parse(ByteBuffer buffer, short version) {
         return new AlterShareGroupOffsetsResponse(
-                new AlterShareGroupOffsetsResponseData(new ByteBufferAccessor(buffer), version)
+            new AlterShareGroupOffsetsResponseData(new ByteBufferAccessor(buffer), version)
         );
     }
 }

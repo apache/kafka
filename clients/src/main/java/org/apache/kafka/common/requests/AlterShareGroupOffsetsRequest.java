@@ -65,21 +65,21 @@ public class AlterShareGroupOffsetsRequest extends AbstractRequest {
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         List<AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic> results = new ArrayList<>();
         data.topics().forEach(
-                topicResult -> results.add(new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic()
-                        .setTopicName(topicResult.topicName())
-                        .setPartitions(topicResult.partitions().stream()
-                                .map(partitionData -> new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition()
-                                        .setPartitionIndex(partitionData.partitionIndex())
-                                        .setErrorCode(Errors.forException(e).code()))
-                                .collect(Collectors.toList()))));
+            topicResult -> results.add(new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic()
+                .setTopicName(topicResult.topicName())
+                .setPartitions(topicResult.partitions().stream()
+                    .map(partitionData -> new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition()
+                        .setPartitionIndex(partitionData.partitionIndex())
+                        .setErrorCode(Errors.forException(e).code()))
+                    .collect(Collectors.toList()))));
         return new AlterShareGroupOffsetsResponse(new AlterShareGroupOffsetsResponseData()
-                .setResponses(results));
+            .setResponses(results));
     }
 
     public static AlterShareGroupOffsetsRequest parse(ByteBuffer buffer, short version) {
         return new AlterShareGroupOffsetsRequest(
-                new AlterShareGroupOffsetsRequestData(new ByteBufferAccessor(buffer), version),
-                version
+            new AlterShareGroupOffsetsRequestData(new ByteBufferAccessor(buffer), version),
+            version
         );
     }
 

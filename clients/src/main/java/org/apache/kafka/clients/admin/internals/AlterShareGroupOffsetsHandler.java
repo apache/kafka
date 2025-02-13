@@ -51,7 +51,7 @@ public class AlterShareGroupOffsetsHandler extends AdminApiHandler.Batched<Coord
 
     private final Map<TopicPartition, Long> offsets;
 
-    private final AdminApiLookupStrategy<CoordinatorKey> lookupStrategy;
+    private final CoordinatorStrategy lookupStrategy;
 
 
     public AlterShareGroupOffsetsHandler(String groupId, Map<TopicPartition, Long> offsets, LogContext logContext) {
@@ -59,6 +59,10 @@ public class AlterShareGroupOffsetsHandler extends AdminApiHandler.Batched<Coord
         this.offsets = offsets;
         this.log = logContext.logger(AlterShareGroupOffsetsHandler.class);
         this.lookupStrategy = new CoordinatorStrategy(FindCoordinatorRequest.CoordinatorType.GROUP, logContext);
+    }
+
+    public static AdminApiFuture.SimpleAdminApiFuture<CoordinatorKey, Map<TopicPartition, Errors>> newFuture(String groupId) {
+        return AdminApiFuture.forKeys(Collections.singleton(CoordinatorKey.byGroupId(groupId)));
     }
 
     @Override
@@ -80,24 +84,20 @@ public class AlterShareGroupOffsetsHandler extends AdminApiHandler.Batched<Coord
                 Long startOffset = partitionEntry.getValue();
 
                 partitionList.add(new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestPartition()
-                        .setPartitionIndex(tp.partition())
-                        .setStartOffset(startOffset)
+                    .setPartitionIndex(tp.partition())
+                    .setStartOffset(startOffset)
                 );
             }
             requestTopics.add(new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestTopic()
-                    .setTopicName(topic)
-                    .setPartitions(partitionList));
+                .setTopicName(topic)
+                .setPartitions(partitionList));
         }
 
         AlterShareGroupOffsetsRequestData data = new AlterShareGroupOffsetsRequestData()
-                .setGroupId(groupId.idValue)
-                .setTopics(requestTopics);
+            .setGroupId(groupId.idValue)
+            .setTopics(requestTopics);
 
         return new AlterShareGroupOffsetsRequest.Builder(data);
-    }
-
-    public static AdminApiFuture.SimpleAdminApiFuture<CoordinatorKey, Map<TopicPartition, Errors>> newFuture(String groupId) {
-        return AdminApiFuture.forKeys(Collections.singleton(CoordinatorKey.byGroupId(groupId)));
     }
 
     @Override
@@ -119,12 +119,12 @@ public class AlterShareGroupOffsetsHandler extends AdminApiHandler.Batched<Coord
 
                 if (error != Errors.NONE) {
                     handleError(
-                            groupId,
-                            topicPartition,
-                            error,
-                            partitionResults,
-                            groupsToUnmap,
-                            groupsToRetry
+                        groupId,
+                        topicPartition,
+                        error,
+                        partitionResults,
+                        groupsToUnmap,
+                        groupsToRetry
                     );
                 } else {
                     partitionResults.put(topicPartition, error);

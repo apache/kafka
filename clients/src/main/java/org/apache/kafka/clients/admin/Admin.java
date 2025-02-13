@@ -1781,6 +1781,19 @@ public interface Admin extends AutoCloseable {
                                                   DescribeShareGroupsOptions options);
 
     /**
+     * Describe some share groups in the cluster, with the default options.
+     * <p>
+     * This is a convenience method for {@link #describeShareGroups(Collection, DescribeShareGroupsOptions)}
+     * with default options. See the overload for more details.
+     *
+     * @param groupIds The IDs of the groups to describe.
+     * @return The DescribeShareGroupsResult.
+     */
+    default DescribeShareGroupsResult describeShareGroups(Collection<String> groupIds) {
+        return describeShareGroups(groupIds, new DescribeShareGroupsOptions());
+    }
+
+    /**
      * Alters offsets for the specified group. In order to succeed, the group must be empty.
      *
      * <p>This operation is not transactional, so it may succeed for some partitions while fail for others.
@@ -1791,7 +1804,6 @@ public interface Admin extends AutoCloseable {
      * @return The AlterShareGroupOffsetsResult.
      */
     AlterShareGroupOffsetsResult alterShareGroupOffsets(String groupId, Map<TopicPartition, Long> offsets, AlterShareGroupOffsetsOptions options);
-
 
     /**
      * Alters offsets for the specified group. In order to succeed, the group must be empty.
@@ -1805,19 +1817,6 @@ public interface Admin extends AutoCloseable {
      */
     default AlterShareGroupOffsetsResult alterShareGroupOffsets(String groupId, Map<TopicPartition, Long> offsets) {
         return alterShareGroupOffsets(groupId, offsets, new AlterShareGroupOffsetsOptions());
-    }
-
-    /**
-     * Describe some share groups in the cluster, with the default options.
-     * <p>
-     * This is a convenience method for {@link #describeShareGroups(Collection, DescribeShareGroupsOptions)}
-     * with default options. See the overload for more details.
-     *
-     * @param groupIds The IDs of the groups to describe.
-     * @return The DescribeShareGroupsResult.
-     */
-    default DescribeShareGroupsResult describeShareGroups(Collection<String> groupIds) {
-        return describeShareGroups(groupIds, new DescribeShareGroupsOptions());
     }
 
     /**

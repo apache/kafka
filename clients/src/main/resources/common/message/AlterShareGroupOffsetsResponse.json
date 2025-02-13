@@ -11,7 +11,7 @@
   // - COORDINATOR_NOT_AVAILABLE (version 0+)
   // - COORDINATOR_LOAD_IN_PROGRESS (version 0+)
   // - GROUP_ID_NOT_FOUND (version 0+)
-  // - GROUP_NOT_EMPTY (version 0+)
+  // - NON_EMPTY_GROUP (version 0+)
   // - KAFKA_STORAGE_ERROR (version 0+)
   // - INVALID_REQUEST (version 0+)
   // - UNKNOWN_SERVER_ERROR (version 0+)
