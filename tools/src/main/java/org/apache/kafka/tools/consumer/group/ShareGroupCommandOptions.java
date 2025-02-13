@@ -64,7 +64,7 @@ public class ShareGroupCommandOptions extends CommandDefaultOptions {
         "When specified with '--list', it displays the state of all groups. It can also be used to list groups with specific states. " +
         "Valid values are Empty, Stable and Dead.";
     private static final String VERBOSE_DOC = "Provide additional information, if any, when describing the group. This option may be used " +
-        "with the '--describe --state' and '--describe --members' options only.";
+        "with the '--describe' option only.";
     private static final String DELETE_OFFSETS_DOC = "Delete offsets of share group. Supports one share group at the time, and multiple topics.";
 
     final OptionSpec<String> bootstrapServerOpt;
@@ -142,8 +142,7 @@ public class ShareGroupCommandOptions extends CommandDefaultOptions {
             .withOptionalArg()
             .ofType(String.class);
         verboseOpt = parser.accepts("verbose", VERBOSE_DOC)
-            .availableIf(membersOpt, stateOpt)
-            .availableUnless(listOpt);
+            .availableIf(describeOpt);
 
         allGroupSelectionScopeOpts = new HashSet<>(Arrays.asList(groupOpt, allGroupsOpt));
         allShareGroupLevelOpts = new HashSet<>(Arrays.asList(listOpt, describeOpt, deleteOpt, deleteOffsetsOpt, resetOffsetsOpt));
