@@ -37,7 +37,7 @@ import org.apache.kafka.coordinator.group.Group.GroupType
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig
 import org.apache.kafka.coordinator.group.{GroupConfig, GroupCoordinatorConfig}
 import org.apache.kafka.coordinator.share.ShareCoordinatorConfig
-import org.apache.kafka.coordinator.transaction.{TransactionLogConfig, TransactionStateManagerConfig}
+import org.apache.kafka.coordinator.transaction.{AddPartitionsToTxnConfig, TransactionLogConfig, TransactionStateManagerConfig}
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.security.authorizer.AuthorizerUtils
@@ -206,8 +206,10 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
 
   private val _transactionLogConfig = new TransactionLogConfig(this)
   private val _transactionStateManagerConfig = new TransactionStateManagerConfig(this)
+  private val _addPartitionsToTxnConfig = new AddPartitionsToTxnConfig(this)
   def transactionLogConfig: TransactionLogConfig = _transactionLogConfig
   def transactionStateManagerConfig: TransactionStateManagerConfig = _transactionStateManagerConfig
+  def addPartitionsToTxnConfig: AddPartitionsToTxnConfig = _addPartitionsToTxnConfig
 
   private val _quotaConfig = new QuotaConfig(this)
   def quotaConfig: QuotaConfig = _quotaConfig
