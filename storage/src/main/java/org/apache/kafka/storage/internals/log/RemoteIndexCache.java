@@ -267,8 +267,9 @@ public class RemoteIndexCache implements Closeable {
         // Delete any .deleted or .tmp files remained from the earlier run of the broker.
         try (Stream<Path> paths = Files.list(cacheDir.toPath())) {
             paths.forEach(path -> {
-                if (path.endsWith(LogFileUtils.DELETED_FILE_SUFFIX) ||
-                        path.endsWith(TMP_FILE_SUFFIX)) {
+                String filename = path.getFileName().toString();
+                if (filename.endsWith(LogFileUtils.DELETED_FILE_SUFFIX) ||
+                        filename.endsWith(TMP_FILE_SUFFIX)) {
                     try {
                         if (Files.deleteIfExists(path)) {
                             log.debug("Deleted file path {} on cache initialization", path);

@@ -924,6 +924,33 @@ class RemoteIndexCacheTest {
       s"Index file marked for deletion should not be present on disk at ${remoteIndexCacheDir.toPath}")
   }
 
+  @Test
+  def testDeleteInvalidIndexFilesOnInit(): Unit = {
+    val cacheDir = new File(logDir, RemoteIndexCache.DIR_NAME)
+    Files.createDirectory(cacheDir.toPath)
+    val baseOffset: Long = 100L
+    val uuid = Uuid.randomUuid()
+
+    val invalidOffsetIdxFilename = "%s_%s%s%s".format(baseOffset, uuid, LogFileUtils.INDEX_FILE_SUFFIX, LogFileUtils.DELETED_FILE_SUFFIX)
+    val invalidOffsetIdxFile = new File(cacheDir, invalidOffsetIdxFilename)
+    invalidOffsetIdxFile.createNewFile()
+
+    val invalidTimeIdxFilename = "%s_%s%s%s".format(baseOffset, uuid, LogFileUtils.TIME_INDEX_FILE_SUFFIX, ".tmp")
+    val invalidTimeIndexFile = new File(cacheDir, invalidTimeIdxFilename)
+    invalidTimeIndexFile.createNewFile()
+
+    val rlsMetadata = new RemoteLogSegmentMetadata(RemoteLogSegmentId.generateNew(idPartition), baseOffset + 100,
+      lastOffset, time.milliseconds(), brokerId, time.milliseconds(), segmentSize, Collections.singletonMap(0, 0L))
+    val validOffsetIdx = createOffsetIndexForSegmentMetadata(rlsMetadata, logDir)
+    val validTimeIdx = createTxIndexForSegmentMetadata(rlsMetadata, logDir)
+
+    new RemoteIndexCache(defaultRemoteIndexCacheSizeBytes, rsm, logDir.toString)
+    assertFalse(invalidOffsetIdxFile.exists())
+    assertFalse(invalidTimeIndexFile.exists())
+    assertTrue(validOffsetIdx.file().exists())
+    assertTrue(validTimeIdx.file().exists())
+  }
+
   private def generateSpyCacheEntry(remoteLogSegmentId: RemoteLogSegmentId
                                     = RemoteLogSegmentId.generateNew(idPartition)): RemoteIndexCache.Entry = {
     val rlsMetadata = new RemoteLogSegmentMetadata(remoteLogSegmentId, baseOffset, lastOffset, time.milliseconds(), brokerId, time.milliseconds(), segmentSize, Collections.singletonMap(0, 0L))
