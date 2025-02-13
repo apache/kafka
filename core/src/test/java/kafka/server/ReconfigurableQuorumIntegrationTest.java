@@ -123,8 +123,9 @@ public class ReconfigurableQuorumIntegrationTest {
                         assertNotEquals(Uuid.ZERO_UUID, voters.get(replicaId));
                     }
                 });
-                admin.removeRaftVoter(3000, cluster.nodes().
-                    controllerNodes().get(3000).metadataDirectoryId()).all().get();
+                // Remove 3001 since 3000 is used as the only one bootstrap server in KafkaClusterTestKit.
+                admin.removeRaftVoter(3001, cluster.nodes().
+                    controllerNodes().get(3001).metadataDirectoryId()).all().get();
             }
         }
     }
@@ -148,17 +149,18 @@ public class ReconfigurableQuorumIntegrationTest {
                         assertNotEquals(Uuid.ZERO_UUID, voters.get(replicaId));
                     }
                 });
-                Uuid dirId = cluster.nodes().controllerNodes().get(3000).metadataDirectoryId();
-                admin.removeRaftVoter(3000, dirId).all().get();
+                Uuid dirId = cluster.nodes().controllerNodes().get(3001).metadataDirectoryId();
+                // Remove 3001 since 3000 is used as the only one bootstrap server in KafkaClusterTestKit.
+                admin.removeRaftVoter(3001, dirId).all().get();
                 TestUtils.retryOnExceptionWithTimeout(30_000, 10, () -> {
                     Map<Integer, Uuid> voters = findVoterDirs(admin);
-                    assertEquals(new HashSet<>(Arrays.asList(3001, 3002, 3003)), voters.keySet());
-                    for (int replicaId : new int[] {3001, 3002, 3003}) {
+                    assertEquals(new HashSet<>(Arrays.asList(3000, 3002, 3003)), voters.keySet());
+                    for (int replicaId : new int[] {3000, 3002, 3003}) {
                         assertNotEquals(Uuid.ZERO_UUID, voters.get(replicaId));
                     }
                 });
                 admin.addRaftVoter(
-                    3000,
+                    3001,
                     dirId,
                     Collections.singleton(new RaftVoterEndpoint("CONTROLLER", "example.com", 8080))
                 ).all().get();
