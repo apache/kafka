@@ -206,7 +206,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                  use_new_coordinator=None,
                  consumer_group_migration_policy=None,
                  dynamicRaftQuorum=False,
-                 use_transactions_v2=False
+                 use_transactions_v2=False,
+                 use_share_groups=None
                  ):
         """
         :param context: test context
@@ -271,6 +272,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         :param consumer_group_migration_policy: The config that enables converting the non-empty classic group using the consumer embedded protocol to the non-empty consumer group using the consumer group protocol and vice versa.
         :param dynamicRaftQuorum: When true, controller_quorum_bootstrap_servers, and bootstraps the first controller using the standalone flag
         :param use_transactions_v2: When true, uses transaction.version=2 which utilizes the new transaction protocol introduced in KIP-890
+        :param use_share_groups: When true, enables the use of share groups introduced in KIP-932
         """
 
         self.zk = zk
@@ -292,10 +294,20 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                 use_new_coordinator = context.injected_args.get(arg_name)
             if use_new_coordinator is None:
                 use_new_coordinator = context.globals.get(arg_name)
+
+        # Set use_share_groups based on context and arguments.
+        # If not specified, the default config is used.
+        if use_share_groups is None:
+            arg_name = 'use_share_groups'
+            if context.injected_args is not None:
+                use_share_groups = context.injected_args.get(arg_name)
+            if use_share_groups is None:
+                use_share_groups = context.globals.get(arg_name)
         
         # Assign the determined value.
         self.use_new_coordinator = use_new_coordinator
         self.use_transactions_v2 = use_transactions_v2
+        self.use_share_groups = use_share_groups
 
         # Set consumer_group_migration_policy based on context and arguments.
         if consumer_group_migration_policy is None:
@@ -749,7 +761,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         #load template configs as dictionary
         config_template = self.render('kafka.properties', node=node, broker_id=self.idx(node),
                                       security_config=self.security_config, num_nodes=self.num_nodes,
-                                      listener_security_config=self.listener_security_config)
+                                      listener_security_config=self.listener_security_config,
+                                      use_share_groups=self.use_share_groups)
 
         configs = dict( l.rstrip().split('=', 1) for l in config_template.split('\n')
                         if not l.startswith("#") and "=" in l )
@@ -777,6 +790,11 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
         for prop in self.per_node_server_prop_overrides.get(self.idx(node), []):
             override_configs[prop[0]] = prop[1]
+
+        if self.use_share_groups is not None and self.use_share_groups is True:
+            override_configs[config_property.SHARE_GROUP_ENABLE] = str(self.use_share_groups)
+            override_configs[config_property.UNSTABLE_API_VERSIONS_ENABLE] = str(self.use_share_groups)
+            override_configs[config_property.GROUP_COORDINATOR_REBALANCE_PROTOCOLS] = 'classic,consumer,share'
 
         #update template configs with test override configs
         configs.update(override_configs)

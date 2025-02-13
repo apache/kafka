@@ -37,7 +37,6 @@ import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig
 import org.apache.kafka.coordinator.transaction.{TransactionLogConfig, TransactionStateManagerConfig}
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.QuorumConfig
-import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.config.{DelegationTokenManagerConfigs, KRaftConfigs, QuotaConfig, ReplicationConfigs, ServerConfigs, ServerLogConfigs, ServerTopicConfigSynonyms}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.MetricConfigs
@@ -56,7 +55,7 @@ class KafkaConfigTest {
     props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
     props.setProperty(KRaftConfigs.NODE_ID_CONFIG, "1")
     props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, "PLAINTEXT://localhost:0,CONTROLLER://localhost:5000")
-    props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "2@localhost:5000")
+    props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "1@localhost:5000")
     props.setProperty(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "PLAINTEXT:PLAINTEXT,CONTROLLER:SASL_SSL")
     props
   }
@@ -159,7 +158,6 @@ class KafkaConfigTest {
     assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props1))
     assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props2))
     assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props3))
-
   }
 
   @Test
@@ -187,7 +185,7 @@ class KafkaConfigTest {
     val advertisedHostName = "routable-host"
     val advertisedPort = 1234
 
-    val props = TestUtils.createBrokerConfig(0)
+    val props = createDefaultConfig()
     props.setProperty(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, s"PLAINTEXT://$advertisedHostName:$advertisedPort")
 
     val serverConfig = KafkaConfig.fromProps(props)
@@ -617,29 +615,6 @@ class KafkaConfigTest {
     assertEquals(conf.effectiveAdvertisedBrokerListeners, listenerListToEndPoints("PLAINTEXT://:9092"))
   }
 
-  @Test
-  def testVersionConfiguration(): Unit = {
-    val props = new Properties()
-    props.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker")
-    props.setProperty(ServerConfigs.BROKER_ID_CONFIG, "1")
-    props.setProperty(QuorumConfig.QUORUM_BOOTSTRAP_SERVERS_CONFIG, "localhost:9092")
-    props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
-    val conf = KafkaConfig.fromProps(props)
-    assertEquals(MetadataVersion.MINIMUM_KRAFT_VERSION, conf.interBrokerProtocolVersion)
-
-    props.setProperty(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG, "3.0.0-IV1")
-    val conf2 = KafkaConfig.fromProps(props)
-    assertEquals(MetadataVersion.IBP_3_0_IV1, conf2.interBrokerProtocolVersion)
-
-    // check that patch version doesn't affect equality
-    props.setProperty(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG, "3.0.1-IV1")
-    val conf3 = KafkaConfig.fromProps(props)
-    assertEquals(MetadataVersion.IBP_3_0_IV1, conf3.interBrokerProtocolVersion)
-
-    //check that latest is newer than 3.0.1-IV0
-    assertTrue(MetadataVersion.latestTesting.isAtLeast(conf3.interBrokerProtocolVersion))
-  }
-
   private def isValidKafkaConfig(props: Properties): Boolean = {
     try {
       KafkaConfig.fromProps(props)
@@ -884,7 +859,6 @@ class KafkaConfigTest {
         case ReplicationConfigs.PRODUCER_PURGATORY_PURGE_INTERVAL_REQUESTS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case ReplicationConfigs.DELETE_RECORDS_PURGATORY_PURGE_INTERVAL_REQUESTS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case ReplicationConfigs.AUTO_LEADER_REBALANCE_ENABLE_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_boolean", "0")
-        case ReplicationConfigs.LEADER_IMBALANCE_PER_BROKER_PERCENTAGE_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case ReplicationConfigs.LEADER_IMBALANCE_CHECK_INTERVAL_SECONDS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case ReplicationConfigs.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_boolean", "0")
         case ServerConfigs.CONTROLLED_SHUTDOWN_ENABLE_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_boolean", "0")
@@ -1406,27 +1380,30 @@ class KafkaConfigTest {
   }
 
   @Test
-  def testRejectsNegativeNodeIdForRaftBasedBrokerCaseWithAutoGenEnabled(): Unit = {
-    // -1 is the default for both node.id and broker.id
+  def testAcceptsLargeId(): Unit = {
+    val largeBrokerId = 2000
     val props = new Properties()
     props.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker")
-    assertFalse(isValidKafkaConfig(props))
-  }
-
-  @Test
-  def testRejectsNegativeNodeIdForRaftBasedControllerCaseWithAutoGenEnabled(): Unit = {
-    // -1 is the default for both node.id and broker.id
-    val props = new Properties()
-    props.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller")
-    assertFalse(isValidKafkaConfig(props))
+    props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, "PLAINTEXT://localhost:9092")
+    props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL")
+    props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "2@localhost:9093")
+    props.setProperty(KRaftConfigs.NODE_ID_CONFIG, largeBrokerId.toString)
+    KafkaConfig.fromProps(props)
   }
 
   @Test
   def testRejectsNegativeNodeId(): Unit = {
-    // -1 is the default for both node.id and broker.id
-    val props = new Properties()
-    props.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker")
-    props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "2@localhost:9093")
+    val props = createDefaultConfig()
+    props.remove(ServerConfigs.BROKER_ID_CONFIG)
+    props.setProperty(KRaftConfigs.NODE_ID_CONFIG, "-1")
+    assertFalse(isValidKafkaConfig(props))
+  }
+
+  @Test
+  def testRejectsNegativeBrokerId(): Unit = {
+    val props = createDefaultConfig()
+    props.setProperty(ServerConfigs.BROKER_ID_CONFIG, "-1")
+    props.remove(KRaftConfigs.NODE_ID_CONFIG)
     assertFalse(isValidKafkaConfig(props))
   }
 
@@ -1611,25 +1588,6 @@ class KafkaConfigTest {
     assertEquals("early.start.listeners contains listener INTERNAL, but this is not " +
       "contained in listeners or controller.listener.names",
         assertThrows(classOf[ConfigException], () => new KafkaConfig(props)).getMessage)
-  }
-
-  @Test
-  def testIgnoreUserInterBrokerProtocolVersionKRaft(): Unit = {
-    for (ibp <- Seq("3.0", "3.1", "3.2")) {
-      val props = new Properties()
-      props.putAll(kraftProps())
-      props.setProperty(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG, ibp)
-      val config = new KafkaConfig(props)
-      assertEquals(config.interBrokerProtocolVersion, MetadataVersion.MINIMUM_KRAFT_VERSION)
-    }
-  }
-
-  @Test
-  def testDefaultInterBrokerProtocolVersionKRaft(): Unit = {
-    val props = new Properties()
-    props.putAll(kraftProps())
-    val config = KafkaConfig.fromProps(props)
-    assertEquals(config.interBrokerProtocolVersion, MetadataVersion.MINIMUM_KRAFT_VERSION)
   }
 
   @Test

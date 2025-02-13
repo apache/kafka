@@ -64,7 +64,6 @@ import org.apache.kafka.server.authorizer.Action;
 import org.apache.kafka.server.authorizer.AuthorizationResult;
 import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.server.common.KRaftVersion;
-import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.config.KRaftConfigs;
 
 import org.junit.jupiter.api.Test;
@@ -545,7 +544,6 @@ class DescribeTopicPartitionsRequestHandlerTest {
         properties.put(QuorumConfig.QUORUM_VOTERS_CONFIG, voterId + "@localhost:9093");
         properties.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL");
         properties.put(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "PLAINTEXT:PLAINTEXT,SSL:SSL");
-        TestUtils.setIbpVersion(properties, MetadataVersion.latestProduction());
         return new KafkaConfig(properties);
     }
 }

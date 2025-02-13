@@ -21,7 +21,7 @@ import java.util.{Collections, Properties}
 import kafka.log.UnifiedLog
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.Logging
-import org.apache.kafka.server.config.{QuotaConfig, ZooKeeperInternals}
+import org.apache.kafka.server.config.QuotaConfig
 import org.apache.kafka.common.metrics.Quota._
 import org.apache.kafka.coordinator.group.GroupCoordinator
 import org.apache.kafka.server.ClientMetricsManager
@@ -146,7 +146,7 @@ class TopicConfigHandler(private val replicaManager: ReplicaManager,
 class BrokerConfigHandler(private val brokerConfig: KafkaConfig,
                           private val quotaManagers: QuotaManagers) extends ConfigHandler with Logging {
   def processConfigChanges(brokerId: String, properties: Properties): Unit = {
-    if (brokerId == ZooKeeperInternals.DEFAULT_STRING)
+    if (brokerId.isEmpty)
       brokerConfig.dynamicConfig.updateDefaultConfig(properties)
     else if (brokerConfig.brokerId == brokerId.trim.toInt) {
       brokerConfig.dynamicConfig.updateBrokerConfig(brokerConfig.brokerId, properties)

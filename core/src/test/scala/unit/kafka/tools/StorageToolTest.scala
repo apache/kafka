@@ -358,25 +358,11 @@ Found problem:
   }
 
   @Test
-  def testFormatWithReleaseVersionDefault(): Unit = {
-    val availableDirs = Seq(TestUtils.tempDir())
-    val properties = new Properties()
-    properties.putAll(defaultStaticQuorumProperties)
-    properties.setProperty("log.dirs", availableDirs.mkString(","))
-    properties.setProperty("inter.broker.protocol.version", "3.7")
-    val stream = new ByteArrayOutputStream()
-    assertEquals(0, runFormatCommand(stream, properties))
-    assertTrue(stream.toString().contains("3.7-IV4"),
-      "Failed to find content in output: " + stream.toString())
-  }
-
-  @Test
   def testFormatWithReleaseVersionDefaultAndReleaseVersion(): Unit = {
     val availableDirs = Seq(TestUtils.tempDir())
     val properties = new Properties()
     properties.putAll(defaultStaticQuorumProperties)
     properties.setProperty("log.dirs", availableDirs.mkString(","))
-    properties.setProperty("inter.broker.protocol.version", "3.7")
     val stream = new ByteArrayOutputStream()
     assertEquals(0, runFormatCommand(stream, properties, Seq(
       "--release-version", "3.6-IV0",

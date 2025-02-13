@@ -29,7 +29,7 @@ class LoggingTest extends Logging {
 
   @Test
   def testTypeOfGetLoggers(): Unit = {
-    val log4jController = new Log4jController
+    val log4jController = new LoggingController
     // the return object of getLoggers must be a collection instance from java standard library.
     // That enables mbean client to deserialize it without extra libraries.
     assertEquals(classOf[java.util.ArrayList[String]], log4jController.getLoggers.getClass)
@@ -38,10 +38,11 @@ class LoggingTest extends Logging {
   @Test
   def testLog4jControllerIsRegistered(): Unit = {
     val mbs = ManagementFactory.getPlatformMBeanServer
+
     val log4jControllerName = ObjectName.getInstance("kafka:type=kafka.Log4jController")
     assertTrue(mbs.isRegistered(log4jControllerName), "kafka.utils.Log4jController is not registered")
-    val instance = mbs.getObjectInstance(log4jControllerName)
-    assertEquals("kafka.utils.Log4jController", instance.getClassName)
+    val log4jInstance = mbs.getObjectInstance(log4jControllerName)
+    assertEquals("kafka.utils.LoggingController", log4jInstance.getClassName)
   }
 
   @Test
@@ -70,7 +71,7 @@ class LoggingTest extends Logging {
 
   @Test
   def testLoggerLevelIsResolved(): Unit = {
-    val controller = new Log4jController()
+    val controller = new LoggingController()
     val previousLevel = controller.getLogLevel("kafka")
     try {
       controller.setLogLevel("kafka", "TRACE")

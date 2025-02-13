@@ -367,6 +367,7 @@ public class ShareCompletedFetchTest {
         return new ShareCompletedFetch(
                 logContext,
                 BufferSupplier.create(),
+                0,
                 TIP,
                 partitionData,
                 shareFetchMetricsAggregator,
