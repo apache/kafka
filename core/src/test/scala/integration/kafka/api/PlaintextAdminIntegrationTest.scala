@@ -3582,9 +3582,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       TopicConfig.COMPRESSION_TYPE_CONFIG -> "producer"
     ).asJava
     val newTopic = new NewTopic(topic, 2, brokerCount.toShort)
-    assertFutureThrows(
+    assertFutureThrows(classOf[InvalidConfigurationException],
       client.createTopics(Collections.singletonList(newTopic.configs(invalidConfigs))).all,
-      classOf[InvalidConfigurationException],
       "Null value not supported for topic configs: retention.bytes"
     )
 
@@ -3598,9 +3597,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       new AlterConfigOp(new ConfigEntry(TopicConfig.RETENTION_BYTES_CONFIG, null), AlterConfigOp.OpType.SET),
       new AlterConfigOp(new ConfigEntry(TopicConfig.COMPRESSION_TYPE_CONFIG, "lz4"), AlterConfigOp.OpType.SET)
     )
-    assertFutureThrows(
+    assertFutureThrows(classOf[InvalidRequestException],
       client.incrementalAlterConfigs(Map(topicResource -> alterOps.asJavaCollection).asJava).all,
-      classOf[InvalidRequestException],
       "Null value not supported for : retention.bytes"
     )
     validateLogConfig(compressionType = "producer")
@@ -4106,9 +4104,9 @@ object PlaintextAdminIntegrationTest {
     var alterResult = admin.incrementalAlterConfigs(alterConfigs)
 
     assertEquals(Set(topicResource1, topicResource2, brokerResource).asJava, alterResult.values.keySet)
-    assertFutureThrows(alterResult.values.get(topicResource1), classOf[InvalidConfigurationException])
+    assertFutureThrows(classOf[InvalidConfigurationException], alterResult.values.get(topicResource1))
     alterResult.values.get(topicResource2).get
-    assertFutureThrows(alterResult.values.get(brokerResource), classOf[InvalidRequestException])
+    assertFutureThrows(classOf[InvalidRequestException], alterResult.values.get(brokerResource))
 
     // Verify that first and third resources were not updated and second was updated
     test.ensureConsistentKRaftMetadata()
@@ -4135,9 +4133,9 @@ object PlaintextAdminIntegrationTest {
     alterResult = admin.incrementalAlterConfigs(alterConfigs, new AlterConfigsOptions().validateOnly(true))
 
     assertEquals(Set(topicResource1, topicResource2, brokerResource).asJava, alterResult.values.keySet)
-    assertFutureThrows(alterResult.values.get(topicResource1), classOf[InvalidConfigurationException])
+    assertFutureThrows(classOf[InvalidConfigurationException], alterResult.values.get(topicResource1))
     alterResult.values.get(topicResource2).get
-    assertFutureThrows(alterResult.values.get(brokerResource), classOf[InvalidRequestException])
+    assertFutureThrows(classOf[InvalidRequestException], alterResult.values.get(brokerResource))
 
     // Verify that no resources are updated since validate_only = true
     test.ensureConsistentKRaftMetadata()
