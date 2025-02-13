@@ -1811,7 +1811,7 @@ public class KafkaAdminClient extends AdminClient {
         List<Node> nodes = new ArrayList<>();
         Node controllerNode = null;
         for (DescribeClusterResponseData.DescribeClusterBroker node : response.brokers()) {
-            Node newNode = new Node(node.brokerId(), node.host(), node.port(), node.rack());
+            Node newNode = new Node(node.brokerId(), node.host(), node.port(), node.rack(), node.pod());
             nodes.add(newNode);
             if (node.brokerId() == response.controllerId()) {
                 controllerNode = newNode;

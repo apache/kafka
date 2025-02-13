@@ -261,7 +261,7 @@ public class BrokerRegistration {
         if (endpoint == null) {
             return Optional.empty();
         }
-        return Optional.of(new Node(id, endpoint.host(), endpoint.port(), rack.orElse(null), fenced));
+        return Optional.of(new Node(id, endpoint.host(), endpoint.port(), rack.orElse(null), pod.orElse(null), fenced));
     }
     
     public List<Node> nodes() {

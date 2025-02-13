@@ -322,14 +322,14 @@ public class ReassignPartitionsUnitTest {
     @Test
     public void testGetBrokerRackInformation() throws Exception {
         try (MockAdminClient adminClient = new MockAdminClient.Builder().
-            brokers(List.of(new Node(0, "localhost", 9092, "rack0"),
-                new Node(1, "localhost", 9093, "rack1"),
-                new Node(2, "localhost", 9094, null))).
+            brokers(List.of(new Node(0, "localhost", 9092, "rack0", "pod0"),
+                new Node(1, "localhost", 9093, "rack1", "pod1"),
+                new Node(2, "localhost", 9094, null, null))).
             build()) {
 
             assertEquals(List.of(
-                new UsableBroker(0, Optional.of("rack0"), Optional.empty(), false),
-                new UsableBroker(1, Optional.of("rack1"), Optional.empty(), false)
+                new UsableBroker(0, Optional.of("rack0"), Optional.of("pod0"), false),
+                new UsableBroker(1, Optional.of("rack1"), Optional.of("pod1"), false)
             ), getBrokerMetadata(adminClient, List.of(0, 1), true));
             assertEquals(List.of(
                 new UsableBroker(0, Optional.empty(), Optional.empty(), false),
@@ -393,11 +393,11 @@ public class ReassignPartitionsUnitTest {
         try (MockAdminClient adminClient = new MockAdminClient.Builder().
             brokers(List.of(
                 new Node(0, "localhost", 9092, "rack0"),
-                new Node(1, "localhost", 9093, "rack0"),
-                new Node(2, "localhost", 9094, null),
-                new Node(3, "localhost", 9095, "rack1"),
-                new Node(4, "localhost", 9096, "rack1"),
-                new Node(5, "localhost", 9097, "rack2"))).
+                new Node(1, "localhost", 9093, "rack0", "pod0"),
+                new Node(2, "localhost", 9094, null, null),
+                new Node(3, "localhost", 9095, "rack1", "pod1"),
+                new Node(4, "localhost", 9096, "rack1", "pod1"),
+                new Node(5, "localhost", 9097, "rack2", "pod2"))).
             build()) {
 
             addTopics(adminClient);

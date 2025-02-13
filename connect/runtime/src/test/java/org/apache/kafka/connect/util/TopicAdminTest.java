@@ -928,7 +928,8 @@ public class TopicAdminTest {
                 .setHost(broker.host())
                 .setPort(broker.port())
                 .setBrokerId(broker.id())
-                .setRack(broker.rack())));
+                .setRack(broker.rack())
+                .setPod(broker.pod())));
 
         return new DescribeClusterResponse(data);
     }

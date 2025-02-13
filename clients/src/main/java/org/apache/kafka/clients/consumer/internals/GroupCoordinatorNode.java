@@ -30,7 +30,7 @@ import org.apache.kafka.common.Node;
  */
 public class GroupCoordinatorNode extends Node {
     public GroupCoordinatorNode(int id, String host, int port) {
-        super(GroupCoordinatorNode.validateId(id), host, port, null, false, "+" + id);
+        super(GroupCoordinatorNode.validateId(id), host, port, null, null, false, "+" + id);
     }
 
     private static int validateId(int id) {
