@@ -299,22 +299,7 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
         return targetPartitions;
     }
 
-    static class TargetPartition {
-        Uuid topicId;
-        int partition;
-
-        TargetPartition(Uuid topicId, int partition) {
-            this.topicId = topicId;
-            this.partition = partition;
-        }
-
-        Uuid topicId() {
-            return topicId;
-        }
-
-        int partition() {
-            return partition;
-        }
+    record TargetPartition(Uuid topicId, int partition) {
 
         @Override
         public boolean equals(Object o) {
