@@ -260,17 +260,15 @@ jobs:
           GRADLE_TEST_EXIT_CODE: ${{ steps.junit-test.outputs.gradle-exitcode }}
         run: |
           python .github/scripts/junit.py \
-           --path build/junit-xml \
-           --export-test-catalog ./test-catalog >> $GITHUB_STEP_SUMMARY
+           --path build/junit-xml >> $GITHUB_STEP_SUMMARY
 
   # This job downloads all the JUnit XML files and thread dumps from the JDK 23 test runs.
-  # If any thread dump artifact is present, this job will fail since that means we had a
-  # timeout and probably did not run all tests. If there were no timeouts, this job will
-  # produce the test catalog and archive it.
+  # If any test job fails, we will not run this job. Also, if any thread dump artifacts
+  # are present, this means there was a timeout in the tests and so we will not proceed
+  # with catalog creation.
   collate-test-catalog:
     name: Collate Test Catalog
     needs: test
-    if: ${{ always() }}
     runs-on: ubuntu-latest
     outputs:
       uploaded-test-catalog: ${{ steps.archive-test-catalog.outcome == 'success' }}
@@ -290,7 +288,7 @@ jobs:
         run: |
           find .
           if [ -d thread-dumps ]; then
-              echo "Found thread-dumps directory. Will not proceed with test catalog collation.";
+              echo "Found 'thread-dumps' directory. Will not proceed with test catalog collation.";
               exit 1;
           fi
       - name: Download JUnit XMLs
@@ -322,7 +320,7 @@ jobs:
   update-test-catalog:
     name: Update Test Catalog
     needs: collate-test-catalog
-    if: ${{ always() && inputs.is-trunk && needs.collate-test-catalog.outputs.uploaded-test-catalog == 'true' }}
+    if: ${{ inputs.is-trunk && needs.collate-test-catalog.outputs.uploaded-test-catalog == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
