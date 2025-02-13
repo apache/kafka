@@ -16,12 +16,12 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-public class PollEvent extends ApplicationEvent {
+public class PollEvent extends CompletableApplicationEvent<Void> {
 
     private final long pollTimeMs;
 
     public PollEvent(final long pollTimeMs) {
-        super(Type.POLL);
+        super(Type.POLL, Long.MAX_VALUE);
         this.pollTimeMs = pollTimeMs;
     }
 

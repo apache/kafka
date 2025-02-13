@@ -750,7 +750,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             do {
 
                 // Make sure to let the background thread know that we are still polling.
-                applicationEventHandler.add(new PollEvent(timer.currentTimeMs()));
+                applicationEventHandler.addAndGet(new PollEvent(timer.currentTimeMs()));
 
                 // We must not allow wake-ups between polling for fetches and returning the records.
                 // If the polled fetches are not empty the consumed position has already been updated in the polling

@@ -1574,7 +1574,7 @@ public class AsyncKafkaConsumerTest {
         completeTopicSubscriptionChangeEventSuccessfully();
         consumer.subscribe(singletonList("topic1"));
         consumer.poll(Duration.ofMillis(100));
-        verify(applicationEventHandler).add(any(PollEvent.class));
+        verify(applicationEventHandler).addAndGet(any(PollEvent.class));
         verify(applicationEventHandler).add(any(CreateFetchRequestsEvent.class));
     }
 

@@ -210,6 +210,8 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         // as we're processing before any new fetching starts in the app thread
         requestManagers.consumerMembershipManager.ifPresent(consumerMembershipManager ->
             consumerMembershipManager.maybeReconcile(true));
+        // notify the app thread could start the next poll cycle since commit request on revoke has been generated
+        event.future().complete(null);
         if (requestManagers.commitRequestManager.isPresent()) {
             CommitRequestManager commitRequestManager = requestManagers.commitRequestManager.get();
             commitRequestManager.updateTimerAndMaybeCommit(event.pollTimeMs());
