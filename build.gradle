@@ -653,7 +653,7 @@ subprojects {
 
   task docsJar(dependsOn: javadocJar)
 
-  test.dependsOn('javadoc')
+  check.dependsOn('javadoc')
 
   task systemTestLibs(dependsOn: jar)
 
