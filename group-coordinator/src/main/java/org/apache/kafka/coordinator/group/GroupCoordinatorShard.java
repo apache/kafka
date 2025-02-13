@@ -17,8 +17,8 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ApiException;
+import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
@@ -98,6 +98,7 @@ import org.apache.kafka.coordinator.group.modern.share.ShareGroup;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.share.persister.DeleteShareGroupStateParameters;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
 import org.slf4j.Logger;
@@ -105,7 +106,6 @@ import org.slf4j.Logger;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -480,30 +480,30 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     /**
-     * Method returns all share partition keys corresponding to a list of groupIds.
+     * Method returns a list of {@link DeleteShareGroupStateParameters} corresponding
+     * to the valid share groups passed as the input. If a share group has subscribed topics
+     * it is not included in the request list.
+     * <p></p>
      * The groupIds are first filtered by type to restrict the list to share groups.
      * @param groupIds - A list of groupIds as string
-     * @param committedOffset - The last committedOffset for the internal topic partition
-     * @return A map representing the share partition structure.
+     * @return {@link CoordinatorResult} object always containing empty records and list of persister delete requests.
      */
-    public Map<String, Map<Uuid, List<Integer>>> sharePartitions(List<String> groupIds, long committedOffset) {
-        List<ShareGroup> shareGroups = new ArrayList<>();
+    public CoordinatorResult<List<DeleteShareGroupStateParameters>, CoordinatorRecord> sharePartitionDeleteRequests(List<String> groupIds) {
+        List<DeleteShareGroupStateParameters> deleteShareGroupStateParameters = new ArrayList<>(groupIds.size());
         for (String groupId : groupIds) {
             try {
-                Group group = groupMetadataManager.group(groupId);
-                if (group instanceof ShareGroup) {
-                    shareGroups.add((ShareGroup) group);
-                }
-            } catch (ApiException exception) {
+                ShareGroup group = groupMetadataManager.shareGroup(groupId);
+                groupMetadataManager.sharePartitionDeleteRequest(group)
+                    .ifPresent(deleteShareGroupStateParameters::add);
+            } catch (GroupIdNotFoundException exception) {
                 // We needn't do anything more than logging here as deleteGroups
                 // method is handling these cases.
                 // Even if some groups cannot be found, we
                 // must check the entire list.
-                log.error("Failed to find group {}", groupId, exception);
+                log.debug("Failed to find group {}", groupId, exception);
             }
         }
-
-        return groupMetadataManager.sharePartitionKeysMap(shareGroups);
+        return new CoordinatorResult<>(List.of(), deleteShareGroupStateParameters);
     }
 
     /**

@@ -81,9 +81,12 @@ import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.TopicsImage;
 import org.apache.kafka.server.record.BrokerCompressionType;
 import org.apache.kafka.server.share.persister.DefaultStatePersister;
+import org.apache.kafka.server.share.persister.DeleteShareGroupStateParameters;
 import org.apache.kafka.server.share.persister.DeleteShareGroupStateResult;
+import org.apache.kafka.server.share.persister.GroupTopicPartitionData;
 import org.apache.kafka.server.share.persister.NoOpShareStatePersister;
 import org.apache.kafka.server.share.persister.PartitionFactory;
+import org.apache.kafka.server.share.persister.PartitionIdData;
 import org.apache.kafka.server.share.persister.Persister;
 import org.apache.kafka.server.share.persister.ReadShareGroupStateSummaryParameters;
 import org.apache.kafka.server.share.persister.ReadShareGroupStateSummaryResult;
@@ -101,6 +104,7 @@ import org.mockito.ArgumentMatchers;
 
 import java.net.InetAddress;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -1598,11 +1602,12 @@ public class GroupCoordinatorServiceTest {
             result1.duplicate()
         ));
 
-        when(runtime.scheduleReadOperation(
+        when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("delete-share-groups"),
             ArgumentMatchers.any(),
+            ArgumentMatchers.any(),
             ArgumentMatchers.any()
-        )).thenReturn(CompletableFuture.completedFuture(Map.of()));
+        )).thenReturn(CompletableFuture.completedFuture(List.of()));
 
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("delete-groups"),
@@ -1671,47 +1676,34 @@ public class GroupCoordinatorServiceTest {
         DeleteGroupsResponseData.DeletableGroupResultCollection expectedResultCollection =
             new DeleteGroupsResponseData.DeletableGroupResultCollection();
         expectedResultCollection.addAll(List.of(
-                result3.duplicate(),
-                result2.duplicate(),
-                result1.duplicate()
-            )
-        );
+            result3.duplicate(),
+            result2.duplicate(),
+            result1.duplicate()
+        ));
 
         Uuid shareGroupTopicId = Uuid.randomUuid();
-        when(runtime.scheduleReadOperation(
+
+        when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("delete-share-groups"),
             ArgumentMatchers.any(),
+            ArgumentMatchers.any(),
             ArgumentMatchers.any()
-        ))
-            .thenReturn(CompletableFuture.completedFuture(
-                    Map.of(
-                        "share-group-id-1",
-                        Map.of(
-                            shareGroupTopicId,
-                            List.of(0, 1)
-                        )
-                    )
-                )
-            )
-            .thenReturn(CompletableFuture.completedFuture(Map.of()));   // non-share group
+        )).thenReturn(CompletableFuture.completedFuture(
+            List.of(createDeleteShareRequest("share-group-id-1", shareGroupTopicId, List.of(0, 1)))
+        )).thenReturn(CompletableFuture.completedFuture(List.of()));   // non-share group
 
-        when(persister.deleteState(
-            any()
-        ))
-            .thenReturn(CompletableFuture.completedFuture(new DeleteShareGroupStateResult.Builder()
-                    .setTopicsData(List.of(
-                            new TopicData<>(
-                                shareGroupTopicId,
-                                List.of(
-                                    PartitionFactory.newPartitionErrorData(0, Errors.NONE.code(), Errors.NONE.message()),
-                                    PartitionFactory.newPartitionErrorData(1, Errors.NONE.code(), Errors.NONE.message())
-                                )
-                            )
-                        )
-                    )
-                    .build()
-                )
-            );
+        when(persister.deleteState(any())).thenReturn(CompletableFuture.completedFuture(
+            new DeleteShareGroupStateResult.Builder()
+                .setTopicsData(List.of(
+                    new TopicData<>(
+                        shareGroupTopicId,
+                        List.of(
+                            PartitionFactory.newPartitionErrorData(0, Errors.NONE.code(), Errors.NONE.message()),
+                            PartitionFactory.newPartitionErrorData(1, Errors.NONE.code(), Errors.NONE.message())
+                        ))
+                ))
+                .build()
+        ));
 
         // share-group-id-1
         when(runtime.scheduleWriteOperation(
@@ -1772,70 +1764,45 @@ public class GroupCoordinatorServiceTest {
         DeleteGroupsResponseData.DeletableGroupResultCollection expectedResultCollection =
             new DeleteGroupsResponseData.DeletableGroupResultCollection();
         expectedResultCollection.addAll(Arrays.asList(
-                result1.duplicate(),
-                result2.duplicate()
-            )
-        );
+            result1.duplicate(),
+            result2.duplicate()));
 
         Uuid shareGroupTopicId = Uuid.randomUuid();
         Uuid shareGroupTopicId2 = Uuid.randomUuid();
-        when(runtime.scheduleReadOperation(
+        when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("delete-share-groups"),
             ArgumentMatchers.any(),
+            ArgumentMatchers.any(),
             ArgumentMatchers.any()
-        ))
-            .thenReturn(CompletableFuture.completedFuture(
-                    Map.of(
-                        "share-group-id-1",
-                        Map.of(
-                            shareGroupTopicId,
-                            List.of(0, 1)
-                        )
-                    )
-                )
-            )
-            .thenReturn(CompletableFuture.completedFuture(
-                    Map.of(
-                        "share-group-id-2",
-                        Map.of(
-                            shareGroupTopicId2,
-                            List.of(0, 1)
-                        )
-                    )
-                )
-            );
+        )).thenReturn(CompletableFuture.completedFuture(
+            List.of(createDeleteShareRequest("share-group-id-1", shareGroupTopicId, List.of(0, 1)))
+        )).thenReturn(CompletableFuture.completedFuture(
+            List.of(createDeleteShareRequest("share-group-id-2", shareGroupTopicId2, List.of(0, 1)))
+        ));
 
-        when(persister.deleteState(
-            any()
-        ))
-            .thenReturn(CompletableFuture.completedFuture(new DeleteShareGroupStateResult.Builder()
-                    .setTopicsData(List.of(
-                            new TopicData<>(
-                                shareGroupTopicId,
-                                List.of(
-                                    PartitionFactory.newPartitionErrorData(0, Errors.UNKNOWN_SERVER_ERROR.code(), Errors.UNKNOWN_SERVER_ERROR.message()),
-                                    PartitionFactory.newPartitionErrorData(1, Errors.UNKNOWN_SERVER_ERROR.code(), Errors.UNKNOWN_SERVER_ERROR.message())
-                                )
-                            )
-                        )
-                    )
-                    .build()
-                )
-            )
-            .thenReturn(CompletableFuture.completedFuture(new DeleteShareGroupStateResult.Builder()
-                    .setTopicsData(List.of(
-                            new TopicData<>(
-                                shareGroupTopicId2,
-                                List.of(
-                                    PartitionFactory.newPartitionErrorData(0, Errors.NONE.code(), Errors.NONE.message()),
-                                    PartitionFactory.newPartitionErrorData(1, Errors.NONE.code(), Errors.NONE.message())
-                                )
-                            )
-                        )
-                    )
-                    .build()
-                )
-            );
+        when(persister.deleteState(any())).thenReturn(CompletableFuture.completedFuture(
+            new DeleteShareGroupStateResult.Builder()
+                .setTopicsData(List.of(
+                    new TopicData<>(
+                        shareGroupTopicId,
+                        List.of(
+                            PartitionFactory.newPartitionErrorData(0, Errors.UNKNOWN_SERVER_ERROR.code(), Errors.UNKNOWN_SERVER_ERROR.message()),
+                            PartitionFactory.newPartitionErrorData(1, Errors.UNKNOWN_SERVER_ERROR.code(), Errors.UNKNOWN_SERVER_ERROR.message())
+                        ))
+                ))
+                .build()
+        )).thenReturn(CompletableFuture.completedFuture(
+            new DeleteShareGroupStateResult.Builder()
+                .setTopicsData(List.of(
+                    new TopicData<>(
+                        shareGroupTopicId2,
+                        List.of(
+                            PartitionFactory.newPartitionErrorData(0, Errors.NONE.code(), Errors.NONE.message()),
+                            PartitionFactory.newPartitionErrorData(1, Errors.NONE.code(), Errors.NONE.message())
+                        ))
+                ))
+                .build()
+        ));
 
         // share-group-id-1
         when(runtime.scheduleWriteOperation(
@@ -1867,7 +1834,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testDeleteShareGroupCoordinatorReadError() throws Exception {
+    public void testDeleteShareGroupCoordinatorShareSpecificWriteError() throws Exception {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         Persister persister = mock(Persister.class);
         GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
@@ -1892,15 +1859,14 @@ public class GroupCoordinatorServiceTest {
             result1.duplicate()
         );
 
-        when(runtime.scheduleReadOperation(
+        when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("delete-share-groups"),
             ArgumentMatchers.any(),
+            ArgumentMatchers.any(),
             ArgumentMatchers.any()
-        ))
-            .thenReturn(CompletableFuture.failedFuture(
-                    Errors.COORDINATOR_NOT_AVAILABLE.exception()
-                )
-            );
+        )).thenReturn(CompletableFuture.failedFuture(
+            Errors.COORDINATOR_NOT_AVAILABLE.exception()
+        ));
 
         // share-group-id-1
         when(runtime.scheduleWriteOperation(
@@ -1924,7 +1890,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testDeleteShareGroupCoordinatorWriteError() throws Exception {
+    public void testDeleteShareGroupCoordinatorGeneralWriteError() throws Exception {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         Persister persister = mock(Persister.class);
         GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
@@ -1950,21 +1916,14 @@ public class GroupCoordinatorServiceTest {
         );
 
         Uuid shareGroupTopicId = Uuid.randomUuid();
-        when(runtime.scheduleReadOperation(
+        when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("delete-share-groups"),
             ArgumentMatchers.any(),
+            ArgumentMatchers.any(),
             ArgumentMatchers.any()
-        ))
-            .thenReturn(CompletableFuture.completedFuture(
-                    Map.of(
-                        "share-group-id-1",
-                        Map.of(
-                            shareGroupTopicId,
-                            List.of(0, 1)
-                        )
-                    )
-                )
-            );
+        )).thenReturn(CompletableFuture.completedFuture(
+            List.of(createDeleteShareRequest("share-group-id-1", shareGroupTopicId, List.of(0, 1)))
+        ));
 
         // share-group-id-1
         when(runtime.scheduleWriteOperation(
@@ -1974,23 +1933,17 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.failedFuture(Errors.CLUSTER_AUTHORIZATION_FAILED.exception()));
 
-        when(persister.deleteState(
-            any()
-        ))
-            .thenReturn(CompletableFuture.completedFuture(new DeleteShareGroupStateResult.Builder()
-                    .setTopicsData(List.of(
-                            new TopicData<>(
-                                shareGroupTopicId,
-                                List.of(
-                                    PartitionFactory.newPartitionErrorData(0, Errors.NONE.code(), Errors.NONE.message()),
-                                    PartitionFactory.newPartitionErrorData(1, Errors.NONE.code(), Errors.NONE.message())
-                                )
-                            )
-                        )
-                    )
-                    .build()
-                )
-            );
+        when(persister.deleteState(any())).thenReturn(CompletableFuture.completedFuture(new DeleteShareGroupStateResult.Builder()
+            .setTopicsData(List.of(
+                new TopicData<>(
+                    shareGroupTopicId,
+                    List.of(
+                        PartitionFactory.newPartitionErrorData(0, Errors.NONE.code(), Errors.NONE.message()),
+                        PartitionFactory.newPartitionErrorData(1, Errors.NONE.code(), Errors.NONE.message())
+                    ))
+            ))
+            .build()
+        ));
 
         List<String> groupIds = List.of("share-group-id-1");
         CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> future =
@@ -2018,11 +1971,12 @@ public class GroupCoordinatorServiceTest {
             .setMetrics(mock(GroupCoordinatorMetrics.class))
             .build(true);
 
-        when(runtime.scheduleReadOperation(
+        when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("delete-share-groups"),
             ArgumentMatchers.any(),
+            ArgumentMatchers.any(),
             ArgumentMatchers.any()
-        )).thenReturn(CompletableFuture.completedFuture(Map.of()));
+        )).thenReturn(CompletableFuture.completedFuture(List.of()));
 
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("delete-groups"),
@@ -2893,5 +2847,32 @@ public class GroupCoordinatorServiceTest {
             this.metrics = metrics;
             return this;
         }
+    }
+
+    private DeleteShareGroupStateParameters createDeleteShareRequest(String groupId, Uuid topic, List<Integer> partitions) {
+        TopicData<PartitionIdData> topicData = new TopicData<>(topic,
+            partitions.stream().map(PartitionFactory::newPartitionIdData).toList()
+        );
+
+        return new DeleteShareGroupStateParameters.Builder()
+            .setGroupTopicPartitionData(new GroupTopicPartitionData.Builder<PartitionIdData>()
+                .setGroupId("share-group-id-1")
+                .setTopicsData(List.of(topicData))
+                .build())
+            .build();
+    }
+
+    private DeleteShareGroupStateParameters appendToCreateDeleteShareRequest(DeleteShareGroupStateParameters params, Uuid topic, List<Integer> partitions) {
+        List<TopicData<PartitionIdData>> topicsData = new ArrayList<>(params.groupTopicPartitionData().topicsData());
+        TopicData<PartitionIdData> topicData = new TopicData<>(topic,
+            partitions.stream().map(PartitionFactory::newPartitionIdData).toList()
+        );
+        topicsData.add(topicData);
+        return new DeleteShareGroupStateParameters.Builder()
+            .setGroupTopicPartitionData(new GroupTopicPartitionData.Builder<PartitionIdData>()
+                .setGroupId(params.groupTopicPartitionData().groupId())
+                .setTopicsData(topicsData)
+                .build())
+            .build();
     }
 }

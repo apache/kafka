@@ -123,6 +123,11 @@ import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsDelta;
 import org.apache.kafka.image.TopicsImage;
+import org.apache.kafka.server.share.persister.DeleteShareGroupStateParameters;
+import org.apache.kafka.server.share.persister.GroupTopicPartitionData;
+import org.apache.kafka.server.share.persister.PartitionFactory;
+import org.apache.kafka.server.share.persister.PartitionIdData;
+import org.apache.kafka.server.share.persister.TopicData;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
 import org.apache.kafka.timeline.TimelineHashSet;
@@ -6282,26 +6287,42 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Returns all share partitions keys as a map from the input list of share groups.
-     * @param shareGroups - A list representing share groups.
-     * @return Map representing the share partition keys for all the groups in the input.
+     * Returns an optional of delete share group request object to be used with the persister.
+     * Empty if no subscribed topics
+     * @param shareGroup - A share group
+     * @return Optional of object representing the share group state delete request.
      */
-    public Map<String, Map<Uuid, List<Integer>>> sharePartitionKeysMap(List<ShareGroup> shareGroups) {
-        Map<String, Map<Uuid, List<Integer>>> keyMap = new HashMap<>();
-        if (metadataImage == null) {
-            return Map.of();
-        }
+    public Optional<DeleteShareGroupStateParameters> sharePartitionDeleteRequest(ShareGroup shareGroup) {
         TopicsImage topicsImage = metadataImage.topics();
-        for (ShareGroup shareGroup : shareGroups) {
-            String groupId = shareGroup.groupId();
-            for (String topic : shareGroup.subscribedTopicNames().keySet()) {
-                TopicImage topicImage = topicsImage.getTopic(topic);
-                keyMap.computeIfAbsent(groupId, k -> new HashMap<>())
-                    .put(topicImage.id(), topicImage.partitions().keySet().stream().toList());
-            }
+        Set<String> subscribedTopics = shareGroup.subscribedTopicNames().keySet();
+        List<TopicData<PartitionIdData>> topicDataList = new ArrayList<>(subscribedTopics.size());
+
+        for (String topic : subscribedTopics) {
+            TopicImage topicImage = topicsImage.getTopic(topic);
+            topicDataList.add(
+                new TopicData<>(
+                    topicImage.id(),
+                    topicImage.partitions().keySet().stream()
+                        .map(PartitionFactory::newPartitionIdData)
+                        .toList()
+                )
+            );
         }
 
-        return keyMap;
+        if (topicDataList.isEmpty()) {
+            return Optional.empty();
+        }
+
+        return Optional.of(
+            new DeleteShareGroupStateParameters.Builder()
+                .setGroupTopicPartitionData(
+                    new GroupTopicPartitionData.Builder<PartitionIdData>()
+                        .setGroupId(shareGroup.groupId())
+                        .setTopicsData(topicDataList)
+                        .build()
+                )
+                .build()
+        );
     }
 
     /**

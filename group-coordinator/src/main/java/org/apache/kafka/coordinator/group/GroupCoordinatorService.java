@@ -17,7 +17,6 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.NotCoordinatorException;
@@ -82,10 +81,8 @@ import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.record.BrokerCompressionType;
 import org.apache.kafka.server.share.persister.DeleteShareGroupStateParameters;
 import org.apache.kafka.server.share.persister.DeleteShareGroupStateResult;
-import org.apache.kafka.server.share.persister.GroupTopicPartitionData;
 import org.apache.kafka.server.share.persister.PartitionErrorData;
 import org.apache.kafka.server.share.persister.PartitionFactory;
-import org.apache.kafka.server.share.persister.PartitionIdData;
 import org.apache.kafka.server.share.persister.Persister;
 import org.apache.kafka.server.share.persister.ReadShareGroupStateSummaryParameters;
 import org.apache.kafka.server.share.persister.TopicData;
@@ -834,60 +831,28 @@ public class GroupCoordinatorService implements GroupCoordinator {
         });
 
         groupsByTopicPartition.forEach((topicPartition, groupList) -> {
-            CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> shareFuture = deleteShareGroups(topicPartition, groupList)
-                .thenCompose(groupErrMap -> {
-                    DeleteGroupsResponseData.DeletableGroupResultCollection collection = new DeleteGroupsResponseData.DeletableGroupResultCollection();
-                    List<String> errGroupIds = new ArrayList<>();
-                    groupErrMap.forEach((groupId, error) -> {
-                        if (error.code() != Errors.NONE.code()) {
-                            log.error("Error deleting share group {} due to error {}", groupId, error);
-                            errGroupIds.add(groupId);
-                            collection.add(
-                                new DeleteGroupsResponseData.DeletableGroupResult()
-                                    .setGroupId(groupId)
-                                    .setErrorCode(error.code())
-                            );
-                        }
-                    });
+            CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> future = deleteShareGroups(topicPartition, groupList).thenCompose(groupErrMap -> {
+                DeleteGroupsResponseData.DeletableGroupResultCollection collection = new DeleteGroupsResponseData.DeletableGroupResultCollection();
+                List<String> retainedGroupIds = deleteCandidateGroupIds(groupErrMap, groupList, collection);
+                if (retainedGroupIds.isEmpty()) {
+                    return CompletableFuture.completedFuture(collection);
+                }
 
-                    Set<String> groupSet = new HashSet<>(groupList);
-                    // Remove all share group ids which have errored out
-                    // when deleting with persister.
-                    errGroupIds.forEach(groupSet::remove);
+                return handleDeleteGroups(context, topicPartition, retainedGroupIds)
+                    .whenComplete((resp, __) -> resp.forEach(result -> collection.add(result.duplicate())))
+                    .thenApply(__ -> collection);
+            });
+            // deleteShareGroups has its own exceptionally block, so we don't need one here.
 
-                    // If no non-share groupIds or non-error share group ids present
-                    // return.
-                    if (groupSet.isEmpty()) {
-                        return CompletableFuture.completedFuture(collection);
-                    }
-
-                    // Let us invoke the standard procedure of any non-share
-                    // groups or successfully deleted share groups remaining.
-                    List<String> retainedGroupIds = groupSet.stream().toList();
-                    return runtime.scheduleWriteOperation(
-                            "delete-groups",
-                            topicPartition,
-                            Duration.ofMillis(config.offsetCommitTimeoutMs()),
-                            coordinator -> coordinator.deleteGroups(context, retainedGroupIds)
-                        ).thenApply(deletedCollection -> {
-                            deletedCollection.forEach(item -> collection.add(item.duplicate()));
-                            return collection;
-                        })
-                        .exceptionally(exception -> handleOperationException(
-                            "delete-groups",
-                            groupList,
-                            exception,
-                            (error, __) -> {
-                                DeleteGroupsRequest.getErrorResultCollection(retainedGroupIds, error).forEach(item -> collection.add(item.duplicate()));
-                                return collection;
-                            },
-                            log
-                        ));
-                });
-            // deleteShareGroups has its own exceptionally block so we don't need one here.
-            // This is in line with the existing deleteGroups call.
-
-            futures.add(shareFuture);
+            // This future object has the following stages:
+            // - First it invokes the share group delete flow where the shard sharePartitionDeleteRequests
+            // method is invoked, and it returns request objects for each valid share group passed to it.
+            // - Then the requests are passed to the persister.deleteStata method one at a time. The results
+            // are collated as a Map of groupId -> persister errors
+            // - The above map is then used to decide whether to invoke the group coordinator delete groups logic
+            // - Share groups with failed persister delete are NOT CONSIDERED for group coordinator delete.
+            // TLDR: DeleteShareGroups -> filter erroneous persister deletes -> Original delete groups logic
+            futures.add(future);
         });
 
         return FutureUtils.combineFutures(futures, DeleteGroupsResponseData.DeletableGroupResultCollection::new,
@@ -896,78 +861,110 @@ public class GroupCoordinatorService implements GroupCoordinator {
             (accumulator, newResults) -> newResults.forEach(result -> accumulator.add(result.duplicate())));
     }
 
-    private CompletableFuture<Map<String, Errors>> deleteShareGroups(TopicPartition topicPartition, List<String> groupList) {
+    List<String> deleteCandidateGroupIds(
+        Map<String, Errors> groupErrMap,
+        List<String> groupList,
+        DeleteGroupsResponseData.DeletableGroupResultCollection collection
+    ) {
+        List<String> errGroupIds = new ArrayList<>();
+        groupErrMap.forEach((groupId, error) -> {
+            if (error.code() != Errors.NONE.code()) {
+                log.error("Error deleting share group {} due to error {}", groupId, error);
+                errGroupIds.add(groupId);
+                collection.add(
+                    new DeleteGroupsResponseData.DeletableGroupResult()
+                        .setGroupId(groupId)
+                        .setErrorCode(error.code())
+                );
+            }
+        });
+
+        Set<String> groupSet = new HashSet<>(groupList);
+        // Remove all share group ids which have errored out
+        // when deleting with persister.
+        groupSet.removeAll(errGroupIds);
+
+        // Let us invoke the standard procedure of any non-share
+        // groups or successfully deleted share groups remaining.
+        return groupSet.stream().toList();
+    }
+
+    CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> handleDeleteGroups(
+        RequestContext context,
+        TopicPartition topicPartition,
+        List<String> groupIds
+    ) {
+        return runtime.scheduleWriteOperation(
+            "delete-groups",
+            topicPartition,
+            Duration.ofMillis(config.offsetCommitTimeoutMs()),
+            coordinator -> coordinator.deleteGroups(context, groupIds)
+        ).exceptionally(exception -> handleOperationException(
+            "delete-groups",
+            groupIds,
+            exception,
+            (error, __) -> DeleteGroupsRequest.getErrorResultCollection(groupIds, error),
+            log
+        ));
+    }
+
+    private CompletableFuture<Map<String, Errors>> deleteShareGroups(
+        TopicPartition topicPartition,
+        List<String> groupList
+    ) {
         // topicPartition refers to internal topic __consumer_offsets
-        return runtime.scheduleReadOperation(
-                "delete-share-groups",
-                topicPartition,
-                (coordinator, offset) -> coordinator.sharePartitions(groupList, offset)
-            )
-            .thenCompose(this::performShareGroupsDeletion)
-            .exceptionally(exception -> handleOperationException(
-                "delete-share-groups",
-                groupList,
-                exception,
-                (error, __) -> {
-                    Map<String, Errors> errors = new HashMap<>();
-                    groupList.forEach(group -> errors.put(group, error));
-                    return errors;
-                },
-                log
-            ));
+        return runtime.scheduleWriteOperation(
+            "delete-share-groups",
+            topicPartition,
+            Duration.ofMillis(config.offsetCommitTimeoutMs()),
+            coordinator -> coordinator.sharePartitionDeleteRequests(groupList)
+        ).thenCompose(
+            this::performShareGroupsDeletion
+        ).exceptionally(exception -> handleOperationException(
+            "delete-share-groups",
+            groupList,
+            exception,
+            (error, __) -> {
+                Map<String, Errors> errors = new HashMap<>();
+                groupList.forEach(group -> errors.put(group, error));
+                return errors;
+            },
+            log
+        ));
     }
 
     private CompletableFuture<Map<String, Errors>> performShareGroupsDeletion(
-        Map<String, Map<Uuid, List<Integer>>> keys
+        List<DeleteShareGroupStateParameters> deleteRequests
     ) {
-        List<CompletableFuture<AbstractMap.SimpleEntry<String, DeleteShareGroupStateResult>>> futures = new ArrayList<>();
-        for (Map.Entry<String, Map<Uuid, List<Integer>>> groupEntry : keys.entrySet()) {
-            List<TopicData<PartitionIdData>> topicData = new ArrayList<>();
-            for (Map.Entry<Uuid, List<Integer>> topicEntry : groupEntry.getValue().entrySet()) {
-                topicData.add(
-                    new TopicData<>(
-                        topicEntry.getKey(),
-                        topicEntry.getValue().stream().map(PartitionFactory::newPartitionIdData).toList()
-                    )
-                );
-            }
-
-            futures.add(deleteShareGroup(groupEntry.getKey(), topicData));
-        }
+        List<CompletableFuture<AbstractMap.SimpleEntry<String, DeleteShareGroupStateResult>>> futures = new ArrayList<>(deleteRequests.size());
+        deleteRequests.forEach(request -> futures.add(
+            deleteShareGroup(request)
+        ));
 
         return persisterDeleteToGroupIdErrorMap(futures);
     }
 
     private CompletableFuture<AbstractMap.SimpleEntry<String, DeleteShareGroupStateResult>> deleteShareGroup(
-        String groupId,
-        List<TopicData<PartitionIdData>> topicData
+        DeleteShareGroupStateParameters deleteRequest
     ) {
-        return persister.deleteState(
-                new DeleteShareGroupStateParameters.Builder()
-                    .setGroupTopicPartitionData(new GroupTopicPartitionData.Builder<PartitionIdData>()
-                        .setGroupId(groupId)
-                        .setTopicsData(topicData)
-                        .build()
-                    )
-                    .build()
-            )
+        String groupId = deleteRequest.groupTopicPartitionData().groupId();
+        return persister.deleteState(deleteRequest)
             .thenCompose(result -> CompletableFuture.completedFuture(new AbstractMap.SimpleEntry<>(groupId, result)))
             .exceptionally(exception -> {
                 // In case the deleteState call fails,
                 // we should construct the appropriate response here
                 // so that the subsequent callbacks don't see runtime exceptions.
-                log.error("Unable to delete share group partition(s) - {}, {}", groupId, topicData);
-                List<TopicData<PartitionErrorData>> respTopicData = topicData.stream()
+                log.error("Unable to delete share group partition(s) - {} using request {}", groupId, deleteRequest, exception);
+                List<TopicData<PartitionErrorData>> respTopicData = deleteRequest.groupTopicPartitionData().topicsData().stream()
                     .map(reqTopicData -> new TopicData<>(
-                            reqTopicData.topicId(),
-                            reqTopicData.partitions().stream()
-                                .map(reqPartData -> {
-                                    Errors err = Errors.forException(exception);
-                                    return PartitionFactory.newPartitionErrorData(reqPartData.partition(), err.code(), err.message());
-                                })
-                                .toList()
-                        )
-                    )
+                        reqTopicData.topicId(),
+                        reqTopicData.partitions().stream()
+                            .map(reqPartData -> {
+                                Errors err = Errors.forException(exception);
+                                return PartitionFactory.newPartitionErrorData(reqPartData.partition(), err.code(), err.message());
+                            })
+                            .toList()
+                    ))
                     .toList();
 
                 return new AbstractMap.SimpleEntry<>(groupId, new DeleteShareGroupStateResult.Builder()
@@ -980,27 +977,25 @@ public class GroupCoordinatorService implements GroupCoordinator {
     private CompletableFuture<Map<String, Errors>> persisterDeleteToGroupIdErrorMap(
         List<CompletableFuture<AbstractMap.SimpleEntry<String, DeleteShareGroupStateResult>>> futures
     ) {
-        return CompletableFuture.allOf(futures.toArray(new CompletableFuture[]{}))
-            .thenCompose(v -> {
-                Map<String, Errors> groupIds = new HashMap<>();
-                for (CompletableFuture<AbstractMap.SimpleEntry<String, DeleteShareGroupStateResult>> future : futures) {
-                    Map.Entry<String, DeleteShareGroupStateResult> entry = future.getNow(null);  // safe as within allOff
-                    groupIds.putIfAbsent(entry.getKey(), Errors.NONE);
-                    for (TopicData<PartitionErrorData> topicData : entry.getValue().topicsData()) {
-                        Optional<PartitionErrorData> errItem = topicData.partitions().stream()
-                            .filter(errData -> errData.errorCode() != Errors.NONE.code())
-                            .findAny();
+        return CompletableFuture.allOf(futures.toArray(new CompletableFuture[]{})).thenCompose(v -> {
+            Map<String, Errors> groupIds = new HashMap<>();
+            for (CompletableFuture<AbstractMap.SimpleEntry<String, DeleteShareGroupStateResult>> future : futures) {
+                Map.Entry<String, DeleteShareGroupStateResult> entry = future.getNow(null);  // safe as within allOff
+                groupIds.putIfAbsent(entry.getKey(), Errors.NONE);
+                for (TopicData<PartitionErrorData> topicData : entry.getValue().topicsData()) {
+                    Optional<PartitionErrorData> errItem = topicData.partitions().stream()
+                        .filter(errData -> errData.errorCode() != Errors.NONE.code())
+                        .findAny();
 
-                        errItem.ifPresent(val -> {
-                                log.error("Received error while deleting share group {} - {}", entry.getKey(), val);
-                                groupIds.put(entry.getKey(), Errors.forCode(val.errorCode()));
-                            }
-                        );
-                    }
+                    errItem.ifPresent(val -> {
+                        log.error("Received error while deleting share group {} - {}", entry.getKey(), val);
+                        groupIds.put(entry.getKey(), Errors.forCode(val.errorCode()));
+                    });
                 }
+            }
 
-                return CompletableFuture.completedFuture(groupIds);
-            });
+            return CompletableFuture.completedFuture(groupIds);
+        });
     }
 
     /**
