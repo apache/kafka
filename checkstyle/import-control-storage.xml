@@ -85,6 +85,7 @@
         <allow pkg="org.apache.kafka.common" />
         <allow pkg="org.apache.kafka.server"/>
         <allow pkg="org.apache.kafka.storage.internals"/>
+        <allow pkg="org.apache.kafka.storage.log.metrics"/>
         <allow pkg="org.apache.kafka.test" />
         <allow pkg="com.github.benmanes.caffeine.cache" />
         <allow pkg="org.apache.kafka.coordinator.transaction"/>

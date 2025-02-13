@@ -52,11 +52,11 @@ import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.H
  */
 public class UniformAssignor implements ConsumerGroupPartitionAssignor {
     private static final Logger LOG = LoggerFactory.getLogger(UniformAssignor.class);
-    public static final String UNIFORM_ASSIGNOR_NAME = "uniform";
+    public static final String NAME = "uniform";
 
     @Override
     public String name() {
-        return UNIFORM_ASSIGNOR_NAME;
+        return NAME;
     }
 
     /**

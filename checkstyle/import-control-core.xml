@@ -74,6 +74,14 @@
     <allow class="kafka.server.MetadataCache" />
   </subpackage>
 
+  <subpackage name="docker">
+    <allow class="com.fasterxml.jackson.annotation.JsonAnyGetter" />
+    <allow class="com.fasterxml.jackson.annotation.JsonAnySetter" />
+    <allow class="com.fasterxml.jackson.annotation.JsonProperty" />
+    <allow class="com.fasterxml.jackson.annotation.JsonPropertyOrder" />
+    <allow class="com.fasterxml.jackson.annotation.JsonIgnoreProperties" />
+  </subpackage>
+
   <subpackage name="examples">
     <allow pkg="org.apache.kafka.clients" />
   </subpackage>
@@ -135,6 +143,7 @@
     <allow pkg="kafka.security.authorizer"/>
     <allow pkg="kafka.server"/>
     <allow pkg="kafka.zk"/>
+    <allow pkg="org.apache.kafka.clients"/>
     <allow pkg="org.apache.kafka.clients.admin"/>
     <allow pkg="org.apache.kafka.coordinator.group"/>
     <allow pkg="org.apache.kafka.metadata"/>

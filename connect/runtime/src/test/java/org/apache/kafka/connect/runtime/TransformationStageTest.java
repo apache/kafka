@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.predicates.Predicate;
@@ -38,33 +39,34 @@ public class TransformationStageTest {
     private final SourceRecord transformed = new SourceRecord(singletonMap("transformed", 2), null, null, null, null);
 
     @Test
-    public void apply() {
+    public void apply() throws Exception {
         applyAndAssert(true, false, transformed);
         applyAndAssert(true, true, initial);
         applyAndAssert(false, false, initial);
         applyAndAssert(false, true, transformed);
     }
 
-    private void applyAndAssert(boolean predicateResult, boolean negate,
-                                SourceRecord expectedResult) {
-
-        @SuppressWarnings("unchecked")
+    @SuppressWarnings("unchecked")
+    private void applyAndAssert(boolean predicateResult, boolean negate, SourceRecord expectedResult) throws Exception {
+        Plugin<Predicate<SourceRecord>> predicatePlugin = mock(Plugin.class);
         Predicate<SourceRecord> predicate = mock(Predicate.class);
         when(predicate.test(any())).thenReturn(predicateResult);
-        @SuppressWarnings("unchecked")
+        when(predicatePlugin.get()).thenReturn(predicate);
+        Plugin<Transformation<SourceRecord>> transformationPlugin = mock(Plugin.class);
         Transformation<SourceRecord> transformation = mock(Transformation.class);
         if (expectedResult == transformed) {
+            when(transformationPlugin.get()).thenReturn(transformation);
             when(transformation.apply(any())).thenReturn(transformed);
         }
         TransformationStage<SourceRecord> stage = new TransformationStage<>(
-                predicate,
+                predicatePlugin,
                 negate,
-                transformation);
+                transformationPlugin);
 
         assertEquals(expectedResult, stage.apply(initial));
 
         stage.close();
-        verify(predicate).close();
-        verify(transformation).close();
+        verify(predicatePlugin).close();
+        verify(transformationPlugin).close();
     }
 }
