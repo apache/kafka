@@ -25,14 +25,16 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetadata;
+import org.apache.kafka.streams.TaskMetadata;
 import org.apache.kafka.streams.ThreadMetadata;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
+import org.apache.kafka.streams.kstream.Grouped;
+import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.test.TestUtils;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.TestInfo;
@@ -40,8 +42,6 @@ import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -67,7 +67,7 @@ public class IQv2EndpointToPartitionsIntegrationTest {
 
     private static EmbeddedKafkaCluster cluster;
     private static final int NUM_BROKERS = 3;
-    private static final Logger LOG = LoggerFactory.getLogger(IQv2EndpointToPartitionsIntegrationTest.class);
+    private static final String EXPECTED_STORE_NAME = "IQTest-count";
 
     public void startCluster(final int standbyConfig) throws IOException {
         final Properties properties = new Properties();
@@ -77,7 +77,7 @@ public class IQv2EndpointToPartitionsIntegrationTest {
         cluster.start();
     }
 
-    public void setUp(final TestInfo testInfo) throws InterruptedException {
+    public void setUp() throws InterruptedException {
         appId = safeUniqueTestName("endpointIntegrationTest");
         inputTopicTwoPartitions = appId + "-input-two";
         outputTopicTwoPartitions = appId + "-output-two";
@@ -105,7 +105,7 @@ public class IQv2EndpointToPartitionsIntegrationTest {
                                                          final String testName) throws Exception {
         try {
             startCluster(usingStandbyReplicas ? numStandbyReplicas : 0);
-            setUp(null);
+            setUp();
 
             final Properties streamOneProperties = new Properties();
             streamOneProperties.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId).getPath() + "-ks1");
@@ -132,17 +132,17 @@ public class IQv2EndpointToPartitionsIntegrationTest {
                 IntegrationTestUtils.startApplicationAndWaitUntilRunning(streamsOne);
                 final List<StreamsMetadata> streamsMetadataAllClients = new ArrayList<>(streamsOne.metadataForAllStreamsClients());
                 assertEquals(1, streamsMetadataAllClients.size());
-                final StreamsMetadata streamsOneMetadataOne = streamsMetadataAllClients.get(0);
-                final Set<TopicPartition> topicPartitions = streamsOneMetadataOne.topicPartitions();
-                assertEquals(2020, streamsOneMetadataOne.hostInfo().port());
+                final StreamsMetadata streamsOneInitialMetadata = streamsMetadataAllClients.get(0);
+                final Set<TopicPartition> topicPartitions = streamsOneInitialMetadata.topicPartitions();
+                assertEquals(2020, streamsOneInitialMetadata.hostInfo().port());
                 assertEquals(4, topicPartitions.size());
-                assertEquals(0, streamsOneMetadataOne.standbyTopicPartitions().size());
+                assertEquals(0, streamsOneInitialMetadata.standbyTopicPartitions().size());
 
                 final long repartitionTopicTaskCount = topicPartitions.stream().filter(tp -> tp.topic().contains("-repartition")).count();
                 final long sourceTopicTaskCount = topicPartitions.stream().filter(tp -> tp.topic().contains("-input-two")).count();
                 assertEquals(2, repartitionTopicTaskCount);
                 assertEquals(2, sourceTopicTaskCount);
-                final int expectedStandbyTopicPartitionCount = usingStandbyReplicas ? 1 : 0;
+                final int expectedStandbyCount = usingStandbyReplicas ? 1 : 0;
 
                 try (final KafkaStreams streamsTwo = new KafkaStreams(topology, streamsSecondApplicationProperties)) {
                     streamsTwo.start();
@@ -152,43 +152,67 @@ public class IQv2EndpointToPartitionsIntegrationTest {
 
                     waitForCondition(() ->  {
                         final ThreadMetadata threadMetadata = streamsOne.metadataForLocalThreads().iterator().next();
-                        return threadMetadata.activeTasks().size() == 2 && threadMetadata.standbyTasks().size() == expectedStandbyTopicPartitionCount;
+                        return threadMetadata.activeTasks().size() == 2 && threadMetadata.standbyTasks().size() == expectedStandbyCount;
                     }, TestUtils.DEFAULT_MAX_WAIT_MS,
                             "KafkaStreams one never released active tasks and received standby task");
 
                     waitForCondition(() -> {
                         final ThreadMetadata threadMetadata = streamsTwo.metadataForLocalThreads().iterator().next();
-                        return threadMetadata.activeTasks().size() == 2 && threadMetadata.standbyTasks().size() == expectedStandbyTopicPartitionCount;
+                        return threadMetadata.activeTasks().size() == 2 && threadMetadata.standbyTasks().size() == expectedStandbyCount;
                     }, TestUtils.DEFAULT_MAX_WAIT_MS,
                             "KafkaStreams two never received active tasks and standby");
 
                     waitForCondition(() -> {
                         final List<StreamsMetadata> metadata = new ArrayList<>(streamsTwo.metadataForAllStreamsClients());
                         return metadata.size() == 2 &&
-                               metadata.get(0).standbyTopicPartitions().size() == expectedStandbyTopicPartitionCount &&
-                               metadata.get(1).standbyTopicPartitions().size() == expectedStandbyTopicPartitionCount;
+                               metadata.get(0).standbyTopicPartitions().size() == expectedStandbyCount &&
+                               metadata.get(1).standbyTopicPartitions().size() == expectedStandbyCount;
                     }, TestUtils.DEFAULT_MAX_WAIT_MS,
                             "Kafka Streams clients 1 and 2 never got metadata about standby tasks");
 
                     final List<StreamsMetadata> allClientMetadataUpdated = new ArrayList<>(streamsTwo.metadataForAllStreamsClients());
-                    final StreamsMetadata streamsOneMetadataOneUpdated = allClientMetadataUpdated.get(0);
-                    final Set<TopicPartition> streamsOneTopicPartitions = streamsOneMetadataOneUpdated.topicPartitions();
-                    assertEquals(2020, streamsOneMetadataOneUpdated.hostInfo().port());
-                    assertEquals(2, streamsOneTopicPartitions.size());
-                    final long streamsOneRepartitionTopicTaskCount = streamsOneTopicPartitions.stream().filter(tp -> tp.topic().contains("-repartition")).count();
-                    final long streamsOneSourceTopicTaskCount = streamsOneTopicPartitions.stream().filter(tp -> tp.topic().contains("-input-two")).count();
-                    assertEquals(1, streamsOneRepartitionTopicTaskCount);
-                    assertEquals(1, streamsOneSourceTopicTaskCount);
 
-                    final StreamsMetadata streamsOneMetadataTwo = allClientMetadataUpdated.get(1);
-                    final Set<TopicPartition> streamsTwoTopicPartitions = streamsOneMetadataTwo.topicPartitions();
-                    assertEquals(3030, streamsOneMetadataTwo.hostInfo().port());
-                    assertEquals(2, streamsTwoTopicPartitions.size());
-                    assertEquals(expectedStandbyTopicPartitionCount, streamsOneMetadataTwo.standbyTopicPartitions().size());
-                    final long streamsTwoRepartitionTopicTaskCount = streamsTwoTopicPartitions.stream().filter(tp -> tp.topic().contains("-repartition")).count();
-                    final long streamsTwoSourceTopicTaskCount = streamsTwoTopicPartitions.stream().filter(tp -> tp.topic().contains("-input-two")).count();
-                    assertEquals(1, streamsTwoRepartitionTopicTaskCount);
-                    assertEquals(1, streamsTwoSourceTopicTaskCount);
+                    final StreamsMetadata streamsOneMetadata = allClientMetadataUpdated.get(0);
+                    final Set<TopicPartition> streamsOneActiveTopicPartitions = streamsOneMetadata.topicPartitions();
+                    final Set<TopicPartition> streamsOneStandbyTopicPartitions = streamsOneMetadata.standbyTopicPartitions();
+                    final Set<String> streamsOneStoreNames = streamsOneMetadata.stateStoreNames();
+                    final Set<String> streamsOneStandbyStoreNames = streamsOneMetadata.standbyStateStoreNames();
+
+                    assertEquals(2020, streamsOneMetadata.hostInfo().port());
+                    assertEquals(2, streamsOneActiveTopicPartitions.size());
+                    assertEquals(expectedStandbyCount, streamsOneStandbyTopicPartitions.size());
+                    assertEquals(1, streamsOneStoreNames.size());
+                    assertEquals(expectedStandbyCount, streamsOneStandbyStoreNames.size());
+                    assertEquals(EXPECTED_STORE_NAME, streamsOneStoreNames.iterator().next());
+                    if (usingStandbyReplicas) {
+                        assertEquals(EXPECTED_STORE_NAME, streamsOneStandbyStoreNames.iterator().next());
+                    }
+
+                    final long streamsOneRepartitionTopicCount = streamsOneActiveTopicPartitions.stream().filter(tp -> tp.topic().contains("-repartition")).count();
+                    final long streamsOneSourceTopicCount = streamsOneActiveTopicPartitions.stream().filter(tp -> tp.topic().contains("-input-two")).count();
+                    assertEquals(1, streamsOneRepartitionTopicCount);
+                    assertEquals(1, streamsOneSourceTopicCount);
+
+                    final StreamsMetadata streamsTwoMetadata = allClientMetadataUpdated.get(1);
+                    final Set<TopicPartition> streamsTwoActiveTopicPartitions = streamsTwoMetadata.topicPartitions();
+                    final Set<TopicPartition> streamsTwoStandbyTopicPartitions = streamsTwoMetadata.standbyTopicPartitions();
+                    final Set<String> streamsTwoStateStoreNames = streamsTwoMetadata.stateStoreNames();
+                    final Set<String> streamsTwoStandbyStateStoreNames = streamsTwoMetadata.standbyStateStoreNames();
+
+                    assertEquals(3030, streamsTwoMetadata.hostInfo().port());
+                    assertEquals(2, streamsTwoActiveTopicPartitions.size());
+                    assertEquals(expectedStandbyCount, streamsTwoStandbyTopicPartitions.size());
+                    assertEquals(1, streamsTwoStateStoreNames.size());
+                    assertEquals(expectedStandbyCount, streamsTwoStandbyStateStoreNames.size());
+                    assertEquals(EXPECTED_STORE_NAME, streamsTwoStateStoreNames.iterator().next());
+                    if (usingStandbyReplicas) {
+                        assertEquals(EXPECTED_STORE_NAME, streamsTwoStandbyStateStoreNames.iterator().next());
+                    }
+
+                    final long streamsTwoRepartitionTopicCount = streamsTwoActiveTopicPartitions.stream().filter(tp -> tp.topic().contains("-repartition")).count();
+                    final long streamsTwoSourceTopicCount = streamsTwoActiveTopicPartitions.stream().filter(tp -> tp.topic().contains("-input-two")).count();
+                    assertEquals(1, streamsTwoRepartitionTopicCount);
+                    assertEquals(1, streamsTwoSourceTopicCount);
                 }
             }
         } finally {
@@ -220,8 +244,8 @@ public class IQv2EndpointToPartitionsIntegrationTest {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.stream(inputTopicTwoPartitions, Consumed.with(Serdes.String(), Serdes.String()))
                 .flatMapValues(value -> Arrays.asList(value.toLowerCase(Locale.getDefault()).split("\\W+")))
-                .groupBy((key, value) -> value)
-                .count()
+                .groupBy((key, value) -> value, Grouped.as("IQTest"))
+                .count(Materialized.as(EXPECTED_STORE_NAME))
                 .toStream().to(outputTopicTwoPartitions, Produced.with(Serdes.String(), Serdes.Long()));
         return builder.build();
     }
