@@ -142,7 +142,7 @@ public class KafkaShareConsumerTest {
 
     @Flaky("KAFKA-18488")
     @Test
-    public void testVerifyFetchAndCommitSyncImplicit() throws InterruptedException {
+    public void testVerifyFetchAndCommitSyncImplicit() {
         ConsumerMetadata metadata = new ConsumerMetadata(0, 0, Long.MAX_VALUE, false, false,
             subscription, new LogContext(), new ClusterResourceListeners());
         MockClient client = new MockClient(time, metadata);
@@ -215,8 +215,9 @@ public class KafkaShareConsumerTest {
         }
     }
 
+    @Flaky("KAFKA-18794")
     @Test
-    public void testVerifyFetchAndCloseImplicit() throws InterruptedException {
+    public void testVerifyFetchAndCloseImplicit() {
         ConsumerMetadata metadata = new ConsumerMetadata(0, 0, Long.MAX_VALUE, false, false,
             subscription, new LogContext(), new ClusterResourceListeners());
         MockClient client = new MockClient(time, metadata);
