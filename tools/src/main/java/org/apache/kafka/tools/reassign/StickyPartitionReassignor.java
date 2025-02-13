@@ -783,29 +783,25 @@ public class StickyPartitionReassignor {
     private static class MovableFromScoreComparator implements Comparator<MoveFrom>, Serializable {
         private static final long serialVersionUID = 1L;
 
-        private int compareMovedAndImproved(MoveFrom o1, MoveFrom o2) {
-            final int o1MovedAndImproved = o1.didImprove() && o1.replica.moved ? 0 : 1;
-            final int o2MovedAndImproved = o2.didImprove() && o2.replica.moved ? 0 : 1;
-            return o1MovedAndImproved - o2MovedAndImproved;
-        }
-
         @Override
         public int compare(MoveFrom o1, MoveFrom o2) {
-            // Prefer already moved replicas that improve at least one score over unmoved replicas
-            int ret = compareMovedAndImproved(o1, o2);
-            if (ret != 0) return ret;
-            ret = o1.rackImprovementScore.compareTo(o2.rackImprovementScore);
-            if (ret != 0) return ret;
+            // Prefer already moved replicas
             final int o1Moved = o1.replica.moved ? 0 : 1;
             final int o2Moved = o2.replica.moved ? 0 : 1;
-            ret = o1Moved - o2Moved;
+            int ret = o1Moved - o2Moved;
             if (ret != 0) return ret;
+
+            ret = o1.rackImprovementScore.compareTo(o2.rackImprovementScore);
+            if (ret != 0) return ret;
+
             ret = o1.to.id - o2.to.id;
             if (ret != 0) return ret;
+
             if (o1.replica.isLeader != o2.replica.isLeader) {
                 if (o1.replica.isLeader) return -1;
                 else return 1;
             }
+
             return o1.replica.compareTo(o2.replica);
         }
     }
@@ -813,13 +809,7 @@ public class StickyPartitionReassignor {
     private static class MovableScoreComparator implements Comparator<Move>, Serializable {
         private static final long serialVersionUID = 1L;
 
-        private int compareMovedAndImproved(Move o1, Move o2) {
-            final int o1MovedAndImproved = o1.didImprove() && o1.replica.moved ? 0 : 1;
-            final int o2MovedAndImproved = o2.didImprove() && o2.replica.moved ? 0 : 1;
-            return o1MovedAndImproved - o2MovedAndImproved;
-        }
-
-        private int compareScores(Move o1, Move o2) {
+        private int compareImprovementScores(Move o1, Move o2) {
             int ret = o1.globalBrokerImprovementScore.compareTo(o2.globalBrokerImprovementScore);
             if (ret != 0) return ret;
             ret = o1.rackImprovementScore.compareTo(o2.rackImprovementScore);
@@ -830,16 +820,17 @@ public class StickyPartitionReassignor {
         @Override
         public int compare(Move o1, Move o2) {
             // Prefer already moved replicas that improve at least one score over unmoved replicas
-            int ret = compareMovedAndImproved(o1, o2);
-            if (ret != 0) return ret;
-            ret = this.compareScores(o1, o2);
-            if (ret != 0) return ret;
             final int o1Moved = o1.replica.moved ? 0 : 1;
             final int o2Moved = o2.replica.moved ? 0 : 1;
-            ret = o1Moved - o2Moved;
+            int ret = o1Moved - o2Moved;
             if (ret != 0) return ret;
+
+            ret = this.compareImprovementScores(o1, o2);
+            if (ret != 0) return ret;
+
             ret = o1.to.id - o2.to.id;
             if (ret != 0) return ret;
+
             return o1.replica.compareTo(o2.replica);
         }
     }
