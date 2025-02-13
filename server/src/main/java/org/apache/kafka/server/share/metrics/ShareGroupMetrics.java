@@ -24,6 +24,7 @@ import com.yammer.metrics.core.Histogram;
 import com.yammer.metrics.core.Meter;
 
 import java.util.Arrays;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -53,7 +54,7 @@ public class ShareGroupMetrics implements AutoCloseable {
                     RECORD_ACKNOWLEDGEMENTS_PER_SEC,
                     "records",
                     TimeUnit.SECONDS,
-                    Map.of(ACK_TYPE_TAG, type.toString())
+                    Map.of(ACK_TYPE_TAG, capitalize(type.toString()))
                 )
             )
         );
@@ -84,5 +85,12 @@ public class ShareGroupMetrics implements AutoCloseable {
         Arrays.stream(AcknowledgeType.values()).forEach(
             m -> metricsGroup.removeMetric(RECORD_ACKNOWLEDGEMENTS_PER_SEC, Map.of(ACK_TYPE_TAG, m.toString())));
         metricsGroup.removeMetric(PARTITION_LOAD_TIME_MS);
+    }
+
+    private static String capitalize(String string) {
+        if (string == null || string.isEmpty()) {
+            return string;
+        }
+        return string.substring(0, 1).toUpperCase(Locale.ENGLISH) + string.substring(1);
     }
 }
