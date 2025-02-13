@@ -55,6 +55,7 @@ import java.util.stream.Stream;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 @Timeout(600)
 @Tag("integration")
@@ -213,6 +214,15 @@ public class IQv2EndpointToPartitionsIntegrationTest {
                     final long streamsTwoSourceTopicCount = streamsTwoActiveTopicPartitions.stream().filter(tp -> tp.topic().contains("-input-two")).count();
                     assertEquals(1, streamsTwoRepartitionTopicCount);
                     assertEquals(1, streamsTwoSourceTopicCount);
+
+                    if (usingStandbyReplicas) {
+                        TopicPartition streamsOneStandbyTopicPartition = streamsOneStandbyTopicPartitions.iterator().next();
+                        TopicPartition streamsTwoStandbyTopicPartition = streamsTwoStandbyTopicPartitions.iterator().next();
+                        String streamsOneStandbyTopicName = streamsOneStandbyTopicPartition.topic();
+                        String streamsTwoStandbyTopicName = streamsTwoStandbyTopicPartition.topic();
+                        assertEquals(streamsOneStandbyTopicName, streamsTwoStandbyTopicName);
+                        assertNotEquals(streamsOneStandbyTopicPartition.partition(), streamsTwoStandbyTopicPartition.partition());
+                    }
                 }
             }
         } finally {
