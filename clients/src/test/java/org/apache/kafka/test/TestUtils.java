@@ -40,6 +40,7 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 
+import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -64,8 +65,12 @@ import java.util.Properties;
 import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.regex.Matcher;
@@ -74,6 +79,7 @@ import java.util.stream.Collectors;
 
 import static java.util.Arrays.asList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -589,12 +595,20 @@ public class TestUtils {
      * @return The caught exception cause
      */
     public static <T extends Throwable> T assertFutureThrows(Future<?> future, Class<T> exceptionCauseClass) {
-        ExecutionException exception = assertThrows(ExecutionException.class, future::get);
-        Throwable cause = exception.getCause();
-        assertEquals(exceptionCauseClass, cause.getClass(),
-            "Expected a " + exceptionCauseClass.getSimpleName() + " exception, but got " +
-                        cause.getClass().getSimpleName());
-        return exceptionCauseClass.cast(exception.getCause());
+        try {
+            future.get(DEFAULT_MAX_WAIT_MS, TimeUnit.MILLISECONDS);
+            fail("Should throw expected exception " + exceptionCauseClass.getSimpleName() + " but nothing was thrown.");
+        } catch (InterruptedException | ExecutionException | CancellationException e) {
+            Throwable cause = e instanceof ExecutionException ? e.getCause() : e;
+            assertInstanceOf(
+                exceptionCauseClass, cause,
+                "Expected " + exceptionCauseClass.getSimpleName() + ", but got " + cause
+            );
+            return exceptionCauseClass.cast(cause);
+        } catch (TimeoutException e) {
+            fail("Future is not completed within " + DEFAULT_MAX_WAIT_MS + " millisecond.");
+        }
+        throw new RuntimeException("Future should throw expected exception but unexpected error happened.");
     }
 
     public static <T extends Throwable> void assertFutureThrows(
