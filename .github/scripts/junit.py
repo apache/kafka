@@ -266,6 +266,7 @@ if __name__ == "__main__":
     flaky_table = []
     skipped_table = []
     quarantined_table = []
+    new_table = []
 
     exporter = TestCatalogExporter()
 
@@ -310,14 +311,22 @@ if __name__ == "__main__":
                     logger.debug(f"Found skipped test: {skipped_test}")
                     skipped_table.append((simple_class_name, skipped_test.test_name))
 
-                # Only collect quarantined tests from the "quarantinedTest" task
-                if test_job.endswith("-flaky"):
+                # Only collect quarantined tests from the "flaky" test jobs
+                if re.match(r".*\bflaky\b.*", test_job) is not None:
                     for test in all_suite_passed.values():
                         simple_class_name = test.class_name.split(".")[-1]
                         quarantined_table.append((simple_class_name, test.test_name))
                     for test in all_suite_failed.values():
                         simple_class_name = test.class_name.split(".")[-1]
                         quarantined_table.append((simple_class_name, test.test_name))
+
+                if re.match(r".*\bnew\b.*", test_job) is not None:
+                    for test in all_suite_passed.values():
+                        simple_class_name = test.class_name.split(".")[-1]
+                        new_table.append((simple_class_name, test.test_name))
+                    for test in all_suite_failed.values():
+                        simple_class_name = test.class_name.split(".")[-1]
+                        new_table.append((simple_class_name, test.test_name))
 
                 if args.export_test_catalog:
                     exporter.handle_suite(module_path, suite)
@@ -419,6 +428,19 @@ if __name__ == "__main__":
         print(f"| ------ | ---- |")
         logger.debug(f"::group::Found {len(quarantined_table)} quarantined tests")
         for row in quarantined_table:
+            row_joined = " | ".join(row)
+            print(f"| {row_joined} |")
+            logger.debug(f"{row[0]} > {row[1]}")
+        print("\n</details>")
+        logger.debug("::endgroup::")
+
+    if len(new_table) > 0:
+        print("<details>")
+        print(f"<summary>New Tests ({len(new_table)})</summary>\n")
+        print(f"| Module | Test |")
+        print(f"| ------ | ---- |")
+        logger.debug(f"::group::Found {len(new_table)} new tests")
+        for row in new_table:
             row_joined = " | ".join(row)
             print(f"| {row_joined} |")
             logger.debug(f"{row[0]} > {row[1]}")
