@@ -41,6 +41,7 @@ public final class ImageWriterOptions {
 
         public Builder(MetadataImage image) {
             this.metadataVersion = image.features().metadataVersion();
+            this.isEligibleLeaderReplicasEnabled = image.features().isElrEnabled();
         }
 
         public Builder setMetadataVersion(MetadataVersion metadataVersion) {
