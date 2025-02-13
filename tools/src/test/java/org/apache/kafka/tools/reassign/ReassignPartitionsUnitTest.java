@@ -361,7 +361,7 @@ public class ReassignPartitionsUnitTest {
             addTopics(adminClient);
             assertStartsWith("Replication factor: 3 larger than available brokers: 2",
                 assertThrows(InvalidReplicationFactorException.class,
-                    () -> generateAssignment(adminClient, "{\"topics\":[{\"topic\":\"foo\"},{\"topic\":\"bar\"}]}", "0,1", false),
+                    () -> generateAssignment(adminClient, "{\"topics\":[{\"topic\":\"foo\"},{\"topic\":\"bar\"}]}", "0,1", false, false),
                     "Expected generateAssignment to fail").getMessage());
         }
     }
@@ -372,7 +372,7 @@ public class ReassignPartitionsUnitTest {
             addTopics(adminClient);
             assertStartsWith("Topic quux not found",
                 assertThrows(ExecutionException.class,
-                    () -> generateAssignment(adminClient, "{\"topics\":[{\"topic\":\"foo\"},{\"topic\":\"quux\"}]}", "0,1", false),
+                    () -> generateAssignment(adminClient, "{\"topics\":[{\"topic\":\"foo\"},{\"topic\":\"quux\"}]}", "0,1", false, false),
                     "Expected generateAssignment to fail").getCause().getMessage());
         }
     }
@@ -392,11 +392,11 @@ public class ReassignPartitionsUnitTest {
             addTopics(adminClient);
             assertStartsWith("Not all brokers have rack information.",
                 assertThrows(AdminOperationException.class,
-                    () -> generateAssignment(adminClient, "{\"topics\":[{\"topic\":\"foo\"}]}", "0,1,2,3", true),
+                    () -> generateAssignment(adminClient, "{\"topics\":[{\"topic\":\"foo\"}]}", "0,1,2,3", true, false),
                     "Expected generateAssignment to fail").getMessage());
             // It should succeed when --disable-rack-aware is used.
             Entry<Map<TopicPartition, List<Integer>>, Map<TopicPartition, List<Integer>>>
-                proposedCurrent = generateAssignment(adminClient, "{\"topics\":[{\"topic\":\"foo\"}]}", "0,1,2,3", false);
+                proposedCurrent = generateAssignment(adminClient, "{\"topics\":[{\"topic\":\"foo\"}]}", "0,1,2,3", false, false);
 
             Map<TopicPartition, List<Integer>> expCurrent = new HashMap<>();
 
@@ -416,7 +416,7 @@ public class ReassignPartitionsUnitTest {
             Entry<Map<TopicPartition, List<Integer>>, Map<TopicPartition, List<Integer>>>
                 proposedCurrent = generateAssignment(adminClient,
                     "{\"topics\":[{\"topic\":\"foo\"},{\"topic\":\"bar\"}]}",
-                    goalBrokers.stream().map(Object::toString).collect(Collectors.joining(",")), false);
+                    goalBrokers.stream().map(Object::toString).collect(Collectors.joining(",")), false, false);
 
             Map<TopicPartition, List<Integer>> expCurrent = new HashMap<>();
 
@@ -430,6 +430,33 @@ public class ReassignPartitionsUnitTest {
             proposedCurrent.getKey().values().forEach(replicas ->
                 assertTrue(goalBrokers.containsAll(replicas),
                     "Proposed assignment " + proposedCurrent.getKey() + " puts replicas on brokers other than " + goalBrokers)
+            );
+        }
+    }
+
+    @Test
+    public void testGenerateStickyAssignmentWithFewerBrokers() throws Exception {
+        try (MockAdminClient adminClient = new MockAdminClient.Builder().numBrokers(4).build()) {
+            addTopics(adminClient);
+            List<Integer> goalBrokers = asList(0, 1, 3);
+
+            Entry<Map<TopicPartition, List<Integer>>, Map<TopicPartition, List<Integer>>>
+                    proposedCurrent = generateAssignment(adminClient,
+                    "{\"topics\":[{\"topic\":\"foo\"},{\"topic\":\"bar\"}]}",
+                    goalBrokers.stream().map(Object::toString).collect(Collectors.joining(",")), false, true);
+
+            Map<TopicPartition, List<Integer>> expCurrent = new HashMap<>();
+
+            expCurrent.put(new TopicPartition("foo", 0), asList(0, 1, 2));
+            expCurrent.put(new TopicPartition("foo", 1), asList(1, 2, 3));
+            expCurrent.put(new TopicPartition("bar", 0), asList(2, 3, 0));
+
+            assertEquals(expCurrent, proposedCurrent.getValue());
+
+            // The proposed assignment should only span the provided brokers
+            proposedCurrent.getKey().values().forEach(replicas ->
+                    assertTrue(goalBrokers.containsAll(replicas),
+                            "Proposed assignment " + proposedCurrent.getKey() + " puts replicas on brokers other than " + goalBrokers)
             );
         }
     }

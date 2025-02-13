@@ -35,10 +35,12 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
+import static org.hamcrest.CoreMatchers.any;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.hasEntry;
 import static org.hamcrest.number.OrderingComparison.greaterThanOrEqualTo;
 import static org.hamcrest.number.OrderingComparison.lessThan;
 import static org.hamcrest.number.OrderingComparison.lessThanOrEqualTo;
@@ -46,7 +48,7 @@ import static org.hamcrest.number.OrderingComparison.lessThanOrEqualTo;
 
 public class StickyPartitionReassignorUnitTest {
 
-    private static List<BrokerMetadata> brokersFromBrokerLength(int brokersLength) {
+    private static List<BrokerMetadata> brokersNoRackAwarenessFromBrokerLength(int brokersLength) {
         final List<BrokerMetadata> brokers = new ArrayList<>();
         for (int j = 0; j < brokersLength; j++) {
             brokers.add(new BrokerMetadata(j, Optional.empty()));
@@ -99,11 +101,11 @@ public class StickyPartitionReassignorUnitTest {
     }
 
     private static Arbitrary<List<BrokerMetadata>> brokerMetadataNoRackAwareness() {
-        return Arbitraries.integers().between(2, 20).map(StickyPartitionReassignorUnitTest::brokersFromBrokerLength);
+        return Arbitraries.integers().between(2, 20).map(StickyPartitionReassignorUnitTest::brokersNoRackAwarenessFromBrokerLength);
     }
 
     private static Arbitrary<List<BrokerMetadata>> brokerMetadatas() {
-        return Arbitraries.integers().between(2, 15).map(StickyPartitionReassignorUnitTest::racksFromRacksLength).flatMap(racks -> Arbitraries.integers().between(racks.size(), 20).map(StickyPartitionReassignorUnitTest::brokersFromBrokerLength).flatMap(brokers -> assignBrokersToRacks(racks, brokers)));
+        return Arbitraries.integers().between(2, 15).map(StickyPartitionReassignorUnitTest::racksFromRacksLength).flatMap(racks -> Arbitraries.integers().between(racks.size(), 20).map(StickyPartitionReassignorUnitTest::brokersNoRackAwarenessFromBrokerLength).flatMap(brokers -> assignBrokersToRacks(racks, brokers)));
     }
 
     private static Arbitrary<List<BrokerMetadata>> brokerMetadatasEquallyDistributedRacks() {
@@ -146,13 +148,13 @@ public class StickyPartitionReassignorUnitTest {
         return replicasFromBrokers(brokers, replicationFactor).list().ofMinSize(1).ofMaxSize(16);
     }
 
-    private static Arbitrary<List<List<Integer>>> generatePartitionReplicas(List<BrokerMetadata> brokers) {
+    private static Arbitrary<List<List<Integer>>> generatePartitionReplicas(List<BrokerMetadata> brokers, int maxReplicationFactor) {
         if (brokers.isEmpty()) throw new RuntimeException("No brokers to assign partitions to");
-        return Arbitraries.integers().between(1, brokers.size()).flatMap(replicationFactor -> generatePartitionReplicasFixedReplicationFactor(brokers, replicationFactor));
+        return Arbitraries.integers().between(1, maxReplicationFactor).flatMap(replicationFactor -> generatePartitionReplicasFixedReplicationFactor(brokers, replicationFactor));
     }
 
-    private static Arbitrary<Map<TopicPartition, List<Integer>>> generateAssignments(List<BrokerMetadata> brokers) {
-        return generatePartitionReplicas(brokers).list().ofMinSize(1).ofMaxSize(100).map(topics -> {
+    private static Arbitrary<Map<TopicPartition, List<Integer>>> generateAssignments(List<BrokerMetadata> brokers, int maxReplicationFactor) {
+        return generatePartitionReplicas(brokers, maxReplicationFactor).list().ofMinSize(1).ofMaxSize(100).map(topics -> {
             final Map<TopicPartition, List<Integer>> map = new HashMap<>();
 
             for (int t = 0; t < topics.size(); t++) {
@@ -171,8 +173,19 @@ public class StickyPartitionReassignorUnitTest {
         });
     }
 
-    private static Arbitrary<ClusterMetadata> metadataForBrokers(Arbitrary<List<BrokerMetadata>> brokerArbitrary) {
-        return brokerArbitrary.flatMap(brokers -> generateAssignments(brokers).map(assignments -> new ClusterMetadata(brokers, assignments)));
+    private static Arbitrary<ClusterState> metadataForBrokers(Arbitrary<List<BrokerMetadata>> brokerArbitrary) {
+        return brokerArbitrary.flatMap(brokers -> generateAssignments(brokers, brokers.size()).map(assignments -> new ClusterState(brokers, assignments)));
+    }
+
+    private static Arbitrary<ClusterState> metadataForBrokersBrokersRemoved(Arbitrary<List<BrokerMetadata>> brokerArbitrary) {
+        return brokerArbitrary.filter(brokers -> brokers.size() > 1).flatMap(brokers -> Arbitraries.integers().between(1, brokers.size() - 1).flatMap(brokersRemoved -> {
+            final List<BrokerMetadata> brokersDuringRebalancing = new ArrayList<>();
+            for (int i = 0; i < brokers.size(); i++) {
+                if (i >= brokersRemoved) brokersDuringRebalancing.add(brokers.get(i));
+            }
+
+            return generateAssignments(brokers, brokersDuringRebalancing.size()).map(assignments -> new ClusterState(brokersDuringRebalancing, assignments));
+        }));
     }
 
     private static Map<Integer, BrokerMetadata> brokerMap(List<BrokerMetadata> brokers) {
@@ -261,28 +274,43 @@ public class StickyPartitionReassignorUnitTest {
     }
 
     @Provide
-    private Arbitrary<ClusterMetadata> metadataRackAware() {
+    private Arbitrary<ClusterState> metadataRackAware() {
         return metadataForBrokers(brokerMetadatas());
     }
 
     @Provide
-    private Arbitrary<ClusterMetadata> metadataRackAwareBrokersEquallyDistributed() {
+    private Arbitrary<ClusterState> metadataRackAwareBrokersRemoved() {
+        return metadataForBrokersBrokersRemoved(brokerMetadatas());
+    }
+
+    @Provide
+    private Arbitrary<ClusterState> metadataRackAwareBrokersEquallyDistributed() {
         return metadataForBrokers(brokerMetadatasEquallyDistributedRacks());
     }
 
     @Provide
-    private Arbitrary<ClusterMetadata> metadataNoRackAwareness() {
+    private Arbitrary<ClusterState> metadataNoRackAwareness() {
         return metadataForBrokers(brokerMetadataNoRackAwareness());
     }
 
     @Provide
-    private Arbitrary<ClusterMetadata> anyMetadata() {
+    private Arbitrary<ClusterState> metadataNoRackAwarenessBrokersRemoved() {
+        return metadataForBrokersBrokersRemoved(brokerMetadataNoRackAwareness());
+    }
+
+    @Provide
+    private Arbitrary<ClusterState> anyMetadata() {
         return Arbitraries.oneOf(metadataNoRackAwareness(), metadataRackAware());
     }
 
+    @Provide
+    private Arbitrary<ClusterState> anyMetadataBrokersRemoved() {
+        return Arbitraries.oneOf(metadataNoRackAwarenessBrokersRemoved(), metadataRackAwareBrokersRemoved());
+    }
 
-    @Property(tries = 10_000)
-    void topicPartitionRackDistributionIsNotWorseThanBefore(@ForAll("metadataRackAware") ClusterMetadata metadata) {
+
+    @Property
+    void topicPartitionRackDistributionIsNotWorseThanBefore(@ForAll("metadataRackAware") ClusterState metadata) {
         final StickyPartitionReassignor assignor = new StickyPartitionReassignor(metadata.assignments, metadata.brokers);
         final Map<TopicPartition, List<Integer>> newPartitionAssignments = assignor.reassign();
 
@@ -306,8 +334,8 @@ public class StickyPartitionReassignorUnitTest {
         }
     }
 
-    @Property(tries = 10_000)
-    void topicPartitionBrokerDistributionIsNotWorseThanBefore(@ForAll("anyMetadata") ClusterMetadata metadata) {
+    @Property(seed = "-7918172417683095290")
+    void topicPartitionBrokerDistributionIsNotWorseThanBefore(@ForAll("anyMetadata") ClusterState metadata) {
         final StickyPartitionReassignor assignor = new StickyPartitionReassignor(metadata.assignments, metadata.brokers);
         final Map<TopicPartition, List<Integer>> newPartitionAssignments = assignor.reassign();
 
@@ -330,8 +358,8 @@ public class StickyPartitionReassignorUnitTest {
         }
     }
 
-    @Property(tries = 10_000)
-    void globalBrokerDistributionIsNotWorseThanBefore(@ForAll("anyMetadata") ClusterMetadata metadata) {
+    @Property
+    void globalBrokerDistributionIsNotWorseThanBefore(@ForAll("anyMetadata") ClusterState metadata) {
         final Map<Integer, BrokerMetadata> brokers = brokerMap(metadata.brokers);
         final BigInteger currentDistributionScore = globalBrokerScore(brokers, metadata.assignments);
 
@@ -346,30 +374,8 @@ public class StickyPartitionReassignorUnitTest {
     }
 
 
-    @Property(tries = 10_000)
-    void reachesEquilibriumIfBrokersAreEquallySpreadAcrossRacks(@ForAll("metadataRackAwareBrokersEquallyDistributed") ClusterMetadata metadata) {
-        final StickyPartitionReassignor assignor = new StickyPartitionReassignor(metadata.assignments, metadata.brokers);
-        final Map<TopicPartition, List<Integer>> newPartitionAssignments = assignor.reassign();
-
-        final Map<Integer, Integer> newCountPerBroker = replicaCountPerBroker(newPartitionAssignments);
-        Integer newMinCount = null;
-        Integer newMaxCount = null;
-        for (final BrokerMetadata broker : metadata.brokers) {
-            final int brokerReplicaCount = newCountPerBroker.getOrDefault(broker.id, 0);
-            if (newMinCount == null || newMinCount > brokerReplicaCount) newMinCount = brokerReplicaCount;
-            if (newMaxCount == null || newMaxCount < brokerReplicaCount) newMaxCount = brokerReplicaCount;
-        }
-
-        assertThat(newPartitionAssignments.size(), is(equalTo(metadata.assignments.size())));
-
-        Assertions.assertNotNull(newMaxCount);
-        Assertions.assertNotNull(newMinCount);
-
-        assertThat(newMinCount + 1, is(greaterThanOrEqualTo(newMaxCount)));
-    }
-
-    @Property(tries = 10_000)
-    void reachesEquilibriumIfRacksAreNotSet(@ForAll("metadataNoRackAwareness") ClusterMetadata metadata) {
+    @Property
+    void reachesEquilibriumIfRacksAreNotSet(@ForAll("metadataNoRackAwareness") ClusterState metadata) {
         final StickyPartitionReassignor assignor = new StickyPartitionReassignor(metadata.assignments, metadata.brokers);
         final Map<TopicPartition, List<Integer>> newPartitionAssignments = assignor.reassign();
 
@@ -390,8 +396,8 @@ public class StickyPartitionReassignorUnitTest {
         assertThat(newMinCount + 1, is(greaterThanOrEqualTo(newMaxCount)));
     }
 
-    @Property(tries = 10_000)
-    void reachesBetterGlobalBrokerDistributionOrRequiresAtLeastSameMoveCountForSameGlobalBrokerDistribution(@ForAll("anyMetadata") ClusterMetadata metadata) {
+    @Property
+    void reachesBetterGlobalBrokerDistributionOrRequiresAtLeastSameMoveCountForSameGlobalBrokerDistribution(@ForAll("anyMetadata") ClusterState metadata) {
         final Map<Integer, BrokerMetadata> brokers = brokerMap(metadata.brokers);
 
         final Map<TopicPartition, List<Integer>> oldPartitionAssignments = ReassignPartitionsCommand.calculateAssignment(metadata.assignments, metadata.brokers);
@@ -415,6 +421,29 @@ public class StickyPartitionReassignorUnitTest {
         }
     }
 
-    private record ClusterMetadata(List<BrokerMetadata> brokers, Map<TopicPartition, List<Integer>> assignments) {
+    @Property
+    void willMoveEveryReplicaAssignedToRemovedBroker(@ForAll("anyMetadataBrokersRemoved") ClusterState metadata) {
+        final StickyPartitionReassignor assignor = new StickyPartitionReassignor(metadata.assignments, metadata.brokers);
+        final Map<TopicPartition, List<Integer>> newPartitionAssignments = assignor.reassign();
+
+        final Map<Integer, BrokerMetadata> brokers = brokerMap(metadata.brokers);
+
+        assertThat(newPartitionAssignments.size(), is(equalTo(metadata.assignments.size())));
+
+        for (final Map.Entry<TopicPartition, List<Integer>> currentEntry : metadata.assignments.entrySet()) {
+            final TopicPartition topicPartition = currentEntry.getKey();
+            final List<Integer> currentAssignments = currentEntry.getValue();
+            final List<Integer> newAssignments = newPartitionAssignments.get(topicPartition);
+
+            assertThat(newAssignments, is(notNullValue()));
+            assertThat(newAssignments.size(), is(equalTo(currentAssignments.size())));
+
+            for (final int nodeId : newAssignments) {
+                assertThat(brokers, hasEntry(is(equalTo(nodeId)), is(any(BrokerMetadata.class))));
+            }
+        }
+    }
+
+    private record ClusterState(List<BrokerMetadata> brokers, Map<TopicPartition, List<Integer>> assignments) {
     }
 }

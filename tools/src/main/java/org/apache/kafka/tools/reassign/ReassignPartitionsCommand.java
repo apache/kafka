@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.tools.reassign;
 
+import com.fasterxml.jackson.core.JsonParseException;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonMappingException;
+import joptsimple.OptionSpec;
 import org.apache.kafka.admin.AdminUtils;
 import org.apache.kafka.admin.BrokerMetadata;
 import org.apache.kafka.clients.admin.Admin;
@@ -47,10 +51,6 @@ import org.apache.kafka.server.util.json.JsonValue;
 import org.apache.kafka.tools.TerseException;
 import org.apache.kafka.tools.ToolsUtils;
 
-import com.fasterxml.jackson.core.JsonParseException;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonMappingException;
-
 import java.io.IOException;
 import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.ArrayList;
@@ -71,8 +71,6 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
-
-import joptsimple.OptionSpec;
 
 @SuppressWarnings("ClassDataAbstractionCoupling")
 public class ReassignPartitionsCommand {
@@ -547,7 +545,7 @@ public class ReassignPartitionsCommand {
      * @return                      A tuple containing the proposed assignment and the
      *                              current assignment.
      */
-    private static Entry<Map<TopicPartition, List<Integer>>, Map<TopicPartition, List<Integer>>> generateAssignment(Admin adminClient,
+    public static Entry<Map<TopicPartition, List<Integer>>, Map<TopicPartition, List<Integer>>> generateAssignment(Admin adminClient,
                                                                                                              String reassignmentJson,
                                                                                                              String brokerListString,
                                                                                                              Boolean enableRackAwareness,
@@ -562,7 +560,7 @@ public class ReassignPartitionsCommand {
         List<BrokerMetadata> brokerMetadatas = getBrokerMetadata(adminClient, brokersToReassign, enableRackAwareness);
         Map<TopicPartition, List<Integer>> proposedAssignments;
         if (sticky) {
-           final StickyPartitionReassignor assignor = new StickyPartitionReassignor(currentAssignments, brokerMetadatas);
+            final StickyPartitionReassignor assignor = new StickyPartitionReassignor(currentAssignments, brokerMetadatas);
             proposedAssignments = assignor.reassign();
         } else {
             proposedAssignments = calculateAssignment(currentAssignments, brokerMetadatas);
@@ -1417,7 +1415,7 @@ public class ReassignPartitionsCommand {
         }
 
         OptionSpec<?> action = allActions.get(0);
-        
+
         if (opts.options.has(opts.bootstrapServerOpt) && opts.options.has(opts.bootstrapControllerOpt))
             CommandLineUtils.printUsageAndExit(opts.parser, "Please don't specify both --bootstrap-server and --bootstrap-controller");
         else if (!opts.options.has(opts.bootstrapServerOpt) && !opts.options.has(opts.bootstrapControllerOpt))
