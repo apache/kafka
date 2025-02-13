@@ -104,7 +104,6 @@ import org.mockito.ArgumentMatchers;
 
 import java.net.InetAddress;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -2856,22 +2855,8 @@ public class GroupCoordinatorServiceTest {
 
         return new DeleteShareGroupStateParameters.Builder()
             .setGroupTopicPartitionData(new GroupTopicPartitionData.Builder<PartitionIdData>()
-                .setGroupId("share-group-id-1")
+                .setGroupId(groupId)
                 .setTopicsData(List.of(topicData))
-                .build())
-            .build();
-    }
-
-    private DeleteShareGroupStateParameters appendToCreateDeleteShareRequest(DeleteShareGroupStateParameters params, Uuid topic, List<Integer> partitions) {
-        List<TopicData<PartitionIdData>> topicsData = new ArrayList<>(params.groupTopicPartitionData().topicsData());
-        TopicData<PartitionIdData> topicData = new TopicData<>(topic,
-            partitions.stream().map(PartitionFactory::newPartitionIdData).toList()
-        );
-        topicsData.add(topicData);
-        return new DeleteShareGroupStateParameters.Builder()
-            .setGroupTopicPartitionData(new GroupTopicPartitionData.Builder<PartitionIdData>()
-                .setGroupId(params.groupTopicPartitionData().groupId())
-                .setTopicsData(topicsData)
                 .build())
             .build();
     }

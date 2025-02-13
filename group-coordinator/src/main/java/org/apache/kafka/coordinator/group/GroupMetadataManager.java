@@ -6293,6 +6293,9 @@ public class GroupMetadataManager {
      * @return Optional of object representing the share group state delete request.
      */
     public Optional<DeleteShareGroupStateParameters> sharePartitionDeleteRequest(ShareGroup shareGroup) {
+        if (shareGroup.isEmpty()) {
+            return Optional.empty();
+        }
         TopicsImage topicsImage = metadataImage.topics();
         Set<String> subscribedTopics = shareGroup.subscribedTopicNames().keySet();
         List<TopicData<PartitionIdData>> topicDataList = new ArrayList<>(subscribedTopics.size());

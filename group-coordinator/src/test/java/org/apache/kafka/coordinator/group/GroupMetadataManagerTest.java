@@ -16325,6 +16325,7 @@ public class GroupMetadataManagerTest {
         topicMap.put("t2", mock(SubscriptionCount.class));
         when(shareGroup.subscribedTopicNames()).thenReturn(topicMap);
         when(shareGroup.groupId()).thenReturn("share-group");
+        when(shareGroup.isEmpty()).thenReturn(false);
 
         DeleteShareGroupStateParameters expectedParameters = new DeleteShareGroupStateParameters.Builder()
             .setGroupTopicPartitionData(new GroupTopicPartitionData.Builder<PartitionIdData>()
@@ -16343,6 +16344,30 @@ public class GroupMetadataManagerTest {
         verify(image, times(1)).topics();
         verify(shareGroup, times(1)).subscribedTopicNames();
         verify(shareGroup, times(1)).groupId();
+        verify(shareGroup, times(1)).isEmpty();
+    }
+
+    @Test
+    public void testSharePartitionDeleteRequestEmptyShareGroup() {
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+        assignor.prepareGroupAssignment(new GroupAssignment(Collections.emptyMap()));
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
+            .build();
+
+        MetadataImage image = new MetadataImageBuilder()
+            .build();
+
+        context.groupMetadataManager.onNewMetadataImage(image, mock(MetadataDelta.class));
+
+        ShareGroup shareGroup = mock(ShareGroup.class);
+        when(shareGroup.isEmpty()).thenReturn(true);
+
+        Optional<DeleteShareGroupStateParameters> params = context.groupMetadataManager.sharePartitionDeleteRequest(shareGroup);
+        assertFalse(params.isPresent());
+        assertEquals(Optional.empty(), params);
+
+        verify(shareGroup, times(1)).isEmpty();
     }
 
     private static void checkJoinGroupResponse(
