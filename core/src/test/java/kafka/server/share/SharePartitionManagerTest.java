@@ -1301,7 +1301,6 @@ public class SharePartitionManagerTest {
     @Test
     public void testCloseSharePartitionManager() throws Exception {
         Timer timer = Mockito.mock(SystemTimerReaper.class);
-        Persister persister = Mockito.mock(Persister.class);
         ShareGroupMetrics shareGroupMetrics = Mockito.mock(ShareGroupMetrics.class);
         SharePartitionManager sharePartitionManager = SharePartitionManagerBuilder.builder()
             .withTimer(timer)
