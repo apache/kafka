@@ -795,6 +795,11 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
      *  - Another reconciliation is already in progress.
      *  - There are topics that haven't been added to the current assignment yet, but all their topic IDs
      *    are missing from the target assignment.
+     *
+     * @param canCommit Controls whether reconciliation can proceed when there are partitions to be revoked
+     *                  and auto-commit is enabled. Set to true only when the current offset positions
+     *                  are safe to commit. If false and there are partitions to revoke with auto-commit
+     *                  enabled, the reconciliation will be skipped.
      */
     public void maybeReconcile(boolean canCommit) {
         if (state != MemberState.RECONCILING) {

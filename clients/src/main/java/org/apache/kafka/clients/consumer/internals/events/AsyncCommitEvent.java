@@ -21,7 +21,6 @@ import org.apache.kafka.common.TopicPartition;
 
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Event to commit offsets without waiting for a response, so the request won't be retried.
@@ -30,6 +29,6 @@ import java.util.concurrent.CompletableFuture;
 public class AsyncCommitEvent extends CommitEvent {
 
     public AsyncCommitEvent(final Optional<Map<TopicPartition, OffsetAndMetadata>> offsets) {
-        super(Type.COMMIT_ASYNC, offsets, Long.MAX_VALUE, new CompletableFuture<>());
+        super(Type.COMMIT_ASYNC, offsets, Long.MAX_VALUE);
     }
 }
