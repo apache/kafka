@@ -529,9 +529,9 @@ public class StoreChangelogReader implements ChangelogReader {
                                         final Set<TopicPartition> restoringChangelogs,
                                         final TaskType taskType) {
         final Collection<TopicPartition> toResume =
-            restoringChangelogs.stream().filter(t -> shouldResume(tasks, t, taskType)).toList();
+            restoringChangelogs.stream().filter(t -> shouldResume(tasks, t, taskType)).collect(Collectors.toList());
         final Collection<TopicPartition> toPause =
-            restoringChangelogs.stream().filter(t -> shouldPause(tasks, t, taskType)).toList();
+            restoringChangelogs.stream().filter(t -> shouldPause(tasks, t, taskType)).collect(Collectors.toList());
         restoreConsumer.resume(toResume);
         restoreConsumer.pause(toPause);
     }

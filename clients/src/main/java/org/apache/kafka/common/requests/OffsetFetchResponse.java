@@ -368,7 +368,7 @@ public class OffsetFetchResponse extends AbstractResponse {
             .groups()
             .stream()
             .filter(g -> g.groupId().equals(groupId))
-            .toList()
+            .collect(Collectors.toList())
             .get(0);
         for (OffsetFetchResponseTopics topic : group.topics()) {
             for (OffsetFetchResponsePartitions partition : topic.partitions()) {

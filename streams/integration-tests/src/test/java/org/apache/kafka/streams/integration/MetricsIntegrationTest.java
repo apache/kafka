@@ -434,7 +434,7 @@ public class MetricsIntegrationTest {
         final List<Metric> metricsList = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream()
             .filter(m -> m.metricName().name().equals(ALIVE_STREAM_THREADS) &&
                 m.metricName().group().equals(STREAM_CLIENT_NODE_METRICS))
-            .toList();
+            .collect(Collectors.toList());
         assertThat(metricsList.size(), is(1));
         assertThat(metricsList.get(0).metricValue(), is(NUM_THREADS));
     }
@@ -443,7 +443,7 @@ public class MetricsIntegrationTest {
         final List<Metric> metricsList = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream()
             .filter(m -> m.metricName().name().equals(STATE) &&
                 m.metricName().group().equals(STREAM_CLIENT_NODE_METRICS))
-            .toList();
+            .collect(Collectors.toList());
         assertThat(metricsList.size(), is(1));
         assertThat(metricsList.get(0).metricValue(), is(state));
         assertThat(metricsList.get(0).metricValue().toString(), is(state.toString()));
@@ -453,7 +453,7 @@ public class MetricsIntegrationTest {
         final List<Metric> metricsList = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream()
             .filter(m -> m.metricName().name().equals(TOPOLOGY_DESCRIPTION) &&
                 m.metricName().group().equals(STREAM_CLIENT_NODE_METRICS))
-            .toList();
+            .collect(Collectors.toList());
         assertThat(metricsList.size(), is(1));
         assertThat(metricsList.get(0).metricValue(), is(topologyDescription));
     }
@@ -462,7 +462,7 @@ public class MetricsIntegrationTest {
         final List<Metric> metricsList = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream()
             .filter(m -> m.metricName().name().equals(APPLICATION_ID) &&
                 m.metricName().group().equals(STREAM_CLIENT_NODE_METRICS))
-            .toList();
+            .collect(Collectors.toList());
         assertThat(metricsList.size(), is(1));
         assertThat(metricsList.get(0).metricValue(), is(appId));
     }
@@ -470,7 +470,7 @@ public class MetricsIntegrationTest {
     private void checkClientLevelMetrics() {
         final List<Metric> listMetricThread = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream()
             .filter(m -> m.metricName().group().equals(STREAM_CLIENT_NODE_METRICS))
-            .toList();
+            .collect(Collectors.toList());
         checkMetricByName(listMetricThread, VERSION, 1);
         checkMetricByName(listMetricThread, COMMIT_ID, 1);
         checkMetricByName(listMetricThread, APPLICATION_ID, 1);
@@ -485,7 +485,7 @@ public class MetricsIntegrationTest {
     private void checkThreadLevelMetrics() {
         final List<Metric> listMetricThread = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream()
             .filter(m -> m.metricName().group().equals(STREAM_THREAD_NODE_METRICS))
-            .toList();
+            .collect(Collectors.toList());
         checkMetricByName(listMetricThread, COMMIT_LATENCY_AVG, NUM_THREADS);
         checkMetricByName(listMetricThread, COMMIT_LATENCY_MAX, NUM_THREADS);
         checkMetricByName(listMetricThread, POLL_LATENCY_AVG, NUM_THREADS);
@@ -523,7 +523,7 @@ public class MetricsIntegrationTest {
     private void checkTaskLevelMetrics() {
         final List<Metric> listMetricTask = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream()
             .filter(m -> m.metricName().group().equals(STREAM_TASK_NODE_METRICS))
-            .toList();
+            .collect(Collectors.toList());
         checkMetricByName(listMetricTask, ENFORCED_PROCESSING_RATE, 4);
         checkMetricByName(listMetricTask, ENFORCED_PROCESSING_TOTAL, 4);
         checkMetricByName(listMetricTask, RECORD_LATENESS_AVG, 4);
@@ -543,7 +543,7 @@ public class MetricsIntegrationTest {
     private void checkProcessorNodeLevelMetrics() {
         final List<Metric> listMetricProcessor = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream()
             .filter(m -> m.metricName().group().equals(STREAM_PROCESSOR_NODE_METRICS))
-            .toList();
+            .collect(Collectors.toList());
         final int numberOfSourceNodes = 4;
         final int numberOfTerminalNodes = 4;
         checkMetricByName(listMetricProcessor, PROCESS_RATE, 4);
@@ -556,7 +556,7 @@ public class MetricsIntegrationTest {
     private void checkTopicLevelMetrics() {
         final List<Metric> listMetricProcessor = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream()
             .filter(m -> m.metricName().group().equals(STREAM_TOPIC_METRICS))
-            .toList();
+            .collect(Collectors.toList());
         final int numberOfSourceTopics = 4;
         final int numberOfSinkTopics = 4;
         checkMetricByName(listMetricProcessor, BYTES_CONSUMED_TOTAL, numberOfSourceTopics);
@@ -568,7 +568,7 @@ public class MetricsIntegrationTest {
     private void checkKeyValueStoreMetrics(final String tagKey) {
         final List<Metric> listMetricStore = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream()
             .filter(m -> m.metricName().tags().containsKey(tagKey) && m.metricName().group().equals(STATE_STORE_LEVEL_GROUP))
-            .toList();
+            .collect(Collectors.toList());
 
         final int expectedNumberOfLatencyMetrics = 1;
         final int expectedNumberOfRateMetrics = 1;
@@ -631,14 +631,14 @@ public class MetricsIntegrationTest {
     private void checkMetricsDeregistration() {
         final List<Metric> listMetricAfterClosingApp = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream()
             .filter(m -> m.metricName().group().contains(STREAM_STRING))
-            .toList();
+            .collect(Collectors.toList());
         assertThat(listMetricAfterClosingApp.size(), is(0));
     }
 
     private void checkCacheMetrics() {
         final List<Metric> listMetricCache = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream()
             .filter(m -> m.metricName().group().equals(STREAM_CACHE_NODE_METRICS))
-            .toList();
+            .collect(Collectors.toList());
         checkMetricByName(listMetricCache, HIT_RATIO_AVG, 3);
         checkMetricByName(listMetricCache, HIT_RATIO_MIN, 3);
         checkMetricByName(listMetricCache, HIT_RATIO_MAX, 3);
@@ -647,7 +647,7 @@ public class MetricsIntegrationTest {
     private void checkWindowStoreAndSuppressionBufferMetrics() {
         final List<Metric> listMetricStore = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream()
             .filter(m -> m.metricName().group().equals(STATE_STORE_LEVEL_GROUP))
-            .toList();
+            .collect(Collectors.toList());
         checkMetricByName(listMetricStore, PUT_LATENCY_AVG, 1);
         checkMetricByName(listMetricStore, PUT_LATENCY_MAX, 1);
         checkMetricByName(listMetricStore, PUT_IF_ABSENT_LATENCY_AVG, 0);
@@ -700,7 +700,7 @@ public class MetricsIntegrationTest {
     private void checkSessionStoreMetrics() {
         final List<Metric> listMetricStore = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream()
             .filter(m -> m.metricName().group().equals(STATE_STORE_LEVEL_GROUP))
-            .toList();
+            .collect(Collectors.toList());
         checkMetricByName(listMetricStore, PUT_LATENCY_AVG, 1);
         checkMetricByName(listMetricStore, PUT_LATENCY_MAX, 1);
         checkMetricByName(listMetricStore, PUT_IF_ABSENT_LATENCY_AVG, 0);
@@ -754,7 +754,7 @@ public class MetricsIntegrationTest {
     private void checkMetricByName(final List<Metric> listMetric, final String metricName, final int numMetric) {
         final List<Metric> metrics = listMetric.stream()
             .filter(m -> m.metricName().name().equals(metricName))
-            .toList();
+            .collect(Collectors.toList());
         assertEquals(numMetric, metrics.size(), "Size of metrics of type:'" + metricName + "' must be equal to " + numMetric + " but it's equal to " + metrics.size());
         for (final Metric m : metrics) {
             assertNotNull(m.metricValue(), "Metric:'" + m.metricName() + "' must be not null");

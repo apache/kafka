@@ -304,7 +304,7 @@ public class ConsumerHeartbeatRequestManager extends AbstractHeartbeatRequestMan
                     entry -> new ConsumerGroupHeartbeatRequestData.TopicPartitions()
                         .setTopicId(entry.getKey())
                         .setPartitions(new ArrayList<>(entry.getValue())))
-                .toList();
+                .collect(Collectors.toList());
         }
 
         // Fields of ConsumerHeartbeatRequest sent in the most recent request

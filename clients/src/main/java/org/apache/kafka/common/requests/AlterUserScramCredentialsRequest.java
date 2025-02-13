@@ -79,7 +79,7 @@ public class AlterUserScramCredentialsRequest extends AbstractRequest {
                                 .setUser(user)
                                 .setErrorCode(errorCode)
                                 .setErrorMessage(errorMessage))
-                        .toList();
+                        .collect(Collectors.toList());
         return new AlterUserScramCredentialsResponse(new AlterUserScramCredentialsResponseData().setResults(results));
     }
 }

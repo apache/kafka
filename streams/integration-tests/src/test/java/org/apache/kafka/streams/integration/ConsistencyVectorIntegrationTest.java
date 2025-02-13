@@ -194,7 +194,7 @@ public class ConsistencyVectorIntegrationTest {
             INPUT_TOPIC_NAME,
             IntStream.range(0, NUMBER_OF_MESSAGES)
                      .mapToObj(i -> KeyValue.pair(KEY, i))
-                     .toList(),
+                     .collect(Collectors.toList()),
             producerProps,
             mockTime
         );

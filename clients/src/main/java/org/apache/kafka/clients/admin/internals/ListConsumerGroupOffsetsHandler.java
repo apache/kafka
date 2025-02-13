@@ -109,7 +109,7 @@ public class ListConsumerGroupOffsetsHandler implements AdminApiHandler<Coordina
             return groupIds.stream().map(groupId -> {
                 Set<CoordinatorKey> keys = Collections.singleton(groupId);
                 return new RequestAndKeys<>(buildBatchedRequest(keys), keys);
-            }).toList();
+            }).collect(Collectors.toList());
         }
     }
 

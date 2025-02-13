@@ -226,7 +226,7 @@ public class MetadataSnapshot {
         List<PartitionInfo> partitionInfos = metadataByPartition.values()
                 .stream()
                 .map(metadata -> MetadataResponse.toPartitionInfo(metadata, nodes))
-                .toList();
+                .collect(Collectors.toList());
         this.clusterInstance = new Cluster(clusterId, nodes.values(), partitionInfos, unauthorizedTopics,
                 invalidTopics, internalTopics, controller, topicIds);
     }

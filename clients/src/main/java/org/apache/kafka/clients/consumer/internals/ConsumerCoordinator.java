@@ -1537,7 +1537,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 if (partitions != null) {
                     List<PartitionRackInfo> partitionRacks = partitions.stream()
                             .map(p -> new PartitionRackInfo(clientRack, p))
-                            .toList();
+                            .collect(Collectors.toList());
                     partitionsPerTopic.put(topic, partitionRacks);
                 }
             }

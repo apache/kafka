@@ -106,6 +106,6 @@ public class AlterPartitionRequest extends AbstractRequest {
     }
 
     public static List<BrokerState> newIsrToSimpleNewIsrWithBrokerEpochs(List<Integer> newIsr) {
-        return newIsr.stream().map(brokerId -> new BrokerState().setBrokerId(brokerId)).toList();
+        return newIsr.stream().map(brokerId -> new BrokerState().setBrokerId(brokerId)).collect(Collectors.toList());
     }
 }

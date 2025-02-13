@@ -147,7 +147,7 @@ public class CoordinatorRequestManagerTest {
                 }
             })
             .filter(Objects::nonNull)
-            .toList();
+            .collect(Collectors.toList());
 
         // Return the most recent log entry that matches the message in markCoordinatorUnknown, if present.
         return milliseconds.isEmpty() ? Optional.empty() : Optional.of(milliseconds.get(milliseconds.size() - 1));

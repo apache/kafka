@@ -116,7 +116,7 @@ public class LogCaptureAppender extends AbstractAppender implements AutoCloseabl
         return getEvents().stream()
                 .filter(e -> level.equals(e.getLevel()))
                 .map(Event::getMessage)
-                .toList();
+                .collect(Collectors.toList());
     }
 
     public List<String> getMessages() {

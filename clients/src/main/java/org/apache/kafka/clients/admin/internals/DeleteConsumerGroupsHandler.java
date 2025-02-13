@@ -76,7 +76,7 @@ public class DeleteConsumerGroupsHandler extends AdminApiHandler.Batched<Coordin
         int coordinatorId,
         Set<CoordinatorKey> keys
     ) {
-        List<String> groupIds = keys.stream().map(key -> key.idValue).toList();
+        List<String> groupIds = keys.stream().map(key -> key.idValue).collect(Collectors.toList());
         DeleteGroupsRequestData data = new DeleteGroupsRequestData()
             .setGroupsNames(groupIds);
         return new DeleteGroupsRequest.Builder(data);

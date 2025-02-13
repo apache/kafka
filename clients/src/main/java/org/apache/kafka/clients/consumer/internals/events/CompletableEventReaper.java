@@ -168,7 +168,7 @@ public class CompletableEventReaper {
     public List<CompletableEvent<?>> uncompletedEvents() {
         return tracked.stream()
                 .filter(e -> !e.future().isDone())
-                .toList();
+                .collect(Collectors.toList());
     }
     
 }

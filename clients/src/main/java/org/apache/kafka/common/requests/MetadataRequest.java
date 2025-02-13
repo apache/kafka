@@ -97,7 +97,7 @@ public class MetadataRequest extends AbstractRequest {
             return data.topics()
                 .stream()
                 .map(MetadataRequestTopic::name)
-                .toList();
+                .collect(Collectors.toList());
         }
 
         @Override
@@ -173,7 +173,7 @@ public class MetadataRequest extends AbstractRequest {
             return data.topics()
                 .stream()
                 .map(MetadataRequestTopic::name)
-                .toList();
+                .collect(Collectors.toList());
     }
 
     public List<Uuid> topicIds() {
@@ -185,7 +185,7 @@ public class MetadataRequest extends AbstractRequest {
             return data.topics()
                     .stream()
                     .map(MetadataRequestTopic::topicId)
-                    .toList();
+                    .collect(Collectors.toList());
     }
 
     public boolean allowAutoTopicCreation() {
@@ -199,12 +199,12 @@ public class MetadataRequest extends AbstractRequest {
     public static List<MetadataRequestTopic> convertToMetadataRequestTopic(final Collection<String> topics) {
         return topics.stream().map(topic -> new MetadataRequestTopic()
             .setName(topic))
-            .toList();
+            .collect(Collectors.toList());
     }
 
     public static List<MetadataRequestTopic> convertTopicIdsToMetadataRequestTopic(final Collection<Uuid> topicIds) {
         return topicIds.stream().map(topicId -> new MetadataRequestTopic()
                 .setTopicId(topicId))
-                .toList();
+                .collect(Collectors.toList());
     }
 }

@@ -808,11 +808,11 @@ public class CustomStickyTaskAssignorTest {
         final Map<ProcessId, KafkaStreamsAssignment> assignments = assign(streamStates, tasks, assignmentConfigs);
         final List<TaskId> allActiveTasks = allTasks(assignments).stream().filter(t -> t.type() == ACTIVE)
             .map(AssignedTask::id)
-            .toList();
+            .collect(Collectors.toList());
         assertThat(allActiveTasks.size(), equalTo(topicCount * taskPerTopic));
         final List<TaskId> allStandbyTasks = allTasks(assignments).stream().filter(t -> t.type() == STANDBY)
             .map(AssignedTask::id)
-            .toList();
+            .collect(Collectors.toList());
         assertThat(allStandbyTasks.size(), equalTo(topicCount * taskPerTopic * numStandbys));
     }
 

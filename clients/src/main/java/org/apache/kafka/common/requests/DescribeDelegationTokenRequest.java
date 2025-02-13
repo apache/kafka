@@ -39,7 +39,7 @@ public class DescribeDelegationTokenRequest extends AbstractRequest {
                     .map(owner -> new DescribeDelegationTokenRequestData.DescribeDelegationTokenOwner()
                             .setPrincipalName(owner.getName())
                             .setPrincipalType(owner.getPrincipalType()))
-                    .toList());
+                    .collect(Collectors.toList()));
         }
 
         @Override

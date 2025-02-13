@@ -86,14 +86,14 @@ public class TopicMetadataRequestManager implements RequestManager {
         // Prune any requests which have timed out
         List<TopicMetadataRequestState> expiredRequests = inflightRequests.stream()
                 .filter(TimedRequestState::isExpired)
-                .toList();
+                .collect(Collectors.toList());
         expiredRequests.forEach(TopicMetadataRequestState::expire);
 
         List<NetworkClientDelegate.UnsentRequest> requests = inflightRequests.stream()
             .map(req -> req.send(currentTimeMs))
             .filter(Optional::isPresent)
             .map(Optional::get)
-            .toList();
+            .collect(Collectors.toList());
 
         return requests.isEmpty() ? EMPTY : new NetworkClientDelegate.PollResult(0, requests);
     }

@@ -88,7 +88,7 @@ public class DescribeShareGroupsHandler extends AdminApiHandler.Batched<Coordina
                     " when building `DescribeShareGroups` request");
             }
             return key.idValue;
-        }).toList();
+        }).collect(Collectors.toList());
         ShareGroupDescribeRequestData data = new ShareGroupDescribeRequestData()
             .setGroupIds(groupIds)
             .setIncludeAuthorizedOperations(includeAuthorizedOperations);

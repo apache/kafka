@@ -220,7 +220,7 @@ public abstract class AbstractFetch implements Closeable {
                 List<Node> leaderNodes = response.data().nodeEndpoints().stream()
                     .map(e -> new Node(e.nodeId(), e.host(), e.port(), e.rack()))
                     .filter(e -> !e.equals(Node.noNode()))
-                    .toList();
+                    .collect(Collectors.toList());
                 Set<TopicPartition> updatedPartitions = metadata.updatePartitionLeadership(partitionsWithUpdatedLeaderInfo, leaderNodes);
                 updatedPartitions.forEach(
                     tp -> {

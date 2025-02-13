@@ -89,7 +89,7 @@ public class DescribeTransactionsHandler extends AdminApiHandler.Batched<Coordin
                     " when building `DescribeTransaction` request");
             }
             return key.idValue;
-        }).toList();
+        }).collect(Collectors.toList());
         request.setTransactionalIds(transactionalIds);
         return new DescribeTransactionsRequest.Builder(request);
     }

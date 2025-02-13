@@ -230,7 +230,7 @@ public class SuppressionIntegrationTest {
                 consumer.partitionsFor(topic)
                         .stream()
                         .map(pi -> new TopicPartition(pi.topic(), pi.partition()))
-                        .toList();
+                        .collect(Collectors.toList());
             consumer.assign(partitions);
             consumer.seekToBeginning(partitions);
             final long start = System.currentTimeMillis();

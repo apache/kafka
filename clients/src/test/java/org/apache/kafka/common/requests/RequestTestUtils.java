@@ -233,7 +233,7 @@ public class RequestTestUtils {
             for (int i = 0; i < numPartitions; i++) {
                 TopicPartition tp = new TopicPartition(topic, i);
                 Node leader = nodes.get(i % nodes.size());
-                List<Integer> replicaIds = leaderOnly ? Collections.singletonList(leader.id()) : nodes.stream().map(Node::id).toList();
+                List<Integer> replicaIds = leaderOnly ? Collections.singletonList(leader.id()) : nodes.stream().map(Node::id).collect(Collectors.toList());
                 partitionMetadata.add(partitionSupplier.supply(
                         Errors.NONE, tp, Optional.of(leader.id()), Optional.ofNullable(epochSupplier.apply(tp)),
                         replicaIds, replicaIds, Collections.emptyList()));

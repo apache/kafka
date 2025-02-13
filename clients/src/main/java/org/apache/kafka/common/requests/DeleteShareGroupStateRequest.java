@@ -70,7 +70,7 @@ public class DeleteShareGroupStateRequest extends AbstractRequest {
                                 .map(partitionData -> new DeleteShareGroupStateResponseData.PartitionResult()
                                         .setPartition(partitionData.partition())
                                         .setErrorCode(Errors.forException(e).code()))
-                                .toList())));
+                                .collect(Collectors.toList()))));
         return new DeleteShareGroupStateResponse(new DeleteShareGroupStateResponseData()
                 .setResults(results));
     }

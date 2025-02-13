@@ -74,7 +74,7 @@ public class CopartitionedTopicsEnforcer {
             final Collection<InternalTopicConfig> internalTopicConfigsWithEnforcedNumberOfPartitions = internalTopicConfigs
                 .stream()
                 .filter(InternalTopicConfig::hasEnforcedNumberOfPartitions)
-                .toList();
+                .collect(Collectors.toList());
 
             // if there's at least one repartition topic with enforced number of partitions
             // validate that they all have same number of partitions

@@ -520,7 +520,7 @@ public class KStreamKStreamJoinTest {
     private <T> List<T> iteratorToList(final Iterator<T> iterator) {
         return StreamSupport.stream(
                         Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), false)
-                .toList();
+                .collect(Collectors.toList());
     }
 
     private void runJoin(final StreamJoined<String, Integer, Integer> streamJoined,

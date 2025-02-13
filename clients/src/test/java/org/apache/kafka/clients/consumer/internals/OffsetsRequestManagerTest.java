@@ -985,7 +985,7 @@ public class OffsetsRequestManagerTest {
                 partitionLeaders.keySet().stream()
                         .map(tp -> new PartitionInfo(tp.topic(), tp.partition(),
                                 partitionLeaders.get(tp), null, null))
-                        .toList();
+                        .collect(Collectors.toList());
 
         return new Cluster("clusterId", partitionLeaders.values(), partitions,
                 Collections.emptySet(),

@@ -714,12 +714,12 @@ public class NamedTopologyIntegrationTest {
         assertThat(
             streams1SourceTopicsForTopology.containsAll(metadata.topicPartitions().stream()
                                                             .map(TopicPartition::topic)
-                                                            .toList()),
+                                                            .collect(Collectors.toList())),
             is(true));
         assertThat(
             streams2SourceTopicsForTopology.containsAll(metadata.topicPartitions().stream()
                                                             .map(TopicPartition::topic)
-                                                            .toList()),
+                                                            .collect(Collectors.toList())),
             is(true));
 
         // then verify that only this topology's one store appears if the host has partitions assigned

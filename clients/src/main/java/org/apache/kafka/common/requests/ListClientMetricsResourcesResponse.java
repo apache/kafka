@@ -72,6 +72,6 @@ public class ListClientMetricsResourcesResponse extends AbstractResponse {
         return data.clientMetricsResources()
             .stream()
             .map(entry -> new ClientMetricsResourceListing(entry.name()))
-            .toList();
+            .collect(Collectors.toList());
     }
 }

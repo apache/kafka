@@ -123,7 +123,7 @@ class LogicalKeyValueSegment implements Comparable<LogicalKeyValueSegment>, Segm
             .map(kv -> new KeyValue<>(
                 prefixKeyFormatter.addPrefix(kv.key),
                 kv.value))
-            .toList());
+            .collect(Collectors.toList()));
     }
 
     @Override

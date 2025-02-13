@@ -500,7 +500,7 @@ public class ProcessorStateManager implements StateManager {
             final RecordBatchingStateRestoreCallback restoreCallback = adapt(storeMetadata.restoreCallback);
             final List<ConsumerRecord<byte[], byte[]>> convertedRecords = restoreRecords.stream()
                 .map(storeMetadata.recordConverter::convert)
-                .toList();
+                .collect(Collectors.toList());
 
             try {
                 restoreCallback.restoreBatch(convertedRecords);
@@ -763,7 +763,7 @@ public class ProcessorStateManager implements StateManager {
     private StateStoreMetadata findStore(final TopicPartition changelogPartition) {
         final List<StateStoreMetadata> found = stores.values().stream()
             .filter(metadata -> changelogPartition.equals(metadata.changelogPartition))
-            .toList();
+            .collect(Collectors.toList());
 
         if (found.size() > 1) {
             throw new IllegalStateException("Multiple state stores are found for changelog partition " + changelogPartition +

@@ -123,7 +123,7 @@ public class ProduceResponse extends AbstractResponse {
                         .map(e -> new ProduceResponseData.BatchIndexAndErrorMessage()
                             .setBatchIndex(e.batchIndex)
                             .setBatchIndexErrorMessage(e.message))
-                        .toList()));
+                        .collect(Collectors.toList())));
         });
         nodeEndpoints.forEach(endpoint -> data.nodeEndpoints()
                 .add(new ProduceResponseData.NodeEndpoint()

@@ -106,7 +106,7 @@ public class EndQuorumEpochRequest extends AbstractRequest {
                     .setCandidateId(id)
                     .setCandidateDirectoryId(Uuid.ZERO_UUID)
                 )
-                .toList();
+                .collect(Collectors.toList());
         } else {
             return partition.preferredCandidates();
         }

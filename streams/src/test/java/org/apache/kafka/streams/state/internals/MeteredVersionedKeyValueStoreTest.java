@@ -469,6 +469,6 @@ public class MeteredVersionedKeyValueStoreTest {
             .keySet()
             .stream()
             .filter(name -> name.group().equals(STORE_LEVEL_GROUP) && name.tags().equals(tags))
-            .toList();
+            .collect(Collectors.toList());
     }
 }

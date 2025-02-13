@@ -138,7 +138,7 @@ public class StandbyTaskEOSMultiRebalanceIntegrationTest {
 
         IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
                 inputTopic,
-                IntStream.range(0, initialBulk).boxed().map(i -> new KeyValue<>(i, i)).toList(),
+                IntStream.range(0, initialBulk).boxed().map(i -> new KeyValue<>(i, i)).collect(Collectors.toList()),
                 TestUtils.producerConfig(
                         CLUSTER.bootstrapServers(),
                         IntegerSerializer.class,
@@ -185,7 +185,7 @@ public class StandbyTaskEOSMultiRebalanceIntegrationTest {
         LOG.info("Produce the second bulk");
         IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
                 inputTopic,
-                IntStream.range(initialBulk, initialBulk + secondBulk).boxed().map(i -> new KeyValue<>(i, i)).toList(),
+                IntStream.range(initialBulk, initialBulk + secondBulk).boxed().map(i -> new KeyValue<>(i, i)).collect(Collectors.toList()),
                 TestUtils.producerConfig(
                         CLUSTER.bootstrapServers(),
                         IntegerSerializer.class,
@@ -221,7 +221,7 @@ public class StandbyTaskEOSMultiRebalanceIntegrationTest {
     private void logIfDuplicate(final Integer id, final List<ConsumerRecord<Integer, Integer>> record) {
         assertThat("The id and the value in the records must match", record.stream().allMatch(r -> id.equals(r.value())));
         if (record.size() > 1) {
-            LOG.warn("Id : " + id + " is assigned to the following " + record.stream().map(ConsumerRecord::key).toList());
+            LOG.warn("Id : " + id + " is assigned to the following " + record.stream().map(ConsumerRecord::key).collect(Collectors.toList()));
         }
     }
 

@@ -676,7 +676,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                             return !mismatch;
                         })
                         .sorted(Comparator.comparing(TopicPartition::partition).thenComparing(TopicPartition::topic))
-                        .toList();
+                        .collect(Collectors.toList());
 
                 List<TopicPartition> consumerAssignment = assignment.get(consumer);
 

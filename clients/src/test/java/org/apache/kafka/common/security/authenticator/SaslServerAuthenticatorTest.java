@@ -306,7 +306,7 @@ public class SaslServerAuthenticatorTest {
         verify(transportLayer, times(2)).write(buffersCaptor.capture());
         return buffersCaptor.getAllValues().stream()
                 .map(this::concatBuffers)
-                .toList();
+                .collect(Collectors.toList());
     }
 
     private ByteBuffer concatBuffers(ByteBuffer[] buffers) {

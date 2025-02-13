@@ -152,7 +152,7 @@ public class SubscriptionInfo {
                 clientTag.setValue(clientTagEntry.getValue().getBytes(StandardCharsets.UTF_8));
                 return clientTag;
             })
-            .toList();
+            .collect(Collectors.toList());
     }
 
     // For version > MIN_NAMED_TOPOLOGY_VERSION
@@ -165,7 +165,7 @@ public class SubscriptionInfo {
             taskOffsetSum.setNamedTopology(task.topologyName());
             taskOffsetSum.setOffsetSum(t.getValue());
             return taskOffsetSum;
-        }).toList());
+        }).collect(Collectors.toList()));
     }
 
     // For MIN_NAMED_TOPOLOGY_VERSION > version > MIN_VERSION_OFFSET_SUM_SUBSCRIPTION
@@ -187,7 +187,7 @@ public class SubscriptionInfo {
             taskOffsetSum.setTopicGroupId(t.getKey());
             taskOffsetSum.setPartitionToOffsetSum(t.getValue());
             return taskOffsetSum;
-        }).toList());
+        }).collect(Collectors.toList()));
     }
 
     // For MIN_VERSION_OFFSET_SUM_SUBSCRIPTION > version
@@ -211,13 +211,13 @@ public class SubscriptionInfo {
             taskId.setTopicGroupId(t.subtopology());
             taskId.setPartition(t.partition());
             return taskId;
-        }).toList());
+        }).collect(Collectors.toList()));
         data.setStandbyTasks(standbyTasks.stream().map(t -> {
             final SubscriptionInfoData.TaskId taskId = new SubscriptionInfoData.TaskId();
             taskId.setTopicGroupId(t.subtopology());
             taskId.setPartition(t.partition());
             return taskId;
-        }).toList());
+        }).collect(Collectors.toList()));
     }
 
     public int version() {

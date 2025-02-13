@@ -184,7 +184,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
                         final String group = mn.group().replace("-metrics", "").replace('-', '.');
                         return "org.apache.kafka." + group + "." + name;
                     }).filter(name -> !name.equals("org.apache.kafka.stream.thread.state"))// telemetry reporter filters out string metrics
-                    .sorted().toList();
+                    .sorted().collect(Collectors.toList());
             final List<String> actualMetrics = new ArrayList<>(TelemetryPlugin.SUBSCRIBED_METRICS.get(mainConsumerInstanceId));
             assertEquals(expectedMetrics, actualMetrics);
 
@@ -221,15 +221,15 @@ public class KafkaStreamsTelemetryIntegrationTest {
             IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
 
             final List<MetricName> streamsThreadMetrics = streams.metrics().values().stream().map(Metric::metricName)
-                    .filter(metricName -> metricName.tags().containsKey("thread-id")).toList();
+                    .filter(metricName -> metricName.tags().containsKey("thread-id")).collect(Collectors.toList());
 
             final List<MetricName> streamsClientMetrics = streams.metrics().values().stream().map(Metric::metricName)
-                    .filter(metricName -> metricName.group().equals("stream-metrics")).toList();
+                    .filter(metricName -> metricName.group().equals("stream-metrics")).collect(Collectors.toList());
 
 
 
-            final List<MetricName> consumerPassedStreamThreadMetricNames = INTERCEPTING_CONSUMERS.get(FIRST_INSTANCE_CLIENT).passedMetrics.stream().map(KafkaMetric::metricName).toList();
-            final List<MetricName> adminPassedStreamClientMetricNames = INTERCEPTING_ADMIN_CLIENTS.get(FIRST_INSTANCE_CLIENT).passedMetrics.stream().map(KafkaMetric::metricName).toList();
+            final List<MetricName> consumerPassedStreamThreadMetricNames = INTERCEPTING_CONSUMERS.get(FIRST_INSTANCE_CLIENT).passedMetrics.stream().map(KafkaMetric::metricName).collect(Collectors.toList());
+            final List<MetricName> adminPassedStreamClientMetricNames = INTERCEPTING_ADMIN_CLIENTS.get(FIRST_INSTANCE_CLIENT).passedMetrics.stream().map(KafkaMetric::metricName).collect(Collectors.toList());
 
 
             assertEquals(streamsThreadMetrics.size(), consumerPassedStreamThreadMetricNames.size());
@@ -259,10 +259,10 @@ public class KafkaStreamsTelemetryIntegrationTest {
             IntegrationTestUtils.startApplicationAndWaitUntilRunning(streamsOne);
 
             final List<MetricName> streamsTaskMetricNames = streamsOne.metrics().values().stream().map(Metric::metricName)
-                    .filter(metricName -> metricName.tags().containsKey("task-id")).toList();
+                    .filter(metricName -> metricName.tags().containsKey("task-id")).collect(Collectors.toList());
 
             final List<MetricName> consumerPassedStreamTaskMetricNames = INTERCEPTING_CONSUMERS.get(FIRST_INSTANCE_CLIENT).passedMetrics.stream().map(KafkaMetric::metricName)
-                    .filter(metricName -> metricName.tags().containsKey("task-id")).toList();
+                    .filter(metricName -> metricName.tags().containsKey("task-id")).collect(Collectors.toList());
 
             /*
              With only one instance, Kafka Streams should register task metrics for all tasks 0_0, 0_1, 1_0, 1_1
@@ -293,24 +293,24 @@ public class KafkaStreamsTelemetryIntegrationTest {
                 );
 
                 final List<MetricName> streamsOneTaskMetrics = streamsOne.metrics().values().stream().map(Metric::metricName)
-                        .filter(metricName -> metricName.tags().containsKey("task-id")).toList();
+                        .filter(metricName -> metricName.tags().containsKey("task-id")).collect(Collectors.toList());
                 final List<MetricName> streamsOneStateMetrics = streamsOne.metrics().values().stream().map(Metric::metricName)
-                        .filter(metricName -> metricName.group().equals("stream-state-metrics")).toList();
+                        .filter(metricName -> metricName.group().equals("stream-state-metrics")).collect(Collectors.toList());
                 
                 final List<MetricName> consumerOnePassedTaskMetrics = INTERCEPTING_CONSUMERS.get(FIRST_INSTANCE_CLIENT)
-                        .passedMetrics.stream().map(KafkaMetric::metricName).filter(metricName -> metricName.tags().containsKey("task-id")).toList();
+                        .passedMetrics.stream().map(KafkaMetric::metricName).filter(metricName -> metricName.tags().containsKey("task-id")).collect(Collectors.toList());
                 final List<MetricName> consumerOnePassedStateMetrics = INTERCEPTING_CONSUMERS.get(FIRST_INSTANCE_CLIENT)
-                        .passedMetrics.stream().map(KafkaMetric::metricName).filter(metricName -> metricName.group().equals("stream-state-metrics")).toList();
+                        .passedMetrics.stream().map(KafkaMetric::metricName).filter(metricName -> metricName.group().equals("stream-state-metrics")).collect(Collectors.toList());
 
                 final List<MetricName> streamsTwoTaskMetrics = streamsTwo.metrics().values().stream().map(Metric::metricName)
-                        .filter(metricName -> metricName.tags().containsKey("task-id")).toList();
+                        .filter(metricName -> metricName.tags().containsKey("task-id")).collect(Collectors.toList());
                 final List<MetricName> streamsTwoStateMetrics = streamsTwo.metrics().values().stream().map(Metric::metricName)
-                        .filter(metricName -> metricName.group().equals("stream-state-metrics")).toList();
+                        .filter(metricName -> metricName.group().equals("stream-state-metrics")).collect(Collectors.toList());
                 
                 final List<MetricName> consumerTwoPassedTaskMetrics = INTERCEPTING_CONSUMERS.get(SECOND_INSTANCE_CLIENT)
-                        .passedMetrics.stream().map(KafkaMetric::metricName).filter(metricName -> metricName.tags().containsKey("task-id")).toList();
+                        .passedMetrics.stream().map(KafkaMetric::metricName).filter(metricName -> metricName.tags().containsKey("task-id")).collect(Collectors.toList());
                 final List<MetricName> consumerTwoPassedStateMetrics = INTERCEPTING_CONSUMERS.get(SECOND_INSTANCE_CLIENT)
-                        .passedMetrics.stream().map(KafkaMetric::metricName).filter(metricName -> metricName.group().equals("stream-state-metrics")).toList();
+                        .passedMetrics.stream().map(KafkaMetric::metricName).filter(metricName -> metricName.group().equals("stream-state-metrics")).collect(Collectors.toList());
                 /*
                  Confirm pre-existing KafkaStreams instance one only passes metrics for its tasks and has no metrics for previous tasks
                  */
@@ -350,10 +350,10 @@ public class KafkaStreamsTelemetryIntegrationTest {
             IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
 
             final List<MetricName> streamsThreadMetrics = streams.metrics().values().stream().map(Metric::metricName)
-                    .filter(metricName -> metricName.tags().containsKey("thread-id")).toList();
+                    .filter(metricName -> metricName.tags().containsKey("thread-id")).collect(Collectors.toList());
 
             final List<MetricName> streamsClientMetrics = streams.metrics().values().stream().map(Metric::metricName)
-                    .filter(metricName -> metricName.group().equals("stream-metrics")).toList();
+                    .filter(metricName -> metricName.group().equals("stream-metrics")).collect(Collectors.toList());
 
             final Map<MetricName, ? extends Metric> embeddedConsumerMetrics = INTERCEPTING_CONSUMERS.get(FIRST_INSTANCE_CLIENT).metrics();
             final Map<MetricName, ? extends Metric> embeddedAdminMetrics = INTERCEPTING_ADMIN_CLIENTS.get(FIRST_INSTANCE_CLIENT).metrics();
@@ -376,7 +376,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
         return streams.metadataForLocalThreads().stream()
                 .flatMap(threadMeta -> threadMeta.activeTasks().stream()
                         .map(taskMeta -> taskMeta.taskId().toString()))
-                .toList();
+                .collect(Collectors.toList());
     }
 
     private static Stream<Arguments> singleAndMultiTaskParameters() {
@@ -541,7 +541,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
                         .flatMap(sm -> sm.getMetricsList().stream())
                         .map(metric -> metric.getName())
                         .sorted()
-                        .toList();
+                        .collect(Collectors.toList());
                 LOG.info("Found metrics {} for clientId={}", metricNames, clientId);
                 SUBSCRIBED_METRICS.put(clientId, metricNames);
             } catch (final Exception e) {

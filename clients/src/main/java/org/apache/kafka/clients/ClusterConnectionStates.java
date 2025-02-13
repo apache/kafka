@@ -457,7 +457,7 @@ final class ClusterConnectionStates {
     public List<String> nodesWithConnectionSetupTimeout(long now) {
         return connectingNodes.stream()
             .filter(id -> isConnectionSetupTimeout(id, now))
-            .toList();
+            .collect(Collectors.toList());
     }
 
     /**

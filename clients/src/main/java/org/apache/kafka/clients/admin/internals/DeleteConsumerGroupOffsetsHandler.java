@@ -90,7 +90,7 @@ public class DeleteConsumerGroupOffsetsHandler extends AdminApiHandler.Batched<C
             .setName(topic)
             .setPartitions(topicPartitions.stream()
                 .map(tp -> new OffsetDeleteRequestPartition().setPartitionIndex(tp.partition()))
-                .toList()
+                .collect(Collectors.toList())
             )
         ));
 

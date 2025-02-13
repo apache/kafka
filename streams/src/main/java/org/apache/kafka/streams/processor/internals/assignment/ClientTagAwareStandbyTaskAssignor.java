@@ -183,7 +183,7 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
             if (tags != null) {
                 tagSet.addAll(tags.entrySet().stream()
                     .map(entry -> KeyValue.pair(entry.getKey(), entry.getValue()))
-                    .toList()
+                    .collect(Collectors.toList())
                 );
             }
         };

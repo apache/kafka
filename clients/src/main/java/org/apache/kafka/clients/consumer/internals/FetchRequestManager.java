@@ -157,7 +157,7 @@ public class FetchRequestManager extends AbstractFetch implements RequestManager
                 };
 
                 return new UnsentRequest(request, Optional.of(fetchTarget)).whenComplete(responseHandler);
-            }).toList();
+            }).collect(Collectors.toList());
 
             pendingFetchRequestFuture.complete(null);
             return new PollResult(requests);

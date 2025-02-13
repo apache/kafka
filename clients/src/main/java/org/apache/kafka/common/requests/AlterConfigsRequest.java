@@ -104,7 +104,7 @@ public class AlterConfigsRequest extends AbstractRequest {
                     resource.resourceName()),
             resource -> new Config(resource.configs().stream()
                     .map(entry -> new ConfigEntry(entry.name(), entry.value()))
-                    .toList())));
+                    .collect(Collectors.toList()))));
     }
 
     public boolean validateOnly() {

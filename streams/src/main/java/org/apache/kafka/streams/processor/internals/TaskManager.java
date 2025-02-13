@@ -1788,11 +1788,11 @@ public class TaskManager {
     }
 
     List<Task> activeTaskIterable() {
-        return activeTaskStream().toList();
+        return activeTaskStream().collect(Collectors.toList());
     }
 
     List<Task> activeRunningTaskIterable() {
-        return activeRunningTaskStream().toList();
+        return activeRunningTaskStream().collect(Collectors.toList());
     }
 
     private Stream<Task> activeTaskStream() {
@@ -1814,7 +1814,7 @@ public class TaskManager {
     }
 
     private List<Task> standbyTaskIterable() {
-        return standbyTaskStream().toList();
+        return standbyTaskStream().collect(Collectors.toList());
     }
 
     private Stream<Task> standbyTaskStream() {

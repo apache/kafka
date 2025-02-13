@@ -1196,7 +1196,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             // not ready to sent request
             List<OffsetCommitRequestState> unreadyCommitRequests = unsentOffsetCommits.stream()
                 .filter(request -> !request.canSendRequest(currentTimeMs))
-                .toList();
+                .collect(Collectors.toList());
 
             failAndRemoveExpiredCommitRequests();
 

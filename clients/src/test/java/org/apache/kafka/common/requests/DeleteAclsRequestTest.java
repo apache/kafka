@@ -87,6 +87,6 @@ public class DeleteAclsRequestTest {
     private static DeleteAclsRequestData requestData(AclBindingFilter... acls) {
         return new DeleteAclsRequestData().setFilters(Arrays.stream(acls)
             .map(DeleteAclsRequest::deleteAclsFilter)
-            .toList());
+            .collect(Collectors.toList()));
     }
 }

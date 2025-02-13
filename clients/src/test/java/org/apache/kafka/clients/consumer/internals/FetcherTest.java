@@ -3905,6 +3905,6 @@ public class FetcherTest {
     }
 
     private <T> List<Long> collectRecordOffsets(List<ConsumerRecord<T, T>> records) {
-        return records.stream().map(ConsumerRecord::offset).toList();
+        return records.stream().map(ConsumerRecord::offset).collect(Collectors.toList());
     }
 }

@@ -1484,7 +1484,7 @@ public class KStreamSlidingWindowAggregateTest {
                 appender.getEvents().stream()
                     .filter(e -> e.getLevel().equals("WARN"))
                     .map(Event::getMessage)
-                    .toList(),
+                    .collect(Collectors.toList()),
                 hasItem("Skipping record due to null key or value. topic=[topic] partition=[0] offset=[0]")
             );
         }

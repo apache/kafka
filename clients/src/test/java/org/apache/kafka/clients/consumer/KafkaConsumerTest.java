@@ -993,7 +993,7 @@ public class KafkaConsumerTest {
                     return Stream.of(t.partitions());
                 else
                     return Stream.empty();
-            }).flatMap(List::stream).toList();
+            }).flatMap(List::stream).collect(Collectors.toList());
             ListOffsetsPartition expectedTp0 = new ListOffsetsPartition()
                     .setPartitionIndex(tp0.partition())
                     .setTimestamp(ListOffsetsRequest.LATEST_TIMESTAMP);

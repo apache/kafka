@@ -1365,7 +1365,7 @@ public class ShareMembershipManagerTest {
 
         List<TopicIdPartition> assignedPartitions =
                 partitions.stream().map(tp -> new TopicIdPartition(topicId,
-                        new TopicPartition(topicName, tp))).toList();
+                        new TopicPartition(topicName, tp))).collect(Collectors.toList());
         verifyReconciliationTriggeredAndCompleted(membershipManager, assignedPartitions);
         return membershipManager;
     }
@@ -1390,7 +1390,7 @@ public class ShareMembershipManagerTest {
     }
 
     private List<TopicPartition> buildTopicPartitions(List<TopicIdPartition> topicIdPartitions) {
-        return topicIdPartitions.stream().map(TopicIdPartition::topicPartition).toList();
+        return topicIdPartitions.stream().map(TopicIdPartition::topicPartition).collect(Collectors.toList());
     }
 
     private void mockAckSent(ShareMembershipManager membershipManager) {
@@ -1510,7 +1510,7 @@ public class ShareMembershipManagerTest {
                 .setTopicPartitions(topicIdPartitionList.entrySet().stream().map(tp ->
                         new ShareGroupHeartbeatResponseData.TopicPartitions()
                                 .setTopicId(tp.getKey())
-                                .setPartitions(new ArrayList<>(tp.getValue()))).toList());
+                                .setPartitions(new ArrayList<>(tp.getValue()))).collect(Collectors.toList()));
         ShareGroupHeartbeatResponse heartbeatResponse = createShareGroupHeartbeatResponse(targetAssignment, membershipManager.memberId());
         membershipManager.onHeartbeatSuccess(heartbeatResponse);
     }

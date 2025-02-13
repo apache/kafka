@@ -2413,7 +2413,7 @@ public class ConsumerMembershipManagerTest {
 
         List<TopicIdPartition> assignedPartitions =
             partitions.stream().map(tp -> new TopicIdPartition(topicId,
-                new TopicPartition(topicName, tp))).toList();
+                new TopicPartition(topicName, tp))).collect(Collectors.toList());
         verifyReconciliationTriggeredAndCompleted(membershipManager, assignedPartitions);
         return membershipManager;
     }
@@ -2531,7 +2531,7 @@ public class ConsumerMembershipManagerTest {
     }
 
     private List<TopicPartition> buildTopicPartitions(List<TopicIdPartition> topicIdPartitions) {
-        return topicIdPartitions.stream().map(TopicIdPartition::topicPartition).toList();
+        return topicIdPartitions.stream().map(TopicIdPartition::topicPartition).collect(Collectors.toList());
     }
 
     private void mockAckSent(ConsumerMembershipManager membershipManager) {
@@ -2669,7 +2669,7 @@ public class ConsumerMembershipManagerTest {
             .setTopicPartitions(topicIdPartitionList.entrySet().stream().map(tp ->
                 new ConsumerGroupHeartbeatResponseData.TopicPartitions()
                     .setTopicId(tp.getKey())
-                    .setPartitions(new ArrayList<>(tp.getValue()))).toList());
+                    .setPartitions(new ArrayList<>(tp.getValue()))).collect(Collectors.toList()));
         ConsumerGroupHeartbeatResponse heartbeatResponse = createConsumerGroupHeartbeatResponse(targetAssignment, membershipManager.memberId());
         membershipManager.onHeartbeatSuccess(heartbeatResponse);
     }

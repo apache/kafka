@@ -125,8 +125,8 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         // compute added and removed partitions for rebalance callback
         Set<TopicPartition> oldAssignmentSet = this.subscriptions.assignedPartitions();
         Set<TopicPartition> newAssignmentSet = new HashSet<>(newAssignment);
-        List<TopicPartition> added = newAssignment.stream().filter(x -> !oldAssignmentSet.contains(x)).toList();
-        List<TopicPartition> removed = oldAssignmentSet.stream().filter(x -> !newAssignmentSet.contains(x)).toList();
+        List<TopicPartition> added = newAssignment.stream().filter(x -> !oldAssignmentSet.contains(x)).collect(Collectors.toList());
+        List<TopicPartition> removed = oldAssignmentSet.stream().filter(x -> !newAssignmentSet.contains(x)).collect(Collectors.toList());
 
         // rebalance
         this.records.clear();

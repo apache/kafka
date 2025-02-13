@@ -52,14 +52,14 @@ public class DescribeDelegationTokenResponse extends AbstractResponse {
                     .setRenewers(dt.tokenInfo().renewers()
                         .stream()
                         .map(r -> new DescribedDelegationTokenRenewer().setPrincipalName(r.getName()).setPrincipalType(r.getPrincipalType()))
-                        .toList());
+                        .collect(Collectors.toList()));
                 if (version > 2) {
                     ddt.setTokenRequesterPrincipalType(dt.tokenInfo().tokenRequester().getPrincipalType())
                         .setTokenRequesterPrincipalName(dt.tokenInfo().tokenRequester().getName());
                 }
                 return ddt;
             })
-            .toList();
+            .collect(Collectors.toList());
 
         this.data = new DescribeDelegationTokenResponseData()
             .setThrottleTimeMs(throttleTimeMs)
@@ -115,9 +115,9 @@ public class DescribeDelegationTokenResponse extends AbstractResponse {
                 ddt.renewers()
                     .stream()
                     .map(ddtr -> new KafkaPrincipal(ddtr.principalType(), ddtr.principalName()))
-                    .toList(), ddt.issueTimestamp(), ddt.maxTimestamp(), ddt.expiryTimestamp()),
+                    .collect(Collectors.toList()), ddt.issueTimestamp(), ddt.maxTimestamp(), ddt.expiryTimestamp()),
                 ddt.hmac()))
-            .toList();
+            .collect(Collectors.toList());
     }
 
     public boolean hasError() {

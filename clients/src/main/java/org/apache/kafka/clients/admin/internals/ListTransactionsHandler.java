@@ -73,7 +73,7 @@ public class ListTransactionsHandler extends AdminApiHandler.Batched<AllBrokersS
         request.setProducerIdFilters(new ArrayList<>(options.filteredProducerIds()));
         request.setStateFilters(options.filteredStates().stream()
             .map(TransactionState::toString)
-            .toList());
+            .collect(Collectors.toList()));
         request.setDurationFilter(options.filteredDuration());
         return new ListTransactionsRequest.Builder(request);
     }
@@ -110,7 +110,7 @@ public class ListTransactionsHandler extends AdminApiHandler.Batched<AllBrokersS
                     transactionState.transactionalId(),
                     transactionState.producerId(),
                     TransactionState.parse(transactionState.transactionState())))
-                .toList();
+                .collect(Collectors.toList());
             return ApiResult.completed(key, listings);
         }
     }

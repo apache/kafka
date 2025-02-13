@@ -73,7 +73,7 @@ public class AlterReplicaLogDirsRequest extends AbstractRequest {
                     .setPartitions(topic.partitions().stream().map(partitionId ->
                         new AlterReplicaLogDirsResponseData.AlterReplicaLogDirPartitionResult()
                             .setErrorCode(Errors.forException(e).code())
-                            .setPartitionIndex(partitionId)).toList()))).toList());
+                            .setPartitionIndex(partitionId)).collect(Collectors.toList())))).collect(Collectors.toList()));
         return new AlterReplicaLogDirsResponse(data.setThrottleTimeMs(throttleTimeMs));
     }
 

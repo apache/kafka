@@ -294,7 +294,7 @@ public class RocksDBMetricsIntegrationTest {
                                    final int numMetric) {
         final List<Metric> metrics = listMetric.stream()
             .filter(m -> m.metricName().name().equals(metricName))
-            .toList();
+            .collect(Collectors.toList());
         assertThat(
             "Size of metrics of type:'" + metricName + "' must be equal to " + numMetric + " but it's equal to " + metrics.size(),
             metrics.size(),
@@ -309,6 +309,6 @@ public class RocksDBMetricsIntegrationTest {
                                            final String metricsScope) {
         return new ArrayList<Metric>(kafkaStreams.metrics().values()).stream()
             .filter(m -> m.metricName().group().equals(METRICS_GROUP) && m.metricName().tags().containsKey(metricsScope))
-            .toList();
+            .collect(Collectors.toList());
     }
 }

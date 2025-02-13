@@ -92,7 +92,7 @@ public class DeleteTopicsRequest extends AbstractRequest {
     
     public List<String> topicNames() {
         if (version() >= 6)
-            return data.topics().stream().map(DeleteTopicState::name).toList();
+            return data.topics().stream().map(DeleteTopicState::name).collect(Collectors.toList());
         return data.topicNames(); 
     }
 
@@ -104,14 +104,14 @@ public class DeleteTopicsRequest extends AbstractRequest {
     
     public List<Uuid> topicIds() {
         if (version() >= 6)
-            return data.topics().stream().map(DeleteTopicState::topicId).toList();
+            return data.topics().stream().map(DeleteTopicState::topicId).collect(Collectors.toList());
         return Collections.emptyList();
     }
     
     public List<DeleteTopicState> topics() {
         if (version() >= 6)
             return data.topics();
-        return data.topicNames().stream().map(name -> new DeleteTopicState().setName(name)).toList(); 
+        return data.topicNames().stream().map(name -> new DeleteTopicState().setName(name)).collect(Collectors.toList()); 
     }
 
     public static DeleteTopicsRequest parse(ByteBuffer buffer, short version) {

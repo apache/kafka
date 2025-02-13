@@ -104,7 +104,7 @@ public class DefaultStateUpdater implements StateUpdater {
             return updatingTasks.values().stream()
                 .filter(t -> !t.isActive())
                 .map(t -> (StandbyTask) t)
-                .toList();
+                .collect(Collectors.toList());
         }
 
         private boolean onlyStandbyTasksUpdating() {
@@ -250,7 +250,7 @@ public class DefaultStateUpdater implements StateUpdater {
                 handleStreamsException(streamsException);
             }
             final Set<TopicPartition> completedChangelogs = changelogReader.completedChangelogs();
-            final List<Task> activeTasks = updatingTasks.values().stream().filter(Task::isActive).toList();
+            final List<Task> activeTasks = updatingTasks.values().stream().filter(Task::isActive).collect(Collectors.toList());
             for (final Task task : activeTasks) {
                 maybeCompleteRestoration((StreamTask) task, completedChangelogs);
             }

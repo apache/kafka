@@ -54,7 +54,7 @@ class IncompleteBatches {
 
     public Iterable<ProduceRequestResult> requestResults() {
         synchronized (incomplete) {
-            return incomplete.stream().map(batch -> batch.produceFuture).toList();
+            return incomplete.stream().map(batch -> batch.produceFuture).collect(Collectors.toList());
         }
     }
 

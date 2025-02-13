@@ -94,7 +94,7 @@ public class DescribeClassicGroupsHandler extends AdminApiHandler.Batched<Coordi
                     " when building `DescribeGroups` request");
             }
             return key.idValue;
-        }).toList();
+        }).collect(Collectors.toList());
         DescribeGroupsRequestData data = new DescribeGroupsRequestData()
             .setGroups(groupIds)
             .setIncludeAuthorizedOperations(includeAuthorizedOperations);

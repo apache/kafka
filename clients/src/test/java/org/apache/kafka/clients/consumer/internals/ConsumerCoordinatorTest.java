@@ -1581,7 +1581,7 @@ public abstract class ConsumerCoordinatorTest {
         final List<String> topics = Arrays.asList(topic1, topic2);
         final List<TopicPartition> partitions = metadataResponse1.topicMetadata().stream()
                 .flatMap(t -> t.partitionMetadata().stream().map(p -> new TopicPartition(t.topic(), p.partition())))
-                .toList();
+                .collect(Collectors.toList());
         subscriptions.subscribe(Set.copyOf(topics), Optional.of(rebalanceListener));
         client.updateMetadata(metadataResponse1);
         coordinator.maybeUpdateSubscriptionMetadata();
