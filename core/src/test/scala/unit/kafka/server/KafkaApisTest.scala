@@ -10611,7 +10611,7 @@ class KafkaApisTest extends Logging {
   def testDescribeShareGroupOffsetsRequestEmptyGroupsSuccess(): Unit = {
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
 
-    val describeShareGroupOffsetsRequest = new DescribeShareGroupOffsetsRequestData()
+    val describeShareGroupOffsetsRequest = new DescribeShareGroupOffsetsRequestData
 
     val requestChannelRequest = buildRequest(new DescribeShareGroupOffsetsRequest.Builder(describeShareGroupOffsetsRequest, true).build)
 

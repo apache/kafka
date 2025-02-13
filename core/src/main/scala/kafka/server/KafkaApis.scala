@@ -3216,7 +3216,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     CompletableFuture.allOf(futures.toArray: _*).handle[Unit] { (_, _) =>
       val groupResponses = new ArrayBuffer[DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup](futures.size)
       val responseData = new DescribeShareGroupOffsetsResponseData().setGroups(groupResponses.asJava)
-      futures.foreach(future => groupResponses += future.get())
+      futures.foreach(future => groupResponses += future.join)
       requestHelper.sendMaybeThrottle(request, new DescribeShareGroupOffsetsResponse(responseData))
     }
   }
