@@ -91,6 +91,6 @@ public class ShareGroupMetrics implements AutoCloseable {
         if (string == null || string.isEmpty()) {
             return string;
         }
-        return string.substring(0, 1).toUpperCase(Locale.ENGLISH) + string.substring(1);
+        return string.substring(0, 1).toUpperCase(Locale.ROOT) + string.substring(1);
     }
 }
