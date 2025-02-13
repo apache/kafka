@@ -10458,7 +10458,7 @@ class KafkaApisTest extends Logging {
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
 
     val response = verifyNoThrottling[DescribeShareGroupOffsetsResponse](requestChannelRequest)
-    response.data.groups.forEach(group => group.topics.forEach(topic => topic.partitions.forEach(partition => assertEquals(Errors.UNSUPPORTED_VERSION.code(), partition.errorCode()))))
+    response.data.groups.forEach(group => group.topics.forEach(topic => topic.partitions.forEach(partition => assertEquals(Errors.UNSUPPORTED_VERSION.code, partition.errorCode))))
   }
 
   @Test
@@ -10469,7 +10469,7 @@ class KafkaApisTest extends Logging {
       ))
     )
 
-    val requestChannelRequest = buildRequest(new DescribeShareGroupOffsetsRequest.Builder(describeShareGroupOffsetsRequest, true).build())
+    val requestChannelRequest = buildRequest(new DescribeShareGroupOffsetsRequest.Builder(describeShareGroupOffsetsRequest, true).build)
 
     val authorizer: Authorizer = mock(classOf[Authorizer])
     when(authorizer.authorize(any[RequestContext], any[util.List[Action]]))
@@ -10485,7 +10485,7 @@ class KafkaApisTest extends Logging {
     response.data.groups.forEach(
       group => group.topics.forEach(
         topic => topic.partitions.forEach(
-          partition => assertEquals(Errors.GROUP_AUTHORIZATION_FAILED.code(), partition.errorCode())
+          partition => assertEquals(Errors.GROUP_AUTHORIZATION_FAILED.code, partition.errorCode)
         )
       )
     )
@@ -10494,11 +10494,11 @@ class KafkaApisTest extends Logging {
   @Test
   def testDescribeShareGroupOffsetsRequestSuccess(): Unit = {
     val topicName1 = "topic-1"
-    val topicId1 = Uuid.randomUuid()
+    val topicId1 = Uuid.randomUuid
     val topicName2 = "topic-2"
-    val topicId2 = Uuid.randomUuid()
+    val topicId2 = Uuid.randomUuid
     val topicName3 = "topic-3"
-    val topicId3 = Uuid.randomUuid()
+    val topicId3 = Uuid.randomUuid
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     addTopicToMetadataCache(topicName1, 1, topicId = topicId1)
     addTopicToMetadataCache(topicName2, 1, topicId = topicId2)
@@ -10520,14 +10520,14 @@ class KafkaApisTest extends Logging {
     val describeShareGroupOffsetsRequest = new DescribeShareGroupOffsetsRequestData()
       .setGroups(util.List.of(describeShareGroupOffsetsRequestGroup1, describeShareGroupOffsetsRequestGroup2))
 
-    val requestChannelRequest = buildRequest(new DescribeShareGroupOffsetsRequest.Builder(describeShareGroupOffsetsRequest, true).build())
+    val requestChannelRequest = buildRequest(new DescribeShareGroupOffsetsRequest.Builder(describeShareGroupOffsetsRequest, true).build)
 
-    val futureGroup1 = new CompletableFuture[DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup]()
+    val futureGroup1 = new CompletableFuture[DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup]
     when(groupCoordinator.describeShareGroupOffsets(
       requestChannelRequest.context,
       describeShareGroupOffsetsRequestGroup1
     )).thenReturn(futureGroup1)
-    val futureGroup2 = new CompletableFuture[DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup]()
+    val futureGroup2 = new CompletableFuture[DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup]
     when(groupCoordinator.describeShareGroupOffsets(
       requestChannelRequest.context,
       describeShareGroupOffsetsRequestGroup2
@@ -10613,9 +10613,9 @@ class KafkaApisTest extends Logging {
 
     val describeShareGroupOffsetsRequest = new DescribeShareGroupOffsetsRequestData()
 
-    val requestChannelRequest = buildRequest(new DescribeShareGroupOffsetsRequest.Builder(describeShareGroupOffsetsRequest, true).build())
+    val requestChannelRequest = buildRequest(new DescribeShareGroupOffsetsRequest.Builder(describeShareGroupOffsetsRequest, true).build)
 
-    val future = new CompletableFuture[DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup]()
+    val future = new CompletableFuture[DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup]
     kafkaApis = createKafkaApis(
       overrideProperties = Map(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
     )
@@ -10638,9 +10638,9 @@ class KafkaApisTest extends Logging {
 
     val describeShareGroupOffsetsRequest = new DescribeShareGroupOffsetsRequestData().setGroups(util.List.of(describeShareGroupOffsetsRequestGroup))
 
-    val requestChannelRequest = buildRequest(new DescribeShareGroupOffsetsRequest.Builder(describeShareGroupOffsetsRequest, true).build())
+    val requestChannelRequest = buildRequest(new DescribeShareGroupOffsetsRequest.Builder(describeShareGroupOffsetsRequest, true).build)
 
-    val future = new CompletableFuture[DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup]()
+    val future = new CompletableFuture[DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup]
     when(groupCoordinator.describeShareGroupOffsets(
       requestChannelRequest.context,
       describeShareGroupOffsetsRequestGroup

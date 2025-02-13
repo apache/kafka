@@ -964,8 +964,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
         RequestContext context,
         DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup requestData
     ) {
-        final HashMap<Uuid, String> requestTopicIdToNameMapping = new HashMap<>();
-
         if (!isActive.get()) {
             return CompletableFuture.completedFuture(
                 DescribeShareGroupOffsetsRequest.getErrorDescribedGroup(requestData.groupId(), Errors.COORDINATOR_NOT_AVAILABLE));
@@ -976,6 +974,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 DescribeShareGroupOffsetsRequest.getErrorDescribedGroup(requestData.groupId(), Errors.COORDINATOR_NOT_AVAILABLE));
         }
 
+        Map<Uuid, String> requestTopicIdToNameMapping = new HashMap<>();
         List<ReadShareGroupStateSummaryRequestData.ReadStateSummaryData> readStateSummaryData = new ArrayList<>(requestData.topics().size());
         List<DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic> describeShareGroupOffsetsResponseTopicList = new ArrayList<>(requestData.topics().size());
         requestData.topics().forEach(topic -> {

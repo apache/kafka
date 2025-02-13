@@ -3204,8 +3204,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code))
       } else if (groupDescribeOffsets.topics.isEmpty) {
         futures += CompletableFuture.completedFuture(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup()
-          .setGroupId(groupDescribeOffsets.groupId)
-          .setErrorCode(Errors.NONE.code))
+          .setGroupId(groupDescribeOffsets.groupId))
       } else {
         futures += describeShareGroupOffsetsForGroup(
           request.context,
