@@ -27,7 +27,6 @@ import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.WindowStore;
 
 import java.time.Duration;
-import java.time.Instant;
 
 /**
  * {@code TimeWindowedKStream} is an abstraction of a <em>windowed</em> record stream of {@link Record key-value} pairs.
