@@ -263,9 +263,8 @@ public class TopicIds implements Set<Uuid> {
         throw new UnsupportedOperationException();
     }
 
-    @SuppressWarnings("rawtypes")
     @Override
-    public boolean addAll(Collection c) {
+    public boolean addAll(Collection<? extends Uuid> c) {
         throw new UnsupportedOperationException();
     }
 
