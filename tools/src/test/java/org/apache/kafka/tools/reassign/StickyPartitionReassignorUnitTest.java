@@ -334,7 +334,7 @@ public class StickyPartitionReassignorUnitTest {
         }
     }
 
-    @Property(seed = "-7918172417683095290")
+    @Property
     void topicPartitionBrokerDistributionIsNotWorseThanBefore(@ForAll("anyMetadata") ClusterState metadata) {
         final StickyPartitionReassignor assignor = new StickyPartitionReassignor(metadata.assignments, metadata.brokers);
         final Map<TopicPartition, List<Integer>> newPartitionAssignments = assignor.reassign();
