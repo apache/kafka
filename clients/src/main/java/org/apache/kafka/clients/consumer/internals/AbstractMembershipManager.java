@@ -831,9 +831,6 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
             return;
         }
 
-        if (autoCommitEnabled && !canCommit) return;
-
-        markReconciliationInProgress();
 
         // Keep copy of assigned TopicPartitions created from the TopicIdPartitions that are
         // being reconciled. Needed for interactions with the centralized subscription state that
@@ -851,6 +848,9 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
         SortedSet<TopicPartition> revokedPartitions = new TreeSet<>(TOPIC_PARTITION_COMPARATOR);
         revokedPartitions.addAll(ownedPartitions);
         revokedPartitions.removeAll(assignedTopicPartitions);
+
+        if (autoCommitEnabled && !revokedPartitions.isEmpty() && !canCommit) return;
+        markReconciliationInProgress();
 
         log.info("Reconciling assignment with local epoch {}\n" +
                         "\tMember:                                    {}\n" +
@@ -875,6 +875,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
         CompletableFuture<Void> commitResult;
 
         commitResult = signalReconciliationStarted();
+
 
         // Execute commit -> onPartitionsRevoked -> onPartitionsAssigned.
         commitResult.whenComplete((__, commitReqError) -> {
