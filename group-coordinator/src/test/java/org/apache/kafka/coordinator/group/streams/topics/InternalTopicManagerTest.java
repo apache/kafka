@@ -55,7 +55,7 @@ class InternalTopicManagerTest {
     @Test
     void testConfigureTopicsSetsConfigurationExceptionWhenSourceTopicIsMissing() {
         Map<String, TopicMetadata> topicMetadata = new HashMap<>();
-        topicMetadata.put(SOURCE_TOPIC_1, new TopicMetadata(Uuid.randomUuid(), SOURCE_TOPIC_1, 2, Collections.emptyMap()));
+        topicMetadata.put(SOURCE_TOPIC_1, new TopicMetadata(Uuid.randomUuid(), SOURCE_TOPIC_1, 2));
         // SOURCE_TOPIC_2 is missing from topicMetadata
         StreamsTopology topology = makeTestTopology();
 
@@ -70,10 +70,10 @@ class InternalTopicManagerTest {
     @Test
     void testConfigureTopics() {
         Map<String, TopicMetadata> topicMetadata = new HashMap<>();
-        topicMetadata.put(SOURCE_TOPIC_1, new TopicMetadata(Uuid.randomUuid(), SOURCE_TOPIC_1, 2, Collections.emptyMap()));
-        topicMetadata.put(SOURCE_TOPIC_2, new TopicMetadata(Uuid.randomUuid(), SOURCE_TOPIC_2, 2, Collections.emptyMap()));
+        topicMetadata.put(SOURCE_TOPIC_1, new TopicMetadata(Uuid.randomUuid(), SOURCE_TOPIC_1, 2));
+        topicMetadata.put(SOURCE_TOPIC_2, new TopicMetadata(Uuid.randomUuid(), SOURCE_TOPIC_2, 2));
         topicMetadata.put(STATE_CHANGELOG_TOPIC_2,
-            new TopicMetadata(Uuid.randomUuid(), STATE_CHANGELOG_TOPIC_2, 2, Collections.emptyMap()));
+            new TopicMetadata(Uuid.randomUuid(), STATE_CHANGELOG_TOPIC_2, 2));
         StreamsTopology topology = makeTestTopology();
 
         ConfiguredTopology configuredTopology = InternalTopicManager.configureTopics(new LogContext(), topology, topicMetadata);
