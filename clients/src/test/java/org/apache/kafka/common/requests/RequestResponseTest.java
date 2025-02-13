@@ -3742,11 +3742,11 @@ public class RequestResponseTest {
     private AlterShareGroupOffsetsResponse createAlterShareGroupOffsetsResponse() {
         AlterShareGroupOffsetsResponseData data = new AlterShareGroupOffsetsResponseData()
             .setResponses(List.of(new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic()
-            .setPartitions(List.of(new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition()
-                .setPartitionIndex(0)
-                .setErrorCode(Errors.NONE.code())))
-            .setTopicName("topic")
-            .setTopicId(Uuid.randomUuid())));
+                .setPartitions(List.of(new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition()
+                    .setPartitionIndex(0)
+                    .setErrorCode(Errors.NONE.code())))
+                .setTopicName("topic")
+                .setTopicId(Uuid.randomUuid())));
         return new AlterShareGroupOffsetsResponse(data);
     }
 
