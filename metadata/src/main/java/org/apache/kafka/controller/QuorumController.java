@@ -1635,8 +1635,7 @@ public final class QuorumController implements Controller {
     /**
      * Register the writeNoOpRecord task.
      *
-     * This task periodically writes a NoOpRecord to the metadata log, if the MetadataVersion
-     * supports it.
+     * This task periodically writes a NoOpRecord to the metadata log.
      *
      * @param maxIdleIntervalNs     The period at which to write the NoOpRecord.
      */

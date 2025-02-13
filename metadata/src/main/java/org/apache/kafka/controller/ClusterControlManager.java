@@ -401,16 +401,10 @@ public class ClusterControlManager {
             record.features().add(processRegistrationFeature(brokerId, finalizedFeatures, feature));
             unverifiedFeatures.remove(feature.name());
         }
-        // Brokers that don't send a supported metadata.version range are assumed to only
-        // support the original metadata.version.
-        if (request.features().find(MetadataVersion.FEATURE_NAME) == null) {
-            record.features().add(processRegistrationFeature(brokerId, finalizedFeatures,
-                new BrokerRegistrationRequestData.Feature().
-                    setName(MetadataVersion.FEATURE_NAME).
-                    setMinSupportedVersion(MetadataVersion.MINIMUM_VERSION.featureLevel()).
-                    setMaxSupportedVersion(MetadataVersion.MINIMUM_VERSION.featureLevel())));
-            unverifiedFeatures.remove(MetadataVersion.FEATURE_NAME);
-        }
+
+        if (request.features().find(MetadataVersion.FEATURE_NAME) == null)
+            throw new InvalidRegistrationException("Request features do not contain '" + MetadataVersion.FEATURE_NAME + "'");
+
         // We also need to check every controller feature is supported by the broker.
         unverifiedFeatures.forEach((featureName, finalizedVersion) -> {
             if (finalizedVersion != 0 && request.features().findAll(featureName).isEmpty()) {
@@ -498,7 +492,8 @@ public class ClusterControlManager {
         // MetadataVersion has no default while the other features default to `0`
         short finalized;
         if (feature.name().equals(MetadataVersion.FEATURE_NAME))
-            finalized = finalizedFeatures.get(feature.name()).orElseThrow(() -> new RuntimeException());
+            finalized = finalizedFeatures.get(feature.name()).orElseThrow(() ->
+                new IllegalArgumentException("Feature with name '" + MetadataVersion.FEATURE_NAME + "' not found in finalizedFeatures " + finalizedFeatures));
         else
             finalized = finalizedFeatures.versionOrDefault(feature.name(), (short) 0);
 
