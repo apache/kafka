@@ -208,12 +208,12 @@ def split_report_path(base_path: str, report_path: str) -> Tuple[str, str]:
     """
     Parse a report XML and extract the module path. Test report paths look like:
 
-        build/junit-xml/module[/sub-module]/[task]/TEST-class.method.xml
+        build/junit-xml/module[/sub-module]/[test-job]/TEST-class.method.xml
 
-    This method strips off a base path and assumes all path segments leading up to the suite name
+    This method strips off a base path and assumes all path segments leading up to the job name
     are part of the module path.
 
-    Returns a tuple of (module, task)
+    Returns a tuple of (module, job)
     """
     rel_report_path = os.path.relpath(report_path, base_path)
     path_segments = pathlib.Path(rel_report_path).parts
@@ -272,8 +272,8 @@ if __name__ == "__main__":
     logger.debug(f"::group::Parsing {len(reports)} JUnit Report Files")
     for report in reports:
         with open(report, "r") as fp:
-            module_path, task = split_report_path(args.path, report)
-            logger.debug(f"Parsing file: {report}, module: {module_path}, task: {task}")
+            module_path, test_job = split_report_path(args.path, report)
+            logger.debug(f"Parsing file: {report}, module: {module_path}, job: {test_job}")
             for suite in parse_report(workspace_path, report, fp):
                 total_skipped += suite.skipped
                 total_errors += suite.errors
@@ -311,7 +311,7 @@ if __name__ == "__main__":
                     skipped_table.append((simple_class_name, skipped_test.test_name))
 
                 # Only collect quarantined tests from the "quarantinedTest" task
-                if task == "quarantinedTest":
+                if test_job.endswith("-flaky"):
                     for test in all_suite_passed.values():
                         simple_class_name = test.class_name.split(".")[-1]
                         quarantined_table.append((simple_class_name, test.test_name))
