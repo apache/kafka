@@ -2862,14 +2862,10 @@ public class SharePartitionManagerTest {
             new SystemTimer(TIMER_NAME_PREFIX + "-test-timer"));
     }
 
-    private void assertNoReaperThreadsPendingClose() {
-        List<String> threads = Thread.getAllStackTraces()
-            .keySet()
-            .stream()
-            .map(Thread::getName)
-            .filter(name -> name.contains(TIMER_NAME_PREFIX))
-            .toList();
-        assertTrue(threads.isEmpty(), "Found unexpected reaper threads: " + threads);
+    private void assertNoReaperThreadsPendingClose() throws InterruptedException {
+        TestUtils.waitForCondition(
+            () -> Thread.getAllStackTraces().keySet().stream().noneMatch(t -> t.getName().contains(TIMER_NAME_PREFIX)),
+            "Found unexpected reaper threads with name containing: " + TIMER_NAME_PREFIX);
     }
 
     private void testSharePartitionListener(
