@@ -74,7 +74,6 @@ import java.util.stream.Collectors;
 
 import static java.util.Arrays.asList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -592,7 +591,10 @@ public class TestUtils {
     public static <T extends Throwable> T assertFutureThrows(Class<T> exceptionCauseClass, Future<?> future) {
         ExecutionException exception = assertThrows(ExecutionException.class, future::get);
         Throwable cause = exception.getCause();
-        assertInstanceOf(exceptionCauseClass, cause,
+        
+        // Enable strict type checking.
+        // This ensures we're testing for the exact exception type, not its subclasses.
+        assertEquals(exceptionCauseClass, cause.getClass(),
             "Expected a " + exceptionCauseClass.getSimpleName() + " exception, but got " +
                         cause.getClass().getSimpleName());
         return exceptionCauseClass.cast(exception.getCause());
