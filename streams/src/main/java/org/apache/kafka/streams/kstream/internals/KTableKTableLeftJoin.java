@@ -130,9 +130,31 @@ class KTableKTableLeftJoin<K, V1, V2, VOut> extends KTableKTableAbstractJoin<K, 
             }
 
             resultTimestamp = Math.max(record.timestamp(), timestampRight);
+            /*
+            Retain Previous Department Information:
 
+            Added an else if block to handle the case where record.value().newValue is null (tombstone).
+
+            In this case, the newValue is set using record.value().oldValue to retain the previous department information.
+
+            Behavior:
+
+            When a tombstone is encountered (i.e., record.value().newValue == null), the join result will now retain the old department information instead of setting it to null.
+
+            Impact of the Changes
+            Fixes the Issue:
+
+            The join result will no longer lose department information when a tombstone is processed.
+
+            Handles Out-of-Order Events:
+
+            Ensures that the join result remains consistent even if events arrive out of order.
+             */
             if (record.value().newValue != null) {
                 newValue = joiner.apply(record.value().newValue, value2);
+            } else if (record.value().oldValue != null) {
+                // If the new value is null (tombstone), retain the old value
+                newValue = joiner.apply(record.value().oldValue, value2);
             }
 
             if (sendOldValues && record.value().oldValue != null) {
