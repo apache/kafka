@@ -33,10 +33,10 @@ import java.util.stream.Collectors;
  */
 public class ShareGroupMetrics implements AutoCloseable {
     // Rate of records acknowledged per acknowledgement type.
-    private static final String RECORD_ACKNOWLEDGEMENTS_PER_SEC = "RecordAcknowledgementPerSec";
+    private static final String RECORD_ACKNOWLEDGEMENTS_PER_SEC = "RecordAcknowledgementsPerSec";
     // The time in milliseconds to load the share partitions.
     private static final String PARTITION_LOAD_TIME_MS = "PartitionLoadTimeMs";
-    private static final String ACK_TYPE = "ackType";
+    private static final String ACK_TYPE_TAG = "ackType";
 
     private final KafkaMetricsGroup metricsGroup;
     private final Time time;
@@ -53,7 +53,7 @@ public class ShareGroupMetrics implements AutoCloseable {
                     RECORD_ACKNOWLEDGEMENTS_PER_SEC,
                     "records",
                     TimeUnit.SECONDS,
-                    Map.of(ACK_TYPE, type.toString())
+                    Map.of(ACK_TYPE_TAG, type.toString())
                 )
             )
         );
@@ -82,7 +82,7 @@ public class ShareGroupMetrics implements AutoCloseable {
     @Override
     public void close() throws Exception {
         Arrays.stream(AcknowledgeType.values()).forEach(
-            m -> metricsGroup.removeMetric(RECORD_ACKNOWLEDGEMENTS_PER_SEC, Map.of(ACK_TYPE, m.toString())));
+            m -> metricsGroup.removeMetric(RECORD_ACKNOWLEDGEMENTS_PER_SEC, Map.of(ACK_TYPE_TAG, m.toString())));
         metricsGroup.removeMetric(PARTITION_LOAD_TIME_MS);
     }
 }
