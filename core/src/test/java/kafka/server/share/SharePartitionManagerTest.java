@@ -2842,13 +2842,13 @@ public class SharePartitionManagerTest {
     }
 
     private void assertNoReaperThreadsPendingClose() {
-        List<String> allThreads = Thread.getAllStackTraces()
+        List<String> threads = Thread.getAllStackTraces()
             .keySet()
             .stream()
             .map(Thread::getName)
             .filter(name -> name.contains(TIMER_NAME_PREFIX))
             .toList();
-        assertTrue(allThreads.isEmpty(), "Found unexpected reaper threads: " + allThreads);
+        assertTrue(threads.isEmpty(), "Found unexpected reaper threads: " + threads);
     }
 
     private void testSharePartitionListener(
