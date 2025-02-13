@@ -1723,21 +1723,6 @@ NodeId	DirectoryId           	LogEndOffset	Lag	LastFetchTimestamp	LastCaughtUpTi
         <td>The amount of time queueing while a possible previous request is in-flight plus the round trip to the transaction coordinator to verify (or not verify)</td>
       </tr>
       <tr>
-        <td>Consumer Group Offset Count</td>
-        <td>kafka.server:type=GroupMetadataManager,name=NumOffsets</td>
-        <td>Total number of committed offsets for Consumer Groups</td>
-      </tr>
-      <tr>
-        <td>Consumer Group Count</td>
-        <td>kafka.server:type=GroupMetadataManager,name=NumGroups</td>
-        <td>Total number of Consumer Groups</td>
-      </tr>
-      <tr>
-        <td>Consumer Group Count, per State</td>
-        <td>kafka.server:type=GroupMetadataManager,name=NumGroups[PreparingRebalance,CompletingRebalance,Empty,Stable,Dead]</td>
-        <td>The number of Consumer Groups in each state: PreparingRebalance, CompletingRebalance, Empty, Stable, Dead</td>
-      </tr>
-      <tr>
         <td>Number of reassigning partitions</td>
         <td>kafka.server:type=ReplicaManager,name=ReassigningPartitions</td>
         <td>The number of reassigning leader partitions on a broker.</td>
@@ -1788,6 +1773,133 @@ NodeId	DirectoryId           	LogEndOffset	Lag	LastFetchTimestamp	LastCaughtUpTi
         <td>Indicates if a log directory is offline (1) or online (0).</td>
       </tr>
   </tbody></table>
+
+<h4 class="anchor-heading"><a id="group_coordinator_monitoring" class="anchor-link"></a><a href="#group_coordinator_monitoring">Group Coordinator Monitoring</a></h4>
+The following set of metrics are available for monitoring the group coordinator:<br/><br/>
+<table class="data-table">
+  <tbody>
+    <tr>
+      <td>The Partition Count, per State</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=partition-count,state={loading|active|failed}</td>
+      <td>The number of <code>__consumer_offsets</code> partitions hosted by the broker, broken down by state</td>
+    </tr>
+    <tr>
+      <td>Partition Maximum Loading Time</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=partition-load-time-max</td>
+      <td>The maximum loading time needed to read the state from the <code>__consumer_offsets</code> partitions</td>
+    </tr>
+    <tr>
+      <td>Partition Average Loading Time</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=partition-load-time-avg</td>
+      <td>The average loading time needed to read the state from the <code>__consumer_offsets</code> partitions</td>
+    </tr>
+    <tr>
+      <td>Average Thread Idle Ratio</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=thread-idle-ratio-avg</td>
+      <td>The average idle ratio of the coordinator threads</td>
+    </tr>
+    <tr>
+      <td>Event Queue Size</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=event-queue-size</td>
+      <td>The number of events waiting to be processed in the queue</td>
+    </tr>
+    <tr>
+      <td>Event Queue Time (Ms)</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=event-queue-time-ms-[max|p50|p99|p999]</td>
+      <td>The time that an event spent waiting in the queue to be processed</td>
+    </tr>
+    <tr>
+      <td>Event Processing Time (Ms)</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=event-processing-time-ms-[max|p50|p99|p999]</td>
+      <td>The time that an event took to be processed</td>
+    </tr>
+    <tr>
+      <td>Event Purgatory Time (Ms)</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=event-purgatory-time-ms-[max|p50|p99|p999]</td>
+      <td>The time that an event waited in the purgatory before being completed</td>
+    </tr>
+    <tr>
+      <td>Batch Flush Time (Ms)</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=batch-flush-time-ms-[max|p50|p99|p999]</td>
+      <td>The time that a batch took to be flushed to the local partition</td>
+    </tr>
+    <tr>
+      <td>Group Count, per group type</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=group-count,protocol={consumer|generic}</td>
+      <td>Total number of group per group type: Classic or Consumer</td>
+    </tr>
+    <tr>
+      <td>Consumer Group Count, per state</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=consumer-group-count,state=[empty|assigning|reconciling|stable|dead]</td>
+      <td>Total number of Consumer Groups in each state: Empty, Assigning, Reconciling, Stable, Dead</td>
+    </tr>
+    <tr>
+      <td>Consumer Group Rebalance Rate</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=consumer-group-rebalance-rate</td>
+      <td>The rebalance rate of consumer groups</td>
+    </tr>
+    <tr>
+      <td>Consumer Group Rebalance Count</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=consumer-group-rebalance-count</td>
+      <td>Total number of Consumer Group Rebalances</td>
+    </tr>
+    <tr>
+      <td>Classic Group Count</td>
+      <td>kafka.server:type=GroupMetadataManager,name=NumGroups</td>
+      <td>Total number of Classic Groups</td>
+    </tr>
+    <tr>
+      <td>Classic Group Count, per State</td>
+      <td>kafka.server:type=GroupMetadataManager,name=NumGroups[PreparingRebalance,CompletingRebalance,Empty,Stable,Dead]</td>
+      <td>The number of Classic Groups in each state: PreparingRebalance, CompletingRebalance, Empty, Stable, Dead</td>
+    </tr>
+    <tr>
+      <td>Classic Group Completed Rebalance Rate</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=group-completed-rebalance-rate</td>
+      <td>The rate of classic group completed rebalances</td>
+    </tr>
+    <tr>
+      <td>Classic Group Completed Rebalance Count</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=group-completed-rebalance-count</td>
+      <td>The total number of classic group completed rebalances</td>
+    </tr>
+    <tr>
+      <td>Group Offset Count</td>
+      <td>kafka.server:type=GroupMetadataManager,name=NumOffsets</td>
+      <td>Total number of committed offsets for Classic and Consumer Groups</td>
+    </tr>
+    <tr>
+      <td>Offset Commit Rate</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=offset-commit-rate</td>
+      <td>The rate of committed offsets</td>
+    </tr>
+    <tr>
+      <td>Offset Commit Count</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=offset-commit-count</td>
+      <td>The total number of committed offsets</td>
+    </tr>
+    <tr>
+      <td>Offset Expiration Rate</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=offset-expiration-rate</td>
+      <td>The rate of expired offsets</td>
+    </tr>
+    <tr>
+      <td>Offset Expiration Count</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=offset-expiration-count</td>
+      <td>The total number of expired offsets</td>
+    </tr>
+    <tr>
+      <td>Offset Deletion Rate</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=offset-deletion-rate</td>
+      <td>The rate of administrative deleted offsets</td>
+    </tr>
+    <tr>
+      <td>Offset Deletion Count</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=offset-deletion-count</td>
+      <td>The total number of administrative deleted offsets</td>
+    </tr>
+  </tbody>
+</table>
 
 <h4 class="anchor-heading"><a id="tiered_storage_monitoring" class="anchor-link"></a><a href="#tiered_storage_monitoring">Tiered Storage Monitoring</a></h4>
   The following set of metrics are available for monitoring of the tiered storage feature:<br/><br/>
