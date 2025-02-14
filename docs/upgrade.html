@@ -60,6 +60,12 @@
             consumer groups using the new protocol, disabling the new protocol and letting compaction remove the tombstones.
             Check <a href="/{{version}}/documentation.html#consumer_rebalance_protocol">here</a> for details.
         </li>
+        <li>
+            Transactions Server Side Defense (<a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-890%3A+Transactions+Server-Side+Defense">KIP-890</a>)
+            brings a strengthened transactional protocol to Apache Kafka 4.0. The new and improved transactional protocol is enabled when the upgrade to 4.0 is finalized.
+            When using 4.0 producer clients, the producer epoch is bumped on every transaction to ensure every transaction includes the intended messages and duplicates are not
+            written as part of the next transaction. Downgrading the protocol is safe. For more information check <a href="/{{version}}/documentation.html#transaction_protocol">here</a>
+        </li>
         <li>A number of deprecated classes, methods, configurations and tools have been removed.
             <ul>
                 <li><b>Common</b>
