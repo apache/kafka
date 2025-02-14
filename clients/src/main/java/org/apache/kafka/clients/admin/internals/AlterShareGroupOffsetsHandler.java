@@ -67,36 +67,18 @@ public class AlterShareGroupOffsetsHandler extends AdminApiHandler.Batched<Coord
 
     @Override
     AlterShareGroupOffsetsRequest.Builder buildBatchedRequest(int brokerId, Set<CoordinatorKey> groupIds) {
-        Map<String, Map<TopicPartition, Long>> offsetsByTopic = new HashMap<>();
-        offsets.forEach((topicPartition, offset) -> {
-            Map<TopicPartition, Long> offsetsByPartition = offsetsByTopic.computeIfAbsent(topicPartition.topic(), v -> new HashMap<>());
-            offsetsByPartition.put(topicPartition, offset);
-        });
-
-        AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestTopicCollection requestTopics = new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestTopicCollection();
-        for (Map.Entry<String, Map<TopicPartition, Long>> topicEntry : offsetsByTopic.entrySet()) {
-            String topic = topicEntry.getKey();
-            Map<TopicPartition, Long> offsetsByPartition = topicEntry.getValue();
-
-            List<AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestPartition> partitionList = new ArrayList<>();
-            for (Map.Entry<TopicPartition, Long> partitionEntry : offsetsByPartition.entrySet()) {
-                TopicPartition tp = partitionEntry.getKey();
-                Long startOffset = partitionEntry.getValue();
-
-                partitionList.add(new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestPartition()
-                    .setPartitionIndex(tp.partition())
-                    .setStartOffset(startOffset)
-                );
+        var data = new AlterShareGroupOffsetsRequestData().setGroupId(groupId.idValue);
+        offsets.forEach((tp, offset) -> {
+            var topic = data.topics().find(tp.topic());
+            if (topic == null) {
+                topic = new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestTopic()
+                        .setTopicName(tp.topic());
+                data.topics().add(topic);
             }
-            requestTopics.add(new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestTopic()
-                .setTopicName(topic)
-                .setPartitions(partitionList));
-        }
-
-        AlterShareGroupOffsetsRequestData data = new AlterShareGroupOffsetsRequestData()
-            .setGroupId(groupId.idValue)
-            .setTopics(requestTopics);
-
+            topic.partitions().add(new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestPartition()
+                    .setPartitionIndex(tp.partition())
+                    .setStartOffset(offset));
+        });
         return new AlterShareGroupOffsetsRequest.Builder(data);
     }
 
