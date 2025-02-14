@@ -104,6 +104,8 @@ trait RaftManager[T] {
   def replicatedLog: ReplicatedLog
 
   def voterNode(id: Int, listener: ListenerName): Option[Node]
+
+  def getRecordSerde: RecordSerde[T]
 }
 
 class KafkaRaftManager[T](
@@ -298,4 +300,6 @@ class KafkaRaftManager[T](
   override def voterNode(id: Int, listener: ListenerName): Option[Node] = {
     client.voterNode(id, listener).toScala
   }
+
+  override def getRecordSerde: RecordSerde[T] = recordSerde
 }

@@ -194,6 +194,7 @@ class BrokerServer(
 
       val clientMetricsReceiverPlugin = new ClientMetricsReceiverPlugin()
       config.dynamicConfig.initialize(Some(clientMetricsReceiverPlugin))
+      DynamicBrokerConfig.readDynamicBrokerConfigsFromSnapshot(raftManager, config, quotaManagers)
 
       /* start scheduler */
       kafkaScheduler = new KafkaScheduler(config.backgroundThreads)
