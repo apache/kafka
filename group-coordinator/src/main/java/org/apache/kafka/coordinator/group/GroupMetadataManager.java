@@ -6288,14 +6288,11 @@ public class GroupMetadataManager {
 
     /**
      * Returns an optional of delete share group request object to be used with the persister.
-     * Empty if no subscribed topics
+     * Empty if no subscribed topics or if the share group is empty.
      * @param shareGroup - A share group
      * @return Optional of object representing the share group state delete request.
      */
-    public Optional<DeleteShareGroupStateParameters> sharePartitionDeleteRequest(ShareGroup shareGroup) {
-        if (shareGroup.isEmpty()) {
-            return Optional.empty();
-        }
+    public Optional<DeleteShareGroupStateParameters> shareGroupBuildPartitionDeleteRequest(ShareGroup shareGroup) {
         TopicsImage topicsImage = metadataImage.topics();
         Set<String> subscribedTopics = shareGroup.subscribedTopicNames().keySet();
         List<TopicData<PartitionIdData>> topicDataList = new ArrayList<>(subscribedTopics.size());

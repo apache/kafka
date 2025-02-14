@@ -19,6 +19,7 @@ package org.apache.kafka.coordinator.group;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
+import org.apache.kafka.common.errors.GroupNotEmptyException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
@@ -493,7 +494,8 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         for (String groupId : groupIds) {
             try {
                 ShareGroup group = groupMetadataManager.shareGroup(groupId);
-                groupMetadataManager.sharePartitionDeleteRequest(group)
+                group.validateDeleteGroup();
+                groupMetadataManager.shareGroupBuildPartitionDeleteRequest(group)
                     .ifPresent(deleteShareGroupStateParameters::add);
             } catch (GroupIdNotFoundException exception) {
                 // We needn't do anything more than logging here as deleteGroups
@@ -501,6 +503,8 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 // Even if some groups cannot be found, we
                 // must check the entire list.
                 log.debug("Failed to find group {}", groupId, exception);
+            } catch (GroupNotEmptyException exception) {
+                log.error("Tried to delete share group which is not empty", exception);
             }
         }
         return new CoordinatorResult<>(List.of(), deleteShareGroupStateParameters);

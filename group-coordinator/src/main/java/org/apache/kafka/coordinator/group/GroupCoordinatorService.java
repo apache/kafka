@@ -851,7 +851,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             // are collated as a Map of groupId -> persister errors
             // - The above map is then used to decide whether to invoke the group coordinator delete groups logic
             // - Share groups with failed persister delete are NOT CONSIDERED for group coordinator delete.
-            // TLDR: DeleteShareGroups -> filter erroneous persister deletes -> Original delete groups logic
+            // TLDR: DeleteShareGroups -> filter erroneous persister deletes -> general delete groups logic
             futures.add(future);
         });
 
