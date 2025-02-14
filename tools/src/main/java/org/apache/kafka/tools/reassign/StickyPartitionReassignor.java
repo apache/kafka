@@ -818,11 +818,6 @@ public class StickyPartitionReassignor {
             ret = o1.to.id - o2.to.id;
             if (ret != 0) return ret;
 
-            if (o1.replica.isLeader != o2.replica.isLeader) {
-                if (o1.replica.isLeader) return -1;
-                else return 1;
-            }
-
             return o1.replica.compareTo(o2.replica);
         }
     }
