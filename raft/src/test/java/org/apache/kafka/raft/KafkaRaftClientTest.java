@@ -932,10 +932,10 @@ class KafkaRaftClientTest {
         RecordBatch batch = records.batches().iterator().next();
         assertTrue(batch.isControlBatch());
 
-        Record record = batch.iterator().next();
-        assertEquals(electionTimestamp, record.timestamp());
+        Record expectedRecord = batch.iterator().next();
+        assertEquals(electionTimestamp, expectedRecord.timestamp());
         RaftClientTestContext.verifyLeaderChangeMessage(localId, Arrays.asList(localId, otherNodeId),
-            Arrays.asList(otherNodeId, localId), record.key(), record.value());
+            Arrays.asList(otherNodeId, localId), expectedRecord.key(), expectedRecord.value());
     }
 
     @ParameterizedTest
@@ -981,10 +981,10 @@ class KafkaRaftClientTest {
         RecordBatch batch = records.batches().iterator().next();
         assertTrue(batch.isControlBatch());
 
-        Record record = batch.iterator().next();
-        assertEquals(electionTimestamp, record.timestamp());
+        Record expectedRecord = batch.iterator().next();
+        assertEquals(electionTimestamp, expectedRecord.timestamp());
         RaftClientTestContext.verifyLeaderChangeMessage(localId, Arrays.asList(localId, firstNodeId, secondNodeId),
-            Arrays.asList(voterId, localId), record.key(), record.value());
+            Arrays.asList(voterId, localId), expectedRecord.key(), expectedRecord.value());
     }
 
     @ParameterizedTest
@@ -3980,10 +3980,10 @@ class KafkaRaftClientTest {
         List<Record> readRecords = Utils.toList(leaderChangeBatch.iterator());
         assertEquals(1, readRecords.size());
 
-        Record record = readRecords.get(0);
-        assertEquals(now, record.timestamp());
+        Record expectedRecord = readRecords.get(0);
+        assertEquals(now, expectedRecord.timestamp());
         RaftClientTestContext.verifyLeaderChangeMessage(localId, Collections.singletonList(localId),
-            Collections.singletonList(localId), record.key(), record.value());
+            Collections.singletonList(localId), expectedRecord.key(), expectedRecord.value());
 
         MutableRecordBatch batch = batches.get(1);
         assertEquals(1, batch.partitionLeaderEpoch());
