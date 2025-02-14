@@ -1454,7 +1454,8 @@ public class ReassignPartitionsCommand {
             opts.bootstrapServerOpt,
             opts.brokerListOpt,
             opts.commandConfigOpt,
-            opts.disableRackAware
+            opts.disableRackAware,
+            opts.sticky
         ));
         permittedArgs.put(opts.executeOpt, Arrays.asList(
             opts.additionalOpt,
