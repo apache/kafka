@@ -4243,6 +4243,44 @@ $ bin/kafka-topics.sh --create --topic tieredTopic --bootstrap-server localhost:
     <li>Rack-aware assignment strategies are not fully supported. (see <a href="https://issues.apache.org/jira/browse/KAFKA-17747">KAFKA-17747</a>)</li>
   </ul>
 
+<h3 class="anchor-heading"><a id="transaction_protocol" class="anchor-link"></a><a href="#transaction_protocol">6.11 Transaction Protocol</a></h3>
+
+<h4 class="anchor-heading"><a id="transaction_protocol_overview" class="anchor-link"></a><a href="#transaction_protocol_overview">Overview</a></h4>
+
+<p>Starting from Apache Kafka 4.0, Transactions Server Side Defense (<a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-890%3A+Transactions+Server-Side+Defense">KIP-890</a>)
+  brings a strengthened transactional protocol. When enabled and using 4.0 producer clients, the producer epoch is bumped on every transaction to ensure every transaction includes the intended messages and duplicates are not
+  written as part of the next transaction.</p>
+
+<p>The protocol is automatically enabled on the server since Apache Kafka 4.0. Enabling and disabling the protocol is controlled by the
+  <code>transaction.version</code> feature flag. This flag can be set using the storage tool on new cluster creation, or dynamically to an existing cluster via the features tool.
+  Producer clients starting 4.0 and above will use the new transactional protocol as long as it is enabled on the server.</p>
+
+<h4 class="anchor-heading"><a id="transaction_protocol_upgrade" class="anchor-link"></a><a href="#transaction_protocol_upgrade">Upgrade & Downgrade</a></h4>
+
+<p>To enable the new protocol on the server, set <code>transaction.version=2</code>. The producer clients do not need to be restarted, and will dynamically upgrade the next time they
+  connect or re-connect to a broker. (Alternatively, the client can be restarted to force this connection). A producer will not upgrade mid-transaction, but on the start of the next transaction
+  after it becomes aware of the server-side upgrade.</p>
+
+<p>Downgrades are safe to perform and work similarly. The older protocol will be used by the clients on the first transaction after the producer becomes aware of the downgraded protocol.</p>
+
+<h4 class="anchor-heading"><a id="transaction_protocol_performance" class="anchor-link"></a><a href="#transaction_protocol_performance">Performance</a></h4>
+
+<p>The new transactional protocol improves performance over verification by only sending a single call to add partitions on the server side, rather than one from the client to add and one from the server to verify.</p>
+
+<p>One consequence of this change is that we can no longer use the hardcoded retry backoff introduced by <a href="https://issues.apache.org/jira/browse/KAFKA-5477">KAFKA-5477</a>. Due to the asynchronous nature of the <code>endTransaction</code> api,
+  the client can start adding partitions to the next transaction before the markers are written. When this happens, the server will return <code>CONCURRENT_TRANSACTIONS</code>
+  until the previous transaction completes. Rather than the default client backoff for these retries, there was a shorter retry backoff of 20ms.</p>
+
+<p>Now with the server-side request, the server will attempt to retry adding the partition a few times when it sees the <code>CONCURRENT_TRANSACTIONS</code> error before it returns the error to the client.
+  This can result in higher produce latencies reported on these requests. The transaction end to end latency (measured from the time the client begins the transaction to the time to commit) does not increase
+  overall with this change. The time just shifts from client-side backoff to being calculated as part of the produce latency.</p>
+
+<p>The server-side backoff and total retry time can be configured with the following new configs:</p>
+<ul>
+  <li><code>add.partitions.to.txn.retry.backoff.ms</code></li>
+  <li><code>add.partitions.to.txn.retry.backoff.max.ms</code></li>
+</ul>
+
 </script>
 
 <div class="p-ops"></div>
