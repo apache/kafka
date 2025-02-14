@@ -45,7 +45,14 @@ public class DeleteConsumerGroupsHandler extends AdminApiHandler.Batched<Coordin
     public DeleteConsumerGroupsHandler(
         LogContext logContext
     ) {
-        this.log = logContext.logger(DeleteConsumerGroupsHandler.class);
+        this(logContext, DeleteConsumerGroupsHandler.class);
+    }
+
+    public DeleteConsumerGroupsHandler(
+        LogContext logContext,
+        Class<?> loggerClass
+    ) {
+        this.log = logContext.logger(loggerClass);
         this.lookupStrategy = new CoordinatorStrategy(CoordinatorType.GROUP, logContext);
     }
 

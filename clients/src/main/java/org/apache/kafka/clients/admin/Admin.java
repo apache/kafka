@@ -954,12 +954,29 @@ public interface Admin extends AutoCloseable {
     DeleteConsumerGroupsResult deleteConsumerGroups(Collection<String> groupIds, DeleteConsumerGroupsOptions options);
 
     /**
+     * Delete share groups from the cluster.
+     *
+     * @param options The options to use when deleting a share group.
+     * @return The DeleteShareGroupsResult.
+     */
+    DeleteShareGroupsResult deleteShareGroups(Collection<String> groupIds, DeleteShareGroupsOptions options);
+
+    /**
      * Delete consumer groups from the cluster with the default options.
      *
      * @return The DeleteConsumerGroupResult.
      */
     default DeleteConsumerGroupsResult deleteConsumerGroups(Collection<String> groupIds) {
         return deleteConsumerGroups(groupIds, new DeleteConsumerGroupsOptions());
+    }
+
+    /**
+     * Delete share groups from the cluster with the default options.
+     *
+     * @return The DeleteShareGroupsResult.
+     */
+    default DeleteShareGroupsResult deleteShareGroups(Collection<String> groupIds) {
+        return deleteShareGroups(groupIds, new DeleteShareGroupsOptions());
     }
 
     /**
