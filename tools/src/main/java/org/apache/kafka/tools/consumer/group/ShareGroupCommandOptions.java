@@ -37,7 +37,7 @@ public class ShareGroupCommandOptions extends CommandDefaultOptions {
 
     private static final String BOOTSTRAP_SERVER_DOC = "REQUIRED: The server(s) to connect to.";
     private static final String GROUP_DOC = "The share group we wish to act on.";
-    private static final String TOPIC_DOC = "The topic whose share group information should be deleted or topic whose should be included in the reset offset process. " +
+    private static final String TOPIC_DOC = "The topic whose offset information should be deleted or included in the reset offset process. " +
         "When resetting offsets, partitions can be specified using this format: 'topic1:0,1,2', where 0,1,2 are the partitions to be included.";
     private static final String ALL_TOPICS_DOC = "Consider all topics assigned to a share group in the 'reset-offsets' process.";
     private static final String LIST_DOC = "List all share groups.";
@@ -177,8 +177,8 @@ public class ShareGroupCommandOptions extends CommandDefaultOptions {
                 CommandLineUtils.printUsageAndExit(parser,
                     "Option " + deleteOpt + " takes the option: " + groupOpt);
             if (options.has(topicOpt))
-                CommandLineUtils.printUsageAndExit(parser, "The consumer does not support topic-specific offset " +
-                    "deletion from a share group.");
+                CommandLineUtils.printUsageAndExit(parser,
+                    "Option " + deleteOpt + " does not take the option: " + topicOpt);
         }
 
         if (options.has(deleteOffsetsOpt)) {
