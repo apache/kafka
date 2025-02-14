@@ -338,6 +338,7 @@ public class PartitionRegistrationTest {
         List<UnwritableMetadataException> exceptions = new ArrayList<>();
         ImageWriterOptions options = new ImageWriterOptions.Builder().
                 setMetadataVersion(metadataVersion).
+                setEligibleLeaderReplicasEnabled(metadataVersion.isElrSupported()).
                 setLossHandler(exceptions::add).
                 build();
         assertEquals(new ApiMessageAndVersion(expectRecord, metadataVersion.partitionRecordVersion()),
