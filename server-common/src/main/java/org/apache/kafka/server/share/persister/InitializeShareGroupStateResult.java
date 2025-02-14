@@ -20,7 +20,6 @@ package org.apache.kafka.server.share.persister;
 import org.apache.kafka.common.message.InitializeShareGroupStateResponseData;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * This class contains the result from {@link Persister#initializeState(InitializeShareGroupStateParameters)}.

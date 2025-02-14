@@ -19,8 +19,6 @@ package org.apache.kafka.server.share.persister;
 
 import org.apache.kafka.common.message.WriteShareGroupStateRequestData;
 
-import java.util.stream.Collectors;
-
 /**
  * This class contains the parameters for {@link Persister#writeState(WriteShareGroupStateParameters)}.
  */

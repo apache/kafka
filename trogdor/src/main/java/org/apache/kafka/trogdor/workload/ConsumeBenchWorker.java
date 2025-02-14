@@ -58,8 +58,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.stream.Collectors;
-
 
 public class ConsumeBenchWorker implements TaskWorker {
     private static final Logger log = LoggerFactory.getLogger(ConsumeBenchWorker.class);

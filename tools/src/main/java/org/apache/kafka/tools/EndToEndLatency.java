@@ -40,7 +40,6 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Random;
 import java.util.concurrent.ExecutionException;
-import java.util.stream.Collectors;
 
 /**
  * This class records the average end to end latency for a single message to travel through Kafka.

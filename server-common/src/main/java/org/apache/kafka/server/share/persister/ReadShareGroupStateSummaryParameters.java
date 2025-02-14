@@ -20,7 +20,6 @@ package org.apache.kafka.server.share.persister;
 import org.apache.kafka.common.message.ReadShareGroupStateSummaryRequestData;
 
 import java.util.Objects;
-import java.util.stream.Collectors;
 
 /**
  * This class contains the parameters for {@link Persister#readSummary(ReadShareGroupStateSummaryParameters)}.

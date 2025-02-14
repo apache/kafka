@@ -25,7 +25,6 @@ import org.apache.kafka.tiered.storage.TieredStorageTestContext;
 import java.io.PrintStream;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.tiered.storage.utils.TieredStorageTestUtils.describeTopic;
 import static org.junit.jupiter.api.Assertions.assertEquals;

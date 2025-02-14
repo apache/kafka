@@ -23,7 +23,6 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 /**
  * Captures the properties required for configuring the internal topics we create for changelogs and repartitioning etc.

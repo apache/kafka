@@ -21,7 +21,6 @@ import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * Internal representation of a subtopology.

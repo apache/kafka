@@ -51,7 +51,6 @@ import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import joptsimple.OptionException;

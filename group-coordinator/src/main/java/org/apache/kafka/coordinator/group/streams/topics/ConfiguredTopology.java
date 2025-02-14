@@ -24,7 +24,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.SortedMap;
-import java.util.stream.Collectors;
 
 /**
  * This class captures the result of taking a topology definition sent by the client and using the current state of the topics inside the

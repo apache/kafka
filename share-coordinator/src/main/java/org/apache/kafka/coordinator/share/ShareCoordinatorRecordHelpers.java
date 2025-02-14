@@ -24,8 +24,6 @@ import org.apache.kafka.coordinator.share.generated.ShareUpdateKey;
 import org.apache.kafka.coordinator.share.generated.ShareUpdateValue;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
-import java.util.stream.Collectors;
-
 public class ShareCoordinatorRecordHelpers {
     public static CoordinatorRecord newShareSnapshotRecord(String groupId, Uuid topicId, int partitionId, ShareGroupOffset offsetData) {
         return CoordinatorRecord.record(

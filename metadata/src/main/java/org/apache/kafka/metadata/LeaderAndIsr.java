@@ -21,7 +21,6 @@ import org.apache.kafka.common.message.AlterPartitionRequestData.BrokerState;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 public class LeaderAndIsr {
     public static final int INITIAL_LEADER_EPOCH = 0;

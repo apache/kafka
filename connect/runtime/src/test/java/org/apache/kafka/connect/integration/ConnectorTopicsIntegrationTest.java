@@ -43,7 +43,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
-import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
 import static org.apache.kafka.connect.integration.TestableSourceConnector.TOPIC_CONFIG;

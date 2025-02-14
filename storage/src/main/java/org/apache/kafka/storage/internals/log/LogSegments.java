@@ -29,7 +29,6 @@ import java.util.OptionalLong;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.function.Predicate;
-import java.util.stream.Collectors;
 
 /**
  * This class encapsulates a thread-safe navigable map of LogSegment instances and provides the

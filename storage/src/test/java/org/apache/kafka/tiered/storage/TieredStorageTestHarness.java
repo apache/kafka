@@ -43,7 +43,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.Properties;
-import java.util.stream.Collectors;
 
 import scala.collection.Seq;
 import scala.jdk.javaapi.CollectionConverters;

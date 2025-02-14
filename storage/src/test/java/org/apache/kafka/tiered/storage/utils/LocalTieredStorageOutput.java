@@ -25,7 +25,6 @@ import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentFileset;
 
 import java.nio.ByteBuffer;
 import java.util.List;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.server.log.remote.storage.RemoteLogSegmentFileset.RemoteLogSegmentFileType.SEGMENT;
 
