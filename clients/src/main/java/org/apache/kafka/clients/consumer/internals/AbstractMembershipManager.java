@@ -876,7 +876,6 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
 
         commitResult = signalReconciliationStarted();
 
-
         // Execute commit -> onPartitionsRevoked -> onPartitionsAssigned.
         commitResult.whenComplete((__, commitReqError) -> {
             if (commitReqError != null) {

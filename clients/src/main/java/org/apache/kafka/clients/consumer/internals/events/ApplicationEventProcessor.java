@@ -210,16 +210,21 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         // as we're processing before any new fetching starts in the app thread
         requestManagers.consumerMembershipManager.ifPresent(consumerMembershipManager ->
             consumerMembershipManager.maybeReconcile(true));
-        // notify the app thread could start the next poll cycle since commit request on revoke has been generated
-        event.future().complete(null);
         if (requestManagers.commitRequestManager.isPresent()) {
             CommitRequestManager commitRequestManager = requestManagers.commitRequestManager.get();
             commitRequestManager.updateTimerAndMaybeCommit(event.pollTimeMs());
+            // all commit request generation points have been passed,
+            // so it's safe to notify the app thread could start the next poll cycle
+            event.future().complete(null);
             requestManagers.consumerHeartbeatRequestManager.ifPresent(hrm -> {
                 hrm.membershipManager().onConsumerPoll();
                 hrm.resetPollTimer(event.pollTimeMs());
             });
         } else {
+            // safe to unblock - no auto-commit risk here:
+            // 1. commitRequestManager is not present
+            // 2. shareConsumer has no auto-commit mechanism
+            event.future().complete(null);
             requestManagers.shareHeartbeatRequestManager.ifPresent(hrm -> {
                 hrm.membershipManager().onConsumerPoll();
                 hrm.resetPollTimer(event.pollTimeMs());

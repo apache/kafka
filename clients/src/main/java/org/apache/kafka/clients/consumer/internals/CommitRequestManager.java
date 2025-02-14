@@ -263,7 +263,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
      * In that case, the next auto-commit request will be sent on the next call to poll, after a
      * response for the in-flight is received.
      */
-    void maybeAutoCommitAsync() {
+    private void maybeAutoCommitAsync() {
         if (autoCommitEnabled() && autoCommitState.get().shouldAutoCommit()) {
             OffsetCommitRequestState requestState = createOffsetCommitRequest(
                 subscriptions.allConsumed(),
@@ -563,7 +563,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         return error instanceof StaleMemberEpochException && memberInfo.memberEpoch.isPresent();
     }
 
-    void updateAutoCommitTimer(final long currentTimeMs) {
+    private void updateAutoCommitTimer(final long currentTimeMs) {
         this.autoCommitState.ifPresent(t -> t.updateTimer(currentTimeMs));
     }
 
@@ -634,6 +634,19 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         });
     }
 
+    /**
+     * This is a non-blocking method to update timer and trigger async auto-commit.
+     * <p>
+     * This method performs two main tasks:
+     * <ol>
+     * <li>Updates the internal timer with the current time.</li>
+     * <li>Initiate an asynchronous auto-commit operation for all consumed messages if needed.</li>
+     * </ol>
+     *
+     * @param currentTimeMs the current timestamp in millisecond
+     * @see CommitRequestManager#updateAutoCommitTimer(long)
+     * @see CommitRequestManager#maybeAutoCommitAsync()
+     */
     public void updateTimerAndMaybeCommit(final long currentTimeMs) {
         updateAutoCommitTimer(currentTimeMs);
         maybeAutoCommitAsync();

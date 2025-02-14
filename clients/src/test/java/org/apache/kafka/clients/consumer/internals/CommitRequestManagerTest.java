@@ -93,7 +93,6 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.clearInvocations;
-import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
@@ -320,7 +319,6 @@ public class CommitRequestManagerTest {
     @Test
     public void testCommitSyncWithEmptyOffsets() {
         subscriptionState = mock(SubscriptionState.class);
-        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
 
         CommitRequestManager commitRequestManager = create(false, 100);
         CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = commitRequestManager.commitSync(
@@ -332,20 +330,6 @@ public class CommitRequestManagerTest {
         Map<TopicPartition, OffsetAndMetadata> commitOffsets = assertDoesNotThrow(() -> future.get());
         assertTrue(future.isDone());
         assertEquals(Collections.emptyMap(), commitOffsets);
-    }
-
-    @Test
-    public void testCommitSyncWithEmptyAllConsumedOffsets() {
-        subscriptionState = mock(SubscriptionState.class);
-        doReturn(Map.of()).when(subscriptionState).allConsumed();
-
-        CommitRequestManager commitRequestManager = create(true, 100);
-        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = commitRequestManager.commitSync(
-            Collections.emptyMap(), time.milliseconds() + defaultApiTimeoutMs);
-
-        Map<TopicPartition, OffsetAndMetadata> commitOffsets = assertDoesNotThrow(() -> future.get());
-        assertTrue(future.isDone());
-        assertTrue(commitOffsets.isEmpty());
     }
 
     @Test
@@ -376,32 +360,6 @@ public class CommitRequestManagerTest {
     @Test
     public void testCommitAsyncWithEmptyOffsets() {
         subscriptionState = mock(SubscriptionState.class);
-        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
-        TopicPartition tp = new TopicPartition("topic", 1);
-        OffsetAndMetadata offsetAndMetadata = new OffsetAndMetadata(0, Optional.of(1), "");
-        Map<TopicPartition, OffsetAndMetadata> offsets = Map.of(tp, offsetAndMetadata);
-        doReturn(offsets).when(subscriptionState).allConsumed();
-
-        CommitRequestManager commitRequestManager = create(true, 100);
-        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = commitRequestManager.commitAsync(offsets);
-        assertEquals(1, commitRequestManager.unsentOffsetCommitRequests().size());
-        List<NetworkClientDelegate.FutureCompletionHandler> pollResults = assertPoll(1, commitRequestManager);
-        pollResults.forEach(v -> v.onComplete(mockOffsetCommitResponse(
-            "topic",
-            1,
-            (short) 1,
-            Errors.NONE)));
-
-        verify(metadata).updateLastSeenEpochIfNewer(tp, 1);
-        assertTrue(future.isDone());
-        Map<TopicPartition, OffsetAndMetadata> commitOffsets = assertDoesNotThrow(() -> future.get());
-        assertEquals(offsets, commitOffsets);
-    }
-
-    @Test
-    public void testCommitAsyncWithEmptyAllConsumedOffsets() {
-        subscriptionState = mock(SubscriptionState.class);
-        doReturn(Map.of()).when(subscriptionState).allConsumed();
 
         CommitRequestManager commitRequestManager = create(true, 100);
         CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = commitRequestManager.commitAsync(Collections.emptyMap());
@@ -528,7 +486,6 @@ public class CommitRequestManagerTest {
     public void testAutoCommitAsyncFailsWithStaleMemberEpochContinuesToCommitOnTheInterval() {
         CommitRequestManager commitRequestManager = create(true, 100);
         time.sleep(100);
-        commitRequestManager.updateAutoCommitTimer(time.milliseconds());
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
         TopicPartition t1p = new TopicPartition("topic1", 0);
         subscriptionState.assignFromUser(singleton(t1p));
@@ -536,7 +493,7 @@ public class CommitRequestManagerTest {
 
         // Async commit on the interval fails with fatal stale epoch and just resets the timer to
         // the interval
-        commitRequestManager.maybeAutoCommitAsync();
+        commitRequestManager.updateTimerAndMaybeCommit(time.milliseconds());
         completeOffsetCommitRequestWithError(commitRequestManager, Errors.STALE_MEMBER_EPOCH);
         verify(commitRequestManager).resetAutoCommitTimer();
 
@@ -595,7 +552,8 @@ public class CommitRequestManagerTest {
 
         // complete the unsent request and re-poll
         futures.get(0).onComplete(buildOffsetCommitClientResponse(new OffsetCommitResponse(0, new HashMap<>())));
-        commitRequestManager.maybeAutoCommitAsync();
+        time.sleep(100);
+        commitRequestManager.updateTimerAndMaybeCommit(time.milliseconds());
         assertPoll(1, commitRequestManager);
     }
 
@@ -721,7 +679,7 @@ public class CommitRequestManagerTest {
         // polling the manager.
         inflightCommitResult.onComplete(
             mockOffsetCommitResponse(t1p.topic(), t1p.partition(), (short) 1, Errors.NONE));
-        commitRequestManager.maybeAutoCommitAsync();
+        commitRequestManager.updateTimerAndMaybeCommit(time.milliseconds());
         assertPoll(1, commitRequestManager);
     }
 
