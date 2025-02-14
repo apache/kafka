@@ -31,11 +31,9 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
-import java.util.Optional;
 
 import static java.nio.file.StandardCopyOption.ATOMIC_MOVE;
 import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
-import static org.apache.kafka.server.common.MetadataVersion.MINIMUM_BOOTSTRAP_VERSION;
 
 
 /**
@@ -46,21 +44,16 @@ public class BootstrapDirectory {
     public static final String BINARY_BOOTSTRAP_FILENAME = "bootstrap.checkpoint";
 
     private final String directoryPath;
-    private final Optional<String> ibp;
 
     /**
      * Create a new BootstrapDirectory object.
      *
      * @param directoryPath     The path to the directory with the bootstrap file.
-     * @param ibp               The configured value of inter.broker.protocol, or the empty string
-     *                          if it is not configured.
      */
     public BootstrapDirectory(
-        String directoryPath,
-        Optional<String> ibp
+        String directoryPath
     ) {
         this.directoryPath = Objects.requireNonNull(directoryPath);
-        this.ibp = Objects.requireNonNull(ibp);
     }
 
     public BootstrapMetadata read() throws Exception {
@@ -75,23 +68,10 @@ public class BootstrapDirectory {
         }
         Path binaryBootstrapPath = Paths.get(directoryPath, BINARY_BOOTSTRAP_FILENAME);
         if (!Files.exists(binaryBootstrapPath)) {
-            return readFromConfiguration();
+            return BootstrapMetadata.fromVersion(MetadataVersion.latestProduction(), "the default bootstrap");
         } else {
             return readFromBinaryFile(binaryBootstrapPath.toString());
         }
-    }
-
-    BootstrapMetadata readFromConfiguration() {
-        if (ibp.isEmpty()) {
-            return BootstrapMetadata.fromVersion(MetadataVersion.latestProduction(), "the default bootstrap");
-        }
-        MetadataVersion version = MetadataVersion.fromVersionString(ibp.get());
-        if (version.isLessThan(MINIMUM_BOOTSTRAP_VERSION)) {
-            return BootstrapMetadata.fromVersion(MINIMUM_BOOTSTRAP_VERSION,
-                "the minimum version bootstrap with metadata.version " + MINIMUM_BOOTSTRAP_VERSION);
-        }
-        return BootstrapMetadata.fromVersion(version,
-            "the configured bootstrap with metadata.version " + version);
     }
 
     BootstrapMetadata readFromBinaryFile(String binaryPath) throws Exception {
