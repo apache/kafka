@@ -257,8 +257,8 @@ class StreamsCoordinatorRecordHelpersTest {
         Uuid uuid1 = Uuid.randomUuid();
         Uuid uuid2 = Uuid.randomUuid();
         Map<String, TopicMetadata> newPartitionMetadata = Map.of(
-            TOPIC_1, new TopicMetadata(uuid1, TOPIC_1, 1, Map.of(0, Set.of(RACK_1, RACK_2))),
-            TOPIC_2, new TopicMetadata(uuid2, TOPIC_2, 2, Map.of(1, Set.of(RACK_3)))
+            TOPIC_1, new TopicMetadata(uuid1, TOPIC_1, 1),
+            TOPIC_2, new TopicMetadata(uuid2, TOPIC_2, 2)
         );
 
         StreamsGroupPartitionMetadataValue value = new StreamsGroupPartitionMetadataValue();
@@ -266,21 +266,11 @@ class StreamsCoordinatorRecordHelpersTest {
             .setTopicId(uuid1)
             .setTopicName(TOPIC_1)
             .setNumPartitions(1)
-            .setPartitionMetadata(List.of(
-                new StreamsGroupPartitionMetadataValue.PartitionMetadata()
-                    .setPartition(0)
-                    .setRacks(List.of(RACK_1, RACK_2))
-            ))
         );
         value.topics().add(new StreamsGroupPartitionMetadataValue.TopicMetadata()
             .setTopicId(uuid2)
             .setTopicName(TOPIC_2)
             .setNumPartitions(2)
-            .setPartitionMetadata(List.of(
-                new StreamsGroupPartitionMetadataValue.PartitionMetadata()
-                    .setPartition(1)
-                    .setRacks(List.of(RACK_3))
-            ))
         );
 
         CoordinatorRecord expectedRecord = CoordinatorRecord.record(

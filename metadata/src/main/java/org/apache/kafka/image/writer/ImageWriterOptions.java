@@ -32,6 +32,7 @@ public final class ImageWriterOptions {
         private Consumer<UnwritableMetadataException> lossHandler = e -> {
             throw e;
         };
+        private boolean isEligibleLeaderReplicasEnabled = false;
 
         public Builder() {
             this.metadataVersion = MetadataVersion.latestProduction();
@@ -39,6 +40,7 @@ public final class ImageWriterOptions {
 
         public Builder(MetadataImage image) {
             this.metadataVersion = image.features().metadataVersion();
+            this.isEligibleLeaderReplicasEnabled = image.features().isElrEnabled();
         }
 
         public Builder setMetadataVersion(MetadataVersion metadataVersion) {
@@ -46,8 +48,17 @@ public final class ImageWriterOptions {
             return this;
         }
 
+        public Builder setEligibleLeaderReplicasEnabled(boolean isEligibleLeaderReplicasEnabled) {
+            this.isEligibleLeaderReplicasEnabled = isEligibleLeaderReplicasEnabled;
+            return this;
+        }
+
         public MetadataVersion metadataVersion() {
             return metadataVersion;
+        }
+
+        public boolean isEligibleLeaderReplicasEnabled() {
+            return isEligibleLeaderReplicasEnabled;
         }
 
         public Builder setLossHandler(Consumer<UnwritableMetadataException> lossHandler) {
@@ -56,23 +67,29 @@ public final class ImageWriterOptions {
         }
 
         public ImageWriterOptions build() {
-            return new ImageWriterOptions(metadataVersion, lossHandler);
+            return new ImageWriterOptions(metadataVersion, lossHandler, isEligibleLeaderReplicasEnabled);
         }
     }
 
     private final MetadataVersion metadataVersion;
     private final Consumer<UnwritableMetadataException> lossHandler;
+    private final boolean isEligibleLeaderReplicasEnabled;
 
     private ImageWriterOptions(
         MetadataVersion metadataVersion,
-        Consumer<UnwritableMetadataException> lossHandler
+        Consumer<UnwritableMetadataException> lossHandler,
+        boolean isEligibleLeaderReplicasEnabled
     ) {
         this.metadataVersion = metadataVersion;
         this.lossHandler = lossHandler;
+        this.isEligibleLeaderReplicasEnabled = isEligibleLeaderReplicasEnabled;
     }
 
     public MetadataVersion metadataVersion() {
         return metadataVersion;
+    }
+    public boolean isEligibleLeaderReplicasEnabled() {
+        return isEligibleLeaderReplicasEnabled;
     }
 
     public void handleLoss(String loss) {

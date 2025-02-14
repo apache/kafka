@@ -680,7 +680,7 @@ public class ClusterControlManager {
         ControllerRegistration newRegistration = new ControllerRegistration.Builder(record).build();
         ControllerRegistration prevRegistration =
             controllerRegistrations.put(record.controllerId(), newRegistration);
-        log.info("Replayed RegisterControllerRecord contaning {}.{}", newRegistration,
+        log.info("Replayed RegisterControllerRecord containing {}.{}", newRegistration,
             prevRegistration == null ? "" :
                 " Previous incarnation was " + prevRegistration.incarnationId());
     }

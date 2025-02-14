@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.runtime.distributed.ExtendedAssignment;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
@@ -181,15 +182,20 @@ public class WorkerTestUtils {
         return buildTransformationChain(transformation, toleranceOperator);
     }
 
+    @SuppressWarnings("unchecked")
     public static <T, R extends ConnectRecord<R>> TransformationChain<T, R> buildTransformationChain(
             Transformation<R> transformation,
             RetryWithToleranceOperator<T> toleranceOperator) {
         Predicate<R> predicate = mock(Predicate.class);
         when(predicate.test(any())).thenReturn(true);
-        TransformationStage<R> stage = new TransformationStage(
-                predicate,
+        Plugin<Predicate<R>> predicatePlugin = mock(Plugin.class);
+        when(predicatePlugin.get()).thenReturn(predicate);
+        Plugin<Transformation<R>> transformationPlugin = mock(Plugin.class);
+        when(transformationPlugin.get()).thenReturn(transformation);
+        TransformationStage<R> stage = new TransformationStage<>(
+                predicatePlugin,
                 false,
-                transformation);
+                transformationPlugin);
         TransformationChain<T, R> realTransformationChainRetriableException = new TransformationChain(List.of(stage), toleranceOperator);
         TransformationChain<T, R> transformationChainRetriableException = Mockito.spy(realTransformationChainRetriableException);
         return transformationChainRetriableException;
