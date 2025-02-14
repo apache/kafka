@@ -80,6 +80,7 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
 
   @AfterEach
   override def tearDown(): Unit = {
+    if (admin != null) admin.close()
     GroupedUserQuotaCallback.tearDown()
     super.tearDown()
     closeSasl()
