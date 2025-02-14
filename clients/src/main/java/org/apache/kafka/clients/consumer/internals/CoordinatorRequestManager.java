@@ -175,7 +175,7 @@ public class CoordinatorRequestManager implements RequestManager {
             long durationOfOngoingDisconnectMs = Math.max(0, currentTimeMs - timeMarkedUnknownMs);
             long currDisconnectMin = durationOfOngoingDisconnectMs / COORDINATOR_DISCONNECT_LOGGING_INTERVAL_MS;
             if (currDisconnectMin > totalDisconnectedMin) {
-                log.debug("Consumer has been disconnected from the group coordinator for {}ms", durationOfOngoingDisconnectMs);
+                log.warn("Consumer has been disconnected from the group coordinator for {}ms", durationOfOngoingDisconnectMs);
                 totalDisconnectedMin = currDisconnectMin;
             }
         }

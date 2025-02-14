@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -30,6 +31,7 @@ import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.MockTime;
@@ -204,11 +206,28 @@ public class WorkerSinkTaskTest {
     private void createTask(TargetState initialState, Converter keyConverter, Converter valueConverter, HeaderConverter headerConverter,
                             RetryWithToleranceOperator<ConsumerRecord<byte[], byte[]>> retryWithToleranceOperator,
                             Supplier<List<ErrorReporter<ConsumerRecord<byte[], byte[]>>>> errorReportersSupplier,
-                            TransformationChain transformationChain) {
-        workerTask = new WorkerSinkTask(
-                taskId, sinkTask, statusListener, initialState, workerConfig, ClusterConfigState.EMPTY, metrics,
+                            TransformationChain<ConsumerRecord<byte[], byte[]>, SinkRecord> transformationChain) {
+        createTask(taskId, sinkTask, statusListener, initialState, workerConfig, metrics,
                 keyConverter, valueConverter, errorHandlingMetrics, headerConverter,
                 transformationChain, consumer, pluginLoader, time,
+                retryWithToleranceOperator, statusBackingStore, errorReportersSupplier);
+    }
+
+    private void createTask(ConnectorTaskId taskId, SinkTask task, TaskStatus.Listener statusListener, TargetState initialState,
+                            WorkerConfig workerConfig, ConnectMetrics connectMetrics, Converter keyConverter, Converter valueConverter,
+                            ErrorHandlingMetrics errorMetrics, HeaderConverter headerConverter,
+                            TransformationChain<ConsumerRecord<byte[], byte[]>, SinkRecord> transformationChain,
+                            Consumer<byte[], byte[]> consumer, ClassLoader loader, Time time,
+                            RetryWithToleranceOperator<ConsumerRecord<byte[], byte[]>> retryWithToleranceOperator,
+                            StatusBackingStore statusBackingStore,
+                            Supplier<List<ErrorReporter<ConsumerRecord<byte[], byte[]>>>> errorReportersSupplier) {
+        Plugin<Converter> keyConverterPlugin = connectMetrics.wrap(keyConverter, taskId, true);
+        Plugin<Converter> valueConverterPlugin = connectMetrics.wrap(valueConverter, taskId, false);
+        Plugin<HeaderConverter> headerConverterPlugin = connectMetrics.wrap(headerConverter, taskId);
+        workerTask = new WorkerSinkTask(
+                taskId, task, statusListener, initialState, workerConfig, ClusterConfigState.EMPTY, connectMetrics,
+                keyConverterPlugin, valueConverterPlugin, errorMetrics, headerConverterPlugin,
+                transformationChain, consumer, loader, time,
                 retryWithToleranceOperator, null, statusBackingStore, errorReportersSupplier);
     }
 
@@ -1857,11 +1876,10 @@ public class WorkerSinkTaskTest {
     public void testPartitionCountInCaseOfPartitionRevocation() {
         MockConsumer<byte[], byte[]> mockConsumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name());
         // Setting up Worker Sink Task to check metrics
-        workerTask = new WorkerSinkTask(
-                taskId, sinkTask, statusListener, TargetState.PAUSED, workerConfig, ClusterConfigState.EMPTY, metrics,
+        createTask(taskId, sinkTask, statusListener, TargetState.PAUSED, workerConfig, metrics,
                 keyConverter, valueConverter, errorHandlingMetrics, headerConverter,
                 transformationChain, mockConsumer, pluginLoader, time,
-                RetryWithToleranceOperatorTest.noneOperator(), null, statusBackingStore, Collections::emptyList);
+                RetryWithToleranceOperatorTest.noneOperator(), statusBackingStore, Collections::emptyList);
         mockConsumer.updateBeginningOffsets(
                 new HashMap<>() {{
                     put(TOPIC_PARTITION, 0L);

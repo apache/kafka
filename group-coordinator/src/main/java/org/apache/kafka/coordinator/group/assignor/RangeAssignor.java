@@ -84,11 +84,11 @@ import java.util.Set;
  * <p>
  */
 public class RangeAssignor implements ConsumerGroupPartitionAssignor {
-    public static final String RANGE_ASSIGNOR_NAME = "range";
+    public static final String NAME = "range";
 
     @Override
     public String name() {
-        return RANGE_ASSIGNOR_NAME;
+        return NAME;
     }
 
     /**

@@ -16,54 +16,58 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.streams.processor.api.Record;
+
 import java.util.Map;
 
 /**
- * Branches the records in the original stream based on the predicates supplied for the branch definitions.
- * <p>
- * Branches are defined with {@link BranchedKStream#branch(Predicate, Branched)} or
- * {@link BranchedKStream#defaultBranch(Branched)} methods. Each record is evaluated against the {@code predicate}
- * supplied via {@link Branched} parameters, and is routed to the first branch for which its respective predicate
- * evaluates to {@code true}. If a record does not match any predicates, it will be routed to the default branch,
- * or dropped if no default branch is created.
- * <p>
- * Each branch (which is a {@link KStream} instance) then can be processed either by
- * a {@link java.util.function.Function} or a {@link java.util.function.Consumer} provided via a {@link Branched}
- * parameter. If certain conditions are met, it also can be accessed from the {@link Map} returned by an optional
- * {@link BranchedKStream#defaultBranch(Branched)} or {@link BranchedKStream#noDefaultBranch()} method call
- * (see <a href="#examples">usage examples</a>).
- * <p>
- * The branching happens on a first-match basis: A record in the original stream is assigned to the corresponding result
- * stream for the first predicate that evaluates to {@code true}, and is assigned to this stream only. If you need
- * to route a record to multiple streams, you can apply multiple {@link KStream#filter(Predicate)} operators
- * to the same {@link KStream} instance, one for each predicate, instead of branching.
- * <p>
+ * {@code BranchedKStream} is an abstraction of a <em>branched</em> record stream of {@link Record key-value} pairs.
+ * It is an intermediate representation of a {@link KStream} in order to split the original {@link KStream} into
+ * multiple {@link KStream sub-streams} (called branches).
  * The process of routing the records to different branches is a stateless record-by-record operation.
  *
- * <h2><a name="maprules">Rules of forming the resulting map</a></h2>
- * The keys of the {@code Map<String, KStream<K, V>>} entries returned by {@link BranchedKStream#defaultBranch(Branched)} or
- * {@link BranchedKStream#noDefaultBranch()} are defined by the following rules:
+ * <p>Branches are defined via {@link #branch(Predicate, Branched)} or {@link #defaultBranch(Branched)} methods.
+ * Each input record is evaluated against the {@code predicate} supplied via {@link Branched} parameters, and is routed
+ * to the <em>first</em> branch for which its respective predicate evaluates to {@code true}, and is included in this
+ * branch only.
+ * If a record does not match any predicates, it will be routed to the default branch, or dropped if no default branch
+ * is created.
+ * For details about multicasting/broadcasting records into more than one {@link KStream}, see {@link KStream#split()}.
+ *
+ * <p>Each {@link KStream branch} can be processed either by a {@link java.util.function.Function Function} or a
+ * {@link java.util.function.Consumer Consumer} provided via a {@link Branched} parameter.
+ * If certain conditions are met (see below), all created branches can be accessed from the {@link Map} returned by an
+ * optional {@link #defaultBranch(Branched)} or {@link #noDefaultBranch()} method call.
+ *
+ * <h6>Rules of forming the resulting {@link Map}</h6>
+ *
+ * The keys of the {@link Map Map<String, KStream<K, V>>} entries returned by {@link #defaultBranch(Branched)} or
+ * {@link #noDefaultBranch()} are defined by the following rules:
  * <ul>
- *     <li>If {@link Named} parameter was provided for {@link KStream#split(Named)}, its value is used as
- *     a prefix for each key. By default, no prefix is used
- *     <li>If a branch name is provided in {@link BranchedKStream#branch(Predicate, Branched)} via the
- *     {@link Branched} parameter, its value is appended to the prefix to form the {@code Map} key
- *     <li>If a name is not provided for the branch, then the key defaults to {@code prefix + position} of the branch
- *     as a decimal number, starting from {@code "1"}
- *     <li>If a name is not provided for the {@link BranchedKStream#defaultBranch()}, then the key defaults
- *     to {@code prefix + "0"}
+ *   <li>If {@link Named} parameter was provided for {@link KStream#split(Named)}, its value is used as a prefix for each key.
+ *       By default, no prefix is used.</li>
+ *   <li>If a branch name is provided in {@link #branch(Predicate, Branched)} via the {@link Branched} parameter,
+ *       its value is appended to the prefix to form the {@link Map} key.</li>
+ *   <li>If a name is not provided for the branch, then the key defaults to {@code prefix + position} of the branch as
+ *       a decimal number, starting from {@code "1"}.</li>
+ *   <li>If a name is not provided for the {@link #defaultBranch()}, then the key defaults to {@code prefix + "0"}.</li>
  * </ul>
- * The values of the respective {@code Map<Stream, KStream<K, V>>} entries are formed as following:
+ *
+ * The values of the respective {@link Map Map<Stream, KStream<K, V>>} entries are formed as following:
  * <ul>
- *     <li>If no chain function or consumer is provided in {@link BranchedKStream#branch(Predicate, Branched)} via
- *     the {@link Branched} parameter, then the branch itself is added to the {@code Map}
- *     <li>If chain function is provided and it returns a non-null value for a given branch, then the value
- *     is the result returned by this function
- *     <li>If a chain function returns {@code null} for a given branch, then no entry is added to the map
- *     <li>If a consumer is provided for a given branch, then no entry is added to the map
+ *   <li>If no {@link java.util.function.Function chain function} or {@link java.util.function.Consumer consumer} is
+ *       provided in {@link #branch(Predicate, Branched)} via the {@link Branched} parameter,
+ *       then the branch itself is added to the {@code Map}.</li>
+ *   <li>If a {@link java.util.function.Function chain function} is provided, and it returns a non-{@code null} value for a given branch,
+ *       then the value is the result returned by this function.</li>
+ *   <li>If a {@link java.util.function.Function chain function} returns {@code null} for a given branch,
+ *       then no entry is added to the {@link Map}.</li>
+ *   <li>If a {@link java.util.function.Consumer consumer} is provided for a given branch,
+ *       then no entry is added to the {@link Map}.</li>
  * </ul>
+ *
  * For example:
- * <pre> {@code
+ * <pre>{@code
  * Map<String, KStream<..., ...>> result =
  *   source.split(Named.as("foo-"))
  *     .branch(predicate1, Branched.as("bar"))                    // "foo-bar"
@@ -74,46 +78,44 @@ import java.util.Map;
  *     .defaultBranch()                                           // "foo-0": "0" is the default name for the default branch
  * }</pre>
  *
- * <h2><a name="examples">Usage examples</a></h2>
+ * <h4><a name="examples">Usage examples</a></h4>
  *
- * <h3>Direct Branch Consuming</h3>
- * In many cases we do not need to have a single scope for all the branches, each branch being processed completely
- * independently of others. Then we can use 'consuming' lambdas or method references in {@link Branched} parameter:
+ * <h6>Direct branch processing</h6>
  *
- * <pre> {@code
+ * If no single scope for all the branches is required, and each branch can be processed completely
+ * independently of others, 'consuming' lambdas or method references in {@link Branched} parameter can be used:
+ * <pre>{@code
  * source.split()
- *     .branch(predicate1, Branched.withConsumer(ks -> ks.to("A")))
- *     .branch(predicate2, Branched.withConsumer(ks -> ks.to("B")))
- *     .defaultBranch(Branched.withConsumer(ks->ks.to("C")));
+ *   .branch(predicate1, Branched.withConsumer(ks -> ks.to("A")))
+ *   .branch(predicate2, Branched.withConsumer(ks -> ks.to("B")))
+ *   .defaultBranch(Branched.withConsumer(ks->ks.to("C")));
  * }</pre>
  *
- * <h3>Collecting branches in a single scope</h3>
- * In other cases we want to combine branches again after splitting. The map returned by
- * {@link BranchedKStream#defaultBranch()} or {@link BranchedKStream#noDefaultBranch()} methods provides
- * access to all the branches in the same scope:
+ * <h6>Collecting branches in a single scope</h6>
  *
- * <pre> {@code
+ * If multiple branches need to be processed in the same scope, for example for merging or joining branches again after
+ * splitting, the {@link Map} returned by {@link #defaultBranch()} or {@link #noDefaultBranch()} methods provides
+ * access to all the branches in the same scope:
+ * <pre>{@code
  * Map<String, KStream<String, String>> branches = source.split(Named.as("split-"))
- *     .branch((key, value) -> value == null, Branched.withFunction(s -> s.mapValues(v->"NULL"), "null")
- *     .defaultBranch(Branched.as("non-null"));
+ *   .branch((key, value) -> value == null, Branched.withFunction(s -> s.mapValues(v->"NULL"), "null")
+ *   .defaultBranch(Branched.as("non-null"));
  *
  * KStream<String, String> merged = branches.get("split-non-null").merge(branches.get("split-null"));
  * }</pre>
  *
- * <h3>Dynamic branching</h3>
- * There is also a case when we might need to create branches dynamically, e.g. one per enum value:
+ * <h6>Dynamic branching</h6>
  *
- * <pre> {@code
+ * There is also a case when dynamic branch creating is needed, e.g., one branch per enum value:
+ * <pre>{@code
  * BranchedKStream branched = stream.split();
- * for (RecordType recordType : RecordType.values())
- *     branched.branch((k, v) -> v.getRecType() == recordType,
- *         Branched.withConsumer(recordType::processRecords));
+ * for (RecordType recordType : RecordType.values()) {
+ *   branched.branch((k, v) -> v.getRecType() == recordType, Branched.withConsumer(recordType::processRecords));
+ * }
  * }</pre>
  *
- * @param <K> Type of keys
- * @param <V> Type of values
- *
- * @see KStream
+ * @param <K> the key type of this stream
+ * @param <V> the value type of this stream
  */
 public interface BranchedKStream<K, V> {
     /**

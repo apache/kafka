@@ -276,6 +276,11 @@ public class SharePartition {
     private final SharePartitionListener listener;
 
     /**
+     * The load start time is used to track the time taken to load the share partition.
+     */
+    private final long loadStartTimeMs;
+
+    /**
      * The share partition start offset specifies the partition start offset from which the records
      * are cached in the cachedState of the sharePartition.
      */
@@ -359,6 +364,7 @@ public class SharePartition {
         this.defaultRecordLockDurationMs = defaultRecordLockDurationMs;
         this.timer = timer;
         this.time = time;
+        this.loadStartTimeMs = time.hiResClockMs();
         this.persister = persister;
         this.partitionState = sharePartitionState;
         this.replicaManager = replicaManager;
@@ -909,6 +915,10 @@ public class SharePartition {
             lock.writeLock().unlock();
         }
         return future;
+    }
+
+    long loadStartTimeMs() {
+        return loadStartTimeMs;
     }
 
     private Optional<Throwable> releaseAcquiredRecordsForPerOffsetBatch(String memberId,
