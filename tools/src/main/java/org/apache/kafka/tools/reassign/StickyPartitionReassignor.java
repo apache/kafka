@@ -374,7 +374,7 @@ public class StickyPartitionReassignor {
         // Iterate through all brokers in ascending order by replica assignment count
         // (broker with the least assignments first, broker with the most assignments last)
         for (BrokerMetadata toBroker : this.sortedBrokersByAssignments) {
-            // final BigInteger globalBrokerScore = this.computeNewGlobalBrokerScoreForUnassignedReplica(toBroker);
+            final BigInteger globalBrokerScore = this.computeNewGlobalBrokerScoreForUnassignedReplica(toBroker);
             BigInteger leaderScore = BigInteger.ZERO;
 
             final TreeSet<MoveFrom> toBrokerMoves = this.possibleInitialAssignments.get(toBroker);
@@ -388,7 +388,7 @@ public class StickyPartitionReassignor {
                 leaderScore = this.computeNewLeaderScoreForUnassignedReplica(toBroker);
             }
 
-            final Move bestInitialAssignment = new Move(bestInitialAssignmentForBroker.replica, null, toBroker, BigInteger.ZERO, bestInitialAssignmentForBroker.rackImprovementScore, leaderScore);
+            final Move bestInitialAssignment = new Move(bestInitialAssignmentForBroker.replica, null, toBroker, globalBrokerScore, bestInitialAssignmentForBroker.rackImprovementScore, leaderScore);
 
             // Use the best move that moves a replica from fromBroker to toBroker if we do not have a
             // best move yet or if the move is better than the current best move
@@ -697,6 +697,27 @@ public class StickyPartitionReassignor {
             // Assume that the move was executed and remove a replica from the from-rack count
             // and add a replica to the to-rack count
             if (broker.equals(from)) replicasOnBroker--;
+            if (broker.equals(to)) replicasOnBroker++;
+
+            final BigInteger thisScore = BigInteger.valueOf(replicasOnBroker).pow(2);
+            brokerScore = brokerScore.add(thisScore);
+        }
+        return brokerScore;
+    }
+
+    private BigInteger computeNewGlobalBrokerScoreForUnassignedReplica(BrokerMetadata to) {
+        // The count per broker can grow as large as the number of replicas in
+        // the cluster.
+        // Using long arithmetic as for partitionBrokerScore or rackScore
+        // might not be safe for the globalBrokerScore.
+        // Therefore, BigIntegers are used instead
+        // Mathematically using just the square of the count is as good a
+        // metric for ranking the distribution scores as the squared
+        // residuals
+        BigInteger brokerScore = BigInteger.ZERO;
+        for (final BrokerMetadata broker : this.sortedBrokersByAssignments) {
+            long replicasOnBroker = this.brokerToAssignments.getOrDefault(broker.id, 0);
+            // Assume that the move was executed and add a replica to the to-rack count
             if (broker.equals(to)) replicasOnBroker++;
 
             final BigInteger thisScore = BigInteger.valueOf(replicasOnBroker).pow(2);
