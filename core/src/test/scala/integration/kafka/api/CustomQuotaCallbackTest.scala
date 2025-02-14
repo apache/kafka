@@ -214,9 +214,7 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
   }
 
   private def createAdminClient(): Admin = {
-    if (admin != null) {
-      return admin
-    }
+    if (admin != null) return admin
     val config = new util.HashMap[String, Object]
     config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
     clientSecurityProps("admin-client").asInstanceOf[util.Map[Object, Object]].forEach { (key, value) =>
