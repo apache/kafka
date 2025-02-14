@@ -39,7 +39,7 @@ import java.util.Map;
  * If certain conditions are met (see below), all created branches can be accessed from the {@link Map} returned by an
  * optional {@link #defaultBranch(Branched)} or {@link #noDefaultBranch()} method call.
  *
- * <h6><a name="maprules">Rules of forming the resulting {@link Map}</a></h6>
+ * <h6>Rules of forming the resulting {@link Map}</h6>
  *
  * The keys of the {@link Map Map<String, KStream<K, V>>} entries returned by {@link #defaultBranch(Branched)} or
  * {@link #noDefaultBranch()} are defined by the following rules:
