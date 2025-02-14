@@ -3747,7 +3747,7 @@ public class FetchRequestManagerTest {
         Future<Void> future = fetcher.createFetchRequests();
         List<NetworkClientDelegate.UnsentRequest> call2 = fetcher.sendFetches();
         assertEquals(0, call2.size());
-        assertFutureThrows(future, IllegalStateException.class);
+        assertFutureThrows(IllegalStateException.class, future);
     }
 
     @Test
