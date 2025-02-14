@@ -562,9 +562,10 @@ public class TransactionManager {
      */
     private void setProducerIdAndEpoch(ProducerIdAndEpoch producerIdAndEpoch) {
         // With TV2, the epoch bump is common and frequent. Only log if it is at debug level or the producer ID is changed.
-        if (!isTransactional() || !isTransactionV2Enabled ||
-                producerIdAndEpoch.producerId != this.producerIdAndEpoch.producerId || log.isDebugEnabled()) {
+        if (!isTransactional() || !isTransactionV2Enabled || producerIdAndEpoch.producerId != this.producerIdAndEpoch.producerId) {
             log.info("ProducerId set to {} with epoch {}", producerIdAndEpoch.producerId, producerIdAndEpoch.epoch);
+        } else {
+            log.debug("ProducerId set to {} with epoch {}", producerIdAndEpoch.producerId, producerIdAndEpoch.epoch);
         }
         this.producerIdAndEpoch = producerIdAndEpoch;
     }
