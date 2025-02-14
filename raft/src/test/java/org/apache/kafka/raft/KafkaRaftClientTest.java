@@ -4042,24 +4042,17 @@ class KafkaRaftClientTest {
             .build();
         context.pollUntil(() -> context.log.endOffset().offset() == 1L);
 
-        assertNotNull(getMetric(context.metrics, "current-state"));
-        assertNotNull(getMetric(context.metrics, "current-leader"));
-        assertNotNull(getMetric(context.metrics, "current-vote"));
-        assertNotNull(getMetric(context.metrics, "current-epoch"));
-        assertNotNull(getMetric(context.metrics, "high-watermark"));
-        assertNotNull(getMetric(context.metrics, "log-end-offset"));
-        assertNotNull(getMetric(context.metrics, "log-end-epoch"));
-        assertNotNull(getMetric(context.metrics, "number-unknown-voter-connections"));
-        assertNotNull(getMetric(context.metrics, "poll-idle-ratio-avg"));
-        assertNotNull(getMetric(context.metrics, "commit-latency-avg"));
-        assertNotNull(getMetric(context.metrics, "commit-latency-max"));
-        assertNotNull(getMetric(context.metrics, "election-latency-avg"));
-        assertNotNull(getMetric(context.metrics, "election-latency-max"));
-        assertNotNull(getMetric(context.metrics, "fetch-records-rate"));
-        assertNotNull(getMetric(context.metrics, "append-records-rate"));
-        assertNotNull(getMetric(context.metrics, "number-of-voters"));
-        assertNotNull(getMetric(context.metrics, "number-of-observers"));
-        assertNotNull(getMetric(context.metrics, "uncommitted-voter-change"));
+        List<String> metricNames = Arrays.asList(
+                "current-state", "current-leader", "current-vote", "current-epoch", "high-watermark",
+                "log-end-offset", "log-end-epoch", "number-unknown-voter-connections", "poll-idle-ratio-avg",
+                "commit-latency-avg", "commit-latency-max", "election-latency-avg", "election-latency-max",
+                "fetch-records-rate", "append-records-rate", "number-of-voters", "number-of-observers",
+                "uncommitted-voter-change"
+        );
+
+        for (String metricName : metricNames) {
+            assertNotNull(getMetric(context.metrics, metricName));
+        }
 
         assertEquals("leader", getMetric(context.metrics, "current-state").metricValue());
         assertEquals((double) localId, getMetric(context.metrics, "current-leader").metricValue());
