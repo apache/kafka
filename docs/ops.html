@@ -4153,7 +4153,9 @@ $ bin/kafka-topics.sh --create --topic tieredTopic --bootstrap-server localhost:
   <p>Downgrades are safe to perform by setting <code>eligible.leader.replicas.version=0</code>.</p>
 
   <h4 class="anchor-heading"><a id="eligible_leader_replicas_tool" class="anchor-link"></a><a href="#eligible_leader_replicas_tool">Tool</a></h4>
-  <p>The ELR fields can be checked through the API DescribeTopicPartitions. The admin client can fetch the ELR info by describing the topics.</p>
+  <p>The ELR fields can be checked through the API DescribeTopicPartitions. The admin client can fetch the ELR info by describing the topics.
+    Also note that, if <code>min.insync.replicas</code> is updated for a topic, the ELR field will be cleaned. If cluster default min ISR is updated,
+    all the ELR fields will be cleaned.</p>
 
 </script>
 
