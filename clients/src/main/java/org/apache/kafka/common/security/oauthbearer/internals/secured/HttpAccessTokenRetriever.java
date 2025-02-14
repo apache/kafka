@@ -49,6 +49,9 @@ import java.util.concurrent.ExecutionException;
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLSocketFactory;
 
+import static org.apache.kafka.common.config.SaslConfigs.DEFAULT_SASL_OAUTHBEARER_HEADER_URLENCODE;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_HEADER_URLENCODE;
+
 /**
  * <code>HttpAccessTokenRetriever</code> is an {@link AccessTokenRetriever} that will
  * communicate with an OAuth/OIDC provider directly via HTTP to post client credentials
@@ -396,6 +399,25 @@ public class HttpAccessTokenRetriever implements AccessTokenRetriever {
             throw new IllegalArgumentException(String.format("The value for %s must not contain only whitespace", name));
 
         return value;
+    }
+
+    /**
+     * In some cases, the incoming {@link Map} doesn't contain a value for
+     * {@link SaslConfigs#SASL_OAUTHBEARER_HEADER_URLENCODE}. Returning {@code null} from {@link Map#get(Object)}
+     * will cause a {@link NullPointerException} when it is later unboxed.
+     *
+     * <p/>
+     *
+     * This utility method ensures that we have a non-{@code null} value to use in the
+     * {@link HttpAccessTokenRetriever} constructor.
+     */
+    public static boolean validateUrlencodeHeader(ConfigurationUtils configurationUtils) {
+        Boolean urlencodeHeader = configurationUtils.validateBoolean(SASL_OAUTHBEARER_HEADER_URLENCODE, false);
+
+        if (urlencodeHeader != null)
+            return urlencodeHeader;
+        else
+            return DEFAULT_SASL_OAUTHBEARER_HEADER_URLENCODE;
     }
 
 }

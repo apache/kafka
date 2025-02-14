@@ -44,7 +44,7 @@ public class AccessTokenValidatorFactoryTest extends OAuthBearerTest {
         };
 
         Map<String, ?> configs = getSaslConfigs();
-        AccessTokenValidator accessTokenValidator = AccessTokenValidatorFactory.create(configs);
+        AccessTokenValidator accessTokenValidator = LoginAccessTokenValidator.create(configs);
 
         assertThrowsWithMessage(
             KafkaException.class, () -> handler.init(accessTokenRetriever, accessTokenValidator), "encountered an error when initializing");
@@ -65,7 +65,7 @@ public class AccessTokenValidatorFactoryTest extends OAuthBearerTest {
         };
 
         Map<String, ?> configs = getSaslConfigs();
-        AccessTokenValidator accessTokenValidator = AccessTokenValidatorFactory.create(configs);
+        AccessTokenValidator accessTokenValidator = LoginAccessTokenValidator.create(configs);
         handler.init(accessTokenRetriever, accessTokenValidator);
 
         // Basically asserting this doesn't throw an exception :(

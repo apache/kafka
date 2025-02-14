@@ -32,6 +32,8 @@ import java.util.Set;
 
 import static org.apache.kafka.common.config.SaslConfigs.DEFAULT_SASL_OAUTHBEARER_SCOPE_CLAIM_NAME;
 import static org.apache.kafka.common.config.SaslConfigs.DEFAULT_SASL_OAUTHBEARER_SUB_CLAIM_NAME;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SCOPE_CLAIM_NAME;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SUB_CLAIM_NAME;
 
 /**
  * LoginAccessTokenValidator is an implementation of {@link AccessTokenValidator} that is used
@@ -62,6 +64,17 @@ public class LoginAccessTokenValidator implements AccessTokenValidator {
     private final String scopeClaimName;
 
     private final String subClaimName;
+
+    public static LoginAccessTokenValidator create(Map<String, ?> configs) {
+        return create(configs, (String) null);
+    }
+
+    public static LoginAccessTokenValidator create(Map<String, ?> configs, String saslMechanism) {
+        ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
+        String scopeClaimName = cu.get(SASL_OAUTHBEARER_SCOPE_CLAIM_NAME);
+        String subClaimName = cu.get(SASL_OAUTHBEARER_SUB_CLAIM_NAME);
+        return new LoginAccessTokenValidator(scopeClaimName, subClaimName);
+    }
 
     /**
      * Creates a new LoginAccessTokenValidator that will be used by the client for lightweight

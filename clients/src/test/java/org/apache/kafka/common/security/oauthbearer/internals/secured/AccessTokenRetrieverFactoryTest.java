@@ -55,7 +55,7 @@ public class AccessTokenRetrieverFactoryTest extends OAuthBearerTest {
         Map<String, ?> configs = Collections.singletonMap(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, accessTokenFile.toURI().toString());
         Map<String, Object> jaasConfig = Collections.emptyMap();
 
-        try (AccessTokenRetriever accessTokenRetriever = AccessTokenRetrieverFactory.create(configs, jaasConfig)) {
+        try (AccessTokenRetriever accessTokenRetriever = AccessTokenRetriever.create(configs, jaasConfig)) {
             accessTokenRetriever.init();
             assertEquals(expected, accessTokenRetriever.retrieve());
         }
@@ -68,7 +68,7 @@ public class AccessTokenRetrieverFactoryTest extends OAuthBearerTest {
         System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, file);
         Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, file);
         Map<String, Object> jaasConfig = Collections.emptyMap();
-        assertThrowsWithMessage(ConfigException.class, () -> AccessTokenRetrieverFactory.create(configs, jaasConfig), "that doesn't exist");
+        assertThrowsWithMessage(ConfigException.class, () -> AccessTokenRetriever.create(configs, jaasConfig), "that doesn't exist");
     }
 
     @Test
@@ -79,7 +79,7 @@ public class AccessTokenRetrieverFactoryTest extends OAuthBearerTest {
         System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, accessTokenFile.toURI().toString());
         Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, accessTokenFile.toURI().toString());
         Map<String, Object> jaasConfig = Collections.emptyMap();
-        assertThrowsWithMessage(ConfigException.class, () -> AccessTokenRetrieverFactory.create(configs, jaasConfig), "that doesn't exist");
+        assertThrowsWithMessage(ConfigException.class, () -> AccessTokenRetriever.create(configs, jaasConfig), "that doesn't exist");
     }
 
     @Test
@@ -88,7 +88,7 @@ public class AccessTokenRetrieverFactoryTest extends OAuthBearerTest {
         File tmpDir = createTempDir("not_allowed");
         File accessTokenFile = new File(tmpDir, "not_allowed.json");
         Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, accessTokenFile.toURI().toString());
-        assertThrowsWithMessage(ConfigException.class, () -> AccessTokenRetrieverFactory.create(configs, Collections.emptyMap()),
+        assertThrowsWithMessage(ConfigException.class, () -> AccessTokenRetriever.create(configs, Collections.emptyMap()),
                 ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG);
     }
 
@@ -96,7 +96,7 @@ public class AccessTokenRetrieverFactoryTest extends OAuthBearerTest {
     @MethodSource("urlencodeHeaderSupplier")
     public void testUrlencodeHeader(Map<String, Object> configs, boolean expectedValue) {
         ConfigurationUtils cu = new ConfigurationUtils(configs);
-        boolean actualValue = AccessTokenRetrieverFactory.validateUrlencodeHeader(cu);
+        boolean actualValue = HttpAccessTokenRetriever.validateUrlencodeHeader(cu);
         assertEquals(expectedValue, actualValue);
     }
 

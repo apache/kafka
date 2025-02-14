@@ -24,9 +24,8 @@ import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.auth.SaslExtensions;
 import org.apache.kafka.common.security.auth.SaslExtensionsCallback;
 import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerClientInitialResponse;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenRetrieverFactory;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenValidatorFactory;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.JaasOptionsUtils;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.LoginAccessTokenValidator;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ValidateException;
 
 import org.slf4j.Logger;
@@ -186,8 +185,8 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
         moduleOptions = JaasOptionsUtils.getOptions(saslMechanism, jaasConfigEntries);
-        accessTokenRetriever = AccessTokenRetrieverFactory.create(configs, saslMechanism, moduleOptions);
-        accessTokenValidator = AccessTokenValidatorFactory.create(configs, saslMechanism);
+        accessTokenRetriever = AccessTokenRetriever.create(configs, saslMechanism, moduleOptions);
+        accessTokenValidator = LoginAccessTokenValidator.create(configs, saslMechanism);
 
         try {
             this.accessTokenRetriever.init();

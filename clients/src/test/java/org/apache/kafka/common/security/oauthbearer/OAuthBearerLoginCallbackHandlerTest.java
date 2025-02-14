@@ -21,9 +21,9 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.security.auth.SaslExtensionsCallback;
 import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerClientInitialResponse;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenBuilder;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenValidatorFactory;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.FileTokenRetriever;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpAccessTokenRetriever;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.LoginAccessTokenValidator;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerTest;
 import org.apache.kafka.common.utils.Utils;
 
@@ -143,7 +143,7 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
         Map<String, ?> configs = getSaslConfigs();
         OAuthBearerTestableLoginCallbackHandler handler = new OAuthBearerTestableLoginCallbackHandler();
         AccessTokenRetriever accessTokenRetriever = () -> "foo";
-        AccessTokenValidator accessTokenValidator = AccessTokenValidatorFactory.create(configs);
+        AccessTokenValidator accessTokenValidator = LoginAccessTokenValidator.create(configs);
         handler.init(accessTokenRetriever, accessTokenValidator);
 
         try {
@@ -268,7 +268,7 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
 
     private OAuthBearerLoginCallbackHandler createHandler(AccessTokenRetriever accessTokenRetriever, Map<String, ?> configs) {
         OAuthBearerTestableLoginCallbackHandler handler = new OAuthBearerTestableLoginCallbackHandler();
-        AccessTokenValidator accessTokenValidator = AccessTokenValidatorFactory.create(configs);
+        AccessTokenValidator accessTokenValidator = LoginAccessTokenValidator.create(configs);
         handler.init(accessTokenRetriever, accessTokenValidator);
         return handler;
     }

@@ -34,8 +34,15 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
 import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_EXPECTED_ISSUER;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SCOPE_CLAIM_NAME;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SUB_CLAIM_NAME;
 import static org.jose4j.jwa.AlgorithmConstraints.DISALLOW_NONE;
 
 /**
@@ -72,6 +79,36 @@ public class ValidatorAccessTokenValidator implements AccessTokenValidator {
     private final String scopeClaimName;
 
     private final String subClaimName;
+
+    public static ValidatorAccessTokenValidator create(Map<String, ?> configs,
+                                                       VerificationKeyResolver verificationKeyResolver) {
+        return create(configs, null, verificationKeyResolver);
+    }
+
+    public static ValidatorAccessTokenValidator create(Map<String, ?> configs,
+                                                       String saslMechanism,
+                                                       VerificationKeyResolver verificationKeyResolver) {
+        ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
+        Set<String> expectedAudiences = null;
+        List<String> l = cu.get(SASL_OAUTHBEARER_EXPECTED_AUDIENCE);
+
+        if (l != null)
+            expectedAudiences = Set.copyOf(l);
+
+        Integer clockSkew = cu.validateInteger(SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS, false);
+        String expectedIssuer = cu.validateString(SASL_OAUTHBEARER_EXPECTED_ISSUER, false);
+        String scopeClaimName = cu.validateString(SASL_OAUTHBEARER_SCOPE_CLAIM_NAME);
+        String subClaimName = cu.validateString(SASL_OAUTHBEARER_SUB_CLAIM_NAME);
+
+        return new ValidatorAccessTokenValidator(
+            clockSkew,
+            expectedAudiences,
+            expectedIssuer,
+            verificationKeyResolver,
+            scopeClaimName,
+            subClaimName
+        );
+    }
 
     /**
      * Creates a new ValidatorAccessTokenValidator that will be used by the broker for more
