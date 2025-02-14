@@ -24,9 +24,7 @@ import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.auth.SaslExtensions;
 import org.apache.kafka.common.security.auth.SaslExtensionsCallback;
 import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerClientInitialResponse;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenRetriever;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenRetrieverFactory;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenValidator;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenValidatorFactory;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.JaasOptionsUtils;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ValidateException;
@@ -177,25 +175,19 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
 
     private static final String EXTENSION_PREFIX = "extension_";
 
-    private Map<String, Object> moduleOptions;
+    protected Map<String, Object> moduleOptions;
 
-    private AccessTokenRetriever accessTokenRetriever;
+    protected AccessTokenRetriever accessTokenRetriever;
 
-    private AccessTokenValidator accessTokenValidator;
+    protected AccessTokenValidator accessTokenValidator;
 
-    private boolean isInitialized = false;
+    protected boolean isInitialized = false;
 
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
         moduleOptions = JaasOptionsUtils.getOptions(saslMechanism, jaasConfigEntries);
-        AccessTokenRetriever accessTokenRetriever = AccessTokenRetrieverFactory.create(configs, saslMechanism, moduleOptions);
-        AccessTokenValidator accessTokenValidator = AccessTokenValidatorFactory.create(configs, saslMechanism);
-        init(accessTokenRetriever, accessTokenValidator);
-    }
-
-    public void init(AccessTokenRetriever accessTokenRetriever, AccessTokenValidator accessTokenValidator) {
-        this.accessTokenRetriever = accessTokenRetriever;
-        this.accessTokenValidator = accessTokenValidator;
+        accessTokenRetriever = AccessTokenRetrieverFactory.create(configs, saslMechanism, moduleOptions);
+        accessTokenValidator = AccessTokenValidatorFactory.create(configs, saslMechanism);
 
         try {
             this.accessTokenRetriever.init();
@@ -204,14 +196,6 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
         }
 
         isInitialized = true;
-    }
-
-    /*
-     * Package-visible for testing.
-     */
-
-    AccessTokenRetriever getAccessTokenRetriever() {
-        return accessTokenRetriever;
     }
 
     @Override

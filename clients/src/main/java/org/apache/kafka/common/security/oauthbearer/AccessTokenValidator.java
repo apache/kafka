@@ -15,9 +15,11 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.security.oauthbearer.internals.secured;
+package org.apache.kafka.common.security.oauthbearer;
 
-import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.LoginAccessTokenValidator;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.ValidateException;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.ValidatorAccessTokenValidator;
 
 /**
  * An instance of <code>AccessTokenValidator</code> acts as a function object that, given an access

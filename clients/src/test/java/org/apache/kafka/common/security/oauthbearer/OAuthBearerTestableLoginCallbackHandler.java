@@ -15,21 +15,16 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.security.oauthbearer.internals.secured;
+package org.apache.kafka.common.security.oauthbearer;
 
-import java.io.IOException;
+import java.util.Collections;
 
-public interface Initable {
+public class OAuthBearerTestableLoginCallbackHandler extends OAuthBearerLoginCallbackHandler {
 
-    /**
-     * Lifecycle method to perform any one-time initialization of the retriever. This must
-     * be performed by the caller to ensure the correct state before methods are invoked.
-     *
-     * @throws IOException Thrown on errors related to IO during initialization
-     */
-
-    default void init() throws IOException {
-        // This method left intentionally blank.
+    public void init(AccessTokenRetriever accessTokenRetriever, AccessTokenValidator accessTokenValidator) {
+        this.moduleOptions = Collections.emptyMap();
+        this.accessTokenRetriever = accessTokenRetriever;
+        this.accessTokenValidator = accessTokenValidator;
+        this.isInitialized = true;
     }
-
 }

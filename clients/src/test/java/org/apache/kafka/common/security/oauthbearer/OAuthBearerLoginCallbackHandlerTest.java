@@ -21,8 +21,6 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.security.auth.SaslExtensionsCallback;
 import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerClientInitialResponse;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenBuilder;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenRetriever;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenValidator;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenValidatorFactory;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.FileTokenRetriever;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpAccessTokenRetriever;
@@ -143,7 +141,7 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
     @Test
     public void testInvalidCallbackGeneratesUnsupportedCallbackException() {
         Map<String, ?> configs = getSaslConfigs();
-        OAuthBearerLoginCallbackHandler handler = new OAuthBearerLoginCallbackHandler();
+        OAuthBearerTestableLoginCallbackHandler handler = new OAuthBearerTestableLoginCallbackHandler();
         AccessTokenRetriever accessTokenRetriever = () -> "foo";
         AccessTokenValidator accessTokenValidator = AccessTokenValidatorFactory.create(configs);
         handler.init(accessTokenRetriever, accessTokenValidator);
@@ -226,7 +224,7 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
         Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, accessTokenFile.toURI().toString());
         Map<String, Object> jaasConfigs = Collections.emptyMap();
         configureHandler(handler, configs, jaasConfigs);
-        assertInstanceOf(FileTokenRetriever.class, handler.getAccessTokenRetriever());
+        assertInstanceOf(FileTokenRetriever.class, handler.accessTokenRetriever);
     }
 
     @Test
@@ -238,7 +236,7 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
         jaasConfigs.put(CLIENT_ID_CONFIG, "an ID");
         jaasConfigs.put(CLIENT_SECRET_CONFIG, "a secret");
         configureHandler(handler, configs, jaasConfigs);
-        assertInstanceOf(HttpAccessTokenRetriever.class, handler.getAccessTokenRetriever());
+        assertInstanceOf(HttpAccessTokenRetriever.class, handler.accessTokenRetriever);
     }
 
     private void testInvalidAccessToken(String accessToken, String expectedMessageSubstring) throws Exception {
@@ -269,7 +267,7 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
     }
 
     private OAuthBearerLoginCallbackHandler createHandler(AccessTokenRetriever accessTokenRetriever, Map<String, ?> configs) {
-        OAuthBearerLoginCallbackHandler handler = new OAuthBearerLoginCallbackHandler();
+        OAuthBearerTestableLoginCallbackHandler handler = new OAuthBearerTestableLoginCallbackHandler();
         AccessTokenValidator accessTokenValidator = AccessTokenValidatorFactory.create(configs);
         handler.init(accessTokenRetriever, accessTokenValidator);
         return handler;

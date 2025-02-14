@@ -18,8 +18,10 @@
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler;
+import org.apache.kafka.common.security.oauthbearer.AccessTokenRetriever;
+import org.apache.kafka.common.security.oauthbearer.AccessTokenValidator;
 
+import org.apache.kafka.common.security.oauthbearer.OAuthBearerTestableLoginCallbackHandler;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -29,7 +31,7 @@ public class AccessTokenValidatorFactoryTest extends OAuthBearerTest {
 
     @Test
     public void testConfigureThrowsExceptionOnAccessTokenValidatorInit() {
-        OAuthBearerLoginCallbackHandler handler = new OAuthBearerLoginCallbackHandler();
+        OAuthBearerTestableLoginCallbackHandler handler = new OAuthBearerTestableLoginCallbackHandler();
         AccessTokenRetriever accessTokenRetriever = new AccessTokenRetriever() {
             @Override
             public void init() throws IOException {
@@ -50,7 +52,7 @@ public class AccessTokenValidatorFactoryTest extends OAuthBearerTest {
 
     @Test
     public void testConfigureThrowsExceptionOnAccessTokenValidatorClose() {
-        OAuthBearerLoginCallbackHandler handler = new OAuthBearerLoginCallbackHandler();
+        OAuthBearerTestableLoginCallbackHandler handler = new OAuthBearerTestableLoginCallbackHandler();
         AccessTokenRetriever accessTokenRetriever = new AccessTokenRetriever() {
             @Override
             public void close() throws IOException {

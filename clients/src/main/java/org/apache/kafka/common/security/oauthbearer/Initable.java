@@ -15,15 +15,20 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.security.oauthbearer.internals.secured;
+package org.apache.kafka.common.security.oauthbearer;
 
-import org.apache.kafka.common.security.oauthbearer.AccessTokenValidator;
+import java.io.IOException;
 
-public class LoginAccessTokenValidatorTest extends AccessTokenValidatorTest {
+public interface Initable {
 
-    @Override
-    protected AccessTokenValidator createAccessTokenValidator(AccessTokenBuilder builder) {
-        return new LoginAccessTokenValidator(builder.scopeClaimName(), builder.subjectClaimName());
+    /**
+     * Lifecycle method to perform any one-time initialization of a resource. This must
+     * be performed by the caller to ensure the correct state before methods are invoked.
+     *
+     * @throws IOException Thrown on errors related to IO during initialization
+     */
+
+    default void init() throws IOException {
+        // This method left intentionally blank.
     }
-
 }

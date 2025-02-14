@@ -19,7 +19,6 @@ package org.apache.kafka.common.security.oauthbearer;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenValidator;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenValidatorFactory;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.CloseableVerificationKeyResolver;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.JaasOptionsUtils;
@@ -117,16 +116,15 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
 
     private static final Map<VerificationKeyResolverKey, CloseableVerificationKeyResolver> VERIFICATION_KEY_RESOLVER_CACHE = new HashMap<>();
 
-    private CloseableVerificationKeyResolver verificationKeyResolver;
+    protected CloseableVerificationKeyResolver verificationKeyResolver;
 
-    private AccessTokenValidator accessTokenValidator;
+    protected AccessTokenValidator accessTokenValidator;
 
-    private boolean isInitialized = false;
+    protected boolean isInitialized = false;
 
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
         Map<String, Object> moduleOptions = JaasOptionsUtils.getOptions(saslMechanism, jaasConfigEntries);
-        CloseableVerificationKeyResolver verificationKeyResolver;
 
         // Here's the logic which keeps our VerificationKeyResolvers down to a single instance.
         synchronized (VERIFICATION_KEY_RESOLVER_CACHE) {
@@ -135,13 +133,7 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
                 new RefCountingVerificationKeyResolver(VerificationKeyResolverFactory.create(configs, saslMechanism, moduleOptions)));
         }
 
-        AccessTokenValidator accessTokenValidator = AccessTokenValidatorFactory.create(configs, saslMechanism, verificationKeyResolver);
-        init(verificationKeyResolver, accessTokenValidator);
-    }
-
-    public void init(CloseableVerificationKeyResolver verificationKeyResolver, AccessTokenValidator accessTokenValidator) {
-        this.verificationKeyResolver = verificationKeyResolver;
-        this.accessTokenValidator = accessTokenValidator;
+        accessTokenValidator = AccessTokenValidatorFactory.create(configs, saslMechanism, verificationKeyResolver);
 
         try {
             verificationKeyResolver.init();

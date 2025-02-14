@@ -15,7 +15,10 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.security.oauthbearer.internals.secured;
+package org.apache.kafka.common.security.oauthbearer;
+
+import org.apache.kafka.common.security.oauthbearer.internals.secured.FileTokenRetriever;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpAccessTokenRetriever;
 
 import java.io.Closeable;
 import java.io.IOException;
