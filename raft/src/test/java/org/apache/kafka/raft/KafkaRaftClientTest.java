@@ -2474,7 +2474,7 @@ class KafkaRaftClientTest {
         // invalid voter id is rejected
         context.deliverRequest(
             context.voteRequest(
-                context.clusterId.toString(),
+                context.clusterId,
                 epoch + 1,
                 otherNodeKey,
                 ReplicaKey.of(10, Uuid.randomUuid()),
@@ -2489,7 +2489,7 @@ class KafkaRaftClientTest {
         // invalid voter directory id is rejected
         context.deliverRequest(
             context.voteRequest(
-                context.clusterId.toString(),
+                context.clusterId,
                 epoch + 2,
                 otherNodeKey,
                 ReplicaKey.of(0, Uuid.randomUuid()),
@@ -2519,7 +2519,7 @@ class KafkaRaftClientTest {
         // Leader voter3 sends a begin quorum epoch request with incorrect voter id
         context.deliverRequest(
             context.beginEpochRequest(
-                context.clusterId.toString(),
+                context.clusterId,
                 epoch,
                 voter3,
                 ReplicaKey.of(10, Uuid.randomUuid())
@@ -2532,7 +2532,7 @@ class KafkaRaftClientTest {
         // Leader voter3 sends a begin quorum epoch request with incorrect voter directory id
         context.deliverRequest(
             context.beginEpochRequest(
-                context.clusterId.toString(),
+                context.clusterId,
                 epoch,
                 voter3,
                 ReplicaKey.of(localId, Uuid.randomUuid())
@@ -2545,7 +2545,7 @@ class KafkaRaftClientTest {
         // Leader voter3 sends a begin quorum epoch request with incorrect voter directory id
         context.deliverRequest(
             context.beginEpochRequest(
-                context.clusterId.toString(),
+                context.clusterId,
                 epoch,
                 voter3,
                 context.localReplicaKey()
@@ -2571,7 +2571,7 @@ class KafkaRaftClientTest {
         int epoch = context.currentEpoch();
 
         // valid cluster id is accepted
-        context.deliverRequest(context.beginEpochRequest(context.clusterId.toString(), epoch, localId));
+        context.deliverRequest(context.beginEpochRequest(context.clusterId, epoch, localId));
         context.pollUntilResponse();
         context.assertSentBeginQuorumEpochResponse(Errors.NONE, epoch, OptionalInt.of(localId));
 
