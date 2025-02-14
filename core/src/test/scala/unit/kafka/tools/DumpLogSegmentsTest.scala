@@ -239,7 +239,8 @@ class DumpLogSegmentsTest {
     addSimpleRecords(log, batches)
     
     val offsetMismatches = mutable.Map[String, List[(Long, Long)]]()
-    DumpLogSegments.dumpIndex(new File(indexFilePath), indexSanityOnly = false, verifyOnly = true, offsetMismatches,
+    DumpLogSegments.dumpIndex(new File(indexFilePath), indexSanityOnly = false, verifyOnly = true,
+      DumpLogSegments.DefaultFieldSep, DumpLogSegments.DefaultEntryCaption, offsetMismatches,
       Int.MaxValue)
     assertEquals(Map.empty, offsetMismatches)
   }
@@ -251,7 +252,7 @@ class DumpLogSegmentsTest {
     addSimpleRecords(log, batches)
     
     val errors = new TimeIndexDumpErrors
-    DumpLogSegments.dumpTimeIndex(new File(timeIndexFilePath), indexSanityOnly = false, verifyOnly = true, errors)
+    DumpLogSegments.dumpTimeIndex(new File(timeIndexFilePath), indexSanityOnly = false, verifyOnly = true, DumpLogSegments.DefaultFieldSep, DumpLogSegments.DefaultEntryCaption, errors)
     assertEquals(Map.empty, errors.misMatchesForTimeIndexFilesMap)
     assertEquals(Map.empty, errors.outOfOrderTimestamp)
     assertEquals(Map.empty, errors.shallowOffsetNotFound)
@@ -603,6 +604,7 @@ class DumpLogSegmentsTest {
     val outContent = new ByteArrayOutputStream()
     Console.withOut(outContent) {
       DumpLogSegments.dumpIndex(indexFile, indexSanityOnly = false, verifyOnly = true,
+        DumpLogSegments.DefaultFieldSep, DumpLogSegments.DefaultEntryCaption,
         misMatchesForIndexFilesMap = mutable.Map[String, List[(Long, Long)]](), Int.MaxValue)
     }
     assertEquals(expectOutput, outContent.toString)
