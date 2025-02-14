@@ -99,9 +99,9 @@ class KStreamKStreamSelfJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1
             long timeFrom = Math.max(0L, inputRecordTimestamp - joinThisBeforeMs);
             long timeTo = Math.max(0L, inputRecordTimestamp + joinThisAfterMs);
             boolean emittedJoinWithSelf = false;
-            Record<K, VOut> selfRecord = record
-                .withValue(joinerThis.apply(record.key(), record.value(), (V2) record.value()));
-            selfRecord = selfRecord.withTimestamp(inputRecordTimestamp);
+            final Record<K, ? extends VOut> selfRecord = record
+                .withValue(joinerThis.apply(record.key(), record.value(), (V2) record.value()))
+                .withTimestamp(inputRecordTimestamp);
             timeTracker.advanceStreamTime(inputRecordTimestamp);
             // We emit the self record only if it isn't expired.
             final boolean emitSelfRecord = inputRecordTimestamp > timeTracker.streamTime - retentionPeriod + 1;
