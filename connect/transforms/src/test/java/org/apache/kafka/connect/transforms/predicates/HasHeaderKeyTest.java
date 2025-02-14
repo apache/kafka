@@ -30,6 +30,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import static java.util.Collections.singletonList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -84,7 +85,7 @@ public class HasHeaderKeyTest {
 
     private SourceRecord recordWithHeaders(String... headers) {
         return new SourceRecord(null, null, null, null, null, null, null, null, null,
-                Arrays.stream(headers).map(TestHeader::new).toList());
+                Arrays.stream(headers).map(TestHeader::new).collect(Collectors.toList()));
     }
 
     private static class TestHeader implements Header {

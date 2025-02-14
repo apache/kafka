@@ -322,7 +322,7 @@ public class ReassignPartitionsCommand {
                     currentReassignments.get(part).replicas(),
                     targetReplicas,
                     false));
-        }).toList();
+        }).collect(Collectors.toList());
 
         Set<String> topicNamesToLookUp = notFoundReassignments.stream()
             .map(e -> e.getKey())
@@ -1202,7 +1202,7 @@ public class ReassignPartitionsCommand {
         List<Entry<TopicPartition, Set<Integer>>> duplicateEntries = partitionsToBeReassigned.stream()
             .map(t -> new SimpleImmutableEntry<>(t.getKey(), ToolsUtils.duplicates(t.getValue())))
             .filter(t -> !t.getValue().isEmpty())
-            .toList();
+            .collect(Collectors.toList());
         if (!duplicateEntries.isEmpty()) {
             String duplicatesMsg = duplicateEntries.stream().map(t ->
                 String.format("%s contains multiple entries for %s",

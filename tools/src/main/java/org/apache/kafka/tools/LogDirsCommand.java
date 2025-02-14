@@ -112,7 +112,7 @@ public class LogDirsCommand {
                     put("offsetLag", entry.getValue().offsetLag());
                     put("isFuture", entry.getValue().isFuture());
                 }};
-        }).toList();
+        }).collect(Collectors.toList());
     }
 
     private static List<Map<String, Object>> fromLogDirInfosToPrintableRepresentation(Map<String, LogDirDescription> logDirInfos, Set<String> topicSet) {
@@ -128,7 +128,7 @@ public class LogDirsCommand {
                             }).collect(Collectors.toMap(Entry::getKey, Entry::getValue))
                     ));
                 }};
-        }).toList();
+        }).collect(Collectors.toList());
     }
 
     private static String formatAsJson(Map<Integer, Map<String, LogDirDescription>> logDirInfosByBroker, Set<String> topicSet) throws JsonProcessingException {
