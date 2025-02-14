@@ -1110,7 +1110,7 @@ public class TopicCommandTest {
                     () -> clusterInstance.aliveBrokers().values().stream().allMatch(
                             broker -> {
                                 Optional<LeaderAndIsr> partitionState = Optional.ofNullable(
-                                        broker.metadataCache().getLeaderAndIsr(testTopicName, 0).getOrElse(null));
+                                        broker.metadataCache().getLeaderAndIsr(testTopicName, 0).orElseGet(null));
                                 return partitionState.map(s -> FetchRequest.isValidBrokerId(s.leader())).orElse(false);
                             }
                     ), CLUSTER_WAIT_MS, String.format("Meta data propogation fail in %s ms", CLUSTER_WAIT_MS));

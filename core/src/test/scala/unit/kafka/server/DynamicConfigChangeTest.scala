@@ -34,6 +34,7 @@ import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.coordinator.group.GroupConfig
+import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.server.config.{QuotaConfig, ServerLogConfigs}
 import org.apache.kafka.storage.internals.log.LogConfig
 import org.apache.kafka.test.TestUtils.assertFutureThrows

@@ -290,7 +290,7 @@ public interface ClusterInstance {
         TestUtils.waitForCondition(
             () -> brokers.stream().allMatch(broker -> partitions == 0 ?
                 broker.metadataCache().numPartitions(topic).isEmpty() :
-                broker.metadataCache().numPartitions(topic).contains(partitions)
+                broker.metadataCache().numPartitions(topic).get() == partitions
         ), 60000L, topic + " metadata not propagated after 60000 ms");
 
         for (ControllerServer controller : controllers().values()) {

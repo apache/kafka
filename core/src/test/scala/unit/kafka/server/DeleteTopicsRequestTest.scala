@@ -33,6 +33,7 @@ import org.junit.jupiter.params.provider.ValueSource
 
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
+import scala.jdk.javaapi.OptionConverters
 
 class DeleteTopicsRequestTest extends BaseRequestTest with Logging {
 
@@ -49,8 +50,8 @@ class DeleteTopicsRequestTest extends BaseRequestTest with Logging {
 
     // Ensure one topic partition is offline.
     TestUtils.waitUntilTrue(() => {
-      aliveBrokers.head.metadataCache.getLeaderAndIsr(onlineTopic, 0).exists(_.leader() == 1) &&
-        aliveBrokers.head.metadataCache.getLeaderAndIsr(offlineTopic, 0).exists(_.leader() ==
+      OptionConverters.toScala(aliveBrokers.head.metadataCache.getLeaderAndIsr(onlineTopic, 0)).exists(_.leader() == 1) &&
+        OptionConverters.toScala(aliveBrokers.head.metadataCache.getLeaderAndIsr(offlineTopic, 0)).exists(_.leader() ==
           MetadataResponse.NO_LEADER_ID)
     }, "Topic partition is not offline")
 

@@ -74,7 +74,7 @@ class RackAwareAutoTopicCreationTest extends KafkaServerTestHarness with RackAwa
       // double check that the topic is created with leader elected
       TestUtils.waitUntilLeaderIsElectedOrChangedWithAdmin(admin, topic, 0)
       val assignment = getReplicaAssignment(topic)
-      val brokerMetadatas = brokers.head.metadataCache.getAliveBrokers()
+      val brokerMetadatas = brokers.head.metadataCache.getAliveBrokers().asScala
       val expectedMap = Map(0 -> "0", 1 -> "0", 2 -> "1", 3 -> "1")
       assertEquals(expectedMap, brokerMetadatas.map(b => b.id -> b.rack.get).toMap)
       checkReplicaDistribution(assignment, expectedMap, numServers, numPartitions, replicationFactor,

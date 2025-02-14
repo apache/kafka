@@ -78,7 +78,7 @@ import org.apache.kafka.coordinator.group.{GroupConfig, GroupCoordinator, GroupC
 import org.apache.kafka.coordinator.share.{ShareCoordinator, ShareCoordinatorTestConfig}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
-import org.apache.kafka.metadata.{ConfigRepository, MockConfigRepository}
+import org.apache.kafka.metadata.{ConfigRepository, MetadataCache, MockConfigRepository}
 import org.apache.kafka.network.metrics.{RequestChannelMetrics, RequestMetrics}
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.security.authorizer.AclEntry
@@ -132,7 +132,7 @@ class KafkaApisTest extends Logging {
   }
   private val metrics = new Metrics()
   private val brokerId = 1
-  private var metadataCache: MetadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.LATEST_PRODUCTION)
+  private var metadataCache: MetadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.LATEST_PRODUCTION)
   private val clientQuotaManager: ClientQuotaManager = mock(classOf[ClientQuotaManager])
   private val clientRequestQuotaManager: ClientRequestQuotaManager = mock(classOf[ClientRequestQuotaManager])
   private val clientControllerQuotaManager: ControllerMutationQuotaManager = mock(classOf[ControllerMutationQuotaManager])
@@ -302,7 +302,7 @@ class KafkaApisTest extends Logging {
       Seq(resource), "consumer.session.timeout.ms", "45000").build(requestHeader.apiVersion)
     val request = buildRequest(incrementalAlterConfigsRequest, requestHeader = Option(requestHeader))
 
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.LATEST_PRODUCTION)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.LATEST_PRODUCTION)
     createKafkaApis(authorizer = Some(authorizer)).handleIncrementalAlterConfigsRequest(request)
     verify(forwardingManager, times(1)).forwardRequest(
       any(),
@@ -380,7 +380,7 @@ class KafkaApisTest extends Logging {
     val apiRequest = new AlterConfigsRequest.Builder(configs.asJava, false).build(requestHeader.apiVersion)
     val request = buildRequest(apiRequest)
 
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.LATEST_PRODUCTION)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.LATEST_PRODUCTION)
     kafkaApis = createKafkaApis()
     kafkaApis.handleAlterConfigsRequest(request)
     verify(forwardingManager, times(1)).forwardRequest(
@@ -402,7 +402,7 @@ class KafkaApisTest extends Logging {
       Seq(resource), "metrics", "foo.bar").build(requestHeader.apiVersion)
     val request = buildRequest(incrementalAlterConfigsRequest, requestHeader = Option(requestHeader))
 
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.LATEST_PRODUCTION)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.LATEST_PRODUCTION)
     kafkaApis = createKafkaApis()
     kafkaApis.handleIncrementalAlterConfigsRequest(request)
     verify(forwardingManager, times(1)).forwardRequest(
@@ -475,7 +475,7 @@ class KafkaApisTest extends Logging {
   def testDescribeQuorumForwardedForKRaftClusters(): Unit = {
     val requestData = DescribeQuorumRequest.singletonRequest(KafkaRaftServer.MetadataPartition)
     val requestBuilder = new DescribeQuorumRequest.Builder(requestData)
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     kafkaApis = createKafkaApis()
     testForwardableApi(kafkaApis = kafkaApis,
       ApiKeys.DESCRIBE_QUORUM,
@@ -487,7 +487,7 @@ class KafkaApisTest extends Logging {
     apiKey: ApiKeys,
     requestBuilder: AbstractRequest.Builder[_ <: AbstractRequest]
   ): Unit = {
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     kafkaApis = createKafkaApis()
     testForwardableApi(kafkaApis = kafkaApis,
       apiKey,
@@ -558,7 +558,7 @@ class KafkaApisTest extends Logging {
       .build(requestHeader.apiVersion)
     val request = buildRequest(incrementalAlterConfigsRequest, requestHeader = Option(requestHeader))
 
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.LATEST_PRODUCTION)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.LATEST_PRODUCTION)
     kafkaApis = createKafkaApis(authorizer = Some(authorizer))
     kafkaApis.handleIncrementalAlterConfigsRequest(request)
 
@@ -586,7 +586,7 @@ class KafkaApisTest extends Logging {
     controllerThrottleTimeMs: Int,
     requestThrottleTimeMs: Int
   ): Unit = {
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
 
     val topicToCreate = new CreatableTopic()
       .setName("topic")
@@ -2230,8 +2230,8 @@ class KafkaApisTest extends Logging {
       when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
         any[RequestChannel.Request](), anyDouble, anyLong)).thenReturn(0)
       when(metadataCache.contains(tp)).thenAnswer(_ => true)
-      when(metadataCache.getLeaderAndIsr(tp.topic(), tp.partition())).thenAnswer(_ => Option.empty)
-      when(metadataCache.getAliveBrokerNode(any(), any())).thenReturn(Option.empty)
+      when(metadataCache.getLeaderAndIsr(tp.topic(), tp.partition())).thenAnswer(_ => Optional.empty)
+      when(metadataCache.getAliveBrokerNode(any(), any())).thenReturn(Optional.empty)
       kafkaApis = createKafkaApis()
       kafkaApis.handleProduceRequest(request, RequestLocal.withThreadConfinedCaching)
 
@@ -3571,11 +3571,11 @@ class KafkaApisTest extends Logging {
   def testGetAllTopicMetadataShouldNotCreateTopicOrReturnUnknownTopicPartition(): Unit = {
     // Setup: authorizer authorizes 2 topics, but one got deleted in metadata cache
     metadataCache = mock(classOf[KRaftMetadataCache])
-    when(metadataCache.getAliveBrokerNodes(any())).thenReturn(List(new Node(brokerId,"localhost", 0)))
-    when(metadataCache.getRandomAliveBrokerId).thenReturn(None)
+    when(metadataCache.getAliveBrokerNodes(any())).thenReturn(util.List.of(new Node(brokerId,"localhost", 0)))
+    when(metadataCache.getRandomAliveBrokerId).thenReturn(util.Optional.empty())
 
     // 2 topics returned for authorization in during handle
-    val topicsReturnedFromMetadataCacheForAuthorization = Set("remaining-topic", "later-deleted-topic")
+    val topicsReturnedFromMetadataCacheForAuthorization = util.Set.of("remaining-topic", "later-deleted-topic")
     when(metadataCache.getAllTopics()).thenReturn(topicsReturnedFromMetadataCacheForAuthorization)
     // 1 topic is deleted from metadata right at the time between authorization and the next getTopicMetadata() call
     when(metadataCache.getTopicMetadata(
@@ -3583,7 +3583,7 @@ class KafkaApisTest extends Logging {
       any[ListenerName],
       anyBoolean,
       anyBoolean
-    )).thenReturn(Seq(
+    )).thenReturn(util.List.of(
       new MetadataResponseTopic()
         .setErrorCode(Errors.NONE.code)
         .setName("remaining-topic")
@@ -3892,7 +3892,7 @@ class KafkaApisTest extends Logging {
     val topicName = "foo"
     val topicId = Uuid.randomUuid()
     val partitionIndex = 0
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val memberId: Uuid = Uuid.ZERO_UUID
 
@@ -3963,7 +3963,7 @@ class KafkaApisTest extends Logging {
   def testHandleShareFetchRequestInvalidRequestOnInitialEpoch(): Unit = {
     val topicName = "foo"
     val topicId = Uuid.randomUuid()
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val memberId: Uuid = Uuid.ZERO_UUID
 
@@ -4069,7 +4069,7 @@ class KafkaApisTest extends Logging {
     val topicName = "foo"
     val topicId = Uuid.randomUuid()
     val partitionIndex = 0
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val memberId: Uuid = Uuid.ZERO_UUID
 
@@ -4177,7 +4177,7 @@ class KafkaApisTest extends Logging {
     val topicName = "foo"
     val topicId = Uuid.randomUuid()
     val partitionIndex = 0
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val memberId: Uuid = Uuid.ZERO_UUID
 
@@ -4225,7 +4225,7 @@ class KafkaApisTest extends Logging {
     val topicName = "foo"
     val topicId = Uuid.randomUuid()
     val partitionIndex = 0
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val memberId: Uuid = Uuid.ZERO_UUID
 
@@ -4302,7 +4302,7 @@ class KafkaApisTest extends Logging {
     val topicName = "foo"
     val topicId = Uuid.randomUuid()
     val partitionIndex = 0
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val memberId: Uuid = Uuid.ZERO_UUID
 
@@ -4366,7 +4366,7 @@ class KafkaApisTest extends Logging {
     val topicName = "foo"
     val topicId = Uuid.randomUuid()
     val partitionIndex = 0
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val memberId: Uuid = Uuid.ZERO_UUID
 
@@ -4430,7 +4430,7 @@ class KafkaApisTest extends Logging {
     val topicName = "foo"
     val topicId = Uuid.randomUuid()
     val partitionIndex = 0
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val memberId: Uuid = Uuid.ZERO_UUID
 
@@ -4523,7 +4523,7 @@ class KafkaApisTest extends Logging {
     val topicName = "foo"
     val topicId = Uuid.randomUuid()
     val partitionIndex = 0
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val memberId: Uuid = Uuid.ZERO_UUID
 
@@ -4613,7 +4613,7 @@ class KafkaApisTest extends Logging {
     val topicName = "foo"
     val topicId = Uuid.randomUuid()
     val partitionIndex = 0
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val memberId: Uuid = Uuid.randomUuid()
 
@@ -4831,7 +4831,7 @@ class KafkaApisTest extends Logging {
     val topicName4 = "foo4"
     val topicId4 = Uuid.randomUuid()
 
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     addTopicToMetadataCache(topicName1, 2, topicId = topicId1)
     addTopicToMetadataCache(topicName2, 2, topicId = topicId2)
     addTopicToMetadataCache(topicName3, 1, topicId = topicId3)
@@ -5311,7 +5311,7 @@ class KafkaApisTest extends Logging {
     val topicId1 = Uuid.randomUuid()
     val topicId2 = Uuid.randomUuid()
 
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     addTopicToMetadataCache(topicName1, 1, topicId = topicId1)
     addTopicToMetadataCache(topicName2, 2, topicId = topicId2)
 
@@ -5478,7 +5478,7 @@ class KafkaApisTest extends Logging {
     val topicId1 = Uuid.randomUuid()
     val topicId2 = Uuid.randomUuid()
 
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     addTopicToMetadataCache(topicName1, 1, topicId = topicId1)
     addTopicToMetadataCache(topicName2, 2, topicId = topicId2)
 
@@ -5619,7 +5619,7 @@ class KafkaApisTest extends Logging {
     val topicId1 = Uuid.randomUuid()
     val topicId2 = Uuid.randomUuid()
 
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     addTopicToMetadataCache(topicName1, 1, topicId = topicId1)
     addTopicToMetadataCache(topicName2, 2, topicId = topicId2)
 
@@ -5771,7 +5771,7 @@ class KafkaApisTest extends Logging {
     val topicId2 = Uuid.randomUuid()
     val topicId3 = Uuid.randomUuid()
 
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     addTopicToMetadataCache(topicName1, 1, topicId = topicId1)
     addTopicToMetadataCache(topicName2, 2, topicId = topicId2)
     // topicName3 is not in the metadataCache.
@@ -5971,7 +5971,7 @@ class KafkaApisTest extends Logging {
     val topicName = "foo"
     val topicId = Uuid.randomUuid()
     val partitionIndex = 0
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val memberId: Uuid = Uuid.randomUuid()
 
@@ -6111,7 +6111,7 @@ class KafkaApisTest extends Logging {
     val memberId: Uuid = Uuid.randomUuid()
     val groupId = "group"
 
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
 
     val shareFetchRequestData = new ShareFetchRequestData().
       setGroupId(groupId).
@@ -6155,7 +6155,7 @@ class KafkaApisTest extends Logging {
     val memberId: Uuid = Uuid.randomUuid()
     val groupId = "group"
 
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
 
     val shareFetchRequestData = new ShareFetchRequestData().
       setGroupId(groupId).
@@ -6197,7 +6197,7 @@ class KafkaApisTest extends Logging {
     val topicName = "foo"
     val topicId = Uuid.randomUuid()
     val partitionIndex = 0
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val memberId: Uuid = Uuid.ZERO_UUID
 
@@ -6250,7 +6250,7 @@ class KafkaApisTest extends Logging {
     val topicName = "foo"
     val topicId = Uuid.randomUuid()
     val partitionIndex = 0
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val memberId: Uuid = Uuid.ZERO_UUID
 
@@ -6321,7 +6321,7 @@ class KafkaApisTest extends Logging {
     val topicName = "foo"
     val topicId = Uuid.randomUuid()
     val partitionIndex = 0
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val memberId: Uuid = Uuid.randomUuid()
 
@@ -6386,7 +6386,7 @@ class KafkaApisTest extends Logging {
     val memberId: Uuid = Uuid.randomUuid()
     val groupId = "group"
 
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
 
     val shareAcknowledgeRequestData = new ShareAcknowledgeRequestData()
       .setGroupId(groupId)
@@ -6429,7 +6429,7 @@ class KafkaApisTest extends Logging {
     val memberId: Uuid = Uuid.randomUuid()
     val groupId = "group"
 
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
 
     val shareAcknowledgeRequestData = new ShareAcknowledgeRequestData()
       .setGroupId(groupId)
@@ -6470,7 +6470,7 @@ class KafkaApisTest extends Logging {
     val topicName = "foo"
     val topicId = Uuid.randomUuid()
     val partitionIndex = 0
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val memberId: Uuid = Uuid.ZERO_UUID
 
@@ -6522,7 +6522,7 @@ class KafkaApisTest extends Logging {
     val topicName = "foo"
     val topicId = Uuid.randomUuid()
     val partitionIndex = 0
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val memberId: Uuid = Uuid.ZERO_UUID
 
@@ -6573,7 +6573,7 @@ class KafkaApisTest extends Logging {
     val topicName = "foo"
     val topicId = Uuid.randomUuid()
     val partitionIndex = 0
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val memberId: Uuid = Uuid.ZERO_UUID
 
@@ -6624,7 +6624,7 @@ class KafkaApisTest extends Logging {
     val topicName = "foo"
     val topicId = Uuid.randomUuid()
     val partitionIndex = 0
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val groupId: String = "group"
     val memberId: Uuid = Uuid.ZERO_UUID
@@ -6681,7 +6681,7 @@ class KafkaApisTest extends Logging {
     val partitionIndex = 0
     val topicIdPartition = new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex))
     val topicPartition = topicIdPartition.topicPartition
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     addTopicToMetadataCache(topicPartition.topic, numPartitions = 1, numBrokers = 3, topicId)
     val memberId: Uuid = Uuid.ZERO_UUID
 
@@ -6757,7 +6757,7 @@ class KafkaApisTest extends Logging {
     val topicName = "foo"
     val topicId = Uuid.randomUuid()
     val partitionIndex = 0
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val memberId: Uuid = Uuid.randomUuid()
 
@@ -6810,7 +6810,7 @@ class KafkaApisTest extends Logging {
     val topicName = "foo"
     val topicId = Uuid.randomUuid()
     val partitionIndex = 0
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val memberId: Uuid = Uuid.randomUuid()
 
@@ -6883,7 +6883,7 @@ class KafkaApisTest extends Logging {
     val topicName = "foo"
     val topicId = Uuid.randomUuid()
     val partitionIndex = 0
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val memberId: Uuid = Uuid.randomUuid()
 
@@ -6959,7 +6959,7 @@ class KafkaApisTest extends Logging {
   def testGetAcknowledgeBatchesFromShareFetchRequest(): Unit = {
     val topicId1 = Uuid.randomUuid()
     val topicId2 = Uuid.randomUuid()
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     val shareFetchRequestData = new ShareFetchRequestData().
       setGroupId("group").
       setMemberId(Uuid.randomUuid().toString).
@@ -7036,7 +7036,7 @@ class KafkaApisTest extends Logging {
   def testGetAcknowledgeBatchesFromShareFetchRequestError(): Unit = {
     val topicId1 = Uuid.randomUuid()
     val topicId2 = Uuid.randomUuid()
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     val shareFetchRequestData = new ShareFetchRequestData().
       setGroupId("group").
       setMemberId(Uuid.randomUuid().toString).
@@ -7106,7 +7106,7 @@ class KafkaApisTest extends Logging {
     val topicId1 = Uuid.randomUuid()
     val topicId2 = Uuid.randomUuid()
 
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     val shareAcknowledgeRequestData = new ShareAcknowledgeRequestData().
       setGroupId("group").
       setMemberId(Uuid.randomUuid().toString).
@@ -7178,7 +7178,7 @@ class KafkaApisTest extends Logging {
   def testGetAcknowledgeBatchesFromShareAcknowledgeRequestError(): Unit = {
     val topicId1 = Uuid.randomUuid()
     val topicId2 = Uuid.randomUuid()
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     val shareAcknowledgeRequestData = new ShareAcknowledgeRequestData().
       setGroupId("group").
       setMemberId(Uuid.randomUuid().toString).
@@ -7254,7 +7254,7 @@ class KafkaApisTest extends Logging {
     val topicId2 = Uuid.randomUuid()
     val memberId = Uuid.randomUuid()
 
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     addTopicToMetadataCache(topicName1, 1, topicId = topicId1)
     addTopicToMetadataCache(topicName2, 2, topicId = topicId2)
 
@@ -7333,7 +7333,7 @@ class KafkaApisTest extends Logging {
     val topicId2 = Uuid.randomUuid()
     val memberId = Uuid.randomUuid()
 
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     addTopicToMetadataCache(topicName1, 1, topicId = topicId1)
     addTopicToMetadataCache(topicName2, 2, topicId = topicId2)
 
@@ -7412,7 +7412,7 @@ class KafkaApisTest extends Logging {
     val topicId2 = Uuid.randomUuid()
     val memberId = Uuid.randomUuid()
 
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     // Topic with id topicId1 is not present in Metadata Cache
     addTopicToMetadataCache(topicName2, 2, topicId = topicId2)
 
@@ -7492,7 +7492,7 @@ class KafkaApisTest extends Logging {
     val topicId2 = Uuid.randomUuid()
     val memberId = Uuid.randomUuid()
 
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     addTopicToMetadataCache(topicName1, 1, topicId = topicId1)
     addTopicToMetadataCache(topicName2, 2, topicId = topicId2)
 
@@ -7564,7 +7564,7 @@ class KafkaApisTest extends Logging {
     val topicId1 = Uuid.randomUuid()
     val topicId2 = Uuid.randomUuid()
 
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     val responseAcknowledgeData: mutable.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData] = mutable.Map()
     responseAcknowledgeData += (new TopicIdPartition(topicId1, new TopicPartition("foo", 0)) ->
       new ShareAcknowledgeResponseData.PartitionData().setPartitionIndex(0).setErrorCode(Errors.NONE.code))
@@ -9056,8 +9056,8 @@ class KafkaApisTest extends Logging {
 
     assertEquals(clusterId, describeClusterResponse.data.clusterId)
     assertEquals(8096, describeClusterResponse.data.clusterAuthorizedOperations)
-    assertEquals(metadataCache.getAliveBrokerNodes(plaintextListener).toSet,
-      describeClusterResponse.nodes.asScala.values.toSet)
+    assertEquals(util.Set.copyOf(metadataCache.getAliveBrokerNodes(plaintextListener)),
+      describeClusterResponse.nodes.asScala.values.toSet.asJava)
   }
 
   /**
@@ -9704,7 +9704,7 @@ class KafkaApisTest extends Logging {
   @Test
   def testEmptyLegacyAlterConfigsRequestWithKRaft(): Unit = {
     val request = buildRequest(new AlterConfigsRequest(new AlterConfigsRequestData(), 1.toShort))
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
       any[Long])).thenReturn(0)
     kafkaApis = createKafkaApis()
@@ -9724,7 +9724,7 @@ class KafkaApisTest extends Logging {
           setConfigs(new LAlterableConfigCollection(asList(new LAlterableConfig().
             setName("foo").
             setValue(null)).iterator()))).iterator())), 1.toShort))
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
       any[Long])).thenReturn(0)
     kafkaApis = createKafkaApis()
@@ -9742,7 +9742,7 @@ class KafkaApisTest extends Logging {
   @Test
   def testEmptyIncrementalAlterConfigsRequestWithKRaft(): Unit = {
     val request = buildRequest(new IncrementalAlterConfigsRequest(new IncrementalAlterConfigsRequestData(), 1.toShort))
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
       any[Long])).thenReturn(0)
     kafkaApis = createKafkaApis()
@@ -9762,7 +9762,7 @@ class KafkaApisTest extends Logging {
           setName(LoggingController.ROOT_LOGGER).
           setValue("TRACE")).iterator()))).iterator())),
         1.toShort))
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
       any[Long])).thenReturn(0)
     kafkaApis = createKafkaApis()
@@ -9783,7 +9783,7 @@ class KafkaApisTest extends Logging {
 
     val requestChannelRequest = buildRequest(new ConsumerGroupHeartbeatRequest.Builder(consumerGroupHeartbeatRequest).build())
     metadataCache = {
-      val cache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
       val delta = new MetadataDelta(MetadataImage.EMPTY);
       delta.replay(new FeatureLevelRecord()
         .setName(MetadataVersion.FEATURE_NAME)
@@ -9931,7 +9931,7 @@ class KafkaApisTest extends Logging {
     val expectedResponse = new ConsumerGroupDescribeResponseData()
     expectedResponse.groups.add(expectedDescribedGroup)
     metadataCache = {
-      val cache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
       val delta = new MetadataDelta(MetadataImage.EMPTY);
       delta.replay(new FeatureLevelRecord()
         .setName(MetadataVersion.FEATURE_NAME)
@@ -10008,7 +10008,7 @@ class KafkaApisTest extends Logging {
       any[RequestContext]())).thenReturn(new GetTelemetrySubscriptionsResponse(
       new GetTelemetrySubscriptionsResponseData()))
 
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     kafkaApis = createKafkaApis()
     kafkaApis.handle(request, RequestLocal.noCaching)
 
@@ -10027,7 +10027,7 @@ class KafkaApisTest extends Logging {
     when(clientMetricsManager.processGetTelemetrySubscriptionRequest(any[GetTelemetrySubscriptionsRequest](),
       any[RequestContext]())).thenThrow(new RuntimeException("test"))
 
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     kafkaApis = createKafkaApis()
     kafkaApis.handle(request, RequestLocal.noCaching)
 
@@ -10045,7 +10045,7 @@ class KafkaApisTest extends Logging {
     when(clientMetricsManager.processPushTelemetryRequest(any[PushTelemetryRequest](), any[RequestContext]()))
       .thenReturn(new PushTelemetryResponse(new PushTelemetryResponseData()))
 
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     kafkaApis = createKafkaApis()
     kafkaApis.handle(request, RequestLocal.noCaching)
     val response = verifyNoThrottling[PushTelemetryResponse](request)
@@ -10062,7 +10062,7 @@ class KafkaApisTest extends Logging {
     when(clientMetricsManager.processPushTelemetryRequest(any[PushTelemetryRequest](), any[RequestContext]()))
       .thenThrow(new RuntimeException("test"))
 
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     kafkaApis = createKafkaApis()
     kafkaApis.handle(request, RequestLocal.noCaching)
     val response = verifyNoThrottling[PushTelemetryResponse](request)
@@ -10074,7 +10074,7 @@ class KafkaApisTest extends Logging {
   @Test
   def testListClientMetricsResources(): Unit = {
     val request = buildRequest(new ListClientMetricsResourcesRequest.Builder(new ListClientMetricsResourcesRequestData()).build())
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
 
     val resources = new mutable.HashSet[String]
     resources.add("test1")
@@ -10091,7 +10091,7 @@ class KafkaApisTest extends Logging {
   @Test
   def testListClientMetricsResourcesEmptyResponse(): Unit = {
     val request = buildRequest(new ListClientMetricsResourcesRequest.Builder(new ListClientMetricsResourcesRequestData()).build())
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
 
     val resources = new mutable.HashSet[String]
     when(clientMetricsManager.listClientMetricsResources).thenReturn(resources.asJava)
@@ -10105,7 +10105,7 @@ class KafkaApisTest extends Logging {
   @Test
   def testListClientMetricsResourcesWithException(): Unit = {
     val request = buildRequest(new ListClientMetricsResourcesRequest.Builder(new ListClientMetricsResourcesRequestData()).build())
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
 
     when(clientMetricsManager.listClientMetricsResources).thenThrow(new RuntimeException("test"))
     kafkaApis = createKafkaApis()
@@ -10121,7 +10121,7 @@ class KafkaApisTest extends Logging {
     val shareGroupHeartbeatRequest = new ShareGroupHeartbeatRequestData().setGroupId("group")
 
     val requestChannelRequest = buildRequest(new ShareGroupHeartbeatRequest.Builder(shareGroupHeartbeatRequest, true).build())
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     kafkaApis = createKafkaApis()
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
 
@@ -10142,7 +10142,7 @@ class KafkaApisTest extends Logging {
       requestChannelRequest.context,
       shareGroupHeartbeatRequest
     )).thenReturn(future)
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     kafkaApis = createKafkaApis(
       overrideProperties = Map(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
     )
@@ -10165,7 +10165,7 @@ class KafkaApisTest extends Logging {
     val authorizer: Authorizer = mock(classOf[Authorizer])
     when(authorizer.authorize(any[RequestContext], any[util.List[Action]]))
       .thenReturn(Seq(AuthorizationResult.DENIED).asJava)
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     kafkaApis = createKafkaApis(
       overrideProperties = Map(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
       authorizer = Some(authorizer),
@@ -10187,7 +10187,7 @@ class KafkaApisTest extends Logging {
       requestChannelRequest.context,
       shareGroupHeartbeatRequest
     )).thenReturn(future)
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     kafkaApis = createKafkaApis(
       overrideProperties = Map(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
     )
@@ -10471,7 +10471,7 @@ class KafkaApisTest extends Logging {
     )
 
     val requestChannelRequest = buildRequest(new DescribeShareGroupOffsetsRequest.Builder(describeShareGroupOffsetsRequest, true).build())
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     kafkaApis = createKafkaApis()
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
 
@@ -10492,7 +10492,7 @@ class KafkaApisTest extends Logging {
     val authorizer: Authorizer = mock(classOf[Authorizer])
     when(authorizer.authorize(any[RequestContext], any[util.List[Action]]))
       .thenReturn(util.List.of(AuthorizationResult.DENIED))
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     kafkaApis = createKafkaApis(
       overrideProperties = Map(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
       authorizer = Some(authorizer),
@@ -10517,7 +10517,7 @@ class KafkaApisTest extends Logging {
     val topicId2 = Uuid.randomUuid
     val topicName3 = "topic-3"
     val topicId3 = Uuid.randomUuid
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     addTopicToMetadataCache(topicName1, 1, topicId = topicId1)
     addTopicToMetadataCache(topicName2, 1, topicId = topicId2)
     addTopicToMetadataCache(topicName3, 1, topicId = topicId3)
@@ -10627,7 +10627,7 @@ class KafkaApisTest extends Logging {
 
   @Test
   def testDescribeShareGroupOffsetsRequestEmptyGroupsSuccess(): Unit = {
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
 
     val describeShareGroupOffsetsRequest = new DescribeShareGroupOffsetsRequestData
 
@@ -10650,7 +10650,7 @@ class KafkaApisTest extends Logging {
 
   @Test
   def testDescribeShareGroupOffsetsRequestEmptyTopicsSuccess(): Unit = {
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
 
     val describeShareGroupOffsetsRequestGroup = new DescribeShareGroupOffsetsRequestGroup().setGroupId("group")
 
@@ -10891,7 +10891,7 @@ class KafkaApisTest extends Logging {
       any[RequestContext],
       any[util.List[String]]
     )).thenReturn(future)
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     kafkaApis = createKafkaApis(
       overrideProperties = configOverrides,
       authorizer = Option(authorizer),
@@ -10919,7 +10919,7 @@ class KafkaApisTest extends Logging {
       any[RequestContext],
       any[ReadShareGroupStateRequestData]
     )).thenReturn(future)
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     kafkaApis = createKafkaApis(
       overrideProperties = configOverrides,
       authorizer = Option(authorizer),
@@ -10948,7 +10948,7 @@ class KafkaApisTest extends Logging {
       any[RequestContext],
       any[ReadShareGroupStateSummaryRequestData]
     )).thenReturn(future)
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     kafkaApis = createKafkaApis(
       overrideProperties = configOverrides,
       authorizer = Option(authorizer),
@@ -10977,7 +10977,7 @@ class KafkaApisTest extends Logging {
       any[RequestContext],
       any[WriteShareGroupStateRequestData]
     )).thenReturn(future)
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     kafkaApis = createKafkaApis(
       overrideProperties = configOverrides,
       authorizer = Option(authorizer),
@@ -11006,7 +11006,7 @@ class KafkaApisTest extends Logging {
       any[RequestContext],
       any[DeleteShareGroupStateRequestData]
     )).thenReturn(future)
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     kafkaApis = createKafkaApis(
       overrideProperties = configOverrides,
       authorizer = Option(authorizer),
