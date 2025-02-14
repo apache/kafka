@@ -92,7 +92,6 @@ import org.apache.kafka.server.util.timer.Timer;
 import org.slf4j.Logger;
 
 import java.time.Duration;
-import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -934,22 +933,31 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     private CompletableFuture<Map<String, Errors>> performShareGroupsDeletion(
-        List<DeleteShareGroupStateParameters> deleteRequests
+        Map<String, Map.Entry<DeleteShareGroupStateParameters, Errors>> deleteRequests
     ) {
-        List<CompletableFuture<AbstractMap.SimpleEntry<String, DeleteShareGroupStateResult>>> futures = new ArrayList<>(deleteRequests.size());
-        deleteRequests.forEach(request -> futures.add(
-            deleteShareGroup(request)
-        ));
+        List<CompletableFuture<Map.Entry<String, DeleteShareGroupStateResult>>> futures = new ArrayList<>(deleteRequests.size());
+        Map<String, Errors> errorMap = new HashMap<>();
+        deleteRequests.forEach((groupId, valPair) -> {
+            if (valPair.getValue() == Errors.NONE) {
+                futures.add(deleteShareGroup(valPair.getKey()));
+            } else {
+                errorMap.put(groupId, valPair.getValue());
+            }
+        });
 
-        return persisterDeleteToGroupIdErrorMap(futures);
+        return persisterDeleteToGroupIdErrorMap(futures)
+            .thenApply(respErrMap -> {
+                errorMap.putAll(respErrMap);
+                return errorMap;
+            });
     }
 
-    private CompletableFuture<AbstractMap.SimpleEntry<String, DeleteShareGroupStateResult>> deleteShareGroup(
+    private CompletableFuture<Map.Entry<String, DeleteShareGroupStateResult>> deleteShareGroup(
         DeleteShareGroupStateParameters deleteRequest
     ) {
         String groupId = deleteRequest.groupTopicPartitionData().groupId();
         return persister.deleteState(deleteRequest)
-            .thenCompose(result -> CompletableFuture.completedFuture(new AbstractMap.SimpleEntry<>(groupId, result)))
+            .thenCompose(result -> CompletableFuture.completedFuture(Map.entry(groupId, result)))
             .exceptionally(exception -> {
                 // In case the deleteState call fails,
                 // we should construct the appropriate response here
@@ -967,7 +975,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     ))
                     .toList();
 
-                return new AbstractMap.SimpleEntry<>(groupId, new DeleteShareGroupStateResult.Builder()
+                return Map.entry(groupId, new DeleteShareGroupStateResult.Builder()
                     .setTopicsData(respTopicData)
                     .build()
                 );
@@ -975,11 +983,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     private CompletableFuture<Map<String, Errors>> persisterDeleteToGroupIdErrorMap(
-        List<CompletableFuture<AbstractMap.SimpleEntry<String, DeleteShareGroupStateResult>>> futures
+        List<CompletableFuture<Map.Entry<String, DeleteShareGroupStateResult>>> futures
     ) {
         return CompletableFuture.allOf(futures.toArray(new CompletableFuture[]{})).thenCompose(v -> {
             Map<String, Errors> groupIds = new HashMap<>();
-            for (CompletableFuture<AbstractMap.SimpleEntry<String, DeleteShareGroupStateResult>> future : futures) {
+            for (CompletableFuture<Map.Entry<String, DeleteShareGroupStateResult>> future : futures) {
                 Map.Entry<String, DeleteShareGroupStateResult> entry = future.getNow(null);  // safe as within allOff
                 groupIds.putIfAbsent(entry.getKey(), Errors.NONE);
                 for (TopicData<PartitionErrorData> topicData : entry.getValue().topicsData()) {

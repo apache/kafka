@@ -22,6 +22,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.CoordinatorLoadInProgressException;
 import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
+import org.apache.kafka.common.errors.GroupNotEmptyException;
 import org.apache.kafka.common.errors.InvalidFetchSizeException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.KafkaStorageException;
@@ -120,6 +121,7 @@ import java.util.stream.Stream;
 import static org.apache.kafka.common.requests.JoinGroupRequest.UNKNOWN_MEMBER_ID;
 import static org.apache.kafka.coordinator.common.runtime.TestUtil.requestContext;
 import static org.apache.kafka.coordinator.group.GroupConfigManagerTest.createConfigManager;
+import static org.apache.kafka.server.share.persister.DeleteShareGroupStateParameters.EMPTY_PARAMS;
 import static org.apache.kafka.test.TestUtils.assertFutureThrows;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -1606,7 +1608,7 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.any(),
             ArgumentMatchers.any(),
             ArgumentMatchers.any()
-        )).thenReturn(CompletableFuture.completedFuture(List.of()));
+        )).thenReturn(CompletableFuture.completedFuture(Map.of()));
 
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("delete-groups"),
@@ -1688,8 +1690,8 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.any(),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(
-            List.of(createDeleteShareRequest("share-group-id-1", shareGroupTopicId, List.of(0, 1)))
-        )).thenReturn(CompletableFuture.completedFuture(List.of()));   // non-share group
+            Map.of("share-group-id-1", Map.entry(createDeleteShareRequest("share-group-id-1", shareGroupTopicId, List.of(0, 1)), Errors.NONE))
+        )).thenReturn(CompletableFuture.completedFuture(Map.of()));   // non-share group
 
         when(persister.deleteState(any())).thenReturn(CompletableFuture.completedFuture(
             new DeleteShareGroupStateResult.Builder()
@@ -1774,9 +1776,9 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.any(),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(
-            List.of(createDeleteShareRequest("share-group-id-1", shareGroupTopicId, List.of(0, 1)))
+            Map.of("share-group-id-1", Map.entry(createDeleteShareRequest("share-group-id-1", shareGroupTopicId, List.of(0, 1)), Errors.NONE))
         )).thenReturn(CompletableFuture.completedFuture(
-            List.of(createDeleteShareRequest("share-group-id-2", shareGroupTopicId2, List.of(0, 1)))
+            Map.of("share-group-id-2", Map.entry(createDeleteShareRequest("share-group-id-2", shareGroupTopicId2, List.of(0, 1)), Errors.NONE))
         ));
 
         when(persister.deleteState(any())).thenReturn(CompletableFuture.completedFuture(
@@ -1889,6 +1891,62 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
+    public void testDeleteShareGroupNotEmptyError() throws Exception {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        Persister persister = mock(Persister.class);
+        GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
+            .setConfig(createConfig())
+            .setRuntime(runtime)
+            .setMetrics(mock(GroupCoordinatorMetrics.class))
+            .setPersister(persister)
+            .build();
+        service.startup(() -> 3);
+
+        DeleteGroupsResponseData.DeletableGroupResultCollection resultCollection1 =
+            new DeleteGroupsResponseData.DeletableGroupResultCollection();
+        // share group err
+        DeleteGroupsResponseData.DeletableGroupResult result1 = new DeleteGroupsResponseData.DeletableGroupResult()
+            .setGroupId("share-group-id-1")
+            .setErrorCode(Errors.forException(new GroupNotEmptyException("bad stuff")).code());
+        resultCollection1.add(result1);
+
+        DeleteGroupsResponseData.DeletableGroupResultCollection expectedResultCollection =
+            new DeleteGroupsResponseData.DeletableGroupResultCollection();
+        expectedResultCollection.add(
+            result1.duplicate()
+        );
+
+        when(runtime.scheduleWriteOperation(
+            ArgumentMatchers.eq("delete-share-groups"),
+            ArgumentMatchers.any(),
+            ArgumentMatchers.any(),
+            ArgumentMatchers.any()
+        )).thenReturn(CompletableFuture.completedFuture(
+            Map.of("share-group-id-1", Map.entry(EMPTY_PARAMS, Errors.forException(new GroupNotEmptyException("bad stuff"))))
+        ));
+
+        List<String> groupIds = List.of("share-group-id-1");
+        CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> future =
+            service.deleteGroups(requestContext(ApiKeys.DELETE_GROUPS), groupIds, BufferSupplier.NO_CACHING);
+
+        try {
+            future.getNow(null);
+        } catch (Exception e) {
+            fail(e);
+        }
+        assertEquals(expectedResultCollection, future.get());
+        // If there is error creating share group delete req
+        // neither persister call nor general delete groups call is made.
+        verify(persister, times(0)).deleteState(any());
+        verify(runtime, times(0)).scheduleWriteOperation(
+            ArgumentMatchers.eq("delete-groups"),
+            ArgumentMatchers.any(),
+            ArgumentMatchers.any(),
+            ArgumentMatchers.any()
+        );
+    }
+
+    @Test
     public void testDeleteShareGroupCoordinatorGeneralWriteError() throws Exception {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         Persister persister = mock(Persister.class);
@@ -1921,7 +1979,7 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.any(),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(
-            List.of(createDeleteShareRequest("share-group-id-1", shareGroupTopicId, List.of(0, 1)))
+            Map.of("share-group-id-1", Map.entry(createDeleteShareRequest("share-group-id-1", shareGroupTopicId, List.of(0, 1)), Errors.NONE))
         ));
 
         // share-group-id-1
@@ -1975,7 +2033,7 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.any(),
             ArgumentMatchers.any(),
             ArgumentMatchers.any()
-        )).thenReturn(CompletableFuture.completedFuture(List.of()));
+        )).thenReturn(CompletableFuture.completedFuture(Map.of()));
 
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("delete-groups"),

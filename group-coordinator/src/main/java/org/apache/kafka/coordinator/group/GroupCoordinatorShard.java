@@ -105,8 +105,10 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -481,33 +483,30 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     /**
-     * Method returns a list of {@link DeleteShareGroupStateParameters} corresponding
-     * to the valid share groups passed as the input. If a share group has subscribed topics
-     * it is not included in the request list.
+     * Method returns a Map keyed on groupId and value as pair of {@link DeleteShareGroupStateParameters}
+     * and any ERRORS while building the request corresponding
+     * to the valid share groups passed as the input.
      * <p></p>
      * The groupIds are first filtered by type to restrict the list to share groups.
      * @param groupIds - A list of groupIds as string
-     * @return {@link CoordinatorResult} object always containing empty records and list of persister delete requests.
+     * @return {@link CoordinatorResult} object always containing empty records and Map keyed on groupId and value pair (req, error)
      */
-    public CoordinatorResult<List<DeleteShareGroupStateParameters>, CoordinatorRecord> sharePartitionDeleteRequests(List<String> groupIds) {
-        List<DeleteShareGroupStateParameters> deleteShareGroupStateParameters = new ArrayList<>(groupIds.size());
+    public CoordinatorResult<Map<String, Map.Entry<DeleteShareGroupStateParameters, Errors>>, CoordinatorRecord> sharePartitionDeleteRequests(List<String> groupIds) {
+        Map<String, Map.Entry<DeleteShareGroupStateParameters, Errors>> responseMap = new HashMap<>();
         for (String groupId : groupIds) {
             try {
                 ShareGroup group = groupMetadataManager.shareGroup(groupId);
                 group.validateDeleteGroup();
                 groupMetadataManager.shareGroupBuildPartitionDeleteRequest(group)
-                    .ifPresent(deleteShareGroupStateParameters::add);
+                    .ifPresent(req -> responseMap.put(groupId, Map.entry(req, Errors.NONE)));
             } catch (GroupIdNotFoundException exception) {
-                // We needn't do anything more than logging here as deleteGroups
-                // method is handling these cases.
-                // Even if some groups cannot be found, we
-                // must check the entire list.
-                log.debug("Failed to find group {}", groupId, exception);
+                log.debug("GroupId {} not found as a share group.", groupId);
             } catch (GroupNotEmptyException exception) {
-                log.error("Tried to delete share group which is not empty", exception);
+                log.debug("Share group {} is not empty.", groupId);
+                responseMap.put(groupId, Map.entry(DeleteShareGroupStateParameters.EMPTY_PARAMS, Errors.forException(exception)));
             }
         }
-        return new CoordinatorResult<>(List.of(), deleteShareGroupStateParameters);
+        return new CoordinatorResult<>(List.of(), responseMap);
     }
 
     /**

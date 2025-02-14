@@ -87,6 +87,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -1402,7 +1403,10 @@ public class GroupCoordinatorShardTest {
 
         when(groupMetadataManager.shareGroupBuildPartitionDeleteRequest(eq(shareGroup))).thenReturn(Optional.of(params));
 
-        CoordinatorResult<List<DeleteShareGroupStateParameters>, CoordinatorRecord> expectedResult = new CoordinatorResult<>(List.of(), List.of(params));
+        CoordinatorResult<Map<String, Map.Entry<DeleteShareGroupStateParameters, Errors>>, CoordinatorRecord> expectedResult =
+            new CoordinatorResult<>(List.of(), Map.of("share-group", Map.entry(params, Errors.NONE)));
+
+
         assertEquals(expectedResult, coordinator.sharePartitionDeleteRequests(List.of("share-group", "non-share-group")));
         verify(groupMetadataManager, times(1)).shareGroup(eq("share-group"));
         verify(groupMetadataManager, times(1)).shareGroup(eq("non-share-group"));
@@ -1410,7 +1414,7 @@ public class GroupCoordinatorShardTest {
 
         // empty list
         Mockito.reset(groupMetadataManager);
-        expectedResult = new CoordinatorResult<>(List.of(), List.of());
+        expectedResult = new CoordinatorResult<>(List.of(), Map.of());
         assertEquals(
             expectedResult,
             coordinator.sharePartitionDeleteRequests(List.of())
@@ -1439,11 +1443,14 @@ public class GroupCoordinatorShardTest {
         );
 
         ShareGroup shareGroup = mock(ShareGroup.class);
-        doThrow(GroupNotEmptyException.class).when(shareGroup).validateDeleteGroup();
+        doThrow(new GroupNotEmptyException("bad stuff")).when(shareGroup).validateDeleteGroup();
 
         when(groupMetadataManager.shareGroup(eq("share-group"))).thenReturn(shareGroup);
 
-        CoordinatorResult<List<DeleteShareGroupStateParameters>, CoordinatorRecord> expectedResult = new CoordinatorResult<>(List.of(), List.of());
+        CoordinatorResult<Map<String, Map.Entry<DeleteShareGroupStateParameters, Errors>>, CoordinatorRecord> expectedResult =
+            new CoordinatorResult<>(List.of(), Map.of("share-group", Map.entry(DeleteShareGroupStateParameters.EMPTY_PARAMS,
+                Errors.forException(new GroupNotEmptyException("bad stuff")))
+            ));
         assertEquals(expectedResult, coordinator.sharePartitionDeleteRequests(List.of("share-group")));
         verify(groupMetadataManager, times(1)).shareGroup(eq("share-group"));
         // Not called because of NON-EMPTY group.
@@ -1451,7 +1458,7 @@ public class GroupCoordinatorShardTest {
 
         // empty list
         Mockito.reset(groupMetadataManager);
-        expectedResult = new CoordinatorResult<>(List.of(), List.of());
+        expectedResult = new CoordinatorResult<>(List.of(), Map.of());
         assertEquals(
             expectedResult,
             coordinator.sharePartitionDeleteRequests(List.of())
