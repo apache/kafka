@@ -27,6 +27,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 public class PluginsRecommenders {
 
@@ -98,12 +99,12 @@ public class PluginsRecommenders {
                 return Collections.emptyList();
             }
             List<Object> sourceConnectors = plugins.sourceConnectors(connectorClassOrAlias).stream()
-                    .map(PluginDesc::version).distinct().toList();
+                    .map(PluginDesc::version).distinct().collect(Collectors.toList());
             if (!sourceConnectors.isEmpty()) {
                 return sourceConnectors;
             }
             return plugins.sinkConnectors(connectorClassOrAlias).stream()
-                    .map(PluginDesc::version).distinct().toList();
+                    .map(PluginDesc::version).distinct().collect(Collectors.toList());
         }
 
         @Override
@@ -121,7 +122,7 @@ public class PluginsRecommenders {
                 return Collections.emptyList();
             }
             return plugins.converters().stream()
-                    .map(PluginDesc::pluginClass).distinct().toList();
+                    .map(PluginDesc::pluginClass).distinct().collect(Collectors.toList());
         }
 
         @Override
@@ -138,7 +139,7 @@ public class PluginsRecommenders {
                 return Collections.emptyList();
             }
             return plugins.headerConverters().stream()
-                    .map(PluginDesc::pluginClass).distinct().toList();
+                    .map(PluginDesc::pluginClass).distinct().collect(Collectors.toList());
         }
 
         @Override
@@ -151,7 +152,7 @@ public class PluginsRecommenders {
 
         protected Function<String, List<Object>> recommendations() {
             return converterClass -> plugins.converters(converterClass).stream()
-                    .map(PluginDesc::version).distinct().toList();
+                    .map(PluginDesc::version).distinct().collect(Collectors.toList());
         }
 
         protected abstract String converterConfig();
@@ -202,7 +203,7 @@ public class PluginsRecommenders {
         @Override
         protected Function<String, List<Object>> recommendations() {
             return converterClass -> plugins.headerConverters(converterClass).stream()
-                    .map(PluginDesc::version).distinct().toList();
+                    .map(PluginDesc::version).distinct().collect(Collectors.toList());
         }
     }
 
@@ -229,7 +230,7 @@ public class PluginsRecommenders {
 
             Class classOrAlias = (Class) parsedConfig.get(classOrAliasConfig);
             return plugins().apply(classOrAlias.getName())
-                    .stream().map(PluginDesc::version).distinct().toList();
+                    .stream().map(PluginDesc::version).distinct().collect(Collectors.toList());
         }
 
         @Override

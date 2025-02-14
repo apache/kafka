@@ -23,6 +23,7 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -56,7 +57,7 @@ public class TimerTaskListTest {
             list1.add(new TimerTaskEntry(task, 10L));
             assertEquals(i, sharedCounter.get());
             return task;
-        }).toList();
+        }).collect(Collectors.toList());
 
         assertEquals(tasks.size(), sharedCounter.get());
 
