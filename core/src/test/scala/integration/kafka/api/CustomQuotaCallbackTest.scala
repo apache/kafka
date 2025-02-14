@@ -41,7 +41,6 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import java.{lang, util}
 import scala.jdk.CollectionConverters._
-import scala.util.Using
 
 class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
 
@@ -81,7 +80,6 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
 
   @AfterEach
   override def tearDown(): Unit = {
-    admin.close()
     GroupedUserQuotaCallback.tearDown()
     super.tearDown()
     closeSasl()
@@ -195,13 +193,11 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
     topic: String, 
     listenerName: ListenerName = listenerName
   ): Unit = {
-    Using.resource(createAdminClient()) { admin =>
-      TestUtils.deleteTopicWithAdmin(
-        admin = admin,
-        topic = topic,
-        brokers = aliveBrokers,
-        controllers = controllerServers)
-    }
+    TestUtils.deleteTopicWithAdmin(
+      admin = createAdminClient(),
+      topic = topic,
+      brokers = aliveBrokers,
+      controllers = controllerServers)
   }
 
   private def createTopic(topic: String, numPartitions: Int, leader: Int): Unit = {
