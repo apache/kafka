@@ -101,6 +101,18 @@ public class StreamsRebalanceData {
         }
 
         @Override
+        public boolean equals(Object o) {
+            if (o == null || getClass() != o.getClass()) return false;
+            HostInfo hostInfo = (HostInfo) o;
+            return port == hostInfo.port && Objects.equals(host, hostInfo.host);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(host, port);
+        }
+
+        @Override
         public String toString() {
             return "HostInfo{" +
                 "host='" + host + '\'' +

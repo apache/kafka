@@ -18,7 +18,6 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.metrics.HeartbeatMetricsManager;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
@@ -40,10 +39,10 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-
 
 public class StreamsGroupHeartbeatRequestManager implements RequestManager {
 
@@ -51,16 +50,14 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
 
         private final StreamsMembershipManager membershipManager;
         private final int rebalanceTimeoutMs;
-
         private final StreamsRebalanceData streamsRebalanceData;
 
         public HeartbeatState(final StreamsRebalanceData streamsRebalanceData,
                               final StreamsMembershipManager membershipManager,
                               final int rebalanceTimeoutMs) {
-
             this.membershipManager = membershipManager;
-            this.rebalanceTimeoutMs = rebalanceTimeoutMs;
             this.streamsRebalanceData = streamsRebalanceData;
+            this.rebalanceTimeoutMs = rebalanceTimeoutMs;
         }
 
         public StreamsGroupHeartbeatRequestData buildRequestData() {
@@ -70,14 +67,11 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
             data.setMemberEpoch(membershipManager.memberEpoch());
             membershipManager.groupInstanceId().ifPresent(data::setInstanceId);
             StreamsGroupHeartbeatRequestData.Topology topology = new StreamsGroupHeartbeatRequestData.Topology();
-            topology.setSubtopologies(getTopologyFromStreams());
+            topology.setSubtopologies(getTopologyFromStreams(streamsRebalanceData.subtopologies()));
             topology.setEpoch(streamsRebalanceData.topologyEpoch());
             data.setRebalanceTimeoutMs(rebalanceTimeoutMs);
             data.setTopology(topology);
             data.setProcessId(streamsRebalanceData.processId().toString());
-            data.setActiveTasks(Collections.emptyList());
-            data.setStandbyTasks(Collections.emptyList());
-            data.setWarmupTasks(Collections.emptyList());
             streamsRebalanceData.endpoint().ifPresent(userEndpoint -> {
                 data.setUserEndpoint(new StreamsGroupHeartbeatRequestData.Endpoint()
                     .setHost(userEndpoint.host())
@@ -90,9 +84,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
                     .setValue(entry.getValue())
                 )
                 .collect(Collectors.toList()));
-            if (streamsRebalanceData.shutdownRequested()) {
-                data.setShutdownApplication(true);
-            }
+            data.setShutdownApplication(streamsRebalanceData.shutdownRequested());
             StreamsRebalanceData.Assignment reconciledAssignment = streamsRebalanceData.reconciledAssignment();
             data.setActiveTasks(convertTaskIdCollection(reconciledAssignment.activeTasks()));
             data.setStandbyTasks(convertTaskIdCollection(reconciledAssignment.standbyTasks()));
@@ -117,14 +109,13 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
                 .collect(Collectors.toList());
         }
 
-        private List<StreamsGroupHeartbeatRequestData.Subtopology> getTopologyFromStreams() {
-            final Map<String, StreamsRebalanceData.Subtopology> subTopologyMap = streamsRebalanceData.subtopologies();
-            final List<StreamsGroupHeartbeatRequestData.Subtopology> subtopologies = new ArrayList<>(subTopologyMap.size());
-            for (final Map.Entry<String, StreamsRebalanceData.Subtopology> subtopology : subTopologyMap.entrySet()) {
-                subtopologies.add(getSubtopologyFromStreams(subtopology.getKey(), subtopology.getValue()));
+        private static List<StreamsGroupHeartbeatRequestData.Subtopology> getTopologyFromStreams(final Map<String, StreamsRebalanceData.Subtopology> subtopologies) {
+            final List<StreamsGroupHeartbeatRequestData.Subtopology> subtopologiesForRequest = new ArrayList<>(subtopologies.size());
+            for (final Map.Entry<String, StreamsRebalanceData.Subtopology> subtopology : subtopologies.entrySet()) {
+                subtopologiesForRequest.add(getSubtopologyFromStreams(subtopology.getKey(), subtopology.getValue()));
             }
-            subtopologies.sort(Comparator.comparing(StreamsGroupHeartbeatRequestData.Subtopology::subtopologyId));
-            return subtopologies;
+            subtopologiesForRequest.sort(Comparator.comparing(StreamsGroupHeartbeatRequestData.Subtopology::subtopologyId));
+            return subtopologiesForRequest;
         }
 
         private static StreamsGroupHeartbeatRequestData.Subtopology getSubtopologyFromStreams(final String subtopologyName,
@@ -146,7 +137,6 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
 
         private static List<StreamsGroupHeartbeatRequestData.CopartitionGroup> getCopartitionGroupsFromStreams(final Collection<Set<String>> copartitionGroups,
                                                                                                                final StreamsGroupHeartbeatRequestData.Subtopology subtopologyData) {
-
             final Map<String, Short> sourceTopicsMap =
                 IntStream.range(0, subtopologyData.sourceTopics().size())
                     .boxed()
@@ -184,8 +174,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
             return copartitionGroup;
         }
 
-        private static List<StreamsGroupHeartbeatRequestData.TopicInfo> getRepartitionTopicsInfoFromStreams(
-            final StreamsRebalanceData.Subtopology subtopologyDataFromStreams) {
+        private static List<StreamsGroupHeartbeatRequestData.TopicInfo> getRepartitionTopicsInfoFromStreams(final StreamsRebalanceData.Subtopology subtopologyDataFromStreams) {
             final List<StreamsGroupHeartbeatRequestData.TopicInfo> repartitionTopicsInfo = new ArrayList<>();
             for (final Map.Entry<String, StreamsRebalanceData.TopicInfo> repartitionTopic : subtopologyDataFromStreams.repartitionSourceTopics().entrySet()) {
                 final StreamsGroupHeartbeatRequestData.TopicInfo repartitionTopicInfo = new StreamsGroupHeartbeatRequestData.TopicInfo();
@@ -201,8 +190,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
             return repartitionTopicsInfo;
         }
 
-        private static List<StreamsGroupHeartbeatRequestData.TopicInfo> getChangelogTopicsInfoFromStreams(
-            final StreamsRebalanceData.Subtopology subtopologyDataFromStreams) {
+        private static List<StreamsGroupHeartbeatRequestData.TopicInfo> getChangelogTopicsInfoFromStreams(final StreamsRebalanceData.Subtopology subtopologyDataFromStreams) {
             final List<StreamsGroupHeartbeatRequestData.TopicInfo> changelogTopicsInfo = new ArrayList<>();
             for (final Map.Entry<String, StreamsRebalanceData.TopicInfo> changelogTopic : subtopologyDataFromStreams.stateChangelogTopics().entrySet()) {
                 final StreamsGroupHeartbeatRequestData.TopicInfo changelogTopicInfo = new StreamsGroupHeartbeatRequestData.TopicInfo();
@@ -226,7 +214,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
     static class HeartbeatRequestState extends RequestState {
 
         /**
-         * heartbeatTimer tracks the time since the last heartbeat was sent
+         * The heartbeat timer tracks the time since the last heartbeat was sent
          */
         private final Timer heartbeatTimer;
 
@@ -235,16 +223,20 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
          */
         private long heartbeatIntervalMs;
 
-        public HeartbeatRequestState(
-            final LogContext logContext,
-            final Time time,
-            final long heartbeatIntervalMs,
-            final long retryBackoffMs,
-            final long retryBackoffMaxMs,
-            final double jitter) {
-            super(logContext, StreamsGroupHeartbeatRequestManager.HeartbeatRequestState.class.getName(), retryBackoffMs, 2,
+        public HeartbeatRequestState(final LogContext logContext,
+                                     final Time time,
+                                     final long heartbeatIntervalMs,
+                                     final long retryBackoffMs,
+                                     final long retryBackoffMaxMs,
+                                     final double jitter) {
+            super(
+                logContext,
+                StreamsGroupHeartbeatRequestManager.HeartbeatRequestState.class.getName(),
+                retryBackoffMs,
+                2,
                 retryBackoffMaxMs,
-                jitter);
+                jitter
+            );
             this.heartbeatIntervalMs = heartbeatIntervalMs;
             this.heartbeatTimer = time.timer(heartbeatIntervalMs);
         }
@@ -285,35 +277,42 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
 
     private final StreamsMembershipManager membershipManager;
 
-    private final BackgroundEventHandler backgroundEventHandler;
-
     private final HeartbeatMetricsManager metricsManager;
 
     private StreamsRebalanceData streamsRebalanceData;
 
-    public StreamsGroupHeartbeatRequestManager(
-        final LogContext logContext,
-        final Time time,
-        final ConsumerConfig config,
-        final CoordinatorRequestManager coordinatorRequestManager,
-        final StreamsMembershipManager membershipManager,
-        final BackgroundEventHandler backgroundEventHandler,
-        final Metrics metrics,
-        final StreamsRebalanceData streamsRebalanceData
-    ) {
-        this.coordinatorRequestManager = coordinatorRequestManager;
+    public StreamsGroupHeartbeatRequestManager(final LogContext logContext,
+                                               final Time time,
+                                               final ConsumerConfig config,
+                                               final CoordinatorRequestManager coordinatorRequestManager,
+                                               final StreamsMembershipManager membershipManager,
+                                               final Metrics metrics,
+                                               final StreamsRebalanceData streamsRebalanceData) {
         this.logger = logContext.logger(getClass());
-        this.membershipManager = membershipManager;
-        this.backgroundEventHandler = backgroundEventHandler;
+        this.coordinatorRequestManager = Objects.requireNonNull(
+            coordinatorRequestManager,
+            "Coordinator request manager cannot be null"
+        );
+        this.membershipManager = Objects.requireNonNull(
+            membershipManager,
+            "Streams membership manager cannot be null"
+        );
+        this.metricsManager = new HeartbeatMetricsManager(
+            Objects.requireNonNull(metrics, "Metrics cannot be null")
+        );
+        this.streamsRebalanceData = Objects.requireNonNull(streamsRebalanceData, "Streams rebalance data cannot be null");
         this.maxPollIntervalMs = config.getInt(CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG);
         long retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
         long retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
-        this.heartbeatState = new HeartbeatState(streamsRebalanceData, membershipManager,
-            maxPollIntervalMs);
-        this.heartbeatRequestState = new HeartbeatRequestState(logContext, time, 0, retryBackoffMs,
-            retryBackoffMaxMs, maxPollIntervalMs);
-        this.metricsManager = new HeartbeatMetricsManager(metrics);
-        this.streamsRebalanceData = streamsRebalanceData;
+        this.heartbeatState = new HeartbeatState(streamsRebalanceData, membershipManager, maxPollIntervalMs);
+        this.heartbeatRequestState = new HeartbeatRequestState(
+            logContext,
+            time,
+            0,
+            retryBackoffMs,
+            retryBackoffMaxMs,
+            maxPollIntervalMs
+        );
     }
 
     @Override
@@ -365,14 +364,13 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
             String statusDetails = statuses.stream()
                 .map(status -> "(" + status.statusCode() + ") " + status.statusDetail())
                 .collect(Collectors.joining(", "));
-            logger.error("Membership is in the following statuses: {}.", statusDetails);
+            logger.warn("Membership is in the following statuses: {}.", statusDetails);
         }
 
         membershipManager.onHeartbeatSuccess(response);
     }
 
-    private static Map<StreamsRebalanceData.HostInfo, List<TopicPartition>> convertHostInfoMap(
-        final StreamsGroupHeartbeatResponseData data) {
+    private static Map<StreamsRebalanceData.HostInfo, List<TopicPartition>> convertHostInfoMap(final StreamsGroupHeartbeatResponseData data) {
         Map<StreamsRebalanceData.HostInfo, List<TopicPartition>> partitionsByHost = new HashMap<>();
         data.partitionsByUserEndpoint().forEach(endpoint -> {
             List<TopicPartition> topicPartitions = endpoint.partitions().stream()
