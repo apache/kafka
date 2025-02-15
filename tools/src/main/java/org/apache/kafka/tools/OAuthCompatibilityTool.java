@@ -27,7 +27,6 @@ import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.security.oauthbearer.AccessTokenRetriever;
 import org.apache.kafka.common.security.oauthbearer.AccessTokenValidator;
 import org.apache.kafka.common.security.oauthbearer.DefaultAccessTokenRetriever;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.ClientAccessTokenValidator;
 import org.apache.kafka.common.security.oauthbearer.DefaultAccessTokenValidator;
 import org.apache.kafka.common.utils.Exit;
 
@@ -131,7 +130,7 @@ public class OAuthCompatibilityTool {
         ConfigHandler configHandler = new ConfigHandler(namespace);
 
         Map<String, ?> configs = configHandler.getConfigs();
-//        Map<String, Object> jaasConfigs = configHandler.getJaasOptions();
+        Map<String, Object> jaasConfigs = configHandler.getJaasOptions();
 
         try {
             String accessToken;
@@ -140,7 +139,7 @@ public class OAuthCompatibilityTool {
             try (AccessTokenRetriever retriever = new DefaultAccessTokenRetriever()) {
                 retriever.configure(configs, null, List.of());
 
-                try (AccessTokenValidator validator = new ClientAccessTokenValidator()) {
+                try (AccessTokenValidator validator = new DefaultAccessTokenValidator()) {
                     validator.configure(configs, null, List.of());
 
                     System.out.println("PASSED 1/5: client configuration");

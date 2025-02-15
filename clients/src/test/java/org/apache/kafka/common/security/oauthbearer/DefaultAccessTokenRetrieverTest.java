@@ -30,6 +30,7 @@ import java.util.Map;
 
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
 import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG;
+import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule.OAUTHBEARER_MECHANISM;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class DefaultAccessTokenRetrieverTest extends OAuthBearerTest {
@@ -50,7 +51,7 @@ public class DefaultAccessTokenRetrieverTest extends OAuthBearerTest {
         Map<String, ?> configs = Collections.singletonMap(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, accessTokenFile.toURI().toString());
 
         try (AccessTokenRetriever accessTokenRetriever = new DefaultAccessTokenRetriever()) {
-            accessTokenRetriever.configure(configs, null, List.of());
+            accessTokenRetriever.configure(configs, OAUTHBEARER_MECHANISM, List.of());
             assertEquals(expected, accessTokenRetriever.retrieve());
         }
     }
@@ -63,7 +64,7 @@ public class DefaultAccessTokenRetrieverTest extends OAuthBearerTest {
         Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, file);
 
         try (AccessTokenRetriever accessTokenRetriever = new DefaultAccessTokenRetriever()) {
-            assertThrowsWithMessage(ConfigException.class, () -> accessTokenRetriever.configure(configs, null, List.of()), "that doesn't exist");
+            assertThrowsWithMessage(ConfigException.class, () -> accessTokenRetriever.configure(configs, OAUTHBEARER_MECHANISM, List.of()), "that doesn't exist");
         }
     }
 
@@ -76,7 +77,7 @@ public class DefaultAccessTokenRetrieverTest extends OAuthBearerTest {
         Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, accessTokenFile.toURI().toString());
 
         try (AccessTokenRetriever accessTokenRetriever = new DefaultAccessTokenRetriever()) {
-            assertThrowsWithMessage(ConfigException.class, () -> accessTokenRetriever.configure(configs, null, List.of()), "that doesn't exist");
+            assertThrowsWithMessage(ConfigException.class, () -> accessTokenRetriever.configure(configs, OAUTHBEARER_MECHANISM, List.of()), "that doesn't exist");
         }
     }
 
@@ -88,7 +89,7 @@ public class DefaultAccessTokenRetrieverTest extends OAuthBearerTest {
         Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, accessTokenFile.toURI().toString());
 
         try (AccessTokenRetriever accessTokenRetriever = new DefaultAccessTokenRetriever()) {
-            assertThrowsWithMessage(ConfigException.class, () -> accessTokenRetriever.configure(configs, null, List.of()), ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG);
+            assertThrowsWithMessage(ConfigException.class, () -> accessTokenRetriever.configure(configs, OAUTHBEARER_MECHANISM, List.of()), ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG);
         }
     }
 }

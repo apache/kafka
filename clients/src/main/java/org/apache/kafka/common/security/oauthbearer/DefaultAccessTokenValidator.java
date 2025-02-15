@@ -18,7 +18,17 @@
 package org.apache.kafka.common.security.oauthbearer;
 
 import org.apache.kafka.common.security.oauthbearer.internals.secured.BrokerAccessTokenValidator;
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.ClientAccessTokenValidator;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.ValidateException;
+import org.apache.kafka.common.utils.Utils;
+
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+
+import javax.security.auth.login.AppConfigurationEntry;
+
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_URL;
 
 /**
  * Implementation of {@link AccessTokenValidator} that is used
@@ -45,13 +55,41 @@ import org.apache.kafka.common.utils.Time;
  * </ol>
  */
 
-public class DefaultAccessTokenValidator extends BrokerAccessTokenValidator {
+public class DefaultAccessTokenValidator implements AccessTokenValidator {
 
-    public DefaultAccessTokenValidator() {
-        super(Time.SYSTEM);
+    protected AccessTokenValidator delegate;
+
+    @Override
+    public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
+        AccessTokenValidator validator;
+
+        if (configs.get(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL) != null)
+            validator = new BrokerAccessTokenValidator();
+        else
+            validator = new ClientAccessTokenValidator();
+
+        configure(validator, configs, saslMechanism, jaasConfigEntries);
     }
 
-    public DefaultAccessTokenValidator(Time time) {
-        super(time);
+    public void configure(AccessTokenValidator validator,
+                          Map<String, ?> configs,
+                          String saslMechanism,
+                          List<AppConfigurationEntry> jaasConfigEntries) {
+        delegate = validator;
+        delegate.configure(configs, saslMechanism, jaasConfigEntries);
+    }
+
+    @Override
+    public OAuthBearerToken validate(String accessToken) throws ValidateException {
+        return Objects.requireNonNull(delegate).validate(accessToken);
+    }
+
+    @Override
+    public void close() {
+        Utils.closeQuietly(delegate, "delegate");
+    }
+
+    AccessTokenValidator delegate() {
+        return delegate;
     }
 }

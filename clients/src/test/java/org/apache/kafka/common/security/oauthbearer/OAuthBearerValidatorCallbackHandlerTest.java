@@ -18,13 +18,11 @@
 package org.apache.kafka.common.security.oauthbearer;
 
 import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenBuilder;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.CloseableVerificationKeyResolver;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerTest;
 
 import org.jose4j.jws.AlgorithmIdentifiers;
 import org.junit.jupiter.api.Test;
 
-import java.security.Key;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -32,13 +30,11 @@ import java.util.Map;
 import javax.security.auth.callback.Callback;
 
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE;
+import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule.OAUTHBEARER_MECHANISM;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 public class OAuthBearerValidatorCallbackHandlerTest extends OAuthBearerTest {
 
@@ -93,13 +89,9 @@ public class OAuthBearerValidatorCallbackHandlerTest extends OAuthBearerTest {
     }
 
     private OAuthBearerValidatorCallbackHandler createHandler(Map<String, ?> configs, AccessTokenBuilder builder) throws Exception {
-        OAuthBearerTestableValidatorCallbackHandler handler = new OAuthBearerTestableValidatorCallbackHandler();
-        CloseableVerificationKeyResolver verificationKeyResolver = mock(CloseableVerificationKeyResolver.class);
-        Key key = builder.jwk() != null ? builder.jwk().getPublicKey() : null;
-        when(verificationKeyResolver.resolveKey(any(), any())).thenReturn(key);
-        DefaultAccessTokenValidator accessTokenValidator = new DefaultAccessTokenValidator(time);
-        accessTokenValidator.configure(verificationKeyResolver, configs, null, List.of());
-        handler.configure(accessTokenValidator);
+        OAuthBearerValidatorCallbackHandler handler = new OAuthBearerValidatorCallbackHandler();
+        DefaultAccessTokenValidator accessTokenValidator = new DefaultAccessTokenValidator();
+        handler.configure(accessTokenValidator, configs, OAUTHBEARER_MECHANISM, List.of());
         return handler;
     }
 }

@@ -60,7 +60,7 @@ public class DefaultAccessTokenRetriever implements AccessTokenRetriever {
         Utils.closeQuietly(delegate, "delegate");
     }
 
-    public AccessTokenRetriever delegate() {
+    AccessTokenRetriever delegate() {
         return delegate;
     }
 }

@@ -25,7 +25,6 @@ import org.apache.kafka.common.security.oauthbearer.AccessTokenRetriever;
 import org.apache.kafka.common.security.oauthbearer.AccessTokenValidator;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
-import org.apache.kafka.common.security.oauthbearer.OAuthBearerTestableLoginCallbackHandler;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -61,6 +60,7 @@ import java.util.function.Consumer;
 
 import javax.security.auth.login.AppConfigurationEntry;
 
+import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule.OAUTHBEARER_MECHANISM;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -97,7 +97,7 @@ public abstract class OAuthBearerTest {
         AppConfigurationEntry kafkaClient = config.getAppConfigurationEntry("KafkaClient")[0];
 
         handler.configure(configs,
-            OAuthBearerLoginModule.OAUTHBEARER_MECHANISM,
+            OAUTHBEARER_MECHANISM,
             Collections.singletonList(kafkaClient));
     }
 
@@ -112,11 +112,11 @@ public abstract class OAuthBearerTest {
     protected OAuthBearerLoginCallbackHandler createHandler(AccessTokenRetriever accessTokenRetriever,
                                                             Map<String, ?> configs) {
         List<AppConfigurationEntry> jaasConfigEntries = List.of();
-        OAuthBearerTestableLoginCallbackHandler handler = new OAuthBearerTestableLoginCallbackHandler();
+        OAuthBearerLoginCallbackHandler handler = new OAuthBearerLoginCallbackHandler();
         AccessTokenValidator accessTokenValidator = new ClientAccessTokenValidator();
         accessTokenRetriever.configure(configs, null, jaasConfigEntries);
         accessTokenValidator.configure(configs, null, jaasConfigEntries);
-        handler.init(accessTokenRetriever, accessTokenValidator);
+        handler.configure(accessTokenRetriever, accessTokenValidator, configs, OAUTHBEARER_MECHANISM, List.of());
         return handler;
     }
 

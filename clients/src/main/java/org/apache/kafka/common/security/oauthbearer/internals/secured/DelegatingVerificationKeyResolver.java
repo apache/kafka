@@ -29,6 +29,7 @@ import java.security.Key;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 
 import javax.security.auth.login.AppConfigurationEntry;
 
@@ -64,6 +65,6 @@ public class DelegatingVerificationKeyResolver implements CloseableVerificationK
 
     @Override
     public Key resolveKey(JsonWebSignature jws, List<JsonWebStructure> nestingContext) throws UnresolvableKeyException {
-        return delegate.resolveKey(jws, nestingContext);
+        return Objects.requireNonNull(delegate).resolveKey(jws, nestingContext);
     }
 }

@@ -98,7 +98,6 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
 
     private static final Logger log = LoggerFactory.getLogger(OAuthBearerValidatorCallbackHandler.class);
 
-
     protected AccessTokenValidator accessTokenValidator;
 
     protected boolean isInitialized = false;
@@ -106,16 +105,19 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
         try {
-            accessTokenValidator = newInstance(
-                SaslConfigs.SASL_OAUTHBEARER_ACCESS_TOKEN_VALIDATOR_CLASS,
-                DefaultAccessTokenValidator.class,
-                configs,
-                saslMechanism,
-                jaasConfigEntries
-            );
+            AccessTokenValidator validator = newInstance(configs);
+            configure(validator, configs, saslMechanism, jaasConfigEntries);
         } catch (Throwable t) {
             throw new KafkaException("The OAuth validator configuration encountered an error during initialization", t);
         }
+    }
+
+    public void configure(AccessTokenValidator accessTokenValidator,
+                          Map<String, ?> configs,
+                          String saslMechanism,
+                          List<AppConfigurationEntry> jaasConfigEntries) {
+        this.accessTokenValidator = accessTokenValidator;
+        this.accessTokenValidator.configure(configs, saslMechanism, jaasConfigEntries);
 
         isInitialized = true;
     }
@@ -166,18 +168,12 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
     }
 
     @SuppressWarnings("unchecked")
-    private <T extends OAuthBearerConfigurable> T newInstance(String configName,
-                                                              Class<T> defaultClazz,
-                                                              Map<String, ?> configs,
-                                                              String saslMechanism,
-                                                              List<AppConfigurationEntry> jaasConfigEntries) {
-        Class<T> clazz = (Class<T>) configs.get(configName);
+    private <T extends AccessTokenValidator> T newInstance(Map<String, ?> configs) {
+        Class<T> clazz = (Class<T>) configs.get(SaslConfigs.SASL_OAUTHBEARER_ACCESS_TOKEN_VALIDATOR_CLASS);
 
         if (clazz == null)
-            clazz = defaultClazz;
+            clazz = (Class<T>) DefaultAccessTokenValidator.class;
 
-        T obj = Utils.newInstance(clazz);
-        obj.configure(configs, saslMechanism, jaasConfigEntries);
-        return obj;
+        return Utils.newInstance(clazz);
     }
 }

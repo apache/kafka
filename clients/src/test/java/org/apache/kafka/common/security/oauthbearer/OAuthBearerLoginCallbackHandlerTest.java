@@ -17,6 +17,7 @@
 
 package org.apache.kafka.common.security.oauthbearer;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.security.auth.SaslExtensionsCallback;
 import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerClientInitialResponse;
@@ -34,6 +35,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import javax.security.auth.callback.Callback;
@@ -43,12 +45,16 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_
 import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.CLIENT_ID_CONFIG;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.CLIENT_SECRET_CONFIG;
+import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule.OAUTHBEARER_MECHANISM;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -134,12 +140,38 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
     }
 
     @Test
+    public void testConfigureThrowsExceptionOnAccessTokenValidatorConfigure() {
+        try (OAuthBearerLoginCallbackHandler handler = new OAuthBearerLoginCallbackHandler();
+             AccessTokenRetriever accessTokenRetriever = mock(AccessTokenRetriever.class);
+             AccessTokenValidator accessTokenValidator = mock(AccessTokenValidator.class)) {
+
+            doThrow(new KafkaException("Forced failure")).when(accessTokenValidator).configure(any(), any(), any());
+
+            assertThrows(
+                KafkaException.class,
+                () -> handler.configure(accessTokenRetriever, accessTokenValidator, getSaslConfigs(), OAUTHBEARER_MECHANISM, List.of())
+            );
+        }
+    }
+
+    @Test
+    public void testConfigureThrowsExceptionOnAccessTokenValidatorClose() {
+        try (OAuthBearerLoginCallbackHandler handler = new OAuthBearerLoginCallbackHandler();
+             AccessTokenRetriever accessTokenRetriever = mock(AccessTokenRetriever.class)) {
+            AccessTokenValidator accessTokenValidator = mock(AccessTokenValidator.class);
+            doThrow(new KafkaException("Forced failure")).when(accessTokenValidator).close();
+            handler.configure(accessTokenRetriever, accessTokenValidator, getSaslConfigs(), OAUTHBEARER_MECHANISM, List.of());
+            assertDoesNotThrow(handler::close);
+        }
+    }
+
+    @Test
     public void testInvalidCallbackGeneratesUnsupportedCallbackException() throws IOException {
-        OAuthBearerTestableLoginCallbackHandler handler = new OAuthBearerTestableLoginCallbackHandler();
+        OAuthBearerLoginCallbackHandler handler = new OAuthBearerLoginCallbackHandler();
         AccessTokenRetriever accessTokenRetriever = mock(AccessTokenRetriever.class);
         when(accessTokenRetriever.retrieve()).thenReturn("foo");
         AccessTokenValidator accessTokenValidator = new ClientAccessTokenValidator();
-        handler.init(accessTokenRetriever, accessTokenValidator);
+        handler.configure(accessTokenRetriever, accessTokenValidator, getSaslConfigs(), OAUTHBEARER_MECHANISM, List.of());
 
         try {
             Callback unsupportedCallback = new Callback() { };

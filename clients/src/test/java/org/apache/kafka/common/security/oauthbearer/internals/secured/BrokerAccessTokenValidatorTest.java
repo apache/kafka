@@ -15,11 +15,12 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.security.oauthbearer;
+package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
-import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenBuilder;
+import org.apache.kafka.common.security.oauthbearer.AccessTokenValidator;
+import org.apache.kafka.common.security.oauthbearer.AccessTokenValidatorTest;
+import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
 
-import org.apache.kafka.common.security.oauthbearer.internals.secured.CloseableVerificationKeyResolver;
 import org.jose4j.jwk.PublicJsonWebKey;
 import org.jose4j.jws.AlgorithmIdentifiers;
 import org.jose4j.lang.InvalidAlgorithmException;
@@ -31,12 +32,13 @@ import java.util.Map;
 
 import javax.security.auth.login.AppConfigurationEntry;
 
+import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule.OAUTHBEARER_MECHANISM;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-public class DefaultAccessTokenValidatorTest extends AccessTokenValidatorTest {
+public class BrokerAccessTokenValidatorTest extends AccessTokenValidatorTest {
 
     @Override
     protected AccessTokenValidator createAccessTokenValidator(AccessTokenBuilder builder) throws Exception {
@@ -44,7 +46,7 @@ public class DefaultAccessTokenValidatorTest extends AccessTokenValidatorTest {
         CloseableVerificationKeyResolver keyResolver = mock(CloseableVerificationKeyResolver.class);
         when(keyResolver.resolveKey(any(), any())).thenReturn(key);
 
-        return new DefaultAccessTokenValidator() {
+        return new BrokerAccessTokenValidator() {
             @Override
             public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
                 super.configure(keyResolver, configs, saslMechanism, jaasConfigEntries);
@@ -85,7 +87,7 @@ public class DefaultAccessTokenValidatorTest extends AccessTokenValidatorTest {
             .subjectClaimName(subClaimName)
             .subject(null);
         AccessTokenValidator validator = createAccessTokenValidator(tokenBuilder);
-        validator.configure(getSaslConfigs(), null, List.of());
+        validator.configure(getSaslConfigs(), OAUTHBEARER_MECHANISM, List.of());
 
         // Validation should succeed (e.g. signature verification) even if sub claim is missing
         OAuthBearerToken token = validator.validate(tokenBuilder.build());
@@ -96,7 +98,7 @@ public class DefaultAccessTokenValidatorTest extends AccessTokenValidatorTest {
     private void testEncryptionAlgorithm(PublicJsonWebKey jwk, String alg) throws Exception {
         AccessTokenBuilder builder = new AccessTokenBuilder().jwk(jwk).alg(alg);
         AccessTokenValidator validator = createAccessTokenValidator(builder);
-        validator.configure(getSaslConfigs(), null, List.of());
+        validator.configure(getSaslConfigs(), OAUTHBEARER_MECHANISM, List.of());
         String accessToken = builder.build();
         OAuthBearerToken token = validator.validate(accessToken);
 

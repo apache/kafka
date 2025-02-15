@@ -22,6 +22,7 @@ import org.apache.kafka.common.security.oauthbearer.AccessTokenValidator;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+
 import org.jose4j.jws.JsonWebSignature;
 import org.jose4j.jwt.JwtClaims;
 import org.jose4j.jwt.MalformedClaimException;
@@ -36,7 +37,6 @@ import org.jose4j.lang.UnresolvableKeyException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.security.auth.login.AppConfigurationEntry;
 import java.security.Key;
 import java.util.Collection;
 import java.util.Collections;
@@ -46,6 +46,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import javax.security.auth.login.AppConfigurationEntry;
 
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE;
@@ -112,25 +114,26 @@ public class BrokerAccessTokenValidator implements AccessTokenValidator {
 
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
-        Map<String, Object> moduleOptions = JaasOptionsUtils.getOptions(saslMechanism, jaasConfigEntries);
+        CloseableVerificationKeyResolver resolver;
 
         // Here's the logic which keeps our VerificationKeyResolvers down to a single instance.
         synchronized (VERIFICATION_KEY_RESOLVER_CACHE) {
-            VerificationKeyResolverKey key = new VerificationKeyResolverKey(configs, moduleOptions);
-            verificationKeyResolver = VERIFICATION_KEY_RESOLVER_CACHE.computeIfAbsent(
+            VerificationKeyResolverKey key = new VerificationKeyResolverKey(configs, jaasConfigEntries);
+            resolver = VERIFICATION_KEY_RESOLVER_CACHE.computeIfAbsent(
                 key,
                 k -> new RefCountingVerificationKeyResolver(new DelegatingVerificationKeyResolver(time))
             );
         }
 
-        configure(verificationKeyResolver, configs, saslMechanism, jaasConfigEntries);
+        configure(resolver, configs, saslMechanism, jaasConfigEntries);
     }
 
     public void configure(CloseableVerificationKeyResolver verificationKeyResolver,
                    Map<String, ?> configs,
                    String saslMechanism,
                    List<AppConfigurationEntry> jaasConfigEntries) {
-        verificationKeyResolver.configure(configs, saslMechanism, jaasConfigEntries);
+        this.verificationKeyResolver = verificationKeyResolver;
+        this.verificationKeyResolver.configure(configs, saslMechanism, jaasConfigEntries);
 
         ConfigurationUtils cu = new ConfigurationUtils(saslMechanism, configs);
         Set<String> expectedAudiences = null;
@@ -246,11 +249,11 @@ public class BrokerAccessTokenValidator implements AccessTokenValidator {
 
         private final Map<String, ?> configs;
 
-        private final Map<String, Object> moduleOptions;
+        private final List<AppConfigurationEntry> jaasConfigEntries;
 
-        public VerificationKeyResolverKey(Map<String, ?> configs, Map<String, Object> moduleOptions) {
+        public VerificationKeyResolverKey(Map<String, ?> configs, List<AppConfigurationEntry> jaasConfigEntries) {
             this.configs = configs;
-            this.moduleOptions = moduleOptions;
+            this.jaasConfigEntries = jaasConfigEntries;
         }
 
         @Override
@@ -264,14 +267,13 @@ public class BrokerAccessTokenValidator implements AccessTokenValidator {
             }
 
             VerificationKeyResolverKey that = (VerificationKeyResolverKey) o;
-            return configs.equals(that.configs) && moduleOptions.equals(that.moduleOptions);
+            return configs.equals(that.configs) && jaasConfigEntries.equals(that.jaasConfigEntries);
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(configs, moduleOptions);
+            return Objects.hash(configs, jaasConfigEntries);
         }
-
     }
 
     /**

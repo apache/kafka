@@ -29,6 +29,7 @@ import org.junit.jupiter.api.TestInstance.Lifecycle;
 
 import java.util.List;
 
+import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule.OAUTHBEARER_MECHANISM;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @TestInstance(Lifecycle.PER_CLASS)
@@ -39,7 +40,7 @@ public abstract class AccessTokenValidatorTest extends OAuthBearerTest {
     protected AccessTokenValidator createAccessTokenValidator() throws Exception {
         AccessTokenBuilder builder = new AccessTokenBuilder();
         AccessTokenValidator validator = createAccessTokenValidator(builder);
-        validator.configure(getSaslConfigs(), null, List.of());
+        validator.configure(getSaslConfigs(), OAUTHBEARER_MECHANISM, List.of());
         return validator;
     }
 

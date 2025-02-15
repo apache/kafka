@@ -29,6 +29,7 @@ import java.util.Map;
 
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_URL;
 import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG;
+import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule.OAUTHBEARER_MECHANISM;
 
 public class DelegatingVerificationKeyResolverTest extends OAuthBearerTest {
 
@@ -47,7 +48,7 @@ public class DelegatingVerificationKeyResolverTest extends OAuthBearerTest {
 
         // verify it won't throw exception
         try (CloseableVerificationKeyResolver verificationKeyResolver = new DelegatingVerificationKeyResolver(time)) {
-            verificationKeyResolver.configure(configs, null, List.of());
+            verificationKeyResolver.configure(configs, OAUTHBEARER_MECHANISM, List.of());
         }
     }
 
@@ -59,7 +60,7 @@ public class DelegatingVerificationKeyResolverTest extends OAuthBearerTest {
         Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL, file);
 
         try (CloseableVerificationKeyResolver verificationKeyResolver = new DelegatingVerificationKeyResolver(time)) {
-            assertThrowsWithMessage(ConfigException.class, () -> verificationKeyResolver.configure(configs, null, List.of()), "that doesn't exist");
+            assertThrowsWithMessage(ConfigException.class, () -> verificationKeyResolver.configure(configs, OAUTHBEARER_MECHANISM, List.of()), "that doesn't exist");
         }
     }
 
@@ -72,7 +73,7 @@ public class DelegatingVerificationKeyResolverTest extends OAuthBearerTest {
         Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL, verificationKeyFile.toURI().toString());
 
         try (CloseableVerificationKeyResolver verificationKeyResolver = new DelegatingVerificationKeyResolver(time)) {
-            assertThrowsWithMessage(ConfigException.class, () -> verificationKeyResolver.configure(configs, null, List.of()), "that doesn't exist");
+            assertThrowsWithMessage(ConfigException.class, () -> verificationKeyResolver.configure(configs, OAUTHBEARER_MECHANISM, List.of()), "that doesn't exist");
         }
     }
 
@@ -84,7 +85,7 @@ public class DelegatingVerificationKeyResolverTest extends OAuthBearerTest {
         Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL, verificationKeyFile.toURI().toString());
 
         try (CloseableVerificationKeyResolver verificationKeyResolver = new DelegatingVerificationKeyResolver(time)) {
-            assertThrowsWithMessage(ConfigException.class, () -> verificationKeyResolver.configure(configs, null, List.of()), ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG);
+            assertThrowsWithMessage(ConfigException.class, () -> verificationKeyResolver.configure(configs, OAUTHBEARER_MECHANISM, List.of()), ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG);
         }
     }
 }

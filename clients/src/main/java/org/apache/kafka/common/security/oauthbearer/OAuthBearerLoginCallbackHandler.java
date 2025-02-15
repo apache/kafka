@@ -25,7 +25,6 @@ import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.auth.SaslExtensions;
 import org.apache.kafka.common.security.auth.SaslExtensionsCallback;
 import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerClientInitialResponse;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.ClientCredentialsAccessTokenRetriever;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.JaasOptionsUtils;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ValidateException;
 import org.apache.kafka.common.utils.Utils;
@@ -185,30 +184,39 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
 
     protected boolean isInitialized = false;
 
-
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
         moduleOptions = JaasOptionsUtils.getOptions(saslMechanism, jaasConfigEntries);
 
         try {
-            accessTokenRetriever = newInstance(
+            AccessTokenRetriever retriever = newInstance(
                 SaslConfigs.SASL_OAUTHBEARER_ACCESS_TOKEN_RETRIEVER_CLASS,
-                ClientCredentialsAccessTokenRetriever.class,
-                configs,
-                saslMechanism,
-                jaasConfigEntries
+                DefaultAccessTokenRetriever.class,
+                configs
             );
 
-            accessTokenValidator = newInstance(
+            AccessTokenValidator validator = newInstance(
                 SaslConfigs.SASL_OAUTHBEARER_ACCESS_TOKEN_VALIDATOR_CLASS,
                 DefaultAccessTokenValidator.class,
-                configs,
-                saslMechanism,
-                jaasConfigEntries
+                configs
             );
+
+            configure(retriever, validator, configs, saslMechanism, jaasConfigEntries);
         } catch (Throwable t) {
             throw new KafkaException("The OAuth login configuration encountered an error during initialization", t);
         }
+    }
+
+    public void configure(AccessTokenRetriever accessTokenRetriever,
+                   AccessTokenValidator accessTokenValidator,
+                   Map<String, ?> configs,
+                   String saslMechanism,
+                   List<AppConfigurationEntry> jaasConfigEntries) {
+        this.accessTokenRetriever = accessTokenRetriever;
+        this.accessTokenValidator = accessTokenValidator;
+
+        this.accessTokenRetriever.configure(configs, saslMechanism, jaasConfigEntries);
+        this.accessTokenValidator.configure(configs, saslMechanism, jaasConfigEntries);
 
         isInitialized = true;
     }
@@ -286,18 +294,12 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
     }
 
     @SuppressWarnings("unchecked")
-    private <T extends OAuthBearerConfigurable> T newInstance(String configName,
-                                                              Class<T> defaultClazz,
-                                                              Map<String, ?> configs,
-                                                              String saslMechanism,
-                                                              List<AppConfigurationEntry> jaasConfigEntries) {
+    private <T> T newInstance(String configName, Class<T> defaultClazz, Map<String, ?> configs) {
         Class<T> clazz = (Class<T>) configs.get(configName);
 
         if (clazz == null)
             clazz = defaultClazz;
 
-        T obj = Utils.newInstance(clazz);
-        obj.configure(configs, saslMechanism, jaasConfigEntries);
-        return obj;
+        return Utils.newInstance(clazz);
     }
 }

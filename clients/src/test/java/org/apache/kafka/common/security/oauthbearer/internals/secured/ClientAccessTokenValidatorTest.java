@@ -17,51 +17,13 @@
 
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
-import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.security.oauthbearer.AccessTokenRetriever;
 import org.apache.kafka.common.security.oauthbearer.AccessTokenValidator;
 import org.apache.kafka.common.security.oauthbearer.AccessTokenValidatorTest;
-import org.apache.kafka.common.security.oauthbearer.OAuthBearerTestableLoginCallbackHandler;
-
-import org.junit.jupiter.api.Test;
-
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.mock;
 
 public class ClientAccessTokenValidatorTest extends AccessTokenValidatorTest {
 
     @Override
     protected AccessTokenValidator createAccessTokenValidator(AccessTokenBuilder builder) {
         return new ClientAccessTokenValidator();
-    }
-
-    @Test
-    public void testConfigureThrowsExceptionOnAccessTokenValidatorConfigure() {
-        try (OAuthBearerTestableLoginCallbackHandler handler = new OAuthBearerTestableLoginCallbackHandler();
-             AccessTokenRetriever accessTokenRetriever = mock(AccessTokenRetriever.class);
-             AccessTokenValidator accessTokenValidator = mock(AccessTokenValidator.class)) {
-
-            doThrow(new KafkaException("Forced failure")).when(accessTokenValidator).configure(any(), any(), any());
-
-            assertThrowsWithMessage(
-                KafkaException.class,
-                () -> handler.init(accessTokenRetriever, accessTokenValidator),
-                "encountered an error during configuration"
-            );
-        }
-    }
-
-    @Test
-    public void testConfigureThrowsExceptionOnAccessTokenValidatorClose() {
-        try (OAuthBearerTestableLoginCallbackHandler handler = new OAuthBearerTestableLoginCallbackHandler();
-             AccessTokenRetriever accessTokenRetriever = mock(AccessTokenRetriever.class);
-             AccessTokenValidator accessTokenValidator = mock(AccessTokenValidator.class)) {
-            doThrow(new KafkaException("Forced failure")).when(accessTokenValidator).close();
-            assertDoesNotThrow(() -> handler.init(accessTokenRetriever, accessTokenValidator));
-            assertThrows(KafkaException.class, handler::close);
-        }
     }
 }

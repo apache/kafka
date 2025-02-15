@@ -107,27 +107,13 @@ public class RefreshingHttpsJwksVerificationKeyResolver implements CloseableVeri
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
         refreshingHttpsJwks = new RefreshingHttpsJwks(time);
-
-        try {
-            log.debug("init started");
-
-            refreshingHttpsJwks.configure(configs, saslMechanism, jaasConfigEntries);
-        } finally {
-            isInitialized = true;
-
-            log.debug("init completed");
-        }
+        refreshingHttpsJwks.configure(configs, saslMechanism, jaasConfigEntries);
+        isInitialized = true;
     }
 
     @Override
     public void close() {
-        try {
-            log.debug("close started");
-
-            Utils.closeQuietly(refreshingHttpsJwks, "refreshingHttpsJwks");
-        } finally {
-            log.debug("close completed");
-        }
+        Utils.closeQuietly(refreshingHttpsJwks, "refreshingHttpsJwks");
     }
 
     @Override
