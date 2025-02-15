@@ -214,7 +214,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
             CommitRequestManager commitRequestManager = requestManagers.commitRequestManager.get();
             commitRequestManager.updateTimerAndMaybeCommit(event.pollTimeMs());
             // all commit request generation points have been passed,
-            // so it's safe to notify the app thread could start the next poll cycle
+            // so it's safe to notify the app thread could proceed and start fetching
             event.future().complete(null);
             requestManagers.consumerHeartbeatRequestManager.ifPresent(hrm -> {
                 hrm.membershipManager().onConsumerPoll();

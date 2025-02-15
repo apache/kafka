@@ -640,7 +640,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
      * This method performs two main tasks:
      * <ol>
      * <li>Updates the internal timer with the current time.</li>
-     * <li>Initiate an asynchronous auto-commit operation for all consumed messages if needed.</li>
+     * <li>Initiate an asynchronous auto-commit operation for all consumed positions if needed.</li>
      * </ol>
      *
      * @param currentTimeMs the current timestamp in millisecond

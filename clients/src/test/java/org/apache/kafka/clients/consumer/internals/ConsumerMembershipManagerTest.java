@@ -2393,6 +2393,14 @@ public class ConsumerMembershipManagerTest {
         assertEquals(-1d, getMetricValue(metrics, rebalanceMetricsManager.lastRebalanceSecondsAgo));
     }
 
+    @Test
+    public void testPollMustCallsMaybeReconcileWithFalse() {
+        ConsumerMembershipManager membershipManager = createMemberInStableState();
+        membershipManager.poll(time.milliseconds());
+        verify(membershipManager).maybeReconcile(false);
+        verifyReconciliationNotTriggered(membershipManager);
+    }
+
     private Object getMetricValue(Metrics metrics, MetricName name) {
         return metrics.metrics().get(name).metricValue();
     }

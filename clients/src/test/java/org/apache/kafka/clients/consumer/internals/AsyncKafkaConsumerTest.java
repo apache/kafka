@@ -1518,12 +1518,11 @@ public class AsyncKafkaConsumerTest {
         props.put(ConsumerConfig.GROUP_ID_CONFIG, "consumerGroupA");
         props.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name().toLowerCase(Locale.ROOT));
         props.put(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG, "someAssignor");
+        props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
         final ConsumerConfig config = new ConsumerConfig(props);
         consumer = newConsumer(config);
 
         assertFalse(config.unused().contains(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG));
-        // To unblock commitSyncAllConsumed on close
-        markOffsetsReadyForCommitEvent();
     }
 
     @Test
@@ -1543,13 +1542,12 @@ public class AsyncKafkaConsumerTest {
         final Properties props = requiredConsumerConfigAndGroupId("consumerGroupA");
         props.put(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG, 10000);
         props.put(THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED, true);
+        props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
         final ConsumerConfig config = new ConsumerConfig(props);
         consumer = newConsumer(config);
 
         assertTrue(config.unused().contains(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG));
         assertTrue(config.unused().contains(THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED));
-        // To unblock commitSyncAllConsumed on close
-        markOffsetsReadyForCommitEvent();
     }
 
     @Test

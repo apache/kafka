@@ -323,12 +323,12 @@ public class CommitRequestManagerTest {
         CommitRequestManager commitRequestManager = create(false, 100);
         CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = commitRequestManager.commitSync(
             Collections.emptyMap(), time.milliseconds() + defaultApiTimeoutMs);
+        assertTrue(future.isDone());
         assertEquals(0, commitRequestManager.unsentOffsetCommitRequests().size());
         assertPoll(0, commitRequestManager);
 
         verify(metadata, never()).updateLastSeenEpochIfNewer(any(), anyInt());
         Map<TopicPartition, OffsetAndMetadata> commitOffsets = assertDoesNotThrow(() -> future.get());
-        assertTrue(future.isDone());
         assertEquals(Collections.emptyMap(), commitOffsets);
     }
 
@@ -365,6 +365,7 @@ public class CommitRequestManagerTest {
         CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = commitRequestManager.commitAsync(Collections.emptyMap());
 
         assertTrue(future.isDone());
+        assertPoll(0, commitRequestManager);
         Map<TopicPartition, OffsetAndMetadata> commitOffsets = assertDoesNotThrow(() -> future.get());
         assertTrue(commitOffsets.isEmpty());
     }
@@ -552,7 +553,6 @@ public class CommitRequestManagerTest {
 
         // complete the unsent request and re-poll
         futures.get(0).onComplete(buildOffsetCommitClientResponse(new OffsetCommitResponse(0, new HashMap<>())));
-        time.sleep(100);
         commitRequestManager.updateTimerAndMaybeCommit(time.milliseconds());
         assertPoll(1, commitRequestManager);
     }
