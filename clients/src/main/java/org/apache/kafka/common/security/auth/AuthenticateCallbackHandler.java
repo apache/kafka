@@ -34,7 +34,7 @@ public interface AuthenticateCallbackHandler extends CallbackHandler {
      * @param configs Key-value pairs containing the parsed configuration options of
      *        the client or broker. Note that these are the Kafka configuration options
      *        and not the JAAS configuration options. JAAS config options may be obtained
-     *        from `jaasConfigEntries`. For configs that may be specified as both Kafka config
+     *        from `jaasConfigEntries` for configs that may be specified as both Kafka config
      *        as well as JAAS config (e.g. sasl.kerberos.service.name), the configuration
      *        is treated as invalid if conflicting values are provided.
      * @param saslMechanism Negotiated SASL mechanism. For clients, this is the SASL
