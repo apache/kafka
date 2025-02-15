@@ -17,42 +17,47 @@
 
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.security.oauthbearer.AccessTokenRetriever;
 import org.apache.kafka.common.utils.Utils;
 
+import javax.security.auth.login.AppConfigurationEntry;
 import java.io.IOException;
-import java.nio.file.Path;
+import java.util.List;
+import java.util.Map;
+
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
 
 /**
- * <code>FileTokenRetriever</code> is an {@link AccessTokenRetriever} that will load the contents,
+ * <code>FileAccessTokenRetriever</code> is an {@link AccessTokenRetriever} that will load the contents of a file,
  * interpreting them as a JWT access key in the serialized form.
  *
  * @see AccessTokenRetriever
  */
 
-public class FileTokenRetriever implements AccessTokenRetriever {
+public class FileAccessTokenRetriever implements AccessTokenRetriever {
 
-    private final Path accessTokenFile;
-
-    private String accessToken;
-
-    public FileTokenRetriever(Path accessTokenFile) {
-        this.accessTokenFile = accessTokenFile;
-    }
+    protected String accessToken;
 
     @Override
-    public void init() throws IOException {
-        this.accessToken = Utils.readFileAsString(accessTokenFile.toFile().getPath());
-        // always non-null; to remove any newline chars or backend will report err
-        this.accessToken = this.accessToken.trim();
+    public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
+        ConfigurationUtils cu = new ConfigurationUtils(saslMechanism, configs);
+        String accessTokenFileName = cu.validateFile(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL).toFile().getPath();
+
+        try {
+            String fileContents = Utils.readFileAsString(accessTokenFileName);
+            // always non-null; to remove any newline chars or backend will report err
+            accessToken = fileContents.trim();
+        } catch (Exception e) {
+            throw new KafkaException("An error occurred reading the OAuth token from " + accessTokenFileName);
+        }
     }
 
     @Override
     public String retrieve() throws IOException {
         if (accessToken == null)
-            throw new IllegalStateException("Access token is null; please call init() first");
+            throw new IllegalStateException("Access token is null; please call configure() first");
 
         return accessToken;
     }
-
 }

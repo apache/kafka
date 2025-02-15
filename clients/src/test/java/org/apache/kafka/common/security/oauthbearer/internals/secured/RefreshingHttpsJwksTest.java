@@ -25,11 +25,13 @@ import org.jose4j.jwk.HttpsJwks;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
+import javax.security.auth.login.AppConfigurationEntry;
 import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
@@ -42,6 +44,7 @@ import static org.apache.kafka.common.security.oauthbearer.internals.secured.Ref
 import static org.apache.kafka.common.security.oauthbearer.internals.secured.RefreshingHttpsJwks.MISSING_KEY_ID_MAX_KEY_LENGTH;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -49,10 +52,6 @@ import static org.mockito.Mockito.verify;
 public class RefreshingHttpsJwksTest extends OAuthBearerTest {
 
     private static final int REFRESH_MS = 5000;
-
-    private static final int RETRY_BACKOFF_MS = 50;
-
-    private static final int RETRY_BACKOFF_MAX_MS = 2000;
 
     /**
      * Test that a key not previously scheduled for refresh will be scheduled without a refresh.
@@ -64,10 +63,11 @@ public class RefreshingHttpsJwksTest extends OAuthBearerTest {
         MockTime time = new MockTime();
         HttpsJwks httpsJwks = spyHttpsJwks();
 
+        assertNotNull(httpsJwks);
        // we use mocktime here to ensure that scheduled refresh _doesn't_ run and update the invocation count
        // we expect httpsJwks.refresh() to be invoked twice, once from init() and maybeExpediteRefresh() each
         try (RefreshingHttpsJwks refreshingHttpsJwks = getRefreshingHttpsJwks(time, httpsJwks)) {
-            refreshingHttpsJwks.init();
+            refreshingHttpsJwks.configure(getSaslConfigs(), null, List.of());
             verify(httpsJwks, times(1)).refresh();
             assertTrue(refreshingHttpsJwks.maybeExpediteRefresh(keyId));
             verify(httpsJwks, times(2)).refresh();
@@ -86,7 +86,7 @@ public class RefreshingHttpsJwksTest extends OAuthBearerTest {
         HttpsJwks httpsJwks = spyHttpsJwks();
 
         try (RefreshingHttpsJwks refreshingHttpsJwks = getRefreshingHttpsJwks(time, httpsJwks)) {
-            refreshingHttpsJwks.init();
+            refreshingHttpsJwks.configure(getSaslConfigs(), null, List.of());
             assertTrue(refreshingHttpsJwks.maybeExpediteRefresh(keyId));
             assertFalse(refreshingHttpsJwks.maybeExpediteRefresh(keyId));
         }
@@ -118,7 +118,7 @@ public class RefreshingHttpsJwksTest extends OAuthBearerTest {
         HttpsJwks httpsJwks = spyHttpsJwks();
 
         try (RefreshingHttpsJwks refreshingHttpsJwks = getRefreshingHttpsJwks(time, httpsJwks)) {
-            refreshingHttpsJwks.init();
+            refreshingHttpsJwks.configure(getSaslConfigs(), null, List.of());
             verify(httpsJwks, times(1)).refresh();
             assertFalse(refreshingHttpsJwks.maybeExpediteRefresh(keyId));
             verify(httpsJwks, times(1)).refresh();
@@ -137,7 +137,7 @@ public class RefreshingHttpsJwksTest extends OAuthBearerTest {
         HttpsJwks httpsJwks = spyHttpsJwks();
 
         try (RefreshingHttpsJwks refreshingHttpsJwks = getRefreshingHttpsJwks(time, httpsJwks)) {
-            refreshingHttpsJwks.init();
+            refreshingHttpsJwks.configure(getSaslConfigs(), null, List.of());
             // We refresh once at the initialization time from getJsonWebKeys.
             verify(httpsJwks, times(1)).refresh();
             assertTrue(refreshingHttpsJwks.maybeExpediteRefresh(keyId));
@@ -179,7 +179,7 @@ public class RefreshingHttpsJwksTest extends OAuthBearerTest {
         HttpsJwks httpsJwks = spyHttpsJwks();
 
         try (RefreshingHttpsJwks refreshingHttpsJwks = getRefreshingHttpsJwks(time, httpsJwks)) {
-            refreshingHttpsJwks.init();
+            refreshingHttpsJwks.configure(getSaslConfigs(), null, List.of());
             assertTrue(refreshingHttpsJwks.maybeExpediteRefresh(keyId));
             time.sleep(sleepDelay);
             assertEquals(shouldBeScheduled, refreshingHttpsJwks.maybeExpediteRefresh(keyId));
@@ -187,7 +187,14 @@ public class RefreshingHttpsJwksTest extends OAuthBearerTest {
     }
 
     private RefreshingHttpsJwks getRefreshingHttpsJwks(final MockTime time, final HttpsJwks httpsJwks) {
-        return new RefreshingHttpsJwks(time, httpsJwks, REFRESH_MS, RETRY_BACKOFF_MS, RETRY_BACKOFF_MAX_MS, mockExecutorService(time));
+        HttpsJwks httpsJwksFromTest = httpsJwks;
+
+        return new RefreshingHttpsJwks(time, mockExecutorService(time)) {
+            @Override
+            public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
+                super.configure(httpsJwksFromTest, configs, saslMechanism, jaasConfigEntries);
+            }
+        };
     }
 
     /**
@@ -310,4 +317,11 @@ public class RefreshingHttpsJwksTest extends OAuthBearerTest {
         }
     }
 
+    @SuppressWarnings("unchecked")
+    @Override
+    protected Map<String, ?> getSaslConfigs() {
+        Map<String, String> configs = new HashMap<>((Map<String, String>) super.getSaslConfigs());
+        configs.put("fo", "bar");
+        return configs;
+    }
 }

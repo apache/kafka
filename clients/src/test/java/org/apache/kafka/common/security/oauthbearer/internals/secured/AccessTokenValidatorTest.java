@@ -18,11 +18,16 @@
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
 import org.apache.kafka.common.security.oauthbearer.AccessTokenValidator;
+import org.apache.kafka.common.utils.Time;
 import org.jose4j.jws.AlgorithmIdentifiers;
 import org.jose4j.jwx.HeaderParameterNames;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.TestInstance.Lifecycle;
+
+import javax.security.auth.login.AppConfigurationEntry;
+import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -33,7 +38,9 @@ public abstract class AccessTokenValidatorTest extends OAuthBearerTest {
 
     protected AccessTokenValidator createAccessTokenValidator() throws Exception {
         AccessTokenBuilder builder = new AccessTokenBuilder();
-        return createAccessTokenValidator(builder);
+        AccessTokenValidator validator = createAccessTokenValidator(builder);
+        validator.configure(getSaslConfigs(), null, List.of());
+        return validator;
     }
 
     @Test
@@ -89,5 +96,4 @@ public abstract class AccessTokenValidatorTest extends OAuthBearerTest {
         String accessToken = String.format("%s.%s.%s", header, payload, signature);
         assertThrows(ValidateException.class, () -> validator.validate(accessToken));
     }
-
 }

@@ -17,21 +17,10 @@
 
 package org.apache.kafka.common.security.oauthbearer;
 
-import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.CloseableVerificationKeyResolver;
-
 public class OAuthBearerTestableValidatorCallbackHandler extends OAuthBearerValidatorCallbackHandler {
 
-    public void init(AccessTokenValidator accessTokenValidator, CloseableVerificationKeyResolver verificationKeyResolver) {
+    public void configure(AccessTokenValidator accessTokenValidator) {
         this.accessTokenValidator = accessTokenValidator;
-        this.verificationKeyResolver = verificationKeyResolver;
-
-        try {
-            verificationKeyResolver.init();
-        } catch (Exception e) {
-            throw new KafkaException("The OAuth validator configuration encountered an error when initializing the VerificationKeyResolver", e);
-        }
-
         isInitialized = true;
     }
 }

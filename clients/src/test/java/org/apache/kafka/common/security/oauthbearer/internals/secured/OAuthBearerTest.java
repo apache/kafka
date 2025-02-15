@@ -21,7 +21,14 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.authenticator.TestJaasConfig;
+import org.apache.kafka.common.security.oauthbearer.AccessTokenRetriever;
+import org.apache.kafka.common.security.oauthbearer.AccessTokenValidator;
+import org.apache.kafka.common.security.oauthbearer.DefaultClientAccessTokenValidator;
+import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
+import org.apache.kafka.common.security.oauthbearer.OAuthBearerTestableLoginCallbackHandler;
+import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -48,6 +55,7 @@ import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
@@ -64,6 +72,8 @@ import static org.mockito.Mockito.when;
 public abstract class OAuthBearerTest {
 
     protected final Logger log = LoggerFactory.getLogger(getClass());
+
+    protected final Time time = new MockTime();
 
     protected ObjectMapper mapper = new ObjectMapper();
 
@@ -90,6 +100,25 @@ public abstract class OAuthBearerTest {
         handler.configure(configs,
             OAuthBearerLoginModule.OAUTHBEARER_MECHANISM,
             Collections.singletonList(kafkaClient));
+    }
+
+    protected String createAccessKey(String header, String payload, String signature) {
+        Base64.Encoder enc = Base64.getEncoder();
+        header = enc.encodeToString(Utils.utf8(header));
+        payload = enc.encodeToString(Utils.utf8(payload));
+        signature = enc.encodeToString(Utils.utf8(signature));
+        return String.format("%s.%s.%s", header, payload, signature);
+    }
+
+    protected OAuthBearerLoginCallbackHandler createHandler(AccessTokenRetriever accessTokenRetriever,
+                                                            Map<String, ?> configs) {
+        List<AppConfigurationEntry> jaasConfigEntries = List.of();
+        OAuthBearerTestableLoginCallbackHandler handler = new OAuthBearerTestableLoginCallbackHandler();
+        AccessTokenValidator accessTokenValidator = new DefaultClientAccessTokenValidator();
+        accessTokenRetriever.configure(configs, null, jaasConfigEntries);
+        accessTokenValidator.configure(configs, null, jaasConfigEntries);
+        handler.init(accessTokenRetriever, accessTokenValidator);
+        return handler;
     }
 
     protected String createBase64JsonJwtSection(Consumer<ObjectNode> c) {

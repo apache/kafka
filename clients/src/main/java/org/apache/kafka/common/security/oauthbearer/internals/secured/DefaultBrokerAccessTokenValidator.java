@@ -17,9 +17,14 @@
 
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
+import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.oauthbearer.AccessTokenValidator;
+import org.apache.kafka.common.security.oauthbearer.CloseableVerificationKeyResolver;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
 
+import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
+import org.jose4j.jws.JsonWebSignature;
 import org.jose4j.jwt.JwtClaims;
 import org.jose4j.jwt.MalformedClaimException;
 import org.jose4j.jwt.NumericDate;
@@ -28,15 +33,22 @@ import org.jose4j.jwt.consumer.InvalidJwtException;
 import org.jose4j.jwt.consumer.JwtConsumer;
 import org.jose4j.jwt.consumer.JwtConsumerBuilder;
 import org.jose4j.jwt.consumer.JwtContext;
-import org.jose4j.keys.resolvers.VerificationKeyResolver;
+import org.jose4j.jwx.JsonWebStructure;
+import org.jose4j.lang.UnresolvableKeyException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.security.auth.login.AppConfigurationEntry;
+import java.io.IOException;
+import java.security.Key;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE;
@@ -46,7 +58,7 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SUB_CL
 import static org.jose4j.jwa.AlgorithmConstraints.DISALLOW_NONE;
 
 /**
- * ValidatorAccessTokenValidator is an implementation of {@link AccessTokenValidator} that is used
+ * Implementation of {@link AccessTokenValidator} that is used
  * by the broker to perform more extensive validation of the JWT access token that is received
  * from the client, but ultimately from posting the client credentials to the OAuth/OIDC provider's
  * token endpoint.
@@ -70,25 +82,60 @@ import static org.jose4j.jwa.AlgorithmConstraints.DISALLOW_NONE;
  * </ol>
  */
 
-public class ValidatorAccessTokenValidator implements AccessTokenValidator {
+public class DefaultBrokerAccessTokenValidator implements AccessTokenValidator {
 
-    private static final Logger log = LoggerFactory.getLogger(ValidatorAccessTokenValidator.class);
+    private static final Logger log = LoggerFactory.getLogger(DefaultBrokerAccessTokenValidator.class);
 
-    private final JwtConsumer jwtConsumer;
+    /**
+     * Because a {@link CloseableVerificationKeyResolver} instance can spawn threads and issue
+     * HTTP(S) calls ({@link RefreshingHttpsJwksVerificationKeyResolver}), we only want to create
+     * a new instance for each particular set of configuration. Because each set of configuration
+     * may have multiple instances, we want to reuse the single instance.
+     */
 
-    private final String scopeClaimName;
+    private static final Map<VerificationKeyResolverKey, CloseableVerificationKeyResolver> VERIFICATION_KEY_RESOLVER_CACHE = new HashMap<>();
 
-    private final String subClaimName;
+    private final Time time;
 
-    public static ValidatorAccessTokenValidator create(Map<String, ?> configs,
-                                                       VerificationKeyResolver verificationKeyResolver) {
-        return create(configs, null, verificationKeyResolver);
+    protected CloseableVerificationKeyResolver verificationKeyResolver;
+
+    protected JwtConsumer jwtConsumer;
+
+    protected String scopeClaimName;
+
+    protected String subClaimName;
+
+    public DefaultBrokerAccessTokenValidator() {
+        this(Time.SYSTEM);
     }
 
-    public static ValidatorAccessTokenValidator create(Map<String, ?> configs,
-                                                       String saslMechanism,
-                                                       VerificationKeyResolver verificationKeyResolver) {
-        ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
+    public DefaultBrokerAccessTokenValidator(Time time) {
+        this.time = time;
+    }
+
+    @Override
+    public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
+        Map<String, Object> moduleOptions = JaasOptionsUtils.getOptions(saslMechanism, jaasConfigEntries);
+
+        // Here's the logic which keeps our VerificationKeyResolvers down to a single instance.
+        synchronized (VERIFICATION_KEY_RESOLVER_CACHE) {
+            VerificationKeyResolverKey key = new VerificationKeyResolverKey(configs, moduleOptions);
+            verificationKeyResolver = VERIFICATION_KEY_RESOLVER_CACHE.computeIfAbsent(
+                key,
+                k -> new RefCountingVerificationKeyResolver(new DelegatingVerificationKeyResolver(time))
+            );
+        }
+
+        configure(verificationKeyResolver, configs, saslMechanism, jaasConfigEntries);
+    }
+
+    public void configure(CloseableVerificationKeyResolver verificationKeyResolver,
+                   Map<String, ?> configs,
+                   String saslMechanism,
+                   List<AppConfigurationEntry> jaasConfigEntries) {
+        verificationKeyResolver.configure(configs, saslMechanism, jaasConfigEntries);
+
+        ConfigurationUtils cu = new ConfigurationUtils(saslMechanism, configs);
         Set<String> expectedAudiences = null;
         List<String> l = cu.get(SASL_OAUTHBEARER_EXPECTED_AUDIENCE);
 
@@ -100,62 +147,6 @@ public class ValidatorAccessTokenValidator implements AccessTokenValidator {
         String scopeClaimName = cu.validateString(SASL_OAUTHBEARER_SCOPE_CLAIM_NAME);
         String subClaimName = cu.validateString(SASL_OAUTHBEARER_SUB_CLAIM_NAME);
 
-        return new ValidatorAccessTokenValidator(
-            clockSkew,
-            expectedAudiences,
-            expectedIssuer,
-            verificationKeyResolver,
-            scopeClaimName,
-            subClaimName
-        );
-    }
-
-    /**
-     * Creates a new ValidatorAccessTokenValidator that will be used by the broker for more
-     * thorough validation of the JWT.
-     *
-     * @param clockSkew               The optional value (in seconds) to allow for differences
-     *                                between the time of the OAuth/OIDC identity provider and
-     *                                the broker. If <code>null</code> is provided, the broker
-     *                                and the OAUth/OIDC identity provider are assumed to have
-     *                                very close clock settings.
-     * @param expectedAudiences       The (optional) set the broker will use to verify that
-     *                                the JWT was issued for one of the expected audiences.
-     *                                The JWT will be inspected for the standard OAuth
-     *                                <code>aud</code> claim and if this value is set, the
-     *                                broker will match the value from JWT's <code>aud</code>
-     *                                claim to see if there is an <b>exact</b> match. If there is no
-     *                                match, the broker will reject the JWT and authentication
-     *                                will fail. May be <code>null</code> to not perform any
-     *                                check to verify the JWT's <code>aud</code> claim matches any
-     *                                fixed set of known/expected audiences.
-     * @param expectedIssuer          The (optional) value for the broker to use to verify that
-     *                                the JWT was created by the expected issuer. The JWT will
-     *                                be inspected for the standard OAuth <code>iss</code> claim
-     *                                and if this value is set, the broker will match it
-     *                                <b>exactly</b> against what is in the JWT's <code>iss</code>
-     *                                claim. If there is no match, the broker will reject the JWT
-     *                                and authentication will fail. May be <code>null</code> to not
-     *                                perform any check to verify the JWT's <code>iss</code> claim
-     *                                matches a specific issuer.
-     * @param verificationKeyResolver jose4j-based {@link VerificationKeyResolver} that is used
-     *                                to validate the signature matches the contents of the header
-     *                                and payload
-     * @param scopeClaimName          Name of the scope claim to use; must be non-<code>null</code>
-     * @param subClaimName            Name of the subject claim to use; must be
-     *                                non-<code>null</code>
-     *
-     * @see JwtConsumerBuilder
-     * @see JwtConsumer
-     * @see VerificationKeyResolver
-     */
-
-    public ValidatorAccessTokenValidator(Integer clockSkew,
-        Set<String> expectedAudiences,
-        String expectedIssuer,
-        VerificationKeyResolver verificationKeyResolver,
-        String scopeClaimName,
-        String subClaimName) {
         final JwtConsumerBuilder jwtConsumerBuilder = new JwtConsumerBuilder();
 
         if (clockSkew != null)
@@ -175,6 +166,11 @@ public class ValidatorAccessTokenValidator implements AccessTokenValidator {
             .build();
         this.scopeClaimName = scopeClaimName;
         this.subClaimName = subClaimName;
+    }
+
+    @Override
+    public void close() {
+        Utils.closeQuietly(verificationKeyResolver, "verificationKeyResolver");
     }
 
     /**
@@ -243,5 +239,76 @@ public class ValidatorAccessTokenValidator implements AccessTokenValidator {
         T get() throws MalformedClaimException;
 
     }
+    /**
+     * <code>VkrKey</code> is a simple structure which encapsulates the criteria for different
+     * sets of configuration. This will allow us to use this object as a key in a {@link Map}
+     * to keep a single instance per key.
+     */
 
+    private static class VerificationKeyResolverKey {
+
+        private final Map<String, ?> configs;
+
+        private final Map<String, Object> moduleOptions;
+
+        public VerificationKeyResolverKey(Map<String, ?> configs, Map<String, Object> moduleOptions) {
+            this.configs = configs;
+            this.moduleOptions = moduleOptions;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) {
+                return true;
+            }
+
+            if (o == null || getClass() != o.getClass()) {
+                return false;
+            }
+
+            VerificationKeyResolverKey that = (VerificationKeyResolverKey) o;
+            return configs.equals(that.configs) && moduleOptions.equals(that.moduleOptions);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(configs, moduleOptions);
+        }
+
+    }
+
+    /**
+     * <code>RefCountingVerificationKeyResolver</code> allows us to share a single
+     * {@link CloseableVerificationKeyResolver} instance between multiple
+     * {@link AuthenticateCallbackHandler} instances and perform the lifecycle methods the
+     * appropriate number of times.
+     */
+
+    private static class RefCountingVerificationKeyResolver implements CloseableVerificationKeyResolver {
+
+        private final CloseableVerificationKeyResolver delegate;
+
+        private final AtomicInteger count = new AtomicInteger(0);
+
+        public RefCountingVerificationKeyResolver(CloseableVerificationKeyResolver delegate) {
+            this.delegate = delegate;
+        }
+
+        @Override
+        public Key resolveKey(JsonWebSignature jws, List<JsonWebStructure> nestingContext) throws UnresolvableKeyException {
+            return delegate.resolveKey(jws, nestingContext);
+        }
+
+        @Override
+        public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
+            if (count.incrementAndGet() == 1)
+                delegate.configure(configs, saslMechanism, jaasConfigEntries);
+        }
+
+        @Override
+        public void close() {
+            if (count.decrementAndGet() == 0)
+                delegate.close();
+        }
+    }
 }

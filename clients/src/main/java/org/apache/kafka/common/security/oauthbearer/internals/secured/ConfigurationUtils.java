@@ -46,10 +46,10 @@ public class ConfigurationUtils {
     private final String prefix;
 
     public ConfigurationUtils(Map<String, ?> configs) {
-        this(configs, null);
+        this(null, configs);
     }
 
-    public ConfigurationUtils(Map<String, ?> configs, String saslMechanism) {
+    public ConfigurationUtils(String saslMechanism, Map<String, ?> configs) {
         this.configs = configs;
 
         if (saslMechanism != null && !saslMechanism.trim().isEmpty())

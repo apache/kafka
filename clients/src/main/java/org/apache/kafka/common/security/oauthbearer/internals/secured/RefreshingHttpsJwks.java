@@ -17,17 +17,20 @@
 
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
-import org.apache.kafka.common.security.oauthbearer.Initable;
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.security.auth.AuthenticationConfigurable;
 import org.apache.kafka.common.utils.Time;
 
+import org.jose4j.http.Get;
 import org.jose4j.jwk.HttpsJwks;
 import org.jose4j.jwk.JsonWebKey;
 import org.jose4j.lang.JoseException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.Closeable;
+import javax.security.auth.login.AppConfigurationEntry;
 import java.io.IOException;
+import java.net.URL;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -40,6 +43,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_URL;
+
 /**
  * Implementation of {@link HttpsJwks} that will periodically refresh the JWKS cache to reduce or
  * even prevent HTTP/HTTPS traffic in the hot path of validation. It is assumed that it's
@@ -50,15 +58,15 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  * This instance is created and provided to the
  * {@link org.jose4j.keys.resolvers.HttpsJwksVerificationKeyResolver} that is used when using
  * an HTTP-/HTTPS-based {@link org.jose4j.keys.resolvers.VerificationKeyResolver}, which is then
- * provided to the {@link ValidatorAccessTokenValidator} to use in validating the signature of
+ * provided to the {@link DefaultBrokerAccessTokenValidator} to use in validating the signature of
  * a JWT.
  *
  * @see org.jose4j.keys.resolvers.HttpsJwksVerificationKeyResolver
  * @see org.jose4j.keys.resolvers.VerificationKeyResolver
- * @see ValidatorAccessTokenValidator
+ * @see DefaultBrokerAccessTokenValidator
  */
 
-public final class RefreshingHttpsJwks implements Initable, Closeable {
+public class RefreshingHttpsJwks implements AuthenticationConfigurable {
 
     private static final Logger log = LoggerFactory.getLogger(RefreshingHttpsJwks.class);
 
@@ -72,31 +80,9 @@ public final class RefreshingHttpsJwks implements Initable, Closeable {
 
     private static final TimeUnit SHUTDOWN_TIME_UNIT = TimeUnit.SECONDS;
 
-    /**
-     * {@link HttpsJwks} does the actual work of contacting the OAuth/OIDC endpoint to get the
-     * JWKS. In some cases, the call to {@link HttpsJwks#getJsonWebKeys()} will trigger a call
-     * to {@link HttpsJwks#refresh()} which will block the current thread in network I/O. We cache
-     * the JWKS ourselves (see {@link #jsonWebKeys}) to avoid the network I/O.
-     * <p>
-     * We want to be very careful where we use the {@link HttpsJwks} instance so that we don't
-     * perform any operation (directly or indirectly) that could cause blocking. This is because
-     * the JWKS logic is part of the larger authentication logic which operates on Kafka's network
-     * thread. It's OK to execute {@link HttpsJwks#getJsonWebKeys()} (which calls
-     * {@link HttpsJwks#refresh()}) from within {@link #init()} as that method is called only at
-     * startup, and we can afford the blocking hit there.
-     */
-
-    private final HttpsJwks httpsJwks;
-
     private final ScheduledExecutorService executorService;
 
     private final Time time;
-
-    private final long refreshMs;
-
-    private final long refreshRetryBackoffMs;
-
-    private final long refreshRetryBackoffMaxMs;
 
     /**
      * Protects {@link #missingKeyIds} and {@link #jsonWebKeys}.
@@ -113,6 +99,28 @@ public final class RefreshingHttpsJwks implements Initable, Closeable {
     private final AtomicBoolean refreshInProgressFlag = new AtomicBoolean(false);
 
     /**
+     * {@link HttpsJwks} does the actual work of contacting the OAuth/OIDC endpoint to get the
+     * JWKS. In some cases, the call to {@link HttpsJwks#getJsonWebKeys()} will trigger a call
+     * to {@link HttpsJwks#refresh()} which will block the current thread in network I/O. We cache
+     * the JWKS ourselves (see {@link #jsonWebKeys}) to avoid the network I/O.
+     * <p>
+     * We want to be very careful where we use the {@link HttpsJwks} instance so that we don't
+     * perform any operation (directly or indirectly) that could cause blocking. This is because
+     * the JWKS logic is part of the larger authentication logic which operates on Kafka's network
+     * thread. It's OK to execute {@link HttpsJwks#getJsonWebKeys()} (which calls
+     * {@link HttpsJwks#refresh()}) from within {@link #configure(Map, String, List)} as that method is called only at
+     * startup, and we can afford the blocking hit there.
+     */
+
+    protected HttpsJwks httpsJwks;
+
+    protected long refreshMs;
+
+    protected long refreshRetryBackoffMs;
+
+    protected long refreshRetryBackoffMaxMs;
+
+    /**
      * As mentioned in the comments for {@link #httpsJwks}, we cache the JWKS ourselves so that
      * we can return the list immediately without any network I/O. They are only cached within
      * calls to {@link #refresh()}.
@@ -120,28 +128,14 @@ public final class RefreshingHttpsJwks implements Initable, Closeable {
 
     private List<JsonWebKey> jsonWebKeys;
 
-    private boolean isInitialized;
+    protected boolean isInitialized;
 
-    /**
-     * Creates a <code>RefreshingHttpsJwks</code>. It should only be used for testing to pass in a mock executor
-     * service. Otherwise the constructor below should be used.
-     */
+    public RefreshingHttpsJwks(Time time) {
+        this(time, Executors.newSingleThreadScheduledExecutor());
+    }
 
-    // VisibleForTesting
-    RefreshingHttpsJwks(Time time,
-                        HttpsJwks httpsJwks,
-                        long refreshMs,
-                        long refreshRetryBackoffMs,
-                        long refreshRetryBackoffMaxMs,
-                        ScheduledExecutorService executorService) {
-        if (refreshMs <= 0)
-            throw new IllegalArgumentException("JWKS validation key refresh configuration value retryWaitMs value must be positive");
-
-        this.httpsJwks = httpsJwks;
+    public RefreshingHttpsJwks(Time time, ScheduledExecutorService executorService) {
         this.time = time;
-        this.refreshMs = refreshMs;
-        this.refreshRetryBackoffMs = refreshRetryBackoffMs;
-        this.refreshRetryBackoffMaxMs = refreshRetryBackoffMaxMs;
         this.executorService = executorService;
         this.missingKeyIds = new LinkedHashMap<>(MISSING_KEY_ID_CACHE_MAX_ENTRIES, .75f, true) {
             @Override
@@ -151,55 +145,27 @@ public final class RefreshingHttpsJwks implements Initable, Closeable {
         };
     }
 
-    /**
-     * Creates a <code>RefreshingHttpsJwks</code> that will be used by the
-     * {@link RefreshingHttpsJwksVerificationKeyResolver} to resolve new key IDs in JWTs.
-     *
-     * @param time                     {@link Time} instance
-     * @param httpsJwks                {@link HttpsJwks} instance from which to retrieve the JWKS
-     *                                 based on the OAuth/OIDC standard
-     * @param refreshMs                The number of milliseconds between refresh passes to connect
-     *                                 to the OAuth/OIDC JWKS endpoint to retrieve the latest set
-     * @param refreshRetryBackoffMs    Time for delay after initial failed attempt to retrieve JWKS
-     * @param refreshRetryBackoffMaxMs Maximum time to retrieve JWKS
-     */
-
-    public RefreshingHttpsJwks(Time time,
-                               HttpsJwks httpsJwks,
-                               long refreshMs,
-                               long refreshRetryBackoffMs,
-                               long refreshRetryBackoffMaxMs) {
-        this(time, httpsJwks, refreshMs, refreshRetryBackoffMs, refreshRetryBackoffMaxMs, Executors.newSingleThreadScheduledExecutor());
-    }
-
     @Override
-    public void init() throws IOException {
+    public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
         try {
             log.debug("init started");
 
-            List<JsonWebKey> localJWKs;
+            ConfigurationUtils cu = new ConfigurationUtils(saslMechanism, configs);
+            URL jwksEndpointUrl = cu.validateUrl(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL);
 
-            try {
-                localJWKs = httpsJwks.getJsonWebKeys();
-            } catch (JoseException e) {
-                throw new IOException("Could not refresh JWKS", e);
-            }
+            long refreshIntervalMs = cu.validateLong(SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS, true, 0L);
+            JaasOptionsUtils jou = new JaasOptionsUtils(saslMechanism, jaasConfigEntries);
 
-            try {
-                refreshLock.writeLock().lock();
-                jsonWebKeys = Collections.unmodifiableList(localJWKs);
-            } finally {
-                refreshLock.writeLock().unlock();
-            }
+            HttpsJwks httpsJwks = new HttpsJwks(jwksEndpointUrl.toString());
+            httpsJwks.setDefaultCacheDuration(refreshIntervalMs);
 
-            // Since we just grabbed the keys (which will have invoked a HttpsJwks.refresh()
-            // internally), we can delay our first invocation by refreshMs.
-            //
-            // Note: we refer to this as a _scheduled_ refresh.
-            executorService.scheduleAtFixedRate(this::refresh,
-                    refreshMs,
-                    refreshMs,
-                    TimeUnit.MILLISECONDS);
+            jou.maybeCreateSSLSocketFactory(jwksEndpointUrl).ifPresent(sslSocketFactory -> {
+                Get get = new Get();
+                get.setSslSocketFactory(sslSocketFactory);
+                httpsJwks.setSimpleHttpGet(get);
+            });
+
+            configure(httpsJwks, configs, saslMechanism, jaasConfigEntries);
 
             log.info("JWKS validation key refresh thread started with a refresh interval of {} ms", refreshMs);
         } finally {
@@ -207,6 +173,45 @@ public final class RefreshingHttpsJwks implements Initable, Closeable {
 
             log.debug("init completed");
         }
+    }
+
+    void configure(HttpsJwks httpsJwks,
+                   Map<String, ?> configs,
+                   String saslMechanism,
+                   List<AppConfigurationEntry> jaasConfigEntries) {
+        this.httpsJwks = httpsJwks;
+
+        ConfigurationUtils cu = new ConfigurationUtils(saslMechanism, configs);
+        refreshRetryBackoffMs = cu.validateLong(SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS);
+        refreshRetryBackoffMaxMs = cu.validateLong(SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS);
+
+        List<JsonWebKey> localJWKs;
+
+        try {
+            localJWKs = httpsJwks.getJsonWebKeys();
+        } catch (Exception e) {
+            throw new KafkaException("Could not refresh JWKS", e);
+        }
+
+        try {
+            refreshLock.writeLock().lock();
+            jsonWebKeys = Collections.unmodifiableList(localJWKs);
+        } finally {
+            refreshLock.writeLock().unlock();
+        }
+
+        // Since we just grabbed the keys (which will have invoked a HttpsJwks.refresh()
+        // internally), we can delay our first invocation by refreshMs.
+        //
+        // Note: we refer to this as a _scheduled_ refresh.
+        executorService.scheduleAtFixedRate(
+            this::refresh,
+            refreshMs,
+            refreshMs,
+            TimeUnit.MILLISECONDS
+        );
+
+        log.info("JWKS validation key refresh thread started with a refresh interval of {} ms", refreshMs);
     }
 
     @Override
@@ -270,7 +275,7 @@ public final class RefreshingHttpsJwks implements Initable, Closeable {
      * </p>
      *
      * <p>
-     * The <i>scheduled</i> refresh is scheduled in {@link #init()} and runs every
+     * The <i>scheduled</i> refresh is scheduled in {@link #configure(Map, String, List)} and runs every
      * {@link #refreshMs} milliseconds. An <i>expedited</i> refresh is performed when an
      * incoming JWT refers to a key ID that isn't in our JWKS cache ({@link #jsonWebKeys})
      * and we try to perform a refresh sooner than the next scheduled refresh.

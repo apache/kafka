@@ -26,10 +26,11 @@ import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.security.oauthbearer.AccessTokenRetriever;
 import org.apache.kafka.common.security.oauthbearer.AccessTokenValidator;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.CloseableVerificationKeyResolver;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.LoginAccessTokenValidator;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.ValidatorAccessTokenValidator;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.VerificationKeyResolverFactory;
+import org.apache.kafka.common.security.oauthbearer.DefaultAccessTokenRetriever;
+import org.apache.kafka.common.security.oauthbearer.CloseableVerificationKeyResolver;
+import org.apache.kafka.common.security.oauthbearer.DefaultClientAccessTokenValidator;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.DefaultBrokerAccessTokenValidator;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.DelegatingVerificationKeyResolver;
 import org.apache.kafka.common.utils.Exit;
 
 import net.sourceforge.argparse4j.ArgumentParsers;
@@ -132,19 +133,19 @@ public class OAuthCompatibilityTool {
         ConfigHandler configHandler = new ConfigHandler(namespace);
 
         Map<String, ?> configs = configHandler.getConfigs();
-        Map<String, Object> jaasConfigs = configHandler.getJaasOptions();
+//        Map<String, Object> jaasConfigs = configHandler.getJaasOptions();
 
         try {
             String accessToken;
 
-            {
-                // Client side...
-                try (AccessTokenRetriever atr = AccessTokenRetriever.create(configs, jaasConfigs)) {
-                    atr.init();
-                    AccessTokenValidator atv = LoginAccessTokenValidator.create(configs);
+            // Client side...
+            try (AccessTokenRetriever retriever = new DefaultAccessTokenRetriever()) {
+                retriever.configure(configs, sasl, jaasConfigs);
+
+                try (AccessTokenValidator atv = new DefaultClientAccessTokenValidator()) {
                     System.out.println("PASSED 1/5: client configuration");
 
-                    accessToken = atr.retrieve();
+                    accessToken = retriever.retrieve();
                     System.out.println("PASSED 2/5: client JWT retrieval");
 
                     atv.validate(accessToken);
@@ -152,17 +153,16 @@ public class OAuthCompatibilityTool {
                 }
             }
 
-            {
-                // Broker side...
-                try (CloseableVerificationKeyResolver vkr = VerificationKeyResolverFactory.create(configs, jaasConfigs)) {
-                    vkr.init();
-                    AccessTokenValidator atv = ValidatorAccessTokenValidator.create(configs, vkr);
-                    System.out.println("PASSED 4/5: broker configuration");
+            // Broker side...
+            try (AccessTokenValidator validator = new DefaultBrokerAccessTokenValidator()) {
+                vkr.init();
+                ;
+                System.out.println("PASSED 4/5: broker configuration");
 
-                    atv.validate(accessToken);
-                    System.out.println("PASSED 5/5: broker JWT validation");
-                }
+                validator.validate(accessToken);
+                System.out.println("PASSED 5/5: broker JWT validation");
             }
+
 
             System.out.println("SUCCESS");
             Exit.exit(0);

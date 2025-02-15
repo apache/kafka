@@ -17,9 +17,6 @@
 
 package org.apache.kafka.common.security.oauthbearer;
 
-import org.apache.kafka.common.KafkaException;
-
-import java.io.IOException;
 import java.util.Collections;
 
 public class OAuthBearerTestableLoginCallbackHandler extends OAuthBearerLoginCallbackHandler {
@@ -28,13 +25,6 @@ public class OAuthBearerTestableLoginCallbackHandler extends OAuthBearerLoginCal
         this.moduleOptions = Collections.emptyMap();
         this.accessTokenRetriever = accessTokenRetriever;
         this.accessTokenValidator = accessTokenValidator;
-
-        try {
-            this.accessTokenRetriever.init();
-        } catch (IOException e) {
-            throw new KafkaException("The OAuth login configuration encountered an error when initializing the AccessTokenRetriever", e);
-        }
-
         this.isInitialized = true;
     }
 }

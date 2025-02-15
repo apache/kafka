@@ -17,6 +17,9 @@
 
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
+import org.apache.kafka.common.security.oauthbearer.CloseableVerificationKeyResolver;
+import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.jose4j.jwk.HttpsJwks;
 import org.jose4j.jwk.JsonWebKey;
 import org.jose4j.jwk.VerificationJwkSelector;
@@ -28,9 +31,11 @@ import org.jose4j.lang.UnresolvableKeyException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.security.auth.login.AppConfigurationEntry;
 import java.io.IOException;
 import java.security.Key;
 import java.util.List;
+import java.util.Map;
 
 /**
  * <code>RefreshingHttpsJwksVerificationKeyResolver</code> is a
@@ -85,23 +90,27 @@ public class RefreshingHttpsJwksVerificationKeyResolver implements CloseableVeri
 
     private static final Logger log = LoggerFactory.getLogger(RefreshingHttpsJwksVerificationKeyResolver.class);
 
-    private final RefreshingHttpsJwks refreshingHttpsJwks;
+    protected final Time time;
 
-    private final VerificationJwkSelector verificationJwkSelector;
+    protected final VerificationJwkSelector verificationJwkSelector;
 
-    private boolean isInitialized;
+    protected RefreshingHttpsJwks refreshingHttpsJwks;
 
-    public RefreshingHttpsJwksVerificationKeyResolver(RefreshingHttpsJwks refreshingHttpsJwks) {
-        this.refreshingHttpsJwks = refreshingHttpsJwks;
+    protected boolean isInitialized;
+
+    public RefreshingHttpsJwksVerificationKeyResolver(Time time) {
+        this.time = time;
         this.verificationJwkSelector = new VerificationJwkSelector();
     }
 
     @Override
-    public void init() throws IOException {
+    public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
+        refreshingHttpsJwks = new RefreshingHttpsJwks(time);
+
         try {
             log.debug("init started");
 
-            refreshingHttpsJwks.init();
+            refreshingHttpsJwks.configure(configs, saslMechanism, jaasConfigEntries);
         } finally {
             isInitialized = true;
 
@@ -114,7 +123,7 @@ public class RefreshingHttpsJwksVerificationKeyResolver implements CloseableVeri
         try {
             log.debug("close started");
 
-            refreshingHttpsJwks.close();
+            Utils.closeQuietly(refreshingHttpsJwks, "refreshingHttpsJwks");
         } finally {
             log.debug("close completed");
         }
@@ -148,5 +157,4 @@ public class RefreshingHttpsJwksVerificationKeyResolver implements CloseableVeri
             throw new UnresolvableKeyException(sb, e);
         }
     }
-
 }

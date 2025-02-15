@@ -15,18 +15,23 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.security.oauthbearer.internals.secured;
+package org.apache.kafka.common.security.oauthbearer;
 
-import org.apache.kafka.common.security.oauthbearer.AccessTokenValidator;
-import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.BasicOAuthBearerToken;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.ClaimValidationUtils;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.SerializedJwt;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.ValidateException;
 import org.apache.kafka.common.security.oauthbearer.internals.unsecured.OAuthBearerIllegalTokenException;
 import org.apache.kafka.common.security.oauthbearer.internals.unsecured.OAuthBearerUnsecuredJws;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.security.auth.login.AppConfigurationEntry;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -53,40 +58,29 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SUB_CL
  * </ol>
  */
 
-public class LoginAccessTokenValidator implements AccessTokenValidator {
+public class DefaultClientAccessTokenValidator implements AccessTokenValidator {
 
-    private static final Logger log = LoggerFactory.getLogger(LoginAccessTokenValidator.class);
+    private static final Logger log = LoggerFactory.getLogger(DefaultClientAccessTokenValidator.class);
 
     public static final String EXPIRATION_CLAIM_NAME = "exp";
 
     public static final String ISSUED_AT_CLAIM_NAME = "iat";
 
-    private final String scopeClaimName;
+    protected String scopeClaimName;
 
-    private final String subClaimName;
+    protected String subClaimName;
 
-    public static LoginAccessTokenValidator create(Map<String, ?> configs) {
-        return create(configs, (String) null);
-    }
-
-    public static LoginAccessTokenValidator create(Map<String, ?> configs, String saslMechanism) {
-        ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
-        String scopeClaimName = cu.get(SASL_OAUTHBEARER_SCOPE_CLAIM_NAME);
-        String subClaimName = cu.get(SASL_OAUTHBEARER_SUB_CLAIM_NAME);
-        return new LoginAccessTokenValidator(scopeClaimName, subClaimName);
-    }
-
-    /**
-     * Creates a new LoginAccessTokenValidator that will be used by the client for lightweight
-     * validation of the JWT.
-     *
-     * @param scopeClaimName Name of the scope claim to use; must be non-<code>null</code>
-     * @param subClaimName   Name of the subject claim to use; must be non-<code>null</code>
-     */
-
-    public LoginAccessTokenValidator(String scopeClaimName, String subClaimName) {
-        this.scopeClaimName = ClaimValidationUtils.validateClaimNameOverride(DEFAULT_SASL_OAUTHBEARER_SCOPE_CLAIM_NAME, scopeClaimName);
-        this.subClaimName = ClaimValidationUtils.validateClaimNameOverride(DEFAULT_SASL_OAUTHBEARER_SUB_CLAIM_NAME, subClaimName);
+    @Override
+    public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
+        ConfigurationUtils cu = new ConfigurationUtils(saslMechanism, configs);
+        scopeClaimName = ClaimValidationUtils.validateClaimNameOverride(
+            DEFAULT_SASL_OAUTHBEARER_SCOPE_CLAIM_NAME,
+            cu.get(SASL_OAUTHBEARER_SCOPE_CLAIM_NAME)
+        );
+        subClaimName = ClaimValidationUtils.validateClaimNameOverride(
+            DEFAULT_SASL_OAUTHBEARER_SUB_CLAIM_NAME,
+            cu.get(SASL_OAUTHBEARER_SUB_CLAIM_NAME)
+        );
     }
 
     /**
@@ -130,11 +124,13 @@ public class LoginAccessTokenValidator implements AccessTokenValidator {
         Long issuedAt = ClaimValidationUtils.validateIssuedAt(ISSUED_AT_CLAIM_NAME,
             issuedAtRaw != null ? issuedAtRaw.longValue() * 1000L : null);
 
-        return new BasicOAuthBearerToken(accessToken,
+        return new BasicOAuthBearerToken(
+            accessToken,
             scopes,
             expiration,
             subject,
-            issuedAt);
+            issuedAt
+        );
     }
 
     private Object getClaim(Map<String, Object> payload, String claimName) {
@@ -142,5 +138,4 @@ public class LoginAccessTokenValidator implements AccessTokenValidator {
         log.debug("getClaim - {}: {}", claimName, value);
         return value;
     }
-
 }

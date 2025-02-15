@@ -17,9 +17,9 @@
 
 package org.apache.kafka.common.security.oauthbearer;
 
-import org.apache.kafka.common.security.oauthbearer.internals.secured.LoginAccessTokenValidator;
+import org.apache.kafka.common.security.auth.AuthenticationConfigurable;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ValidateException;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.ValidatorAccessTokenValidator;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.DefaultBrokerAccessTokenValidator;
 
 /**
  * An instance of <code>AccessTokenValidator</code> acts as a function object that, given an access
@@ -42,13 +42,13 @@ import org.apache.kafka.common.security.oauthbearer.internals.secured.ValidatorA
  *     <li><a href="https://datatracker.ietf.org/doc/html/draft-ietf-oauth-access-token-jwt">RFC 6750, Section 2.1</a></li>
  * </ul>
  *
- * @see LoginAccessTokenValidator A basic AccessTokenValidator used by client-side login
+ * @see DefaultClientAccessTokenValidator A basic AccessTokenValidator used by client-side login
  *                                authentication
- * @see ValidatorAccessTokenValidator A more robust AccessTokenValidator that is used on the broker
+ * @see DefaultBrokerAccessTokenValidator A more robust AccessTokenValidator that is used on the broker
  *                                    to validate the token's contents and verify the signature
  */
 
-public interface AccessTokenValidator {
+public interface AccessTokenValidator extends AuthenticationConfigurable {
 
     /**
      * Accepts an OAuth JWT access token in base-64 encoded format, validates, and returns an
@@ -63,4 +63,8 @@ public interface AccessTokenValidator {
 
     OAuthBearerToken validate(String accessToken) throws ValidateException;
 
+    @Override
+    default void close() {
+        // Do nothing...
+    }
 }

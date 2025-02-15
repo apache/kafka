@@ -20,26 +20,28 @@ package org.apache.kafka.common.security.oauthbearer;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
+import org.apache.kafka.common.security.auth.AuthenticationConfigurable;
 import org.apache.kafka.common.security.auth.SaslExtensions;
 import org.apache.kafka.common.security.auth.SaslExtensionsCallback;
 import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerClientInitialResponse;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.ClientCredentialsAccessTokenRetriever;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.DefaultBrokerAccessTokenValidator;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.JaasOptionsUtils;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.LoginAccessTokenValidator;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ValidateException;
-
+import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.io.IOException;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 
 import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.UnsupportedCallbackException;
 import javax.security.auth.login.AppConfigurationEntry;
 import javax.security.sasl.SaslException;
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
 
@@ -48,7 +50,7 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_
  * <code>OAuthBearerLoginCallbackHandler</code> is an {@link AuthenticateCallbackHandler} that
  * accepts {@link OAuthBearerTokenCallback} and {@link SaslExtensionsCallback} callbacks to
  * perform the steps to request a JWT from an OAuth/OIDC provider using the
- * <code>clientcredentials</code>. This grant type is commonly used for non-interactive
+ * <code>client_credentials</code>. This grant type is commonly used for non-interactive
  * "service accounts" where there is no user available to interactively supply credentials.
  * </p>
  *
@@ -148,8 +150,6 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_
 
 public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHandler {
 
-    private static final Logger log = LoggerFactory.getLogger(OAuthBearerLoginCallbackHandler.class);
-
     public static final String CLIENT_ID_CONFIG = "clientId";
     public static final String CLIENT_SECRET_CONFIG = "clientSecret";
     public static final String SCOPE_CONFIG = "scope";
@@ -158,19 +158,21 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
         "client ID to uniquely identify the service account to use for authentication for " +
         "this client. The value must be paired with a corresponding " + CLIENT_SECRET_CONFIG + " " +
         "value and is provided to the OAuth provider using the OAuth " +
-        "clientcredentials grant type.";
+        "client_credentials grant type.";
 
     public static final String CLIENT_SECRET_DOC = "The OAuth/OIDC identity provider-issued " +
         "client secret serves a similar function as a password to the " + CLIENT_ID_CONFIG + " " +
         "account and identifies the service account to use for authentication for " +
         "this client. The value must be paired with a corresponding " + CLIENT_ID_CONFIG + " " +
         "value and is provided to the OAuth provider using the OAuth " +
-        "clientcredentials grant type.";
+        "client_credentials grant type.";
 
     public static final String SCOPE_DOC = "The (optional) HTTP/HTTPS login request to the " +
         "token endpoint (" + SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL + ") may need to specify an " +
         "OAuth \"scope\". If so, the " + SCOPE_CONFIG + " is used to provide the value to " +
         "include with the login request.";
+
+    private static final Logger log = LoggerFactory.getLogger(OAuthBearerLoginCallbackHandler.class);
 
     private static final String EXTENSION_PREFIX = "extension_";
 
@@ -182,16 +184,29 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
 
     protected boolean isInitialized = false;
 
+
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
         moduleOptions = JaasOptionsUtils.getOptions(saslMechanism, jaasConfigEntries);
-        accessTokenRetriever = AccessTokenRetriever.create(configs, saslMechanism, moduleOptions);
-        accessTokenValidator = LoginAccessTokenValidator.create(configs, saslMechanism);
 
         try {
-            this.accessTokenRetriever.init();
-        } catch (IOException e) {
-            throw new KafkaException("The OAuth login configuration encountered an error when initializing the AccessTokenRetriever", e);
+            accessTokenRetriever = newInstance(
+                SaslConfigs.SASL_OAUTHBEARER_ACCESS_TOKEN_RETRIEVER_CLASS,
+                ClientCredentialsAccessTokenRetriever.class,
+                configs,
+                saslMechanism,
+                jaasConfigEntries
+            );
+
+            accessTokenValidator = newInstance(
+                SaslConfigs.SASL_OAUTHBEARER_ACCESS_TOKEN_VALIDATOR_CLASS,
+                DefaultBrokerAccessTokenValidator.class,
+                configs,
+                saslMechanism,
+                jaasConfigEntries
+            );
+        } catch (Throwable t) {
+            throw new KafkaException("The OAuth login configuration encountered an error during initialization", t);
         }
 
         isInitialized = true;
@@ -199,13 +214,8 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
 
     @Override
     public void close() {
-        if (accessTokenRetriever != null) {
-            try {
-                this.accessTokenRetriever.close();
-            } catch (IOException e) {
-                log.warn("The OAuth login configuration encountered an error when closing the AccessTokenRetriever", e);
-            }
-        }
+        Utils.closeQuietly(accessTokenRetriever, "accessTokenRetriever");
+        Utils.closeQuietly(accessTokenValidator, "accessTokenValidator");
     }
 
     @Override
@@ -223,7 +233,7 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
         }
     }
 
-    private void handleTokenCallback(OAuthBearerTokenCallback callback) throws IOException {
+    protected void handleTokenCallback(OAuthBearerTokenCallback callback) throws IOException {
         checkInitialized();
         String accessToken = accessTokenRetriever.retrieve();
 
@@ -236,7 +246,7 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
         }
     }
 
-    private void handleExtensionsCallback(SaslExtensionsCallback callback) {
+    protected void handleExtensionsCallback(SaslExtensionsCallback callback) {
         checkInitialized();
 
         Map<String, String> extensions = new HashMap<>();
@@ -269,9 +279,24 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
         callback.extensions(saslExtensions);
     }
 
-    private void checkInitialized() {
+    protected void checkInitialized() {
         if (!isInitialized)
             throw new IllegalStateException(String.format("To use %s, first call the configure or init method", getClass().getSimpleName()));
     }
 
+    @SuppressWarnings("unchecked")
+    private <T extends AuthenticationConfigurable> T newInstance(String configName,
+                                                                 Class<T> defaultClazz,
+                                                                 Map<String, ?> configs,
+                                                                 String saslMechanism,
+                                                                 List<AppConfigurationEntry> jaasConfigEntries) {
+        Class<T> clazz = (Class<T>) configs.get(configName);
+
+        if (clazz == null)
+            clazz = defaultClazz;
+
+        T obj = Utils.newInstance(clazz);
+        obj.configure(configs, saslMechanism, jaasConfigEntries);
+        return obj;
+    }
 }

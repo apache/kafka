@@ -19,17 +19,19 @@ package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
 import org.apache.kafka.common.config.ConfigException;
 
+import org.apache.kafka.common.security.oauthbearer.CloseableVerificationKeyResolver;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_URL;
 import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG;
 
-public class VerificationKeyResolverFactoryTest extends OAuthBearerTest {
+public class DelegatingVerificationKeyResolverTest extends OAuthBearerTest {
 
     @AfterEach
     public void tearDown() throws Exception {
@@ -43,10 +45,11 @@ public class VerificationKeyResolverFactoryTest extends OAuthBearerTest {
 
         System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, verificationKeyFile.toURI().toString());
         Map<String, ?> configs = Collections.singletonMap(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL, verificationKeyFile.toURI().toString());
-        Map<String, Object> jaasConfig = Collections.emptyMap();
 
         // verify it won't throw exception
-        try (CloseableVerificationKeyResolver verificationKeyResolver = VerificationKeyResolverFactory.create(configs, jaasConfig)) { }
+        try (CloseableVerificationKeyResolver verificationKeyResolver = new DelegatingVerificationKeyResolver(time)) {
+            verificationKeyResolver.configure(configs, null, List.of());
+        }
     }
 
     @Test
@@ -55,8 +58,10 @@ public class VerificationKeyResolverFactoryTest extends OAuthBearerTest {
         String file = new File("/tmp/this-directory-does-not-exist/foo.json").toURI().toString();
         System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, file);
         Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL, file);
-        Map<String, Object> jaasConfig = Collections.emptyMap();
-        assertThrowsWithMessage(ConfigException.class, () -> VerificationKeyResolverFactory.create(configs, jaasConfig), "that doesn't exist");
+
+        try (CloseableVerificationKeyResolver verificationKeyResolver = new DelegatingVerificationKeyResolver(time)) {
+            assertThrowsWithMessage(ConfigException.class, () -> verificationKeyResolver.configure(configs, null, List.of()), "that doesn't exist");
+        }
     }
 
     @Test
@@ -66,8 +71,10 @@ public class VerificationKeyResolverFactoryTest extends OAuthBearerTest {
         File verificationKeyFile = new File(tmpDir, "this-file-does-not-exist.json");
         System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, verificationKeyFile.toURI().toString());
         Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL, verificationKeyFile.toURI().toString());
-        Map<String, Object> jaasConfig = Collections.emptyMap();
-        assertThrowsWithMessage(ConfigException.class, () -> VerificationKeyResolverFactory.create(configs, jaasConfig), "that doesn't exist");
+
+        try (CloseableVerificationKeyResolver verificationKeyResolver = new DelegatingVerificationKeyResolver(time)) {
+            assertThrowsWithMessage(ConfigException.class, () -> verificationKeyResolver.configure(configs, null, List.of()), "that doesn't exist");
+        }
     }
 
     @Test
@@ -76,7 +83,9 @@ public class VerificationKeyResolverFactoryTest extends OAuthBearerTest {
         File tmpDir = createTempDir("not_allowed");
         File verificationKeyFile = new File(tmpDir, "not_allowed.json");
         Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL, verificationKeyFile.toURI().toString());
-        assertThrowsWithMessage(ConfigException.class, () -> VerificationKeyResolverFactory.create(configs, Collections.emptyMap()),
-                ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG);
+
+        try (CloseableVerificationKeyResolver verificationKeyResolver = new DelegatingVerificationKeyResolver(time)) {
+            assertThrowsWithMessage(ConfigException.class, () -> verificationKeyResolver.configure(configs, null, List.of()), ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG);
+        }
     }
 }

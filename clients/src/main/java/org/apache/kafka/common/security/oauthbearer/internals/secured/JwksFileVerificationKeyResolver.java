@@ -17,6 +17,8 @@
 
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.security.oauthbearer.CloseableVerificationKeyResolver;
 import org.apache.kafka.common.utils.Utils;
 
 import org.jose4j.jwk.JsonWebKeySet;
@@ -24,15 +26,16 @@ import org.jose4j.jws.JsonWebSignature;
 import org.jose4j.jwx.JsonWebStructure;
 import org.jose4j.keys.resolvers.JwksVerificationKeyResolver;
 import org.jose4j.keys.resolvers.VerificationKeyResolver;
-import org.jose4j.lang.JoseException;
 import org.jose4j.lang.UnresolvableKeyException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
-import java.nio.file.Path;
+import javax.security.auth.login.AppConfigurationEntry;
 import java.security.Key;
 import java.util.List;
+import java.util.Map;
+
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_URL;
 
 /**
  * <code>JwksFileVerificationKeyResolver</code> is a {@link VerificationKeyResolver} implementation
@@ -84,25 +87,20 @@ public class JwksFileVerificationKeyResolver implements CloseableVerificationKey
 
     private static final Logger log = LoggerFactory.getLogger(JwksFileVerificationKeyResolver.class);
 
-    private final Path jwksFile;
-
     private VerificationKeyResolver delegate;
 
-    public JwksFileVerificationKeyResolver(Path jwksFile) {
-        this.jwksFile = jwksFile;
-    }
-
     @Override
-    public void init() throws IOException {
-        log.debug("Starting creation of new VerificationKeyResolver from {}", jwksFile);
-        String json = Utils.readFileAsString(jwksFile.toFile().getPath());
-
+    public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
+        ConfigurationUtils cu = new ConfigurationUtils(saslMechanism, configs);
+        String jwksFileName = cu.validateFile(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL).toFile().getPath();
+        log.debug("Starting creation of new VerificationKeyResolver from {}", jwksFileName);
         JsonWebKeySet jwks;
 
         try {
+            String json = Utils.readFileAsString(jwksFileName);
             jwks = new JsonWebKeySet(json);
-        } catch (JoseException e) {
-            throw new IOException(e);
+        } catch (Exception e) {
+            throw new KafkaException(e);
         }
 
         delegate = new JwksVerificationKeyResolver(jwks.getJsonWebKeys());
@@ -116,4 +114,8 @@ public class JwksFileVerificationKeyResolver implements CloseableVerificationKey
         return delegate.resolveKey(jws, nestingContext);
     }
 
+    @Override
+    public void close() {
+        // Do nothing...
+    }
 }

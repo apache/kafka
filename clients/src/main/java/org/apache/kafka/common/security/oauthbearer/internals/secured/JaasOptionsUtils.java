@@ -33,6 +33,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 import javax.net.ssl.SSLSocketFactory;
 import javax.security.auth.login.AppConfigurationEntry;
@@ -52,6 +53,10 @@ public class JaasOptionsUtils {
         this.options = options;
     }
 
+    public JaasOptionsUtils(String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
+        this.options = getOptions(saslMechanism, jaasConfigEntries);
+    }
+
     public static Map<String, Object> getOptions(String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
         if (!OAuthBearerLoginModule.OAUTHBEARER_MECHANISM.equals(saslMechanism))
             throw new IllegalArgumentException(String.format("Unexpected SASL mechanism: %s", saslMechanism));
@@ -62,8 +67,12 @@ public class JaasOptionsUtils {
         return Collections.unmodifiableMap(jaasConfigEntries.get(0).getOptions());
     }
 
-    public boolean shouldCreateSSLSocketFactory(URL url) {
-        return url.getProtocol().equalsIgnoreCase("https");
+    public Optional<SSLSocketFactory> maybeCreateSSLSocketFactory(URL url) {
+        if (url.getProtocol().equalsIgnoreCase("https")) {
+            return Optional.of(createSSLSocketFactory());
+        } else {
+            return Optional.empty();
+        }
     }
 
     public Map<String, ?> getSslClientConfig() {

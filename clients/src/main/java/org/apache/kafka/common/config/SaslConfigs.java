@@ -129,6 +129,14 @@ public class SaslConfigs {
             + " authentication provider."
             + LOGIN_EXPONENTIAL_BACKOFF_NOTE;
 
+    public static final String SASL_OAUTHBEARER_ACCESS_TOKEN_RETRIEVER_CLASS = "sasl.oauthbearer.access.token.retriever.class";
+    public static final String DEFAULT_SASL_OAUTHBEARER_ACCESS_TOKEN_RETRIEVER_CLASS = "org.apache.kafka.common.security.oauthbearer.DefaultAccessTokenRetriever";
+    public static final String SASL_OAUTHBEARER_ACCESS_TOKEN_RETRIEVER_CLASS_DOC = "The fully qualified name of a class that implements the AccessTokenRetriever interface.";
+
+    public static final String SASL_OAUTHBEARER_ACCESS_TOKEN_VALIDATOR_CLASS = "sasl.oauthbearer.access.token.validator.class";
+    public static final String DEFAULT_SASL_OAUTHBEARER_ACCESS_TOKEN_VALIDATOR_CLASS = "org.apache.kafka.common.security.oauthbearer.DefaultClientAccessTokenValidator";
+    public static final String SASL_OAUTHBEARER_ACCESS_TOKEN_VALIDATOR_CLASS_DOC = "The fully qualified name of a class that implements the AccessTokenValidator interface.";
+
     public static final String SASL_OAUTHBEARER_SCOPE_CLAIM_NAME = "sasl.oauthbearer.scope.claim.name";
     public static final String DEFAULT_SASL_OAUTHBEARER_SCOPE_CLAIM_NAME = "scope";
     public static final String SASL_OAUTHBEARER_SCOPE_CLAIM_NAME_DOC = "The OAuth claim for the scope is often named \"" + DEFAULT_SASL_OAUTHBEARER_SCOPE_CLAIM_NAME + "\", but this (optional)"
@@ -215,6 +223,8 @@ public class SaslConfigs {
                 .define(SaslConfigs.SASL_LOGIN_READ_TIMEOUT_MS, ConfigDef.Type.INT, null, ConfigDef.Importance.LOW, SASL_LOGIN_READ_TIMEOUT_MS_DOC)
                 .define(SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MAX_MS, ConfigDef.Type.LONG, DEFAULT_SASL_LOGIN_RETRY_BACKOFF_MAX_MS, ConfigDef.Importance.LOW, SASL_LOGIN_RETRY_BACKOFF_MAX_MS_DOC)
                 .define(SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MS, ConfigDef.Type.LONG, DEFAULT_SASL_LOGIN_RETRY_BACKOFF_MS, ConfigDef.Importance.LOW, SASL_LOGIN_RETRY_BACKOFF_MS_DOC)
+                .define(SaslConfigs.SASL_OAUTHBEARER_ACCESS_TOKEN_RETRIEVER_CLASS, ConfigDef.Type.CLASS, DEFAULT_SASL_OAUTHBEARER_ACCESS_TOKEN_RETRIEVER_CLASS, ConfigDef.Importance.LOW, SASL_OAUTHBEARER_ACCESS_TOKEN_RETRIEVER_CLASS_DOC)
+                .define(SaslConfigs.SASL_OAUTHBEARER_ACCESS_TOKEN_VALIDATOR_CLASS, ConfigDef.Type.CLASS, DEFAULT_SASL_OAUTHBEARER_ACCESS_TOKEN_VALIDATOR_CLASS, ConfigDef.Importance.LOW, SASL_OAUTHBEARER_ACCESS_TOKEN_VALIDATOR_CLASS_DOC)
                 .define(SaslConfigs.SASL_OAUTHBEARER_SCOPE_CLAIM_NAME, ConfigDef.Type.STRING, DEFAULT_SASL_OAUTHBEARER_SCOPE_CLAIM_NAME, ConfigDef.Importance.LOW, SASL_OAUTHBEARER_SCOPE_CLAIM_NAME_DOC)
                 .define(SaslConfigs.SASL_OAUTHBEARER_SUB_CLAIM_NAME, ConfigDef.Type.STRING, DEFAULT_SASL_OAUTHBEARER_SUB_CLAIM_NAME, ConfigDef.Importance.LOW, SASL_OAUTHBEARER_SUB_CLAIM_NAME_DOC)
                 .define(SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM, SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL_DOC)

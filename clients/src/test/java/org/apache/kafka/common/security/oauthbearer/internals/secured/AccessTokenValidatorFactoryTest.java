@@ -21,6 +21,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.security.oauthbearer.AccessTokenRetriever;
 import org.apache.kafka.common.security.oauthbearer.AccessTokenValidator;
 
+import org.apache.kafka.common.security.oauthbearer.DefaultClientAccessTokenValidator;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerTestableLoginCallbackHandler;
 import org.junit.jupiter.api.Test;
 
@@ -29,47 +30,5 @@ import java.util.Map;
 
 public class AccessTokenValidatorFactoryTest extends OAuthBearerTest {
 
-    @Test
-    public void testConfigureThrowsExceptionOnAccessTokenValidatorInit() {
-        OAuthBearerTestableLoginCallbackHandler handler = new OAuthBearerTestableLoginCallbackHandler();
-        AccessTokenRetriever accessTokenRetriever = new AccessTokenRetriever() {
-            @Override
-            public void init() throws IOException {
-                throw new IOException("My init had an error!");
-            }
-            @Override
-            public String retrieve() {
-                return "dummy";
-            }
-        };
-
-        Map<String, ?> configs = getSaslConfigs();
-        AccessTokenValidator accessTokenValidator = LoginAccessTokenValidator.create(configs);
-
-        assertThrowsWithMessage(
-            KafkaException.class, () -> handler.init(accessTokenRetriever, accessTokenValidator), "encountered an error when initializing");
-    }
-
-    @Test
-    public void testConfigureThrowsExceptionOnAccessTokenValidatorClose() {
-        OAuthBearerTestableLoginCallbackHandler handler = new OAuthBearerTestableLoginCallbackHandler();
-        AccessTokenRetriever accessTokenRetriever = new AccessTokenRetriever() {
-            @Override
-            public void close() throws IOException {
-                throw new IOException("My close had an error!");
-            }
-            @Override
-            public String retrieve() {
-                return "dummy";
-            }
-        };
-
-        Map<String, ?> configs = getSaslConfigs();
-        AccessTokenValidator accessTokenValidator = LoginAccessTokenValidator.create(configs);
-        handler.init(accessTokenRetriever, accessTokenValidator);
-
-        // Basically asserting this doesn't throw an exception :(
-        handler.close();
-    }
 
 }
