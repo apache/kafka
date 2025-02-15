@@ -37,10 +37,9 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
 import java.util
-import java.util.{OptionalInt, Properties}
+import java.util.{Optional, OptionalInt, Properties}
 import java.util.concurrent.{CompletableFuture, TimeUnit}
 import scala.jdk.CollectionConverters._
-import scala.jdk.OptionConverters.RichOptional
 
 @Timeout(value = 60)
 class ControllerRegistrationManagerTest {
@@ -106,7 +105,7 @@ class ControllerRegistrationManagerTest {
     val delta = new MetadataDelta.Builder().
       setImage(prevImage).
       build()
-    if (!prevImage.features().metadataVersion.map(_.equals(metadataVersion)).toScala.getOrElse(false)) {
+    if (!prevImage.features().metadataVersion.equals(Optional.of(metadataVersion))) {
       delta.replay(new FeatureLevelRecord().
         setName(MetadataVersion.FEATURE_NAME).
         setFeatureLevel(metadataVersion.featureLevel()))
@@ -120,7 +119,7 @@ class ControllerRegistrationManagerTest {
     }
     val provenance = new MetadataProvenance(100, 200, 300, true)
     val newImage = delta.apply(provenance)
-    val manifest = if (!prevImage.features().metadataVersion().map(_.equals(metadataVersion)).toScala.getOrElse(false)) {
+    val manifest = if (!prevImage.features().metadataVersion().equals(Optional.of(metadataVersion))) {
       new SnapshotManifest(provenance, 1000)
     } else {
       new LogDeltaManifest.Builder().
