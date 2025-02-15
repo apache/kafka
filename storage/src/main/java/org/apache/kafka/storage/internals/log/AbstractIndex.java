@@ -326,7 +326,7 @@ public abstract class AbstractIndex implements Closeable {
     }
 
     /*
-     * Kafka mmaps index files into memory, and all the read / write operations of the index is through OS page cache. This
+     * Kafka maps index files into memory, and all the read / write operations of the index is through OS page cache. This
      * avoids blocked disk I/O in most cases.
      *
      * To the extent of our knowledge, all the modern operating systems use LRU policy or its variants to manage page
