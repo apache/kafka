@@ -540,7 +540,7 @@ Found problem:
     assertEquals(0, runVersionMappingCommand(stream, "3.3-IV3"))
 
     val output = stream.toString()
-    val metadataVersion = MetadataVersion.IBP_3_3_IV3
+    val metadataVersion = MetadataVersion.MINIMUM_VERSION
     // Check that the metadata version is correctly included in the output
     assertTrue(output.contains(s"metadata.version=${metadataVersion.featureLevel()} (${metadataVersion.version()})"),
       s"Output did not contain expected Metadata Version: $output"

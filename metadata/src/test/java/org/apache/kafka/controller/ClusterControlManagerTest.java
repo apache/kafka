@@ -273,7 +273,7 @@ public class ClusterControlManagerTest {
 
     private static Stream<Arguments> metadataVersions() {
         return Stream.of(
-                MetadataVersion.IBP_3_3_IV3,
+                MetadataVersion.MINIMUM_VERSION,
                 MetadataVersion.IBP_3_7_IV2, // introduces directory assignment
                 MetadataVersion.latestTesting()
             ).map(Arguments::of);
@@ -451,7 +451,7 @@ public class ClusterControlManagerTest {
 
     @Test
     public void testRegistrationsToRecords() {
-        MetadataVersion metadataVersion = MetadataVersion.IBP_3_3_IV3;
+        MetadataVersion metadataVersion = MetadataVersion.MINIMUM_VERSION;
         MockTime time = new MockTime(0, 0, 0);
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         FeatureControlManager featureControl = new FeatureControlManager.Builder().
@@ -532,7 +532,7 @@ public class ClusterControlManagerTest {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         Map<String, VersionRange> supportedFeatures = new HashMap<>();
         supportedFeatures.put(MetadataVersion.FEATURE_NAME, VersionRange.of(
-            MetadataVersion.IBP_3_3_IV3.featureLevel(),
+            MetadataVersion.MINIMUM_VERSION.featureLevel(),
             MetadataVersion.IBP_3_7_IV0.featureLevel()));
         supportedFeatures.put(TestFeatureVersion.FEATURE_NAME, VersionRange.of(
             TestFeatureVersion.TEST_0.featureLevel(),
@@ -569,7 +569,7 @@ public class ClusterControlManagerTest {
                     baseRequest.setFeatures(new BrokerRegistrationRequestData.FeatureCollection(
                         Collections.singleton(new BrokerRegistrationRequestData.Feature().
                             setName(MetadataVersion.FEATURE_NAME).
-                            setMinSupportedVersion(MetadataVersion.IBP_3_3_IV3.featureLevel()).
+                            setMinSupportedVersion(MetadataVersion.MINIMUM_VERSION.featureLevel()).
                             setMaxSupportedVersion(MetadataVersion.IBP_3_7_IV0.featureLevel())).iterator())),
                     123L,
                     featureControl.finalizedFeatures(Long.MAX_VALUE),
@@ -581,7 +581,7 @@ public class ClusterControlManagerTest {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         Map<String, VersionRange> supportedFeatures = new HashMap<>();
         supportedFeatures.put(MetadataVersion.FEATURE_NAME, VersionRange.of(
-            MetadataVersion.IBP_3_3_IV3.featureLevel(),
+            MetadataVersion.MINIMUM_VERSION.featureLevel(),
             MetadataVersion.IBP_3_9_IV0.featureLevel()));
         supportedFeatures.put(KRaftVersion.FEATURE_NAME, VersionRange.of(
             KRaftVersion.KRAFT_VERSION_1.featureLevel(),
