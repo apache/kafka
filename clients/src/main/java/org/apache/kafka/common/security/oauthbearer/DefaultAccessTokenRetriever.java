@@ -20,6 +20,7 @@ package org.apache.kafka.common.security.oauthbearer;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ClientCredentialsAccessTokenRetriever;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.FileAccessTokenRetriever;
+import org.apache.kafka.common.utils.Utils;
 
 import java.io.IOException;
 import java.net.URL;
@@ -56,8 +57,7 @@ public class DefaultAccessTokenRetriever implements AccessTokenRetriever {
 
     @Override
     public void close() {
-        if (delegate != null)
-            delegate.close();
+        Utils.closeQuietly(delegate, "delegate");
     }
 
     public AccessTokenRetriever delegate() {

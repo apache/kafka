@@ -21,6 +21,7 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.security.auth.SaslExtensionsCallback;
 import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerClientInitialResponse;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenBuilder;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.ClientAccessTokenValidator;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.FileAccessTokenRetriever;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpAccessTokenRetriever;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerTest;
@@ -137,7 +138,7 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
         OAuthBearerTestableLoginCallbackHandler handler = new OAuthBearerTestableLoginCallbackHandler();
         AccessTokenRetriever accessTokenRetriever = mock(AccessTokenRetriever.class);
         when(accessTokenRetriever.retrieve()).thenReturn("foo");
-        AccessTokenValidator accessTokenValidator = new DefaultClientAccessTokenValidator();
+        AccessTokenValidator accessTokenValidator = new ClientAccessTokenValidator();
         handler.init(accessTokenRetriever, accessTokenValidator);
 
         try {

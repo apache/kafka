@@ -19,6 +19,7 @@ package org.apache.kafka.common.security.oauthbearer;
 
 import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenBuilder;
 
+import org.apache.kafka.common.security.oauthbearer.internals.secured.CloseableVerificationKeyResolver;
 import org.jose4j.jwk.PublicJsonWebKey;
 import org.jose4j.jws.AlgorithmIdentifiers;
 import org.jose4j.lang.InvalidAlgorithmException;
@@ -35,7 +36,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-public class DefaultBrokerAccessTokenValidatorTest extends AccessTokenValidatorTest {
+public class DefaultAccessTokenValidatorTest extends AccessTokenValidatorTest {
 
     @Override
     protected AccessTokenValidator createAccessTokenValidator(AccessTokenBuilder builder) throws Exception {
@@ -43,7 +44,7 @@ public class DefaultBrokerAccessTokenValidatorTest extends AccessTokenValidatorT
         CloseableVerificationKeyResolver keyResolver = mock(CloseableVerificationKeyResolver.class);
         when(keyResolver.resolveKey(any(), any())).thenReturn(key);
 
-        return new DefaultBrokerAccessTokenValidator() {
+        return new DefaultAccessTokenValidator() {
             @Override
             public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
                 super.configure(keyResolver, configs, saslMechanism, jaasConfigEntries);

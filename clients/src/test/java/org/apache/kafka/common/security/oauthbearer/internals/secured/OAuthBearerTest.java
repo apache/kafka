@@ -23,7 +23,6 @@ import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.authenticator.TestJaasConfig;
 import org.apache.kafka.common.security.oauthbearer.AccessTokenRetriever;
 import org.apache.kafka.common.security.oauthbearer.AccessTokenValidator;
-import org.apache.kafka.common.security.oauthbearer.DefaultClientAccessTokenValidator;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerTestableLoginCallbackHandler;
@@ -114,7 +113,7 @@ public abstract class OAuthBearerTest {
                                                             Map<String, ?> configs) {
         List<AppConfigurationEntry> jaasConfigEntries = List.of();
         OAuthBearerTestableLoginCallbackHandler handler = new OAuthBearerTestableLoginCallbackHandler();
-        AccessTokenValidator accessTokenValidator = new DefaultClientAccessTokenValidator();
+        AccessTokenValidator accessTokenValidator = new ClientAccessTokenValidator();
         accessTokenRetriever.configure(configs, null, jaasConfigEntries);
         accessTokenValidator.configure(configs, null, jaasConfigEntries);
         handler.init(accessTokenRetriever, accessTokenValidator);

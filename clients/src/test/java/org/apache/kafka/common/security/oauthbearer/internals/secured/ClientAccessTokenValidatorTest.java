@@ -15,10 +15,13 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.security.oauthbearer;
+package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenBuilder;
+import org.apache.kafka.common.security.oauthbearer.AccessTokenRetriever;
+import org.apache.kafka.common.security.oauthbearer.AccessTokenValidator;
+import org.apache.kafka.common.security.oauthbearer.AccessTokenValidatorTest;
+import org.apache.kafka.common.security.oauthbearer.OAuthBearerTestableLoginCallbackHandler;
 
 import org.junit.jupiter.api.Test;
 
@@ -28,11 +31,11 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 
-public class DefaultClientAccessTokenValidatorTest extends AccessTokenValidatorTest {
+public class ClientAccessTokenValidatorTest extends AccessTokenValidatorTest {
 
     @Override
     protected AccessTokenValidator createAccessTokenValidator(AccessTokenBuilder builder) {
-        return new DefaultClientAccessTokenValidator();
+        return new ClientAccessTokenValidator();
     }
 
     @Test

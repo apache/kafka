@@ -108,7 +108,7 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
         try {
             accessTokenValidator = newInstance(
                 SaslConfigs.SASL_OAUTHBEARER_ACCESS_TOKEN_VALIDATOR_CLASS,
-                DefaultBrokerAccessTokenValidator.class,
+                DefaultAccessTokenValidator.class,
                 configs,
                 saslMechanism,
                 jaasConfigEntries

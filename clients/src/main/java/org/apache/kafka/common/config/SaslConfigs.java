@@ -134,7 +134,7 @@ public class SaslConfigs {
     public static final String SASL_OAUTHBEARER_ACCESS_TOKEN_RETRIEVER_CLASS_DOC = "The fully qualified name of a class that implements the AccessTokenRetriever interface.";
 
     public static final String SASL_OAUTHBEARER_ACCESS_TOKEN_VALIDATOR_CLASS = "sasl.oauthbearer.access.token.validator.class";
-    public static final String DEFAULT_SASL_OAUTHBEARER_ACCESS_TOKEN_VALIDATOR_CLASS = "org.apache.kafka.common.security.oauthbearer.DefaultClientAccessTokenValidator";
+    public static final String DEFAULT_SASL_OAUTHBEARER_ACCESS_TOKEN_VALIDATOR_CLASS = "org.apache.kafka.common.security.oauthbearer.DefaultAccessTokenValidator";
     public static final String SASL_OAUTHBEARER_ACCESS_TOKEN_VALIDATOR_CLASS_DOC = "The fully qualified name of a class that implements the AccessTokenValidator interface.";
 
     public static final String SASL_OAUTHBEARER_SCOPE_CLAIM_NAME = "sasl.oauthbearer.scope.claim.name";

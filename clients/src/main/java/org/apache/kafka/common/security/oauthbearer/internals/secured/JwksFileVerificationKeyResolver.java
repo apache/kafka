@@ -18,7 +18,6 @@
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.security.oauthbearer.CloseableVerificationKeyResolver;
 import org.apache.kafka.common.utils.Utils;
 
 import org.jose4j.jwk.JsonWebKeySet;

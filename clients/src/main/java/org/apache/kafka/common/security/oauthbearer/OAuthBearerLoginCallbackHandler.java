@@ -201,7 +201,7 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
 
             accessTokenValidator = newInstance(
                 SaslConfigs.SASL_OAUTHBEARER_ACCESS_TOKEN_VALIDATOR_CLASS,
-                DefaultBrokerAccessTokenValidator.class,
+                DefaultAccessTokenValidator.class,
                 configs,
                 saslMechanism,
                 jaasConfigEntries

@@ -27,8 +27,8 @@ import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.security.oauthbearer.AccessTokenRetriever;
 import org.apache.kafka.common.security.oauthbearer.AccessTokenValidator;
 import org.apache.kafka.common.security.oauthbearer.DefaultAccessTokenRetriever;
-import org.apache.kafka.common.security.oauthbearer.DefaultClientAccessTokenValidator;
-import org.apache.kafka.common.security.oauthbearer.DefaultBrokerAccessTokenValidator;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.ClientAccessTokenValidator;
+import org.apache.kafka.common.security.oauthbearer.DefaultAccessTokenValidator;
 import org.apache.kafka.common.utils.Exit;
 
 import net.sourceforge.argparse4j.ArgumentParsers;
@@ -140,7 +140,7 @@ public class OAuthCompatibilityTool {
             try (AccessTokenRetriever retriever = new DefaultAccessTokenRetriever()) {
                 retriever.configure(configs, null, List.of());
 
-                try (AccessTokenValidator validator = new DefaultClientAccessTokenValidator()) {
+                try (AccessTokenValidator validator = new ClientAccessTokenValidator()) {
                     validator.configure(configs, null, List.of());
 
                     System.out.println("PASSED 1/5: client configuration");
@@ -154,7 +154,7 @@ public class OAuthCompatibilityTool {
             }
 
             // Broker side...
-            try (AccessTokenValidator validator = new DefaultBrokerAccessTokenValidator()) {
+            try (AccessTokenValidator validator = new DefaultAccessTokenValidator()) {
                 validator.configure(configs, null, List.of());
 
                 System.out.println("PASSED 4/5: broker configuration");

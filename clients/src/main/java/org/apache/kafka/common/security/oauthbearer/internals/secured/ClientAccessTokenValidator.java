@@ -15,13 +15,10 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.security.oauthbearer;
+package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
-import org.apache.kafka.common.security.oauthbearer.internals.secured.BasicOAuthBearerToken;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.ClaimValidationUtils;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.SerializedJwt;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.ValidateException;
+import org.apache.kafka.common.security.oauthbearer.AccessTokenValidator;
+import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
 import org.apache.kafka.common.security.oauthbearer.internals.unsecured.OAuthBearerIllegalTokenException;
 import org.apache.kafka.common.security.oauthbearer.internals.unsecured.OAuthBearerUnsecuredJws;
 
@@ -59,9 +56,9 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SUB_CL
  * </ol>
  */
 
-public class DefaultClientAccessTokenValidator implements AccessTokenValidator {
+public class ClientAccessTokenValidator implements AccessTokenValidator {
 
-    private static final Logger log = LoggerFactory.getLogger(DefaultClientAccessTokenValidator.class);
+    private static final Logger log = LoggerFactory.getLogger(ClientAccessTokenValidator.class);
 
     public static final String EXPIRATION_CLAIM_NAME = "exp";
 

@@ -18,6 +18,7 @@
 package org.apache.kafka.common.security.oauthbearer;
 
 import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenBuilder;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.CloseableVerificationKeyResolver;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerTest;
 
 import org.jose4j.jws.AlgorithmIdentifiers;
@@ -96,7 +97,7 @@ public class OAuthBearerValidatorCallbackHandlerTest extends OAuthBearerTest {
         CloseableVerificationKeyResolver verificationKeyResolver = mock(CloseableVerificationKeyResolver.class);
         Key key = builder.jwk() != null ? builder.jwk().getPublicKey() : null;
         when(verificationKeyResolver.resolveKey(any(), any())).thenReturn(key);
-        DefaultBrokerAccessTokenValidator accessTokenValidator = new DefaultBrokerAccessTokenValidator(time);
+        DefaultAccessTokenValidator accessTokenValidator = new DefaultAccessTokenValidator(time);
         accessTokenValidator.configure(verificationKeyResolver, configs, null, List.of());
         handler.configure(accessTokenValidator);
         return handler;
