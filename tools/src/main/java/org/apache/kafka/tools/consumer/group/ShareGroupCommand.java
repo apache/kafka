@@ -55,6 +55,8 @@ import joptsimple.OptionException;
 
 public class ShareGroupCommand {
 
+    static final String MISSING_COLUMN_VALUE = "-";
+
     public static void main(String[] args) {
         ShareGroupCommandOptions opts = new ShareGroupCommandOptions(args);
         try {
@@ -202,7 +204,7 @@ public class ShareGroupCommand {
             } else {
                 TreeMap<String, Entry<ShareGroupDescription, Collection<SharePartitionOffsetInformation>>> offsets
                     = collectGroupsOffsets(groupIds);
-                printOffsets(offsets);
+                printOffsets(offsets, opts.options.has(opts.verboseOpt));
             }
         }
 
@@ -250,7 +252,7 @@ public class ShareGroupCommand {
                             groupId,
                             tp.getKey().topic(),
                             tp.getKey().partition(),
-                            earliestResult.get(tp.getKey())
+                            Optional.ofNullable(earliestResult.get(tp.getKey()))
                         );
                         partitionOffsets.add(partitionOffsetInfo);
                     }
@@ -263,34 +265,53 @@ public class ShareGroupCommand {
             return groupOffsets;
         }
 
-        private void printOffsets(TreeMap<String, Entry<ShareGroupDescription, Collection<SharePartitionOffsetInformation>>> offsets) {
+        private void printOffsets(TreeMap<String, Entry<ShareGroupDescription, Collection<SharePartitionOffsetInformation>>> offsets, boolean verbose) {
             offsets.forEach((groupId, tuple) -> {
                 ShareGroupDescription description = tuple.getKey();
                 Collection<SharePartitionOffsetInformation> offsetsInfo = tuple.getValue();
                 if (maybePrintEmptyGroupState(groupId, description.groupState(), offsetsInfo.size())) {
-                    String fmt = printOffsetFormat(groupId, offsetsInfo);
-                    System.out.printf(fmt, "GROUP", "TOPIC", "PARTITION", "START-OFFSET");
+                    String fmt = printOffsetFormat(groupId, offsetsInfo, verbose);
+
+                    if (verbose) {
+                        System.out.printf(fmt, "GROUP", "TOPIC", "PARTITION", "LEADER-EPOCH", "START-OFFSET");
+                    } else {
+                        System.out.printf(fmt, "GROUP", "TOPIC", "PARTITION", "START-OFFSET");
+                    }
 
                     for (SharePartitionOffsetInformation info : offsetsInfo) {
-                        System.out.printf(fmt,
-                            groupId,
-                            info.topic,
-                            info.partition,
-                            info.offset
-                        );
+                        if (verbose) {
+                            System.out.printf(fmt,
+                                groupId,
+                                info.topic,
+                                info.partition,
+                                MISSING_COLUMN_VALUE, // Temporary
+                                info.offset.map(Object::toString).orElse(MISSING_COLUMN_VALUE)
+                            );
+                        } else {
+                            System.out.printf(fmt,
+                                groupId,
+                                info.topic,
+                                info.partition,
+                                info.offset.map(Object::toString).orElse(MISSING_COLUMN_VALUE)
+                            );
+                        }
                     }
                     System.out.println();
                 }
             });
         }
 
-        private static String printOffsetFormat(String groupId, Collection<SharePartitionOffsetInformation> offsetsInfo) {
+        private static String printOffsetFormat(String groupId, Collection<SharePartitionOffsetInformation> offsetsInfo, boolean verbose) {
             int groupLen = Math.max(15, groupId.length());
             int maxTopicLen = 15;
             for (SharePartitionOffsetInformation info : offsetsInfo) {
                 maxTopicLen = Math.max(maxTopicLen, info.topic.length());
             }
-            return "\n%" + (-groupLen) + "s %" + (-maxTopicLen) + "s %-10s %s";
+            if (verbose) {
+                return "\n%" + (-groupLen) + "s %" + (-maxTopicLen) + "s %-10s %-13s %s";
+            } else {
+                return "\n%" + (-groupLen) + "s %" + (-maxTopicLen) + "s %-10s %s";
+            }
         }
 
         private void printStates(Map<String, ShareGroupDescription> descriptions, boolean verbose) {
@@ -380,13 +401,13 @@ public class ShareGroupCommand {
         final String group;
         final String topic;
         final int partition;
-        final long offset;
+        final Optional<Long> offset;
 
         SharePartitionOffsetInformation(
             String group,
             String topic,
             int partition,
-            long offset
+            Optional<Long> offset
         ) {
             this.group = group;
             this.topic = topic;

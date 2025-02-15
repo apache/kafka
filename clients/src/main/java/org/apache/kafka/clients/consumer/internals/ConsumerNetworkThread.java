@@ -109,6 +109,8 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
                     log.error("Unexpected error caught in consumer network thread", e);
                 }
             }
+        } catch (final Throwable e) {
+            log.error("Failed to initialize resources for consumer network thread", e);
         } finally {
             cleanup();
         }

@@ -387,11 +387,16 @@ public class PartitionRegistration {
             setLeaderRecoveryState(leaderRecoveryState.value()).
             setLeaderEpoch(leaderEpoch).
             setPartitionEpoch(partitionEpoch);
-        if (options.metadataVersion().isElrSupported()) {
+        if (options.isEligibleLeaderReplicasEnabled()) {
             // The following are tagged fields, we should only set them when there are some contents, in order to save
             // spaces.
             if (elr.length > 0) record.setEligibleLeaderReplicas(Replicas.toList(elr));
             if (lastKnownElr.length > 0) record.setLastKnownElr(Replicas.toList(lastKnownElr));
+        }
+
+        if (options.metadataVersion() == null) {
+            options.handleLoss("the metadata version");
+            return new ApiMessageAndVersion(record, (short) 0);
         }
         if (options.metadataVersion().isDirectoryAssignmentSupported()) {
             record.setDirectories(Uuid.toList(directories));

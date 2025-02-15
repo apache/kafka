@@ -259,15 +259,17 @@ public interface GroupCoordinator {
     );
 
     /**
-     * Fetch the Share Group Offsets for a given group.
+     * Describe the Share Group Offsets for a given group.
      *
-     * @param context The request context
-     * @param request The DescribeShareGroupOffsets request.
-     * @return A future yielding the results.
+     * @param context           The request context
+     * @param request           The DescribeShareGroupOffsetsRequestGroup request.
+     *
+     * @return  A future yielding the results.
+     *          The error codes of the response are set to indicate the errors occurred during the execution.
      */
-    CompletableFuture<DescribeShareGroupOffsetsResponseData> describeShareGroupOffsets(
+    CompletableFuture<DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup> describeShareGroupOffsets(
         RequestContext context,
-        DescribeShareGroupOffsetsRequestData request
+        DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup request
     );
 
     /**
