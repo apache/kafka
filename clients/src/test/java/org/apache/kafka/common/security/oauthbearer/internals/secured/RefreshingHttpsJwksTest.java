@@ -25,7 +25,6 @@ import org.jose4j.jwk.HttpsJwks;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
-import javax.security.auth.login.AppConfigurationEntry;
 import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -39,6 +38,8 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+
+import javax.security.auth.login.AppConfigurationEntry;
 
 import static org.apache.kafka.common.security.oauthbearer.internals.secured.RefreshingHttpsJwks.MISSING_KEY_ID_CACHE_IN_FLIGHT_MS;
 import static org.apache.kafka.common.security.oauthbearer.internals.secured.RefreshingHttpsJwks.MISSING_KEY_ID_MAX_KEY_LENGTH;

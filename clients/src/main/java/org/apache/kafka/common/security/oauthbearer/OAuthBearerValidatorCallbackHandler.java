@@ -20,14 +20,13 @@ package org.apache.kafka.common.security.oauthbearer;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
-import org.apache.kafka.common.security.auth.AuthenticationConfigurable;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ValidateException;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.DefaultBrokerAccessTokenValidator;
-
 import org.apache.kafka.common.utils.Utils;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
@@ -95,7 +94,7 @@ import javax.security.auth.login.AppConfigurationEntry;
  * </p>
  */
 
-public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallbackHandler {
+public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallbackHandler, Closeable {
 
     private static final Logger log = LoggerFactory.getLogger(OAuthBearerValidatorCallbackHandler.class);
 
@@ -167,11 +166,11 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
     }
 
     @SuppressWarnings("unchecked")
-    private <T extends AuthenticationConfigurable> T newInstance(String configName,
-                                                                 Class<T> defaultClazz,
-                                                                 Map<String, ?> configs,
-                                                                 String saslMechanism,
-                                                                 List<AppConfigurationEntry> jaasConfigEntries) {
+    private <T extends OAuthBearerConfigurable> T newInstance(String configName,
+                                                              Class<T> defaultClazz,
+                                                              Map<String, ?> configs,
+                                                              String saslMechanism,
+                                                              List<AppConfigurationEntry> jaasConfigEntries) {
         Class<T> clazz = (Class<T>) configs.get(configName);
 
         if (clazz == null)

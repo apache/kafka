@@ -15,21 +15,20 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.security.oauthbearer.internals.secured;
+package org.apache.kafka.common.security.oauthbearer;
 
-import org.apache.kafka.common.security.oauthbearer.AccessTokenValidator;
-import org.apache.kafka.common.security.oauthbearer.CloseableVerificationKeyResolver;
-import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenBuilder;
 
 import org.jose4j.jwk.PublicJsonWebKey;
 import org.jose4j.jws.AlgorithmIdentifiers;
 import org.jose4j.lang.InvalidAlgorithmException;
 import org.junit.jupiter.api.Test;
 
-import javax.security.auth.login.AppConfigurationEntry;
 import java.security.Key;
 import java.util.List;
 import java.util.Map;
+
+import javax.security.auth.login.AppConfigurationEntry;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;

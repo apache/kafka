@@ -19,12 +19,8 @@ package org.apache.kafka.common.security.oauthbearer;
 
 import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenBuilder;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerTest;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.DefaultBrokerAccessTokenValidator;
 
 import org.jose4j.jws.AlgorithmIdentifiers;
-import org.jose4j.jws.JsonWebSignature;
-import org.jose4j.jwx.JsonWebStructure;
-import org.jose4j.lang.UnresolvableKeyException;
 import org.junit.jupiter.api.Test;
 
 import java.security.Key;
@@ -33,7 +29,6 @@ import java.util.List;
 import java.util.Map;
 
 import javax.security.auth.callback.Callback;
-import javax.security.auth.login.AppConfigurationEntry;
 
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE;
 import static org.junit.jupiter.api.Assertions.assertEquals;

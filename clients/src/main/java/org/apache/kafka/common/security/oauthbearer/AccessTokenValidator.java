@@ -17,9 +17,7 @@
 
 package org.apache.kafka.common.security.oauthbearer;
 
-import org.apache.kafka.common.security.auth.AuthenticationConfigurable;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ValidateException;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.DefaultBrokerAccessTokenValidator;
 
 /**
  * An instance of <code>AccessTokenValidator</code> acts as a function object that, given an access
@@ -48,7 +46,7 @@ import org.apache.kafka.common.security.oauthbearer.internals.secured.DefaultBro
  *                                    to validate the token's contents and verify the signature
  */
 
-public interface AccessTokenValidator extends AuthenticationConfigurable {
+public interface AccessTokenValidator extends OAuthBearerConfigurable {
 
     /**
      * Accepts an OAuth JWT access token in base-64 encoded format, validates, and returns an

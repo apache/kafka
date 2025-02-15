@@ -15,13 +15,11 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.security.oauthbearer.internals.secured;
+package org.apache.kafka.common.security.oauthbearer;
 
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.security.oauthbearer.AccessTokenRetriever;
-import org.apache.kafka.common.security.oauthbearer.AccessTokenValidator;
-import org.apache.kafka.common.security.oauthbearer.DefaultClientAccessTokenValidator;
-import org.apache.kafka.common.security.oauthbearer.OAuthBearerTestableLoginCallbackHandler;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenBuilder;
+
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;

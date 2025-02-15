@@ -27,10 +27,8 @@ import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.security.oauthbearer.AccessTokenRetriever;
 import org.apache.kafka.common.security.oauthbearer.AccessTokenValidator;
 import org.apache.kafka.common.security.oauthbearer.DefaultAccessTokenRetriever;
-import org.apache.kafka.common.security.oauthbearer.CloseableVerificationKeyResolver;
 import org.apache.kafka.common.security.oauthbearer.DefaultClientAccessTokenValidator;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.DefaultBrokerAccessTokenValidator;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.DelegatingVerificationKeyResolver;
+import org.apache.kafka.common.security.oauthbearer.DefaultBrokerAccessTokenValidator;
 import org.apache.kafka.common.utils.Exit;
 
 import net.sourceforge.argparse4j.ArgumentParsers;
@@ -140,29 +138,30 @@ public class OAuthCompatibilityTool {
 
             // Client side...
             try (AccessTokenRetriever retriever = new DefaultAccessTokenRetriever()) {
-                retriever.configure(configs, sasl, jaasConfigs);
+                retriever.configure(configs, null, List.of());
 
-                try (AccessTokenValidator atv = new DefaultClientAccessTokenValidator()) {
+                try (AccessTokenValidator validator = new DefaultClientAccessTokenValidator()) {
+                    validator.configure(configs, null, List.of());
+
                     System.out.println("PASSED 1/5: client configuration");
 
                     accessToken = retriever.retrieve();
                     System.out.println("PASSED 2/5: client JWT retrieval");
 
-                    atv.validate(accessToken);
+                    validator.validate(accessToken);
                     System.out.println("PASSED 3/5: client JWT validation");
                 }
             }
 
             // Broker side...
             try (AccessTokenValidator validator = new DefaultBrokerAccessTokenValidator()) {
-                vkr.init();
-                ;
+                validator.configure(configs, null, List.of());
+
                 System.out.println("PASSED 4/5: broker configuration");
 
                 validator.validate(accessToken);
                 System.out.println("PASSED 5/5: broker JWT validation");
             }
-
 
             System.out.println("SUCCESS");
             Exit.exit(0);

@@ -19,19 +19,19 @@ package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
 import org.apache.kafka.common.security.oauthbearer.CloseableVerificationKeyResolver;
 import org.apache.kafka.common.utils.Time;
-
 import org.apache.kafka.common.utils.Utils;
+
 import org.jose4j.jws.JsonWebSignature;
 import org.jose4j.jwx.JsonWebStructure;
 import org.jose4j.lang.UnresolvableKeyException;
 
-import javax.security.auth.login.AppConfigurationEntry;
-import java.io.IOException;
 import java.net.URL;
 import java.security.Key;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+
+import javax.security.auth.login.AppConfigurationEntry;
 
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_URL;
 

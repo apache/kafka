@@ -17,7 +17,6 @@
 
 package org.apache.kafka.common.security.oauthbearer;
 
-import org.apache.kafka.common.security.auth.AuthenticationConfigurable;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.FileAccessTokenRetriever;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpAccessTokenRetriever;
 
@@ -37,7 +36,7 @@ import java.io.IOException;
  * @see FileAccessTokenRetriever
  */
 
-public interface AccessTokenRetriever extends AuthenticationConfigurable {
+public interface AccessTokenRetriever extends OAuthBearerConfigurable {
 
     /**
      * Retrieves a JWT access token in its serialized three-part form. The implementation

@@ -15,14 +15,15 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.security.auth;
+package org.apache.kafka.common.security.oauthbearer;
 
 import org.apache.kafka.common.Configurable;
 
-import javax.security.auth.login.AppConfigurationEntry;
 import java.io.Closeable;
 import java.util.List;
 import java.util.Map;
+
+import javax.security.auth.login.AppConfigurationEntry;
 
 /**
  * Analogue to {@link Configurable} for SASL-based authentication.
@@ -30,7 +31,7 @@ import java.util.Map;
  * Any resources created in {@link #configure(Map, String, List)} should be cleaned up and released in
  * the call to {@link #close()}.
  */
-public interface AuthenticationConfigurable extends Closeable {
+public interface OAuthBearerConfigurable extends Closeable {
 
     /**
      * Configures this object for the specified SASL mechanism.

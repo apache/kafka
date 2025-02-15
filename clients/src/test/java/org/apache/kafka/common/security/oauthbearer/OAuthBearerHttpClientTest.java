@@ -17,11 +17,8 @@
 
 package org.apache.kafka.common.security.oauthbearer;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpAccessTokenRetriever;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerTest;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.UnretryableException;
+
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;

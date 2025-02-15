@@ -22,26 +22,27 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
-import org.apache.kafka.common.security.auth.AuthenticationConfigurable;
 import org.apache.kafka.common.security.auth.SaslExtensions;
 import org.apache.kafka.common.security.auth.SaslExtensionsCallback;
 import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerClientInitialResponse;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ClientCredentialsAccessTokenRetriever;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.DefaultBrokerAccessTokenValidator;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.JaasOptionsUtils;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ValidateException;
 import org.apache.kafka.common.utils.Utils;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.Closeable;
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.UnsupportedCallbackException;
 import javax.security.auth.login.AppConfigurationEntry;
 import javax.security.sasl.SaslException;
-import java.io.IOException;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
 
@@ -148,7 +149,9 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_
  * </p>
  */
 
-public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHandler {
+public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHandler, Closeable {
+
+    private static final Logger log = LoggerFactory.getLogger(OAuthBearerLoginCallbackHandler.class);
 
     public static final String CLIENT_ID_CONFIG = "clientId";
     public static final String CLIENT_SECRET_CONFIG = "clientSecret";
@@ -171,8 +174,6 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
         "token endpoint (" + SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL + ") may need to specify an " +
         "OAuth \"scope\". If so, the " + SCOPE_CONFIG + " is used to provide the value to " +
         "include with the login request.";
-
-    private static final Logger log = LoggerFactory.getLogger(OAuthBearerLoginCallbackHandler.class);
 
     private static final String EXTENSION_PREFIX = "extension_";
 
@@ -285,11 +286,11 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
     }
 
     @SuppressWarnings("unchecked")
-    private <T extends AuthenticationConfigurable> T newInstance(String configName,
-                                                                 Class<T> defaultClazz,
-                                                                 Map<String, ?> configs,
-                                                                 String saslMechanism,
-                                                                 List<AppConfigurationEntry> jaasConfigEntries) {
+    private <T extends OAuthBearerConfigurable> T newInstance(String configName,
+                                                              Class<T> defaultClazz,
+                                                              Map<String, ?> configs,
+                                                              String saslMechanism,
+                                                              List<AppConfigurationEntry> jaasConfigEntries) {
         Class<T> clazz = (Class<T>) configs.get(configName);
 
         if (clazz == null)

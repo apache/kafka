@@ -17,7 +17,6 @@
 
 package org.apache.kafka.common.security.oauthbearer;
 
-import org.apache.kafka.common.security.auth.AuthenticationConfigurable;
 import org.jose4j.keys.resolvers.VerificationKeyResolver;
 
 import java.io.Closeable;
@@ -34,6 +33,6 @@ import java.io.Closeable;
  * @see Closeable
  */
 
-public interface CloseableVerificationKeyResolver extends VerificationKeyResolver, AuthenticationConfigurable {
+public interface CloseableVerificationKeyResolver extends VerificationKeyResolver, OAuthBearerConfigurable {
 
 }

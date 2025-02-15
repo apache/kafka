@@ -21,13 +21,14 @@ import org.apache.kafka.common.security.oauthbearer.internals.secured.ClientCred
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.FileAccessTokenRetriever;
 
-import javax.security.auth.login.AppConfigurationEntry;
 import java.io.IOException;
 import java.net.URL;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+
+import javax.security.auth.login.AppConfigurationEntry;
 
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
 

@@ -15,19 +15,19 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.security.oauthbearer.internals.secured;
+package org.apache.kafka.common.security.oauthbearer;
 
-import org.apache.kafka.common.security.oauthbearer.AccessTokenValidator;
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenBuilder;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerTest;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.ValidateException;
+
 import org.jose4j.jws.AlgorithmIdentifiers;
 import org.jose4j.jwx.HeaderParameterNames;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.TestInstance.Lifecycle;
 
-import javax.security.auth.login.AppConfigurationEntry;
 import java.util.List;
-import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
 

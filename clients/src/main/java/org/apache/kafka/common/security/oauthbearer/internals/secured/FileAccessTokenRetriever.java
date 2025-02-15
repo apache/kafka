@@ -21,10 +21,12 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.security.oauthbearer.AccessTokenRetriever;
 import org.apache.kafka.common.utils.Utils;
 
-import javax.security.auth.login.AppConfigurationEntry;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+
+import javax.security.auth.login.AppConfigurationEntry;
 
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
 
@@ -55,9 +57,6 @@ public class FileAccessTokenRetriever implements AccessTokenRetriever {
 
     @Override
     public String retrieve() throws IOException {
-        if (accessToken == null)
-            throw new IllegalStateException("Access token is null; please call configure() first");
-
-        return accessToken;
+        return Objects.requireNonNull(accessToken, "Access token is null; please call configure() first");
     }
 }
