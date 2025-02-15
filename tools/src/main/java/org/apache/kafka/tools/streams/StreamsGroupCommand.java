@@ -225,17 +225,10 @@ public class StreamsGroupCommand {
         }
 
         private void printTaskType(List<StreamsGroupMemberAssignment.TaskIds> tasks, String taskType) {
-            StringBuilder builder = new StringBuilder();
-            builder.append(taskType);
-            builder.append(": ");
+            StringBuilder builder = new StringBuilder(taskType).append(": ");
             for (StreamsGroupMemberAssignment.TaskIds taskIds : tasks) {
-                builder.append(taskIds.subtopologyId());
-                builder.append(":[");
-                for (Integer partition : taskIds.partitions()) {
-                    builder.append(partition);
-                    builder.append(",");
-                }
-                builder.replace(builder.length() - 1, builder.length(), "");
+                builder.append(taskIds.subtopologyId()).append(":[");
+                builder.append(taskIds.partitions().stream().map(String::valueOf).collect(Collectors.joining(",")));
                 builder.append("] ");
             }
             System.out.println(builder);

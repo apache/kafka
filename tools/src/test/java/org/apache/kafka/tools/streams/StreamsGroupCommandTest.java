@@ -41,7 +41,6 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
@@ -311,23 +310,17 @@ public class StreamsGroupCommandTest {
             String output = ToolsTestUtils.grabConsoleOutput(() -> StreamsGroupCommand.main(args.toArray(new String[0])));
             out.set(output);
 
-            int index = 0;
             String[] lines = output.split("\n");
+            if (lines.length == 1 && lines[0].isEmpty()) lines = new String[]{};
 
-            // Parse the header if one is expected.
-            if (!expectedHeader.isEmpty()) {
-                if (lines.length == 0) return false;
-                List<String> header = Arrays.stream(lines[index++].split("\\s+")).toList();
-                if (!expectedHeader.equals(header)) {
-                    return false;
-                }
+            if (!expectedHeader.isEmpty() && lines.length > 0) {
+                List<String> header = Arrays.asList(lines[0].split("\\s+"));
+                if (!expectedHeader.equals(header)) return false;
             }
 
-            // Parse the groups.
-            Set<List<String>> groups = new HashSet<>();
-            for (; index < lines.length; index++) {
-                groups.add(Arrays.stream(lines[index].split("\\s+")).collect(Collectors.toList()));
-            }
+            Set<List<String>> groups = Arrays.stream(lines, expectedHeader.isEmpty() ? 0 : 1, lines.length)
+                .map(line -> Arrays.asList(line.split("\\s+")))
+                .collect(Collectors.toSet());
             return expectedRows.equals(groups);
         }, () -> String.format("Expected header=%s and groups=%s, but found:%n%s", expectedHeader, expectedRows, out.get()));
     }
@@ -344,22 +337,15 @@ public class StreamsGroupCommandTest {
             String output = ToolsTestUtils.grabConsoleOutput(() -> StreamsGroupCommand.main(args.toArray(new String[0])));
             out.set(output);
 
-            int index = 0;
             String[] lines = output.split("\n");
-            if (lines.length == 1 && lines[0].isEmpty()) {
-                lines = new String[]{};
-            }
+            if (lines.length == 1 && lines[0].isEmpty()) lines = new String[]{};
 
-            // Parse the header
             if (lines.length == 0) return false;
-            List<String> header = Arrays.stream(lines[index++].split("\\s+")).toList();
-            if (!expectedHeader.equals(header)) {
-                return false;
-            }
+            List<String> header = Arrays.asList(lines[0].split("\\s+"));
+            if (!expectedHeader.equals(header)) return false;
 
-            // Parse the group description
-            Set<List<String>> groupDesc = new HashSet<>(parseLines(lines, index, dontCareIndices));
-            return expectedRows.equals(groupDesc) & lines.length == expectedSize;
+            Set<List<String>> groupDesc = parseLines(lines, 1, dontCareIndices).stream().collect(Collectors.toSet());
+            return expectedRows.equals(groupDesc) && lines.length == expectedSize;
         }, () -> String.format("Expected header=%s and groups=%s, but found:%n%s", expectedHeader, expectedRows, out.get()));
     }
 
@@ -374,37 +360,25 @@ public class StreamsGroupCommandTest {
             String output = ToolsTestUtils.grabConsoleOutput(() -> StreamsGroupCommand.main(args.toArray(new String[0])));
             out.set(output);
 
-            int index = 0;
             String[] lines = output.split("\n");
-            if (lines.length == 1 && lines[0].isEmpty()) {
-                lines = new String[]{};
-            }
+            if (lines.length == 1 && lines[0].isEmpty()) lines = new String[]{};
 
-            Set<MemberRows> actualRows = new HashSet<>();
-            List<String> header = Arrays.stream(lines[index++].split("\\s+")).toList();
-            List<List<String>> groupDesc = parseLines(lines, index, dontCareIndices);
-            MemberRows memberRows = !verbose ? new MemberRows(header, groupDesc.get(0), groupDesc.get(1), groupDesc.get(2), groupDesc.get(3))
-                                             : new MemberRows(header, groupDesc.get(0), groupDesc.get(1), groupDesc.get(2), groupDesc.get(3), groupDesc.get(4), groupDesc.get(5), groupDesc.get(6));
-            actualRows.add(memberRows);
+            List<String> header = Arrays.asList(lines[0].split("\\s+"));
+            List<List<String>> groupDesc = parseLines(lines, 1, dontCareIndices);
+            MemberRows memberRows = verbose ? new MemberRows(header, groupDesc.get(0), groupDesc.get(1), groupDesc.get(2), groupDesc.get(3), groupDesc.get(4), groupDesc.get(5), groupDesc.get(6))
+                : new MemberRows(header, groupDesc.get(0), groupDesc.get(1), groupDesc.get(2), groupDesc.get(3));
+            Set<MemberRows> actualRows = Set.of(memberRows);
 
             return expectedRows.equals(actualRows);
         }, () -> String.format("expected=%s, but found:%n%s", expectedRows, out.get()));
     }
 
     private static List<List<String>> parseLines(String[] lines, int index, List<Integer> dontCareIndices) {
-        List<List<String>> res = new ArrayList<>();
-        for (; index < lines.length; index++) {
-            List<String> line = null;
-            if (lines[index].isEmpty()) {
-                line = Collections.emptyList();
-            } else if (lines[index].contains("TASKS:")) {
-                line = new ArrayList<>(Arrays.stream(lines[index].split("\\s+")).toList());
-            } else {
-                line = clearDontCares(new ArrayList<>(Arrays.stream(lines[index].split("\\s+")).toList()), dontCareIndices);
-            }
-            res.add(line);
-        }
-        return res;
+        return Arrays.stream(lines, index, lines.length)
+            .map(line -> line.isEmpty() ? Collections.<String>emptyList()
+                : line.contains("TASKS:") ? Arrays.asList(line.split("\\s+"))
+                : clearDontCares(Arrays.asList(line.split("\\s+")), dontCareIndices))
+            .collect(Collectors.toList());
     }
 
     private static class MemberRows {
