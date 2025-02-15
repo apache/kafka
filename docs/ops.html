@@ -1723,21 +1723,6 @@ NodeId	DirectoryId           	LogEndOffset	Lag	LastFetchTimestamp	LastCaughtUpTi
         <td>The amount of time queueing while a possible previous request is in-flight plus the round trip to the transaction coordinator to verify (or not verify)</td>
       </tr>
       <tr>
-        <td>Consumer Group Offset Count</td>
-        <td>kafka.server:type=GroupMetadataManager,name=NumOffsets</td>
-        <td>Total number of committed offsets for Consumer Groups</td>
-      </tr>
-      <tr>
-        <td>Consumer Group Count</td>
-        <td>kafka.server:type=GroupMetadataManager,name=NumGroups</td>
-        <td>Total number of Consumer Groups</td>
-      </tr>
-      <tr>
-        <td>Consumer Group Count, per State</td>
-        <td>kafka.server:type=GroupMetadataManager,name=NumGroups[PreparingRebalance,CompletingRebalance,Empty,Stable,Dead]</td>
-        <td>The number of Consumer Groups in each state: PreparingRebalance, CompletingRebalance, Empty, Stable, Dead</td>
-      </tr>
-      <tr>
         <td>Number of reassigning partitions</td>
         <td>kafka.server:type=ReplicaManager,name=ReassigningPartitions</td>
         <td>The number of reassigning leader partitions on a broker.</td>
@@ -1788,6 +1773,133 @@ NodeId	DirectoryId           	LogEndOffset	Lag	LastFetchTimestamp	LastCaughtUpTi
         <td>Indicates if a log directory is offline (1) or online (0).</td>
       </tr>
   </tbody></table>
+
+<h4 class="anchor-heading"><a id="group_coordinator_monitoring" class="anchor-link"></a><a href="#group_coordinator_monitoring">Group Coordinator Monitoring</a></h4>
+The following set of metrics are available for monitoring the group coordinator:<br/><br/>
+<table class="data-table">
+  <tbody>
+    <tr>
+      <td>The Partition Count, per State</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=partition-count,state={loading|active|failed}</td>
+      <td>The number of <code>__consumer_offsets</code> partitions hosted by the broker, broken down by state</td>
+    </tr>
+    <tr>
+      <td>Partition Maximum Loading Time</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=partition-load-time-max</td>
+      <td>The maximum loading time needed to read the state from the <code>__consumer_offsets</code> partitions</td>
+    </tr>
+    <tr>
+      <td>Partition Average Loading Time</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=partition-load-time-avg</td>
+      <td>The average loading time needed to read the state from the <code>__consumer_offsets</code> partitions</td>
+    </tr>
+    <tr>
+      <td>Average Thread Idle Ratio</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=thread-idle-ratio-avg</td>
+      <td>The average idle ratio of the coordinator threads</td>
+    </tr>
+    <tr>
+      <td>Event Queue Size</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=event-queue-size</td>
+      <td>The number of events waiting to be processed in the queue</td>
+    </tr>
+    <tr>
+      <td>Event Queue Time (Ms)</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=event-queue-time-ms-[max|p50|p99|p999]</td>
+      <td>The time that an event spent waiting in the queue to be processed</td>
+    </tr>
+    <tr>
+      <td>Event Processing Time (Ms)</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=event-processing-time-ms-[max|p50|p99|p999]</td>
+      <td>The time that an event took to be processed</td>
+    </tr>
+    <tr>
+      <td>Event Purgatory Time (Ms)</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=event-purgatory-time-ms-[max|p50|p99|p999]</td>
+      <td>The time that an event waited in the purgatory before being completed</td>
+    </tr>
+    <tr>
+      <td>Batch Flush Time (Ms)</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=batch-flush-time-ms-[max|p50|p99|p999]</td>
+      <td>The time that a batch took to be flushed to the local partition</td>
+    </tr>
+    <tr>
+      <td>Group Count, per group type</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=group-count,protocol={consumer|classic}</td>
+      <td>Total number of group per group type: Classic or Consumer</td>
+    </tr>
+    <tr>
+      <td>Consumer Group Count, per state</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=consumer-group-count,state=[empty|assigning|reconciling|stable|dead]</td>
+      <td>Total number of Consumer Groups in each state: Empty, Assigning, Reconciling, Stable, Dead</td>
+    </tr>
+    <tr>
+      <td>Consumer Group Rebalance Rate</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=consumer-group-rebalance-rate</td>
+      <td>The rebalance rate of consumer groups</td>
+    </tr>
+    <tr>
+      <td>Consumer Group Rebalance Count</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=consumer-group-rebalance-count</td>
+      <td>Total number of Consumer Group Rebalances</td>
+    </tr>
+    <tr>
+      <td>Classic Group Count</td>
+      <td>kafka.server:type=GroupMetadataManager,name=NumGroups</td>
+      <td>Total number of Classic Groups</td>
+    </tr>
+    <tr>
+      <td>Classic Group Count, per State</td>
+      <td>kafka.server:type=GroupMetadataManager,name=NumGroups[PreparingRebalance,CompletingRebalance,Empty,Stable,Dead]</td>
+      <td>The number of Classic Groups in each state: PreparingRebalance, CompletingRebalance, Empty, Stable, Dead</td>
+    </tr>
+    <tr>
+      <td>Classic Group Completed Rebalance Rate</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=group-completed-rebalance-rate</td>
+      <td>The rate of classic group completed rebalances</td>
+    </tr>
+    <tr>
+      <td>Classic Group Completed Rebalance Count</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=group-completed-rebalance-count</td>
+      <td>The total number of classic group completed rebalances</td>
+    </tr>
+    <tr>
+      <td>Group Offset Count</td>
+      <td>kafka.server:type=GroupMetadataManager,name=NumOffsets</td>
+      <td>Total number of committed offsets for Classic and Consumer Groups</td>
+    </tr>
+    <tr>
+      <td>Offset Commit Rate</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=offset-commit-rate</td>
+      <td>The rate of committed offsets</td>
+    </tr>
+    <tr>
+      <td>Offset Commit Count</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=offset-commit-count</td>
+      <td>The total number of committed offsets</td>
+    </tr>
+    <tr>
+      <td>Offset Expiration Rate</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=offset-expiration-rate</td>
+      <td>The rate of expired offsets</td>
+    </tr>
+    <tr>
+      <td>Offset Expiration Count</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=offset-expiration-count</td>
+      <td>The total number of expired offsets</td>
+    </tr>
+    <tr>
+      <td>Offset Deletion Rate</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=offset-deletion-rate</td>
+      <td>The rate of administrative deleted offsets</td>
+    </tr>
+    <tr>
+      <td>Offset Deletion Count</td>
+      <td>kafka.server:type=group-coordinator-metrics,name=offset-deletion-count</td>
+      <td>The total number of administrative deleted offsets</td>
+    </tr>
+  </tbody>
+</table>
 
 <h4 class="anchor-heading"><a id="tiered_storage_monitoring" class="anchor-link"></a><a href="#tiered_storage_monitoring">Tiered Storage Monitoring</a></h4>
   The following set of metrics are available for monitoring of the tiered storage feature:<br/><br/>
@@ -4130,6 +4242,44 @@ $ bin/kafka-topics.sh --create --topic tieredTopic --bootstrap-server localhost:
     <li>Client-side assignors are not supported. (see <a href="https://issues.apache.org/jira/browse/KAFKA-18327">KAFKA-18327</a>)</li>
     <li>Rack-aware assignment strategies are not fully supported. (see <a href="https://issues.apache.org/jira/browse/KAFKA-17747">KAFKA-17747</a>)</li>
   </ul>
+
+<h3 class="anchor-heading"><a id="transaction_protocol" class="anchor-link"></a><a href="#transaction_protocol">6.11 Transaction Protocol</a></h3>
+
+<h4 class="anchor-heading"><a id="transaction_protocol_overview" class="anchor-link"></a><a href="#transaction_protocol_overview">Overview</a></h4>
+
+<p>Starting from Apache Kafka 4.0, Transactions Server Side Defense (<a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-890%3A+Transactions+Server-Side+Defense">KIP-890</a>)
+  brings a strengthened transactional protocol. When enabled and using 4.0 producer clients, the producer epoch is bumped on every transaction to ensure every transaction includes the intended messages and duplicates are not
+  written as part of the next transaction.</p>
+
+<p>The protocol is automatically enabled on the server since Apache Kafka 4.0. Enabling and disabling the protocol is controlled by the
+  <code>transaction.version</code> feature flag. This flag can be set using the storage tool on new cluster creation, or dynamically to an existing cluster via the features tool.
+  Producer clients starting 4.0 and above will use the new transactional protocol as long as it is enabled on the server.</p>
+
+<h4 class="anchor-heading"><a id="transaction_protocol_upgrade" class="anchor-link"></a><a href="#transaction_protocol_upgrade">Upgrade & Downgrade</a></h4>
+
+<p>To enable the new protocol on the server, set <code>transaction.version=2</code>. The producer clients do not need to be restarted, and will dynamically upgrade the next time they
+  connect or re-connect to a broker. (Alternatively, the client can be restarted to force this connection). A producer will not upgrade mid-transaction, but on the start of the next transaction
+  after it becomes aware of the server-side upgrade.</p>
+
+<p>Downgrades are safe to perform and work similarly. The older protocol will be used by the clients on the first transaction after the producer becomes aware of the downgraded protocol.</p>
+
+<h4 class="anchor-heading"><a id="transaction_protocol_performance" class="anchor-link"></a><a href="#transaction_protocol_performance">Performance</a></h4>
+
+<p>The new transactional protocol improves performance over verification by only sending a single call to add partitions on the server side, rather than one from the client to add and one from the server to verify.</p>
+
+<p>One consequence of this change is that we can no longer use the hardcoded retry backoff introduced by <a href="https://issues.apache.org/jira/browse/KAFKA-5477">KAFKA-5477</a>. Due to the asynchronous nature of the <code>endTransaction</code> api,
+  the client can start adding partitions to the next transaction before the markers are written. When this happens, the server will return <code>CONCURRENT_TRANSACTIONS</code>
+  until the previous transaction completes. Rather than the default client backoff for these retries, there was a shorter retry backoff of 20ms.</p>
+
+<p>Now with the server-side request, the server will attempt to retry adding the partition a few times when it sees the <code>CONCURRENT_TRANSACTIONS</code> error before it returns the error to the client.
+  This can result in higher produce latencies reported on these requests. The transaction end to end latency (measured from the time the client begins the transaction to the time to commit) does not increase
+  overall with this change. The time just shifts from client-side backoff to being calculated as part of the produce latency.</p>
+
+<p>The server-side backoff and total retry time can be configured with the following new configs:</p>
+<ul>
+  <li><code>add.partitions.to.txn.retry.backoff.ms</code></li>
+  <li><code>add.partitions.to.txn.retry.backoff.max.ms</code></li>
+</ul>
 
 </script>
 
