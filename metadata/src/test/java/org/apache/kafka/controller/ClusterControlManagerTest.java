@@ -494,8 +494,7 @@ public class ClusterControlManagerTest {
         clusterControl.replay(registrationChangeRecord);
         short expectedVersion = metadataVersion.registerBrokerRecordVersion();
 
-        ImageWriterOptions options = new ImageWriterOptions.Builder().
-                setMetadataVersion(metadataVersion).
+        ImageWriterOptions options = new ImageWriterOptions.Builder(metadataVersion).
                 setLossHandler(__ -> { }).
                 build();
         assertEquals(new ApiMessageAndVersion(new RegisterBrokerRecord().

@@ -64,6 +64,7 @@ import java.util.{Collections, Optional, OptionalLong, Properties}
 import scala.collection.{Seq, mutable}
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS, SECONDS}
 import scala.jdk.CollectionConverters._
+import scala.jdk.OptionConverters.RichOptional
 
 @Timeout(120)
 @Tag("integration")
@@ -996,8 +997,8 @@ class KRaftClusterTest {
       } finally {
         admin.close()
       }
-      TestUtils.waitUntilTrue(() => cluster.brokers().get(0).metadataCache.currentImage().features().metadataVersion().equals(MetadataVersion.latestTesting()),
-        "Timed out waiting for metadata.version update")
+      TestUtils.waitUntilTrue(() => cluster.brokers().get(0).metadataCache.currentImage().features().metadataVersion().toScala
+        .map(_.equals(MetadataVersion.latestTesting())).getOrElse(false), "Timed out waiting for metadata.version update")
     } finally {
       cluster.close()
     }

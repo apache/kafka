@@ -28,6 +28,7 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
+import java.util.Optional;
 
 
 /**
@@ -38,27 +39,38 @@ import java.util.Objects;
 public final class FeaturesImage {
     public static final FeaturesImage EMPTY = new FeaturesImage(
         Collections.emptyMap(),
-        MetadataVersion.MINIMUM_VERSION
+        Optional.empty()
     );
 
     private final Map<String, Short> finalizedVersions;
 
-    private final MetadataVersion metadataVersion;
+    private final Optional<MetadataVersion> metadataVersion;
 
     public FeaturesImage(
-        Map<String, Short> finalizedVersions,
-        MetadataVersion metadataVersion) {
+            Map<String, Short> finalizedVersions,
+            MetadataVersion metadataVersion) {
+        this(finalizedVersions, Optional.of(metadataVersion));
+    }
+
+    private FeaturesImage(
+            Map<String, Short> finalizedVersions,
+            Optional<MetadataVersion> metadataVersion) {
         this.finalizedVersions = Collections.unmodifiableMap(finalizedVersions);
         this.metadataVersion = metadataVersion;
     }
 
     public boolean isEmpty() {
-        return finalizedVersions.isEmpty() &&
-            metadataVersion.equals(MetadataVersion.MINIMUM_VERSION);
+        return finalizedVersions.isEmpty() && metadataVersion.isEmpty();
     }
 
-    public MetadataVersion metadataVersion() {
+    public Optional<MetadataVersion> metadataVersion() {
         return metadataVersion;
+    }
+
+
+    public MetadataVersion metadataVersionOrThrow() {
+        return metadataVersion.orElseThrow(() ->
+                new IllegalStateException("Unknown metadata version for FeaturesImage: " + this));
     }
 
     public Map<String, Short> finalizedVersions() {

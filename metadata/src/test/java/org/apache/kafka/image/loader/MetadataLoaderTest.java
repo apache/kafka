@@ -18,11 +18,9 @@
 package org.apache.kafka.image.loader;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.message.SnapshotHeaderRecord;
 import org.apache.kafka.common.metadata.AbortTransactionRecord;
 import org.apache.kafka.common.metadata.BeginTransactionRecord;
-import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.EndTransactionRecord;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
@@ -55,6 +53,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -242,8 +241,7 @@ public class MetadataLoaderTest {
         boolean loadSnapshot,
         boolean sameObject
     ) throws Exception {
-        MockFaultHandler faultHandler =
-                new MockFaultHandler("testPublisherCannotBeInstalledMoreThanOnce");
+        MockFaultHandler faultHandler = new MockFaultHandler("testPublisherCannotBeInstalledMoreThanOnce");
         MockPublisher publisher = new MockPublisher();
         try (MetadataLoader loader = new MetadataLoader.Builder().
                 setFaultHandler(faultHandler).
@@ -253,13 +251,18 @@ public class MetadataLoaderTest {
             if (loadSnapshot) {
                 MockSnapshotReader snapshotReader = new MockSnapshotReader(
                     new MetadataProvenance(200, 100, 4000, true),
-                    singletonList(
+                    List.of(
                         Batch.control(
                             200,
                             100,
                             4000,
                             10,
                             singletonList(new ControlRecord(ControlRecordType.SNAPSHOT_HEADER, new SnapshotHeaderRecord()))
+                        ),
+                        Batch.data(0, 0, 0, 0,
+                            singletonList(new ApiMessageAndVersion(new FeatureLevelRecord().
+                                setName(MetadataVersion.FEATURE_NAME).
+                                setFeatureLevel(MINIMUM_VERSION.featureLevel()), (short) 0))
                         )
                     )
                 );
@@ -318,7 +321,7 @@ public class MetadataLoaderTest {
             loader.removeAndClosePublisher(publishers.get(0)).get();
         }
         assertTrue(publishers.get(0).closed);
-        assertEquals(MINIMUM_VERSION,
+        assertEquals(Optional.of(MINIMUM_VERSION),
                 publishers.get(0).latestImage.features().metadataVersion());
         assertTrue(publishers.get(1).closed);
         assertNull(publishers.get(1).latestImage);
@@ -341,6 +344,12 @@ public class MetadataLoaderTest {
                 setHighWaterMarkAccessor(() -> OptionalLong.of(0L)).
                 build()) {
             loader.installPublishers(publishers).get();
+            loader.handleCommit(
+                MockBatchReader.newSingleBatchReader(400, 50, List.of(
+                    new ApiMessageAndVersion(new FeatureLevelRecord()
+                        .setName(MetadataVersion.FEATURE_NAME)
+                        .setFeatureLevel(MINIMUM_VERSION.featureLevel()), (short) 0)))
+            );
             loadEmptySnapshot(loader, 200);
             publishers.get(0).firstPublish.get(10, TimeUnit.SECONDS);
             assertEquals(200L, loader.lastAppliedOffset());
@@ -352,9 +361,19 @@ public class MetadataLoaderTest {
                 loader.metrics().currentMetadataVersion());
         }
         assertTrue(publishers.get(0).closed);
-        assertEquals(MINIMUM_VERSION,
-                publishers.get(0).latestImage.features().metadataVersion());
-        assertTrue(publishers.get(0).latestImage.isEmpty());
+        assertEquals(Optional.of(MINIMUM_VERSION), publishers.get(0).latestImage.features().metadataVersion());
+        var latestImage = publishers.get(0).latestImage;
+        assertFalse(latestImage.isEmpty());
+        assertFalse(latestImage.features().isEmpty());
+        assertTrue(latestImage.features().finalizedVersions().isEmpty());
+        assertTrue(latestImage.cluster().isEmpty());
+        assertTrue(latestImage.topics().isEmpty());
+        assertTrue(latestImage.cluster().isEmpty());
+        assertTrue(latestImage.configs().isEmpty());
+        assertTrue(latestImage.producerIds().isEmpty());
+        assertTrue(latestImage.acls().isEmpty());
+        assertTrue(latestImage.scram().isEmpty());
+        assertTrue(latestImage.delegationTokens().isEmpty());
         faultHandler.maybeRethrowFirstException();
     }
 
@@ -488,7 +507,7 @@ public class MetadataLoaderTest {
                 .numBytes(10)
                 .build(),
             publishers.get(0).latestLogDeltaManifest);
-        assertEquals(MINIMUM_VERSION,
+        assertEquals(Optional.of(MINIMUM_VERSION),
             publishers.get(0).latestImage.features().metadataVersion());
         faultHandler.maybeRethrowFirstException();
     }
@@ -530,8 +549,7 @@ public class MetadataLoaderTest {
         for (int i = 0; i < 2; i++) {
             assertTrue(publishers.get(i).closed);
             assertTrue(publishers.get(i).closed);
-            assertEquals(MINIMUM_VERSION,
-                    publishers.get(i).latestImage.features().metadataVersion());
+            assertEquals(Optional.of(MINIMUM_VERSION), publishers.get(i).latestImage.features().metadataVersion());
         }
         faultHandler.maybeRethrowFirstException();
     }
@@ -660,6 +678,12 @@ public class MetadataLoaderTest {
                 setHighWaterMarkAccessor(() -> OptionalLong.of(0)).
                 build()) {
             loader.installPublishers(publishers).get();
+            loader.handleCommit(
+                MockBatchReader.newSingleBatchReader(400, 50, List.of(
+                    new ApiMessageAndVersion(new FeatureLevelRecord()
+                        .setName(MetadataVersion.FEATURE_NAME)
+                        .setFeatureLevel(MINIMUM_VERSION.featureLevel()), (short) 0)))
+            );
             loader.waitForAllEventsToBeHandled();
 
             loader.handleCommit(
@@ -721,6 +745,12 @@ public class MetadataLoaderTest {
                 setHighWaterMarkAccessor(() -> OptionalLong.of(0)).
                 build()) {
             loader.installPublishers(publishers).get();
+            loader.handleCommit(
+                MockBatchReader.newSingleBatchReader(400, 50, List.of(
+                    new ApiMessageAndVersion(new FeatureLevelRecord().
+                        setName(MetadataVersion.FEATURE_NAME).
+                        setFeatureLevel(MINIMUM_VERSION.featureLevel()), (short) 0)))
+            );
             loader.waitForAllEventsToBeHandled();
 
             loader.handleCommit(
@@ -752,6 +782,12 @@ public class MetadataLoaderTest {
                 setHighWaterMarkAccessor(() -> OptionalLong.of(0)).
                 build()) {
             loader.installPublishers(publishers).get();
+            loader.handleCommit(
+                MockBatchReader.newSingleBatchReader(400, 50, List.of(
+                    new ApiMessageAndVersion(new FeatureLevelRecord().
+                        setName(MetadataVersion.FEATURE_NAME).
+                        setFeatureLevel(MINIMUM_VERSION.featureLevel()), (short) 0)))
+            );
             loader.waitForAllEventsToBeHandled();
 
             loader.handleCommit(
@@ -808,12 +844,10 @@ public class MetadataLoaderTest {
             loader.handleCommit(
                 MockBatchReader.newSingleBatchReader(0, 1, singletonList(
                     // Any record will work here
-                    new ApiMessageAndVersion(new ConfigRecord()
-                        .setResourceType(ConfigResource.Type.BROKER.id())
-                        .setResourceName("3000")
-                        .setName("foo")
-                        .setValue("bar"), (short) 0)
-                )));
+                    new ApiMessageAndVersion(new FeatureLevelRecord()
+                        .setName(MetadataVersion.FEATURE_NAME)
+                        .setFeatureLevel(MINIMUM_VERSION.featureLevel()), (short) 0)))
+            );
             firstPublish.get(30, TimeUnit.SECONDS);
 
             assertFalse(capturedImages.isEmpty());

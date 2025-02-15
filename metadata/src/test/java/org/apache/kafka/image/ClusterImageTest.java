@@ -296,7 +296,7 @@ public class ClusterImageTest {
 
     private static List<ApiMessageAndVersion> getImageRecords(ClusterImage image) {
         RecordListWriter writer = new RecordListWriter();
-        image.write(writer, new ImageWriterOptions.Builder().build());
+        image.write(writer, new ImageWriterOptions.Builder(MetadataVersion.latestProduction()).build());
         return writer.records();
     }
 
@@ -311,8 +311,7 @@ public class ClusterImageTest {
                 setSupportedFeatures(Collections.emptyMap()).build()));
         RecordListWriter writer = new RecordListWriter();
         final AtomicReference<String> lossString = new AtomicReference<>("");
-        testImage.write(writer, new ImageWriterOptions.Builder().
-            setMetadataVersion(MetadataVersion.IBP_3_6_IV2).
+        testImage.write(writer, new ImageWriterOptions.Builder(MetadataVersion.IBP_3_6_IV2).
             setLossHandler(loss -> lossString.compareAndSet("", loss.loss())).
                 build());
         assertEquals("controller registration data", lossString.get());

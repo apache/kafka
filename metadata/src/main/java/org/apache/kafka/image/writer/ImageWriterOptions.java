@@ -34,12 +34,12 @@ public final class ImageWriterOptions {
         };
         private boolean isEligibleLeaderReplicasEnabled = false;
 
-        public Builder() {
-            this.metadataVersion = MetadataVersion.latestProduction();
+        public Builder(MetadataVersion metadataVersion) {
+            this.metadataVersion = metadataVersion;
         }
 
         public Builder(MetadataImage image) {
-            this.metadataVersion = image.features().metadataVersion();
+            this.metadataVersion = image.features().metadataVersionOrThrow();
             this.isEligibleLeaderReplicasEnabled = image.features().isElrEnabled();
         }
 
