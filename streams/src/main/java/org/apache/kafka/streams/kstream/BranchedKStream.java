@@ -41,8 +41,8 @@ import java.util.Map;
  *
  * <h6>Rules of forming the resulting {@link Map}</h6>
  *
- * The keys of the {@link Map Map<String, KStream<K, V>>} entries returned by {@link #defaultBranch(Branched)} or
- * {@link #noDefaultBranch()} are defined by the following rules:
+ * The keys of the {@link Map Map&lt;String, KStream&lt;K, V&gt;&gt;} entries returned by
+ * {@link #defaultBranch(Branched)} or {@link #noDefaultBranch()} are defined by the following rules:
  * <ul>
  *   <li>If {@link Named} parameter was provided for {@link KStream#split(Named)}, its value is used as a prefix for each key.
  *       By default, no prefix is used.</li>
@@ -53,7 +53,7 @@ import java.util.Map;
  *   <li>If a name is not provided for the {@link #defaultBranch()}, then the key defaults to {@code prefix + "0"}.</li>
  * </ul>
  *
- * The values of the respective {@link Map Map<Stream, KStream<K, V>>} entries are formed as following:
+ * The values of the respective {@link Map Map&lt;Stream, KStream&lt;K, V&gt;&gt;} entries are formed as following:
  * <ul>
  *   <li>If no {@link java.util.function.Function chain function} or {@link java.util.function.Consumer consumer} is
  *       provided in {@link #branch(Predicate, Branched)} via the {@link Branched} parameter,
