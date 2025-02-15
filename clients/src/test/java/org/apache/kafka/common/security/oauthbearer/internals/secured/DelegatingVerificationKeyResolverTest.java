@@ -17,6 +17,7 @@
 
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigException;
 
 import org.junit.jupiter.api.AfterEach;
@@ -30,6 +31,7 @@ import java.util.Map;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_URL;
 import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule.OAUTHBEARER_MECHANISM;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class DelegatingVerificationKeyResolverTest extends OAuthBearerTest {
 
@@ -46,9 +48,9 @@ public class DelegatingVerificationKeyResolverTest extends OAuthBearerTest {
         System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, verificationKeyFile.toURI().toString());
         Map<String, ?> configs = Collections.singletonMap(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL, verificationKeyFile.toURI().toString());
 
-        // verify it won't throw exception
+        // verify it throws an exception
         try (CloseableVerificationKeyResolver verificationKeyResolver = new DelegatingVerificationKeyResolver(time)) {
-            verificationKeyResolver.configure(configs, OAUTHBEARER_MECHANISM, List.of());
+            assertThrows(KafkaException.class, () -> verificationKeyResolver.configure(configs, OAUTHBEARER_MECHANISM, List.of()));
         }
     }
 

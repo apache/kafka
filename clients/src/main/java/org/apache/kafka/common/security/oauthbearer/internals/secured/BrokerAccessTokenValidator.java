@@ -128,7 +128,7 @@ public class BrokerAccessTokenValidator implements AccessTokenValidator {
         configure(resolver, configs, saslMechanism, jaasConfigEntries);
     }
 
-    public void configure(CloseableVerificationKeyResolver verificationKeyResolver,
+    void configure(CloseableVerificationKeyResolver verificationKeyResolver,
                    Map<String, ?> configs,
                    String saslMechanism,
                    List<AppConfigurationEntry> jaasConfigEntries) {

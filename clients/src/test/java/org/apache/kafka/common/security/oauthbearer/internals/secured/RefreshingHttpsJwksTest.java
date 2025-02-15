@@ -188,13 +188,11 @@ public class RefreshingHttpsJwksTest extends OAuthBearerTest {
         }
     }
 
-    private RefreshingHttpsJwks getRefreshingHttpsJwks(final MockTime time, final HttpsJwks httpsJwks) {
-        HttpsJwks httpsJwksFromTest = httpsJwks;
-
+    private RefreshingHttpsJwks getRefreshingHttpsJwks(final MockTime time, final HttpsJwks jwks) {
         return new RefreshingHttpsJwks(time, mockExecutorService(time)) {
             @Override
             public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
-                super.configure(httpsJwksFromTest, configs, saslMechanism, jaasConfigEntries);
+                super.configure(jwks, configs, saslMechanism, jaasConfigEntries);
             }
         };
     }

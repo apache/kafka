@@ -71,10 +71,10 @@ public class DefaultAccessTokenValidator implements AccessTokenValidator {
         configure(validator, configs, saslMechanism, jaasConfigEntries);
     }
 
-    public void configure(AccessTokenValidator validator,
-                          Map<String, ?> configs,
-                          String saslMechanism,
-                          List<AppConfigurationEntry> jaasConfigEntries) {
+    void configure(AccessTokenValidator validator,
+                   Map<String, ?> configs,
+                   String saslMechanism,
+                   List<AppConfigurationEntry> jaasConfigEntries) {
         delegate = validator;
         delegate.configure(configs, saslMechanism, jaasConfigEntries);
     }

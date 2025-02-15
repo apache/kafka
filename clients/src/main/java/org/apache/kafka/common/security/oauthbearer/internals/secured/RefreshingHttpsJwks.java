@@ -212,8 +212,6 @@ public class RefreshingHttpsJwks implements OAuthBearerConfigurable {
             refreshMs,
             TimeUnit.MILLISECONDS
         );
-
-        log.info("JWKS validation key refresh thread started with a refresh interval of {} ms", refreshMs);
     }
 
     @Override
