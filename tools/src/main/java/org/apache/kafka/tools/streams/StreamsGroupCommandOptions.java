@@ -60,6 +60,11 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
     public final OptionSpec<Void> verboseOpt;
 
 
+    public static StreamsGroupCommandOptions fromArgs(String[] args) {
+        StreamsGroupCommandOptions opts = new StreamsGroupCommandOptions(args);
+        opts.checkArgs();
+        return opts;
+    }
 
     public StreamsGroupCommandOptions(String[] args) {
         super(args);
@@ -104,9 +109,6 @@ public class StreamsGroupCommandOptions extends CommandDefaultOptions {
         CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt);
 
         if (options.has(describeOpt)) {
-            if (!options.has(groupOpt))
-                CommandLineUtils.printUsageAndExit(parser,
-                    "Option " + describeOpt + " takes the option: " + groupOpt);
             List<OptionSpec<?>> mutuallyExclusiveOpts = Arrays.asList(membersOpt, offsetsOpt, stateOpt);
             if (mutuallyExclusiveOpts.stream().mapToInt(o -> options.has(o) ? 1 : 0).sum() > 1) {
                 CommandLineUtils.printUsageAndExit(parser,

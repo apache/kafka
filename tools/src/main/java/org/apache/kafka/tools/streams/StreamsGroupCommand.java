@@ -169,17 +169,19 @@ public class StreamsGroupCommand {
         }
 
         public void describeGroups() throws ExecutionException, InterruptedException {
-            String group = opts.options.valueOf(opts.groupOpt);
-            StreamsGroupDescription description = getDescribeGroup(group);
-            if (description == null)
-                return;
-            boolean verbose =  opts.options.has(opts.verboseOpt);
-            if (opts.options.has(opts.membersOpt)) {
-                printMembers(description, verbose);
-            } else if (opts.options.has(opts.stateOpt)) {
-                printStates(description, verbose);
-            } else {
-                printOffsets(description, verbose);
+            List<String> groups = listStreamsGroups();
+            if (!groups.isEmpty()) {
+                StreamsGroupDescription description = getDescribeGroup(groups.get(0));
+                if (description == null)
+                    return;
+                boolean verbose = opts.options.has(opts.verboseOpt);
+                if (opts.options.has(opts.membersOpt)) {
+                    printMembers(description, verbose);
+                } else if (opts.options.has(opts.stateOpt)) {
+                    printStates(description, verbose);
+                } else {
+                    printOffsets(description, verbose);
+                }
             }
         }
 
@@ -209,7 +211,7 @@ public class StreamsGroupCommand {
                         System.out.println();
                     }
                 } else {
-                    String fmt = "%" + -groupLen + "s %s %-15s%" + -maxMemberIdLen + "s %s %15s %" + -maxHostLen + "s %" + -maxClientIdLen + "s\n";
+                    String fmt = "%" + -groupLen + "s %-25s %-15s%" + -maxMemberIdLen + "s %-15s %-15s %" + -maxHostLen + "s %" + -maxClientIdLen + "s\n";
                     for (StreamsGroupMemberDescription member : members) {
                         System.out.printf(fmt, "GROUP", "TARGET-ASSIGNMENT-EPOCH", "TOPOLOGY-EPOCH", "MEMBER", "MEMBER-PROTOCOL", "MEMBER-EPOCH", "PROCESS", "CLIENT-ID");
                         System.out.printf(fmt, description.groupId(), description.targetAssignmentEpoch(), description.topologyEpoch(), member.memberId(),
@@ -223,21 +225,34 @@ public class StreamsGroupCommand {
         }
 
         private void printTaskType(List<StreamsGroupMemberAssignment.TaskIds> tasks, String taskType) {
-            System.out.printf("%s\n", taskType + ": " + tasks.stream().map(taskId -> taskId.subtopologyId() + ": [" + taskId.partitions()).collect(Collectors.joining(",")) + "] ");
+            StringBuilder builder = new StringBuilder();
+            builder.append(taskType);
+            builder.append(": ");
+            for (StreamsGroupMemberAssignment.TaskIds taskIds : tasks) {
+                builder.append(taskIds.subtopologyId());
+                builder.append(":[");
+                for (Integer partition : taskIds.partitions()) {
+                    builder.append(partition);
+                    builder.append(",");
+                }
+                builder.replace(builder.length() - 1, builder.length(), "");
+                builder.append("] ");
+            }
+            System.out.println(builder);
         }
 
         private void printTasks(StreamsGroupMemberAssignment assignment, boolean isTarget) {
             String typePrefix = isTarget ? "TARGET-" : "";
-            printTaskType(assignment.activeTasks(), typePrefix + "ACTIVE-TASKS:");
-            printTaskType(assignment.standbyTasks(), typePrefix + "STANDBY-TASKS:");
-            printTaskType(assignment.warmupTasks(), typePrefix + "WARMUP-TASKS:");
+            printTaskType(assignment.activeTasks(), typePrefix + "ACTIVE-TASKS");
+            printTaskType(assignment.standbyTasks(), typePrefix + "STANDBY-TASKS");
+            printTaskType(assignment.warmupTasks(), typePrefix + "WARMUP-TASKS");
         }
 
         private void printStates(StreamsGroupDescription description, boolean verbose) {
             maybePrintEmptyGroupState(description.groupId(), description.groupState(), 1);
 
             int groupLen = Math.max(15, description.groupId().length());
-            String coordinator = description.coordinator().host() + ":" + description.coordinator().port() + "  (" + description.coordinator().idString() + ")";
+            String coordinator = description.coordinator().host() + ":" + description.coordinator().port() + " (" + description.coordinator().idString() + ")";
             int coordinatorLen = Math.max(25, coordinator.length());
 
             if (!verbose) {
@@ -245,7 +260,7 @@ public class StreamsGroupCommand {
                 System.out.printf(fmt, "GROUP", "COORDINATOR (ID)", "STATE", "#MEMBERS");
                 System.out.printf(fmt, description.groupId(), coordinator, description.groupState().toString(), description.members().size());
             } else {
-                String fmt = "%" + -groupLen + "s %" + -coordinatorLen + "s %-15s %-15s %-15s %s\n";
+                String fmt = "%" + -groupLen + "s %" + -coordinatorLen + "s %-15s %-15s %-25s %s\n";
                 System.out.printf(fmt, "GROUP", "COORDINATOR (ID)", "STATE", "GROUP-EPOCH", "TARGET-ASSIGNMENT-EPOCH", "#MEMBERS");
                 System.out.printf(fmt, description.groupId(), coordinator, description.groupState().toString(), description.groupEpoch(), description.targetAssignmentEpoch(), description.members().size());
             }
@@ -270,7 +285,7 @@ public class StreamsGroupCommand {
                     String fmt =  "%" + (-groupLen) + "s %" + (-maxTopicLen) + "s %-10s %-15s %s\n";
                     System.out.printf(fmt, "GROUP", "TOPIC", "PARTITION", "LEADER-EPOCH", "OFFSET-LAG");
                     for (Map.Entry<TopicPartition, Long> offset : offsets.entrySet()) {
-                        System.out.printf(fmt, description.groupId(), offset.getKey().topic(), offset.getKey().partition(), "", offset.getValue());
+                        System.out.printf(fmt, description.groupId(), offset.getKey().topic(), offset.getKey().partition(), description.groupEpoch(), offset.getValue());
                     }
                 }
             }
