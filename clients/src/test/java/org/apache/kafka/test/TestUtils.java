@@ -583,8 +583,8 @@ public class TestUtils {
     }
 
     /**
-     * Assert that a future raises an expected exception cause type. Return the exception cause
-     * if the assertion succeeds; otherwise raise AssertionError.
+     * Assert that a future raises an expected exception cause type.
+     * This method will wait for the future to complete or timeout(15000 milliseconds) after a default period.
      *
      * @param future The future to await
      * @param exceptionCauseClass Class of the expected exception cause
