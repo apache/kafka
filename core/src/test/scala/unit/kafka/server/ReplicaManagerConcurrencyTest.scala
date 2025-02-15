@@ -24,8 +24,7 @@ import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.metadata.KRaftMetadataCache
 import kafka.utils.TestUtils.waitUntilTrue
 import kafka.utils.{CoreUtils, Logging, TestUtils}
-import org.apache.kafka.common.metadata.RegisterBrokerRecord
-import org.apache.kafka.common.metadata.{PartitionChangeRecord, PartitionRecord, TopicRecord}
+import org.apache.kafka.common.metadata.{FeatureLevelRecord, PartitionChangeRecord, PartitionRecord, RegisterBrokerRecord, TopicRecord}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.SimpleRecord
@@ -39,7 +38,7 @@ import org.apache.kafka.metadata.{LeaderAndIsr, LeaderRecoveryState, MockConfigR
 import org.apache.kafka.metadata.PartitionRegistration
 import org.apache.kafka.metadata.storage.Formatter
 import org.apache.kafka.raft.QuorumConfig
-import org.apache.kafka.server.common.{KRaftVersion, TopicIdPartition}
+import org.apache.kafka.server.common.{KRaftVersion, MetadataVersion, TopicIdPartition}
 import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerLogConfigs}
 import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams, FetchPartitionData}
 import org.apache.kafka.server.util.{MockTime, ShutdownableThread}
@@ -378,6 +377,10 @@ class ReplicaManagerConcurrencyTest extends Logging {
         case InitializeEvent =>
           val delta = new MetadataDelta.Builder().setImage(latestImage).build()
           brokerIds.foreach { brokerId =>
+            delta.replay(new FeatureLevelRecord()
+              .setName(MetadataVersion.FEATURE_NAME)
+              .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+            )
             delta.replay(new RegisterBrokerRecord()
               .setBrokerId(brokerId)
               .setFenced(false)
