@@ -9418,7 +9418,7 @@ public class KafkaAdminClientTest {
             assertNull(result.partitionResult(fooTopicPartition0).get());
             assertNull(result.partitionResult(fooTopicPartition1).get());
             assertNull(result.partitionResult(barPartition0).get());
-            TestUtils.assertFutureThrows(result.partitionResult(zooTopicPartition0), IllegalArgumentException.class);
+            TestUtils.assertFutureThrows(IllegalArgumentException.class, result.partitionResult(zooTopicPartition0));
         }
     }
 
@@ -9442,9 +9442,9 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(new AlterShareGroupOffsetsResponse(data));
             final AlterShareGroupOffsetsResult result = env.adminClient().alterShareGroupOffsets(GROUP_ID, Map.of(fooTopicPartition0, 1L, fooTopicPartition1, 2L, barPartition0, 1L));
 
-            TestUtils.assertFutureThrows(result.all(), Errors.NON_EMPTY_GROUP.exception().getClass());
+            TestUtils.assertFutureThrows(Errors.NON_EMPTY_GROUP.exception().getClass(), result.all());
             assertNull(result.partitionResult(fooTopicPartition0).get());
-            TestUtils.assertFutureThrows(result.partitionResult(fooTopicPartition1), Errors.NON_EMPTY_GROUP.exception().getClass());
+            TestUtils.assertFutureThrows(Errors.NON_EMPTY_GROUP.exception().getClass(), result.partitionResult(fooTopicPartition1));
             assertNull(result.partitionResult(barPartition0).get());
         }
     }
