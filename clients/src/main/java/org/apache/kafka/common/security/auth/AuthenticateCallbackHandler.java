@@ -17,18 +17,19 @@
 
 package org.apache.kafka.common.security.auth;
 
-import javax.security.auth.callback.CallbackHandler;
-import javax.security.auth.login.AppConfigurationEntry;
 import java.util.List;
 import java.util.Map;
+
+import javax.security.auth.callback.CallbackHandler;
+import javax.security.auth.login.AppConfigurationEntry;
 
 /*
  * Callback handler for SASL-based authentication
  */
-public interface AuthenticateCallbackHandler extends CallbackHandler, AuthenticationConfigurable {
+public interface AuthenticateCallbackHandler extends CallbackHandler {
 
     /**
-     * Configures this object for the specified SASL mechanism.
+     * Configures this callback handler for the specified SASL mechanism.
      *
      * @param configs Key-value pairs containing the parsed configuration options of
      *        the client or broker. Note that these are the Kafka configuration options
@@ -43,7 +44,7 @@ public interface AuthenticateCallbackHandler extends CallbackHandler, Authentica
      *        This list contains a single entry for clients and may contain more than
      *        one entry for brokers if multiple mechanisms are enabled on a listener using
      *        static JAAS configuration where there is no mapping between mechanisms and
-     *        login module entries. In this case, implementations can use the login module in
+     *        login module entries. In this case, callback handlers can use the login module in
      *        `jaasConfigEntries` to identify the entry corresponding to `saslMechanism`.
      *        Alternatively, dynamic JAAS configuration option
      *        {@link org.apache.kafka.common.config.SaslConfigs#SASL_JAAS_CONFIG} may be
@@ -52,4 +53,9 @@ public interface AuthenticateCallbackHandler extends CallbackHandler, Authentica
      *        in `jaasConfigEntries`.
      */
     void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries);
+
+    /**
+     * Closes this instance.
+     */
+    void close();
 }
