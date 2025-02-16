@@ -256,7 +256,7 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
         // best effort to commit the offsets in the case where the epoch might have changed while
         // the current reconciliation is in process. Note this is using the rebalance timeout as
         // it is the limit enforced by the broker to complete the reconciliation process.
-        return commitRequestManager.maybeAutoCommitSyncBeforeRevocation(getDeadlineMsForTimeout(rebalanceTimeoutMs));
+        return commitRequestManager.maybeAutoCommitSyncBeforeRebalance(getDeadlineMsForTimeout(rebalanceTimeoutMs));
     }
 
     /**

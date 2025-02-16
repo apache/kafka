@@ -126,7 +126,7 @@ public class ConsumerMembershipManagerTest {
         metrics = new Metrics(time);
         rebalanceMetricsManager = new ConsumerRebalanceMetricsManager(metrics);
 
-        when(commitRequestManager.maybeAutoCommitSyncBeforeRevocation(anyLong())).thenReturn(CompletableFuture.completedFuture(null));
+        when(commitRequestManager.maybeAutoCommitSyncBeforeRebalance(anyLong())).thenReturn(CompletableFuture.completedFuture(null));
     }
 
     private ConsumerMembershipManager createMembershipManagerJoiningGroup() {
@@ -608,7 +608,7 @@ public class ConsumerMembershipManagerTest {
         membershipManager.onHeartbeatSuccess(createConsumerGroupHeartbeatResponse(assignment2, membershipManager.memberId()));
         assertEquals(MemberState.RECONCILING, membershipManager.state());
         CompletableFuture<Void> commitResult = new CompletableFuture<>();
-        when(commitRequestManager.maybeAutoCommitSyncBeforeRevocation(anyLong())).thenReturn(commitResult);
+        when(commitRequestManager.maybeAutoCommitSyncBeforeRebalance(anyLong())).thenReturn(commitResult);
         membershipManager.maybeReconcile(false);
 
         // Get fenced, commit completes
@@ -663,7 +663,7 @@ public class ConsumerMembershipManagerTest {
         // stay in RECONCILING state, since an unresolved topic is assigned
         membershipManager.onHeartbeatSuccess(createConsumerGroupHeartbeatResponse(assignment1, membershipManager.memberId()));
         assertEquals(MemberState.RECONCILING, membershipManager.state());
-        membershipManager.maybeReconcile(false);
+        membershipManager.maybeReconcile(true);
         verifyReconciliationTriggeredAndCompleted(membershipManager,
             Collections.singletonList(new TopicIdPartition(topic1, new TopicPartition("topic1", 0)))
         );
@@ -818,7 +818,7 @@ public class ConsumerMembershipManagerTest {
         assertEquals(MemberState.RECONCILING, membershipManager.state());
         clearInvocations(membershipManager, commitRequestManager);
 
-        membershipManager.maybeReconcile(false);
+        membershipManager.maybeReconcile(true);
 
         verifyReconciliationTriggeredAndCompleted(membershipManager, Arrays.asList(topicId1Partition0, topicId2Partition0));
     }
@@ -879,7 +879,7 @@ public class ConsumerMembershipManagerTest {
         );
         when(metadata.topicNames()).thenReturn(fullTopicMetadata);
 
-        membershipManager.maybeReconcile(false);
+        membershipManager.maybeReconcile(true);
 
         verifyReconciliationTriggeredAndCompleted(membershipManager, Arrays.asList(topicId1Partition0, topicId2Partition0));
     }
@@ -1205,7 +1205,7 @@ public class ConsumerMembershipManagerTest {
         receiveAssignment(topicId, Collections.singletonList(0), membershipManager);
 
         verifyReconciliationNotTriggered(membershipManager);
-        membershipManager.maybeReconcile(false);
+        membershipManager.maybeReconcile(true);
 
         Set<TopicPartition> expectedAssignment = Collections.singleton(new TopicPartition(topicName, 0));
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
@@ -1247,7 +1247,7 @@ public class ConsumerMembershipManagerTest {
 
         verifyReconciliationNotTriggered(membershipManager);
 
-        membershipManager.maybeReconcile(false);
+        membershipManager.maybeReconcile(true);
 
         verifyReconciliationTriggeredAndCompleted(membershipManager, Collections.emptyList());
 
@@ -1299,7 +1299,7 @@ public class ConsumerMembershipManagerTest {
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
         when(subscriptionState.rebalanceListener()).thenReturn(Optional.empty());
 
-        membershipManager.maybeReconcile(false);
+        membershipManager.maybeReconcile(true);
 
         // Assignment should have been reconciled.
         Set<TopicPartition> expectedAssignment = Collections.singleton(new TopicPartition(topicName, 1));
@@ -1361,7 +1361,7 @@ public class ConsumerMembershipManagerTest {
         receiveAssignment(topicId, Arrays.asList(0, 1), membershipManager);
 
         verifyReconciliationNotTriggered(membershipManager);
-        membershipManager.maybeReconcile(false);
+        membershipManager.maybeReconcile(true);
 
         List<TopicIdPartition> assignedPartitions = topicIdPartitions(topicId, topicName, 0, 1);
         verifyReconciliationTriggeredAndCompleted(membershipManager, assignedPartitions);
@@ -1401,7 +1401,7 @@ public class ConsumerMembershipManagerTest {
         receiveAssignment(topicId, Arrays.asList(0, 1), membershipManager);
 
         verifyReconciliationNotTriggered(membershipManager);
-        membershipManager.maybeReconcile(false);
+        membershipManager.maybeReconcile(true);
 
         verifyReconciliationTriggeredAndCompleted(membershipManager, expectedAssignmentReconciled);
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
@@ -1450,7 +1450,7 @@ public class ConsumerMembershipManagerTest {
         receiveEmptyAssignment(membershipManager);
 
         verifyReconciliationNotTriggered(membershipManager);
-        when(commitRequestManager.maybeAutoCommitSyncBeforeRevocation(anyLong())).thenReturn(commitResult);
+        when(commitRequestManager.maybeAutoCommitSyncBeforeRebalance(anyLong())).thenReturn(commitResult);
         membershipManager.maybeReconcile(true);
 
         // Member stays in RECONCILING while the commit request hasn't completed.
@@ -1463,7 +1463,7 @@ public class ConsumerMembershipManagerTest {
         commitResult.complete(null);
         InOrder inOrder = inOrder(subscriptionState, commitRequestManager);
         inOrder.verify(subscriptionState).markPendingRevocation(Set.of(new TopicPartition("topic1", 0)));
-        inOrder.verify(commitRequestManager).maybeAutoCommitSyncBeforeRevocation(anyLong());
+        inOrder.verify(commitRequestManager).maybeAutoCommitSyncBeforeRebalance(anyLong());
         inOrder.verify(subscriptionState).markPendingRevocation(Set.of(new TopicPartition("topic1", 0)));
 
         testRevocationOfAllPartitionsCompleted(membershipManager);
@@ -1544,7 +1544,7 @@ public class ConsumerMembershipManagerTest {
         String topicName = "topic1";
         mockTopicNameInMetadataCache(Collections.singletonMap(topicId, topicName), true);
 
-        membershipManager.maybeReconcile(false);
+        membershipManager.maybeReconcile(true);
         List<TopicIdPartition> expectedAssignmentReconciled = topicIdPartitions(topicId, topicName, 0, 1);
         verifyReconciliationTriggeredAndCompleted(membershipManager, expectedAssignmentReconciled);
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
@@ -1591,7 +1591,7 @@ public class ConsumerMembershipManagerTest {
         receiveAssignment(topicId, Arrays.asList(0, 1), membershipManager);
 
         verifyReconciliationNotTriggered(membershipManager);
-        membershipManager.maybeReconcile(false);
+        membershipManager.maybeReconcile(true);
         verify(subscriptionState).markPendingRevocation(Set.of());
 
         // Member should complete reconciliation
@@ -2223,7 +2223,7 @@ public class ConsumerMembershipManagerTest {
         receiveEmptyAssignment(membershipManager);
 
         verifyReconciliationNotTriggered(membershipManager);
-        membershipManager.maybeReconcile(false);
+        membershipManager.maybeReconcile(true);
         membershipManager.onHeartbeatRequestGenerated();
 
         assertEquals(MemberState.STABLE, membershipManager.state());
@@ -2557,7 +2557,7 @@ public class ConsumerMembershipManagerTest {
         if (withAutoCommit) {
             when(commitRequestManager.autoCommitEnabled()).thenReturn(true);
             CompletableFuture<Void> commitResult = new CompletableFuture<>();
-            when(commitRequestManager.maybeAutoCommitSyncBeforeRevocation(anyLong())).thenReturn(commitResult);
+            when(commitRequestManager.maybeAutoCommitSyncBeforeRebalance(anyLong())).thenReturn(commitResult);
             return commitResult;
         } else {
             return CompletableFuture.completedFuture(null);

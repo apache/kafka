@@ -576,7 +576,7 @@ public class CommitRequestManagerTest {
         // Another auto-commit request should be sent if a revocation happens, even if an
         // auto-commit on the interval is in-flight.
         CompletableFuture<Void> autoCommitBeforeRevocation =
-            commitRequestManager.maybeAutoCommitSyncBeforeRevocation(200);
+            commitRequestManager.maybeAutoCommitSyncBeforeRebalance(200);
         assertEquals(1, commitRequestManager.pendingRequests.unsentOffsetCommits.size());
 
         // Receive response for initial auto-commit on interval
@@ -1160,7 +1160,7 @@ public class CommitRequestManagerTest {
         long deadlineMs = time.milliseconds() + retryBackoffMs * 2;
 
         // Send commit request expected to be retried on STALE_MEMBER_EPOCH error while it does not expire
-        commitRequestManager.maybeAutoCommitSyncBeforeRevocation(deadlineMs);
+        commitRequestManager.maybeAutoCommitSyncBeforeRebalance(deadlineMs);
 
         int newEpoch = 8;
         String memberId = "member1";
@@ -1214,7 +1214,7 @@ public class CommitRequestManagerTest {
         // Send auto commit to revoke partitions, expected to be retried on STALE_MEMBER_EPOCH
         // with the latest epochs received (using long deadline to avoid expiring the request
         // while retrying with the new epochs)
-        commitRequestManager.maybeAutoCommitSyncBeforeRevocation(Long.MAX_VALUE);
+        commitRequestManager.maybeAutoCommitSyncBeforeRebalance(Long.MAX_VALUE);
 
         int initialEpoch = 1;
         String memberId = "member1";

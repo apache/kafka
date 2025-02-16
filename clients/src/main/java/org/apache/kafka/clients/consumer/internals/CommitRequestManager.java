@@ -316,7 +316,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
      * complete exceptionally if the commit fails with a non-retriable error, or if the retry
      * timeout expires.
      */
-    public CompletableFuture<Void> maybeAutoCommitSyncBeforeRevocation(final long deadlineMs) {
+    public CompletableFuture<Void> maybeAutoCommitSyncBeforeRebalance(final long deadlineMs) {
         if (!autoCommitEnabled()) {
             return CompletableFuture.completedFuture(null);
         }

@@ -796,10 +796,9 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
      *  - There are topics that haven't been added to the current assignment yet, but all their topic IDs
      *    are missing from the target assignment.
      *
-     * @param canCommit Controls whether reconciliation can proceed when there are partitions to be revoked
-     *                  and auto-commit is enabled. Set to true only when the current offset positions
-     *                  are safe to commit. If false and there are partitions to revoke with auto-commit
-     *                  enabled, the reconciliation will be skipped.
+     * @param canCommit Controls whether reconciliation can proceed when auto-commit is enabled.
+     *                  Set to true only when the current offset positions are safe to commit.
+     *                  If false and auto-commit enabled, the reconciliation will be skipped.
      */
     public void maybeReconcile(boolean canCommit) {
         if (state != MemberState.RECONCILING) {
@@ -831,6 +830,8 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
             return;
         }
 
+        if (autoCommitEnabled && !canCommit) return;
+        markReconciliationInProgress();
 
         // Keep copy of assigned TopicPartitions created from the TopicIdPartitions that are
         // being reconciled. Needed for interactions with the centralized subscription state that
@@ -848,9 +849,6 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
         SortedSet<TopicPartition> revokedPartitions = new TreeSet<>(TOPIC_PARTITION_COMPARATOR);
         revokedPartitions.addAll(ownedPartitions);
         revokedPartitions.removeAll(assignedTopicPartitions);
-
-        if (autoCommitEnabled && !revokedPartitions.isEmpty() && !canCommit) return;
-        markReconciliationInProgress();
 
         log.info("Reconciling assignment with local epoch {}\n" +
                         "\tMember:                                    {}\n" +
