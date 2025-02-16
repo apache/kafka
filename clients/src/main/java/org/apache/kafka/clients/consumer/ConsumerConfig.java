@@ -750,7 +750,7 @@ public class ConsumerConfig extends AbstractConfig {
         }
     }
 
-    private void checkUnsupportedConfigs() {
+    protected void checkUnsupportedConfigs() {
         String groupProtocol = getString(GROUP_PROTOCOL_CONFIG);
         if (GroupProtocol.CLASSIC.name().equalsIgnoreCase(groupProtocol)) {
             checkUnsupportedConfigs(GroupProtocol.CLASSIC, CLASSIC_PROTOCOL_UNSUPPORTED_CONFIGS);
