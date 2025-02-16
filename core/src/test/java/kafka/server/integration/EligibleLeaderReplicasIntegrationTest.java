@@ -419,18 +419,19 @@ public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarnes
             });
 
             kafka.utils.TestUtils.waitUntilTrue(
-            () -> {
-                try {
-                    TopicPartitionInfo partition = adminClient.describeTopics(Collections.singletonList(testTopicName))
-                        .allTopicNames().get().get(testTopicName).partitions().get(0);
-                    if (partition.leader() == null) return false;
-                    return partition.lastKnownElr().isEmpty() && partition.elr().isEmpty() && partition.leader().id() == lastKnownLeader;
-                } catch (Exception e) {
-                    return false;
-                }
-            },
-            () -> String.format("Partition metadata for %s is not correct", testTopicName),
-            org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS, 100L);
+                () -> {
+                    try {
+                        TopicPartitionInfo partition = adminClient.describeTopics(Collections.singletonList(testTopicName))
+                            .allTopicNames().get().get(testTopicName).partitions().get(0);
+                        if (partition.leader() == null) return false;
+                        return partition.lastKnownElr().isEmpty() && partition.elr().isEmpty() && partition.leader().id() == lastKnownLeader;
+                    } catch (Exception e) {
+                        return false;
+                    }
+                },
+                () -> String.format("Partition metadata for %s is not correct", testTopicName),
+                org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS, 100L
+            );
         } finally {
             restartDeadBrokers(false);
         }
