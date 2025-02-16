@@ -261,16 +261,7 @@ public class KafkaConsumerTest {
         Properties props = new Properties();
         props.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
         props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-
-        Class<?> consumerClass;
-        if (groupProtocol == GroupProtocol.CLASSIC) {
-            consumerClass = ClassicKafkaConsumer.class;
-        } else if (groupProtocol == GroupProtocol.CONSUMER) {
-            consumerClass = AsyncKafkaConsumer.class;
-        } else {
-            consumerClass = ShareConsumer.class;
-        }
-
+        Class<?> consumerClass = groupProtocol == GroupProtocol.CLASSIC ? ClassicKafkaConsumer.class : AsyncKafkaConsumer.class;
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
             appender.setClassLogger(consumerClass, Level.DEBUG);
             consumer = newConsumer(props, new StringDeserializer(), new StringDeserializer());
@@ -287,16 +278,7 @@ public class KafkaConsumerTest {
         Properties props = new Properties();
         props.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
         props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-
-        Class<?> consumerClass;
-        if (groupProtocol == GroupProtocol.CLASSIC) {
-            consumerClass = ClassicKafkaConsumer.class;
-        } else if (groupProtocol == GroupProtocol.CONSUMER) {
-            consumerClass = AsyncKafkaConsumer.class;
-        } else {
-            consumerClass = ShareConsumer.class;
-        }
-
+        Class<?> consumerClass = groupProtocol == GroupProtocol.CLASSIC ? ClassicKafkaConsumer.class : AsyncKafkaConsumer.class;
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
             appender.setClassLogger(consumerClass, Level.DEBUG);
             consumer = newConsumer(props, new StringDeserializer(), new StringDeserializer());
@@ -587,9 +569,7 @@ public class KafkaConsumerTest {
         Map<String, Object> config = new HashMap<>();
         config.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
         config.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-        if (groupProtocol != GroupProtocol.SHARE) {
-            config.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, "instance_id");
-        }
+        config.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, "instance_id");
         consumer = newConsumer(config, new ByteArrayDeserializer(), new ByteArrayDeserializer());
     }
 
@@ -706,7 +686,7 @@ public class KafkaConsumerTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = GroupProtocol.class, names = {"CLASSIC", "CONSUMER"})
+    @EnumSource(GroupProtocol.class)
     public void testInterceptorConstructorClose(GroupProtocol groupProtocol) {
         try {
             Properties props = new Properties();
@@ -733,7 +713,7 @@ public class KafkaConsumerTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = GroupProtocol.class, names = {"CLASSIC", "CONSUMER"})
+    @EnumSource(GroupProtocol.class)
     public void testInterceptorConstructorConfigurationWithExceptionShouldCloseRemainingInstances(GroupProtocol groupProtocol) {
         final int targetInterceptor = 3;
 
@@ -3088,27 +3068,22 @@ public class KafkaConsumerTest {
         int requestTimeoutMs = defaultApiTimeoutMs / 2;
 
         Map<String, Object> configs = new HashMap<>();
-        if (groupProtocol == GroupProtocol.CLASSIC) {
-            configs.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, heartbeatIntervalMs);
-            configs.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, sessionTimeoutMs);
-        }
-
-        if (groupProtocol != GroupProtocol.SHARE) {
-            configs.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, autoCommitEnabled);
-            configs.put(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG, autoCommitIntervalMs);
-            configs.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_UNCOMMITTED.toString());
-
-            groupInstanceId.ifPresent(gi -> configs.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, gi));
-        }
+        configs.put(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG, autoCommitIntervalMs);
         configs.put(ConsumerConfig.CHECK_CRCS_CONFIG, checkCrcs);
         configs.put(ConsumerConfig.CLIENT_ID_CONFIG, clientId);
         configs.put(ConsumerConfig.CLIENT_RACK_CONFIG, CommonClientConfigs.DEFAULT_CLIENT_RACK);
         configs.put(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, defaultApiTimeoutMs);
+        configs.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, autoCommitEnabled);
         configs.put(ConsumerConfig.FETCH_MAX_BYTES_CONFIG, maxBytes);
         configs.put(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, maxWaitMs);
         configs.put(ConsumerConfig.FETCH_MIN_BYTES_CONFIG, minBytes);
         configs.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
         configs.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
+        if (groupProtocol == GroupProtocol.CLASSIC) {
+            configs.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, heartbeatIntervalMs);
+            configs.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, sessionTimeoutMs);
+        }
+        configs.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_UNCOMMITTED.toString());
         configs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         configs.put(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, fetchSize);
         configs.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, rebalanceTimeoutMs);
@@ -3118,6 +3093,7 @@ public class KafkaConsumerTest {
         configs.put(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG, retryBackoffMs);
         configs.put(ConsumerConfig.THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED, throwOnStableOffsetNotSupported);
         configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializer.getClass());
+        groupInstanceId.ifPresent(gi -> configs.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, gi));
 
         return new ConsumerConfig(configs);
     }
@@ -3401,8 +3377,10 @@ public void testClosingConsumerUnregistersConsumerMetrics(GroupProtocol groupPro
         );
     }
 
+    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
+    //       The bug will be investigated and fixed so this test can use both group protocols.
     @ParameterizedTest
-    @EnumSource(value = GroupProtocol.class, names = {"CLASSIC", "CONSUMER"})
+    @EnumSource(value = GroupProtocol.class)
     public void configurableObjectsShouldSeeGeneratedClientId(GroupProtocol groupProtocol) {
         CLIENT_IDS.clear();
         Properties props = new Properties();
