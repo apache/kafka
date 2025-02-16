@@ -89,10 +89,11 @@ public class RecordsUtil {
                 buffer = Utils.ensureCapacity(buffer, buffer.position() + recordBatchAndRecords.batch.sizeInBytes());
                 recordBatchAndRecords.batch.writeTo(buffer);
             } else {
-                MemoryRecordsBuilder builder = convertRecordBatch(toMagic, buffer, recordBatchAndRecords);
-                buffer = builder.buffer();
-                temporaryMemoryBytes += builder.uncompressedBytesWritten();
-                numRecordsConverted += builder.numRecords();
+                try (MemoryRecordsBuilder builder = convertRecordBatch(toMagic, buffer, recordBatchAndRecords)) {
+                    buffer = builder.buffer();
+                    temporaryMemoryBytes += builder.uncompressedBytesWritten();
+                    numRecordsConverted += builder.numRecords();
+                }
             }
         }
 
