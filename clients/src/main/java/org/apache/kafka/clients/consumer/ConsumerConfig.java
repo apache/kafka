@@ -398,6 +398,20 @@ public class ConsumerConfig extends AbstractConfig {
             SESSION_TIMEOUT_MS_CONFIG
     );
 
+    /**
+     * A list of configuration keys not supported for SHARE protocol.
+     */
+    private static final List<String> SHARE_PROTOCOL_UNSUPPORTED_CONFIGS = List.of(
+            AUTO_OFFSET_RESET_CONFIG,
+            ENABLE_AUTO_COMMIT_CONFIG,
+            GROUP_INSTANCE_ID_CONFIG,
+            ISOLATION_LEVEL_CONFIG,
+            PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
+            INTERCEPTOR_CLASSES_CONFIG,
+            SESSION_TIMEOUT_MS_CONFIG,
+            HEARTBEAT_INTERVAL_MS_CONFIG
+    );
+    
     static {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG,
                                         Type.LIST,
@@ -742,6 +756,8 @@ public class ConsumerConfig extends AbstractConfig {
             checkUnsupportedConfigs(GroupProtocol.CLASSIC, CLASSIC_PROTOCOL_UNSUPPORTED_CONFIGS);
         } else if (GroupProtocol.CONSUMER.name().equalsIgnoreCase(groupProtocol)) {
             checkUnsupportedConfigs(GroupProtocol.CONSUMER, CONSUMER_PROTOCOL_UNSUPPORTED_CONFIGS);
+        } else if (GroupProtocol.SHARE.name().equalsIgnoreCase(groupProtocol)) {
+            checkUnsupportedConfigs(GroupProtocol.SHARE, SHARE_PROTOCOL_UNSUPPORTED_CONFIGS);
         }
     }
 
