@@ -37,7 +37,7 @@ import org.apache.kafka.coordinator.group.Group.GroupType
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig
 import org.apache.kafka.coordinator.group.{GroupConfig, GroupCoordinatorConfig}
 import org.apache.kafka.coordinator.share.ShareCoordinatorConfig
-import org.apache.kafka.coordinator.transaction.{TransactionLogConfig, TransactionStateManagerConfig}
+import org.apache.kafka.coordinator.transaction.{AddPartitionsToTxnConfig, TransactionLogConfig, TransactionStateManagerConfig}
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.security.authorizer.AuthorizerUtils
@@ -206,8 +206,10 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
 
   private val _transactionLogConfig = new TransactionLogConfig(this)
   private val _transactionStateManagerConfig = new TransactionStateManagerConfig(this)
+  private val _addPartitionsToTxnConfig = new AddPartitionsToTxnConfig(this)
   def transactionLogConfig: TransactionLogConfig = _transactionLogConfig
   def transactionStateManagerConfig: TransactionStateManagerConfig = _transactionStateManagerConfig
+  def addPartitionsToTxnConfig: AddPartitionsToTxnConfig = _addPartitionsToTxnConfig
 
   private val _quotaConfig = new QuotaConfig(this)
   def quotaConfig: QuotaConfig = _quotaConfig
@@ -384,13 +386,9 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   val producerPurgatoryPurgeIntervalRequests = getInt(ReplicationConfigs.PRODUCER_PURGATORY_PURGE_INTERVAL_REQUESTS_CONFIG)
   val deleteRecordsPurgatoryPurgeIntervalRequests = getInt(ReplicationConfigs.DELETE_RECORDS_PURGATORY_PURGE_INTERVAL_REQUESTS_CONFIG)
   val autoLeaderRebalanceEnable = getBoolean(ReplicationConfigs.AUTO_LEADER_REBALANCE_ENABLE_CONFIG)
-  val leaderImbalancePerBrokerPercentage = getInt(ReplicationConfigs.LEADER_IMBALANCE_PER_BROKER_PERCENTAGE_CONFIG)
   val leaderImbalanceCheckIntervalSeconds: Long = getLong(ReplicationConfigs.LEADER_IMBALANCE_CHECK_INTERVAL_SECONDS_CONFIG)
   val uncleanLeaderElectionCheckIntervalMs: Long = getLong(ReplicationConfigs.UNCLEAN_LEADER_ELECTION_INTERVAL_MS_CONFIG)
   def uncleanLeaderElectionEnable: java.lang.Boolean = getBoolean(ReplicationConfigs.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG)
-
-  // This will be removed soon. See KAFKA-18366.
-  val interBrokerProtocolVersion = MetadataVersion.MINIMUM_KRAFT_VERSION
 
   /** ********* Controlled shutdown configuration ***********/
   val controlledShutdownEnable = getBoolean(ServerConfigs.CONTROLLED_SHUTDOWN_ENABLE_CONFIG)

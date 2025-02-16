@@ -848,8 +848,9 @@ public class ReplicationControlManager {
             int partitionIndex = partEntry.getKey();
             PartitionRegistration info = partEntry.getValue();
             records.add(info.toRecord(topicId, partitionIndex, new ImageWriterOptions.Builder().
-                    setMetadataVersion(featureControl.metadataVersion()).
-                    build()));
+                setMetadataVersion(featureControl.metadataVersion()).
+                setEligibleLeaderReplicasEnabled(featureControl.isElrFeatureEnabled()).
+                build()));
         }
         return ApiError.NONE;
     }
@@ -1468,7 +1469,7 @@ public class ReplicationControlManager {
      * @param records            The record list to append to.
      */
     void handleBrokerShutdown(int brokerId, boolean isCleanShutdown, List<ApiMessageAndVersion> records) {
-        if (featureControl.metadataVersion().isElrSupported() && !isCleanShutdown) {
+        if (featureControl.isElrFeatureEnabled() && !isCleanShutdown) {
             // ELR is enabled, generate unclean shutdown partition change records
             generateLeaderAndIsrUpdates("handleBrokerUncleanShutdown", NO_LEADER, NO_LEADER, brokerId, records,
                 brokersToIsrs.partitionsWithBrokerInIsr(brokerId));
@@ -1942,6 +1943,7 @@ public class ReplicationControlManager {
             records.add(buildPartitionRegistration(partitionAssignment, isr)
                 .toRecord(topicId, partitionId, new ImageWriterOptions.Builder().
                         setMetadataVersion(featureControl.metadataVersion()).
+                        setEligibleLeaderReplicasEnabled(featureControl.isElrFeatureEnabled()).
                         build()));
             partitionId++;
         }

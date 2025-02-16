@@ -19,7 +19,6 @@ package kafka.server
 import java.io.File
 import java.nio.file.Files
 import java.util.{Optional, Properties}
-import kafka.log.UnifiedLog
 import org.apache.kafka.common.{KafkaException, Uuid}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.metadata.bootstrap.{BootstrapDirectory, BootstrapMetadata}
@@ -28,6 +27,7 @@ import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.server.config.{KRaftConfigs, ServerLogConfigs}
 import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.storage.internals.log.UnifiedLog
 import org.apache.kafka.test.TestUtils
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test

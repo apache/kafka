@@ -84,6 +84,7 @@ import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.R
 import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData;
 import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData.AlterReplicaLogDirPartitionResult;
 import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData.AlterReplicaLogDirTopicResult;
+import org.apache.kafka.common.message.AlterShareGroupOffsetsResponseData;
 import org.apache.kafka.common.message.AlterUserScramCredentialsResponseData;
 import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
@@ -168,6 +169,7 @@ import org.apache.kafka.common.requests.AddRaftVoterResponse;
 import org.apache.kafka.common.requests.AlterClientQuotasResponse;
 import org.apache.kafka.common.requests.AlterPartitionReassignmentsResponse;
 import org.apache.kafka.common.requests.AlterReplicaLogDirsResponse;
+import org.apache.kafka.common.requests.AlterShareGroupOffsetsResponse;
 import org.apache.kafka.common.requests.AlterUserScramCredentialsResponse;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.requests.ApiVersionsRequest;
@@ -242,7 +244,6 @@ import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.resource.ResourceType;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetrySender;
-import org.apache.kafka.common.test.api.Flaky;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -1793,7 +1794,6 @@ public class KafkaAdminClientTest {
         }
     }
 
-    @Flaky("KAFKA-18441")
     @Test
     public void testAdminClientApisAuthenticationFailure() {
         Cluster cluster = mockBootstrapCluster();
@@ -9205,12 +9205,13 @@ public class KafkaAdminClientTest {
             ClientRequest clientRequest = mockClient.requests().peek();
             assertNotNull(clientRequest);
             DescribeShareGroupOffsetsRequestData data = ((DescribeShareGroupOffsetsRequest.Builder) clientRequest.requestBuilder()).build().data();
-            assertEquals(GROUP_ID, data.groupId());
+            assertEquals(1, data.groups().size());
+            assertEquals(GROUP_ID, data.groups().get(0).groupId());
             assertEquals(Collections.singletonList("A"),
-                data.topics().stream().map(DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestTopic::topicName).collect(Collectors.toList()));
+                data.groups().get(0).topics().stream().map(DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestTopic::topicName).collect(Collectors.toList()));
         }
     }
-    
+
     @Test
     public void testListShareGroupOffsets() throws Exception {
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
@@ -9225,21 +9226,24 @@ public class KafkaAdminClientTest {
             TopicPartition myTopicPartition4 = new TopicPartition("my_topic_1", 4);
             TopicPartition myTopicPartition5 = new TopicPartition("my_topic_2", 6);
 
-
             ListShareGroupOffsetsSpec groupSpec = new ListShareGroupOffsetsSpec().topicPartitions(
                 List.of(myTopicPartition0, myTopicPartition1, myTopicPartition2, myTopicPartition3, myTopicPartition4, myTopicPartition5)
             );
             Map<String, ListShareGroupOffsetsSpec> groupSpecs = new HashMap<>();
             groupSpecs.put(GROUP_ID, groupSpec);
 
-            DescribeShareGroupOffsetsResponseData data = new DescribeShareGroupOffsetsResponseData().setResponses(
+            DescribeShareGroupOffsetsResponseData data = new DescribeShareGroupOffsetsResponseData().setGroups(
                 List.of(
-                    new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic().setTopicName("my_topic").setPartitions(List.of(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition().setPartitionIndex(0).setStartOffset(10))),
-                    new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic().setTopicName("my_topic").setPartitions(List.of(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition().setPartitionIndex(1).setStartOffset(11))),
-                    new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic().setTopicName("my_topic").setPartitions(List.of(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition().setPartitionIndex(2).setStartOffset(40))),
-                    new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic().setTopicName("my_topic").setPartitions(List.of(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition().setPartitionIndex(3).setStartOffset(50))),
-                    new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic().setTopicName("my_topic_1").setPartitions(List.of(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition().setPartitionIndex(4).setStartOffset(100))),
-                    new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic().setTopicName("my_topic_2").setPartitions(List.of(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition().setPartitionIndex(6).setStartOffset(500)))
+                    new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup().setGroupId(GROUP_ID).setTopics(
+                        List.of(
+                            new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic().setTopicName("my_topic").setPartitions(List.of(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition().setPartitionIndex(0).setStartOffset(10))),
+                            new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic().setTopicName("my_topic").setPartitions(List.of(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition().setPartitionIndex(1).setStartOffset(11))),
+                            new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic().setTopicName("my_topic").setPartitions(List.of(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition().setPartitionIndex(2).setStartOffset(40))),
+                            new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic().setTopicName("my_topic").setPartitions(List.of(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition().setPartitionIndex(3).setStartOffset(50))),
+                            new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic().setTopicName("my_topic_1").setPartitions(List.of(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition().setPartitionIndex(4).setStartOffset(100))),
+                            new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic().setTopicName("my_topic_2").setPartitions(List.of(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition().setPartitionIndex(6).setStartOffset(500)))
+                        )
+                    )
                 )
             );
             env.kafkaClient().prepareResponse(new DescribeShareGroupOffsetsResponse(data));
@@ -9254,6 +9258,92 @@ public class KafkaAdminClientTest {
             assertEquals(50, partitionToOffsetAndMetadata.get(myTopicPartition3));
             assertEquals(100, partitionToOffsetAndMetadata.get(myTopicPartition4));
             assertEquals(500, partitionToOffsetAndMetadata.get(myTopicPartition5));
+        }
+    }
+
+    @Test
+    public void testListShareGroupOffsetsMultipleGroups() throws Exception {
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            env.kafkaClient().prepareResponse(prepareBatchedFindCoordinatorResponse(Errors.NONE, env.cluster().controller(), Set.of(GROUP_ID, "group-1")));
+
+            TopicPartition myTopicPartition0 = new TopicPartition("my_topic", 0);
+            TopicPartition myTopicPartition1 = new TopicPartition("my_topic", 1);
+            TopicPartition myTopicPartition2 = new TopicPartition("my_topic", 2);
+            TopicPartition myTopicPartition3 = new TopicPartition("my_topic", 3);
+            TopicPartition myTopicPartition4 = new TopicPartition("my_topic_1", 4);
+            TopicPartition myTopicPartition5 = new TopicPartition("my_topic_2", 6);
+
+            ListShareGroupOffsetsSpec group0Specs = new ListShareGroupOffsetsSpec().topicPartitions(
+                List.of(myTopicPartition0, myTopicPartition1, myTopicPartition2, myTopicPartition3)
+            );
+            ListShareGroupOffsetsSpec group1Specs = new ListShareGroupOffsetsSpec().topicPartitions(
+                List.of(myTopicPartition4, myTopicPartition5)
+            );
+            Map<String, ListShareGroupOffsetsSpec> groupSpecs = new HashMap<>();
+            groupSpecs.put(GROUP_ID, group0Specs);
+            groupSpecs.put("group-1", group1Specs);
+
+            DescribeShareGroupOffsetsResponseData data = new DescribeShareGroupOffsetsResponseData().setGroups(
+                List.of(
+                    new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup().setGroupId(GROUP_ID).setTopics(
+                        List.of(
+                            new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic().setTopicName("my_topic").setPartitions(List.of(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition().setPartitionIndex(0).setStartOffset(10))),
+                            new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic().setTopicName("my_topic").setPartitions(List.of(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition().setPartitionIndex(1).setStartOffset(11))),
+                            new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic().setTopicName("my_topic").setPartitions(List.of(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition().setPartitionIndex(2).setStartOffset(40))),
+                            new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic().setTopicName("my_topic").setPartitions(List.of(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition().setPartitionIndex(3).setStartOffset(50)))
+                        )
+                    ),
+                    new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup().setGroupId("group-1").setTopics(
+                        List.of(
+                            new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic().setTopicName("my_topic_1").setPartitions(List.of(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition().setPartitionIndex(4).setStartOffset(100))),
+                            new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic().setTopicName("my_topic_2").setPartitions(List.of(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition().setPartitionIndex(6).setStartOffset(500)))
+                        )
+                    )
+                )
+            );
+            env.kafkaClient().prepareResponse(new DescribeShareGroupOffsetsResponse(data));
+
+            final ListShareGroupOffsetsResult result = env.adminClient().listShareGroupOffsets(groupSpecs);
+            assertEquals(2, result.all().get().size());
+
+            final Map<TopicPartition, Long> partitionToOffsetAndMetadataGroup0 = result.partitionsToOffset(GROUP_ID).get();
+            assertEquals(4, partitionToOffsetAndMetadataGroup0.size());
+            assertEquals(10, partitionToOffsetAndMetadataGroup0.get(myTopicPartition0));
+            assertEquals(11, partitionToOffsetAndMetadataGroup0.get(myTopicPartition1));
+            assertEquals(40, partitionToOffsetAndMetadataGroup0.get(myTopicPartition2));
+            assertEquals(50, partitionToOffsetAndMetadataGroup0.get(myTopicPartition3));
+
+            final Map<TopicPartition, Long> partitionToOffsetAndMetadataGroup1 = result.partitionsToOffset("group-1").get();
+            assertEquals(2, partitionToOffsetAndMetadataGroup1.size());
+            assertEquals(100, partitionToOffsetAndMetadataGroup1.get(myTopicPartition4));
+            assertEquals(500, partitionToOffsetAndMetadataGroup1.get(myTopicPartition5));
+        }
+    }
+
+    @Test
+    public void testListShareGroupOffsetsEmpty() throws Exception {
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+
+            ListShareGroupOffsetsSpec groupSpec = new ListShareGroupOffsetsSpec();
+            Map<String, ListShareGroupOffsetsSpec> groupSpecs = new HashMap<>();
+            groupSpecs.put(GROUP_ID, groupSpec);
+
+            DescribeShareGroupOffsetsResponseData data = new DescribeShareGroupOffsetsResponseData().setGroups(
+                List.of(
+                    new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup().setGroupId(GROUP_ID)
+                )
+            );
+            env.kafkaClient().prepareResponse(new DescribeShareGroupOffsetsResponse(data));
+
+            final ListShareGroupOffsetsResult result = env.adminClient().listShareGroupOffsets(groupSpecs);
+            final Map<TopicPartition, Long> partitionToOffsetAndMetadata = result.partitionsToOffset(GROUP_ID).get();
+
+            assertEquals(0, partitionToOffsetAndMetadata.size());
         }
     }
 
@@ -9276,12 +9366,18 @@ public class KafkaAdminClientTest {
             Map<String, ListShareGroupOffsetsSpec> groupSpecs = new HashMap<>();
             groupSpecs.put(GROUP_ID, groupSpec);
 
-            DescribeShareGroupOffsetsResponseData data = new DescribeShareGroupOffsetsResponseData().setResponses(
+            DescribeShareGroupOffsetsResponseData data = new DescribeShareGroupOffsetsResponseData().setGroups(
                 List.of(
-                    new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic().setTopicName("my_topic").setPartitions(List.of(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition().setPartitionIndex(0).setStartOffset(10))),
-                    new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic().setTopicName("my_topic").setPartitions(List.of(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition().setPartitionIndex(1).setStartOffset(11))),
-                    new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic().setTopicName("my_topic_1").setPartitions(List.of(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition().setPartitionIndex(4).setErrorCode(Errors.NOT_COORDINATOR.code()).setErrorMessage("Not a Coordinator"))),
-                    new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic().setTopicName("my_topic_2").setPartitions(List.of(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition().setPartitionIndex(6).setStartOffset(500)))
+                    new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup().setGroupId(GROUP_ID).setTopics(
+                        List.of(
+                            new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic().setTopicName("my_topic").setPartitions(List.of(
+                                new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition().setPartitionIndex(0).setStartOffset(10),
+                                new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition().setPartitionIndex(1).setStartOffset(11)
+                            )),
+                            new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic().setTopicName("my_topic_1").setPartitions(List.of(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition().setPartitionIndex(4).setErrorCode(Errors.NOT_COORDINATOR.code()).setErrorMessage("Not a Coordinator"))),
+                            new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic().setTopicName("my_topic_2").setPartitions(List.of(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition().setPartitionIndex(6).setStartOffset(500)))
+                        )
+                    )
                 )
             );
             env.kafkaClient().prepareResponse(new DescribeShareGroupOffsetsResponse(data));
@@ -9294,6 +9390,62 @@ public class KafkaAdminClientTest {
             assertEquals(10, partitionToOffsetAndMetadata.get(myTopicPartition0));
             assertEquals(11, partitionToOffsetAndMetadata.get(myTopicPartition1));
             assertEquals(500, partitionToOffsetAndMetadata.get(myTopicPartition3));
+        }
+    }
+
+    @Test
+    public void testAlterShareGroupOffsets() throws Exception {
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+
+            AlterShareGroupOffsetsResponseData data = new AlterShareGroupOffsetsResponseData().setResponses(
+                List.of(
+                    new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic().setTopicName("foo").setPartitions(List.of(new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition().setPartitionIndex(0), new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition().setPartitionIndex(1))),
+                    new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic().setTopicName("bar").setPartitions(List.of(new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition().setPartitionIndex(0)))
+                )
+            );
+
+            TopicPartition fooTopicPartition0 = new TopicPartition("foo", 0);
+            TopicPartition fooTopicPartition1 = new TopicPartition("foo", 1);
+            TopicPartition barPartition0 = new TopicPartition("bar", 0);
+            TopicPartition zooTopicPartition0 = new TopicPartition("zoo", 0);
+
+            env.kafkaClient().prepareResponse(new AlterShareGroupOffsetsResponse(data));
+            final AlterShareGroupOffsetsResult result = env.adminClient().alterShareGroupOffsets(GROUP_ID, Map.of(fooTopicPartition0, 1L, fooTopicPartition1, 2L, barPartition0, 1L));
+
+            assertNull(result.all().get());
+            assertNull(result.partitionResult(fooTopicPartition0).get());
+            assertNull(result.partitionResult(fooTopicPartition1).get());
+            assertNull(result.partitionResult(barPartition0).get());
+            TestUtils.assertFutureThrows(result.partitionResult(zooTopicPartition0), IllegalArgumentException.class);
+        }
+    }
+
+    @Test
+    public void testAlterShareGroupOffsetsWithErrorInOnePartition() throws Exception {
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+
+            AlterShareGroupOffsetsResponseData data = new AlterShareGroupOffsetsResponseData().setResponses(
+                List.of(
+                    new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic().setTopicName("foo").setPartitions(List.of(new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition().setPartitionIndex(0), new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition().setPartitionIndex(1).setErrorCode(Errors.NON_EMPTY_GROUP.code()).setErrorMessage("The group is not empty"))),
+                    new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic().setTopicName("bar").setPartitions(List.of(new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition().setPartitionIndex(0)))
+                )
+            );
+
+            TopicPartition fooTopicPartition0 = new TopicPartition("foo", 0);
+            TopicPartition fooTopicPartition1 = new TopicPartition("foo", 1);
+            TopicPartition barPartition0 = new TopicPartition("bar", 0);
+
+            env.kafkaClient().prepareResponse(new AlterShareGroupOffsetsResponse(data));
+            final AlterShareGroupOffsetsResult result = env.adminClient().alterShareGroupOffsets(GROUP_ID, Map.of(fooTopicPartition0, 1L, fooTopicPartition1, 2L, barPartition0, 1L));
+
+            TestUtils.assertFutureThrows(result.all(), Errors.NON_EMPTY_GROUP.exception().getClass());
+            assertNull(result.partitionResult(fooTopicPartition0).get());
+            TestUtils.assertFutureThrows(result.partitionResult(fooTopicPartition1), Errors.NON_EMPTY_GROUP.exception().getClass());
+            assertNull(result.partitionResult(barPartition0).get());
         }
     }
 }

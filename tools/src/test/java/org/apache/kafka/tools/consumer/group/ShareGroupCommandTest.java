@@ -47,6 +47,7 @@ import org.mockito.ArgumentMatchers;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -70,7 +71,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 public class ShareGroupCommandTest {
-    private static final List<List<String>> DESCRIBE_TYPE_OFFSETS = List.of(List.of(""), List.of("--offsets"));
+    private static final List<List<String>> DESCRIBE_TYPE_OFFSETS = List.of(List.of(""), List.of("--offsets"), List.of("--verbose"), List.of("--offsets", "--verbose"));
     private static final List<List<String>> DESCRIBE_TYPE_MEMBERS = List.of(List.of("--members"), List.of("--members", "--verbose"));
     private static final List<List<String>> DESCRIBE_TYPE_STATE = List.of(List.of("--state"), List.of("--state", "--verbose"));
     private static final List<List<String>> DESCRIBE_TYPES = Stream.of(DESCRIBE_TYPE_OFFSETS, DESCRIBE_TYPE_MEMBERS, DESCRIBE_TYPE_STATE).flatMap(Collection::stream).toList();
@@ -178,7 +179,61 @@ public class ShareGroupCommandTest {
                         return false;
                     }
 
-                    List<String> expectedValues = List.of(firstGroup, "topic1", "0", "0");
+                    List<String> expectedValues;
+                    if (describeType.contains("--verbose")) {
+                        expectedValues = List.of(firstGroup, "topic1", "0", "-", "0");
+                    } else {
+                        expectedValues = List.of(firstGroup, "topic1", "0", "0");
+                    }
+                    return checkArgsHeaderOutput(cgcArgs, lines[0]) &&
+                        Arrays.stream(lines[1].trim().split("\\s+")).toList().equals(expectedValues);
+                }, "Expected a data row and no error in describe results with describe type " + String.join(" ", describeType) + ".");
+            }
+        }
+    }
+
+    @Test
+    public void testDescribeOffsetsOfExistingGroupWithNulls() throws Exception {
+        String firstGroup = "group1";
+        String bootstrapServer = "localhost:9092";
+
+        for (List<String> describeType : DESCRIBE_TYPE_OFFSETS) {
+            List<String> cgcArgs = new ArrayList<>(List.of("--bootstrap-server", bootstrapServer, "--describe", "--group", firstGroup));
+            cgcArgs.addAll(describeType);
+            Admin adminClient = mock(KafkaAdminClient.class);
+            DescribeShareGroupsResult describeShareGroupsResult = mock(DescribeShareGroupsResult.class);
+            ShareGroupDescription exp = new ShareGroupDescription(
+                firstGroup,
+                List.of(new ShareMemberDescription("memid1", "clId1", "host1", new ShareMemberAssignment(
+                    Set.of(new TopicPartition("topic1", 0))
+                ), 0)),
+                GroupState.STABLE,
+                new Node(0, "host1", 9090), 0, 0);
+            // The null here indicates a topic-partition for which offset information could not be retrieved, typically due to an error
+            ListShareGroupOffsetsResult listShareGroupOffsetsResult = AdminClientTestUtils.createListShareGroupOffsetsResult(
+                Map.of(
+                    firstGroup,
+                    KafkaFuture.completedFuture(Collections.singletonMap(new TopicPartition("topic1", 0), null))
+                )
+            );
+
+            when(describeShareGroupsResult.describedGroups()).thenReturn(Map.of(firstGroup, KafkaFuture.completedFuture(exp)));
+            when(adminClient.describeShareGroups(ArgumentMatchers.anyCollection(), any(DescribeShareGroupsOptions.class))).thenReturn(describeShareGroupsResult);
+            when(adminClient.listShareGroupOffsets(ArgumentMatchers.anyMap())).thenReturn(listShareGroupOffsetsResult);
+            try (ShareGroupService service = getShareGroupService(cgcArgs.toArray(new String[0]), adminClient)) {
+                TestUtils.waitForCondition(() -> {
+                    Entry<String, String> res = ToolsTestUtils.grabConsoleOutputAndError(describeGroups(service));
+                    String[] lines = res.getKey().trim().split("\n");
+                    if (lines.length != 2 && !res.getValue().isEmpty()) {
+                        return false;
+                    }
+
+                    List<String> expectedValues;
+                    if (describeType.contains("--verbose")) {
+                        expectedValues = List.of(firstGroup, "topic1", "0", "-", "-");
+                    } else {
+                        expectedValues = List.of(firstGroup, "topic1", "0", "-");
+                    }
                     return checkArgsHeaderOutput(cgcArgs, lines[0]) &&
                         Arrays.stream(lines[1].trim().split("\\s+")).toList().equals(expectedValues);
                 }, "Expected a data row and no error in describe results with describe type " + String.join(" ", describeType) + ".");
@@ -249,8 +304,14 @@ public class ShareGroupCommandTest {
                         return false;
                     }
 
-                    List<String> expectedValues1 = List.of(firstGroup, "topic1", "0", "0");
-                    List<String> expectedValues2 = List.of(secondGroup, "topic1", "0", "0");
+                    List<String> expectedValues1, expectedValues2;
+                    if (describeType.contains("--verbose")) {
+                        expectedValues1 = List.of(firstGroup, "topic1", "0", "-", "0");
+                        expectedValues2 = List.of(secondGroup, "topic1", "0", "-", "0");
+                    } else {
+                        expectedValues1 = List.of(firstGroup, "topic1", "0", "0");
+                        expectedValues2 = List.of(secondGroup, "topic1", "0", "0");
+                    }
                     return checkArgsHeaderOutput(cgcArgs, lines[0]) && checkArgsHeaderOutput(cgcArgs, lines[3]) &&
                         Arrays.stream(lines[1].trim().split("\\s+")).toList().equals(expectedValues1) &&
                         Arrays.stream(lines[4].trim().split("\\s+")).toList().equals(expectedValues2);
@@ -489,20 +550,6 @@ public class ShareGroupCommandTest {
     }
 
     @Test
-    public void testDescribeShareGroupsInvalidVerboseOption() {
-        String bootstrapServer = "localhost:9092";
-        String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServer, "--describe", "--group", "group1", "--verbose"};
-        assertThrows(OptionException.class, () -> getShareGroupService(cgcArgs, new MockAdminClient()));
-    }
-
-    @Test
-    public void testDescribeShareGroupsOffsetsInvalidVerboseOption() {
-        String bootstrapServer = "localhost:9092";
-        String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServer, "--describe", "--group", "group1", "--offsets", "--verbose"};
-        assertThrows(OptionException.class, () -> getShareGroupService(cgcArgs, new MockAdminClient()));
-    }
-
-    @Test
     public void testPrintEmptyGroupState() {
         assertFalse(ShareGroupService.maybePrintEmptyGroupState("group", GroupState.EMPTY, 0));
         assertFalse(ShareGroupService.maybePrintEmptyGroupState("group", GroupState.DEAD, 0));
@@ -564,11 +611,13 @@ public class ShareGroupCommandTest {
         }
 
         // --offsets or no arguments
-        return checkOffsetsArgsHeaderOutput(output);
+        return checkOffsetsArgsHeaderOutput(output, args.contains("--verbose"));
     }
 
-    private boolean checkOffsetsArgsHeaderOutput(String output) {
-        List<String> expectedKeys = List.of("GROUP", "TOPIC", "PARTITION", "START-OFFSET");
+    private boolean checkOffsetsArgsHeaderOutput(String output, boolean verbose) {
+        List<String> expectedKeys = verbose ?
+            List.of("GROUP", "TOPIC", "PARTITION", "LEADER-EPOCH", "START-OFFSET") :
+            List.of("GROUP", "TOPIC", "PARTITION", "START-OFFSET");
         return Arrays.stream(output.trim().split("\\s+")).toList().equals(expectedKeys);
     }
 

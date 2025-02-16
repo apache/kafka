@@ -101,7 +101,7 @@ class GroupCoordinatorAdapterTest {
     val adapter = new GroupCoordinatorAdapter(groupCoordinator, Time.SYSTEM)
 
     val context = makeContext(ApiKeys.DESCRIBE_SHARE_GROUP_OFFSETS, ApiKeys.DESCRIBE_SHARE_GROUP_OFFSETS.latestVersion)
-    val request = new DescribeShareGroupOffsetsRequestData()
+    val request = new DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup()
       .setGroupId("group")
 
     val future = adapter.describeShareGroupOffsets(context, request)

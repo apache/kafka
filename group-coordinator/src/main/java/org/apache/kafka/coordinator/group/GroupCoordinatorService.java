@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.NotCoordinatorException;
@@ -956,47 +957,61 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * See {@link GroupCoordinator#describeShareGroupOffsets(RequestContext, DescribeShareGroupOffsetsRequestData)}.
+     * See {@link GroupCoordinator#describeShareGroupOffsets(RequestContext, DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup)}.
      */
     @Override
-    public CompletableFuture<DescribeShareGroupOffsetsResponseData> describeShareGroupOffsets(
+    public CompletableFuture<DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup> describeShareGroupOffsets(
         RequestContext context,
-        DescribeShareGroupOffsetsRequestData requestData
+        DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup requestData
     ) {
         if (!isActive.get()) {
             return CompletableFuture.completedFuture(
-                new DescribeShareGroupOffsetsResponseData()
-                    .setResponses(DescribeShareGroupOffsetsRequest.getErrorDescribeShareGroupOffsets(
-                        requestData.topics(),
-                        Errors.COORDINATOR_NOT_AVAILABLE
-                    ))
-            );
+                DescribeShareGroupOffsetsRequest.getErrorDescribedGroup(requestData.groupId(), Errors.COORDINATOR_NOT_AVAILABLE));
         }
 
         if (metadataImage == null) {
             return CompletableFuture.completedFuture(
-                new DescribeShareGroupOffsetsResponseData()
-                    .setResponses(DescribeShareGroupOffsetsRequest.getErrorDescribeShareGroupOffsets(
-                        requestData.topics(),
-                        Errors.UNKNOWN_TOPIC_OR_PARTITION
-                    ))
-            );
+                DescribeShareGroupOffsetsRequest.getErrorDescribedGroup(requestData.groupId(), Errors.COORDINATOR_NOT_AVAILABLE));
         }
 
-        List<ReadShareGroupStateSummaryRequestData.ReadStateSummaryData> readStateSummaryData =
-            requestData.topics().stream().map(
-                topic -> new ReadShareGroupStateSummaryRequestData.ReadStateSummaryData()
-                    .setTopicId(metadataImage.topics().topicNameToIdView().get(topic.topicName()))
+        Map<Uuid, String> requestTopicIdToNameMapping = new HashMap<>();
+        List<ReadShareGroupStateSummaryRequestData.ReadStateSummaryData> readStateSummaryData = new ArrayList<>(requestData.topics().size());
+        List<DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic> describeShareGroupOffsetsResponseTopicList = new ArrayList<>(requestData.topics().size());
+        requestData.topics().forEach(topic -> {
+            Uuid topicId = metadataImage.topics().topicNameToIdView().get(topic.topicName());
+            if (topicId != null) {
+                requestTopicIdToNameMapping.put(topicId, topic.topicName());
+                readStateSummaryData.add(new ReadShareGroupStateSummaryRequestData.ReadStateSummaryData()
+                    .setTopicId(topicId)
                     .setPartitions(
                         topic.partitions().stream().map(
                             partitionIndex -> new ReadShareGroupStateSummaryRequestData.PartitionData().setPartition(partitionIndex)
                         ).toList()
-                    )
-            ).toList();
+                    ));
+            } else {
+                describeShareGroupOffsetsResponseTopicList.add(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic()
+                    .setTopicName(topic.topicName())
+                    .setPartitions(topic.partitions().stream().map(
+                        partition -> new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition()
+                            .setPartitionIndex(partition)
+                            .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
+                            .setErrorMessage(Errors.UNKNOWN_TOPIC_OR_PARTITION.message())
+                    ).toList()));
+            }
+        });
+
+        // If the request for the persister is empty, just complete the operation right away.
+        if (readStateSummaryData.isEmpty()) {
+            return CompletableFuture.completedFuture(
+                new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup()
+                    .setGroupId(requestData.groupId())
+                    .setTopics(describeShareGroupOffsetsResponseTopicList));
+        }
+
         ReadShareGroupStateSummaryRequestData readSummaryRequestData = new ReadShareGroupStateSummaryRequestData()
             .setGroupId(requestData.groupId())
             .setTopics(readStateSummaryData);
-        CompletableFuture<DescribeShareGroupOffsetsResponseData> future = new CompletableFuture<>();
+        CompletableFuture<DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup> future = new CompletableFuture<>();
         persister.readSummary(ReadShareGroupStateSummaryParameters.from(readSummaryRequestData))
             .whenComplete((result, error) -> {
                 if (error != null) {
@@ -1009,20 +1024,23 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     future.completeExceptionally(new IllegalStateException("Result is null for the read state summary"));
                     return;
                 }
-                List<DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic> describeShareGroupOffsetsResponseTopicList =
-                    result.topicsData().stream().map(
-                        topicData -> new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic()
-                            .setTopicId(topicData.topicId())
-                            .setTopicName(metadataImage.topics().topicIdToNameView().get(topicData.topicId()))
-                            .setPartitions(topicData.partitions().stream().map(
-                                partitionData -> new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition()
-                                    .setPartitionIndex(partitionData.partition())
-                                    .setStartOffset(partitionData.startOffset())
-                                    .setErrorMessage(partitionData.errorMessage())
-                                    .setErrorCode(partitionData.errorCode())
-                            ).toList())
-                    ).toList();
-                future.complete(new DescribeShareGroupOffsetsResponseData().setResponses(describeShareGroupOffsetsResponseTopicList));
+                result.topicsData().forEach(topicData ->
+                    describeShareGroupOffsetsResponseTopicList.add(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic()
+                        .setTopicId(topicData.topicId())
+                        .setTopicName(requestTopicIdToNameMapping.get(topicData.topicId()))
+                        .setPartitions(topicData.partitions().stream().map(
+                            partitionData -> new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition()
+                                .setPartitionIndex(partitionData.partition())
+                                .setStartOffset(partitionData.startOffset())
+                                .setErrorMessage(Errors.forCode(partitionData.errorCode()).message())
+                                .setErrorCode(partitionData.errorCode())
+                        ).toList())
+                    ));
+
+                future.complete(
+                    new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup()
+                        .setGroupId(requestData.groupId())
+                        .setTopics(describeShareGroupOffsetsResponseTopicList));
             });
         return future;
     }

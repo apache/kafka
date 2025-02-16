@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.coordinator.group;
 
+import org.apache.kafka.common.Configurable;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.record.CompressionType;
@@ -25,11 +27,14 @@ import org.apache.kafka.coordinator.group.assignor.RangeAssignor;
 import org.apache.kafka.coordinator.group.assignor.UniformAssignor;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.config.ConfigDef.Importance.HIGH;
 import static org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM;
@@ -41,6 +46,7 @@ import static org.apache.kafka.common.config.ConfigDef.Type.LIST;
 import static org.apache.kafka.common.config.ConfigDef.Type.LONG;
 import static org.apache.kafka.common.config.ConfigDef.Type.SHORT;
 import static org.apache.kafka.common.config.ConfigDef.Type.STRING;
+import static org.apache.kafka.common.utils.Utils.maybeCloseQuietly;
 import static org.apache.kafka.common.utils.Utils.require;
 
 /**
@@ -120,12 +126,19 @@ public class GroupCoordinatorConfig {
             "group protocol use " + GROUP_MAX_SIZE_CONFIG + " " + "instead.";
     public static final int CONSUMER_GROUP_MAX_SIZE_DEFAULT = Integer.MAX_VALUE;
 
-    public static final String CONSUMER_GROUP_ASSIGNORS_CONFIG = "group.consumer.assignors";
-    public static final String CONSUMER_GROUP_ASSIGNORS_DOC = "The server side assignors as a list of full class names. The first one in the list is considered as the default assignor to be used in the case where the consumer does not specify an assignor.";
-    public static final List<String> CONSUMER_GROUP_ASSIGNORS_DEFAULT = List.of(
-        UniformAssignor.class.getName(),
-        RangeAssignor.class.getName()
+
+    private static final List<ConsumerGroupPartitionAssignor> CONSUMER_GROUP_BUILTIN_ASSIGNORS = List.of(
+        new UniformAssignor(),
+        new RangeAssignor()
     );
+    public static final String CONSUMER_GROUP_ASSIGNORS_CONFIG = "group.consumer.assignors";
+    public static final String CONSUMER_GROUP_ASSIGNORS_DOC = "The server side assignors as a list of either names for builtin assignors or full class names for customer assignors. " +
+        "The first one in the list is considered as the default assignor to be used in the case where the consumer does not specify an assignor. " +
+        "The supported builtin assignors are: " + CONSUMER_GROUP_BUILTIN_ASSIGNORS.stream().map(ConsumerGroupPartitionAssignor::name).collect(Collectors.joining(", ")) + ".";
+    public static final List<String> CONSUMER_GROUP_ASSIGNORS_DEFAULT = CONSUMER_GROUP_BUILTIN_ASSIGNORS
+        .stream()
+        .map(ConsumerGroupPartitionAssignor::name)
+        .toList();
 
     public static final String CONSUMER_GROUP_MIGRATION_POLICY_CONFIG = "group.consumer.migration.policy";
     public static final String CONSUMER_GROUP_MIGRATION_POLICY_DEFAULT = ConsumerGroupMigrationPolicy.BIDIRECTIONAL.toString();
@@ -390,12 +403,51 @@ public class GroupCoordinatorConfig {
     protected List<ConsumerGroupPartitionAssignor> consumerGroupAssignors(
         AbstractConfig config
     ) {
-        return Collections.unmodifiableList(
-            config.getConfiguredInstances(
-                GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG,
-                ConsumerGroupPartitionAssignor.class
-            )
-        );
+        Map<String, ConsumerGroupPartitionAssignor> defaultAssignors = CONSUMER_GROUP_BUILTIN_ASSIGNORS
+            .stream()
+            .collect(Collectors.toMap(ConsumerGroupPartitionAssignor::name, Function.identity()));
+
+        List<ConsumerGroupPartitionAssignor> assignors = new ArrayList<>();
+
+        try {
+            for (Object object : config.getList(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG)) {
+                ConsumerGroupPartitionAssignor assignor;
+
+                if (object instanceof String klass) {
+                    assignor = defaultAssignors.get(klass);
+                    if (assignor == null) {
+                        try {
+                            assignor = Utils.newInstance(klass, ConsumerGroupPartitionAssignor.class);
+                        } catch (ClassNotFoundException e) {
+                            throw new KafkaException("Class " + klass + " cannot be found", e);
+                        } catch (ClassCastException e) {
+                            throw new KafkaException(klass + " is not an instance of " + ConsumerGroupPartitionAssignor.class.getName());
+                        }
+                    }
+                } else if (object instanceof Class<?> klass) {
+                    Object o = Utils.newInstance((Class<?>) klass);
+                    if (!ConsumerGroupPartitionAssignor.class.isInstance(o)) {
+                        throw new KafkaException(klass + " is not an instance of " + ConsumerGroupPartitionAssignor.class.getName());
+                    }
+                    assignor = (ConsumerGroupPartitionAssignor) o;
+                } else {
+                    throw new KafkaException("Unexpected element of type " + object.getClass().getName() + ", expected String or Class");
+                }
+
+                assignors.add(assignor);
+
+                if (assignor instanceof Configurable configurable) {
+                    configurable.configure(config.originals());
+                }
+            }
+        } catch (Exception e) {
+            for (ConsumerGroupPartitionAssignor assignor : assignors) {
+                maybeCloseQuietly(assignor, "AutoCloseable object constructed and configured during failed call to consumerGroupAssignors");
+            }
+            throw e;
+        }
+
+        return assignors;
     }
 
     /**

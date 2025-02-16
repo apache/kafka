@@ -22,6 +22,7 @@ import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.image.writer.RecordListWriter;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 
 import org.junit.jupiter.api.Test;
@@ -165,5 +166,20 @@ public class FeaturesImageTest {
         assertFalse(new FeaturesImage(FeaturesImage.EMPTY.finalizedVersions(),
             MetadataVersion.IBP_3_3_IV0).isEmpty());
         assertTrue(new FeaturesImage(FeaturesImage.EMPTY.finalizedVersions(), FeaturesImage.EMPTY.metadataVersion()).isEmpty());
+    }
+
+    @Test
+    public void testElrEnabled() {
+        FeaturesImage image1 = new FeaturesImage(
+            Map.of(EligibleLeaderReplicasVersion.FEATURE_NAME, EligibleLeaderReplicasVersion.ELRV_0.featureLevel()),
+            MetadataVersion.latestTesting()
+        );
+        assertFalse(image1.isElrEnabled());
+
+        FeaturesImage image2 = new FeaturesImage(
+            Map.of(EligibleLeaderReplicasVersion.FEATURE_NAME, EligibleLeaderReplicasVersion.ELRV_1.featureLevel()),
+            MetadataVersion.latestTesting()
+        );
+        assertTrue(image2.isElrEnabled());
     }
 }
