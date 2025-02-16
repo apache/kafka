@@ -302,7 +302,6 @@ public class KafkaShareConsumerTest {
         configs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         configs.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, batchSize);
-        configs.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true");
         return new ShareConsumerConfig(configs);
     }
 
