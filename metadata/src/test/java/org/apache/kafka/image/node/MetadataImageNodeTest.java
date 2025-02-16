@@ -46,9 +46,9 @@ public class MetadataImageNodeTest {
     public void shouldGetAclsImageNode() {
         when(mockMetadataImage.acls()).thenReturn(mockAclsImage);
 
-        MetadataNode aclsNode = metadataImageNode.child("acls");
+        MetadataNode aclsNode = metadataImageNode.child(AclsImageNode.NAME);
 
-        assertNotNull(aclsNode, "aclsNode should not be null");
-        assertEquals(AclsImageNode.class, aclsNode.getClass(), "aclsNode should be AclsImageNode");
+        assertNotNull(aclsNode);
+        assertEquals(AclsImageNode.class, aclsNode.getClass());
     }
 }
