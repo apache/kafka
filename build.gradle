@@ -2485,7 +2485,9 @@ project(':tools') {
     from (configurations.runtimeClasspath) {
       exclude('kafka-clients*')
     }
-    from (configurations.releaseOnly)
+    from (configurations.releaseOnly) {
+      exclude('log4j-slf4j-impl-*.jar')
+    }
     into "${layout.buildDirectory.get().asFile.path}/dependant-libs-${versions.scala}"
     duplicatesStrategy 'exclude'
   }
