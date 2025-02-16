@@ -123,8 +123,7 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
     private final Optional<String> serverAssignor;
 
     /**
-     * Manager to perform commit requests needed before revoking partitions (if auto-commit is
-     * enabled)
+     * Manager to perform commit requests needed before rebalance (if auto-commit is enabled)
      */
     private final CommitRequestManager commitRequestManager;
 

@@ -206,7 +206,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     }
 
     private void process(final PollEvent event) {
-        // Trigger a reconciliation that can safely commit offsets if needed to revoke partitions,
+        // Trigger a reconciliation that can safely commit offsets if needed to rebalance,
         // as we're processing before any new fetching starts in the app thread
         requestManagers.consumerMembershipManager.ifPresent(consumerMembershipManager ->
             consumerMembershipManager.maybeReconcile(true));
