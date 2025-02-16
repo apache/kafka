@@ -43,6 +43,8 @@ object TestInfoUtils {
       Some(GroupProtocol.CLASSIC)
     else if (testInfo.getDisplayName.contains("groupProtocol=consumer"))
       Some(GroupProtocol.CONSUMER)
+    else if (testInfo.getDisplayName.contains("groupProtocol=share"))
+      Some(GroupProtocol.SHARE)
     else
       None
   }
