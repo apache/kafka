@@ -45,7 +45,7 @@ import java.util.Random;
  *
  * Unattached transitions to:
  *    Unattached:  After learning of a new election with a higher epoch or after giving a binding vote
- *    Prospective: After expiration of the election timeout
+ *    Prospective: After expiration of the fetch timeout
  *    Follower:    After discovering a leader with an equal or larger epoch
  *
  * Prospective transitions to:
@@ -170,6 +170,7 @@ public class QuorumState {
                 partitionState.lastVoterSet().voterIds(),
                 Optional.empty(),
                 randomElectionTimeoutMs(),
+                fetchTimeoutMs,
                 logContext
             );
         } else if (localId.isPresent() && election.isLeader(localId.getAsInt())) {
@@ -230,6 +231,7 @@ public class QuorumState {
                     partitionState.lastVoterSet().voterIds(),
                     Optional.empty(),
                     randomElectionTimeoutMs(),
+                    fetchTimeoutMs,
                     logContext
                 );
             } else {
@@ -254,6 +256,7 @@ public class QuorumState {
                 partitionState.lastVoterSet().voterIds(),
                 Optional.empty(),
                 randomElectionTimeoutMs(),
+                fetchTimeoutMs,
                 logContext
             );
         }
@@ -418,6 +421,7 @@ public class QuorumState {
             partitionState.lastVoterSet().voterIds(),
             state.highWatermark(),
             electionTimeoutMs,
+            fetchTimeoutMs,
             logContext
         ));
     }
@@ -467,6 +471,7 @@ public class QuorumState {
                 partitionState.lastVoterSet().voterIds(),
                 state.highWatermark(),
                 randomElectionTimeoutMs(),
+                fetchTimeoutMs,
                 logContext
             )
         );

@@ -321,15 +321,16 @@ public class KafkaRaftClientTest {
         assertEquals(0L, context.log.endOffset().offset());
         context.assertElectedLeader(epoch, localId);
 
-        // Election timeout
-        context.time.sleep(context.electionTimeoutMs());
+        // fetch timeout
+        context.time.sleep(context.fetchTimeoutMs);
         context.client.poll();
 
         // Become unattached with expired election timeout
         assertTrue(context.client.quorum().isUnattached());
         assertEquals(epoch + 1, context.currentEpoch());
 
-        // Become prospective immediately
+        // Become prospective after the fetch timeout
+        context.time.sleep(context.fetchTimeoutMs);
         context.client.poll();
         assertTrue(context.client.quorum().isProspective());
 
@@ -763,15 +764,15 @@ public class KafkaRaftClientTest {
             OptionalInt.of(localId)
         );
 
-        // After the election timer, local should become unattached.
-        context.time.sleep(2L * context.electionTimeoutMs());
+        // After the fetch timeout, local should become unattached.
+        context.time.sleep(context.fetchTimeoutMs);
         context.pollUntil(context.client.quorum()::isUnattached);
         assertEquals(resignedEpoch + 1, context.currentEpoch());
         assertEquals(new LeaderAndEpoch(OptionalInt.empty(), resignedEpoch + 1),
             context.listener.currentLeaderAndEpoch());
 
-        // Local will become prospective right away
         assertEquals(0, context.client.quorum().unattachedStateOrThrow().electionTimeoutMs());
+        context.time.sleep(context.fetchTimeoutMs);
         context.client.poll();
         assertTrue(context.client.quorum().isProspective());
     }
@@ -886,8 +887,8 @@ public class KafkaRaftClientTest {
         assertTrue(context.client.quorum().isUnattached());
         assertTrue(context.client.quorum().isVoter());
 
-        // after election timeout should become prospective
-        context.time.sleep(context.electionTimeoutMs() * 2L);
+        // after fetch timeout should become prospective
+        context.time.sleep(context.fetchTimeoutMs);
         context.pollUntilRequest();
         assertTrue(context.client.quorum().isProspective());
 
@@ -1604,7 +1605,7 @@ public class KafkaRaftClientTest {
             .build();
 
         // Sleep a little to ensure that we become a prospective
-        context.time.sleep(context.electionTimeoutMs() * 2L);
+        context.time.sleep(context.fetchTimeoutMs);
         context.client.poll();
         assertTrue(context.client.quorum().isProspectiveAndVoted());
         context.assertVotedCandidate(epoch, votedCandidateKey.id());
@@ -4113,7 +4114,7 @@ public class KafkaRaftClientTest {
             .withKip853Rpc(withKip853Rpc)
             .build();
 
-        context.time.sleep(context.electionTimeoutMs());
+        context.time.sleep(context.fetchTimeoutMs);
         context.expectAndGrantPreVotes(epoch - 1);
         context.expectAndGrantVotes(epoch);
 

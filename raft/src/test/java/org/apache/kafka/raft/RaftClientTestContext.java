@@ -572,7 +572,7 @@ public final class RaftClientTestContext {
     }
 
     public void unattachedToCandidate() throws Exception {
-        time.sleep(electionTimeoutMs * 2L);
+        time.sleep(fetchTimeoutMs);
         expectAndGrantPreVotes(currentEpoch());
     }
 

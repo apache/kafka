@@ -47,7 +47,9 @@ public class UnattachedState implements EpochState {
     private final Optional<ReplicaKey> votedKey;
     private final Set<Integer> voters;
     private final long electionTimeoutMs;
+    private final int fetchTimeoutMs;
     private final Timer electionTimer;
+    private final Timer fetchTimer;
     private final Optional<LogOffsetMetadata> highWatermark;
     private final Logger log;
 
@@ -59,6 +61,7 @@ public class UnattachedState implements EpochState {
         Set<Integer> voters,
         Optional<LogOffsetMetadata> highWatermark,
         long electionTimeoutMs,
+        int fetchTimeoutMs,
         LogContext logContext
     ) {
         this.epoch = epoch;
@@ -67,7 +70,9 @@ public class UnattachedState implements EpochState {
         this.voters = voters;
         this.highWatermark = highWatermark;
         this.electionTimeoutMs = electionTimeoutMs;
+        this.fetchTimeoutMs = fetchTimeoutMs;
         this.electionTimer = time.timer(electionTimeoutMs);
+        this.fetchTimer = time.timer(fetchTimeoutMs);
         this.log = logContext.logger(UnattachedState.class);
     }
 
@@ -105,6 +110,10 @@ public class UnattachedState implements EpochState {
         return electionTimeoutMs;
     }
 
+    public int fetchTimeoutMs() {
+        return fetchTimeoutMs;
+    }
+
     public long remainingElectionTimeMs(long currentTimeMs) {
         electionTimer.update(currentTimeMs);
         return electionTimer.remainingMs();
@@ -113,6 +122,11 @@ public class UnattachedState implements EpochState {
     public boolean hasElectionTimeoutExpired(long currentTimeMs) {
         electionTimer.update(currentTimeMs);
         return electionTimer.isExpired();
+    }
+
+    public boolean hasFetchTimeoutExpired(long currentTimeMs) {
+        fetchTimer.update(currentTimeMs);
+        return fetchTimer.isExpired();
     }
 
     @Override

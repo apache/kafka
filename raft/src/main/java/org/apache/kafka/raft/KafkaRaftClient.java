@@ -3279,7 +3279,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             // If shutting down, then remain in this state until either the
             // shutdown completes or an epoch bump forces another state transition
             return shutdown.remainingTimeMs();
-        } else if (state.hasElectionTimeoutExpired(currentTimeMs)) {
+        } else if (state.hasFetchTimeoutExpired(currentTimeMs)) {
             transitionToProspective(currentTimeMs);
             return 0L;
         } else {

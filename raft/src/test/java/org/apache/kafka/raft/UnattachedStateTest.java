@@ -39,6 +39,7 @@ public class UnattachedStateTest {
     private final LogContext logContext = new LogContext();
     private final int epoch = 5;
     private final int electionTimeoutMs = 10000;
+    private final int fetchTimeoutMs = 15000;
     private final Set<Integer> voters = Set.of(1, 2, 3);
     private final ReplicaKey voter1Key = ReplicaKey.of(1, Uuid.randomUuid());
     private final ReplicaKey votedKey = voter1Key;
@@ -55,6 +56,7 @@ public class UnattachedStateTest {
             voters,
             Optional.empty(),
             electionTimeoutMs,
+            fetchTimeoutMs,
             logContext
         );
     }
