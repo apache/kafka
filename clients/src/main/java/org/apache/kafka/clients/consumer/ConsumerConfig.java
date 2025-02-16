@@ -121,9 +121,9 @@ public class ConsumerConfig extends AbstractConfig {
     */
     public static final String GROUP_REMOTE_ASSIGNOR_CONFIG = "group.remote.assignor";
     public static final String DEFAULT_GROUP_REMOTE_ASSIGNOR = null;
-    public static final String GROUP_REMOTE_ASSIGNOR_DOC = "The server-side assignor to use. If no assignor is specified, " +
-        "the group coordinator will pick one. This configuration is applied only if <code>group.protocol</code> is " +
-        "set to \"consumer\".";
+    public static final String GROUP_REMOTE_ASSIGNOR_DOC = "The name of the server-side assignor to use. " +
+        "If not specified, the group coordinator will pick the first assignor defined in the broker config group.consumer.assignors." +
+        "This configuration is applied only if <code>group.protocol</code> is set to \"consumer\".";
 
     /**
      * <code>bootstrap.servers</code>

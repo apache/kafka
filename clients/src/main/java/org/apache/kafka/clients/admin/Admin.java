@@ -1794,6 +1794,32 @@ public interface Admin extends AutoCloseable {
     }
 
     /**
+     * Alters offsets for the specified group. In order to succeed, the group must be empty.
+     *
+     * <p>This operation is not transactional, so it may succeed for some partitions while fail for others.
+     *
+     * @param groupId The group for which to alter offsets.
+     * @param offsets A map of offsets by partition. Partitions not specified in the map are ignored.
+     * @param options The options to use when altering the offsets.
+     * @return The AlterShareGroupOffsetsResult.
+     */
+    AlterShareGroupOffsetsResult alterShareGroupOffsets(String groupId, Map<TopicPartition, Long> offsets, AlterShareGroupOffsetsOptions options);
+
+    /**
+     * Alters offsets for the specified group. In order to succeed, the group must be empty.
+     *
+     * <p>This is a convenience method for {@link #alterShareGroupOffsets(String, Map, AlterShareGroupOffsetsOptions)} with default options.
+     * See the overload for more details.
+     *
+     * @param groupId The group for which to alter offsets.
+     * @param offsets A map of offsets by partition.
+     * @return The AlterShareGroupOffsetsResult.
+     */
+    default AlterShareGroupOffsetsResult alterShareGroupOffsets(String groupId, Map<TopicPartition, Long> offsets) {
+        return alterShareGroupOffsets(groupId, offsets, new AlterShareGroupOffsetsOptions());
+    }
+
+    /**
      * List the share group offsets available in the cluster for the specified share groups.
      *
      * @param groupSpecs Map of share group ids to a spec that specifies the topic partitions of the group to list offsets for.
