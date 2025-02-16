@@ -30,7 +30,8 @@ import static java.lang.annotation.RetentionPolicy.RUNTIME;
 
 /**
  * Used to indicate that a test should call the method given by {@link #value()} to generate a number of
- * cluster configurations. The method specified by the value does not accept any arguments.
+ * cluster configurations. The method specified by the value does not accept any arguments, and it should
+ * be defined within the class that contains the test.
  * Any return value from the method is ignored. A test invocation will be generated for each
  * {@link ClusterConfig} provided to the ClusterGenerator instance.
  *
@@ -42,6 +43,17 @@ import static java.lang.annotation.RetentionPolicy.RUNTIME;
  * ClusterConfig instances.
  *
  * For Scala tests, the method should be defined in a companion object with the same name as the test class.
+ * Usage looks something like this:
+ * <pre>{@code
+ * private static List<ClusterConfig> generator() {
+ *     return Collections.singletonList(ClusterConfig.defaultBuilder().build());
+ * }
+ *
+ * @ClusterTemplate("generator")
+ * public void testGenerateClusterTemplate(ClusterInstance clusterInstance) {
+ *     assertNotNull(clusterInstance.bootstrapServers());
+ * }
+ * }</pre>
  */
 @Documented
 @Target({METHOD})
