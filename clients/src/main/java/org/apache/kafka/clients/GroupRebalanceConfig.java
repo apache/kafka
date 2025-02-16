@@ -16,9 +16,14 @@
  */
 package org.apache.kafka.clients;
 
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.config.AbstractConfig;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.requests.JoinGroupRequest;
+import org.apache.kafka.common.utils.Utils;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
@@ -26,6 +31,20 @@ import java.util.Optional;
  * Class to extract group rebalance related configs.
  */
 public class GroupRebalanceConfig {
+
+    /**
+     * A list of configuration keys not supported for SHARE protocol.
+     */
+    private static final List<String> SHARE_PROTOCOL_UNSUPPORTED_CONFIGS = List.of(
+            ConsumerConfig.AUTO_OFFSET_RESET_CONFIG,
+            ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG,
+            ConsumerConfig.GROUP_INSTANCE_ID_CONFIG,
+            ConsumerConfig.ISOLATION_LEVEL_CONFIG,
+            ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
+            ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG,
+            ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG,
+            ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG
+    );
 
     public enum ProtocolType {
         CONSUMER,
@@ -49,6 +68,10 @@ public class GroupRebalanceConfig {
 
     public GroupRebalanceConfig(AbstractConfig config, ProtocolType protocolType) {
         this.sessionTimeoutMs = config.getInt(CommonClientConfigs.SESSION_TIMEOUT_MS_CONFIG);
+
+        if (protocolType.equals(ProtocolType.SHARE)) {
+            checkUnsupportedConfigs(ProtocolType.SHARE, config, SHARE_PROTOCOL_UNSUPPORTED_CONFIGS);
+        }
 
         // Consumer and Connect use different config names for defining rebalance timeout
         if ((protocolType == ProtocolType.CONSUMER) || (protocolType == ProtocolType.SHARE)) {
@@ -101,5 +124,21 @@ public class GroupRebalanceConfig {
         this.retryBackoffMs = retryBackoffMs;
         this.retryBackoffMaxMs = retryBackoffMaxMs;
         this.leaveGroupOnClose = leaveGroupOnClose;
+    }
+
+    private static void checkUnsupportedConfigs(ProtocolType protocolType, AbstractConfig absConfig, List<String> unsupportedConfigs) {
+        if (protocolType.equals(ProtocolType.SHARE)) {
+            List<String> invalidConfigs = new ArrayList<>();
+            unsupportedConfigs.forEach(configName -> {
+                Object config = absConfig.originals().get(configName);
+                if (config != null && !Utils.isBlank(config.toString())) {
+                    invalidConfigs.add(configName);
+                }
+            });
+            if (!invalidConfigs.isEmpty()) {
+                throw new ConfigException(String.join(", ", invalidConfigs) +
+                        " cannot be set when prototype" + "=" + protocolType.name());
+            }
+        }
     }
 }

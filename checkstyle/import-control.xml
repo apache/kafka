@@ -232,6 +232,7 @@
   <subpackage name="clients">
     <allow pkg="org.apache.kafka.common" />
     <allow pkg="org.apache.kafka.clients" exact-match="true"/>
+    <allow class="org.apache.kafka.clients.consumer.ConsumerConfig" exact-match="true"/>
     <allow pkg="org.apache.kafka.test" />
     <allow class="org.apache.logging.log4j.Level" />
 

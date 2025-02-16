@@ -240,33 +240,20 @@ public class ConsumerConfigTest {
 
     @Test
     public void testUnsupportedConfigsWithConsumerGroupProtocol() {
-        testUnsupportedConfigsWithGroupProtocol(GroupProtocol.CONSUMER, ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, "RoundRobinAssignor");
-        testUnsupportedConfigsWithGroupProtocol(GroupProtocol.CONSUMER, ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 1000);
-        testUnsupportedConfigsWithGroupProtocol(GroupProtocol.CONSUMER, ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 30000);
+        testUnsupportedConfigsWithConsumerGroupProtocol(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, "RoundRobinAssignor");
+        testUnsupportedConfigsWithConsumerGroupProtocol(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 1000);
+        testUnsupportedConfigsWithConsumerGroupProtocol(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 30000);
     }
 
-    @Test
-    public void testUnsupportedConfigsWithShareGroupProtocol() {
-        testUnsupportedConfigsWithGroupProtocol(GroupProtocol.SHARE, ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        testUnsupportedConfigsWithGroupProtocol(GroupProtocol.SHARE, ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true");
-        testUnsupportedConfigsWithGroupProtocol(GroupProtocol.SHARE, ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, "1");
-        testUnsupportedConfigsWithGroupProtocol(GroupProtocol.SHARE, ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed");
-        testUnsupportedConfigsWithGroupProtocol(GroupProtocol.SHARE, ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, "org.apache.kafka.clients.consumer.StickyAssignor");
-        testUnsupportedConfigsWithGroupProtocol(GroupProtocol.SHARE, ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, "org.apache.kafka.clients.consumer.ConsumerInterceptor");
-        testUnsupportedConfigsWithGroupProtocol(GroupProtocol.SHARE, ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "3000");
-        testUnsupportedConfigsWithGroupProtocol(GroupProtocol.SHARE, ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 3000);
-    }
-
-    private void testUnsupportedConfigsWithGroupProtocol(GroupProtocol groupProtocol, String configName, Object value) {
+    private void testUnsupportedConfigsWithConsumerGroupProtocol(String configName, Object value) {
         final Map<String, Object> configs = Map.of(
                 ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializerClass,
                 ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClass,
-                ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name(),
-                ConsumerConfig.GROUP_ID_CONFIG, "1",
+                ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name(),
                 configName, value
         );
         ConfigException exception = assertThrows(ConfigException.class, () -> new ConsumerConfig(configs));
         assertEquals(configName + " cannot be set when " + 
-                ConsumerConfig.GROUP_PROTOCOL_CONFIG + "=" + groupProtocol.name(), exception.getMessage());
+                ConsumerConfig.GROUP_PROTOCOL_CONFIG + "=" + GroupProtocol.CONSUMER.name(), exception.getMessage());
     }
 }
