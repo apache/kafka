@@ -81,7 +81,7 @@ import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.TopicsImage;
 import org.apache.kafka.server.record.BrokerCompressionType;
 import org.apache.kafka.server.share.persister.DefaultStatePersister;
-import org.apache.kafka.server.share.persister.NoOpShareStatePersister;
+import org.apache.kafka.server.share.persister.NoOpStatePersister;
 import org.apache.kafka.server.share.persister.PartitionFactory;
 import org.apache.kafka.server.share.persister.Persister;
 import org.apache.kafka.server.share.persister.ReadShareGroupStateSummaryParameters;
@@ -2480,7 +2480,7 @@ public class GroupCoordinatorServiceTest {
         private GroupCoordinatorConfig config;
         private CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime;
         private GroupCoordinatorMetrics metrics = new GroupCoordinatorMetrics();
-        private Persister persister = new NoOpShareStatePersister();
+        private Persister persister = new NoOpStatePersister();
         private MetadataImage metadataImage = null;
 
         GroupCoordinatorService build() {

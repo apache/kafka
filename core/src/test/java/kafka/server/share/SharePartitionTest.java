@@ -48,7 +48,7 @@ import org.apache.kafka.coordinator.group.GroupConfigManager;
 import org.apache.kafka.coordinator.group.ShareGroupAutoOffsetResetStrategy;
 import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch;
 import org.apache.kafka.server.share.fetch.ShareAcquiredRecords;
-import org.apache.kafka.server.share.persister.NoOpShareStatePersister;
+import org.apache.kafka.server.share.persister.NoOpStatePersister;
 import org.apache.kafka.server.share.persister.PartitionFactory;
 import org.apache.kafka.server.share.persister.Persister;
 import org.apache.kafka.server.share.persister.PersisterStateBatch;
@@ -812,7 +812,7 @@ public class SharePartitionTest {
     }
 
     @Test
-    public void testMaybeInitializeWithNoOpShareStatePersister() {
+    public void testMaybeInitializeWithNoOpStatePersister() {
         ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
 
         FileRecords.TimestampAndOffset timestampAndOffset = new FileRecords.TimestampAndOffset(-1L, 0L, Optional.empty());
@@ -5887,7 +5887,7 @@ public class SharePartitionTest {
     }
 
     @Test
-    public void testWriteShareGroupStateWithNoOpShareStatePersister() {
+    public void testWriteShareGroupStateWithNoOpStatePersister() {
         SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
         List<PersisterStateBatch> stateBatches = Arrays.asList(
                 new PersisterStateBatch(5L, 10L, RecordState.AVAILABLE.id, (short) 2),
@@ -6958,7 +6958,7 @@ public class SharePartitionTest {
         private int maxDeliveryCount = MAX_DELIVERY_COUNT;
         private int maxInflightMessages = MAX_IN_FLIGHT_MESSAGES;
 
-        private Persister persister = new NoOpShareStatePersister();
+        private Persister persister = new NoOpStatePersister();
         private ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
         private GroupConfigManager groupConfigManager = Mockito.mock(GroupConfigManager.class);
         private SharePartitionState state = SharePartitionState.EMPTY;
