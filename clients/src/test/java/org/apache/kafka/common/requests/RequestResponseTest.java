@@ -58,6 +58,8 @@ import org.apache.kafka.common.message.AlterReplicaLogDirsRequestData;
 import org.apache.kafka.common.message.AlterReplicaLogDirsRequestData.AlterReplicaLogDirTopic;
 import org.apache.kafka.common.message.AlterReplicaLogDirsRequestData.AlterReplicaLogDirTopicCollection;
 import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData;
+import org.apache.kafka.common.message.AlterShareGroupOffsetsRequestData;
+import org.apache.kafka.common.message.AlterShareGroupOffsetsResponseData;
 import org.apache.kafka.common.message.AlterUserScramCredentialsRequestData;
 import org.apache.kafka.common.message.AlterUserScramCredentialsResponseData;
 import org.apache.kafka.common.message.ApiMessageType;
@@ -1039,6 +1041,7 @@ public class RequestResponseTest {
             case STREAMS_GROUP_HEARTBEAT: return createStreamsGroupHeartbeatRequest(version);
             case STREAMS_GROUP_DESCRIBE: return createStreamsGroupDescribeRequest(version);
             case DESCRIBE_SHARE_GROUP_OFFSETS: return createDescribeShareGroupOffsetsRequest(version);
+            case ALTER_SHARE_GROUP_OFFSETS: return createAlterShareGroupOffsetsRequest(version);
             default: throw new IllegalArgumentException("Unknown API key " + apikey);
         }
     }
@@ -1132,6 +1135,7 @@ public class RequestResponseTest {
             case STREAMS_GROUP_HEARTBEAT: return createStreamsGroupHeartbeatResponse();
             case STREAMS_GROUP_DESCRIBE: return createStreamsGroupDescribeResponse();
             case DESCRIBE_SHARE_GROUP_OFFSETS: return createDescribeShareGroupOffsetsResponse();
+            case ALTER_SHARE_GROUP_OFFSETS: return createAlterShareGroupOffsetsResponse();
             default: throw new IllegalArgumentException("Unknown API key " + apikey);
         }
     }
@@ -3709,6 +3713,20 @@ public class RequestResponseTest {
         return new DescribeShareGroupOffsetsRequest.Builder(data).build(version);
     }
 
+    private AlterShareGroupOffsetsRequest createAlterShareGroupOffsetsRequest(short version) {
+        AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestTopicCollection alterShareGroupOffsetsRequestTopics = new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestTopicCollection();
+        alterShareGroupOffsetsRequestTopics.add(new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestTopic()
+            .setTopicName("topic")
+            .setPartitions(List.of(new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestPartition()
+                .setPartitionIndex(0)
+                .setStartOffset(0)))
+        );
+        AlterShareGroupOffsetsRequestData data = new AlterShareGroupOffsetsRequestData()
+            .setGroupId("group")
+            .setTopics(alterShareGroupOffsetsRequestTopics);
+        return new AlterShareGroupOffsetsRequest.Builder(data).build(version);
+    }
+
     private DescribeShareGroupOffsetsResponse createDescribeShareGroupOffsetsResponse() {
         DescribeShareGroupOffsetsResponseData data = new DescribeShareGroupOffsetsResponseData()
             .setGroups(Collections.singletonList(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup()
@@ -3722,6 +3740,17 @@ public class RequestResponseTest {
                     .setStartOffset(0)
                     .setLeaderEpoch(0)))))));
         return new DescribeShareGroupOffsetsResponse(data);
+    }
+
+    private AlterShareGroupOffsetsResponse createAlterShareGroupOffsetsResponse() {
+        AlterShareGroupOffsetsResponseData data = new AlterShareGroupOffsetsResponseData()
+            .setResponses(List.of(new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic()
+                .setPartitions(List.of(new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition()
+                    .setPartitionIndex(0)
+                    .setErrorCode(Errors.NONE.code())))
+                .setTopicName("topic")
+                .setTopicId(Uuid.randomUuid())));
+        return new AlterShareGroupOffsetsResponse(data);
     }
 
     private AbstractRequest createStreamsGroupDescribeRequest(final short version) {
