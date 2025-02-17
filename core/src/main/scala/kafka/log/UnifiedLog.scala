@@ -1187,7 +1187,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    *         than the leader epoch, otherwise false
    */
   private def hasInvalidPartitionLeaderEpoch(
-    batch: MutableRecordBatch,
+    batch: RecordBatch,
     origin: AppendOrigin,
     leaderEpoch: Int
   ): Boolean = {

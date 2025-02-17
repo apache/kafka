@@ -69,7 +69,7 @@ class MockFetcherThread(val mockLeader: MockLeaderEndPoint,
   override def processPartitionData(
     topicPartition: TopicPartition,
     fetchOffset: Long,
-    maxEpoch: Int,
+    leaderEpochForReplica: Int,
     partitionData: FetchData
   ): Option[LogAppendInfo] = {
     val state = replicaPartitionState(topicPartition)
@@ -90,18 +90,24 @@ class MockFetcherThread(val mockLeader: MockLeaderEndPoint,
     var shallowOffsetOfMaxTimestamp = -1L
     var lastOffset = state.logEndOffset
     var lastEpoch: OptionalInt = OptionalInt.empty()
+    var skipRemainingBatches = false
 
     for (batch <- batches) {
-      // TODO: this should filter batches based on the maxEpoch
       batch.ensureValid()
-      if (batch.maxTimestamp > maxTimestamp) {
-        maxTimestamp = batch.maxTimestamp
-        shallowOffsetOfMaxTimestamp = batch.baseOffset
+
+      skipRemainingBatches = skipRemainingBatches || hasInvalidPartitionLeaderEpoch(batch, leaderEpochForReplica);
+      if (skipRemainingBatches) {
+        info(s"Skipping batch $batch because leader epoch is $leaderEpochForReplica")
+      } else {
+        if (batch.maxTimestamp > maxTimestamp) {
+          maxTimestamp = batch.maxTimestamp
+          shallowOffsetOfMaxTimestamp = batch.baseOffset
+        }
+        state.log.append(batch)
+        state.logEndOffset = batch.nextOffset
+        lastOffset = batch.lastOffset
+        lastEpoch = OptionalInt.of(batch.partitionLeaderEpoch)
       }
-      state.log.append(batch)
-      state.logEndOffset = batch.nextOffset
-      lastOffset = batch.lastOffset
-      lastEpoch = OptionalInt.of(batch.partitionLeaderEpoch)
     }
 
     state.logStartOffset = partitionData.logStartOffset
@@ -117,6 +123,11 @@ class MockFetcherThread(val mockLeader: MockLeaderEndPoint,
       CompressionType.NONE,
       FetchResponse.recordsSize(partitionData),
       batches.headOption.map(_.lastOffset).getOrElse(-1)))
+  }
+
+  private def hasInvalidPartitionLeaderEpoch(batch: RecordBatch, leaderEpoch: Int): Boolean = {
+    batch.partitionLeaderEpoch() != RecordBatch.NO_PARTITION_LEADER_EPOCH &&
+    batch.partitionLeaderEpoch() > leaderEpoch
   }
 
   override def truncate(topicPartition: TopicPartition, truncationState: OffsetTruncationState): Unit = {

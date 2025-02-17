@@ -52,6 +52,7 @@ import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.record.DefaultRecordBatch;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.UnalignedMemoryRecords;
@@ -95,8 +96,10 @@ import org.apache.kafka.snapshot.SnapshotWriter;
 import org.slf4j.Logger;
 
 import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HexFormat;
 import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -1787,18 +1790,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                     }
                 }
             } else {
-                Records records = FetchResponse.recordsOrFail(partitionResponse);
-                try {
-                    // TODO: make sure to test corrupted records in kafka metadata log
-                    appendAsFollower(records);
-                } catch (CorruptRecordException | InvalidRecordException e) {
-                    // TODO: this should log up to 265 bytes from the records
-                    logger.info(
-                        "Failed to append the records {} in the fetch response to the log",
-                        records,
-                        e
-                    );
-                }
+                appendAsFollower(FetchResponse.recordsOrFail(partitionResponse));
 
                 OptionalLong highWatermark = partitionResponse.highWatermark() < 0 ?
                     OptionalLong.empty() : OptionalLong.of(partitionResponse.highWatermark());
@@ -1812,13 +1804,30 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         }
     }
 
+    private static String convertToHexadecimal(Records records) {
+        ByteBuffer buffer = ((MemoryRecords) records).buffer();
+        byte[] bytes = new byte[Math.min(buffer.remaining(), DefaultRecordBatch.RECORD_BATCH_OVERHEAD)];
+        buffer.get(bytes);
+
+        return HexFormat.of().formatHex(bytes);
+    }
+
     private void appendAsFollower(Records records) {
         if (records.sizeInBytes() == 0) {
             // Nothing to do if there are no bytes in the response
             return;
         }
 
-        LogAppendInfo info = log.appendAsFollower(records, quorum.epoch());
+        Optional<LogAppendInfo> appendInfo = Optional.empty();
+        try {
+            appendInfo = Optional.of(log.appendAsFollower(records, quorum.epoch()));
+        } catch (CorruptRecordException | InvalidRecordException e) {
+            logger.info(
+                "Failed to append the records with the batch header '{}' to the log",
+                convertToHexadecimal(records),
+                e
+            );
+        }
         if (quorum.isVoter() || followersAlwaysFlush) {
             // the leader only requires that voters have flushed their log before sending a Fetch
             // request. Because of reconfiguration some observers (that are getting added to the
@@ -1830,14 +1839,15 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         partitionState.updateState();
 
         OffsetAndEpoch endOffset = endOffset();
-        kafkaRaftMetrics.updateFetchedRecords(info.lastOffset - info.firstOffset + 1);
         kafkaRaftMetrics.updateLogEnd(endOffset);
         logger.trace("Follower end offset updated to {} after append", endOffset);
+
+        appendInfo.ifPresent(
+            info -> kafkaRaftMetrics.updateFetchedRecords(info.lastOffset - info.firstOffset + 1)
+        );
     }
 
-    private LogAppendInfo appendAsLeader(
-        Records records
-    ) {
+    private LogAppendInfo appendAsLeader(Records records) {
         LogAppendInfo info = log.appendAsLeader(records, quorum.epoch());
 
         partitionState.updateState();
