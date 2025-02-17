@@ -24,10 +24,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
-
+/**
+ * The share consumer configuration keys
+ */
 public class ShareConsumerConfig extends ConsumerConfig {
     /**
-     * A list of configuration keys not supported for SHARE protocol.
+     * A list of configuration keys not supported for SHARE consumer.
      */
     private static final List<String> SHARE_PROTOCOL_UNSUPPORTED_CONFIGS = List.of(
             ConsumerConfig.AUTO_OFFSET_RESET_CONFIG,
@@ -37,7 +39,9 @@ public class ShareConsumerConfig extends ConsumerConfig {
             ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
             ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG,
             ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG,
-            ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG
+            ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG,
+            ConsumerConfig.GROUP_PROTOCOL_CONFIG,
+            ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG
     );
 
     public ShareConsumerConfig(Properties props) {
@@ -52,19 +56,22 @@ public class ShareConsumerConfig extends ConsumerConfig {
         super(props, doLog);
     }
 
-
     @Override
-    protected void checkUnsupportedConfigs() {
+    protected Map<String, Object> preProcessParsedConfig(final Map<String, Object> parsedValues) {
+        checkUnsupportedConfigs(parsedValues);
+        return parsedValues;
+    }
+
+    private void checkUnsupportedConfigs(Map<String, Object> parsedValues) {
         List<String> invalidConfigs = new ArrayList<>();
         SHARE_PROTOCOL_UNSUPPORTED_CONFIGS.forEach(configName -> {
-            Object config = originals().get(configName);
-            if (config != null && !Utils.isBlank(config.toString())) {
+            if (parsedValues.containsKey(configName)) {
                 invalidConfigs.add(configName);
             }
         });
         if (!invalidConfigs.isEmpty()) {
             throw new ConfigException(String.join(", ", invalidConfigs) +
-                    " cannot be set when prototype when using shareConsumer.");
+                    " cannot be set when using a share group.");
         }
     }
 
