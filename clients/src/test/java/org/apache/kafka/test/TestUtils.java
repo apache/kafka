@@ -603,8 +603,10 @@ public class TestUtils {
             );
         } catch (TimeoutException e) {
             fail("Future is not completed within " + DEFAULT_MAX_WAIT_MS + " millisecond.");
+        } catch (Exception e) {
+            fail("Unexpected error happened: " + e);
         }
-        throw new RuntimeException("Future should throw expected exception but unexpected error happened.");
+        return null;
     }
 
     public static <T extends Throwable> void assertFutureThrows(
