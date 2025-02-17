@@ -34,6 +34,7 @@ import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.GroupVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.common.TestFeatureVersion;
+import org.apache.kafka.server.common.TransactionVersion;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
@@ -353,6 +354,9 @@ public class FormatterTest {
                     setName(TestFeatureVersion.FEATURE_NAME).
                     setFeatureLevel(version), (short) 0));
             }
+            expected.add(new ApiMessageAndVersion(new FeatureLevelRecord().
+                setName(TransactionVersion.FEATURE_NAME).
+                setFeatureLevel(TransactionVersion.TV_2.featureLevel()), (short) 0));
             assertEquals(expected, bootstrapMetadata.records());
         }
     }

@@ -15,11 +15,18 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.test.api;
+package org.apache.kafka.clients.admin;
 
-import java.util.function.Consumer;
+import org.apache.kafka.common.annotation.InterfaceStability;
 
-@FunctionalInterface
-public interface ClusterGenerator extends Consumer<ClusterConfig> {
+import java.util.Map;
+
+/**
+ * Options for the {@link Admin#alterShareGroupOffsets(String, Map, AlterShareGroupOffsetsOptions)} call.
+ * <p>
+ * The API of this class is evolving, see {@link Admin} for details.
+ */
+@InterfaceStability.Evolving
+public class AlterShareGroupOffsetsOptions extends AbstractOptions<AlterShareGroupOffsetsOptions> {
 
 }

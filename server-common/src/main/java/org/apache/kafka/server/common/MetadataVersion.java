@@ -118,17 +118,20 @@ public enum MetadataVersion {
     // ClearElrRecord is added.
     IBP_4_0_IV1(23, "4.0", "IV1", true),
 
+    // Bootstrap metadata version for transaction versions 1 and 2 (KIP-890)
+    IBP_4_0_IV2(24, "4.0", "IV2", false),
+
+    // Enables async remote LIST_OFFSETS support (KIP-1075)
+    IBP_4_0_IV3(25, "4.0", "IV3", false),
+
     //
     // NOTE: MetadataVersions after this point are unstable and may be changed.
     // If users attempt to use an unstable MetadataVersion, they will get an error.
     // Please move this comment when updating the LATEST_PRODUCTION constant.
     //
 
-    // Bootstrap metadata version for transaction versions 1 and 2 (KIP-890)
-    IBP_4_0_IV2(24, "4.0", "IV2", false),
-
-    // Enables async remote LIST_OFFSETS support (KIP-1075)
-    IBP_4_0_IV3(25, "4.0", "IV3", false);
+    // Not used by anything yet.
+    IBP_4_1_IV0(26, "4.1", "IV0", false);
 
     // NOTES when adding a new version:
     //   Update the default version in @ClusterTest annotation to point to the latest version
@@ -154,7 +157,7 @@ public enum MetadataVersion {
      * <strong>Think carefully before you update this value. ONCE A METADATA VERSION IS PRODUCTION,
      * IT CANNOT BE CHANGED.</strong>
      */
-    public static final MetadataVersion LATEST_PRODUCTION = IBP_4_0_IV1;
+    public static final MetadataVersion LATEST_PRODUCTION = IBP_4_0_IV3;
     // If you change the value above please also update
     // LATEST_STABLE_METADATA_VERSION version in tests/kafkatest/version.py
 
