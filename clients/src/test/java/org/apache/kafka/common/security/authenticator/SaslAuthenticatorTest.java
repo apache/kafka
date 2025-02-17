@@ -2007,9 +2007,10 @@ public class SaslAuthenticatorTest {
                                                                        TransportLayer transportLayer,
                                                                        Map<String, Subject> subjects,
                                                                        Map<String, Long> connectionsMaxReauthMsByMechanism,
-                                                                       ChannelMetadataRegistry metadataRegistry) {
+                                                                       ChannelMetadataRegistry metadataRegistry,
+                                                                       Selector.SelectorMetrics metrics) {
                 return new SaslServerAuthenticator(configs, callbackHandlers, id, subjects, null, listenerName,
-                    securityProtocol, transportLayer, connectionsMaxReauthMsByMechanism, metadataRegistry, time, apiVersionSupplier) {
+                    securityProtocol, transportLayer, connectionsMaxReauthMsByMechanism, metadataRegistry, time, apiVersionSupplier, metrics) {
                     @Override
                     protected void enableKafkaSaslAuthenticateHeaders(boolean flag) {
                         // Don't enable Kafka SASL_AUTHENTICATE headers

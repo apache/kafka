@@ -21,6 +21,7 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.SslClientAuth;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
+import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.security.auth.KafkaPrincipalBuilder;
@@ -216,9 +217,10 @@ public class ChannelBuilders {
             throw new IllegalArgumentException("`mode` must be non-null if `securityProtocol` is `" + securityProtocol + "`");
     }
 
-    public static KafkaPrincipalBuilder createPrincipalBuilder(Map<String, ?> configs,
-                                                               KerberosShortNamer kerberosShortNamer,
-                                                               SslPrincipalMapper sslPrincipalMapper) {
+    public static Plugin<KafkaPrincipalBuilder> createPrincipalBuilderPlugin(Map<String, ?> configs,
+                                                                             KerberosShortNamer kerberosShortNamer,
+                                                                             SslPrincipalMapper sslPrincipalMapper,
+                                                                             Selector.SelectorMetrics metrics) {
         Class<?> principalBuilderClass = (Class<?>) configs.get(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG);
         final KafkaPrincipalBuilder builder;
 
@@ -234,7 +236,7 @@ public class ChannelBuilders {
         if (builder instanceof Configurable)
             ((Configurable) builder).configure(configs);
 
-        return builder;
+        return Plugin.wrapInstance(builder, metrics.metrics(), BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, metrics.metricTags());
     }
 
 }

@@ -19,6 +19,7 @@ package org.apache.kafka.common.network;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
+import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.KafkaPrincipalBuilder;
@@ -29,7 +30,6 @@ import org.apache.kafka.common.security.ssl.SslPrincipalMapper;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 
-import java.io.Closeable;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.nio.channels.SelectionKey;
@@ -97,13 +97,13 @@ public class SslChannelBuilder implements ChannelBuilder, ListenerReconfigurable
 
     @Override
     public KafkaChannel buildChannel(String id, SelectionKey key, int maxReceiveSize,
-                                     MemoryPool memoryPool, ChannelMetadataRegistry metadataRegistry) throws KafkaException {
+                                     MemoryPool memoryPool, ChannelMetadataRegistry metadataRegistry, Selector.SelectorMetrics metrics) throws KafkaException {
         SslTransportLayer transportLayer = null;
         try {
             transportLayer = buildTransportLayer(sslFactory, id, key, metadataRegistry);
             final SslTransportLayer finalTransportLayer = transportLayer;
             Supplier<Authenticator> authenticatorCreator = () ->
-                new SslAuthenticator(configs, finalTransportLayer, listenerName, sslPrincipalMapper);
+                new SslAuthenticator(configs, finalTransportLayer, listenerName, sslPrincipalMapper, metrics);
             return new KafkaChannel(id, transportLayer, authenticatorCreator, maxReceiveSize,
                     memoryPool != null ? memoryPool : MemoryPool.NONE, metadataRegistry);
         } catch (Exception e) {
@@ -131,12 +131,12 @@ public class SslChannelBuilder implements ChannelBuilder, ListenerReconfigurable
      */
     private static class SslAuthenticator implements Authenticator {
         private final SslTransportLayer transportLayer;
-        private final KafkaPrincipalBuilder principalBuilder;
+        private final Plugin<KafkaPrincipalBuilder> principalBuilderPlugin;
         private final ListenerName listenerName;
 
-        private SslAuthenticator(Map<String, ?> configs, SslTransportLayer transportLayer, ListenerName listenerName, SslPrincipalMapper sslPrincipalMapper) {
+        private SslAuthenticator(Map<String, ?> configs, SslTransportLayer transportLayer, ListenerName listenerName, SslPrincipalMapper sslPrincipalMapper, Selector.SelectorMetrics metrics) {
             this.transportLayer = transportLayer;
-            this.principalBuilder = ChannelBuilders.createPrincipalBuilder(configs, null, sslPrincipalMapper);
+            this.principalBuilderPlugin = ChannelBuilders.createPrincipalBuilderPlugin(configs, null, sslPrincipalMapper, metrics);
             this.listenerName = listenerName;
         }
         /**
@@ -159,18 +159,17 @@ public class SslChannelBuilder implements ChannelBuilder, ListenerReconfigurable
                     transportLayer.sslSession(),
                     clientAddress,
                     listenerName.value());
-            return principalBuilder.build(context);
+            return principalBuilderPlugin.get().build(context);
         }
 
         @Override
         public Optional<KafkaPrincipalSerde> principalSerde() {
-            return principalBuilder instanceof KafkaPrincipalSerde ? Optional.of((KafkaPrincipalSerde) principalBuilder) : Optional.empty();
+            return principalBuilderPlugin.get() instanceof KafkaPrincipalSerde ? Optional.of((KafkaPrincipalSerde) principalBuilderPlugin.get()) : Optional.empty();
         }
 
         @Override
         public void close() {
-            if (principalBuilder instanceof Closeable)
-                Utils.closeQuietly((Closeable) principalBuilder, "principal builder");
+            Utils.closeQuietly(principalBuilderPlugin, "principal builder plugin");
         }
 
         /**

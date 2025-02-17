@@ -17,6 +17,7 @@
 package org.apache.kafka.common.network;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.KafkaPrincipalBuilder;
@@ -24,7 +25,6 @@ import org.apache.kafka.common.security.auth.KafkaPrincipalSerde;
 import org.apache.kafka.common.security.auth.PlaintextAuthenticationContext;
 import org.apache.kafka.common.utils.Utils;
 
-import java.io.Closeable;
 import java.net.InetAddress;
 import java.nio.channels.SelectionKey;
 import java.util.Map;
@@ -49,12 +49,12 @@ public class PlaintextChannelBuilder implements ChannelBuilder {
 
     @Override
     public KafkaChannel buildChannel(String id, SelectionKey key, int maxReceiveSize,
-                                     MemoryPool memoryPool, ChannelMetadataRegistry metadataRegistry) throws KafkaException {
+                                     MemoryPool memoryPool, ChannelMetadataRegistry metadataRegistry, Selector.SelectorMetrics metrics) throws KafkaException {
         PlaintextTransportLayer transportLayer = null;
         try {
             transportLayer = buildTransportLayer(key);
             final PlaintextTransportLayer finalTransportLayer = transportLayer;
-            Supplier<Authenticator> authenticatorCreator = () -> new PlaintextAuthenticator(configs, finalTransportLayer, listenerName);
+            Supplier<Authenticator> authenticatorCreator = () -> new PlaintextAuthenticator(configs, finalTransportLayer, listenerName, metrics);
             return buildChannel(id, transportLayer, authenticatorCreator, maxReceiveSize,
                     memoryPool != null ? memoryPool : MemoryPool.NONE, metadataRegistry);
         } catch (Exception e) {
@@ -80,12 +80,12 @@ public class PlaintextChannelBuilder implements ChannelBuilder {
 
     private static class PlaintextAuthenticator implements Authenticator {
         private final PlaintextTransportLayer transportLayer;
-        private final KafkaPrincipalBuilder principalBuilder;
+        private final Plugin<KafkaPrincipalBuilder> principalBuilderPlugin;
         private final ListenerName listenerName;
 
-        private PlaintextAuthenticator(Map<String, ?> configs, PlaintextTransportLayer transportLayer, ListenerName listenerName) {
+        private PlaintextAuthenticator(Map<String, ?> configs, PlaintextTransportLayer transportLayer, ListenerName listenerName, Selector.SelectorMetrics metrics) {
             this.transportLayer = transportLayer;
-            this.principalBuilder = ChannelBuilders.createPrincipalBuilder(configs, null, null);
+            this.principalBuilderPlugin = ChannelBuilders.createPrincipalBuilderPlugin(configs, null, null, metrics);
             this.listenerName = listenerName;
         }
 
@@ -98,12 +98,12 @@ public class PlaintextChannelBuilder implements ChannelBuilder {
             // listenerName should only be null in Client mode where principal() should not be called
             if (listenerName == null)
                 throw new IllegalStateException("Unexpected call to principal() when listenerName is null");
-            return principalBuilder.build(new PlaintextAuthenticationContext(clientAddress, listenerName.value()));
+            return principalBuilderPlugin.get().build(new PlaintextAuthenticationContext(clientAddress, listenerName.value()));
         }
 
         @Override
         public Optional<KafkaPrincipalSerde> principalSerde() {
-            return principalBuilder instanceof KafkaPrincipalSerde ? Optional.of((KafkaPrincipalSerde) principalBuilder) : Optional.empty();
+            return principalBuilderPlugin.get() instanceof KafkaPrincipalSerde ? Optional.of((KafkaPrincipalSerde) principalBuilderPlugin.get()) : Optional.empty();
         }
 
         @Override
@@ -113,8 +113,7 @@ public class PlaintextChannelBuilder implements ChannelBuilder {
 
         @Override
         public void close() {
-            if (principalBuilder instanceof Closeable)
-                Utils.closeQuietly((Closeable) principalBuilder, "principal builder");
+            Utils.closeQuietly(principalBuilderPlugin, "principal builder plugin");
         }
     }
 

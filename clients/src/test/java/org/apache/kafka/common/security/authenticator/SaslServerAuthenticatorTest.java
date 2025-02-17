@@ -19,6 +19,7 @@ package org.apache.kafka.common.security.authenticator;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.SaslAuthenticationException;
+import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.message.RequestHeaderData;
 import org.apache.kafka.common.message.SaslAuthenticateRequestData;
@@ -28,6 +29,7 @@ import org.apache.kafka.common.network.ChannelMetadataRegistry;
 import org.apache.kafka.common.network.ClientInformation;
 import org.apache.kafka.common.network.DefaultChannelMetadataRegistry;
 import org.apache.kafka.common.network.ListenerName;
+import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.network.TransportLayer;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.requests.AbstractRequest;
@@ -90,6 +92,7 @@ import static org.mockito.Mockito.when;
 public class SaslServerAuthenticatorTest {
 
     private final String clientId = "clientId";
+    private final Selector.SelectorMetrics metrics = mock(Selector.SelectorMetrics.class);
     
     @Test
     public void testOversizeRequest() throws IOException {
@@ -287,12 +290,15 @@ public class SaslServerAuthenticatorTest {
     }
 
     private MockedStatic<?> mockKafkaPrincipal(String principalType, String name) {
+
         KafkaPrincipalBuilder kafkaPrincipalBuilder = mock(KafkaPrincipalBuilder.class);
         when(kafkaPrincipalBuilder.build(any())).thenReturn(new KafkaPrincipal(principalType, name));
+        Plugin<KafkaPrincipalBuilder> kafkaPrincipalBuilderPlugin = mock(Plugin.class);
+        when(kafkaPrincipalBuilderPlugin.get()).thenReturn(kafkaPrincipalBuilder);
         MockedStatic<ChannelBuilders> channelBuilders = Mockito.mockStatic(ChannelBuilders.class, Answers.RETURNS_MOCKS);
         channelBuilders.when(() ->
-                ChannelBuilders.createPrincipalBuilder(anyMap(), any(KerberosShortNamer.class), any(SslPrincipalMapper.class))
-        ).thenReturn(kafkaPrincipalBuilder);
+                ChannelBuilders.createPrincipalBuilderPlugin(anyMap(), any(KerberosShortNamer.class), any(SslPrincipalMapper.class), any(Selector.SelectorMetrics.class))
+        ).thenReturn(kafkaPrincipalBuilderPlugin);
         return channelBuilders;
     }
 
@@ -407,7 +413,7 @@ public class SaslServerAuthenticatorTest {
 
         return new SaslServerAuthenticator(configs, callbackHandlers, "node", subjects, null,
                 new ListenerName("ssl"), SecurityProtocol.SASL_SSL, transportLayer, connectionsMaxReauthMsByMechanism,
-                metadataRegistry, time, version -> apiVersionsResponse);
+                metadataRegistry, time, version -> apiVersionsResponse, metrics);
     }
 
 }

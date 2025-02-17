@@ -338,7 +338,7 @@ public class Selector implements Selectable, AutoCloseable {
         ChannelMetadataRegistry metadataRegistry = null;
         try {
             metadataRegistry = new SelectorChannelMetadataRegistry();
-            KafkaChannel channel = channelBuilder.buildChannel(id, key, maxReceiveSize, memoryPool, metadataRegistry);
+            KafkaChannel channel = channelBuilder.buildChannel(id, key, maxReceiveSize, memoryPool, metadataRegistry, sensors);
             key.attach(channel);
             return channel;
         } catch (Exception e) {
@@ -1118,7 +1118,8 @@ public class Selector implements Selectable, AutoCloseable {
         }
     }
 
-    class SelectorMetrics implements AutoCloseable {
+    public class SelectorMetrics implements AutoCloseable {
+
         private final Metrics metrics;
         private final Map<String, String> metricTags;
         private final boolean metricsPerConnection;
@@ -1379,6 +1380,14 @@ public class Selector implements Selectable, AutoCloseable {
                 metrics.removeSensor(sensor.name());
             connectionsByCipher.close();
             connectionsByClient.close();
+        }
+
+        public Metrics metrics() {
+            return metrics;
+        }
+
+        public Map<String, String> metricTags() {
+            return metricTags;
         }
     }
 

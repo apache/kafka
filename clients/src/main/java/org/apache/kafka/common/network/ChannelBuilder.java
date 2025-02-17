@@ -35,10 +35,11 @@ public interface ChannelBuilder extends AutoCloseable, Configurable {
      * @param  maxReceiveSize max size of a single receive buffer to allocate
      * @param  memoryPool memory pool from which to allocate buffers, or null for none
      * @param  metadataRegistry registry which stores the metadata about the channels
+     * @param  metrics the selector metrics
      * @return KafkaChannel
      */
     KafkaChannel buildChannel(String id, SelectionKey key, int maxReceiveSize,
-                              MemoryPool memoryPool, ChannelMetadataRegistry metadataRegistry) throws KafkaException;
+                              MemoryPool memoryPool, ChannelMetadataRegistry metadataRegistry, Selector.SelectorMetrics metrics) throws KafkaException;
 
     /**
      * Closes ChannelBuilder

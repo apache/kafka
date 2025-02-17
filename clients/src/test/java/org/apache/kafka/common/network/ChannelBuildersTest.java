@@ -18,6 +18,10 @@ package org.apache.kafka.common.network;
 
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
+import org.apache.kafka.common.internals.Plugin;
+import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.Monitorable;
+import org.apache.kafka.common.metrics.PluginMetrics;
 import org.apache.kafka.common.security.TestSecurityConfig;
 import org.apache.kafka.common.security.auth.AuthenticationContext;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
@@ -25,7 +29,6 @@ import org.apache.kafka.common.security.auth.KafkaPrincipalBuilder;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 
@@ -34,16 +37,42 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 public class ChannelBuildersTest {
 
     @Test
-    public void testCreateConfigurableKafkaPrincipalBuilder() {
-        Map<String, Object> configs = new HashMap<>();
-        configs.put(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, ConfigurableKafkaPrincipalBuilder.class);
-        KafkaPrincipalBuilder builder = ChannelBuilders.createPrincipalBuilder(configs, null, null);
-        assertInstanceOf(ConfigurableKafkaPrincipalBuilder.class, builder);
-        assertTrue(((ConfigurableKafkaPrincipalBuilder) builder).configured);
+    public void testCreateConfigurableKafkaPrincipalBuilder() throws Exception {
+        Map<String, Object> configs = Map.of(
+                BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, ConfigurableKafkaPrincipalBuilder.class);
+        Selector.SelectorMetrics selectorMetrics = mock(Selector.SelectorMetrics.class);
+        when(selectorMetrics.metrics()).thenReturn(null);
+        when(selectorMetrics.metricTags()).thenReturn(Map.of("k1", "v1"));
+        try (Plugin<KafkaPrincipalBuilder> builderPlugin =
+                     ChannelBuilders.createPrincipalBuilderPlugin(configs, null, null, selectorMetrics)) {
+            assertInstanceOf(ConfigurableKafkaPrincipalBuilder.class, builderPlugin.get());
+            assertTrue(((ConfigurableKafkaPrincipalBuilder) builderPlugin.get()).configured);
+        }
+    }
+
+    @Test
+    public void testCreateMonitorableKafkaPrincipalBuilder() throws Exception {
+        Map<String, Object> configs = Map.of(
+            BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, MonitorableKafkaPrincipalBuilder.class);
+        Metrics metrics = new Metrics();
+        Selector.SelectorMetrics selectorMetrics = mock(Selector.SelectorMetrics.class);
+        when(selectorMetrics.metrics()).thenReturn(metrics);
+        when(selectorMetrics.metricTags()).thenReturn(Map.of("k1", "v1"));
+        try (Plugin<KafkaPrincipalBuilder> builderPlugin =
+                     ChannelBuilders.createPrincipalBuilderPlugin(configs, null, null, selectorMetrics)) {
+            assertInstanceOf(MonitorableKafkaPrincipalBuilder.class, builderPlugin.get());
+            assertTrue(((MonitorableKafkaPrincipalBuilder) builderPlugin.get()).pluginMetrics);
+            verify(selectorMetrics, times(1)).metrics();
+            verify(selectorMetrics, times(1)).metricTags();
+        }
     }
 
     @Test
@@ -62,10 +91,10 @@ public class ChannelBuildersTest {
         assertNull(configs.get("listener.name.listener1.gssapi.sasl.kerberos.service.name"));
         assertFalse(securityConfig.unused().contains("listener.name.listener1.gssapi.sasl.kerberos.service.name"));
 
-        assertEquals(configs.get("gssapi.sasl.kerberos.service.name"), "testkafka");
+        assertEquals("testkafka", configs.get("gssapi.sasl.kerberos.service.name"));
         assertFalse(securityConfig.unused().contains("gssapi.sasl.kerberos.service.name"));
 
-        assertEquals(configs.get("sasl.kerberos.service.name"), "testkafkaglobal");
+        assertEquals("testkafkaglobal", configs.get("sasl.kerberos.service.name"));
         assertFalse(securityConfig.unused().contains("sasl.kerberos.service.name"));
 
         assertNull(configs.get("listener.name.listener1.sasl.kerberos.service.name"));
@@ -74,35 +103,35 @@ public class ChannelBuildersTest {
         assertNull(configs.get("plain.sasl.server.callback.handler.class"));
         assertFalse(securityConfig.unused().contains("plain.sasl.server.callback.handler.class"));
 
-        assertEquals(configs.get("listener.name.listener1.gssapi.config1.key"), "custom.config1");
+        assertEquals("custom.config1", configs.get("listener.name.listener1.gssapi.config1.key"));
         assertFalse(securityConfig.unused().contains("listener.name.listener1.gssapi.config1.key"));
 
-        assertEquals(configs.get("custom.config2.key"), "custom.config2");
+        assertEquals("custom.config2", configs.get("custom.config2.key"));
         assertFalse(securityConfig.unused().contains("custom.config2.key"));
 
         // test configs without listener prefix
         securityConfig = new TestSecurityConfig(props);
         configs = ChannelBuilders.channelBuilderConfigs(securityConfig, null);
 
-        assertEquals(configs.get("listener.name.listener1.gssapi.sasl.kerberos.service.name"), "testkafka");
+        assertEquals("testkafka", configs.get("listener.name.listener1.gssapi.sasl.kerberos.service.name"));
         assertFalse(securityConfig.unused().contains("listener.name.listener1.gssapi.sasl.kerberos.service.name"));
 
         assertNull(configs.get("gssapi.sasl.kerberos.service.name"));
         assertFalse(securityConfig.unused().contains("gssapi.sasl.kerberos.service.name"));
 
-        assertEquals(configs.get("listener.name.listener1.sasl.kerberos.service.name"), "testkafkaglobal");
+        assertEquals("testkafkaglobal", configs.get("listener.name.listener1.sasl.kerberos.service.name"));
         assertFalse(securityConfig.unused().contains("listener.name.listener1.sasl.kerberos.service.name"));
 
         assertNull(configs.get("sasl.kerberos.service.name"));
         assertFalse(securityConfig.unused().contains("sasl.kerberos.service.name"));
 
-        assertEquals(configs.get("plain.sasl.server.callback.handler.class"), "callback");
+        assertEquals("callback", configs.get("plain.sasl.server.callback.handler.class"));
         assertFalse(securityConfig.unused().contains("plain.sasl.server.callback.handler.class"));
 
-        assertEquals(configs.get("listener.name.listener1.gssapi.config1.key"), "custom.config1");
+        assertEquals("custom.config1", configs.get("listener.name.listener1.gssapi.config1.key"));
         assertFalse(securityConfig.unused().contains("listener.name.listener1.gssapi.config1.key"));
 
-        assertEquals(configs.get("custom.config2.key"), "custom.config2");
+        assertEquals("custom.config2", configs.get("custom.config2.key"));
         assertFalse(securityConfig.unused().contains("custom.config2.key"));
     }
 
@@ -117,6 +146,20 @@ public class ChannelBuildersTest {
         @Override
         public KafkaPrincipal build(AuthenticationContext context) {
             return null;
+        }
+    }
+
+    public static class MonitorableKafkaPrincipalBuilder implements KafkaPrincipalBuilder, Monitorable {
+        private boolean pluginMetrics = false;
+
+        @Override
+        public KafkaPrincipal build(AuthenticationContext context) {
+            return null;
+        }
+
+        @Override
+        public void withPluginMetrics(PluginMetrics metrics) {
+            pluginMetrics = true;
         }
     }
 }

@@ -213,7 +213,7 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
 
     @Override
     public KafkaChannel buildChannel(String id, SelectionKey key, int maxReceiveSize,
-                                     MemoryPool memoryPool, ChannelMetadataRegistry metadataRegistry) throws KafkaException {
+                                     MemoryPool memoryPool, ChannelMetadataRegistry metadataRegistry, Selector.SelectorMetrics metrics) throws KafkaException {
         TransportLayer transportLayer = null;
         try {
             SocketChannel socketChannel = (SocketChannel) key.channel();
@@ -228,7 +228,8 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
                         finalTransportLayer,
                         Collections.unmodifiableMap(subjects),
                         Collections.unmodifiableMap(connectionsMaxReauthMsByMechanism),
-                        metadataRegistry);
+                        metadataRegistry,
+                        metrics);
             } else {
                 LoginManager loginManager = loginManagers.get(clientSaslMechanism);
                 authenticatorCreator = () -> buildClientAuthenticator(configs,
@@ -278,10 +279,11 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
                                                                TransportLayer transportLayer,
                                                                Map<String, Subject> subjects,
                                                                Map<String, Long> connectionsMaxReauthMsByMechanism,
-                                                               ChannelMetadataRegistry metadataRegistry) {
+                                                               ChannelMetadataRegistry metadataRegistry,
+                                                               Selector.SelectorMetrics metrics) {
         return new SaslServerAuthenticator(configs, callbackHandlers, id, subjects,
                 kerberosShortNamer, listenerName, securityProtocol, transportLayer,
-                connectionsMaxReauthMsByMechanism, metadataRegistry, time, apiVersionSupplier);
+                connectionsMaxReauthMsByMechanism, metadataRegistry, time, apiVersionSupplier, metrics);
     }
 
     // Visible to override for testing

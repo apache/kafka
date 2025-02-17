@@ -25,6 +25,7 @@ import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.errors.UnsupportedSaslMechanismException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.internals.SecurityManagerCompatibility;
 import org.apache.kafka.common.message.SaslAuthenticateResponseData;
 import org.apache.kafka.common.message.SaslHandshakeResponseData;
@@ -37,6 +38,7 @@ import org.apache.kafka.common.network.InvalidReceiveException;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.network.ReauthenticationContext;
+import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.network.SslTransportLayer;
 import org.apache.kafka.common.network.TransportLayer;
@@ -69,7 +71,6 @@ import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.Closeable;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
@@ -123,7 +124,7 @@ public class SaslServerAuthenticator implements Authenticator {
     private final TransportLayer transportLayer;
     private final List<String> enabledMechanisms;
     private final Map<String, ?> configs;
-    private final KafkaPrincipalBuilder principalBuilder;
+    private final Plugin<KafkaPrincipalBuilder> principalBuilderPlugin;
     private final Map<String, AuthenticateCallbackHandler> callbackHandlers;
     private final Map<String, Long> connectionsMaxReauthMsByMechanism;
     private final Time time;
@@ -159,7 +160,8 @@ public class SaslServerAuthenticator implements Authenticator {
                                    Map<String, Long> connectionsMaxReauthMsByMechanism,
                                    ChannelMetadataRegistry metadataRegistry,
                                    Time time,
-                                   Function<Short, ApiVersionsResponse> apiVersionSupplier) {
+                                   Function<Short, ApiVersionsResponse> apiVersionSupplier,
+                                   Selector.SelectorMetrics metrics) {
         this.callbackHandlers = callbackHandlers;
         this.connectionId = connectionId;
         this.subjects = subjects;
@@ -190,7 +192,7 @@ public class SaslServerAuthenticator implements Authenticator {
 
         // Note that the old principal builder does not support SASL, so we do not need to pass the
         // authenticator or the transport layer
-        this.principalBuilder = ChannelBuilders.createPrincipalBuilder(configs, kerberosNameParser, null);
+        this.principalBuilderPlugin = ChannelBuilders.createPrincipalBuilderPlugin(configs, kerberosNameParser, null, metrics);
 
         saslAuthRequestMaxReceiveSize = (Integer) configs.get(BrokerSecurityConfigs.SASL_SERVER_MAX_RECEIVE_SIZE_CONFIG);
         if (saslAuthRequestMaxReceiveSize == null)
@@ -309,7 +311,7 @@ public class SaslServerAuthenticator implements Authenticator {
                 Optional.of(((SslTransportLayer) transportLayer).sslSession()) : Optional.empty();
         SaslAuthenticationContext context = new SaslAuthenticationContext(saslServer, securityProtocol,
                 clientAddress(), listenerName.value(), sslSession);
-        KafkaPrincipal principal = principalBuilder.build(context);
+        KafkaPrincipal principal = principalBuilderPlugin.get().build(context);
         if (ScramMechanism.isScram(saslMechanism) && Boolean.parseBoolean((String) saslServer.getNegotiatedProperty(ScramLoginModule.TOKEN_AUTH_CONFIG))) {
             principal.tokenAuthenticated(true);
         }
@@ -318,7 +320,7 @@ public class SaslServerAuthenticator implements Authenticator {
 
     @Override
     public Optional<KafkaPrincipalSerde> principalSerde() {
-        return principalBuilder instanceof KafkaPrincipalSerde ? Optional.of((KafkaPrincipalSerde) principalBuilder) : Optional.empty();
+        return principalBuilderPlugin.get() instanceof KafkaPrincipalSerde ? Optional.of((KafkaPrincipalSerde) principalBuilderPlugin.get()) : Optional.empty();
     }
 
     @Override
@@ -333,8 +335,7 @@ public class SaslServerAuthenticator implements Authenticator {
 
     @Override
     public void close() throws IOException {
-        if (principalBuilder instanceof Closeable)
-            Utils.closeQuietly((Closeable) principalBuilder, "principal builder");
+        Utils.closeQuietly(principalBuilderPlugin, "principal builder plugin");
         if (saslServer != null)
             saslServer.dispose();
     }

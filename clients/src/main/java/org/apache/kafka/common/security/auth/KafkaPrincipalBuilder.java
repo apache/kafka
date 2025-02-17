@@ -20,13 +20,22 @@ package org.apache.kafka.common.security.auth;
  * Pluggable principal builder interface which supports both SSL authentication through
  * {@link SslAuthenticationContext} and SASL through {@link SaslAuthenticationContext}.
  *
- * Note that the {@link org.apache.kafka.common.Configurable} and {@link java.io.Closeable}
+ * <p>Note that the {@link org.apache.kafka.common.Configurable} and {@link java.io.Closeable}
  * interfaces are respected if implemented. Additionally, implementations must provide a
  * default no-arg constructor.
  *
- * Note that custom implementations of {@link KafkaPrincipalBuilder}
+ * <p>Note that custom implementations of {@link KafkaPrincipalBuilder}
  * must also implement {@link KafkaPrincipalSerde}, otherwise brokers will not be able to
  * forward requests to the controller.
+ *
+ * <p>Implement {@link org.apache.kafka.common.metrics.Monitorable} to enable the principal builder to register metrics.
+ * The following tags are automatically added to all metrics registered:
+ * <ul>
+ *     <li><code>config</code> set to <code>principal.builder.class</code>
+ *     <li><code>class</code> set to the KafkaPrincipalBuilder class name
+ *     <li><code>listener</code> set to the listener name
+ *     <li><code>networkProcessor</code> set to the processor id
+ * </ul>
  */
 public interface KafkaPrincipalBuilder {
     /**

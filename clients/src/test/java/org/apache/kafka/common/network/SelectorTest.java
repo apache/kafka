@@ -433,7 +433,7 @@ public class SelectorTest {
         final ChannelBuilder channelBuilder = mock(ChannelBuilder.class);
 
         when(channelBuilder.buildChannel(eq(channelId), any(SelectionKey.class), anyInt(), any(MemoryPool.class),
-                any(ChannelMetadataRegistry.class))).thenThrow(new RuntimeException("Test exception"));
+                any(ChannelMetadataRegistry.class), any(Selector.SelectorMetrics.class))).thenThrow(new RuntimeException("Test exception"));
 
         try (MockedConstruction<Selector.SelectorChannelMetadataRegistry> mockedMetadataRegistry =
                      mockConstruction(Selector.SelectorChannelMetadataRegistry.class)) {
