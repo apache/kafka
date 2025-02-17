@@ -43,7 +43,9 @@ public class DeleteShareGroupOffsetsResponse extends AbstractResponse {
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> counts = new HashMap<>();
         data.responses().forEach(
-            topicResult -> updateErrorCounts(counts, Errors.forCode(topicResult.errorCode()))
+            topicResult -> topicResult.partitions().forEach(
+                partitionResult -> updateErrorCounts(counts, Errors.forCode(partitionResult.errorCode()))
+            )
         );
         return counts;
     }

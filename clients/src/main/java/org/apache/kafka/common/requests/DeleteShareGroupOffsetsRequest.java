@@ -26,6 +26,7 @@ import org.apache.kafka.common.protocol.Errors;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class DeleteShareGroupOffsetsRequest extends AbstractRequest {
     public static class Builder extends AbstractRequest.Builder<DeleteShareGroupOffsetsRequest> {
@@ -65,7 +66,11 @@ public class DeleteShareGroupOffsetsRequest extends AbstractRequest {
         data.topics().forEach(
             topicResult -> results.add(new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic()
                 .setTopicName(topicResult.topicName())
-                .setErrorCode(Errors.forException(e).code())));
+                .setPartitions(topicResult.partitions().stream()
+                    .map(partitionData -> new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponsePartition()
+                        .setPartitionIndex(partitionData)
+                        .setErrorCode(Errors.forException(e).code()))
+                    .collect(Collectors.toList()))));
         return new DeleteShareGroupOffsetsResponse(new DeleteShareGroupOffsetsResponseData()
             .setResponses(results));
     }
