@@ -1220,11 +1220,11 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    *
    * If no such message is found, the log end offset is returned.
    *
-   * `NOTE:` OffsetRequest V0 does not use this method, the behavior of OffsetRequest V0 remains the same as before
+   * `NOTE:` ListOffsets requests V0 does not use this method, the behavior of ListOffsets V0 remains the same as before
    * , i.e. it only gives back the timestamp based on the last modification time of the log segments.
    *
    * @param targetTimestamp The given timestamp for offset fetching.
-   * @param remoteLogManager Optional RemoteLogManager instance if it exists.
+   * @param remoteOffsetReader Optional AsyncOffsetReader instance if it exists.
    * @return the offset-result holder
    *         <ul>
    *           <li>When the partition is not enabled with remote storage, then it contains offset of the first message
@@ -1234,7 +1234,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    *           <li>All special timestamp offset results are returned immediately irrespective of the remote storage.
    *         </ul>
    */
-  def fetchOffsetByTimestamp(targetTimestamp: Long, remoteLogManager: Optional[AsyncOffsetReader] = Optional.empty): OffsetResultHolder = {
+  def fetchOffsetByTimestamp(targetTimestamp: Long, remoteOffsetReader: Optional[AsyncOffsetReader] = Optional.empty): OffsetResultHolder = {
     maybeHandleIOException(s"Error while fetching offset by timestamp for $topicPartition in dir ${dir.getParent}") {
       debug(s"Searching offset for timestamp $targetTimestamp")
 
@@ -1292,11 +1292,11 @@ class UnifiedLog(@volatile var logStartOffset: Long,
       } else {
         // We need to search the first segment whose largest timestamp is >= the target timestamp if there is one.
         if (remoteLogEnabled() && !isEmpty) {
-          if (remoteLogManager.isEmpty) {
+          if (remoteOffsetReader.isEmpty) {
             throw new KafkaException("RemoteLogManager is empty even though the remote log storage is enabled.")
           }
 
-          val asyncOffsetReadFutureHolder = remoteLogManager.get.asyncOffsetRead(topicPartition, targetTimestamp,
+          val asyncOffsetReadFutureHolder = remoteOffsetReader.get.asyncOffsetRead(topicPartition, targetTimestamp,
             logStartOffset, leaderEpochCache, () => searchOffsetInLocalLog(targetTimestamp, localLogStartOffset()))
           
           new OffsetResultHolder(Optional.empty(), Optional.of(asyncOffsetReadFutureHolder))

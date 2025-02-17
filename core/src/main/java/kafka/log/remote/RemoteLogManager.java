@@ -662,6 +662,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         return leaderEpoch == RecordBatch.NO_PARTITION_LEADER_EPOCH ? Optional.empty() : Optional.of(leaderEpoch);
     }
 
+    @Override
     public AsyncOffsetReadFutureHolder<OffsetResultHolder.FileRecordsOrError> asyncOffsetRead(
             TopicPartition topicPartition,
             long timestamp,
