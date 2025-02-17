@@ -279,10 +279,6 @@ public class BrokersToIsrs {
         return iterator(NO_LEADER, true);
     }
 
-    PartitionsOnReplicaIterator partitionsLedByBroker(int brokerId) {
-        return iterator(brokerId, true);
-    }
-
     PartitionsOnReplicaIterator partitionsWithBrokerInIsr(int brokerId) {
         return iterator(brokerId, false);
     }

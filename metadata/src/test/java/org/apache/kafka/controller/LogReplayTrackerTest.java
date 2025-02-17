@@ -17,8 +17,6 @@
 
 package org.apache.kafka.controller;
 
-import org.apache.kafka.common.metadata.NoOpRecord;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -32,7 +30,7 @@ public class LogReplayTrackerTest {
     public void testEmpty() {
         LogReplayTracker tracker = new LogReplayTracker.Builder().build();
         assertTrue(tracker.empty());
-        tracker.replay(new NoOpRecord());
+        tracker.replay();
         assertFalse(tracker.empty());
     }
 }

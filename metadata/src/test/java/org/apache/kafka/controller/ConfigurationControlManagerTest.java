@@ -93,8 +93,6 @@ public class ConfigurationControlManagerTest {
     static {
         SYNONYMS.put("abc", Collections.singletonList(new ConfigSynonym("foo.bar")));
         SYNONYMS.put("def", Collections.singletonList(new ConfigSynonym("baz")));
-        SYNONYMS.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG,
-            Collections.singletonList(new ConfigSynonym(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG)));
         SYNONYMS.put("quuux", Collections.singletonList(new ConfigSynonym("quux", HOURS_TO_MILLISECONDS)));
         SYNONYMS.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, Collections.singletonList(new ConfigSynonym(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG)));
     }
@@ -129,7 +127,7 @@ public class ConfigurationControlManagerTest {
     }
 
     @Test
-    public void testReplay() throws Exception {
+    public void testReplay() {
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
             setKafkaConfigSchema(SCHEMA).
             build();
@@ -300,7 +298,7 @@ public class ConfigurationControlManagerTest {
         }
 
         @Override
-        public void close() throws Exception {
+        public void close() {
             // nothing to do
         }
 
@@ -364,7 +362,7 @@ public class ConfigurationControlManagerTest {
         }
 
         @Override
-        public void close() throws Exception {
+        public void close() {
             // empty
         }
 

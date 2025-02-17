@@ -17,7 +17,6 @@
 
 package org.apache.kafka.controller;
 
-import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.utils.LogContext;
 
 import org.slf4j.Logger;
@@ -67,7 +66,7 @@ public class LogReplayTracker {
         return empty;
     }
 
-    void replay(ApiMessage message) {
+    void replay() {
         empty = false;
     }
 }

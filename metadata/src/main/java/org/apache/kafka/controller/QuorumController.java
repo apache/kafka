@@ -179,11 +179,6 @@ public final class QuorumController implements Controller {
     private static final int DEFAULT_MAX_RECORDS_PER_BATCH = 10000;
 
     /**
-     * The default minimum event time that can be logged as a slow event.
-     */
-    private static final int DEFAULT_MIN_SLOW_EVENT_TIME_MS = 200;
-
-    /**
      * The maximum records any user-initiated operation is allowed to generate.
      *
      * For now, this is set to the maximum records in a single batch.
@@ -676,11 +671,6 @@ public final class QuorumController implements Controller {
         public String toString() {
             return name + "(" + System.identityHashCode(this) + ")";
         }
-    }
-
-    // Visible for testing
-    OffsetControlManager offsetControl() {
-        return offsetControl;
     }
 
     // Visible for testing
@@ -1213,7 +1203,7 @@ public final class QuorumController implements Controller {
                         recordRedactor.toLoggableString(message), offset);
             }
         }
-        logReplayTracker.replay(message);
+        logReplayTracker.replay();
         MetadataRecordType type = MetadataRecordType.fromId(message.apiKey());
         switch (type) {
             case REGISTER_BROKER_RECORD:
