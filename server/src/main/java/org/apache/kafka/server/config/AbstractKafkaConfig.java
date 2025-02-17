@@ -65,7 +65,8 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
         QuotaConfig.CONFIG_DEF,
         BrokerSecurityConfigs.CONFIG_DEF,
         DelegationTokenManagerConfigs.CONFIG_DEF,
-        AddPartitionsToTxnConfig.CONFIG_DEF
+        AddPartitionsToTxnConfig.CONFIG_DEF, 
+        AbstractConfig.CONFIG
     ));
 
     public AbstractKafkaConfig(ConfigDef definition, Map<?, ?> originals, Map<String, ?> configProviderProps, boolean doLog) {

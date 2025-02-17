@@ -154,12 +154,8 @@ public class WorkerConfig extends AbstractConfig {
             + "* " + SERVICE_LOAD + ": Discover plugins only by ServiceLoader. Faster startup than other modes. "
             + "Plugins which are not discoverable by ServiceLoader may not be usable.";
 
-    public static final String CONFIG_PROVIDERS_CONFIG = "config.providers";
-    protected static final String CONFIG_PROVIDERS_DOC =
-            "Comma-separated names of <code>ConfigProvider</code> classes, loaded and used "
-            + "in the order specified. Implementing the interface  "
-            + "<code>ConfigProvider</code> allows you to replace variable references in connector configurations, "
-            + "such as for externalized secrets. ";
+    public static final String CONFIG_PROVIDERS_CONFIG = AbstractConfig.CONFIG_PROVIDERS_CONFIG;
+    protected static final String CONFIG_PROVIDERS_DOC = AbstractConfig.CONFIG_PROVIDERS_DOC;
 
     public static final String CONNECTOR_CLIENT_POLICY_CLASS_CONFIG = "connector.client.config.override.policy";
     public static final String CONNECTOR_CLIENT_POLICY_CLASS_DOC =

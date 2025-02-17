@@ -30,6 +30,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 
 import java.time.Duration;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -320,6 +321,10 @@ public abstract class MirrorConnectorConfig extends AbstractConfig {
                     in(Utils.enumOptions(SecurityProtocol.class)),
                     ConfigDef.Importance.MEDIUM,
                     CommonClientConfigs.SECURITY_PROTOCOL_DOC)
+            .define(CONFIG_PROVIDERS_CONFIG,
+                    ConfigDef.Type.LIST,
+                    Collections.emptyList(),
+                    ConfigDef.Importance.LOW, CONFIG_PROVIDERS_DOC)
             .withClientSslSupport()
             .withClientSaslSupport();
 
