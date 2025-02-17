@@ -45,10 +45,14 @@ public class DeleteConsumerGroupsHandlerTest {
 
     @Test
     public void testBuildRequest() {
-        DeleteConsumerGroupsHandler handler = new DeleteConsumerGroupsHandler(logContext);
+        DeleteConsumerGroupsHandler handler = getHandler();
         DeleteGroupsRequest request = handler.buildBatchedRequest(1, singleton(CoordinatorKey.byGroupId(groupId1))).build();
         assertEquals(1, request.data().groupsNames().size());
         assertEquals(groupId1, request.data().groupsNames().get(0));
+    }
+
+    protected DeleteConsumerGroupsHandler getHandler() {
+        return new DeleteConsumerGroupsHandler(logContext);
     }
 
     @Test

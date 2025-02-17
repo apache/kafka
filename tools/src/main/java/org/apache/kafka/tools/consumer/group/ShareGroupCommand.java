@@ -17,7 +17,9 @@
 package org.apache.kafka.tools.consumer.group;
 
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.admin.AbstractOptions;
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.DeleteShareGroupsOptions;
 import org.apache.kafka.clients.admin.DescribeShareGroupsOptions;
 import org.apache.kafka.clients.admin.GroupListing;
 import org.apache.kafka.clients.admin.ListGroupsOptions;
@@ -79,7 +81,7 @@ public class ShareGroupCommand {
             } else if (opts.options.has(opts.describeOpt)) {
                 shareGroupService.describeGroups();
             } else if (opts.options.has(opts.deleteOpt)) {
-                throw new UnsupportedOperationException("--delete option is not yet implemented");
+                shareGroupService.deleteShareGroups();
             } else if (opts.options.has(opts.resetOffsetsOpt)) {
                 throw new UnsupportedOperationException("--reset-offsets option is not yet implemented");
             } else if (opts.options.has(opts.deleteOffsetsOpt)) {
@@ -204,6 +206,50 @@ public class ShareGroupCommand {
                     = collectGroupsOffsets(groupIds);
                 printOffsets(offsets);
             }
+        }
+
+        Map<String, Throwable> deleteShareGroups() {
+            List<String> groupIds = opts.options.has(opts.allGroupsOpt)
+                ? listShareGroups()
+                : opts.options.valuesOf(opts.groupOpt);
+
+            Map<String, KafkaFuture<Void>> groupsToDelete = adminClient.deleteShareGroups(
+                groupIds,
+                withTimeoutMs(new DeleteShareGroupsOptions())
+            ).deletedGroups();
+
+            Map<String, Throwable> success = new HashMap<>();
+            Map<String, Throwable> failed = new HashMap<>();
+
+            groupsToDelete.forEach((g, f) -> {
+                try {
+                    f.get();
+                    success.put(g, null);
+                } catch (InterruptedException ie) {
+                    failed.put(g, ie);
+                } catch (ExecutionException e) {
+                    failed.put(g, e.getCause());
+                }
+            });
+
+            if (failed.isEmpty())
+                System.out.println("Deletion of requested share groups (" + "'" + success.keySet().stream().map(Object::toString).collect(Collectors.joining(", ")) + "'" + ") was successful.");
+            else {
+                printError("Deletion of some share groups failed:", Optional.empty());
+                failed.forEach((group, error) -> System.out.println("* Share Group '" + group + "' could not be deleted due to: " + error));
+
+                if (!success.isEmpty())
+                    System.out.println("\nThese share groups were deleted successfully: " + "'" + success.keySet().stream().map(Object::toString).collect(Collectors.joining("'")) + "', '");
+            }
+
+            failed.putAll(success);
+
+            return failed;
+        }
+
+        private <T extends AbstractOptions<T>> T withTimeoutMs(T options) {
+            int t = opts.options.valueOf(opts.timeoutMsOpt).intValue();
+            return options.timeoutMs(t);
         }
 
         Map<String, ShareGroupDescription> describeShareGroups(Collection<String> groupIds) throws ExecutionException, InterruptedException {
