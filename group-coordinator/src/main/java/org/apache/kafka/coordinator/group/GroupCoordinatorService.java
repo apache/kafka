@@ -26,6 +26,8 @@ import org.apache.kafka.common.errors.StreamsInvalidTopologyException;
 import org.apache.kafka.common.errors.UnsupportedAssignorException;
 import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.internals.Topic;
+import org.apache.kafka.common.message.AlterShareGroupOffsetsRequestData;
+import org.apache.kafka.common.message.AlterShareGroupOffsetsResponseData;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
@@ -62,6 +64,8 @@ import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.AlterShareGroupOffsetsRequest;
+import org.apache.kafka.common.requests.AlterShareGroupOffsetsResponse;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.requests.ConsumerGroupDescribeRequest;
 import org.apache.kafka.common.requests.DeleteGroupsRequest;
@@ -102,10 +106,12 @@ import org.apache.kafka.server.share.persister.InitializeShareGroupStateParamete
 import org.apache.kafka.server.share.persister.InitializeShareGroupStateResult;
 import org.apache.kafka.server.share.persister.PartitionErrorData;
 import org.apache.kafka.server.share.persister.PartitionFactory;
+import org.apache.kafka.server.share.persister.PartitionStateBatchData;
 import org.apache.kafka.server.share.persister.PartitionStateData;
 import org.apache.kafka.server.share.persister.Persister;
 import org.apache.kafka.server.share.persister.ReadShareGroupStateSummaryParameters;
 import org.apache.kafka.server.share.persister.TopicData;
+import org.apache.kafka.server.share.persister.WriteShareGroupStateParameters;
 import org.apache.kafka.server.util.FutureUtils;
 import org.apache.kafka.server.util.timer.Timer;
 import org.apache.kafka.server.util.timer.TimerTask;
@@ -667,6 +673,15 @@ public class GroupCoordinatorService implements GroupCoordinator {
         ));
     }
 
+    CompletableFuture<AlterShareGroupOffsetsResponseData> persisterInitialize(
+            InitializeShareGroupStateParameters request,
+            AlterShareGroupOffsetsResponseData response
+    ) {
+        persister.initializeState(request);
+        //TODO handle response;
+        return CompletableFuture.completedFuture(response);
+    }
+
     // Visibility for testing
     CompletableFuture<ShareGroupHeartbeatResponseData> persisterInitialize(
         InitializeShareGroupStateParameters request,
@@ -1151,6 +1166,35 @@ public class GroupCoordinatorService implements GroupCoordinator {
         });
 
         return FutureUtils.combineFutures(futures, ArrayList::new, List::addAll);
+    }
+
+    /**
+     * See {@link GroupCoordinator#alterShareGroupOffsets(AuthorizableRequestContext, String, AlterShareGroupOffsetsRequestData)}.
+     */
+    @Override
+    public CompletableFuture<AlterShareGroupOffsetsResponseData> alterShareGroupOffsets(AuthorizableRequestContext context, String groupId, AlterShareGroupOffsetsRequestData request) {
+        if (!isActive.get() || metadataImage == null) {
+            return CompletableFuture.completedFuture(
+                AlterShareGroupOffsetsRequest.getErrorAlterShareGroupResponseData(Errors.COORDINATOR_NOT_AVAILABLE));
+        }
+        
+        if (groupId == null) {
+            return CompletableFuture.completedFuture(
+                AlterShareGroupOffsetsRequest.getErrorAlterShareGroupResponseData(Errors.GROUP_ID_NOT_FOUND));
+        }
+
+        return runtime.scheduleWriteOperation(
+            "share-group-alter",
+            topicPartitionFor(groupId),
+            Duration.ofMillis(config.offsetCommitTimeoutMs()),
+            coordinator -> coordinator.alterShareGroupOffsets(groupId, request)
+        ).thenCompose(result -> persisterInitialize(result.getValue(), result.getKey())).exceptionally(exception -> handleOperationException(
+            "share-group-alter",
+            request,
+            exception,
+            (error, message) -> AlterShareGroupOffsetsRequest.getErrorAlterShareGroupResponseData(error),
+            log
+        ));
     }
 
     /**

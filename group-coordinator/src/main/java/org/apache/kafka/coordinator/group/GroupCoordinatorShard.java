@@ -23,6 +23,8 @@ import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.GroupNotEmptyException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.Plugin;
+import org.apache.kafka.common.message.AlterShareGroupOffsetsRequestData;
+import org.apache.kafka.common.message.AlterShareGroupOffsetsResponseData;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
@@ -775,6 +777,37 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 .setResponses(topicResponseList)
         );
     }
+
+    /**
+     * Make the following check to make sure the AlterShareGroupOffsetsRequest request is valid:
+     * 1. Checks whether the provided group is empty
+     * 2. Checks the requested topics are presented in the metadataImage
+     * 3. Checks the requested share partitions are initialized for the group
+     *
+     * groupId - The group ID
+     * @param alterShareGroupOffsetsRequestData - The request data for AlterShareGroupOffsetsRequestData
+     * the final response {@link AlterShareGroupOffsetsResponseData} for the AlterShareGroupOffsetsRequest
+     */
+    public CoordinatorResult<Map.Entry<AlterShareGroupOffsetsResponseData, InitializeShareGroupStateParameters>, CoordinatorRecord> alterShareGroupOffsets(
+        String groupId,
+        AlterShareGroupOffsetsRequestData alterShareGroupOffsetsRequestData
+    ) {
+        List<CoordinatorRecord> records = new ArrayList<>();
+        ShareGroup group = groupMetadataManager.shareGroup(groupId);
+        group.validateOffsetsAlterable();
+
+        Map.Entry<AlterShareGroupOffsetsResponseData, InitializeShareGroupStateParameters> response = groupMetadataManager.completeAlterShareGroupOffsets(
+            groupId,
+            alterShareGroupOffsetsRequestData,
+            records
+        );
+        return new CoordinatorResult<>(
+            records,
+            response
+        );
+    }
+
+
 
     /**
      * Fetch offsets for a given set of partitions and a given group.

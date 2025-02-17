@@ -210,6 +210,14 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
      */
     @Override
     public void validateDeleteGroup() throws ApiException {
+        validateEmptyGroup();
+    }
+
+    public void validateOffsetsAlterable() throws ApiException {
+        validateEmptyGroup();
+    }
+
+    public void validateEmptyGroup() {
         if (state() != ShareGroupState.EMPTY) {
             throw Errors.NON_EMPTY_GROUP.exception();
         }

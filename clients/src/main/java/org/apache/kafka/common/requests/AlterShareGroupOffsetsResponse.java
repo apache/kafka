@@ -18,10 +18,15 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.AlterShareGroupOffsetsResponseData;
+import org.apache.kafka.common.message.AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Readable;
 
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.EnumMap;
 import java.util.Map;
 
@@ -62,5 +67,46 @@ public class AlterShareGroupOffsetsResponse extends AbstractResponse {
         return new AlterShareGroupOffsetsResponse(
             new AlterShareGroupOffsetsResponseData(readable, version)
         );
+    }
+
+    public static class Builder {
+        AlterShareGroupOffsetsResponseData data = new AlterShareGroupOffsetsResponseData();
+        HashMap<String, AlterShareGroupOffsetsResponseTopic> topics = new HashMap<>();
+
+        private AlterShareGroupOffsetsResponseTopic getOrCreateTopic(String topic) {
+            AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic topicData = topics.get(topic);
+            if (topicData == null) {
+                topicData = new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic()
+                    .setTopicName(topic);
+                topics.put(topic, topicData);
+            }
+            return topicData;
+        }
+
+        public Builder addPartition(String topic, int partition, Errors error) {
+            AlterShareGroupOffsetsResponseTopic topicData = getOrCreateTopic(topic);
+            topicData.partitions().add(new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition()
+                .setPartitionIndex(partition)
+                .setErrorCode(error.code()));
+            return this;
+        }
+
+        public AlterShareGroupOffsetsResponse build() {
+            data.setResponses(new ArrayList<>(topics.values()));
+            return new AlterShareGroupOffsetsResponse(data);
+        }
+
+        public Builder merge(AlterShareGroupOffsetsResponseData data) {
+            data.responses().forEach(topic -> {
+                AlterShareGroupOffsetsResponseTopic newTopic = getOrCreateTopic(topic.topicName());
+                topic.partitions().forEach(partition -> {
+                    newTopic.partitions().add(new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition()
+                        .setPartitionIndex(partition.partitionIndex())
+                        .setErrorCode(partition.errorCode()));
+                });
+            });
+            return this;
+
+        }
     }
 }

@@ -32,9 +32,12 @@ import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnknownServerException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnreleasedInstanceIdException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.Plugin;
+import org.apache.kafka.common.message.AlterShareGroupOffsetsRequestData;
+import org.apache.kafka.common.message.AlterShareGroupOffsetsResponseData;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
@@ -70,6 +73,7 @@ import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.SchemaException;
+import org.apache.kafka.common.requests.AlterShareGroupOffsetsRequest;
 import org.apache.kafka.common.requests.ConsumerGroupHeartbeatResponse;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.ShareGroupHeartbeatRequest;
@@ -166,6 +170,7 @@ import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsDelta;
 import org.apache.kafka.image.TopicsImage;
+import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.server.authorizer.Action;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.server.authorizer.AuthorizationResult;
@@ -2737,6 +2742,18 @@ public class GroupMetadataManager {
                     entry.getKey(),
                     entry.getValue().stream()
                         .map(partitionId -> PartitionFactory.newPartitionStateData(partitionId, groupEpoch, -1))
+                        .toList())
+                ).toList()
+            )).build();
+    }
+
+    private InitializeShareGroupStateParameters buildInitializeShareGroupState(String groupId, int groupEpoch, Map<Uuid, Map<Integer, Long>> offsetByTopicPartitions) {
+        return new InitializeShareGroupStateParameters.Builder().setGroupTopicPartitionData(
+            new GroupTopicPartitionData<>(groupId, offsetByTopicPartitions.entrySet().stream()
+                .map(entry -> new TopicData<>(
+                    entry.getKey(),
+                    entry.getValue().entrySet().stream()
+                        .map(partitionEntry -> PartitionFactory.newPartitionStateData(partitionEntry.getKey(), groupEpoch, partitionEntry.getValue()))
                         .toList())
                 ).toList()
             )).build();
@@ -8061,6 +8078,74 @@ public class GroupMetadataManager {
         return deleteShareGroupStateRequestTopicsData;
     }
 
+    public Map.Entry<AlterShareGroupOffsetsResponseData, InitializeShareGroupStateParameters> completeAlterShareGroupOffsets(
+        String groupId,
+        AlterShareGroupOffsetsRequestData alterShareGroupOffsetsRequest,
+        List<CoordinatorRecord> records
+    ) {
+        Group group = groups.get(groupId);
+        List<AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic> alterShareGroupOffsetsResponseTopics = new ArrayList<>();
+
+        Map<Uuid, Set<Integer>> initializingTopics = new HashMap<>();
+        Map<Uuid, Map<Integer, Long>> offsetByTopicPartitions = new HashMap<>();
+
+        alterShareGroupOffsetsRequest.topics().forEach(topic -> {
+            TopicImage topicImage = metadataImage.topics().getTopic(topic.topicName());
+            if (topicImage != null) {
+                Uuid topicId = topicImage.id();
+                Set<Integer> existingPartitions = new HashSet<>(topicImage.partitions().keySet());
+                List<AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition> partitions = new ArrayList<>();
+                topic.partitions().forEach(partition -> {
+                    if (existingPartitions.contains(partition.partitionIndex())) {
+                        partitions.add(
+                            new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition()
+                                .setPartitionIndex(partition.partitionIndex())
+                                .setErrorCode(Errors.NONE.code())
+                                .setErrorMessage(null));
+                        offsetByTopicPartitions.computeIfAbsent(topicId, k -> new HashMap<>()).put(partition.partitionIndex(), partition.startOffset());
+                    } else {
+                        partitions.add(
+                            new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition()
+                                .setPartitionIndex(partition.partitionIndex())
+                                .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
+                                .setErrorMessage(Errors.UNKNOWN_TOPIC_OR_PARTITION.message()));
+                    }
+                });
+
+                initializingTopics.put(topicId, topic.partitions().stream()
+                    .map(AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestPartition::partitionIndex)
+                    .filter(existingPartitions::contains)
+                    .collect(Collectors.toSet()));
+
+                alterShareGroupOffsetsResponseTopics.add(
+                    new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic()
+                        .setTopicName(topic.topicName())
+                        .setPartitions(partitions)
+                );
+
+            } else {
+                List<AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition> partitions = new ArrayList<>();
+                topic.partitions().forEach(partition -> partitions.add(
+                    new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition()
+                        .setPartitionIndex(partition.partitionIndex())
+                        .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
+                        .setErrorMessage(Errors.UNKNOWN_TOPIC_OR_PARTITION.message())));
+                alterShareGroupOffsetsResponseTopics.add(
+                    new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic()
+                        .setTopicName(topic.topicName())
+                        .setPartitions(partitions)
+                );
+            }
+        });
+
+        addInitializingTopicsRecords(groupId, records, initializingTopics);
+        return Map.entry(
+            new AlterShareGroupOffsetsResponseData()
+                .setResponses(alterShareGroupOffsetsResponseTopics),
+            buildInitializeShareGroupState(groupId, ((ShareGroup) group).groupEpoch(), offsetByTopicPartitions)
+        );
+    }
+
     /**
      * Iterates over the share state metadata map and removes any
      * deleted topic ids from the initialized and initializing maps.
@@ -8159,6 +8244,7 @@ public class GroupMetadataManager {
                 .setErrorMessage(null)
         ).toList();
     }
+
 
     /**
      * Validates the DeleteGroups request.

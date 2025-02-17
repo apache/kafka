@@ -78,6 +78,24 @@ public class AlterShareGroupOffsetsRequest extends AbstractRequest {
         );
     }
 
+    public static AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic getErrorAlterShareGroup(
+        Errors error
+    ) {
+        return new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic()
+            .setPartitions(List.of(
+                new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition()
+                    .setPartitionIndex(-1)
+                    .setErrorCode(error.code())
+            ));
+    }
+
+    public static AlterShareGroupOffsetsResponseData getErrorAlterShareGroupResponseData(
+        Errors error
+    ) {
+        AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic responseTopic = getErrorAlterShareGroup(error);
+        return new AlterShareGroupOffsetsResponseData().setResponses(List.of(responseTopic));
+    }
+
     @Override
     public AlterShareGroupOffsetsRequestData data() {
         return data;
