@@ -91,7 +91,7 @@ public class DeleteConsumerGroupsHandlerTest {
     private AdminApiHandler.ApiResult<CoordinatorKey, Void> handleWithError(
         Errors error
     ) {
-        DeleteConsumerGroupsHandler handler = new DeleteConsumerGroupsHandler(logContext);
+        DeleteConsumerGroupsHandler handler = getHandler();
         DeleteGroupsResponse response = buildResponse(error);
         return handler.handleResponse(new Node(1, "host", 1234), singleton(CoordinatorKey.byGroupId(groupId1)), response);
     }
