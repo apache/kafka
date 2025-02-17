@@ -240,6 +240,7 @@ public class ApplicationEventProcessorTest {
         setupProcessor(true);
         when(heartbeatRequestManager.membershipManager()).thenReturn(membershipManager);
         processor.process(event);
+        assertTrue(event.reconcileAndAutoCommit().isDone());
         verify(commitRequestManager).updateTimerAndMaybeCommit(12345);
         verify(membershipManager).onConsumerPoll();
         verify(heartbeatRequestManager).resetPollTimer(12345);

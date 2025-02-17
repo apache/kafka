@@ -215,7 +215,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
             commitRequestManager.updateTimerAndMaybeCommit(event.pollTimeMs());
             // all commit request generation points have been passed,
             // so it's safe to notify the app thread could proceed and start fetching
-            event.future().complete(null);
+            event.markReconcileAndAutoCommitComplete();
             requestManagers.consumerHeartbeatRequestManager.ifPresent(hrm -> {
                 hrm.membershipManager().onConsumerPoll();
                 hrm.resetPollTimer(event.pollTimeMs());
@@ -224,7 +224,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
             // safe to unblock - no auto-commit risk here:
             // 1. commitRequestManager is not present
             // 2. shareConsumer has no auto-commit mechanism
-            event.future().complete(null);
+            event.markReconcileAndAutoCommitComplete();
             requestManagers.shareHeartbeatRequestManager.ifPresent(hrm -> {
                 hrm.membershipManager().onConsumerPoll();
                 hrm.resetPollTimer(event.pollTimeMs());

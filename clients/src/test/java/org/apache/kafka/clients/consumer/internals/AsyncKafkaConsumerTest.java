@@ -397,6 +397,7 @@ public class AsyncKafkaConsumerTest {
 
         consumer.wakeup();
 
+        markReconcileAndAutoCommitCompleteForPollEvent();
         assertThrows(WakeupException.class, () -> consumer.poll(Duration.ZERO));
         assertDoesNotThrow(() -> consumer.poll(Duration.ZERO));
     }
@@ -416,6 +417,7 @@ public class AsyncKafkaConsumerTest {
         completeAssignmentChangeEventSuccessfully();
         consumer.assign(singleton(tp));
 
+        markReconcileAndAutoCommitCompleteForPollEvent();
         assertThrows(WakeupException.class, () -> consumer.poll(Duration.ofMinutes(1)));
         assertDoesNotThrow(() -> consumer.poll(Duration.ZERO));
     }
@@ -439,6 +441,7 @@ public class AsyncKafkaConsumerTest {
         completeAssignmentChangeEventSuccessfully();
         consumer.assign(singleton(tp));
 
+        markReconcileAndAutoCommitCompleteForPollEvent();
         // since wakeup() is called when the non-empty fetch is returned the wakeup should be ignored
         assertDoesNotThrow(() -> consumer.poll(Duration.ofMinutes(1)));
         // the previously ignored wake-up should not be ignored in the next call
@@ -475,6 +478,7 @@ public class AsyncKafkaConsumerTest {
 
         completeTopicSubscriptionChangeEventSuccessfully();
         consumer.subscribe(Collections.singletonList(topicName), listener);
+        markReconcileAndAutoCommitCompleteForPollEvent();
         consumer.poll(Duration.ZERO);
         assertTrue(callbackExecuted.get());
     }
@@ -496,6 +500,7 @@ public class AsyncKafkaConsumerTest {
         completeAssignmentChangeEventSuccessfully();
         consumer.assign(singleton(tp));
 
+        markReconcileAndAutoCommitCompleteForPollEvent();
         consumer.poll(Duration.ZERO);
 
         assertDoesNotThrow(() -> consumer.poll(Duration.ZERO));
@@ -621,6 +626,7 @@ public class AsyncKafkaConsumerTest {
         completeAssignmentChangeEventSuccessfully();
         consumer.assign(Collections.singleton(new TopicPartition("foo", 0)));
         assertDoesNotThrow(() -> consumer.commitAsync(new HashMap<>(), callback));
+        markReconcileAndAutoCommitCompleteForPollEvent();
         assertMockCommitCallbackInvoked(() -> consumer.poll(Duration.ZERO),
             callback,
             null);
@@ -1399,6 +1405,7 @@ public class AsyncKafkaConsumerTest {
             backgroundEventQueue.add(e);
         }
 
+        markReconcileAndAutoCommitCompleteForPollEvent();
         // This will trigger the background event queue to process our background event message.
         // If any error is happening inside the rebalance callbacks, we expect the first exception to be thrown from poll.
         if (expectedException.isPresent()) {
@@ -1468,6 +1475,7 @@ public class AsyncKafkaConsumerTest {
         backgroundEventQueue.add(errorEvent);
         completeAssignmentChangeEventSuccessfully();
         consumer.assign(singletonList(new TopicPartition("topic", 0)));
+        markReconcileAndAutoCommitCompleteForPollEvent();
         final KafkaException exception = assertThrows(KafkaException.class, () -> consumer.poll(Duration.ZERO));
 
         assertEquals(expectedException.getMessage(), exception.getMessage());
@@ -1486,6 +1494,7 @@ public class AsyncKafkaConsumerTest {
         backgroundEventQueue.add(errorEvent2);
         completeAssignmentChangeEventSuccessfully();
         consumer.assign(singletonList(new TopicPartition("topic", 0)));
+        markReconcileAndAutoCommitCompleteForPollEvent();
         final KafkaException exception = assertThrows(KafkaException.class, () -> consumer.poll(Duration.ZERO));
 
         assertEquals(expectedException1.getMessage(), exception.getMessage());
@@ -1571,8 +1580,9 @@ public class AsyncKafkaConsumerTest {
 
         completeTopicSubscriptionChangeEventSuccessfully();
         consumer.subscribe(singletonList("topic1"));
+        markReconcileAndAutoCommitCompleteForPollEvent();
         consumer.poll(Duration.ofMillis(100));
-        verify(applicationEventHandler).addAndGet(any(PollEvent.class));
+        verify(applicationEventHandler).add(any(PollEvent.class));
         verify(applicationEventHandler).add(any(CreateFetchRequestsEvent.class));
     }
 
@@ -1589,7 +1599,7 @@ public class AsyncKafkaConsumerTest {
 
         completeAssignmentChangeEventSuccessfully();
         consumer.assign(singleton(new TopicPartition("t1", 1)));
-
+        markReconcileAndAutoCommitCompleteForPollEvent();
         consumer.poll(Duration.ZERO);
 
         verify(applicationEventHandler, atLeast(1))
@@ -1626,6 +1636,7 @@ public class AsyncKafkaConsumerTest {
         ).when(fetchCollector).collectFetch(any(FetchBuffer.class));
         when(applicationEventHandler.addAndGet(any(CheckAndUpdatePositionsEvent.class))).thenReturn(true);
 
+        markReconcileAndAutoCommitCompleteForPollEvent();
         // And then poll for up to 10000ms, which should return 2 records without timing out
         ConsumerRecords<?, ?> returnedRecords = consumer.poll(Duration.ofMillis(10000));
         assertEquals(2, returnedRecords.count());
@@ -1729,6 +1740,7 @@ public class AsyncKafkaConsumerTest {
         // interrupt the thread and call poll
         try {
             Thread.currentThread().interrupt();
+            markReconcileAndAutoCommitCompleteForPollEvent();
             assertThrows(InterruptException.class, () -> consumer.poll(Duration.ZERO));
         } finally {
             // clear interrupted state again since this thread may be reused by JUnit
@@ -1760,6 +1772,7 @@ public class AsyncKafkaConsumerTest {
         completeTopicSubscriptionChangeEventSuccessfully();
         consumer.subscribe(Collections.singletonList("topic"));
         when(applicationEventHandler.addAndGet(any(CheckAndUpdatePositionsEvent.class))).thenReturn(true);
+        markReconcileAndAutoCommitCompleteForPollEvent();
         consumer.poll(Duration.ZERO);
         verify(backgroundEventReaper).reap(time.milliseconds());
     }
@@ -1822,6 +1835,7 @@ public class AsyncKafkaConsumerTest {
         completeUnsubscribeApplicationEventSuccessfully();
 
         consumer.assign(singleton(new TopicPartition("topic1", 0)));
+        markReconcileAndAutoCommitCompleteForPollEvent();
         consumer.poll(Duration.ZERO);
         verify(applicationEventHandler, never()).addAndGet(any(UpdatePatternSubscriptionEvent.class));
 
@@ -2110,5 +2124,13 @@ public class AsyncKafkaConsumerTest {
             event.markOffsetsReady();
             return null;
         }).when(applicationEventHandler).add(ArgumentMatchers.isA(CommitEvent.class));
+    }
+
+    private void markReconcileAndAutoCommitCompleteForPollEvent() {
+        doAnswer(invocation -> {
+            PollEvent event = invocation.getArgument(0);
+            event.markReconcileAndAutoCommitComplete();
+            return null;
+        }).when(applicationEventHandler).add(ArgumentMatchers.isA(PollEvent.class));
     }
 }
