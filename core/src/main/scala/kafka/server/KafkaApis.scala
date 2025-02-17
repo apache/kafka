@@ -235,6 +235,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.DELETE_SHARE_GROUP_STATE => handleDeleteShareGroupStateRequest(request)
         case ApiKeys.READ_SHARE_GROUP_STATE_SUMMARY => handleReadShareGroupStateSummaryRequest(request)
         case ApiKeys.DESCRIBE_SHARE_GROUP_OFFSETS => handleDescribeShareGroupOffsetsRequest(request)
+        case ApiKeys.ALTER_SHARE_GROUP_OFFSETS => handleAlterShareGroupOffsetsRequest(request)
         case _ => throw new IllegalStateException(s"No handler for request api key ${request.header.apiKey}")
       }
     } catch {
@@ -3109,7 +3110,14 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleReadShareGroupStateRequest(request: RequestChannel.Request): CompletableFuture[Unit] = {
     val readShareGroupStateRequest = request.body[ReadShareGroupStateRequest]
 
-    authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
+    if (!authorizeClusterOperation(request, CLUSTER_ACTION)) {
+      requestHelper.sendMaybeThrottle(request, new ReadShareGroupStateResponse(
+        ReadShareGroupStateResponse.toGlobalErrorResponse(
+          readShareGroupStateRequest.data(),
+          Errors.CLUSTER_AUTHORIZATION_FAILED
+        )))
+      return CompletableFuture.completedFuture[Unit](())
+    }
 
     shareCoordinator match {
       case None => requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
@@ -3128,19 +3136,26 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleWriteShareGroupStateRequest(request: RequestChannel.Request): CompletableFuture[Unit] = {
-    val writeShareRequest = request.body[WriteShareGroupStateRequest]
+    val writeShareGroupStateRequest = request.body[WriteShareGroupStateRequest]
 
-    authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
+    if (!authorizeClusterOperation(request, CLUSTER_ACTION)) {
+      requestHelper.sendMaybeThrottle(request, new WriteShareGroupStateResponse(
+        WriteShareGroupStateResponse.toGlobalErrorResponse(
+          writeShareGroupStateRequest.data(),
+          Errors.CLUSTER_AUTHORIZATION_FAILED
+        )))
+      return CompletableFuture.completedFuture[Unit](())
+    }
 
     shareCoordinator match {
       case None => requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-        writeShareRequest.getErrorResponse(requestThrottleMs,
+        writeShareGroupStateRequest.getErrorResponse(requestThrottleMs,
           new ApiException("Share coordinator is not enabled.")))
         CompletableFuture.completedFuture[Unit](())
-      case Some(coordinator) => coordinator.writeState(request.context, writeShareRequest.data)
+      case Some(coordinator) => coordinator.writeState(request.context, writeShareGroupStateRequest.data)
         .handle[Unit] { (response, exception) =>
           if (exception != null) {
-            requestHelper.sendMaybeThrottle(request, writeShareRequest.getErrorResponse(exception))
+            requestHelper.sendMaybeThrottle(request, writeShareGroupStateRequest.getErrorResponse(exception))
           } else {
             requestHelper.sendMaybeThrottle(request, new WriteShareGroupStateResponse(response))
           }
@@ -3148,14 +3163,23 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
   }
 
-  def handleDeleteShareGroupStateRequest(request: RequestChannel.Request): Unit = {
+  def handleDeleteShareGroupStateRequest(request: RequestChannel.Request): CompletableFuture[Unit] = {
     val deleteShareGroupStateRequest = request.body[DeleteShareGroupStateRequest]
-    authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
+
+    if (!authorizeClusterOperation(request, CLUSTER_ACTION)) {
+      requestHelper.sendMaybeThrottle(request, new DeleteShareGroupStateResponse(
+        DeleteShareGroupStateResponse.toGlobalErrorResponse(
+          deleteShareGroupStateRequest.data(),
+          Errors.CLUSTER_AUTHORIZATION_FAILED
+        )))
+      return CompletableFuture.completedFuture[Unit](())
+    }
 
     shareCoordinator match {
       case None => requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
         deleteShareGroupStateRequest.getErrorResponse(requestThrottleMs,
           new ApiException("Share coordinator is not enabled.")))
+        CompletableFuture.completedFuture[Unit](())
 
       case Some(coordinator) => coordinator.deleteState(request.context, deleteShareGroupStateRequest.data)
         .handle[Unit] { (response, exception) =>
@@ -3168,9 +3192,17 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
   }
 
-  def handleReadShareGroupStateSummaryRequest(request: RequestChannel.Request): Unit = {
+  def handleReadShareGroupStateSummaryRequest(request: RequestChannel.Request): CompletableFuture[Unit] = {
     val readShareGroupStateSummaryRequest = request.body[ReadShareGroupStateSummaryRequest]
-    authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
+
+    if (!authorizeClusterOperation(request, CLUSTER_ACTION)) {
+      requestHelper.sendMaybeThrottle(request, new ReadShareGroupStateSummaryResponse(
+        ReadShareGroupStateSummaryResponse.toGlobalErrorResponse(
+          readShareGroupStateSummaryRequest.data(),
+          Errors.CLUSTER_AUTHORIZATION_FAILED
+        )))
+      return CompletableFuture.completedFuture[Unit](())
+    }
 
     shareCoordinator match {
       case None => requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
@@ -3190,28 +3222,58 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def handleDescribeShareGroupOffsetsRequest(request: RequestChannel.Request): Unit = {
     val describeShareGroupOffsetsRequest = request.body[DescribeShareGroupOffsetsRequest]
+    val groups = describeShareGroupOffsetsRequest.groups()
 
-    if (!isShareGroupProtocolEnabled) {
-      requestHelper.sendMaybeThrottle(request, describeShareGroupOffsetsRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
-      CompletableFuture.completedFuture[Unit](())
-    } else if (!authHelper.authorize(request.context, READ, GROUP, describeShareGroupOffsetsRequest.data.groupId)) {
-      requestHelper.sendMaybeThrottle(request, describeShareGroupOffsetsRequest.getErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED.exception))
-      CompletableFuture.completedFuture[Unit](())
-    } else {
-      groupCoordinator.describeShareGroupOffsets(
-        request.context,
-        describeShareGroupOffsetsRequest.data,
-      ).handle[Unit] { (response, exception) =>
-        if (exception != null) {
-          requestHelper.sendMaybeThrottle(request, describeShareGroupOffsetsRequest.getErrorResponse(exception))
-        } else {
-          requestHelper.sendMaybeThrottle(
-            request,
-            new DescribeShareGroupOffsetsResponse(response)
-          )
-        }
+    val futures = new mutable.ArrayBuffer[CompletableFuture[DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup]](groups.size)
+    groups.forEach { groupDescribeOffsets =>
+      if (!isShareGroupProtocolEnabled) {
+        futures += CompletableFuture.completedFuture(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup()
+          .setGroupId(groupDescribeOffsets.groupId)
+          .setErrorCode(Errors.UNSUPPORTED_VERSION.code))
+      } else if (!authHelper.authorize(request.context, READ, GROUP, groupDescribeOffsets.groupId)) {
+        futures += CompletableFuture.completedFuture(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup()
+          .setGroupId(groupDescribeOffsets.groupId)
+          .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code))
+      } else if (groupDescribeOffsets.topics.isEmpty) {
+        futures += CompletableFuture.completedFuture(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup()
+          .setGroupId(groupDescribeOffsets.groupId))
+      } else {
+        futures += describeShareGroupOffsetsForGroup(
+          request.context,
+          groupDescribeOffsets
+        )
       }
     }
+
+    CompletableFuture.allOf(futures.toArray: _*).handle[Unit] { (_, _) =>
+      val groupResponses = new ArrayBuffer[DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup](futures.size)
+      val responseData = new DescribeShareGroupOffsetsResponseData().setGroups(groupResponses.asJava)
+      futures.foreach(future => groupResponses += future.join)
+      requestHelper.sendMaybeThrottle(request, new DescribeShareGroupOffsetsResponse(responseData))
+    }
+  }
+
+  private def describeShareGroupOffsetsForGroup(requestContext: RequestContext,
+    groupDescribeOffsetsRequest: DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup
+  ): CompletableFuture[DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup] = {
+    groupCoordinator.describeShareGroupOffsets(
+      requestContext,
+      groupDescribeOffsetsRequest
+    ).handle[DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup] { (groupDescribeOffsetsResponse, exception) =>
+      if (exception != null) {
+        new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup()
+          .setGroupId(groupDescribeOffsetsRequest.groupId)
+          .setErrorCode(Errors.forException(exception).code)
+      } else {
+        groupDescribeOffsetsResponse
+      }
+    }
+  }
+
+  def handleAlterShareGroupOffsetsRequest(request: RequestChannel.Request): Unit = {
+    val alterShareGroupOffsetsRequest = request.body[AlterShareGroupOffsetsRequest]
+    requestHelper.sendMaybeThrottle(request, alterShareGroupOffsetsRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+    CompletableFuture.completedFuture[Unit](())
   }
 
   // Visible for Testing
@@ -3481,6 +3543,10 @@ class KafkaApis(val requestChannel: RequestChannel,
       request.messageConversionsTimeNanos = conversionStats.conversionTimeNanos
     }
     request.temporaryMemoryBytes = conversionStats.temporaryMemoryBytes
+  }
+
+  def authorizeClusterOperation(request: RequestChannel.Request, operation: AclOperation): Boolean = {
+    authHelper.authorize(request.context, operation, CLUSTER, CLUSTER_NAME)
   }
 }
 

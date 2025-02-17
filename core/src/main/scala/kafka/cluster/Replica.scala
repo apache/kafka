@@ -17,12 +17,11 @@
 
 package kafka.cluster
 
-import kafka.log.UnifiedLog
 import kafka.server.MetadataCache
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException
-import org.apache.kafka.storage.internals.log.LogOffsetMetadata
+import org.apache.kafka.storage.internals.log.{LogOffsetMetadata, UnifiedLog}
 
 import java.util.concurrent.atomic.AtomicReference
 
@@ -75,7 +74,7 @@ case class ReplicaState(
 object ReplicaState {
   val Empty: ReplicaState = ReplicaState(
     logEndOffsetMetadata = LogOffsetMetadata.UNKNOWN_OFFSET_METADATA,
-    logStartOffset = UnifiedLog.UnknownOffset,
+    logStartOffset = UnifiedLog.UNKNOWN_OFFSET,
     lastFetchLeaderLogEndOffset = 0L,
     lastFetchTimeMs = 0L,
     lastCaughtUpTimeMs = 0L,
@@ -157,9 +156,9 @@ class Replica(val brokerId: Int, val topicPartition: TopicPartition, val metadat
 
       if (isNewLeader) {
         ReplicaState(
-          logStartOffset = UnifiedLog.UnknownOffset,
+          logStartOffset = UnifiedLog.UNKNOWN_OFFSET,
           logEndOffsetMetadata = LogOffsetMetadata.UNKNOWN_OFFSET_METADATA,
-          lastFetchLeaderLogEndOffset = UnifiedLog.UnknownOffset,
+          lastFetchLeaderLogEndOffset = UnifiedLog.UNKNOWN_OFFSET,
           lastFetchTimeMs = 0L,
           lastCaughtUpTimeMs = lastCaughtUpTimeMs,
           brokerEpoch = Option.empty

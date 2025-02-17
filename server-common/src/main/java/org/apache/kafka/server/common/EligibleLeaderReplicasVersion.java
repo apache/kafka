@@ -65,10 +65,6 @@ public enum EligibleLeaderReplicasVersion implements FeatureVersion {
         return dependencies;
     }
 
-    public boolean isEligibleLeaderReplicasFeatureEnabeld() {
-        return featureLevel >= ELRV_1.featureLevel;
-    }
-
     public static EligibleLeaderReplicasVersion fromFeatureLevel(short version) {
         switch (version) {
             case 0:

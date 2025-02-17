@@ -19,6 +19,7 @@ package org.apache.kafka.connect.runtime;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
@@ -71,10 +72,10 @@ class WorkerSourceTask extends AbstractWorkerSourceTask {
                             SourceTask task,
                             TaskStatus.Listener statusListener,
                             TargetState initialState,
-                            Converter keyConverter,
-                            Converter valueConverter,
+                            Plugin<Converter> keyConverterPlugin,
+                            Plugin<Converter> valueConverterPlugin,
                             ErrorHandlingMetrics errorMetrics,
-                            HeaderConverter headerConverter,
+                            Plugin<HeaderConverter> headerConverterPlugin,
                             TransformationChain<SourceRecord, SourceRecord> transformationChain,
                             Producer<byte[], byte[]> producer,
                             TopicAdmin admin,
@@ -92,8 +93,8 @@ class WorkerSourceTask extends AbstractWorkerSourceTask {
                             Executor closeExecutor,
                             Supplier<List<ErrorReporter<SourceRecord>>> errorReportersSupplier) {
 
-        super(id, task, statusListener, initialState, keyConverter, valueConverter, headerConverter, transformationChain,
-                new WorkerSourceTaskContext(offsetReader, id, configState, null), producer,
+        super(id, task, statusListener, initialState, configState, keyConverterPlugin, valueConverterPlugin, headerConverterPlugin, transformationChain,
+                null, producer,
                 admin, topicGroups, offsetReader, offsetWriter, offsetStore, workerConfig, connectMetrics, errorMetrics, loader,
                 time, retryWithToleranceOperator, statusBackingStore, closeExecutor, errorReportersSupplier);
 

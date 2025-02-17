@@ -105,13 +105,6 @@ object DynamicBrokerConfig {
 
   private val ListenerConfigRegex = """listener\.name\.[^.]*\.(.*)""".r
 
-  private val DynamicPasswordConfigs = {
-    val passwordConfigs = KafkaConfig.configKeys.filter(_._2.`type` == ConfigDef.Type.PASSWORD).keySet
-    AllDynamicConfigs.intersect(passwordConfigs)
-  }
-
-  def isPasswordConfig(name: String): Boolean = DynamicBrokerConfig.DynamicPasswordConfigs.exists(name.endsWith)
-
   def brokerConfigSynonyms(name: String, matchListenerOverride: Boolean): List[String] = {
     name match {
       case ServerLogConfigs.LOG_ROLL_TIME_MILLIS_CONFIG | ServerLogConfigs.LOG_ROLL_TIME_HOURS_CONFIG =>

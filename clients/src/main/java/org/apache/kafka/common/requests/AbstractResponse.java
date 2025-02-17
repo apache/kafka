@@ -285,6 +285,8 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
                 return StreamsGroupDescribeResponse.parse(responseBuffer, version);
             case DESCRIBE_SHARE_GROUP_OFFSETS:
                 return DescribeShareGroupOffsetsResponse.parse(responseBuffer, version);
+            case ALTER_SHARE_GROUP_OFFSETS:
+                return AlterShareGroupOffsetsResponse.parse(responseBuffer, version);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseResponse`, the " +
                         "code should be updated to do so.", apiKey));

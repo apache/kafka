@@ -18,7 +18,7 @@
 package org.apache.kafka.image;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.image.node.AclsImageByIdNode;
+import org.apache.kafka.image.node.AclsImageNode;
 import org.apache.kafka.image.writer.ImageWriter;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.metadata.authorizer.StandardAcl;
@@ -75,6 +75,6 @@ public final class AclsImage {
 
     @Override
     public String toString() {
-        return new AclsImageByIdNode(this).stringify();
+        return new AclsImageNode(this).stringify();
     }
 }

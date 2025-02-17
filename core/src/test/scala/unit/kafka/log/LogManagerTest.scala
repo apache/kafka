@@ -44,7 +44,7 @@ import java.util.{Collections, Optional, OptionalLong, Properties}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.storage.log.FetchIsolation
 import org.apache.kafka.server.util.{FileLock, KafkaScheduler, MockTime, Scheduler}
-import org.apache.kafka.storage.internals.log.{CleanerConfig, FetchDataInfo, LogConfig, LogDirFailureChannel, LogStartOffsetIncrementReason, ProducerStateManagerConfig, RemoteIndexCache}
+import org.apache.kafka.storage.internals.log.{CleanerConfig, FetchDataInfo, LogConfig, LogDirFailureChannel, LogMetricNames, LogStartOffsetIncrementReason, ProducerStateManagerConfig, RemoteIndexCache, UnifiedLog => JUnifiedLog}
 import org.apache.kafka.storage.internals.checkpoint.{CleanShutdownFileHandler, OffsetCheckpointFile}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.function.Executable
@@ -540,7 +540,7 @@ class LogManagerTest {
     assertEquals(1, invokedCount)
     assertTrue(
       logDir.listFiles().toSet
-      .exists(f => f.getName.startsWith(testTopic) && f.getName.endsWith(UnifiedLog.StrayDirSuffix))
+      .exists(f => f.getName.startsWith(testTopic) && f.getName.endsWith(JUnifiedLog.STRAY_DIR_SUFFIX))
     )
   }
 
@@ -952,7 +952,7 @@ class LogManagerTest {
       val dir: File = invocation.getArgument(0)
       val topicConfigOverrides: mutable.Map[String, LogConfig] = invocation.getArgument(5)
 
-      val topicPartition = UnifiedLog.parseTopicPartitionName(dir)
+      val topicPartition = JUnifiedLog.parseTopicPartitionName(dir)
       val config = topicConfigOverrides.getOrElse(topicPartition.topic, logConfig)
 
       UnifiedLog(
@@ -1028,7 +1028,7 @@ class LogManagerTest {
     val metricTag = s"topic=${tp.topic},partition=${tp.partition}"
 
     def verifyMetrics(): Unit = {
-      assertEquals(LogMetricNames.allMetricNames.size, logMetrics.size)
+      assertEquals(LogMetricNames.ALL_METRIC_NAMES.size, logMetrics.size)
       logMetrics.foreach { metric =>
         assertTrue(metric.getMBeanName.contains(metricTag))
       }
@@ -1068,7 +1068,7 @@ class LogManagerTest {
     val metricTag = s"topic=${tp.topic},partition=${tp.partition}"
 
     def verifyMetrics(logCount: Int): Unit = {
-      assertEquals(LogMetricNames.allMetricNames.size * logCount, logMetrics.size)
+      assertEquals(LogMetricNames.ALL_METRIC_NAMES.size * logCount, logMetrics.size)
       logMetrics.foreach { metric =>
         assertTrue(metric.getMBeanName.contains(metricTag))
       }

@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.runtime;
 
 
+import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.transforms.Transformation;
@@ -32,44 +33,44 @@ public class TransformationStage<R extends ConnectRecord<R>> implements AutoClos
 
     static final String PREDICATE_CONFIG = "predicate";
     static final String NEGATE_CONFIG = "negate";
-    private final Predicate<R> predicate;
-    private final Transformation<R> transformation;
+    private final Plugin<Predicate<R>> predicatePlugin;
+    private final Plugin<Transformation<R>> transformationPlugin;
     private final boolean negate;
 
-    TransformationStage(Transformation<R> transformation) {
-        this(null, false, transformation);
+    TransformationStage(Plugin<Transformation<R>> transformationPlugin) {
+        this(null, false, transformationPlugin);
     }
 
-    TransformationStage(Predicate<R> predicate, boolean negate, Transformation<R> transformation) {
-        this.predicate = predicate;
+    TransformationStage(Plugin<Predicate<R>> predicatePlugin, boolean negate, Plugin<Transformation<R>> transformationPlugin) {
+        this.predicatePlugin = predicatePlugin;
         this.negate = negate;
-        this.transformation = transformation;
+        this.transformationPlugin = transformationPlugin;
     }
 
     public Class<? extends Transformation<R>> transformClass() {
         @SuppressWarnings("unchecked")
-        Class<? extends Transformation<R>> transformClass = (Class<? extends Transformation<R>>) transformation.getClass();
+        Class<? extends Transformation<R>> transformClass = (Class<? extends Transformation<R>>) transformationPlugin.get().getClass();
         return transformClass;
     }
 
     public R apply(R record) {
-        if (predicate == null || negate ^ predicate.test(record)) {
-            return transformation.apply(record);
+        if (predicatePlugin == null || predicatePlugin.get() == null || negate ^ predicatePlugin.get().test(record)) {
+            return transformationPlugin.get().apply(record);
         }
         return record;
     }
 
     @Override
     public void close() {
-        Utils.closeQuietly(transformation, "transformation");
-        Utils.closeQuietly(predicate, "predicate");
+        Utils.closeQuietly(transformationPlugin, "transformation");
+        Utils.closeQuietly(predicatePlugin, "predicate");
     }
 
     @Override
     public String toString() {
         return "TransformationStage{" +
-                "predicate=" + predicate +
-                ", transformation=" + transformation +
+                "predicate=" + predicatePlugin.get() +
+                ", transformation=" + transformationPlugin.get() +
                 ", negate=" + negate +
                 '}';
     }
