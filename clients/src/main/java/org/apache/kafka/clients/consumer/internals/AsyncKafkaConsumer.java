@@ -751,10 +751,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 PollEvent event = new PollEvent(timer.currentTimeMs());
                 // Make sure to let the background thread know that we are still polling.
                 // This will trigger async auto-commits of consumed positions when hitting
-                // the interval time or on partition revocation
+                // the interval time or reconciling new assignments
                 applicationEventHandler.add(event);
-                // Wait for reconciliation and auto-commit to complete to ensure all commit requests are processed
-                // before proceeding with fetching new records
+                // Wait for reconciliation and auto-commit to be triggered, to ensure all commit requests
+                // retrieve the positions to commit before proceeding with fetching new records
                 ConsumerUtils.getResult(event.reconcileAndAutoCommit());
 
                 // We must not allow wake-ups between polling for fetches and returning the records.

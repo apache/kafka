@@ -171,8 +171,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
     }
 
     /**
-     * Poll for the {@link OffsetFetchRequest} and {@link OffsetCommitRequest} request if there's any. The function will
-     * also try to autocommit the offsets, if feature is enabled.
+     * Poll for the {@link OffsetFetchRequest} and {@link OffsetCommitRequest} request if there's any.
      */
     @Override
     public NetworkClientDelegate.PollResult poll(final long currentTimeMs) {

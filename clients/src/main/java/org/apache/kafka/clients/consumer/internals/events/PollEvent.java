@@ -28,8 +28,8 @@ public class PollEvent extends ApplicationEvent {
      * This future is completed when all commit request generation points have
      * been passed, including:
      * <ul>
-     *   <li>auto-commit on revocation</li>
-     *   <li>auto-commit</li>
+     *   <li>auto-commit on rebalance</li>
+     *   <li>auto-commit on the interval</li>
      * </ul>
      * Once completed, it signals that it's safe for the consumer to proceed with
      * fetching new records.
