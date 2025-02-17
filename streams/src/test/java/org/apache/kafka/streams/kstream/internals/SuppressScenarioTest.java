@@ -811,7 +811,7 @@ public class SuppressScenarioTest {
     }
 
     @Test
-    public void shouldWorkWithCogrouped() {
+    public void shouldWorkWithCogroupedTimeWindows() {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KGroupedStream<String, String> stream1 = builder.stream("one", Consumed.with(Serdes.String(), Serdes.String())).groupByKey(Grouped.with(Serdes.String(), Serdes.String()));
@@ -819,6 +819,32 @@ public class SuppressScenarioTest {
         final KStream<Windowed<String>, Object> cogrouped = stream1.cogroup((key, value, aggregate) -> aggregate + value).cogroup(stream2, (key, value, aggregate) -> aggregate + value)
             .windowedBy(TimeWindows.ofSizeWithNoGrace(Duration.ofMinutes(15)))
             .aggregate(() -> "", Named.as("test"), Materialized.as("store"))
+            .suppress(Suppressed.untilWindowCloses(unbounded()))
+            .toStream();
+    }
+
+    @Test
+    public void shouldWorkWithCogroupedSlidingWindows() {
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final KGroupedStream<String, String> stream1 = builder.stream("one", Consumed.with(Serdes.String(), Serdes.String())).groupByKey(Grouped.with(Serdes.String(), Serdes.String()));
+        final KGroupedStream<String, String> stream2 = builder.stream("two", Consumed.with(Serdes.String(), Serdes.String())).groupByKey(Grouped.with(Serdes.String(), Serdes.String()));
+        final KStream<Windowed<String>, Object> cogrouped = stream1.cogroup((key, value, aggregate) -> aggregate + value).cogroup(stream2, (key, value, aggregate) -> aggregate + value)
+            .windowedBy(SlidingWindows.ofTimeDifferenceWithNoGrace(Duration.ofMinutes(15)))
+            .aggregate(() -> "", Named.as("test"), Materialized.as("store"))
+            .suppress(Suppressed.untilWindowCloses(unbounded()))
+            .toStream();
+    }
+
+    @Test
+    public void shouldWorkWithCogroupedSessionWindows() {
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final KGroupedStream<String, String> stream1 = builder.stream("one", Consumed.with(Serdes.String(), Serdes.String())).groupByKey(Grouped.with(Serdes.String(), Serdes.String()));
+        final KGroupedStream<String, String> stream2 = builder.stream("two", Consumed.with(Serdes.String(), Serdes.String())).groupByKey(Grouped.with(Serdes.String(), Serdes.String()));
+        final KStream<Windowed<String>, Object> cogrouped = stream1.cogroup((key, value, aggregate) -> aggregate + value).cogroup(stream2, (key, value, aggregate) -> aggregate + value)
+            .windowedBy(SessionWindows.ofInactivityGapAndGrace(Duration.ofMinutes(15), Duration.ofMinutes(5)))
+            .aggregate(() -> "", (k, v1, v2) -> "", Named.as("test"), Materialized.as("store"))
             .suppress(Suppressed.untilWindowCloses(unbounded()))
             .toStream();
     }

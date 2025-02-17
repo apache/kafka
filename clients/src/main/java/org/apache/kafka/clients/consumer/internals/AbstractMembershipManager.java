@@ -159,7 +159,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
     /**
      * If the member is currently leaving the group after a call to {@link #leaveGroup()} or
      * {@link #leaveGroupOnClose()}, this will have a future that will complete when the ongoing leave operation
-     * completes (callbacks executed and heartbeat request to leave is sent out). This will be empty is the
+     * completes (callbacks executed and heartbeat request to leave is sent out). This will be empty if the
      * member is not leaving.
      */
     private Optional<CompletableFuture<Void>> leaveGroupInProgress = Optional.empty();

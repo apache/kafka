@@ -69,6 +69,7 @@ import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData.OngoingPartitionReassignment;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData.OngoingTopicReassignment;
 import org.apache.kafka.common.metadata.BrokerRegistrationChangeRecord;
+import org.apache.kafka.common.metadata.ClearElrRecord;
 import org.apache.kafka.common.metadata.FenceBrokerRecord;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
@@ -95,7 +96,6 @@ import org.apache.kafka.metadata.placement.PlacementSpec;
 import org.apache.kafka.metadata.placement.TopicAssignment;
 import org.apache.kafka.metadata.placement.UsableBroker;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
-import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
 import org.apache.kafka.server.common.TopicIdPartition;
 import org.apache.kafka.server.mutable.BoundedList;
 import org.apache.kafka.server.policy.CreateTopicPolicy;
@@ -572,6 +572,56 @@ public class ReplicationControlManager {
         log.info("Replayed RemoveTopicRecord for topic {} with ID {}.", topic.name, record.topicId());
     }
 
+    public void replay(ClearElrRecord record) {
+        if (record.topicName().isEmpty()) {
+            replayClearAllElrs();
+        } else {
+            replayClearTopicElrs(record.topicName());
+        }
+
+    }
+
+    void replayClearAllElrs() {
+        long numRemoved = 0;
+        for (TopicControlInfo topic : topics.values()) {
+            numRemoved += removeTopicElrs(topic);
+        }
+        log.info("Removed ELRs from {} partitions in all topics.", numRemoved);
+    }
+
+    void replayClearTopicElrs(String topicName) {
+        Uuid topicId = topicsByName.get(topicName);
+        if (topicId == null) {
+            throw new RuntimeException("Unable to find a topic named " + topicName +
+                    " in order to clear its ELRs.");
+        }
+        TopicControlInfo topic = topics.get(topicId);
+        if (topic == null) {
+            throw new RuntimeException("Unable to find a topic with ID " + topicId +
+                    " in order to clear its ELRs.");
+        }
+        int numRemoved = removeTopicElrs(topic);
+        log.info("Removed ELRs from {} partitions of topic {}.", numRemoved, topicName);
+    }
+
+    int removeTopicElrs(TopicControlInfo topic) {
+        int numRemoved = 0;
+        List<Integer> partitionIds = new ArrayList<>(topic.parts.keySet());
+        for (int partitionId : partitionIds) {
+            PartitionRegistration partition = topic.parts.get(partitionId);
+            if (partition.elr.length != 0 || partition.lastKnownElr.length != 0) {
+                topic.parts.put(partitionId, partition.merge(
+                    new PartitionChangeRecord().
+                        setPartitionId(partitionId).
+                        setTopicId(topic.id).
+                        setEligibleLeaderReplicas(Collections.emptyList()).
+                        setLastKnownElr(Collections.emptyList())));
+                numRemoved++;
+            }
+        }
+        return numRemoved;
+    }
+
     ControllerResult<CreateTopicsResponseData> createTopics(
         ControllerRequestContext context,
         CreateTopicsRequestData request,
@@ -798,8 +848,9 @@ public class ReplicationControlManager {
             int partitionIndex = partEntry.getKey();
             PartitionRegistration info = partEntry.getValue();
             records.add(info.toRecord(topicId, partitionIndex, new ImageWriterOptions.Builder().
-                    setMetadataVersion(featureControl.metadataVersion()).
-                    build()));
+                setMetadataVersion(featureControl.metadataVersion()).
+                setEligibleLeaderReplicasEnabled(featureControl.isElrFeatureEnabled()).
+                build()));
         }
         return ApiError.NONE;
     }
@@ -1015,11 +1066,6 @@ public class ReplicationControlManager {
         return imbalancedPartitions;
     }
 
-    boolean isElrEnabled() {
-        return featureControl.metadataVersion().isElrSupported() && featureControl.latestFinalizedFeatures().
-            versionOrDefault(EligibleLeaderReplicasVersion.FEATURE_NAME, (short) 0) >= EligibleLeaderReplicasVersion.ELRV_1.featureLevel();
-    }
-
     ControllerResult<AlterPartitionResponseData> alterPartition(
         ControllerRequestContext context,
         AlterPartitionRequestData request
@@ -1085,7 +1131,7 @@ public class ReplicationControlManager {
                     featureControl.metadataVersion(),
                     getTopicEffectiveMinIsr(topic.name)
                 )
-                    .setEligibleLeaderReplicasEnabled(isElrEnabled());
+                    .setEligibleLeaderReplicasEnabled(featureControl.isElrFeatureEnabled());
                 if (configurationControl.uncleanLeaderElectionEnabledForTopic(topic.name())) {
                     builder.setElection(PartitionChangeBuilder.Election.UNCLEAN);
                 }
@@ -1416,21 +1462,22 @@ public class ReplicationControlManager {
     }
 
     /**
-     * Create partition change records to remove replicas from any ISR or ELR for brokers doing unclean shutdown.
+     * Create partition change records to remove replicas from any ISR or ELR for brokers when the shutdown is detected.
      *
-     * @param brokerId      The broker id.
-     * @param records       The record list to append to.
+     * @param brokerId           The broker id to be shut down.
+     * @param isCleanShutdown    Whether the broker has a clean shutdown.
+     * @param records            The record list to append to.
      */
-    void handleBrokerUncleanShutdown(int brokerId, List<ApiMessageAndVersion> records) {
-        if (featureControl.metadataVersion().isElrSupported()) {
+    void handleBrokerShutdown(int brokerId, boolean isCleanShutdown, List<ApiMessageAndVersion> records) {
+        if (featureControl.isElrFeatureEnabled() && !isCleanShutdown) {
             // ELR is enabled, generate unclean shutdown partition change records
             generateLeaderAndIsrUpdates("handleBrokerUncleanShutdown", NO_LEADER, NO_LEADER, brokerId, records,
                 brokersToIsrs.partitionsWithBrokerInIsr(brokerId));
             generateLeaderAndIsrUpdates("handleBrokerUncleanShutdown", NO_LEADER, NO_LEADER, brokerId, records,
                 brokersToElrs.partitionsWithBrokerInElr(brokerId));
         } else {
-            // ELR is not enabled, handle the unclean shutdown as if the broker was fenced
-            generateLeaderAndIsrUpdates("handleBrokerUncleanShutdown", brokerId, NO_LEADER, NO_LEADER, records,
+            // ELR is not enabled or if it is a clean shutdown, handle the shutdown as if the broker was fenced
+            generateLeaderAndIsrUpdates("handleBrokerShutdown", brokerId, NO_LEADER, NO_LEADER, records,
                 brokersToIsrs.partitionsWithBrokerInIsr(brokerId));
         }
     }
@@ -1565,10 +1612,10 @@ public class ReplicationControlManager {
             getTopicEffectiveMinIsr(topic)
         )
             .setElection(election)
-            .setEligibleLeaderReplicasEnabled(isElrEnabled())
+            .setEligibleLeaderReplicasEnabled(featureControl.isElrFeatureEnabled())
             .setDefaultDirProvider(clusterDescriber)
             .build();
-        if (!record.isPresent()) {
+        if (record.isEmpty()) {
             if (electionType == ElectionType.PREFERRED) {
                 return new ApiError(Errors.PREFERRED_LEADER_NOT_AVAILABLE);
             } else {
@@ -1649,7 +1696,7 @@ public class ReplicationControlManager {
     ControllerResult<Boolean> maybeFenceOneStaleBroker() {
         BrokerHeartbeatManager heartbeatManager = clusterControl.heartbeatManager();
         Optional<BrokerIdAndEpoch> idAndEpoch = heartbeatManager.tracker().maybeRemoveExpired();
-        if (!idAndEpoch.isPresent()) {
+        if (idAndEpoch.isEmpty()) {
             log.debug("No stale brokers found.");
             return ControllerResult.of(Collections.emptyList(), false);
         }
@@ -1729,7 +1776,7 @@ public class ReplicationControlManager {
                 getTopicEffectiveMinIsr(topic.name)
             )
                 .setElection(PartitionChangeBuilder.Election.PREFERRED)
-                .setEligibleLeaderReplicasEnabled(isElrEnabled())
+                .setEligibleLeaderReplicasEnabled(featureControl.isElrFeatureEnabled())
                 .setDefaultDirProvider(clusterDescriber)
                 .build().ifPresent(records::add);
         }
@@ -1896,6 +1943,7 @@ public class ReplicationControlManager {
             records.add(buildPartitionRegistration(partitionAssignment, isr)
                 .toRecord(topicId, partitionId, new ImageWriterOptions.Builder().
                         setMetadataVersion(featureControl.metadataVersion()).
+                        setEligibleLeaderReplicasEnabled(featureControl.isElrFeatureEnabled()).
                         build()));
             partitionId++;
         }
@@ -1998,7 +2046,7 @@ public class ReplicationControlManager {
                 featureControl.metadataVersion(),
                 getTopicEffectiveMinIsr(topic.name)
             );
-            builder.setEligibleLeaderReplicasEnabled(isElrEnabled());
+            builder.setEligibleLeaderReplicasEnabled(featureControl.isElrFeatureEnabled());
             if (configurationControl.uncleanLeaderElectionEnabledForTopic(topic.name)) {
                 builder.setElection(PartitionChangeBuilder.Election.UNCLEAN);
             }
@@ -2116,7 +2164,7 @@ public class ReplicationControlManager {
             featureControl.metadataVersion(),
             getTopicEffectiveMinIsr(topicName)
         );
-        builder.setEligibleLeaderReplicasEnabled(isElrEnabled());
+        builder.setEligibleLeaderReplicasEnabled(featureControl.isElrFeatureEnabled());
         if (configurationControl.uncleanLeaderElectionEnabledForTopic(topicName)) {
             builder.setElection(PartitionChangeBuilder.Election.UNCLEAN);
         }
@@ -2177,7 +2225,7 @@ public class ReplicationControlManager {
             featureControl.metadataVersion(),
             getTopicEffectiveMinIsr(topics.get(tp.topicId()).name)
         );
-        builder.setEligibleLeaderReplicasEnabled(isElrEnabled());
+        builder.setEligibleLeaderReplicasEnabled(featureControl.isElrFeatureEnabled());
         if (!reassignment.replicas().equals(currentReplicas)) {
             builder.setTargetReplicas(reassignment.replicas());
         }

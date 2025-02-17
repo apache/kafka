@@ -35,6 +35,8 @@ import org.apache.kafka.clients.admin.AlterPartitionReassignmentsOptions;
 import org.apache.kafka.clients.admin.AlterPartitionReassignmentsResult;
 import org.apache.kafka.clients.admin.AlterReplicaLogDirsOptions;
 import org.apache.kafka.clients.admin.AlterReplicaLogDirsResult;
+import org.apache.kafka.clients.admin.AlterShareGroupOffsetsOptions;
+import org.apache.kafka.clients.admin.AlterShareGroupOffsetsResult;
 import org.apache.kafka.clients.admin.AlterUserScramCredentialsOptions;
 import org.apache.kafka.clients.admin.AlterUserScramCredentialsResult;
 import org.apache.kafka.clients.admin.CreateAclsOptions;
@@ -107,6 +109,9 @@ import org.apache.kafka.clients.admin.ListOffsetsOptions;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
 import org.apache.kafka.clients.admin.ListPartitionReassignmentsOptions;
 import org.apache.kafka.clients.admin.ListPartitionReassignmentsResult;
+import org.apache.kafka.clients.admin.ListShareGroupOffsetsOptions;
+import org.apache.kafka.clients.admin.ListShareGroupOffsetsResult;
+import org.apache.kafka.clients.admin.ListShareGroupOffsetsSpec;
 import org.apache.kafka.clients.admin.ListTopicsOptions;
 import org.apache.kafka.clients.admin.ListTopicsResult;
 import org.apache.kafka.clients.admin.ListTransactionsOptions;
@@ -411,6 +416,16 @@ public class TestingMetricsInterceptingAdminClient extends AdminClient {
     @Override
     public DescribeShareGroupsResult describeShareGroups(final Collection<String> groupIds, final DescribeShareGroupsOptions options) {
         return adminDelegate.describeShareGroups(groupIds, options);
+    }
+
+    @Override
+    public AlterShareGroupOffsetsResult alterShareGroupOffsets(final String groupId, final Map<TopicPartition, Long> offsets, final AlterShareGroupOffsetsOptions options) {
+        return adminDelegate.alterShareGroupOffsets(groupId, offsets, options);
+    }
+
+    @Override
+    public ListShareGroupOffsetsResult listShareGroupOffsets(final Map<String, ListShareGroupOffsetsSpec> groupSpecs, final ListShareGroupOffsetsOptions options) {
+        return adminDelegate.listShareGroupOffsets(groupSpecs, options);
     }
 
     @Override

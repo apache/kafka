@@ -21,20 +21,31 @@ import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
+import org.apache.kafka.clients.consumer.internals.ShareConsumerImpl;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
+import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
+import org.apache.kafka.common.metrics.KafkaMetric;
+import org.apache.kafka.common.metrics.Measurable;
+import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
+import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 
+import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.Test;
+import org.mockito.MockedStatic;
+import org.mockito.Mockito;
+import org.mockito.internal.stubbing.answers.CallsRealMethods;
 
 import java.time.Duration;
 import java.util.AbstractMap;
@@ -46,9 +57,16 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_SHARE_METRIC_GROUP_PREFIX;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.atMostOnce;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.never;
 
 public class KafkaShareConsumerMetricsTest {
     private final String topic = "test";
@@ -157,6 +175,7 @@ public class KafkaShareConsumerMetricsTest {
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
         initMetadata(client, Collections.singletonMap(topic, 1));
+
         KafkaShareConsumer<String, String> consumer = newShareConsumer(time, client, subscription, metadata);
         consumer.subscribe(Collections.singletonList(topic));
         assertTrue(consumerMetricPresent(consumer, "last-poll-seconds-ago"));
@@ -166,6 +185,110 @@ public class KafkaShareConsumerMetricsTest {
         assertFalse(consumerMetricPresent(consumer, "last-poll-seconds-ago"));
         assertFalse(consumerMetricPresent(consumer, "time-between-poll-avg"));
         assertFalse(consumerMetricPresent(consumer, "time-between-poll-max"));
+    }
+
+    @Test
+    public void testRegisteringCustomMetricsDoesntAffectConsumerMetrics() {
+        Time time = new MockTime(1L);
+        ConsumerMetadata metadata = createMetadata(subscription);
+        MockClient client = new MockClient(time, metadata);
+        initMetadata(client, Collections.singletonMap(topic, 1));
+
+        KafkaShareConsumer<String, String> consumer = newShareConsumer(time, client, subscription, metadata);
+        Map<MetricName, KafkaMetric> customMetrics = customMetrics();
+        customMetrics.forEach((name, metric) -> consumer.registerMetricForSubscription(metric));
+
+        Map<MetricName, ? extends Metric> consumerMetrics = consumer.metrics();
+        customMetrics.forEach((name, metric) -> assertFalse(consumerMetrics.containsKey(name)));
+    }
+
+    @Test
+    public void testRegisteringCustomMetricsWithSameNameDoesntAffectConsumerMetrics() {
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
+            appender.setClassLogger(ShareConsumerImpl.class, Level.DEBUG);
+            Time time = new MockTime(1L);
+            ConsumerMetadata metadata = createMetadata(subscription);
+            MockClient client = new MockClient(time, metadata);
+            initMetadata(client, Collections.singletonMap(topic, 1));
+
+            KafkaShareConsumer<String, String> consumer = newShareConsumer(time, client, subscription, metadata);
+            KafkaMetric existingMetricToAdd = (KafkaMetric) consumer.metrics().entrySet().iterator().next().getValue();
+            consumer.registerMetricForSubscription(existingMetricToAdd);
+            final String expectedMessage = String.format("Skipping registration for metric %s. Existing consumer metrics cannot be overwritten.", existingMetricToAdd.metricName());
+            assertTrue(appender.getMessages().stream().anyMatch(m -> m.contains(expectedMessage)));
+        }
+    }
+
+    @Test
+    public void testUnregisteringCustomMetricsWithSameNameDoesntAffectConsumerMetrics() {
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
+            appender.setClassLogger(ShareConsumerImpl.class, Level.DEBUG);
+            Time time = new MockTime(1L);
+            ConsumerMetadata metadata = createMetadata(subscription);
+            MockClient client = new MockClient(time, metadata);
+            initMetadata(client, Collections.singletonMap(topic, 1));
+
+            KafkaShareConsumer<String, String> consumer = newShareConsumer(time, client, subscription, metadata);
+            KafkaMetric existingMetricToRemove = (KafkaMetric) consumer.metrics().entrySet().iterator().next().getValue();
+            consumer.unregisterMetricFromSubscription(existingMetricToRemove);
+            final String expectedMessage = String.format("Skipping unregistration for metric %s. Existing consumer metrics cannot be removed.", existingMetricToRemove.metricName());
+            assertTrue(appender.getMessages().stream().anyMatch(m -> m.contains(expectedMessage)));
+        }
+    }
+
+    @Test
+    public void testShouldOnlyCallMetricReporterMetricChangeOnceWithExistingConsumerMetric() {
+        try (MockedStatic<CommonClientConfigs> mockedCommonClientConfigs = mockStatic(CommonClientConfigs.class, new CallsRealMethods())) {
+            ClientTelemetryReporter clientTelemetryReporter = mock(ClientTelemetryReporter.class);
+            clientTelemetryReporter.configure(any());
+            mockedCommonClientConfigs.when(() -> CommonClientConfigs.telemetryReporter(anyString(), any())).thenReturn(Optional.of(clientTelemetryReporter));
+
+            Time time = new MockTime(1L);
+            ConsumerMetadata metadata = createMetadata(subscription);
+            MockClient client = new MockClient(time, metadata);
+            initMetadata(client, Collections.singletonMap(topic, 1));
+
+            KafkaShareConsumer<String, String> consumer = newShareConsumer(time, client, subscription, metadata);
+
+            KafkaMetric existingMetric = (KafkaMetric) consumer.metrics().entrySet().iterator().next().getValue();
+            consumer.registerMetricForSubscription(existingMetric);
+            // This test would fail without the check as the existing metric is registered in the consumer on startup
+            Mockito.verify(clientTelemetryReporter, atMostOnce()).metricChange(existingMetric);
+        }
+    }
+
+    @Test
+    public void testShouldNotCallMetricReporterMetricRemovalWithExistingConsumerMetric() {
+        try (MockedStatic<CommonClientConfigs> mockedCommonClientConfigs = mockStatic(CommonClientConfigs.class, new CallsRealMethods())) {
+            ClientTelemetryReporter clientTelemetryReporter = mock(ClientTelemetryReporter.class);
+            clientTelemetryReporter.configure(any());
+            mockedCommonClientConfigs.when(() -> CommonClientConfigs.telemetryReporter(anyString(), any())).thenReturn(Optional.of(clientTelemetryReporter));
+
+            Time time = new MockTime(1L);
+            ConsumerMetadata metadata = createMetadata(subscription);
+            MockClient client = new MockClient(time, metadata);
+            initMetadata(client, Collections.singletonMap(topic, 1));
+
+            KafkaShareConsumer<String, String> consumer = newShareConsumer(time, client, subscription, metadata);
+
+            KafkaMetric existingMetric = (KafkaMetric) consumer.metrics().entrySet().iterator().next().getValue();
+            consumer.unregisterMetricFromSubscription(existingMetric);
+            Mockito.verify(clientTelemetryReporter, never()).metricRemoval(existingMetric);
+        }
+    }
+
+    @Test
+    public void testUnregisteringNonexistingMetricsDoesntCauseError() {
+        Time time = new MockTime(1L);
+        ConsumerMetadata metadata = createMetadata(subscription);
+        MockClient client = new MockClient(time, metadata);
+        initMetadata(client, Collections.singletonMap(topic, 1));
+
+        KafkaShareConsumer<String, String> consumer = newShareConsumer(time, client, subscription, metadata);
+
+        Map<MetricName, KafkaMetric> customMetrics = customMetrics();
+        // Metrics never registered but removed should not cause an error
+        customMetrics.forEach((name, metric) -> assertDoesNotThrow(() -> consumer.unregisterMetricFromSubscription(metric)));
     }
 
     private ConsumerMetadata createMetadata(SubscriptionState subscription) {
@@ -255,5 +378,16 @@ public class KafkaShareConsumerMetricsTest {
         MetadataResponse initialMetadata = RequestTestUtils.metadataUpdateWithIds(1, partitionCounts, metadataIds);
 
         mockClient.updateMetadata(initialMetadata);
+    }
+
+    private Map<MetricName, KafkaMetric> customMetrics() {
+        MetricConfig metricConfig = new MetricConfig();
+        Object lock = new Object();
+        MetricName metricNameOne = new MetricName("metricOne", "stream-metrics", "description for metric one", new HashMap<>());
+        MetricName metricNameTwo = new MetricName("metricTwo", "stream-metrics", "description for metric two", new HashMap<>());
+
+        KafkaMetric streamClientMetricOne = new KafkaMetric(lock, metricNameOne, (Measurable) (m, now) -> 1.0, metricConfig, Time.SYSTEM);
+        KafkaMetric streamClientMetricTwo = new KafkaMetric(lock, metricNameTwo, (Measurable) (m, now) -> 2.0, metricConfig, Time.SYSTEM);
+        return Map.of(metricNameOne, streamClientMetricOne, metricNameTwo, streamClientMetricTwo);
     }
 }

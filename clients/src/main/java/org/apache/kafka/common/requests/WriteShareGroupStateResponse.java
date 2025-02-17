@@ -18,12 +18,14 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.message.WriteShareGroupStateRequestData;
 import org.apache.kafka.common.message.WriteShareGroupStateResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -106,5 +108,17 @@ public class WriteShareGroupStateResponse extends AbstractResponse {
     public static WriteShareGroupStateResponseData.PartitionResult toResponsePartitionResult(int partitionId) {
         return new WriteShareGroupStateResponseData.PartitionResult()
                 .setPartition(partitionId);
+    }
+
+    public static WriteShareGroupStateResponseData toGlobalErrorResponse(WriteShareGroupStateRequestData request, Errors error) {
+        List<WriteShareGroupStateResponseData.WriteStateResult> writeStateResults = new ArrayList<>();
+        request.topics().forEach(topicData -> {
+            List<WriteShareGroupStateResponseData.PartitionResult> partitionResults = new ArrayList<>();
+            topicData.partitions().forEach(partitionData -> partitionResults.add(
+                toErrorResponsePartitionResult(partitionData.partition(), error, error.message()))
+            );
+            writeStateResults.add(toResponseWriteStateResult(topicData.topicId(), partitionResults));
+        });
+        return new WriteShareGroupStateResponseData().setResults(writeStateResults);
     }
 }

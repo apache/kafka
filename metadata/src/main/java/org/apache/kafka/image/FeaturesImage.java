@@ -21,6 +21,7 @@ import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.image.node.FeaturesImageNode;
 import org.apache.kafka.image.writer.ImageWriter;
 import org.apache.kafka.image.writer.ImageWriterOptions;
+import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 
 import java.util.ArrayList;
@@ -65,6 +66,11 @@ public final class FeaturesImage {
 
     public Map<String, Short> finalizedVersions() {
         return finalizedVersions;
+    }
+
+    public boolean isElrEnabled() {
+        return finalizedVersions.getOrDefault(EligibleLeaderReplicasVersion.FEATURE_NAME, EligibleLeaderReplicasVersion.ELRV_0.featureLevel())
+            >= EligibleLeaderReplicasVersion.ELRV_1.featureLevel();
     }
 
     private Optional<Short> finalizedVersion(String feature) {
@@ -116,8 +122,7 @@ public final class FeaturesImage {
 
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof FeaturesImage)) return false;
-        FeaturesImage other = (FeaturesImage) o;
+        if (!(o instanceof FeaturesImage other)) return false;
         return finalizedVersions.equals(other.finalizedVersions) &&
             metadataVersion.equals(other.metadataVersion);
     }

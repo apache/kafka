@@ -295,19 +295,6 @@ Found problem:
   }
 
   @Test
-  def testFormatFailsInZkMode(): Unit = {
-    val availableDirs = Seq(TestUtils.tempDir())
-    val properties = new Properties()
-    properties.setProperty("log.dirs", availableDirs.mkString(","))
-    properties.setProperty("zookeeper.connect", "localhost:2181")
-    val stream = new ByteArrayOutputStream()
-    assertEquals("The kafka configuration file appears to be for a legacy cluster. " +
-      "Formatting is only supported for clusters in KRaft mode.",
-        assertThrows(classOf[TerseFailure],
-          () => runFormatCommand(stream, properties)).getMessage)
-  }
-
-  @Test
   def testFormatWithReleaseVersion(): Unit = {
     val availableDirs = Seq(TestUtils.tempDir())
     val properties = new Properties()
@@ -371,25 +358,11 @@ Found problem:
   }
 
   @Test
-  def testFormatWithReleaseVersionDefault(): Unit = {
-    val availableDirs = Seq(TestUtils.tempDir())
-    val properties = new Properties()
-    properties.putAll(defaultStaticQuorumProperties)
-    properties.setProperty("log.dirs", availableDirs.mkString(","))
-    properties.setProperty("inter.broker.protocol.version", "3.7")
-    val stream = new ByteArrayOutputStream()
-    assertEquals(0, runFormatCommand(stream, properties))
-    assertTrue(stream.toString().contains("3.7-IV4"),
-      "Failed to find content in output: " + stream.toString())
-  }
-
-  @Test
   def testFormatWithReleaseVersionDefaultAndReleaseVersion(): Unit = {
     val availableDirs = Seq(TestUtils.tempDir())
     val properties = new Properties()
     properties.putAll(defaultStaticQuorumProperties)
     properties.setProperty("log.dirs", availableDirs.mkString(","))
-    properties.setProperty("inter.broker.protocol.version", "3.7")
     val stream = new ByteArrayOutputStream()
     assertEquals(0, runFormatCommand(stream, properties, Seq(
       "--release-version", "3.6-IV0",

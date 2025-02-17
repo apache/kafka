@@ -52,13 +52,13 @@ public class ListConsumerGroupsOptions extends AbstractOptions<ListConsumerGroup
      * If states is set, only groups in these states will be returned by listConsumerGroups().
      * Otherwise, all groups are returned.
      * This operation is supported by brokers with version 2.6.0 or later.
-     * @deprecated Since 4.0. Use {@link #inGroupStates(Set)}.
+     * @deprecated Since 4.0. Use {@link #inGroupStates(Set)} instead.
      */
     @Deprecated
     public ListConsumerGroupsOptions inStates(Set<ConsumerGroupState> states) {
         this.groupStates = (states == null || states.isEmpty())
             ? Collections.emptySet()
-            : states.stream().map(state -> GroupState.parse(state.name())).collect(Collectors.toSet());
+            : states.stream().map(state -> GroupState.parse(state.toString())).collect(Collectors.toSet());
         return this;
     }
 
@@ -80,11 +80,11 @@ public class ListConsumerGroupsOptions extends AbstractOptions<ListConsumerGroup
 
     /**
      * Returns the list of States that are requested or empty if no states have been specified.
-     * @deprecated Since 4.0. Use {@link #inGroupStates(Set)}.
+     * @deprecated Since 4.0. Use {@link #inGroupStates(Set)} instead.
      */
     @Deprecated
     public Set<ConsumerGroupState> states() {
-        return groupStates.stream().map(groupState -> ConsumerGroupState.parse(groupState.name())).collect(Collectors.toSet());
+        return groupStates.stream().map(groupState -> ConsumerGroupState.parse(groupState.toString())).collect(Collectors.toSet());
     }
 
     /**

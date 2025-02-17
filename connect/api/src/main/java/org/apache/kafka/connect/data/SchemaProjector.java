@@ -160,8 +160,7 @@ public class SchemaProjector {
         assert source.type().isPrimitive();
         assert target.type().isPrimitive();
         Object result;
-        if (isPromotable(source.type(), target.type()) && record instanceof Number) {
-            Number numberRecord = (Number) record;
+        if (isPromotable(source.type(), target.type()) && record instanceof Number numberRecord) {
             switch (target.type()) {
                 case INT8:
                     result = numberRecord.byteValue();

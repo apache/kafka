@@ -16,7 +16,7 @@
  */
 package kafka.server
 
-import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterInstance, ClusterTest, ClusterTestDefaults, ClusterTestExtensions, Type}
+import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
 import kafka.utils.TestUtils
 import kafka.utils.TestUtils.waitForAllPartitionsMetadata
 import org.apache.kafka.clients.admin.{Admin, NewPartitions}
@@ -24,14 +24,13 @@ import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.message.{ShareGroupHeartbeatRequestData, ShareGroupHeartbeatResponseData}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{ShareGroupHeartbeatRequest, ShareGroupHeartbeatResponse}
+import org.apache.kafka.common.test.ClusterInstance
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals, assertNotNull, assertNull, assertTrue}
 import org.junit.jupiter.api.{Tag, Timeout}
-import org.junit.jupiter.api.extension.ExtendWith
 
 import scala.jdk.CollectionConverters._
 
 @Timeout(120)
-@ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 @ClusterTestDefaults(types = Array(Type.KRAFT), brokers = 1, serverProperties = Array(
   new ClusterConfigProperty(key = "group.share.persister.class.name", value = "")
 ))
@@ -894,7 +893,7 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       val allPartitionsMetadata = waitForAllPartitionsMetadata(brokersToValidate, topic, totalPartitionCount)
       (0 until totalPartitionCount - 1).foreach(i => {
         allPartitionsMetadata.get(new TopicPartition(topic, i)).foreach { partitionMetadata =>
-          assertEquals(totalPartitionCount, partitionMetadata.replicas.size)
+          assertEquals(totalPartitionCount, partitionMetadata.isr.size)
         }
       })
     }

@@ -26,15 +26,15 @@ import java.util.Arrays;
  * Represents a join between a KStream and a KTable or GlobalKTable
  */
 
-public class StreamTableJoinNode<K, V> extends GraphNode {
+public class StreamTableJoinNode<K, V, VOut> extends GraphNode {
 
     private final String[] storeNames;
-    private final ProcessorParameters<K, V, ?, ?> processorParameters;
+    private final ProcessorParameters<K, V, K, VOut> processorParameters;
     private final String otherJoinSideNodeName;
     private final Duration gracePeriod;
 
     public StreamTableJoinNode(final String nodeName,
-                               final ProcessorParameters<K, V, ?, ?> processorParameters,
+                               final ProcessorParameters<K, V, K, VOut> processorParameters,
                                final String[] storeNames,
                                final String otherJoinSideNodeName,
                                final Duration gracePeriod) {

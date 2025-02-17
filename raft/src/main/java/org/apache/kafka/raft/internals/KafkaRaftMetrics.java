@@ -42,6 +42,9 @@ public class KafkaRaftMetrics implements AutoCloseable {
     private volatile int numUnknownVoterConnections;
     private volatile OptionalLong electionStartMs;
     private volatile OptionalLong pollStartMs;
+    private volatile int numVoters;
+    private volatile int numObservers;
+    private volatile boolean uncommittedVoterChange;
 
     private final MetricName currentLeaderIdMetricName;
     private final MetricName currentVotedIdMetricName;
@@ -51,14 +54,17 @@ public class KafkaRaftMetrics implements AutoCloseable {
     private final MetricName highWatermarkMetricName;
     private final MetricName logEndOffsetMetricName;
     private final MetricName logEndEpochMetricName;
+    private final MetricName numObserversMetricName;
     private final MetricName numUnknownVoterConnectionsMetricName;
+    private final MetricName numVotersMetricName;
+    private final MetricName uncommittedVoterChangeMetricName;
     private final Sensor commitTimeSensor;
     private final Sensor electionTimeSensor;
     private final Sensor fetchRecordsSensor;
     private final Sensor appendRecordsSensor;
     private final Sensor pollDurationSensor;
 
-    public KafkaRaftMetrics(Metrics metrics, String metricGrpPrefix, QuorumState state) {
+    public KafkaRaftMetrics(Metrics metrics, String metricGrpPrefix) {
         this.metrics = metrics;
         String metricGroupName = metricGrpPrefix + "-metrics";
 
@@ -68,65 +74,20 @@ public class KafkaRaftMetrics implements AutoCloseable {
         this.logEndOffset = new OffsetAndEpoch(0L, 0);
 
         this.currentStateMetricName = metrics.metricName("current-state", metricGroupName, "The current state of this member; possible values are leader, candidate, voted, follower, unattached, observer");
-        Gauge<String> stateProvider = (mConfig, currentTimeMs) -> {
-            if (state.isLeader()) {
-                return "leader";
-            } else if (state.isCandidate()) {
-                return "candidate";
-            } else if (state.isUnattachedAndVoted()) {
-                return "voted";
-            } else if (state.isFollower()) {
-                // a broker is special kind of follower, as not being a voter, it's an observer
-                if (state.isObserver()) {
-                    return "observer";
-                } else {
-                    return "follower";
-                }
-            } else {
-                return "unattached";
-            }
-        };
-        metrics.addMetric(this.currentStateMetricName, null, stateProvider);
 
         this.currentLeaderIdMetricName = metrics.metricName("current-leader", metricGroupName, "The current quorum leader's id; -1 indicates unknown");
-        metrics.addMetric(this.currentLeaderIdMetricName, (mConfig, currentTimeMs) -> state.leaderId().orElse(-1));
 
         this.currentVotedIdMetricName = metrics.metricName("current-vote", metricGroupName, "The current voted id; -1 indicates not voted for anyone");
-        metrics.addMetric(this.currentVotedIdMetricName, (mConfig, currentTimeMs) -> {
-            if (state.isLeader() || state.isCandidate()) {
-                return state.localIdOrThrow();
-            } else {
-                return (double) state.maybeUnattachedState()
-                    .flatMap(votedState -> votedState.votedKey().map(ReplicaKey::id))
-                    .orElse(-1);
-            }
-        });
 
         this.currentVotedDirectoryIdMetricName = metrics.metricName(
             "current-vote-directory-id",
             metricGroupName,
             String.format("The current voted directory id; %s indicates not voted for a directory id", Uuid.ZERO_UUID)
         );
-        Gauge<String> votedDirectoryIdProvider = (mConfig, currentTimestamp) -> {
-            if (state.isLeader() || state.isCandidate()) {
-                return state.localDirectoryId().toString();
-            } else {
-                return state.maybeUnattachedState()
-                    .flatMap(votedState -> votedState.votedKey().flatMap(ReplicaKey::directoryId))
-                    .orElse(Uuid.ZERO_UUID)
-                    .toString();
-            }
-        };
-        metrics.addMetric(this.currentVotedDirectoryIdMetricName, null, votedDirectoryIdProvider);
 
         this.currentEpochMetricName = metrics.metricName("current-epoch", metricGroupName, "The current quorum epoch.");
-        metrics.addMetric(this.currentEpochMetricName, (mConfig, currentTimeMs) -> state.epoch());
 
         this.highWatermarkMetricName = metrics.metricName("high-watermark", metricGroupName, "The high watermark maintained on this member; -1 if it is unknown");
-        metrics.addMetric(
-            this.highWatermarkMetricName,
-            (mConfig, currentTimeMs) -> state.highWatermark().map(LogOffsetMetadata::offset).orElse(-1L)
-        );
 
         this.logEndOffsetMetricName = metrics.metricName("log-end-offset", metricGroupName, "The current raft log end offset.");
         metrics.addMetric(this.logEndOffsetMetricName, (mConfig, currentTimeMs) -> logEndOffset.offset());
@@ -137,6 +98,14 @@ public class KafkaRaftMetrics implements AutoCloseable {
         this.numUnknownVoterConnectionsMetricName = metrics.metricName("number-unknown-voter-connections", metricGroupName,
                 "Number of unknown voters whose connection information is not cached; would never be larger than quorum-size.");
         metrics.addMetric(this.numUnknownVoterConnectionsMetricName, (mConfig, currentTimeMs) -> numUnknownVoterConnections);
+
+        this.numVotersMetricName = metrics.metricName("number-of-voters", metricGroupName, "Number of voters for a KRaft topic partition.");
+        metrics.addMetric(this.numVotersMetricName, (Gauge<Integer>) (mConfig, currentTimestamp) -> numVoters);
+
+        // These metrics should only be present on the leader, otherwise they do not make sense.
+        // They should be added when a replica becomes leader and removed when it is no longer leader.
+        this.numObserversMetricName = metrics.metricName("number-of-observers", metricGroupName, "Number of observers being tracked by the KRaft topic partition leader.");
+        this.uncommittedVoterChangeMetricName = metrics.metricName("uncommitted-voter-change", metricGroupName, "1 if there is a voter change that has not been committed, 0 otherwise.");
 
         this.commitTimeSensor = metrics.sensor("commit-latency");
         this.commitTimeSensor.add(metrics.metricName("commit-latency-avg", metricGroupName,
@@ -169,6 +138,58 @@ public class KafkaRaftMetrics implements AutoCloseable {
                     "doing work (e.g. handling requests or replicating from the leader)"
             ),
             new TimeRatio(1.0)
+        );
+    }
+
+    public void initialize(QuorumState state) {
+        Gauge<String> stateProvider = (mConfig, currentTimeMs) -> {
+            if (state.isLeader()) {
+                return "leader";
+            } else if (state.isProspectiveNotVoted()) {
+                return "prospective";
+            } else if (state.isProspectiveAndVoted()) {
+                return "prospective-voted";
+            } else if (state.isCandidate()) {
+                return "candidate";
+            } else if (state.isUnattachedAndVoted()) {
+                return "unattached-voted";
+            } else if (state.isFollower()) {
+                // a broker is special kind of follower, as not being a voter, it's an observer
+                if (state.isObserver()) {
+                    return "observer";
+                } else {
+                    return "follower";
+                }
+            } else {
+                return "unattached";
+            }
+        };
+        metrics.addMetric(this.currentStateMetricName, null, stateProvider);
+
+        metrics.addMetric(this.currentLeaderIdMetricName, (mConfig, currentTimeMs) -> state.leaderId().orElse(-1));
+
+        metrics.addMetric(this.currentVotedIdMetricName, (mConfig, currentTimeMs) -> {
+            if (state.isLeader() || state.isCandidate()) {
+                return state.localIdOrThrow();
+            } else {
+                return state.votedKey().map(ReplicaKey::id).orElse(-1);
+            }
+        });
+
+        Gauge<String> votedDirectoryIdProvider = (mConfig, currentTimestamp) -> {
+            if (state.isLeader() || state.isCandidate()) {
+                return state.localDirectoryId().toString();
+            } else {
+                return state.votedKey().flatMap(ReplicaKey::directoryId).orElse(Uuid.ZERO_UUID).toString();
+            }
+        };
+        metrics.addMetric(this.currentVotedDirectoryIdMetricName, null, votedDirectoryIdProvider);
+
+        metrics.addMetric(this.currentEpochMetricName, (mConfig, currentTimeMs) -> state.epoch());
+
+        metrics.addMetric(
+            this.highWatermarkMetricName,
+            (mConfig, currentTimeMs) -> state.highWatermark().map(LogOffsetMetadata::offset).orElse(-1L)
         );
     }
 
@@ -208,11 +229,35 @@ public class KafkaRaftMetrics implements AutoCloseable {
         electionStartMs = OptionalLong.of(currentTimeMs);
     }
 
+    public void updateNumVoters(int numVoters) {
+        this.numVoters = numVoters;
+    }
+
+    public void updateNumObservers(int numObservers) {
+        this.numObservers = numObservers;
+    }
+
+    public void updateUncommittedVoterChange(boolean uncommittedVoterChange) {
+        this.uncommittedVoterChange = uncommittedVoterChange;
+    }
+
     public void maybeUpdateElectionLatency(long currentTimeMs) {
         if (electionStartMs.isPresent()) {
             electionTimeSensor.record(currentTimeMs - electionStartMs.getAsLong(), currentTimeMs);
             electionStartMs = OptionalLong.empty();
         }
+    }
+
+    public void addLeaderMetrics() {
+        metrics.addMetric(numObserversMetricName, (Gauge<Integer>) (config, now) -> numObservers);
+        metrics.addMetric(uncommittedVoterChangeMetricName, (Gauge<Integer>) (config, now) -> uncommittedVoterChange ? 1 : 0);
+    }
+
+    public void removeLeaderMetrics() {
+        metrics.removeMetric(numObserversMetricName);
+        metrics.removeMetric(uncommittedVoterChangeMetricName);
+        numObservers = 0;
+        uncommittedVoterChange = false;
     }
 
     @Override
@@ -226,7 +271,10 @@ public class KafkaRaftMetrics implements AutoCloseable {
             highWatermarkMetricName,
             logEndOffsetMetricName,
             logEndEpochMetricName,
-            numUnknownVoterConnectionsMetricName
+            numObserversMetricName,
+            numUnknownVoterConnectionsMetricName,
+            numVotersMetricName,
+            uncommittedVoterChangeMetricName
         ).forEach(metrics::removeMetric);
 
         Arrays.asList(
