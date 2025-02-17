@@ -27,7 +27,7 @@ import org.apache.kafka.storage.internals.log.RemoteIndexCache._
 import org.apache.kafka.storage.internals.log._
 import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
 import org.mockito.ArgumentMatchers
@@ -37,7 +37,7 @@ import org.mockito.invocation.InvocationOnMock
 import org.slf4j.{Logger, LoggerFactory}
 
 import java.io.{File, FileInputStream, IOException, PrintWriter, UncheckedIOException}
-import java.nio.file.{Files, NoSuchFileException, Paths}
+import java.nio.file.{Files, NoSuchFileException, Path, Paths}
 import java.util
 import java.util.concurrent.{CountDownLatch, Executors, Future, TimeUnit}
 import java.util.stream.Collectors
@@ -817,25 +817,23 @@ class RemoteIndexCacheTest {
     verifyFetchIndexInvocation(1, Seq(IndexType.TRANSACTION))
   }
 
-  @Disabled
-  // flaky test
+  @Test
   def testIndexFileAlreadyExistOnDiskButNotInCache(): Unit = {
     val remoteIndexCacheDir = cache.cacheDir()
     val tempSuffix = ".tmptest"
 
-    def renameRemoteCacheIndexFileFromDisk(suffix: String): Unit = {
-      Files.walk(remoteIndexCacheDir.toPath)
-        .filter(Files.isRegularFile(_))
-        .filter(path => path.getFileName.toString.endsWith(suffix))
-        .forEach(f => Utils.atomicMoveWithFallback(f, f.resolveSibling(f.getFileName.toString.stripSuffix(tempSuffix))))
+    def renameRemoteCacheIndexFileFromDisk(tmpOffsetIdxFile: Path, tmpTxnIdxFile: Path, tmpTimeIdxFile: Path): Unit = {
+      for (f <- Seq(tmpOffsetIdxFile, tmpTxnIdxFile, tmpTimeIdxFile)) {
+        Utils.atomicMoveWithFallback(f, f.resolveSibling(f.getFileName.toString.stripSuffix(tempSuffix)))
+      }
     }
 
     val entry = cache.getIndexEntry(rlsMetadata)
     verifyFetchIndexInvocation(count = 1)
     // copy files with temporary name
-    Files.copy(entry.offsetIndex().file().toPath, Paths.get(Utils.replaceSuffix(entry.offsetIndex().file().getPath, "", tempSuffix)))
-    Files.copy(entry.txnIndex().file().toPath, Paths.get(Utils.replaceSuffix(entry.txnIndex().file().getPath, "", tempSuffix)))
-    Files.copy(entry.timeIndex().file().toPath, Paths.get(Utils.replaceSuffix(entry.timeIndex().file().getPath, "", tempSuffix)))
+    val tmpOffsetIdxPath = Files.copy(entry.offsetIndex().file().toPath, Paths.get(Utils.replaceSuffix(entry.offsetIndex().file().getPath, "", tempSuffix)))
+    val tmpTxnIdxPath = Files.copy(entry.txnIndex().file().toPath, Paths.get(Utils.replaceSuffix(entry.txnIndex().file().getPath, "", tempSuffix)))
+    val tmpTimeIdxPath = Files.copy(entry.timeIndex().file().toPath, Paths.get(Utils.replaceSuffix(entry.timeIndex().file().getPath, "", tempSuffix)))
 
     cache.remove(rlsMetadata.remoteLogSegmentId().id())
 
@@ -846,7 +844,7 @@ class RemoteIndexCacheTest {
       "Failed to cleanup cache entry after invalidation")
 
     // restore index files
-    renameRemoteCacheIndexFileFromDisk(tempSuffix)
+    renameRemoteCacheIndexFileFromDisk(tmpOffsetIdxPath, tmpTxnIdxPath, tmpTimeIdxPath)
     // validate cache entry for the above key should be null
     assertNull(cache.internalCache().getIfPresent(rlsMetadata.remoteLogSegmentId().id()))
     cache.getIndexEntry(rlsMetadata)
