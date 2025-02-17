@@ -31,7 +31,7 @@ import static java.lang.annotation.RetentionPolicy.RUNTIME;
 /**
  * Used to indicate that a test should call the method given by {@link #value()} to generate a number of
  * cluster configurations. The test-containing class must define a static method which takes no arguments and
- * returns a list of {@link ClusterConfig} instances, used to generate multiple cluster configurations for the test.
+ * returns a list of {@link ClusterConfig}, used to generate multiple cluster configurations.
  *
  * The method given here must be static since it is invoked before any tests are actually run. Each test generated
  * by this annotation will run as if it was defined as a separate test method with its own
