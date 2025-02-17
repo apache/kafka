@@ -1599,7 +1599,7 @@ public class SharePartitionManagerTest {
         SharePartition sp2 = mock(SharePartition.class);
 
         List<ShareAcknowledgementBatch> ack1 = List.of(
-            new ShareAcknowledgementBatch(12, 12, Collections.singletonList((byte) 1)));
+            new ShareAcknowledgementBatch(12, 12, List.of((byte) 1)));
         List<ShareAcknowledgementBatch> ack2 = List.of(
             new ShareAcknowledgementBatch(15, 20, List.of((byte) 2, (byte) 3, (byte) 2, (byte) 2, (byte) 3, (byte) 2)));
         when(sp1.acknowledge(memberId, ack1)).thenReturn(CompletableFuture.completedFuture(null));
