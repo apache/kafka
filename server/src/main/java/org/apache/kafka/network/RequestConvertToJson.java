@@ -68,6 +68,8 @@ import org.apache.kafka.common.message.DeleteGroupsRequestDataJsonConverter;
 import org.apache.kafka.common.message.DeleteGroupsResponseDataJsonConverter;
 import org.apache.kafka.common.message.DeleteRecordsRequestDataJsonConverter;
 import org.apache.kafka.common.message.DeleteRecordsResponseDataJsonConverter;
+import org.apache.kafka.common.message.DeleteShareGroupOffsetsRequestDataJsonConverter;
+import org.apache.kafka.common.message.DeleteShareGroupOffsetsResponseDataJsonConverter;
 import org.apache.kafka.common.message.DeleteShareGroupStateRequestDataJsonConverter;
 import org.apache.kafka.common.message.DeleteShareGroupStateResponseDataJsonConverter;
 import org.apache.kafka.common.message.DeleteTopicsRequestDataJsonConverter;
@@ -248,6 +250,8 @@ import org.apache.kafka.common.requests.DeleteGroupsRequest;
 import org.apache.kafka.common.requests.DeleteGroupsResponse;
 import org.apache.kafka.common.requests.DeleteRecordsRequest;
 import org.apache.kafka.common.requests.DeleteRecordsResponse;
+import org.apache.kafka.common.requests.DeleteShareGroupOffsetsRequest;
+import org.apache.kafka.common.requests.DeleteShareGroupOffsetsResponse;
 import org.apache.kafka.common.requests.DeleteShareGroupStateRequest;
 import org.apache.kafka.common.requests.DeleteShareGroupStateResponse;
 import org.apache.kafka.common.requests.DeleteTopicsRequest;
@@ -465,6 +469,8 @@ public class RequestConvertToJson {
                 return DescribeShareGroupOffsetsRequestDataJsonConverter.write(((DescribeShareGroupOffsetsRequest) request).data(), request.version());
             case ALTER_SHARE_GROUP_OFFSETS:
                 return AlterShareGroupOffsetsRequestDataJsonConverter.write(((AlterShareGroupOffsetsRequest) request).data(), request.version());
+            case DELETE_SHARE_GROUP_OFFSETS:
+                return DeleteShareGroupOffsetsRequestDataJsonConverter.write(((DeleteShareGroupOffsetsRequest) request).data(), request.version());
             case DESCRIBE_TOPIC_PARTITIONS:
                 return DescribeTopicPartitionsRequestDataJsonConverter.write(((DescribeTopicPartitionsRequest) request).data(), request.version());
             case DESCRIBE_TRANSACTIONS:
@@ -649,6 +655,8 @@ public class RequestConvertToJson {
                 return DescribeShareGroupOffsetsResponseDataJsonConverter.write(((DescribeShareGroupOffsetsResponse) response).data(), version);
             case ALTER_SHARE_GROUP_OFFSETS:
                 return AlterShareGroupOffsetsResponseDataJsonConverter.write(((AlterShareGroupOffsetsResponse) response).data(), version);
+            case DELETE_SHARE_GROUP_OFFSETS:
+                return DeleteShareGroupOffsetsResponseDataJsonConverter.write(((DeleteShareGroupOffsetsResponse) response).data(), version);
             case DESCRIBE_TOPIC_PARTITIONS:
                 return DescribeTopicPartitionsResponseDataJsonConverter.write(((DescribeTopicPartitionsResponse) response).data(), version);
             case DESCRIBE_TRANSACTIONS:
