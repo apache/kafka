@@ -700,7 +700,12 @@ public class ConsumerConfig extends AbstractConfig {
                                         null,
                                         in(null, "implicit", "explicit"),
                                         Importance.MEDIUM,
-                                        ConsumerConfig.INTERNAL_SHARE_ACKNOWLEDGEMENT_MODE_DOC);
+                                        ConsumerConfig.INTERNAL_SHARE_ACKNOWLEDGEMENT_MODE_DOC)
+                                .define(CONFIG_PROVIDERS_CONFIG,
+                                        ConfigDef.Type.LIST,
+                                        Collections.emptyList(),
+                                        ConfigDef.Importance.LOW,
+                                        CONFIG_PROVIDERS_DOC);
     }
 
     @Override
@@ -800,6 +805,13 @@ public class ConsumerConfig extends AbstractConfig {
 
     public static ConfigDef configDef() {
         return new ConfigDef(CONFIG);
+    }
+    
+    @Override
+    public Map<String, Object> originals() {
+        Map<String, Object> map = super.originals();
+        map.remove(AbstractConfig.CONFIG_PROVIDERS_CONFIG);
+        return map;
     }
 
     public static void main(String[] args) {

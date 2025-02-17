@@ -538,7 +538,12 @@ public class ProducerConfig extends AbstractConfig {
                                         CommonClientConfigs.DEFAULT_METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS,
                                         atLeast(0),
                                         Importance.LOW,
-                                        CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC);
+                                        CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC)
+                                .define(CONFIG_PROVIDERS_CONFIG, 
+                                        ConfigDef.Type.LIST, 
+                                        Collections.emptyList(), 
+                                        ConfigDef.Importance.LOW, 
+                                        CONFIG_PROVIDERS_DOC);
     }
 
     @Override
@@ -653,6 +658,13 @@ public class ProducerConfig extends AbstractConfig {
 
     public static ConfigDef configDef() {
         return new ConfigDef(CONFIG);
+    }
+    
+    @Override
+    public Map<String, Object> originals() {
+        Map<String, Object> map = super.originals();
+        map.remove(AbstractConfig.CONFIG_PROVIDERS_CONFIG);
+        return map;
     }
 
     public static void main(String[] args) {

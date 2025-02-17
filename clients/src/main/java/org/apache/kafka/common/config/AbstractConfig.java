@@ -65,8 +65,16 @@ public class AbstractConfig {
     public static final String AUTOMATIC_CONFIG_PROVIDERS_PROPERTY = "org.apache.kafka.automatic.config.providers";
 
     public static final String CONFIG_PROVIDERS_CONFIG = "config.providers";
+    protected static final String CONFIG_PROVIDERS_DOC = 
+            "Comma-separated names of <code>ConfigProvider</code> classes, loaded and used "
+            + "in the order specified. Implementing the interface  "
+            + "<code>ConfigProvider</code> allows you to replace variable references in connector configurations, "
+            + "such as for externalized secrets.";
 
     private static final String CONFIG_PROVIDERS_PARAM = ".param.";
+
+    protected static final ConfigDef CONFIG = new ConfigDef()
+            .define(CONFIG_PROVIDERS_CONFIG, ConfigDef.Type.LIST, Collections.emptyList(), ConfigDef.Importance.LOW, CONFIG_PROVIDERS_DOC);
 
     /**
      * Construct a configuration with a ConfigDef and the configuration properties, which can include properties

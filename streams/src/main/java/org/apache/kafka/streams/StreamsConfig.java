@@ -1255,7 +1255,11 @@ public class StreamsConfig extends AbstractConfig {
                     Type.LONG,
                     null,
                     Importance.LOW,
-                    WINDOW_SIZE_MS_DOC);
+                    WINDOW_SIZE_MS_DOC)
+            .define(CONFIG_PROVIDERS_CONFIG, 
+                    Type.LIST,
+                    Collections.emptyList(),
+                    Importance.LOW, CONFIG_PROVIDERS_DOC);
     }
 
     // this is the list of configs for underlying clients
@@ -2117,6 +2121,13 @@ public class StreamsConfig extends AbstractConfig {
         }
 
         return parsed;
+    }
+
+    @Override
+    public Map<String, Object> originals() {
+        Map<String, Object> map = super.originals();
+        map.remove(AbstractConfig.CONFIG_PROVIDERS_CONFIG);
+        return map;
     }
 
     public static void main(final String[] args) {
