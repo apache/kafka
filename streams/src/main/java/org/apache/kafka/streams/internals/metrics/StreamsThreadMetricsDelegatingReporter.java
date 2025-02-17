@@ -27,6 +27,7 @@ import org.slf4j.LoggerFactory;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 public class StreamsThreadMetricsDelegatingReporter implements MetricsReporter {
     
@@ -37,10 +38,10 @@ public class StreamsThreadMetricsDelegatingReporter implements MetricsReporter {
     private final String stateUpdaterThreadId;
 
 
-    public StreamsThreadMetricsDelegatingReporter(final Consumer<byte[], byte[]> consumer, final String threadId, final String stateUpdaterThreadId) {
+    public StreamsThreadMetricsDelegatingReporter(final Consumer<byte[], byte[]> consumer, final String threadId, final Optional<String> stateUpdaterThreadId) {
         this.consumer = Objects.requireNonNull(consumer);
         this.threadId = Objects.requireNonNull(threadId);
-        this.stateUpdaterThreadId = Objects.requireNonNull(stateUpdaterThreadId);
+        this.stateUpdaterThreadId = stateUpdaterThreadId.orElse("");
         log.debug("Creating MetricsReporter for threadId {} and stateUpdaterId {}", threadId, stateUpdaterThreadId);
     }
 

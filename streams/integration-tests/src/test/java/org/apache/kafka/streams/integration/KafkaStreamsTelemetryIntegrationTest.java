@@ -48,6 +48,11 @@ import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Produced;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.tools.ClientMetricsCommand;
 
@@ -98,6 +103,8 @@ public class KafkaStreamsTelemetryIntegrationTest {
     private String outputTopicTwoPartitions;
     private String inputTopicOnePartition;
     private String outputTopicOnePartition;
+    private String globalStoreTopic;
+    private Uuid globalStoreConsumerInstanceId;
     private Properties streamsApplicationProperties = new Properties();
     private Properties streamsSecondApplicationProperties = new Properties();
 
@@ -125,10 +132,12 @@ public class KafkaStreamsTelemetryIntegrationTest {
         outputTopicTwoPartitions = appId + "-output-two";
         inputTopicOnePartition = appId + "-input-one";
         outputTopicOnePartition = appId + "-output-one";
+        globalStoreTopic = appId + "-global-store";
         cluster.createTopic(inputTopicTwoPartitions, 2, 1);
         cluster.createTopic(outputTopicTwoPartitions, 2, 1);
         cluster.createTopic(inputTopicOnePartition, 1, 1);
         cluster.createTopic(outputTopicOnePartition, 1, 1);
+        cluster.createTopic(globalStoreTopic, 2, 1);
     }
 
     @AfterAll
@@ -148,11 +157,49 @@ public class KafkaStreamsTelemetryIntegrationTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"INFO", "DEBUG", "TRACE"})
+    public void shouldPushGlobalThreadMetricsToBroker(final String recordingLevel) throws Exception {
+        streamsApplicationProperties = props(true);
+        streamsApplicationProperties.put(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, recordingLevel);
+        final Topology topology = simpleTopology(true);
+        subscribeForStreamsMetrics();
+        try (final KafkaStreams streams = new KafkaStreams(topology, streamsApplicationProperties)) {
+            IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
+            final ClientInstanceIds clientInstanceIds = streams.clientInstanceIds(Duration.ofSeconds(60));
+            for (Map.Entry<String, Uuid> instanceId : clientInstanceIds.consumerInstanceIds().entrySet()) {
+                final String instanceIdKey = instanceId.getKey();
+                if (instanceIdKey.endsWith("GlobalStreamThread-global-consumer")) {
+                    globalStoreConsumerInstanceId = instanceId.getValue();
+                }
+            }
+
+            assertNotNull(globalStoreConsumerInstanceId);
+            LOG.info("Global consumer instance id {}", globalStoreConsumerInstanceId);
+            TestUtils.waitForCondition(
+                    () -> !TelemetryPlugin.SUBSCRIBED_METRICS.getOrDefault(globalStoreConsumerInstanceId, Collections.emptyList()).isEmpty(),
+                    30_000,
+                    "Never received subscribed metrics"
+            );
+
+            final List<String> expectedGlobalMetrics = streams.metrics().values().stream().map(Metric::metricName)
+                    .filter(metricName -> !metricName.name().contains("oldest") && metricName.tags().containsKey("thread-id") &&
+                            metricName.tags().get("thread-id").endsWith("-GlobalStreamThread")).map(mn -> {
+                        final String name = mn.name().replace('-', '.');
+                        final String group = mn.group().replace("-metrics", "").replace('-', '.');
+                        return "org.apache.kafka." + group + "." + name;
+                    }).filter(name -> !name.equals("org.apache.kafka.stream.thread.state"))// telemetry reporter filters out string metrics
+                    .sorted().toList();
+            final List<String> actualGlobalMetrics = new ArrayList<>(TelemetryPlugin.SUBSCRIBED_METRICS.get(globalStoreConsumerInstanceId));
+            assertEquals(expectedGlobalMetrics, actualGlobalMetrics);
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"INFO", "DEBUG", "TRACE"})
     public void shouldPushMetricsToBroker(final String recordingLevel) throws Exception {
         // End-to-end test validating metrics pushed to broker
         streamsApplicationProperties  = props(true);
         streamsApplicationProperties.put(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, recordingLevel);
-        final Topology topology = simpleTopology();
+        final Topology topology = simpleTopology(false);
         subscribeForStreamsMetrics();
         try (final KafkaStreams streams = new KafkaStreams(topology, streamsApplicationProperties)) {
             IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
@@ -215,7 +262,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
     public void shouldPassMetrics(final String topologyType, final boolean stateUpdaterEnabled) throws Exception {
         // Streams metrics should get passed to Admin and Consumer
         streamsApplicationProperties = props(stateUpdaterEnabled);
-        final Topology topology = topologyType.equals("simple") ? simpleTopology() : complexTopology();
+        final Topology topology = topologyType.equals("simple") ? simpleTopology(false) : complexTopology();
        
         try (final KafkaStreams streams = new KafkaStreams(topology, streamsApplicationProperties)) {
             IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
@@ -419,8 +466,34 @@ public class KafkaStreamsTelemetryIntegrationTest {
         return builder.build();
     }
 
-    private Topology simpleTopology() {
+    private void addGlobalStore(final StreamsBuilder builder) {
+        builder.addGlobalStore(Stores.keyValueStoreBuilder(
+                Stores.inMemoryKeyValueStore("iq-test-store"),
+                Serdes.String(),
+                Serdes.String()
+        ),
+                globalStoreTopic,
+                Consumed.with(Serdes.String(), Serdes.String()),
+                () -> new Processor<>() {
+                    private KeyValueStore<String, String> store;
+
+                    @Override
+                    public void init(final ProcessorContext<Void, Void> context) {
+                        store = context.getStateStore("iq-test-store");
+                    }
+
+                    @Override
+                    public void process(final Record<String, String> record) {
+                        store.put(record.key(), record.value());
+                    }
+                });
+    }
+
+    private Topology simpleTopology(final boolean includeGlobalStore) {
         final StreamsBuilder builder = new StreamsBuilder();
+        if (includeGlobalStore) {
+            addGlobalStore(builder);
+        }
         builder.stream(inputTopicOnePartition, Consumed.with(Serdes.String(), Serdes.String()))
                 .flatMapValues(value -> Arrays.asList(value.toLowerCase(Locale.getDefault()).split("\\W+")))
                 .to(outputTopicOnePartition, Produced.with(Serdes.String(), Serdes.String()));
@@ -449,7 +522,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
 
         @Override
         public Consumer<byte[], byte[]> getGlobalConsumer(final Map<String, Object> config) {
-            return new KafkaConsumer<>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer());
+            return new TestingMetricsInterceptingConsumer<>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer());
         }
 
         @Override
