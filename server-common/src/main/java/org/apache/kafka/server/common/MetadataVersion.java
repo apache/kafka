@@ -130,7 +130,7 @@ public enum MetadataVersion {
     // Please move this comment when updating the LATEST_PRODUCTION constant.
     //
 
-    // Not used by anything yet.
+    // The default version to enable ELR (KIP-966).
     IBP_4_1_IV0(26, "4.1", "IV0", false);
 
     // NOTES when adding a new version:
