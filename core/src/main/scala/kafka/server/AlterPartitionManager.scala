@@ -65,7 +65,6 @@ object AlterPartitionManager {
    */
   def apply(
     config: KafkaConfig,
-    metadataCache: MetadataCache,
     scheduler: Scheduler,
     controllerNodeProvider: ControllerNodeProvider,
     time: Time,
@@ -100,13 +99,7 @@ class DefaultAlterPartitionManager(
   val brokerEpochSupplier: () => Long,
 ) extends AlterPartitionManager with Logging {
 
-  // Used to allow only one pending ISR update per partition (visible for testing).
-  // Note that we key items by TopicPartition despite using TopicIdPartition while
-  // submitting changes. This is done to ensure that topics with the same name but
-  // with a different topic id or no topic id collide here. When a topic is deleted 
-  // and re-created, we cannot have two entries in this Map especially if we cannot 
-  // use an AlterPartition request version which supports topic ids in the end because 
-  // the two updates with the same name would be merged together.
+  // Used to allow only one pending ISR update per partition (visible for testing)
   private[server] val unsentIsrUpdates = new ConcurrentHashMap[TopicIdPartition, AlterPartitionItem]()
 
   // Used to allow only one in-flight request at a time

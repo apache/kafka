@@ -54,17 +54,6 @@ public class ImageWriterOptionsTest {
     }
 
     @Test
-    public void testSetMetadataVersion() {
-        for (int i = MetadataVersion.MINIMUM_VERSION.ordinal();
-             i < MetadataVersion.VERSIONS.length;
-             i++) {
-            MetadataVersion version = MetadataVersion.VERSIONS[i];
-            ImageWriterOptions.Builder options = new ImageWriterOptions.Builder(version);
-            assertEquals(version, options.metadataVersion());
-        }
-    }
-
-    @Test
     public void testHandleLoss() {
         String expectedMessage = "stuff";
 

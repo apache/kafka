@@ -25,6 +25,7 @@ import org.apache.kafka.common.errors.InvalidRegistrationException;
 import org.apache.kafka.common.errors.StaleBrokerEpochException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData;
+import org.apache.kafka.common.message.ControllerRegistrationRequestData;
 import org.apache.kafka.common.metadata.BrokerRegistrationChangeRecord;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
@@ -716,6 +717,22 @@ public class ClusterControlManagerTest {
                     123L,
                     featureControl.finalizedFeatures(Long.MAX_VALUE),
                     false)).getMessage());
+    }
+
+    @Test
+    public void testRegisterControlWithUnsupportedMetadataVersion() {
+        FeatureControlManager featureControl = new FeatureControlManager.Builder().
+                setMetadataVersion(MetadataVersion.IBP_3_6_IV2).
+                build();
+        ClusterControlManager clusterControl = new ClusterControlManager.Builder().
+                setClusterId("fPZv1VBsRFmnlRvmGcOW9w").
+                setFeatureControlManager(featureControl).
+                setBrokerShutdownHandler((brokerId, isCleanShutdown, records) -> { }).
+                build();
+        clusterControl.activate();
+        assertEquals("The current MetadataVersion is too old to support controller registrations.",
+                assertThrows(UnsupportedVersionException.class, () -> clusterControl.registerController(
+                        new ControllerRegistrationRequestData().setControllerId(1))).getMessage());
     }
 
     @Test
