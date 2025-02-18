@@ -778,6 +778,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                     acknowledgements.complete(INVALID_RESPONSE);
                     maybeSendShareAcknowledgeCommitCallbackEvent(Collections.singletonMap(partition, acknowledgements));
                 });
+                topicIdPartitionAcknowledgementsMap.clear();
             });
 
             if (!partitionsWithUpdatedLeaderInfo.isEmpty()) {
