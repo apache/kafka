@@ -2125,7 +2125,7 @@ public class StreamsConfig extends AbstractConfig {
 
     @Override
     public Map<String, Object> originals() {
-        Map<String, Object> map = super.originals();
+        final Map<String, Object> map = super.originals();
         map.remove(AbstractConfig.CONFIG_PROVIDERS_CONFIG);
         return map;
     }
