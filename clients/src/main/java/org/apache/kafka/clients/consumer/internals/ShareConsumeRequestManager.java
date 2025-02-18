@@ -177,8 +177,14 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                 if (nodeAcksFromFetchMap != null) {
                     acknowledgementsToSend = nodeAcksFromFetchMap.remove(tip);
                     if (acknowledgementsToSend != null) {
-                        metricsManager.recordAcknowledgementSent(acknowledgementsToSend.size());
-                        fetchAcknowledgementsInFlight.computeIfAbsent(node.id(), k -> new HashMap<>()).put(tip, acknowledgementsToSend);
+                        if (handler.isNewSession()) {
+                            // Failing the acknowledgements as we cannot have piggybacked acknowledgements in the initial ShareFetchRequest.
+                            acknowledgementsToSend.complete(Errors.INVALID_SHARE_SESSION_EPOCH.exception());
+                            maybeSendShareAcknowledgeCommitCallbackEvent(Collections.singletonMap(tip, acknowledgementsToSend));
+                        } else {
+                            metricsManager.recordAcknowledgementSent(acknowledgementsToSend.size());
+                            fetchAcknowledgementsInFlight.computeIfAbsent(node.id(), k -> new HashMap<>()).put(tip, acknowledgementsToSend);
+                        }
                     }
                 }
 

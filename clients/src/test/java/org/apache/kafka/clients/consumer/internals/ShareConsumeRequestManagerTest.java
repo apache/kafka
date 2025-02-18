@@ -1345,6 +1345,31 @@ public class ShareConsumeRequestManagerTest {
     }
 
     @Test
+    public void testPiggybackAcknowledgementsOnInitialShareSessionError() {
+        buildRequestManager();
+        shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
+
+        assignFromSubscribed(singleton(tp0));
+
+        Acknowledgements acknowledgements = Acknowledgements.empty();
+        acknowledgements.add(1L, AcknowledgeType.ACCEPT);
+        acknowledgements.add(2L, AcknowledgeType.ACCEPT);
+        acknowledgements.add(3L, AcknowledgeType.REJECT);
+
+        shareConsumeRequestManager.fetch(Collections.singletonMap(tip0, new NodeAcknowledgements(0, acknowledgements)));
+
+        assertEquals(1, sendFetches());
+        assertFalse(shareConsumeRequestManager.hasCompletedFetches());
+
+        client.prepareResponse(fullFetchResponse(tip0, records, acquiredRecords, Errors.NONE));
+        networkClientDelegate.poll(time.timer(0));
+        assertTrue(shareConsumeRequestManager.hasCompletedFetches());
+
+        assertEquals(3, completedAcknowledgements.get(0).get(tip0).size());
+        assertEquals(Errors.INVALID_SHARE_SESSION_EPOCH.exception(), completedAcknowledgements.get(0).get(tip0).getAcknowledgeException());
+    }
+
+    @Test
     public void testInvalidDefaultRecordBatch() {
         buildRequestManager();
 
