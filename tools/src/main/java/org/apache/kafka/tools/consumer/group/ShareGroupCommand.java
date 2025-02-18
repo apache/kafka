@@ -156,6 +156,18 @@ public class ShareGroupCommand {
             }
         }
 
+        List<GroupListing> listDetailedShareGroups() {
+            try {
+                ListGroupsResult result = adminClient.listGroups(new ListGroupsOptions()
+                    .timeoutMs(opts.options.valueOf(opts.timeoutMsOpt).intValue())
+                    .withTypes(Set.of(GroupType.SHARE)));
+                Collection<GroupListing> listings = result.all().get();
+                return listings.stream().toList();
+            } catch (InterruptedException | ExecutionException e) {
+                throw new RuntimeException(e);
+            }
+        }
+
         List<GroupListing> listShareGroupsInStates(Set<GroupState> states) throws ExecutionException, InterruptedException {
             ListGroupsResult result = adminClient.listGroups(new ListGroupsOptions()
                 .timeoutMs(opts.options.valueOf(opts.timeoutMsOpt).intValue())
@@ -211,9 +223,9 @@ public class ShareGroupCommand {
         }
 
         Map<String, Throwable> deleteShareGroups() {
-            List<String> shareGroupIds = listShareGroups();
+            List<GroupListing> shareGroupIds = listDetailedShareGroups();
             List<String> groupIds = opts.options.has(opts.allGroupsOpt)
-                ? shareGroupIds
+                ? shareGroupIds.stream().map(GroupListing::groupId).toList()
                 : opts.options.valuesOf(opts.groupOpt);
 
             if (groupIds.isEmpty()) {
@@ -221,8 +233,14 @@ public class ShareGroupCommand {
             }
 
             for (String groupId : groupIds) {
-                if (!shareGroupIds.contains(groupId)) {
+                Optional<GroupListing> listing = shareGroupIds.stream().filter(item -> item.groupId().equals(groupId)).findAny();
+                if (listing.isEmpty()) {
                     throw new IllegalArgumentException("Share group '" + groupId + "' is not a share group.");
+                } else {
+                    Optional<GroupState> state = listing.get().groupState();
+                    if (state.isPresent() && !state.get().equals(GroupState.EMPTY)) {
+                        throw new IllegalStateException("Share group '" + groupId + "' is not a EMPTY.");
+                    }
                 }
             }
 
