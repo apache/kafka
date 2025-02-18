@@ -537,7 +537,7 @@ Found problem:
   def testVersionMappingWithValidReleaseVersion(): Unit = {
     val stream = new ByteArrayOutputStream()
     // Test with a valid release version
-    assertEquals(0, runVersionMappingCommand(stream, "3.3-IV3"))
+    assertEquals(0, runVersionMappingCommand(stream, MetadataVersion.MINIMUM_VERSION.toString))
 
     val output = stream.toString()
     val metadataVersion = MetadataVersion.MINIMUM_VERSION
