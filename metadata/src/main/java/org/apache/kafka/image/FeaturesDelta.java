@@ -59,14 +59,13 @@ public final class FeaturesDelta {
 
     public void replay(FeatureLevelRecord record) {
         if (record.name().equals(MetadataVersion.FEATURE_NAME)) {
-            // Support for the `metadata.version` feature flag was added in IBP_3_3_IV0, so it's possible (but unlikely) that we read
-            // records with a feature level that is no longer supported for clusters that used a pre-release version of 3.3.0.
-            // We automatically fallback to IBP_3_3_IV3 in that case. We use explicit versions instead of `MINIMUM_VERSION` because
-            // we want to force an explicit decision if we change `MetadataVersion.MINIMUM_VERSION` in the future.
-            if (record.featureLevel() >= MINIMUM_PERSISTED_FEATURE_LEVEL && record.featureLevel() <= MetadataVersion.IBP_3_3_IV3.featureLevel())
-                metadataVersionChange = MetadataVersion.IBP_3_3_IV3;
-            else
+            try {
                 metadataVersionChange = MetadataVersion.fromFeatureLevel(record.featureLevel());
+            } catch (IllegalArgumentException e) {
+                throw new IllegalArgumentException("Unsupported metadata version - if you are currently upgrading your cluster, "
+                        + "please ensure the metadata version is set to " + MetadataVersion.MINIMUM_VERSION + " (or higher) before "
+                        + "updating the software version. The metadata version can be updated via the `kafka-features` command-line tool.", e);
+            }
         } else {
             if (record.featureLevel() == 0) {
                 changes.put(record.name(), Optional.empty());

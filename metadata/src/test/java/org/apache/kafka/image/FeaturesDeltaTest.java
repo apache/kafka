@@ -23,29 +23,21 @@ import org.apache.kafka.server.common.MetadataVersionTestUtils;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Map;
-
 import static java.util.Collections.emptyMap;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class FeaturesDeltaTest {
 
     @Test
-    public void testReplayWithOldestFeatureLevelThatMayExistInTheLog() {
+    public void testReplayWithUnsupportedFeatureLevel() {
         var featuresDelta = new FeaturesDelta(new FeaturesImage(emptyMap(), MetadataVersion.MINIMUM_VERSION));
-        featuresDelta.replay(new FeatureLevelRecord()
+        var exception = assertThrows(IllegalArgumentException.class, () -> featuresDelta.replay(new FeatureLevelRecord()
             .setName(MetadataVersion.FEATURE_NAME)
-            .setFeatureLevel(MetadataVersionTestUtils.IBP_3_3_IV0_FEATURE_LEVEL));
-        assertEquals(Map.of(), featuresDelta.changes());
-    }
-
-    @Test
-    public void testReplayWithFeatureLevelThatWasNeverSupported() {
-        var featuresDelta = new FeaturesDelta(new FeaturesImage(emptyMap(), MetadataVersion.MINIMUM_VERSION));
-        assertThrows(IllegalArgumentException.class, () -> featuresDelta.replay(new FeatureLevelRecord()
-            .setName(MetadataVersion.FEATURE_NAME)
-            .setFeatureLevel(MetadataVersionTestUtils.IBP_3_2_IV0_FEATURE_LEVEL)));
+            .setFeatureLevel(MetadataVersionTestUtils.IBP_3_3_IV2_FEATURE_LEVEL)));
+        assertTrue(exception.getMessage().contains("Unsupported metadata version - if you are currently upgrading your " +
+            "cluster, please ensure the metadata version is set to " + MetadataVersion.MINIMUM_VERSION),
+            "Expected substring missing from exception message: " + exception.getMessage());
     }
 
 }

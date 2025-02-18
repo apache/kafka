@@ -20,7 +20,6 @@ package org.apache.kafka.server.common;
 public class MetadataVersionTestUtils {
     // References to feature levels that are no longer supported in production, but still useful in tests
     public static final short IBP_3_0_IV1_FEATURE_LEVEL = 1;
-    public static final short IBP_3_2_IV0_FEATURE_LEVEL = 3;
     public static final short IBP_3_3_IV0_FEATURE_LEVEL = 4;
     public static final short IBP_3_3_IV2_FEATURE_LEVEL = 6;
 }
