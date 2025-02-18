@@ -110,7 +110,7 @@ object KafkaDockerWrapper extends Logging {
       case Some(str) => str
       case None => throw new RuntimeException("CLUSTER_ID environment variable is not set.")
     }
-    Array("format", "--cluster-id=" + clusterId, "-c", s"${configsPath.toString}/server.properties", "--standalone")
+    Array("format", "--cluster-id=" + clusterId, "-c", s"${configsPath.toString}/server.properties")
   }
 
   private def prepareConfigs(defaultConfigsPath: Path, mountedConfigsPath: Path, finalConfigsPath: Path): Unit = {
