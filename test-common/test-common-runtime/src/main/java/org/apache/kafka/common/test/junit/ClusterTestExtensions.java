@@ -213,7 +213,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
         String baseDisplayName = context.getRequiredTestMethod().getName();
         int repeatCount = getTestRepeatCount();
         List<TestTemplateInvocationContext> contexts = IntStream.range(0, repeatCount)
-            .mapToObj(__ -> generateClusterConfigurations(context, annot.value()).stream())
+            .mapToObj(__ -> generateClusterConfiguration(context, annot.value()).stream())
             .flatMap(Function.identity())
             .flatMap(config -> config.clusterTypes().stream().map(type -> invocationContextForClusterType(type, baseDisplayName, config)))
             .collect(Collectors.toList());
@@ -226,7 +226,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
     }
 
     @SuppressWarnings("unchecked")
-    private List<ClusterConfig> generateClusterConfigurations(
+    private List<ClusterConfig> generateClusterConfiguration(
         ExtensionContext context,
         String generateClustersMethods
     ) {

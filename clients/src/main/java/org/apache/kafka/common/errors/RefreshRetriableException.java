@@ -14,29 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.security;
+package org.apache.kafka.common.errors;
 
-import org.apache.kafka.common.config.types.Password;
-
-import java.security.GeneralSecurityException;
-
-public interface PasswordEncoder {
-    /**
-     * A password encoder that does not modify the given password. This is used in KRaft mode only.
-     */
-    PasswordEncoder NOOP = new PasswordEncoder() {
-
-        @Override
-        public String encode(Password password) {
-            return password.value();
-        }
-
-        @Override
-        public Password decode(String encodedPassword) {
-            return new Password(encodedPassword);
-        }
-    };
-
-    String encode(Password password) throws GeneralSecurityException;
-    Password decode(String encodedPassword) throws GeneralSecurityException;
+/**
+ * Indicates that an operation failed due to outdated or invalid metadata,
+ * requiring a refresh (e.g., refreshing producer metadata) before retrying the request.
+ * The request can be modified or updated with fresh metadata before being retried.
+ */
+public abstract class RefreshRetriableException extends RetriableException {
+    public RefreshRetriableException(String message) {
+        super(message);
+    }
 }

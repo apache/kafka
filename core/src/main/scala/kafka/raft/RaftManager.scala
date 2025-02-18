@@ -25,7 +25,6 @@ import java.util.concurrent.CompletableFuture
 import java.util.{Map => JMap}
 import java.util.{Collection => JCollection}
 import kafka.log.LogManager
-import kafka.log.UnifiedLog
 import kafka.server.KafkaConfig
 import kafka.utils.CoreUtils
 import kafka.utils.Logging
@@ -42,13 +41,14 @@ import org.apache.kafka.common.requests.RequestHeader
 import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{LogContext, Time, Utils}
-import org.apache.kafka.raft.{Endpoints, FileQuorumStateStore, KafkaNetworkChannel, KafkaRaftClient, KafkaRaftClientDriver, LeaderAndEpoch, QuorumConfig, RaftClient, ReplicatedLog, TimingWheelExpirationService}
+import org.apache.kafka.raft.{ExternalKRaftMetrics, Endpoints, FileQuorumStateStore, KafkaNetworkChannel, KafkaRaftClient, KafkaRaftClientDriver, LeaderAndEpoch, QuorumConfig, RaftClient, ReplicatedLog, TimingWheelExpirationService}
 import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.common.Feature
 import org.apache.kafka.server.common.serialization.RecordSerde
 import org.apache.kafka.server.util.{FileLock, KafkaScheduler}
 import org.apache.kafka.server.fault.FaultHandler
 import org.apache.kafka.server.util.timer.SystemTimer
+import org.apache.kafka.storage.internals.log.UnifiedLog
 
 import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters._
@@ -115,6 +115,7 @@ class KafkaRaftManager[T](
   topicId: Uuid,
   time: Time,
   metrics: Metrics,
+  externalKRaftMetrics: ExternalKRaftMetrics,
   threadNamePrefixOpt: Option[String],
   val controllerQuorumVotersFuture: CompletableFuture[JMap[Integer, InetSocketAddress]],
   bootstrapServers: JCollection[InetSocketAddress],
@@ -158,7 +159,8 @@ class KafkaRaftManager[T](
     client.initialize(
       controllerQuorumVotersFuture.get(),
       new FileQuorumStateStore(new File(dataDir, FileQuorumStateStore.DEFAULT_FILE_NAME)),
-      metrics
+      metrics,
+      externalKRaftMetrics
     )
     netChannel.start()
     clientDriver.start()

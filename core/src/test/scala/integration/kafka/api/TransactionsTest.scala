@@ -21,9 +21,8 @@ import kafka.utils.TestUtils.{consumeRecords, waitUntilTrue}
 import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
-import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.errors.{InvalidProducerEpochException, ProducerFencedException, TimeoutException}
-import org.apache.kafka.common.test.api.Flaky
+import org.apache.kafka.common.{KafkaException, TopicPartition}
+import org.apache.kafka.common.errors.{ConcurrentTransactionsException, InvalidProducerEpochException, ProducerFencedException, TimeoutException}
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.transaction.{TransactionLogConfig, TransactionStateManagerConfig}
 import org.apache.kafka.server.config.{ReplicationConfigs, ServerConfigs, ServerLogConfigs}
@@ -605,7 +604,7 @@ class TransactionsTest extends IntegrationTestHarness {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testFencingOnTransactionExpiration(quorum: String, groupProtocol: String): Unit = {
-    val producer = createTransactionalProducer("expiringProducer", transactionTimeoutMs = 100)
+    val producer = createTransactionalProducer("expiringProducer", transactionTimeoutMs = 300)
 
     producer.initTransactions()
     producer.beginTransaction()
@@ -618,13 +617,14 @@ class TransactionsTest extends IntegrationTestHarness {
     Thread.sleep(600)
 
     try {
-      // Now that the transaction has expired, the second send should fail with a InvalidProducerEpochException.
+      // Now that the transaction has expired, the second send should fail with a InvalidProducerEpochException. We may see some concurrentTransactionsExceptions.
       producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "2", "2", willBeCommitted = false)).get()
-      fail("should have raised a InvalidProducerEpochException since the transaction has expired")
+      fail("should have raised an error due to concurrent transactions or invalid producer epoch")
     } catch {
+      case _: ConcurrentTransactionsException =>
       case _: InvalidProducerEpochException =>
       case e: ExecutionException =>
-        assertTrue(e.getCause.isInstanceOf[InvalidProducerEpochException])
+        assertTrue(e.getCause.isInstanceOf[InvalidProducerEpochException], "Error was " + e.getCause + " and not InvalidProducerEpochException")
     }
 
     // Verify that the first message was aborted and the second one was never written at all.
@@ -692,7 +692,6 @@ class TransactionsTest extends IntegrationTestHarness {
     assertThrows(classOf[IllegalStateException], () => producer.initTransactions())
   }
 
-  @Flaky("KAFKA-18035")
   @ParameterizedTest
   @CsvSource(Array(
     "kraft,classic,false",
@@ -732,6 +731,19 @@ class TransactionsTest extends IntegrationTestHarness {
       restartDeadBrokers()
 
       org.apache.kafka.test.TestUtils.assertFutureThrows(failedFuture, classOf[TimeoutException])
+      // Ensure the producer transitions to abortable_error state.
+      TestUtils.waitUntilTrue(() => {
+        var failed = false
+        try {
+          producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(testTopic, 0, "3", "3", willBeCommitted = false))
+        } catch {
+          case e: Exception =>
+            if (e.isInstanceOf[KafkaException])
+              failed = true
+        }
+        failed
+      }, "The send request never failed as expected.")
+      assertThrows(classOf[KafkaException], () => producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(testTopic, 0, "3", "3", willBeCommitted = false)))
       producer.abortTransaction()
 
       producer.beginTransaction()
@@ -754,7 +766,7 @@ class TransactionsTest extends IntegrationTestHarness {
       producerStateEntry =
         brokers(partitionLeader).logManager.getLog(new TopicPartition(testTopic, 0)).get.producerStateManager.activeProducers.get(producerId)
       assertNotNull(producerStateEntry)
-      assertTrue(producerStateEntry.producerEpoch > initialProducerEpoch)
+      assertTrue(producerStateEntry.producerEpoch > initialProducerEpoch, "InitialProduceEpoch: " + initialProducerEpoch + " ProducerStateEntry: " + producerStateEntry)
     } finally {
       producer.close(Duration.ZERO)
     }

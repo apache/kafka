@@ -15,11 +15,12 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.test.api;
+package org.apache.kafka.raft;
 
-import java.util.function.Consumer;
-
-@FunctionalInterface
-public interface ClusterGenerator extends Consumer<ClusterConfig> {
-
+/**
+ * Implementations of this interface store external metrics objects whose
+ * values are updated in the raft layer. They are not allowed to block.
+ */
+public interface ExternalKRaftMetrics {
+    void setIgnoredStaticVoters(boolean ignoredStaticVoters);
 }

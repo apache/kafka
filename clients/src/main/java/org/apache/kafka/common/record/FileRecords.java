@@ -161,7 +161,9 @@ public class FileRecords extends AbstractRecords implements Closeable {
 
         if (position < 0)
             throw new IllegalArgumentException("Invalid position: " + position + " in read from " + this);
-        if (position > currentSizeInBytes - start)
+        // position should always be relative to the start of the file hence compare with file size
+        // to verify if the position is within the file.
+        if (position > currentSizeInBytes)
             throw new IllegalArgumentException("Slice from position " + position + " exceeds end position of " + this);
         if (size < 0)
             throw new IllegalArgumentException("Invalid size: " + size + " in read from " + this);

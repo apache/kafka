@@ -52,7 +52,7 @@ public @interface ClusterTest {
     String brokerListener() default DEFAULT_BROKER_LISTENER_NAME;
     SecurityProtocol controllerSecurityProtocol() default SecurityProtocol.PLAINTEXT;
     String controllerListener() default DEFAULT_CONTROLLER_LISTENER_NAME;
-    MetadataVersion metadataVersion() default MetadataVersion.IBP_4_0_IV3;
+    MetadataVersion metadataVersion() default MetadataVersion.IBP_4_1_IV0;
     ClusterConfigProperty[] serverProperties() default {};
     // users can add tags that they want to display in test
     String[] tags() default {};

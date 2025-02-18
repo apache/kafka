@@ -26,7 +26,6 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMetadataValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupPartitionMetadataKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupPartitionMetadataValue;
-import org.apache.kafka.coordinator.group.generated.StreamsGroupPartitionMetadataValue.PartitionMetadata;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMemberKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMemberValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMetadataKey;
@@ -116,21 +115,10 @@ public class StreamsCoordinatorRecordHelpers {
 
         StreamsGroupPartitionMetadataValue value = new StreamsGroupPartitionMetadataValue();
         newPartitionMetadata.forEach((topicName, topicMetadata) -> {
-            List<StreamsGroupPartitionMetadataValue.PartitionMetadata> partitionMetadata = new ArrayList<>();
-            if (!topicMetadata.partitionRacks().isEmpty()) {
-                topicMetadata.partitionRacks().forEach((partition, racks) ->
-                    partitionMetadata.add(new StreamsGroupPartitionMetadataValue.PartitionMetadata()
-                        .setPartition(partition)
-                        .setRacks(racks.stream().sorted().toList())
-                    )
-                );
-            }
-            partitionMetadata.sort(Comparator.comparingInt(PartitionMetadata::partition));
             value.topics().add(new StreamsGroupPartitionMetadataValue.TopicMetadata()
                 .setTopicId(topicMetadata.id())
                 .setTopicName(topicMetadata.name())
                 .setNumPartitions(topicMetadata.numPartitions())
-                .setPartitionMetadata(partitionMetadata)
             );
         });
 

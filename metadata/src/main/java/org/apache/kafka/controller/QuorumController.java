@@ -1555,7 +1555,7 @@ public final class QuorumController implements Controller {
             setSessionTimeoutNs(sessionTimeoutNs).
             setReplicaPlacer(replicaPlacer).
             setFeatureControlManager(featureControl).
-            setBrokerUncleanShutdownHandler(this::handleUncleanBrokerShutdown).
+            setBrokerShutdownHandler(this::handleBrokerShutdown).
             setInterBrokerListenerName(interBrokerListenerName).
             build();
         this.configurationControl = new ConfigurationControlManager.Builder().
@@ -2025,7 +2025,8 @@ public final class QuorumController implements Controller {
         return appendWriteEvent("registerBroker", context.deadlineNs(),
             () -> clusterControl.
                 registerBroker(request, offsetControl.nextWriteOffset(),
-                    new FinalizedControllerFeatures(controllerFeatures, Long.MAX_VALUE)),
+                    new FinalizedControllerFeatures(controllerFeatures, Long.MAX_VALUE),
+                    context.requestHeader().requestApiVersion() >= 3),
             EnumSet.noneOf(ControllerOperationFlag.class));
     }
 
@@ -2203,7 +2204,7 @@ public final class QuorumController implements Controller {
         return controllerMetrics;
     }
 
-    void handleUncleanBrokerShutdown(int brokerId, List<ApiMessageAndVersion> records) {
-        replicationControl.handleBrokerUncleanShutdown(brokerId, records);
+    void handleBrokerShutdown(int brokerId, boolean isCleanShutdown, List<ApiMessageAndVersion> records) {
+        replicationControl.handleBrokerShutdown(brokerId, isCleanShutdown, records);
     }
 }

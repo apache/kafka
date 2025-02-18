@@ -40,12 +40,7 @@ class BrokerMetricNamesTest(cluster: ClusterInstance) {
   def checkReplicaManagerMetrics(): Unit = {
     val metrics = KafkaYammerMetrics.defaultRegistry.allMetrics
     val expectedPrefix = "kafka.server:type=ReplicaManager,name"
-    val expectedMetricNames = Set(
-      "LeaderCount", "PartitionCount", "OfflineReplicaCount", "UnderReplicatedPartitions",
-      "UnderMinIsrPartitionCount", "AtMinIsrPartitionCount", "ReassigningPartitions",
-      "IsrExpandsPerSec", "IsrShrinksPerSec", "FailedIsrUpdatesPerSec",
-      "ProducerIdCount",
-    )
+    val expectedMetricNames = ReplicaManager.MetricNames
     expectedMetricNames.foreach { metricName =>
       assertEquals(1, metrics.keySet.asScala.count(_.getMBeanName == s"$expectedPrefix=$metricName"))
     }

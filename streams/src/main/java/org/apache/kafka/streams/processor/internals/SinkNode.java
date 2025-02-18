@@ -30,13 +30,13 @@ public class SinkNode<KIn, VIn> extends ProcessorNode<KIn, VIn, Void, Void> {
 
     private Serializer<KIn> keySerializer;
     private Serializer<VIn> valSerializer;
-    private final TopicNameExtractor<KIn, VIn> topicExtractor;
+    private final TopicNameExtractor<? super KIn, ? super VIn> topicExtractor;
     private final StreamPartitioner<? super KIn, ? super VIn> partitioner;
 
     private InternalProcessorContext<Void, Void> context;
 
     SinkNode(final String name,
-             final TopicNameExtractor<KIn, VIn> topicExtractor,
+             final TopicNameExtractor<? super KIn, ? super VIn> topicExtractor,
              final Serializer<KIn> keySerializer,
              final Serializer<VIn> valSerializer,
              final StreamPartitioner<? super KIn, ? super VIn> partitioner) {

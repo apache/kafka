@@ -35,12 +35,10 @@ import org.junit.jupiter.params.provider.CsvSource;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 
-import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.streams.tests.SmokeTestDriver.generate;
 import static org.apache.kafka.streams.tests.SmokeTestDriver.verify;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -48,10 +46,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Timeout(600)
 @Tag("integration")
 public class SmokeTestDriverIntegrationTest {
-    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(
-            3,
-            mkProperties(
-                    Collections.singletonMap("log.message.timestamp.after.max.ms", String.valueOf(Long.MAX_VALUE))));
+    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(3);
 
     @BeforeAll
     public static void startCluster() throws IOException {
@@ -104,7 +99,7 @@ public class SmokeTestDriverIntegrationTest {
     // We set 2 timeout condition to fail the test before passing the verification:
     // (1) 10 min timeout, (2) 30 tries of polling without getting any data
     @ParameterizedTest
-    @CsvSource({"false, false", "true, false", "true, true"})
+    @CsvSource({"false, false", "true, false"})
     public void shouldWorkWithRebalance(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) throws InterruptedException {
         Exit.setExitProcedure((statusCode, message) -> {
             throw new AssertionError("Test called exit(). code:" + statusCode + " message:" + message);

@@ -1499,6 +1499,23 @@ public class CommitRequestManagerTest {
         assertEquals("topic", data.topics().get(0).name());
     }
 
+    @Test
+    public void testPollWithFatalErrorShouldFailAllUnsentRequests() {
+        CommitRequestManager commitRequestManager = create(true, 100);
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
+
+        commitRequestManager.fetchOffsets(Collections.singleton(new TopicPartition("test", 0)), 200);
+        assertEquals(1, commitRequestManager.pendingRequests.unsentOffsetFetches.size());
+
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.empty());
+        when(coordinatorRequestManager.fatalError())
+                .thenReturn(Optional.of(new GroupAuthorizationException("Group authorization exception")));
+
+        assertEquals(NetworkClientDelegate.PollResult.EMPTY, commitRequestManager.poll(200));
+
+        assertEmptyPendingRequests(commitRequestManager);
+    }
+    
     private static void assertEmptyPendingRequests(CommitRequestManager commitRequestManager) {
         assertTrue(commitRequestManager.pendingRequests.inflightOffsetFetches.isEmpty());
         assertTrue(commitRequestManager.pendingRequests.unsentOffsetFetches.isEmpty());

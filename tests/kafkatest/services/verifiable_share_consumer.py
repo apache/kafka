@@ -34,7 +34,7 @@ class ShareConsumerEventHandler(object):
         self.node = node
         self.idx = idx
         self.total_consumed = 0
-        self.total_acknowledged = 0
+        self.total_acknowledged_successfully = 0
         self.total_acknowledged_failed = 0
         self.consumed_per_partition = {}
         self.acknowledged_per_partition = {}
@@ -52,7 +52,7 @@ class ShareConsumerEventHandler(object):
 
     def handle_offsets_acknowledged(self, event, node, logger):
         if event["success"]:
-            self.total_acknowledged += event["count"]
+            self.total_acknowledged_successfully += event["count"]
             for share_partition_data in event["partitions"]:
                 topic_partition = TopicPartition(share_partition_data["topic"], share_partition_data["partition"])
                 self.acknowledged_per_partition[topic_partition] = self.acknowledged_per_partition.get(topic_partition, 0) + share_partition_data["count"]
@@ -291,7 +291,7 @@ class VerifiableShareConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Bac
         with self.lock:
             return self.total_records_acknowledged + self.total_records_acknowledged_failed
         
-    def total_successful_acknowledged(self):
+    def total_acknowledged_successfully(self):
         with self.lock:
             return self.total_records_acknowledged
         
@@ -305,11 +305,11 @@ class VerifiableShareConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Bac
 
     def total_acknowledged_for_a_share_consumer(self, node):
         with self.lock:
-            return self.event_handlers[node].total_acknowledged + self.event_handlers[node].total_acknowledged_failed
+            return self.event_handlers[node].total_acknowledged_successfully + self.event_handlers[node].total_acknowledged_failed
         
-    def total_successful_acknowledged_for_a_share_consumer(self, node):
+    def total_acknowledged_sucessfully_for_a_share_consumer(self, node):
         with self.lock:
-            return self.event_handlers[node].total_acknowledged
+            return self.event_handlers[node].total_acknowledged_successfully
         
     def total_failed_acknowledged_for_a_share_consumer(self, node):
         with self.lock:
