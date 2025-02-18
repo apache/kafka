@@ -29,7 +29,6 @@ import org.apache.kafka.metadata.properties.MetaProperties;
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble;
 import org.apache.kafka.raft.DynamicVoters;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
-import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
 import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.GroupVersion;
 import org.apache.kafka.server.common.MetadataVersion;
