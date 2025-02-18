@@ -253,7 +253,6 @@ log4j-slf4j-impl-2.24.1
 log4j-1.2-api-2.24.1
 lz4-java-1.8.0
 maven-artifact-3.9.6
-metrics-core-4.1.12.1
 metrics-core-2.2.0
 opentelemetry-proto-1.0.0-alpha
 plexus-utils-3.5.1

@@ -84,8 +84,6 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class StreamsGroupTest {
@@ -859,53 +857,6 @@ public class StreamsGroupTest {
     }
 
     @Test
-    public void testStateTransitionMetrics() {
-        // Confirm metrics is not updated when a new StreamsGroup is created but only when the group transitions
-        // its state.
-        GroupCoordinatorMetricsShard metrics = mock(GroupCoordinatorMetricsShard.class);
-        StreamsGroup streamsGroup = new StreamsGroup(
-            LOG_CONTEXT,
-            new SnapshotRegistry(new LogContext()),
-            "group-id",
-            metrics
-        );
-
-        assertEquals(StreamsGroup.StreamsGroupState.EMPTY, streamsGroup.state());
-        verify(metrics, times(0)).onStreamsGroupStateTransition(null, StreamsGroup.StreamsGroupState.EMPTY);
-
-        StreamsGroupMember member = new StreamsGroupMember.Builder("member")
-            .setMemberEpoch(1)
-            .setPreviousMemberEpoch(0)
-            .setState(MemberState.STABLE)
-            .build();
-
-        streamsGroup.updateMember(member);
-
-        assertEquals(StreamsGroup.StreamsGroupState.NOT_READY, streamsGroup.state());
-        verify(metrics, times(1)).onStreamsGroupStateTransition(StreamsGroup.StreamsGroupState.EMPTY, StreamsGroup.StreamsGroupState.NOT_READY);
-
-        streamsGroup.setTopology(new StreamsTopology(1, Collections.emptyMap()));
-
-        assertEquals(StreamsGroup.StreamsGroupState.RECONCILING, streamsGroup.state());
-        verify(metrics, times(1)).onStreamsGroupStateTransition(StreamsGroup.StreamsGroupState.NOT_READY, StreamsGroup.StreamsGroupState.RECONCILING);
-
-        streamsGroup.setGroupEpoch(1);
-
-        assertEquals(StreamsGroup.StreamsGroupState.ASSIGNING, streamsGroup.state());
-        verify(metrics, times(1)).onStreamsGroupStateTransition(StreamsGroup.StreamsGroupState.RECONCILING, StreamsGroup.StreamsGroupState.ASSIGNING);
-
-        streamsGroup.setTargetAssignmentEpoch(1);
-
-        assertEquals(StreamsGroup.StreamsGroupState.STABLE, streamsGroup.state());
-        verify(metrics, times(1)).onStreamsGroupStateTransition(StreamsGroup.StreamsGroupState.ASSIGNING, StreamsGroup.StreamsGroupState.STABLE);
-
-        streamsGroup.removeMember("member");
-
-        assertEquals(StreamsGroup.StreamsGroupState.EMPTY, streamsGroup.state());
-        verify(metrics, times(1)).onStreamsGroupStateTransition(StreamsGroup.StreamsGroupState.STABLE, StreamsGroup.StreamsGroupState.EMPTY);
-    }
-
-    @Test
     public void testIsInStatesCaseInsensitiveAndUnderscored() {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(LOG_CONTEXT);
         GroupCoordinatorMetricsShard metricsShard = new GroupCoordinatorMetricsShard(
@@ -952,6 +903,36 @@ public class StreamsGroupTest {
             .build());
 
         assertEquals(StreamsGroupState.RECONCILING, streamsGroup.state());
+    }
+
+    @Test
+    public void testSetTopologyUpdatesStateAndConfiguredTopologyWithPreviousCallToSetMetadata() {
+        Uuid topicUuid = Uuid.randomUuid();
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(LOG_CONTEXT);
+        GroupCoordinatorMetricsShard metricsShard = mock(GroupCoordinatorMetricsShard.class);
+        StreamsGroup streamsGroup = new StreamsGroup(LOG_CONTEXT, snapshotRegistry, "test-group", metricsShard);
+
+        assertEquals(StreamsGroup.StreamsGroupState.EMPTY, streamsGroup.state());
+
+        Map<String, TopicMetadata> partitionMetadata = new HashMap<>();
+        partitionMetadata.put("topic1", new TopicMetadata(topicUuid, "topic1", 1));
+
+        try (MockedStatic<InternalTopicManager> mocked = mockStatic(InternalTopicManager.class)) {
+            streamsGroup.setPartitionMetadata(partitionMetadata);
+            mocked.verify(() -> InternalTopicManager.configureTopics(any(), any(), any()), never());
+        }
+
+        assertTrue(streamsGroup.configuredTopology().isEmpty(), "Configured topology should not be present");
+        assertEquals(partitionMetadata, streamsGroup.partitionMetadata());
+
+        StreamsTopology topology = new StreamsTopology(1, Collections.emptyMap());
+        ConfiguredTopology topo = mock(ConfiguredTopology.class);
+        when(topo.isReady()).thenReturn(true);
+        try (MockedStatic<InternalTopicManager> mocked = mockStatic(InternalTopicManager.class)) {
+            mocked.when(() -> InternalTopicManager.configureTopics(any(), eq(topology), eq(partitionMetadata))).thenReturn(topo);
+            streamsGroup.setTopology(topology);
+            mocked.verify(() -> InternalTopicManager.configureTopics(any(), eq(topology), eq(partitionMetadata)));
+        }
     }
 
     @Test
