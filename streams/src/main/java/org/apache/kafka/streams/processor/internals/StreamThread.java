@@ -76,7 +76,6 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Queue;
@@ -1403,15 +1402,19 @@ public class StreamThread extends Thread implements ProcessingThread {
             }
 
             // Process metadata from Streams Rebalance Protocol
-            final Map<StreamsAssignmentInterface.HostInfo, List<TopicPartition>> partitionsByEndpoint =
+            final Map<StreamsAssignmentInterface.HostInfo, StreamsAssignmentInterface.EndpointPartitions> partitionsByEndpoint =
                 streamsAssignmentInterface.get().partitionsByHost.get();
-            final Map<HostInfo, Set<TopicPartition>> convertedHostInfoMap = new HashMap<>();
-            partitionsByEndpoint.forEach((hostInfo, topicPartitions) ->
-                convertedHostInfoMap.put(new HostInfo(hostInfo.host, hostInfo.port), new HashSet<>(topicPartitions)));
+            final Map<HostInfo, Set<TopicPartition>> activeHostInfoMap = new HashMap<>();
+            final Map<HostInfo, Set<TopicPartition>> standbyHostInfoMap = new HashMap<>();
+
+            partitionsByEndpoint.forEach((hostInfo, endpointPartitions) -> {
+                activeHostInfoMap.put(new HostInfo(hostInfo.host, hostInfo.port), new HashSet<>(endpointPartitions.activePartitions()));
+                standbyHostInfoMap.put(new HostInfo(hostInfo.host, hostInfo.port), new HashSet<>(endpointPartitions.standbyPartitions()));
+            });
             streamsMetadataState.onChange(
-                convertedHostInfoMap,
-                Collections.emptyMap(), // TODO: We cannot differentiate between standby and active tasks here?!
-                getTopicPartitionInfo(convertedHostInfoMap)
+                activeHostInfoMap,
+                standbyHostInfoMap,
+                getTopicPartitionInfo(activeHostInfoMap)
             );
 
             // Process assignment from Streams Rebalance Protocol

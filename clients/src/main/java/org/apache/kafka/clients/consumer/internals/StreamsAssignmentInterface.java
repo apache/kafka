@@ -29,6 +29,7 @@ import org.apache.kafka.clients.consumer.internals.events.StreamsOnTasksRevokedC
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -120,7 +121,7 @@ public class StreamsAssignmentInterface {
     /**
      * List of partitions available on each host. Updated by the streams protocol client.
      */
-    public final AtomicReference<Map<HostInfo, List<TopicPartition>>> partitionsByHost = new AtomicReference<>(Collections.emptyMap());
+    public final AtomicReference<Map<HostInfo, EndpointPartitions>> partitionsByHost = new AtomicReference<>(Collections.emptyMap());
 
     public static class HostInfo {
 
@@ -140,7 +141,32 @@ public class StreamsAssignmentInterface {
                 ", port=" + port +
                 '}';
         }
+    }
 
+    public static class EndpointPartitions {
+        private final List<TopicPartition> activePartitions;
+        private final List<TopicPartition> standbyPartitions;
+
+        public EndpointPartitions(final List<TopicPartition> activePartitions,
+                                  final List<TopicPartition> standbyPartitions) {
+            this.activePartitions = activePartitions;
+            this.standbyPartitions = standbyPartitions;
+        }
+
+        public List<TopicPartition> activePartitions() {
+            return new ArrayList<>(activePartitions);
+        }
+
+        public List<TopicPartition> standbyPartitions() {
+            return new ArrayList<>(standbyPartitions);
+        }
+        @Override
+        public String toString() {
+            return "EndpointPartitions {"
+                    + "activePartitions=" + activePartitions
+                    + ", standbyPartitions=" + standbyPartitions
+                    + '}';
+        }
     }
 
     public static class Assignment {

@@ -253,18 +253,24 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         membershipManager.onHeartbeatSuccess(response);
     }
 
-    private static Map<StreamsAssignmentInterface.HostInfo, List<TopicPartition>> convertHostInfoMap(
+    private static Map<StreamsAssignmentInterface.HostInfo, StreamsAssignmentInterface.EndpointPartitions> convertHostInfoMap(
         final StreamsGroupHeartbeatResponseData data) {
-        Map<StreamsAssignmentInterface.HostInfo, List<TopicPartition>> partitionsByHost = new HashMap<>();
+        Map<StreamsAssignmentInterface.HostInfo, StreamsAssignmentInterface.EndpointPartitions> partitionsByHost = new HashMap<>();
         data.partitionsByUserEndpoint().forEach(endpoint -> {
-            List<TopicPartition> topicPartitions = endpoint.partitions().stream()
-                .flatMap(partition ->
-                    partition.partitions().stream().map(partitionId -> new TopicPartition(partition.topic(), partitionId)))
-                .collect(Collectors.toList());
+            List<TopicPartition> activeTopicPartitions = getTopicPartitionList(endpoint.activePartitions());
+            List<TopicPartition> standbyTopicPartitions = getTopicPartitionList(endpoint.standbyPartitions());
             Endpoint userEndpoint = endpoint.userEndpoint();
-            partitionsByHost.put(new StreamsAssignmentInterface.HostInfo(userEndpoint.host(), userEndpoint.port()), topicPartitions);
+            StreamsAssignmentInterface.EndpointPartitions endpointPartitions = new StreamsAssignmentInterface.EndpointPartitions(activeTopicPartitions, standbyTopicPartitions);
+            partitionsByHost.put(new StreamsAssignmentInterface.HostInfo(userEndpoint.host(), userEndpoint.port()), endpointPartitions);
         });
         return partitionsByHost;
+    }
+
+    static List<TopicPartition> getTopicPartitionList(List<StreamsGroupHeartbeatResponseData.TopicPartition> topicPartitions) {
+        return topicPartitions.stream()
+            .flatMap(partition ->
+                partition.partitions().stream().map(partitionId -> new TopicPartition(partition.topic(), partitionId)))
+            .collect(Collectors.toList());
     }
 
     private void updateTaskIdCollection(
