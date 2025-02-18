@@ -643,13 +643,13 @@ class RemoteIndexCacheTest {
     assertCacheSize(2)
     val (evictedSegmentMetadata, evictedEntry) = verifyEntryIsEvicted(metadataList, entries, 1)
 
-    // Reduce cache capacity to only store 1 entry and check two entries are marked as deleted.
+    // Reduce cache capacity to only store 1 entry
     cache.resizeCacheSize(1 * estimateEntryBytesSize)
     assertCacheSize(1)
-    // After resize, we need to check an entry is deleted from cache and exist segmentMetadata
+    // After resize, we need to check an entry is deleted from cache and the existing segmentMetadata
     val entryInCache = entries.filterNot(evictedEntry.contains(_))
-    val existSegmentMetadata = metadataList.filterNot(evictedSegmentMetadata.contains(_))
-    verifyEntryIsEvicted(existSegmentMetadata, entryInCache, 1)
+    val updatedSegmentMetadata = metadataList.filterNot(evictedSegmentMetadata.contains(_))
+    verifyEntryIsEvicted(updatedSegmentMetadata, entryInCache, 1)
 
     // resize to the same size, all entries should be kept
     cache.resizeCacheSize(1 * estimateEntryBytesSize)
