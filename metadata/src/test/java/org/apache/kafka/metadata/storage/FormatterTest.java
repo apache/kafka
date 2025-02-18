@@ -29,10 +29,12 @@ import org.apache.kafka.metadata.properties.MetaProperties;
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble;
 import org.apache.kafka.raft.DynamicVoters;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
 import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.GroupVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.common.TestFeatureVersion;
+import org.apache.kafka.server.common.TransactionVersion;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
@@ -342,6 +344,9 @@ public class FormatterTest {
                 setFeatureLevel(MetadataVersion.latestProduction().featureLevel()),
                     (short) 0));
             expected.add(new ApiMessageAndVersion(new FeatureLevelRecord().
+                setName(EligibleLeaderReplicasVersion.FEATURE_NAME).
+                setFeatureLevel(EligibleLeaderReplicasVersion.ELRV_1.featureLevel()), (short) 0));
+            expected.add(new ApiMessageAndVersion(new FeatureLevelRecord().
                 setName(GroupVersion.FEATURE_NAME).
                 setFeatureLevel(GroupVersion.GV_1.featureLevel()), (short) 0));
             if (version > 0) {
@@ -349,6 +354,9 @@ public class FormatterTest {
                     setName(TestFeatureVersion.FEATURE_NAME).
                     setFeatureLevel(version), (short) 0));
             }
+            expected.add(new ApiMessageAndVersion(new FeatureLevelRecord().
+                setName(TransactionVersion.FEATURE_NAME).
+                setFeatureLevel(TransactionVersion.TV_2.featureLevel()), (short) 0));
             assertEquals(expected, bootstrapMetadata.records());
         }
     }

@@ -24,7 +24,6 @@ import javax.management.ObjectName
 import kafka.log.UnifiedLog
 import kafka.server.{MetadataCache, ReplicaManager}
 import kafka.utils.{Pool, TestUtils}
-import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.internals.Topic.TRANSACTION_STATE_TOPIC_NAME
@@ -64,20 +63,14 @@ class TransactionStateManagerTest {
 
   val time = new MockTime()
   val scheduler = new MockScheduler(time)
-  val zkClient: KafkaZkClient = mock(classOf[KafkaZkClient])
   val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
   val metadataCache: MetadataCache = mock(classOf[MetadataCache])
-
-  when(zkClient.getTopicPartitionCount(TRANSACTION_STATE_TOPIC_NAME))
-    .thenReturn(Some(numPartitions))
 
   when(metadataCache.features()).thenReturn {
     new FinalizedFeatures(
       MetadataVersion.latestTesting(),
       Collections.singletonMap(TransactionVersion.FEATURE_NAME, TransactionVersion.TV_2.featureLevel()),
-      0,
-      true
-    )
+      0)
   }
   
   val metrics = new Metrics()
@@ -1256,8 +1249,6 @@ class TransactionStateManagerTest {
       Map(new TopicPartition(TRANSACTION_STATE_TOPIC_NAME, partitionId) ->
         new PartitionResponse(error, 0L, RecordBatch.NO_TIMESTAMP, 0L)))
     )
-    when(replicaManager.getMagic(any()))
-      .thenReturn(Some(RecordBatch.MAGIC_VALUE_V1))
   }
 
   @Test
@@ -1322,7 +1313,7 @@ class TransactionStateManagerTest {
     val txnMetadata = txnMetadataPool.get(transactionalId1)
     assertEquals(txnMetadata1.transactionalId, txnMetadata.transactionalId)
     assertEquals(txnMetadata1.producerId, txnMetadata.producerId)
-    assertEquals(txnMetadata1.previousProducerId, txnMetadata.previousProducerId)
+    assertEquals(txnMetadata1.prevProducerId, txnMetadata.prevProducerId)
     assertEquals(txnMetadata1.producerEpoch, txnMetadata.producerEpoch)
     assertEquals(txnMetadata1.lastProducerEpoch, txnMetadata.lastProducerEpoch)
     assertEquals(txnMetadata1.txnTimeoutMs, txnMetadata.txnTimeoutMs)
@@ -1339,9 +1330,7 @@ class TransactionStateManagerTest {
       new FinalizedFeatures(
         MetadataVersion.latestTesting(),
         Collections.singletonMap(TransactionVersion.FEATURE_NAME, transactionVersion.featureLevel()),
-        0,
-        true
-      )
+        0)
     }
     val transactionManager = new TransactionStateManager(0, scheduler,
       replicaManager, metadataCache, txnConfig, time, metrics)

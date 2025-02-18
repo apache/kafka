@@ -47,7 +47,7 @@ public class ProducerIdControlManagerTest {
         FeatureControlManager featureControl = new FeatureControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
             setQuorumFeatures(new QuorumFeatures(0,
-                QuorumFeatures.defaultFeatureMap(true),
+                QuorumFeatures.defaultSupportedFeatureMap(true),
                 Collections.singletonList(0))).
             build();
         ClusterControlManager clusterControl = new ClusterControlManager.Builder().
@@ -55,7 +55,7 @@ public class ProducerIdControlManagerTest {
             setSnapshotRegistry(snapshotRegistry).
             setSessionTimeoutNs(1000).
             setFeatureControlManager(featureControl).
-            setBrokerUncleanShutdownHandler((brokerId, records) -> { }).
+            setBrokerShutdownHandler((brokerId, isCleanShutdown, records) -> { }).
             build();
 
         clusterControl.activate();

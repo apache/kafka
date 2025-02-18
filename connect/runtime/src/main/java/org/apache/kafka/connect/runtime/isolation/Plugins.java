@@ -45,6 +45,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -265,8 +266,17 @@ public class Plugins {
         };
     }
 
-    public String latestVersion(String classOrAlias) {
-        return delegatingLoader.latestVersion(classOrAlias);
+    public String latestVersion(String classOrAlias, PluginType... allowedTypes) {
+        return pluginVersion(classOrAlias, null, allowedTypes);
+    }
+
+    public String pluginVersion(String classOrAlias, ClassLoader sourceLoader, PluginType... allowedTypes) {
+        String location = (sourceLoader instanceof PluginClassLoader) ? ((PluginClassLoader) sourceLoader).location() : null;
+        PluginDesc<?> desc = delegatingLoader.pluginDesc(classOrAlias, location, new HashSet<>(Arrays.asList(allowedTypes)));
+        if (desc != null) {
+            return desc.version();
+        }
+        return null;
     }
 
     public DelegatingClassLoader delegatingLoader() {
@@ -278,7 +288,7 @@ public class Plugins {
         return delegatingLoader.loader(connectorClassOrAlias);
     }
 
-    public ClassLoader pluginLoader(String classOrAlias, VersionRange range) throws ClassNotFoundException, VersionedPluginLoadingException {
+    public ClassLoader pluginLoader(String classOrAlias, VersionRange range) {
         return delegatingLoader.loader(classOrAlias, range);
     }
 
@@ -298,7 +308,7 @@ public class Plugins {
         return scanResult.sinkConnectors();
     }
 
-    public Set<PluginDesc<SinkConnector>> sinkConnectors(String connectorClassOrAlias) {
+    Set<PluginDesc<SinkConnector>> sinkConnectors(String connectorClassOrAlias) {
         return pluginsOfClass(connectorClassOrAlias, scanResult.sinkConnectors());
     }
 
@@ -306,7 +316,7 @@ public class Plugins {
         return scanResult.sourceConnectors();
     }
 
-    public Set<PluginDesc<SourceConnector>> sourceConnectors(String connectorClassOrAlias) {
+    Set<PluginDesc<SourceConnector>> sourceConnectors(String connectorClassOrAlias) {
         return pluginsOfClass(connectorClassOrAlias, scanResult.sourceConnectors());
     }
 
@@ -365,6 +375,13 @@ public class Plugins {
     public Object newPlugin(String classOrAlias, VersionRange range) throws VersionedPluginLoadingException, ClassNotFoundException {
         Class<?> klass = pluginClass(delegatingLoader, classOrAlias, Object.class, range);
         return newPlugin(klass);
+    }
+
+    public Object newPlugin(String classOrAlias, VersionRange range, ClassLoader sourceLoader) throws ClassNotFoundException {
+        if (range == null && sourceLoader instanceof PluginClassLoader) {
+            return newPlugin(sourceLoader.loadClass(classOrAlias));
+        }
+        return newPlugin(classOrAlias, range);
     }
 
     public Connector newConnector(String connectorClassOrAlias) {
@@ -661,8 +678,7 @@ public class Plugins {
         }
         try (LoaderSwap loaderSwap = withClassLoader(klass.getClassLoader())) {
             plugin = newPlugin(klass);
-            if (plugin instanceof Versioned) {
-                Versioned versionedPlugin = (Versioned) plugin;
+            if (plugin instanceof Versioned versionedPlugin) {
                 if (Utils.isBlank(versionedPlugin.version())) {
                     throw new ConnectException("Version not defined for '" + klassName + "'");
                 }

@@ -35,9 +35,8 @@ import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.server.config.ServerLogConfigs
 import org.apache.kafka.server.storage.log.FetchIsolation
 import org.apache.kafka.server.util.Scheduler
-import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile
 import org.apache.kafka.storage.internals.log.LogConfig.{DEFAULT_REMOTE_LOG_COPY_DISABLE_CONFIG, DEFAULT_REMOTE_LOG_DELETE_ON_DISABLE_CONFIG}
-import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, FetchDataInfo, LazyIndex, LogAppendInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetsListener, LogSegment, ProducerStateManager, ProducerStateManagerConfig, TransactionIndex}
+import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, FetchDataInfo, LazyIndex, LogAppendInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetsListener, LogSegment, ProducerStateManager, ProducerStateManagerConfig, TransactionIndex, UnifiedLog => JUnifiedLog}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 
 import scala.jdk.CollectionConverters._
@@ -53,7 +52,7 @@ object LogTestUtils {
     val ms = FileRecords.open(LogFileUtils.logFile(logDir, offset))
     val idx = LazyIndex.forOffset(LogFileUtils.offsetIndexFile(logDir, offset), offset, 1000)
     val timeIdx = LazyIndex.forTime(LogFileUtils.timeIndexFile(logDir, offset), offset, 1500)
-    val txnIndex = new TransactionIndex(offset, UnifiedLog.transactionIndexFile(logDir, offset))
+    val txnIndex = new TransactionIndex(offset, LogFileUtils.transactionIndexFile(logDir, offset, ""))
 
     new LogSegment(ms, idx, timeIdx, txnIndex, offset, indexIntervalBytes, 0, time)
   }
@@ -104,7 +103,6 @@ object LogTestUtils {
                 producerIdExpirationCheckIntervalMs: Int = TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_DEFAULT,
                 lastShutdownClean: Boolean = true,
                 topicId: Option[Uuid] = None,
-                keepPartitionMetadataFile: Boolean = true,
                 numRemainingSegments: ConcurrentMap[String, Integer] = new ConcurrentHashMap[String, Integer],
                 remoteStorageSystemEnable: Boolean = false,
                 remoteLogManager: Option[RemoteLogManager] = None,
@@ -123,7 +121,6 @@ object LogTestUtils {
       logDirFailureChannel = new LogDirFailureChannel(10),
       lastShutdownClean = lastShutdownClean,
       topicId = topicId,
-      keepPartitionMetadataFile = keepPartitionMetadataFile,
       numRemainingSegments = numRemainingSegments,
       remoteStorageSystemEnable = remoteStorageSystemEnable,
       logOffsetsListener = logOffsetsListener
@@ -212,8 +209,8 @@ object LogTestUtils {
     time.sleep(config.fileDeleteDelayMs + 1)
     for (file <- logDir.listFiles) {
       assertFalse(file.getName.endsWith(LogFileUtils.DELETED_FILE_SUFFIX), "Unexpected .deleted file after recovery")
-      assertFalse(file.getName.endsWith(UnifiedLog.CleanedFileSuffix), "Unexpected .cleaned file after recovery")
-      assertFalse(file.getName.endsWith(UnifiedLog.SwapFileSuffix), "Unexpected .swap file after recovery")
+      assertFalse(file.getName.endsWith(JUnifiedLog.CLEANED_FILE_SUFFIX), "Unexpected .cleaned file after recovery")
+      assertFalse(file.getName.endsWith(JUnifiedLog.SWAP_FILE_SUFFIX), "Unexpected .swap file after recovery")
     }
     assertEquals(expectedKeys, keysInLog(recoveredLog))
     assertFalse(hasOffsetOverflow(recoveredLog))
@@ -261,12 +258,6 @@ object LogTestUtils {
 
   def listProducerSnapshotOffsets(logDir: File): Seq[Long] =
     ProducerStateManager.listSnapshotFiles(logDir).asScala.map(_.offset).sorted.toSeq
-
-  def assertLeaderEpochCacheEmpty(log: UnifiedLog): Unit = {
-    assertEquals(None, log.leaderEpochCache)
-    assertEquals(None, log.latestEpoch)
-    assertFalse(LeaderEpochCheckpointFile.newFile(log.dir).exists())
-  }
 
   def appendNonTransactionalAsLeader(log: UnifiedLog, numRecords: Int): Unit = {
     val simpleRecords = (0 until numRecords).map { seq =>

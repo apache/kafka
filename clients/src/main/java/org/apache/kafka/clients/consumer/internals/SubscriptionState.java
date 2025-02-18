@@ -490,6 +490,20 @@ public class SubscriptionState {
                 || this.subscriptionType == SubscriptionType.AUTO_TOPICS_SHARE || this.subscriptionType == SubscriptionType.AUTO_PATTERN_RE2J;
     }
 
+    public synchronized boolean isAssignedFromRe2j(String topic) {
+        if (!hasRe2JPatternSubscription()) {
+            return false;
+        }
+
+        for (TopicPartition topicPartition : assignment.partitionSet()) {
+            if (topicPartition.topic().equals(topic)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public synchronized void position(TopicPartition tp, FetchPosition position) {
         assignedState(tp).position(position);
     }
@@ -898,8 +912,8 @@ public class SubscriptionState {
     }
 
     /**
-     * Enable fetching and updating positions for the given partitions that were added to the
-     * assignment, but waiting for the onPartitionsAssigned callback to complete. This is
+     * Enable fetching and updating positions for the given partitions that were assigned to the
+     * consumer, but waiting for the onPartitionsAssigned callback to complete. This is
      * expected to be used by the async consumer.
      */
     public synchronized void enablePartitionsAwaitingCallback(Collection<TopicPartition> partitions) {

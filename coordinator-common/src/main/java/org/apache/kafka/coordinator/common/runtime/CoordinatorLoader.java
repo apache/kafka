@@ -29,71 +29,10 @@ import java.util.concurrent.CompletableFuture;
 public interface CoordinatorLoader<U> extends AutoCloseable {
 
     /**
-     * UnknownRecordTypeException is thrown when the Deserializer encounters
-     * an unknown record type.
-     */
-    class UnknownRecordTypeException extends RuntimeException {
-        private final short unknownType;
-
-        public UnknownRecordTypeException(short unknownType) {
-            super(String.format("Found an unknown record type %d", unknownType));
-            this.unknownType = unknownType;
-        }
-
-        public short unknownType() {
-            return unknownType;
-        }
-    }
-
-    /**
      * Object that is returned as part of the future from load(). Holds the partition load time and the
      * end time.
      */
-    class LoadSummary {
-        private final long startTimeMs;
-        private final long endTimeMs;
-        private final long schedulerQueueTimeMs;
-        private final long numRecords;
-        private final long numBytes;
-
-        public LoadSummary(long startTimeMs, long endTimeMs, long schedulerQueueTimeMs, long numRecords, long numBytes) {
-            this.startTimeMs = startTimeMs;
-            this.endTimeMs = endTimeMs;
-            this.schedulerQueueTimeMs = schedulerQueueTimeMs;
-            this.numRecords = numRecords;
-            this.numBytes = numBytes;
-        }
-
-        public long startTimeMs() {
-            return startTimeMs;
-        }
-
-        public long endTimeMs() {
-            return endTimeMs;
-        }
-
-        public long schedulerQueueTimeMs() {
-            return schedulerQueueTimeMs;
-        }
-
-        public long numRecords() {
-            return numRecords;
-        }
-
-        public long numBytes() {
-            return numBytes;
-        }
-
-        @Override
-        public String toString() {
-            return "LoadSummary(" +
-                "startTimeMs=" + startTimeMs +
-                ", endTimeMs=" + endTimeMs +
-                ", schedulerQueueTimeMs=" + schedulerQueueTimeMs +
-                ", numRecords=" + numRecords +
-                ", numBytes=" + numBytes + ")";
-        }
-    }
+    record LoadSummary(long startTimeMs, long endTimeMs, long schedulerQueueTimeMs, long numRecords, long numBytes) { }
 
     /**
      * Loads the coordinator by reading all the records from the TopicPartition

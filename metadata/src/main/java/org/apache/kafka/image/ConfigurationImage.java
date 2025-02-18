@@ -85,8 +85,7 @@ public final class ConfigurationImage {
 
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof ConfigurationImage)) return false;
-        ConfigurationImage other = (ConfigurationImage) o;
+        if (!(o instanceof ConfigurationImage other)) return false;
         return data.equals(other.data);
     }
 

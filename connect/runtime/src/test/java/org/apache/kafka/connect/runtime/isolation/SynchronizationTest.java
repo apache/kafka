@@ -463,9 +463,7 @@ public class SynchronizationTest {
         return r -> {
             // This is essentially Executors.defaultThreadFactory except with
             // custom thread names so in order to filter by thread names when debugging
-            SecurityManager s = System.getSecurityManager();
-            Thread t = new Thread((s != null) ? s.getThreadGroup() :
-                Thread.currentThread().getThreadGroup(), r,
+            Thread t = new Thread(Thread.currentThread().getThreadGroup(), r,
                 threadPrefix + threadNumber.getAndIncrement(),
                 0);
             if (t.isDaemon()) {

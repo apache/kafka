@@ -41,6 +41,13 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     </Match>
 
     <Match>
+        <!-- Disable warnings about creating Classloaders inside doPrivilege.
+            DP_CREATE_CLASSLOADER_INSIDE_DO_PRIVILEGED: Classloaders should only be created inside doPrivileged block
+            The security manager has been deprecated for removal as of JDK 17, see https://openjdk.org/jeps/411 -->
+        <Bug pattern="DP_CREATE_CLASSLOADER_INSIDE_DO_PRIVILEGED"/>
+    </Match>
+
+    <Match>
         <!-- Disable warnings about the lack of equals() when compareTo() is implemented.
             EQ_COMPARETO_USE_OBJECT_EQUALS: This class defines a compareTo method but no equals() method -->
         <Bug pattern="EQ_COMPARETO_USE_OBJECT_EQUALS"/>
@@ -142,13 +149,6 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         <!-- Suppression for the equals() for extension methods. -->
         <Class name="kafka.utils.Implicits$MapExtensionMethods"/>
         <Bug pattern="EQ_UNUSUAL"/>
-    </Match>
-
-    <Match>
-        <!-- Add a suppression for auto-generated calls to instanceof in kafka.utils.Json -->
-        <Source name="Json.scala"/>
-        <Package name="kafka.utils"/>
-        <Bug pattern="BC_VACUOUS_INSTANCEOF"/>
     </Match>
 
     <Match>
@@ -265,6 +265,12 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     </Match>
 
     <Match>
+        <Class name="org.apache.kafka.streams.processor.internals.TopologyMetadata"/>
+        <Method name="offsetResetStrategy"/>
+        <Bug pattern="NP_OPTIONAL_RETURN_NULL"/>
+    </Match>
+
+    <Match>
         <!-- Suppress warnings about ignoring the return value of await.
              This is done intentionally because we use other clues to determine
              if the wait was cut short. -->
@@ -310,16 +316,6 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         <Class name="org.apache.kafka.server.util.KafkaScheduler"/>
         <Method name="taskRunning"/>
         <Bug pattern="GC_UNRELATED_TYPES"/>
-    </Match>
-
-    <Match>
-        <!-- Suppress a spurious warning about a missing default case. -->
-        <Or>
-            <Class name="org.apache.kafka.common.utils.Crc32"/>
-            <Class name="org.apache.kafka.common.utils.PureJavaCrc32C"/>
-        </Or>
-        <Method name="update"/>
-        <Bug pattern="SF_SWITCH_NO_DEFAULT"/>
     </Match>
 
     <Match>

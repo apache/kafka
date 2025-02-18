@@ -1,0 +1,230 @@
+<!--
+ Licensed to the Apache Software Foundation (ASF) under one or more
+ contributor license agreements.  See the NOTICE file distributed with
+ this work for additional information regarding copyright ownership.
+ The ASF licenses this file to You under the Apache License, Version 2.0
+ (the "License"); you may not use this file except in compliance with
+ the License.  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+-->
+
+<script><!--#include virtual="js/templateData.js" --></script>
+
+<script id="zk2kraft-template" type="text/x-handlebars-template"></script>
+
+<div class="p-zk2kraft">
+    <h4 class="anchor-heading">Significant Changes in Kafka 4.0 Release</h4>
+    <p>The following are some of the updates in Kafka 4.0 release:</p>
+    <h5 class="anchor-heading">Removal Zookeeper configs</h5>
+    <ul>
+        <li>
+            <p>
+                The password encoder-related configurations have been removed. These configurations were used in
+                ZooKeeper mode to define the key and backup key for encrypting sensitive data (e.g., passwords), 
+                specify the algorithm and key generation method for password encryption (e.g., AES, RSA), and control 
+                the key length and encryption strength.
+            </p>
+            <ul>
+                <li><code>password.encoder.secret</code></li>
+                <li><code>password.encoder.old.secret</code></li>
+                <li><code>password.encoder.keyfactory.algorithm</code></li>
+                <li><code>password.encoder.cipher.algorithm</code></li>
+                <li><code>password.encoder.key.length</code></li>
+                <li><code>password.encoder.iterations</code></li>
+            </ul>
+            <p>
+                In Kraft mode, Kafka stores sensitive data in records, and the data is not encrypted in Kafka.
+            </p>
+        </li>
+        <li>
+            <p>
+                Removed <code>control.plane.listener.name</code>. Kafka relies on ZooKeeper to manage metadata, but some
+                internal operations (e.g., communication between controllers (a.k.a., broker controller) and brokers)
+                still require Kafka’s internal control plane for coordination.
+            </p>
+            <p>
+                In KRaft mode, Kafka eliminates its dependency on ZooKeeper, and the control plane functionality is
+                fully integrated into Kafka itself. The process roles are clearly separated: brokers handle data-related
+                requests, while the controllers (a.k.a., quorum controller) manages metadata-related requests. The controllers 
+                use the Raft protocol for internal communication, which operates differently from the ZooKeeper model. Use the
+                following parameters to configure the control plane listener:
+            </p>
+            <ul>
+                <li><code>controller.listener.names</code></li>
+                <li><code>listeners</code></li>
+                <li><code>listener.security.protocol.map</code></li>
+            </ul>
+        </li>
+        <li>
+            <p>
+                Removed graceful broker shutdowns-related configurations. These configurations were used in ZooKeeper mode
+                to define the maximum number of retries and the retry backoff time for controlled shutdowns. It can
+                reduce the risk of unplanned leader changes and data inconsistencies.
+            </p>
+            <ul>
+                <li><code>controlled.shutdown.max.retries</code></li>
+                <li><code>controlled.shutdown.retry.backoff.ms</code></li>
+            </ul>
+            <p>
+                In KRaft mode, Kafka uses the Raft protocol to manage metadata. The broker shutdown process differs from
+                ZooKeeper mode as it is managed by the quorum-based controller. The shutdown process is more reliable
+                and efficient due to automated leader transfers and metadata updates handled by the controller.
+            </p>
+        </li>
+        <li>
+            <p>
+                Remove the broker id generation-related configurations. These configurations were used in ZooKeeper mode
+                to specify the broker id auto generation and control the broker id generation process.
+            </p>
+            <ul>
+                <li><code>reserved.broker.max.id</code></li>
+                <li><code>broker.id.generation.enable</code></li>
+            </ul>
+            <p>
+                Kafka use the node id in Kraft mode to identify servers.
+            </p>
+            <ul>
+                <li><code>node.id</code></li>
+            </ul>
+        </li>
+        <li>
+            <p>
+                Remove broker protocol version-related configurations. These configurations were used in ZooKeeper mode to define communication protocol version between brokers.
+                In KRaft mode, Kafka uses <code>metadata.version</code> to control the feature level of the cluster, which can be managed using <code>bin/kafka-features.sh</code>.
+            </p>
+            <ul>
+                <li><code>inter.broker.protocol.version</code></li>
+            </ul>
+        </li>
+        <li>
+            <p>
+                Removed dynamic configurations which relies on ZooKeeper. In KRaft mode, to change these configurations,
+                you need to restart the broker/controller.
+            </p>
+            <ul>
+                <li><code>advertised.listeners</code></li>
+            </ul>
+        </li>
+        <li>
+            <p>
+                Removed the leader imbalance configuration used only in ZooKeeper. <code>leader.imbalance.per.broker.percentage</code>
+                was used to limit the preferred leader election frequency in ZooKeeper.
+            </p>
+            <ul>
+                <li><code>leader.imbalance.per.broker.percentage</code></li>
+            </ul>
+        </li>
+        <li>
+            <p>
+                Removed Zookeeper related configurations.
+            </p>
+            <ul>
+                <li><code>zookeeper.connect</code></li>
+                <li><code>zookeeper.session.timeout.ms</code></li>
+                <li><code>zookeeper.connection.timeout.ms</code></li>
+                <li><code>zookeeper.set.acl</code></li>
+                <li><code>zookeeper.max.in.flight.requests</code></li>
+                <li><code>zookeeper.ssl.client.enable</code></li>
+                <li><code>zookeeper.clientCnxnSocket</code></li>
+                <li><code>zookeeper.ssl.keystore.location</code></li>
+                <li><code>zookeeper.ssl.keystore.password</code></li>
+                <li><code>zookeeper.ssl.keystore.type</code></li>
+                <li><code>zookeeper.ssl.truststore.location</code></li>
+                <li><code>zookeeper.ssl.truststore.password</code></li>
+                <li><code>zookeeper.ssl.truststore.type</code></li>
+                <li><code>zookeeper.ssl.protocol</code></li>
+                <li><code>zookeeper.ssl.enabled.protocols</code></li>
+                <li><code>zookeeper.ssl.cipher.suites</code></li>
+                <li><code>zookeeper.ssl.endpoint.identification.algorithm</code></li>
+                <li><code>zookeeper.ssl.crl.enable</code></li>
+                <li><code>zookeeper.ssl.ocsp.enable</code></li>
+            </ul>
+        </li>
+    </ul>
+    <h5 class="anchor-heading">Removal metrics</h5>
+    <ul>
+        <li>
+            <p>
+                Remove the following metrics related to ZooKeeper.
+                <code>ControlPlaneNetworkProcessorAvgIdlePercent</code>
+                is to monitor the average fraction of time the network processors are idle. The other <code>ControlPlaneExpiredConnectionsKilledCount</code>
+                is to monitor the total number of connections disconnected, across all processors.
+            </p>
+            <ul>
+                <li><code>ControlPlaneNetworkProcessorAvgIdlePercent</code></li>
+                <li><code>ControlPlaneExpiredConnectionsKilledCount</code></li>
+            </ul>
+            <p>
+                In Kraft mode, Kafka also provides metrics to monitor the network processors and expired connections.
+                Use the following metrics to monitor the network processors and expired connections:
+            </p>
+            <ul>
+                <li><code>NetworkProcessorAvgIdlePercent</code></li>
+                <li><code>ExpiredConnectionsKilledCount</code></li>
+            </ul>
+        </li>
+        <li>
+            <p>
+                Remove the metrics which are only used in ZooKeeper mode.
+            </p>
+            <ul>
+                <li><code>kafka.controller:type=ControllerChannelManager,name=QueueSize</code></li>
+                <li><code>kafka.controller:type=ControllerChannelManager,name=RequestRateAndQueueTimeMs</code></li>
+                <li><code>kafka.controller:type=ControllerEventManager,name=EventQueueSize</code></li>
+                <li><code>kafka.controller:type=ControllerEventManager,name=EventQueueTimeMs</code></li>
+                <li><code>kafka.controller:type=ControllerStats,name=AutoLeaderBalanceRateAndTimeMs</code></li>
+                <li><code>kafka.controller:type=ControllerStats,name=ControlledShutdownRateAndTimeMs</code></li>
+                <li><code>kafka.controller:type=ControllerStats,name=ControllerChangeRateAndTimeMs</code></li>
+                <li><code>kafka.controller:type=ControllerStats,name=ControllerShutdownRateAndTimeMs</code></li>
+                <li><code>kafka.controller:type=ControllerStats,name=IdleRateAndTimeMs</code></li>
+                <li><code>kafka.controller:type=ControllerStats,name=IsrChangeRateAndTimeMs</code></li>
+                <li><code>kafka.controller:type=ControllerStats,name=LeaderAndIsrResponseReceivedRateAndTimeMs</code></li>
+                <li><code>kafka.controller:type=ControllerStats,name=LeaderElectionRateAndTimeMs</code></li>
+                <li><code>kafka.controller:type=ControllerStats,name=ListPartitionReassignmentRateAndTimeMs</code></li>
+                <li><code>kafka.controller:type=ControllerStats,name=LogDirChangeRateAndTimeMs</code></li>
+                <li><code>kafka.controller:type=ControllerStats,name=ManualLeaderBalanceRateAndTimeMs</code></li>
+                <li><code>kafka.controller:type=KafkaController,name=MigratingZkBrokerCount</code></li>
+                <li><code>kafka.controller:type=ControllerStats,name=PartitionReassignmentRateAndTimeMs</code></li>
+                <li><code>kafka.controller:type=ControllerStats,name=TopicChangeRateAndTimeMs</code></li>
+                <li><code>kafka.controller:type=ControllerStats,name=TopicDeletionRateAndTimeMs</code></li>
+                <li><code>kafka.controller:type=KafkaController,name=TopicsIneligibleToDeleteCount</code></li>
+                <li><code>kafka.controller:type=ControllerStats,name=TopicUncleanLeaderElectionEnableRateAndTimeMs</code></li>
+                <li><code>kafka.controller:type=ControllerStats,name=UncleanLeaderElectionEnableRateAndTimeMs</code></li>
+                <li><code>kafka.controller:type=ControllerStats,name=UncleanLeaderElectionsPerSec</code></li>
+                <li><code>kafka.controller:type=ControllerStats,name=UpdateFeaturesRateAndTimeMs</code></li>
+                <li><code>kafka.controller:type=ControllerStats,name=UpdateMetadataResponseReceivedRateAndTimeMs</code></li>
+                <li><code>kafka.controller:type=KafkaController,name=ActiveBrokerCount</code></li>
+                <li><code>kafka.controller:type=KafkaController,name=ActiveControllerCount</code></li>
+                <li><code>kafka.controller:type=KafkaController,name=ControllerState</code></li>
+                <li><code>kafka.controller:type=KafkaController,name=FencedBrokerCount</code></li>
+                <li><code>kafka.controller:type=KafkaController,name=GlobalPartitionCount</code></li>
+                <li><code>kafka.controller:type=KafkaController,name=GlobalTopicCount</code></li>
+                <li><code>kafka.controller:type=KafkaController,name=OfflinePartitionsCount</code></li>
+                <li><code>kafka.controller:type=KafkaController,name=PreferredReplicaImbalanceCount</code></li>
+                <li><code>kafka.controller:type=KafkaController,name=ReplicasIneligibleToDeleteCount</code></li>
+                <li><code>kafka.controller:type=KafkaController,name=ReplicasToDeleteCount</code></li>
+                <li><code>kafka.controller:type=KafkaController,name=TopicsToDeleteCount</code></li>
+                <li><code>kafka.controller:type=KafkaController,name=ZkMigrationState</code></li>
+                <li><code>kafka.server:type=DelayedOperationPurgatory,name=PurgatorySize,delayedOperation=ElectLeader</code></li>
+                <li><code>kafka.server:type=DelayedOperationPurgatory,name=PurgatorySize,delayedOperation=topic</code></li>
+                <li><code>kafka.server:type=DelayedOperationPurgatory,name=NumDelayedOperations,delayedOperation=ElectLeader</code></li>
+                <li><code>kafka.server:type=DelayedOperationPurgatory,name=NumDelayedOperations,delayedOperation=topic</code></li>
+                <li><code>kafka.server:type=SessionExpireListener,name=SessionState</code></li>
+                <li><code>kafka.server:type=SessionExpireListener,name=ZooKeeperAuthFailuresPerSec</code></li>
+                <li><code>kafka.server:type=SessionExpireListener,name=ZooKeeperDisconnectsPerSec</code></li>
+                <li><code>kafka.server:type=SessionExpireListener,name=ZooKeeperExpiresPerSec</code></li>
+                <li><code>kafka.server:type=SessionExpireListener,name=ZooKeeperReadOnlyConnectsPerSec</code></li>
+                <li><code>kafka.server:type=SessionExpireListener,name=ZooKeeperSaslAuthenticationsPerSec</code></li>
+                <li><code>kafka.server:type=SessionExpireListener,name=ZooKeeperSyncConnectsPerSec</code></li>
+                <li><code>kafka.server:type=ZooKeeperClientMetrics,name=ZooKeeperRequestLatencyMs</code></li>
+            </ul>
+        </li>
+    </ul>
+</div>

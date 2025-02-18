@@ -13,14 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// KIP-848 is in development. This schema is subject to non-backwards-compatible changes.
 {
-  "type": "data",
+  "apiKey": 6,
+  "type": "coordinator-key",
   "name": "ConsumerGroupTargetAssignmentMetadataKey",
-  "validVersions": "6",
+  "validVersions": "0",
   "flexibleVersions": "none",
   "fields": [
-    { "name": "GroupId", "type": "string", "versions": "6",
+    { "name": "GroupId", "type": "string", "versions": "0",
       "about": "The group id." }
   ]
 }

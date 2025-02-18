@@ -1886,6 +1886,18 @@ public class TaskManager {
         }
     }
 
+    void maybeInitTaskTimeoutsOrThrow(
+        final Collection<TopicPartition> partitions,
+        final TimeoutException timeoutException,
+        final long nowMs
+    ) {
+        for (final TopicPartition partition : partitions) {
+            final Task task = getActiveTask(partition);
+            task.maybeInitTaskTimeoutOrThrow(nowMs, timeoutException);
+            stateUpdater.add(task);
+        }
+    }
+
     private Task getActiveTask(final TopicPartition partition) {
         final Task activeTask = tasks.activeTasksForInputPartition(partition);
 

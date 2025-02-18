@@ -17,7 +17,6 @@
 
 package org.apache.kafka.controller;
 
-import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.metadata.FakeKafkaConfigSchema;
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
 import org.apache.kafka.metalog.LocalLogManagerTestEnv;
@@ -106,9 +105,15 @@ public class QuorumControllerTestEnv implements AutoCloseable {
             for (int nodeId = 0; nodeId < numControllers; nodeId++) {
                 QuorumController.Builder builder = new QuorumController.Builder(nodeId, logEnv.clusterId());
                 builder.setRaftClient(logEnv.logManagers().get(nodeId));
+                if (eligibleLeaderReplicasEnabled) {
+                    bootstrapMetadata = bootstrapMetadata.copyWithFeatureRecord(
+                        EligibleLeaderReplicasVersion.FEATURE_NAME,
+                        EligibleLeaderReplicasVersion.ELRV_1.featureLevel()
+                    );
+                }
                 builder.setBootstrapMetadata(bootstrapMetadata);
                 builder.setLeaderImbalanceCheckIntervalNs(leaderImbalanceCheckIntervalNs);
-                builder.setQuorumFeatures(new QuorumFeatures(nodeId, QuorumFeatures.defaultFeatureMap(true), nodeIds));
+                builder.setQuorumFeatures(new QuorumFeatures(nodeId, QuorumFeatures.defaultSupportedFeatureMap(true), nodeIds));
                 sessionTimeoutMillis.ifPresent(timeout ->
                     builder.setSessionTimeoutNs(NANOSECONDS.convert(timeout, TimeUnit.MILLISECONDS))
                 );
@@ -121,12 +126,6 @@ public class QuorumControllerTestEnv implements AutoCloseable {
                 nonFatalFaultHandlers.put(nodeId, fatalFaultHandler);
                 controllerBuilderInitializer.accept(builder);
                 QuorumController controller = builder.build();
-                if (eligibleLeaderReplicasEnabled) {
-                    controller.featureControl().replay(new FeatureLevelRecord()
-                        .setName(EligibleLeaderReplicasVersion.FEATURE_NAME)
-                        .setFeatureLevel(EligibleLeaderReplicasVersion.ELRV_1.featureLevel())
-                    );
-                }
                 this.controllers.add(controller);
             }
         } catch (Exception e) {

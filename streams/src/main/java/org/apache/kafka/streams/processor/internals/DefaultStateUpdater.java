@@ -320,7 +320,7 @@ public class DefaultStateUpdater implements StateUpdater {
 
 
         private void handleRuntimeException(final RuntimeException runtimeException) {
-            log.error("An unexpected error occurred within the state updater thread: " + runtimeException);
+            log.error("An unexpected error occurred within the state updater thread: {}", String.valueOf(runtimeException));
             addToExceptionsAndFailedTasksThenClearUpdatingAndPausedTasks(runtimeException);
             isRunning.set(false);
         }
@@ -673,7 +673,6 @@ public class DefaultStateUpdater implements StateUpdater {
                 measureCheckpointLatency(() -> task.maybeCheckpoint(true));
                 changelogReader.unregister(changelogPartitions);
                 addToRestoredTasks(task);
-                updatingTasks.remove(task.id());
                 log.info("Stateful active task " + task.id() + " completed restoration");
                 transitToUpdateStandbysIfOnlyStandbysLeft();
             }
@@ -689,6 +688,7 @@ public class DefaultStateUpdater implements StateUpdater {
             restoredActiveTasksLock.lock();
             try {
                 restoredActiveTasks.add(task);
+                updatingTasks.remove(task.id());
                 log.debug("Active task " + task.id() + " was added to the restored tasks");
                 restoredActiveTasksCondition.signalAll();
             } finally {
@@ -926,21 +926,21 @@ public class DefaultStateUpdater implements StateUpdater {
 
     public Set<StandbyTask> updatingStandbyTasks() {
         return stateUpdaterThread != null
-            ? Collections.unmodifiableSet(new HashSet<>(stateUpdaterThread.updatingStandbyTasks()))
+            ? Set.copyOf(stateUpdaterThread.updatingStandbyTasks())
             : Collections.emptySet();
     }
 
     @Override
     public Set<Task> updatingTasks() {
         return stateUpdaterThread != null
-            ? Collections.unmodifiableSet(new HashSet<>(stateUpdaterThread.updatingTasks()))
+            ? Set.copyOf(stateUpdaterThread.updatingTasks())
             : Collections.emptySet();
     }
 
     public Set<StreamTask> restoredActiveTasks() {
         restoredActiveTasksLock.lock();
         try {
-            return Collections.unmodifiableSet(new HashSet<>(restoredActiveTasks));
+            return Set.copyOf(restoredActiveTasks);
         } finally {
             restoredActiveTasksLock.unlock();
         }
@@ -949,19 +949,19 @@ public class DefaultStateUpdater implements StateUpdater {
     public List<ExceptionAndTask> exceptionsAndFailedTasks() {
         exceptionsAndFailedTasksLock.lock();
         try {
-            return Collections.unmodifiableList(new ArrayList<>(exceptionsAndFailedTasks));
+            return List.copyOf(exceptionsAndFailedTasks);
         } finally {
             exceptionsAndFailedTasksLock.unlock();
         }
     }
 
     public Set<Task> removedTasks() {
-        return Collections.unmodifiableSet(new HashSet<>(removedTasks));
+        return Set.copyOf(removedTasks);
     }
 
     public Set<Task> pausedTasks() {
         return stateUpdaterThread != null
-            ? Collections.unmodifiableSet(new HashSet<>(stateUpdaterThread.pausedTasks()))
+            ? Set.copyOf(stateUpdaterThread.pausedTasks())
             : Collections.emptySet();
     }
 

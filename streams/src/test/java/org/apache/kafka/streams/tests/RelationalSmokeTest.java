@@ -306,10 +306,10 @@ public class RelationalSmokeTest extends SmokeTestUtil {
         }
 
         public static DataSet generate(final int numArticles, final int numComments) {
-            // generate four days' worth of data, starting right now (to avoid broker retention/compaction)
+            // generate four days' worth of data, starting 4 days in the past (avoiding future records)
             final int timeSpan = 1000 * 60 * 60 * 24 * 4;
-            final long dataStartTime = System.currentTimeMillis();
-            final long dataEndTime = dataStartTime + timeSpan;
+            final long dataStartTime = System.currentTimeMillis() - timeSpan;
+            final long dataEndTime = System.currentTimeMillis();
 
             // Explicitly create a seed so we can we can log.
             // If we are debugging a failed run, we can deterministically produce the same dataset
@@ -648,6 +648,7 @@ public class RelationalSmokeTest extends SmokeTestUtil {
                     )
                 );
             properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000L);
+            properties.put(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG, Duration.ofDays(5).toMillis());
             return properties;
         }
 

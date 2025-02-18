@@ -112,7 +112,7 @@ class CoordinatorPartitionWriter(
   ): CompletableFuture[VerificationGuard] = {
     val transactionSupportedOperation = AddPartitionsToTxnManager.txnOffsetCommitRequestVersionToTransactionSupportedOperation(apiVersion)
     val future = new CompletableFuture[VerificationGuard]()
-    replicaManager.maybeStartTransactionVerificationForPartition(
+    replicaManager.maybeSendPartitionToTransactionCoordinator(
       topicPartition = tp,
       transactionalId = transactionalId,
       producerId = producerId,
@@ -164,5 +164,26 @@ class CoordinatorPartitionWriter(
 
     // Required offset.
     partitionResult.lastOffset + 1
+  }
+
+  override def deleteRecords(tp: TopicPartition, deleteBeforeOffset: Long): CompletableFuture[Void] = {
+    val responseFuture: CompletableFuture[Void] = new CompletableFuture[Void]()
+
+    replicaManager.deleteRecords(
+      timeout = 30000L, // 30 seconds.
+      offsetPerPartition = Map(tp -> deleteBeforeOffset),
+      responseCallback = results => {
+        val result = results.get(tp)
+        if (result.isEmpty) {
+          responseFuture.completeExceptionally(new IllegalStateException(s"Delete status $result should have partition $tp."))
+        } else if (result.get.errorCode != Errors.NONE.code) {
+          responseFuture.completeExceptionally(Errors.forCode(result.get.errorCode).exception)
+        } else {
+          responseFuture.complete(null)
+        }
+      },
+      allowInternalTopicDeletion = true
+    )
+    responseFuture
   }
 }

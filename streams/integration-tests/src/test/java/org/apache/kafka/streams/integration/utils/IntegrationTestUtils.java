@@ -22,6 +22,7 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
@@ -1189,7 +1190,8 @@ public class IntegrationTestUtils {
     /**
      * Sets up a {@link KafkaConsumer} from a copy of the given configuration that has
      * {@link ConsumerConfig#AUTO_OFFSET_RESET_CONFIG} set to "earliest" and {@link ConsumerConfig#ENABLE_AUTO_COMMIT_CONFIG}
-     * set to "true" to prevent missing events as well as repeat consumption.
+     * set to "true" to prevent missing events as well as repeat consumption. This also sets
+     * {@link ConsumerConfig#GROUP_PROTOCOL_CONFIG} to "classic".
      * @param consumerConfig Consumer configuration
      * @return Consumer
      */
@@ -1198,6 +1200,7 @@ public class IntegrationTestUtils {
         filtered.putAll(consumerConfig);
         filtered.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         filtered.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true");
+        filtered.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name);
         return new KafkaConsumer<>(filtered);
     }
 

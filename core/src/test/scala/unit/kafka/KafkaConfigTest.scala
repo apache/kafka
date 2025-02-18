@@ -29,7 +29,7 @@ import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.utils.Exit
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.QuorumConfig
-import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ZkConfigs}
+import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.api.Assertions._
 
@@ -42,25 +42,85 @@ class KafkaConfigTest {
   def tearDown(): Unit = Exit.resetExitProcedure()
 
   @Test
+  def testBrokerRequiredProperties(): Unit = {
+    val properties = new Properties()
+    assertBadConfigContainingMessage(properties,
+      "Missing required configuration \"process.roles\" which has no default value.")
+
+    properties.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker")
+    assertBadConfigContainingMessage(properties,
+      "Missing required configuration \"node.id\" which has no default value.")
+
+    properties.put(KRaftConfigs.NODE_ID_CONFIG, -1)
+    assertBadConfigContainingMessage(properties,
+      "Invalid value -1 for configuration node.id: Value must be at least 0")
+
+    properties.put(KRaftConfigs.NODE_ID_CONFIG, 0)
+    assertBadConfigContainingMessage(properties,
+      "If using process.roles, either controller.quorum.bootstrap.servers must contain the set of bootstrap controllers or controller.quorum.voters must contain a parseable set of controllers.")
+
+    properties.put(QuorumConfig.QUORUM_BOOTSTRAP_SERVERS_CONFIG, "localhost:9092")
+    assertBadConfigContainingMessage(properties,
+      "requirement failed: controller.listener.names must contain at least one value when running KRaft with just the broker role")
+
+    properties.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
+    KafkaConfig.fromProps(properties)
+  }
+
+  @Test
+  def testControllerRequiredProperties(): Unit = {
+    val properties = new Properties()
+    assertBadConfigContainingMessage(properties,
+      "Missing required configuration \"process.roles\" which has no default value.")
+
+    properties.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller")
+    assertBadConfigContainingMessage(properties,
+      "Missing required configuration \"node.id\" which has no default value.")
+
+    properties.put(KRaftConfigs.NODE_ID_CONFIG, -1)
+    assertBadConfigContainingMessage(properties,
+      "Invalid value -1 for configuration node.id: Value must be at least 0")
+
+    properties.put(KRaftConfigs.NODE_ID_CONFIG, 0)
+    assertBadConfigContainingMessage(properties,
+      "If using process.roles, either controller.quorum.bootstrap.servers must contain the set of bootstrap controllers or controller.quorum.voters must contain a parseable set of controllers.")
+
+    properties.put(QuorumConfig.QUORUM_BOOTSTRAP_SERVERS_CONFIG, "localhost:9092")
+    assertBadConfigContainingMessage(properties,
+      "requirement failed: The listeners config must only contain KRaft controller listeners from controller.listener.names when process.roles=controller")
+
+    properties.put(SocketServerConfigs.LISTENERS_CONFIG, "CONTROLLER://:9092")
+    assertBadConfigContainingMessage(properties,
+      "No security protocol defined for listener CONTROLLER")
+
+    properties.put(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "CONTROLLER:PLAINTEXT")
+    assertBadConfigContainingMessage(properties,
+      "requirement failed: The listeners config must only contain KRaft controller listeners from controller.listener.names when process.roles=controller")
+
+    properties.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
+    KafkaConfig.fromProps(properties)
+  }
+
+  @Test
   def testGetKafkaConfigFromArgs(): Unit = {
     val propertiesFile = prepareDefaultConfig()
 
     // We should load configuration file without any arguments
     val config1 = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile)))
-    assertEquals(1, config1.brokerId)
+    assertEquals(1, config1.nodeId)
 
     // We should be able to override given property on command line
-    val config2 = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", "broker.id=2")))
-    assertEquals(2, config2.brokerId)
+    val config2 = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", "node.id=2")))
+    assertEquals(2, config2.nodeId)
 
     // We should be also able to set completely new property
     val config3 = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", "log.cleanup.policy=compact")))
-    assertEquals(1, config3.brokerId)
+    assertEquals(1, config3.nodeId)
     assertEquals(util.Arrays.asList("compact"), config3.logCleanupPolicy)
 
     // We should be also able to set several properties
-    val config4 = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", "log.cleanup.policy=compact,delete", "--override", "broker.id=2")))
-    assertEquals(2, config4.brokerId)
+    val config4 = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", "log.cleanup.policy=compact,delete", "--override", "node.id=2")))
+    assertEquals(2, config4.nodeId)
     assertEquals(util.Arrays.asList("compact","delete"), config4.logCleanupPolicy)
   }
 
@@ -155,16 +215,6 @@ class KafkaConfigTest {
       |must contain the set of bootstrap controllers or controller.quorum.voters must contain a
       |parseable set of controllers.""".stripMargin.replace("\n", " ")
     )
-
-    // Ensure that if neither process.roles nor controller.quorum.voters is populated, then an exception is thrown if zookeeper.connect is not defined
-    propertiesFile.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "")
-    assertBadConfigContainingMessage(propertiesFile,
-      "Missing required configuration `zookeeper.connect` which has no default value.")
-
-    // Ensure that no exception is thrown once zookeeper.connect is defined (and we clear controller.listener.names)
-    propertiesFile.setProperty(ZkConfigs.ZK_CONNECT_CONFIG, "localhost:2181")
-    propertiesFile.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "")
-    KafkaConfig.fromProps(propertiesFile)
   }
 
   private def setListenerProps(props: Properties): Unit = {
@@ -244,7 +294,14 @@ class KafkaConfigTest {
   }
 
   def prepareDefaultConfig(): String = {
-    prepareConfig(Array("broker.id=1", "zookeeper.connect=somewhere"))
+    prepareConfig(Array(
+      "node.id=1", 
+      "process.roles=controller", 
+      "controller.listener.names=CONTROLLER",
+      "controller.quorum.voters=1@localhost:9093,2@localhost:9093",
+      "listeners=CONTROLLER://:9093",
+      "advertised.listeners=CONTROLLER://127.0.0.1:9093"
+    ))
   }
 
   def prepareConfig(lines : Array[String]): String = {
