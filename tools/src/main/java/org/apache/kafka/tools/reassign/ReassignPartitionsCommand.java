@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.tools.reassign;
 
-import org.apache.kafka.admin.AdminUtils;
 import org.apache.kafka.admin.BrokerMetadata;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
@@ -26,16 +25,24 @@ import org.apache.kafka.clients.admin.DescribeReplicaLogDirsResult;
 import org.apache.kafka.clients.admin.NewPartitionReassignment;
 import org.apache.kafka.clients.admin.PartitionReassignment;
 import org.apache.kafka.clients.admin.TopicDescription;
+import org.apache.kafka.common.DirectoryId;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionReplica;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.ReplicaNotAvailableException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.metadata.placement.ClusterDescriber;
+import org.apache.kafka.metadata.placement.PlacementSpec;
+import org.apache.kafka.metadata.placement.ReplicaPlacer;
+import org.apache.kafka.metadata.placement.StripedReplicaPlacer;
+import org.apache.kafka.metadata.placement.TopicAssignment;
+import org.apache.kafka.metadata.placement.UsableBroker;
 import org.apache.kafka.server.common.AdminCommandFailedException;
 import org.apache.kafka.server.common.AdminOperationException;
 import org.apache.kafka.server.config.QuotaConfig;
@@ -67,6 +74,7 @@ import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Random;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.ExecutionException;
@@ -74,7 +82,7 @@ import java.util.stream.Collectors;
 
 import joptsimple.OptionSpec;
 
-@SuppressWarnings("ClassDataAbstractionCoupling")
+@SuppressWarnings({"ClassDataAbstractionCoupling", "ClassFanOutComplexity"})
 public class ReassignPartitionsCommand {
     private static final String ANY_LOG_DIR = "any";
 
@@ -87,6 +95,8 @@ public class ReassignPartitionsCommand {
     private static final DecodeJson<List<Integer>> INT_LIST = DecodeJson.decodeList(INT);
 
     private static final DecodeJson<List<String>> STRING_LIST = DecodeJson.decodeList(STRING);
+
+    private static final ReplicaPlacer REPLICA_PLACER = new StripedReplicaPlacer(new Random());
 
     /**
      * The earliest version of the partition reassignment JSON.  We will default to this
@@ -582,10 +592,29 @@ public class ReassignPartitionsCommand {
         Map<TopicPartition, List<Integer>> proposedAssignments = new HashMap<>();
         groupedByTopic.forEach((topic, assignment) -> {
             List<Integer> replicas = assignment.get(0).getValue();
-            Map<Integer, List<Integer>> assignedReplicas = AdminUtils.
-                assignReplicasToBrokers(brokerMetadatas, assignment.size(), replicas.size());
-            assignedReplicas.forEach((partition, replicas0) ->
-                proposedAssignments.put(new TopicPartition(topic, partition), replicas0));
+            int partitionNum = assignment.size();
+            // generate topic assignments
+            TopicAssignment topicAssignment = REPLICA_PLACER.place(
+                    new PlacementSpec(0, partitionNum, (short) replicas.size()),
+                    new ClusterDescriber() {
+                        @Override
+                        public Iterator<UsableBroker> usableBrokers() {
+                            return brokerMetadatas.stream().map(brokerMetadata -> new UsableBroker(
+                                    brokerMetadata.id,
+                                    brokerMetadata.rack,
+                                    false
+                            )).iterator();
+                        }
+
+                        @Override
+                        public Uuid defaultDir(int brokerId) {
+                            return DirectoryId.MIGRATING;
+                        }
+                    });
+
+            for (int i = 0; i < topicAssignment.assignments().size(); i++) {
+                proposedAssignments.put(new TopicPartition(topic, i), topicAssignment.assignments().get(i).replicas());
+            }
         });
         return proposedAssignments;
     }
