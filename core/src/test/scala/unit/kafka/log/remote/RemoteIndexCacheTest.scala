@@ -555,7 +555,7 @@ class RemoteIndexCacheTest {
   @Test
   def testCorrectnessForCacheAndIndexFilesWhenResizeCache(): Unit = {
     def getRemoteLogSegMetadataIsKept(metadataToVerify: List[RemoteLogSegmentMetadata]): List[RemoteLogSegmentMetadata] = {
-      metadataToVerify.filter(s => { cache.internalCache().asMap().keySet().contains(s.remoteLogSegmentId().id())})
+      metadataToVerify.filter(s => { cache.internalCache().asMap().containsKey(s.remoteLogSegmentId().id())})
     }
 
     def verifyEntryIsEvicted(metadataToVerify: List[RemoteLogSegmentMetadata], entriesToVerify: List[Entry],
@@ -572,20 +572,20 @@ class RemoteIndexCacheTest {
       assertTrue(entriesIsMarkedForCleanup.equals(entriesIsCleanStarted))
 
       // get the logSegMetadata are evicted
-      val metedataDeleted = metadataToVerify.filter(s => { !cache.internalCache().asMap().keySet().contains(s.remoteLogSegmentId().id())})
-      assertEquals(numOfMarkAsDeleted, metedataDeleted.size)
-      for (metadata <- metedataDeleted) {
+      val metadataDeleted = metadataToVerify.filter(s => { !cache.internalCache().asMap().containsKey(s.remoteLogSegmentId().id())})
+      assertEquals(numOfMarkAsDeleted, metadataDeleted.size)
+      for (metadata <- metadataDeleted) {
         // verify no index files for `entryToVerify` on remote cache dir
-        TestUtils.waitUntilTrue(() => !getIndexFileFromRemoteCacheDir(cache, remoteOffsetIndexFileName(metadata)).isPresent,
+        TestUtils.waitUntilTrue(() => getIndexFileFromRemoteCacheDir(cache, remoteOffsetIndexFileName(metadata)).isEmpty,
           s"Offset index file for evicted entry should not be present on disk at ${cache.cacheDir()}")
-        TestUtils.waitUntilTrue(() => !getIndexFileFromRemoteCacheDir(cache, remoteTimeIndexFileName(metadata)).isPresent,
+        TestUtils.waitUntilTrue(() => getIndexFileFromRemoteCacheDir(cache, remoteTimeIndexFileName(metadata)).isEmpty,
           s"Time index file for evicted entry should not be present on disk at ${cache.cacheDir()}")
-        TestUtils.waitUntilTrue(() => !getIndexFileFromRemoteCacheDir(cache, remoteTransactionIndexFileName(metadata)).isPresent,
+        TestUtils.waitUntilTrue(() => getIndexFileFromRemoteCacheDir(cache, remoteTransactionIndexFileName(metadata)).isEmpty,
           s"Txn index file for evicted entry should not be present on disk at ${cache.cacheDir()}")
-        TestUtils.waitUntilTrue(() => !getIndexFileFromRemoteCacheDir(cache, remoteDeletedSuffixIndexFileName(metadata)).isPresent,
+        TestUtils.waitUntilTrue(() => getIndexFileFromRemoteCacheDir(cache, remoteDeletedSuffixIndexFileName(metadata)).isEmpty,
           s"Index file marked for deletion for evicted entry should not be present on disk at ${cache.cacheDir()}")
       }
-      (metedataDeleted, entriesIsMarkedForCleanup)
+      (metadataDeleted, entriesIsMarkedForCleanup)
     }
 
     def verifyEntryIsKept(metadataToVerify: List[RemoteLogSegmentMetadata]): Unit = {
@@ -593,7 +593,7 @@ class RemoteIndexCacheTest {
         assertTrue(getIndexFileFromRemoteCacheDir(cache, remoteOffsetIndexFileName(metadata)).isPresent)
         assertTrue(getIndexFileFromRemoteCacheDir(cache, remoteTimeIndexFileName(metadata)).isPresent)
         assertTrue(getIndexFileFromRemoteCacheDir(cache, remoteTransactionIndexFileName(metadata)).isPresent)
-        assertTrue(!getIndexFileFromRemoteCacheDir(cache, remoteDeletedSuffixIndexFileName(metadata)).isPresent)
+        assertTrue(getIndexFileFromRemoteCacheDir(cache, remoteDeletedSuffixIndexFileName(metadata)).isEmpty)
       }
     }
 
