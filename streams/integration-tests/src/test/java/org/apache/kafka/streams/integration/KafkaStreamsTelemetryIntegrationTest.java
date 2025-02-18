@@ -168,7 +168,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
         streamsApplicationProperties = props(true);
         streamsApplicationProperties.put(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, recordingLevel);
         IntegrationTestUtils.produceKeyValuesSynchronously(globalStoreTopic,
-                List.of(KeyValue.pair("1", "one"),KeyValue.pair("2", "two"), KeyValue.pair("3","three")),
+                List.of(KeyValue.pair("1", "one"), KeyValue.pair("2", "two"), KeyValue.pair("3", "three")),
                 producerProperties(),
                 cluster.time);
         final Topology topology = simpleTopology(true);
@@ -176,7 +176,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
         try (final KafkaStreams streams = new KafkaStreams(topology, streamsApplicationProperties)) {
             IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
             final ClientInstanceIds clientInstanceIds = streams.clientInstanceIds(Duration.ofSeconds(60));
-            for (Map.Entry<String, Uuid> instanceId : clientInstanceIds.consumerInstanceIds().entrySet()) {
+            for (final Map.Entry<String, Uuid> instanceId : clientInstanceIds.consumerInstanceIds().entrySet()) {
                 final String instanceIdKey = instanceId.getKey();
                 if (instanceIdKey.endsWith("GlobalStreamThread-global-consumer")) {
                     globalStoreConsumerInstanceId = instanceId.getValue();
@@ -194,10 +194,10 @@ public class KafkaStreamsTelemetryIntegrationTest {
             final List<String> expectedGlobalMetrics = streams.metrics().values().stream().map(Metric::metricName)
                     .filter(metricName -> metricName.tags().containsKey("thread-id") &&
                             metricName.tags().get("thread-id").endsWith("-GlobalStreamThread")).map(mn -> {
-                        final String name = mn.name().replace('-', '.');
-                        final String group = mn.group().replace("-metrics", "").replace('-', '.');
-                        return "org.apache.kafka." + group + "." + name;
-                    }).filter(name -> !name.equals("org.apache.kafka.stream.thread.state"))// telemetry reporter filters out string metrics
+                                final String name = mn.name().replace('-', '.');
+                                final String group = mn.group().replace("-metrics", "").replace('-', '.');
+                                return "org.apache.kafka." + group + "." + name;
+                            }).filter(name -> !name.equals("org.apache.kafka.stream.thread.state"))// telemetry reporter filters out string metrics
                     .sorted().toList();
             final List<String> actualGlobalMetrics = new ArrayList<>(TelemetryPlugin.SUBSCRIBED_METRICS.get(globalStoreConsumerInstanceId));
             assertEquals(expectedGlobalMetrics, actualGlobalMetrics);
@@ -451,7 +451,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
 
     private Properties producerProperties() {
         final Properties properties = new Properties();
-        properties.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());;
+        properties.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
         properties.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, Serdes.String().serializer().getClass());
         properties.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, Serdes.String().serializer().getClass());
         return properties;
@@ -505,7 +505,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
                     public void process(final Record<String, String> record) {
                         store.put(record.key(), record.value());
                         globalStoreIterator = store.all();
-                        globalStoreIterator.forEachRemaining(kv -> System.out.printf("key %s value %s%n",kv.key, kv.value));
+                        globalStoreIterator.forEachRemaining(kv -> System.out.printf("key %s value %s%n", kv.key, kv.value));
                     }
                 });
     }
