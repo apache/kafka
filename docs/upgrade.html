@@ -84,6 +84,11 @@
 
     <h5><a id="upgrade_382_notable" href="#upgrade_382_notable">Notable changes in 3.8.2</a></h5>
     <ul>
+        <li>
+            We have added a system property ("org.apache.kafka.sasl.oauthbearer.allowed.urls") to
+            set the allowed URLs as SASL OAUTHBEARER token or jwks endpoints. By default all URLs are allowed.
+            Users should explicitly set the desired allowed list if necessary.
+        </li>
         <li>Request logging for deprecated protocol api versions was changed from <code>DEBUG</code> to <code>INFO</code> level. This makes it possible to enable request
             logging for deprecated requests without enabling it for regular requests (which are still logged at <code>DEBUG</code> level). The relevant logger is
             <code>log4j.logger.kafka.request.logger</code> and it can be adjusted statically via the <code>log4j.properties</code> file or dynamically via <code>kafka-configs.sh</code>.
