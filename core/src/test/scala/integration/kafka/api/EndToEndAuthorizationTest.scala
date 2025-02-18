@@ -299,14 +299,14 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   /**
     * Tests that producer, consumer and adminClient fail to publish messages, consume
     * messages and describe topics respectively when the describe ACL isn't set.
-    * Also verifies that subsequent publish, consume and describe to authorized topic succeeds.
+    * Also verifies that subsequent produce, consume and describe to authorized topic succeeds.
     */
   @ParameterizedTest(name = "{displayName}.quorum={0}.groupProtocol={1}.isIdempotenceEnabled={2}")
   @CsvSource(value = Array(
     "kraft, classic, true",
-    //"kraft, consumer, true",
+    "kraft, consumer, true",
     "kraft, classic, false",
-    //"kraft, consumer, false",
+    "kraft, consumer, false",
   ))
   def testNoDescribeProduceOrConsumeWithoutTopicDescribeAcl(quorum:String, groupProtocol:String, isIdempotenceEnabled:Boolean): Unit = {
     // Set consumer group acls since we are testing topic authorization
