@@ -2267,14 +2267,28 @@ RULE:[n:string](regexp)s/pattern/replacement/g/U</code></pre>
         </tr>
         <tr>
             <td>DESCRIBE_SHARE_GROUP_OFFSETS (90)</td>
-            <td>Read</td>
+            <td>Describe</td>
             <td>Group</td>
+            <td>To describe the offset information for a partition in a share group, the application must have privileges on the
+                group and the topic. Group access is checked first, then topic access.</td>
+        </tr>
+        <tr>
+            <td>DESCRIBE_SHARE_GROUP_OFFSETS (90)</td>
+            <td>Describe</td>
+            <td>Topic</td>
             <td></td>
         </tr>
         <tr>
             <td>ALTER_SHARE_GROUP_OFFSETS (91)</td>
-            <td>Alter</td>
+            <td>Read</td>
             <td>Group</td>
+            <td>To alter the offset information for a partition in a share group, the application must have privileges on the
+                group and the topic. Group access is checked first, then topic access.</td>
+        </tr>
+        <tr>
+            <td>ALTER_SHARE_GROUP_OFFSETS (91)</td>
+            <td>Read</td>
+            <td>Topic</td>
             <td></td>
         </tr>
         </tbody>

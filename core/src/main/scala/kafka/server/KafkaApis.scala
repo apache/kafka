@@ -3230,7 +3230,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         futures += CompletableFuture.completedFuture(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup()
           .setGroupId(groupDescribeOffsets.groupId)
           .setErrorCode(Errors.UNSUPPORTED_VERSION.code))
-      } else if (!authHelper.authorize(request.context, READ, GROUP, groupDescribeOffsets.groupId)) {
+      } else if (!authHelper.authorize(request.context, DESCRIBE, GROUP, groupDescribeOffsets.groupId)) {
         futures += CompletableFuture.completedFuture(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup()
           .setGroupId(groupDescribeOffsets.groupId)
           .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code))

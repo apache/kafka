@@ -327,9 +327,9 @@
 
     <!-- group coordinator -->
     <suppress checks="CyclomaticComplexity"
-              files="(ConsumerGroupMember|GroupMetadataManager|GeneralUniformAssignmentBuilder|GroupCoordinatorRecordSerde).java"/>
+              files="(ConsumerGroupMember|GroupMetadataManager|GeneralUniformAssignmentBuilder|GroupCoordinatorRecordSerde|GroupMetadataManagerTestContext).java"/>
     <suppress checks="(NPathComplexity|MethodLength)"
-              files="(GroupMetadataManager|ConsumerGroupTest|ShareGroupTest|GroupMetadataManagerTest|GroupMetadataManagerTestContext|GeneralUniformAssignmentBuilder).java"/>
+              files="(GroupMetadataManager|ConsumerGroupTest|ShareGroupTest|GroupMetadataManagerTest|GroupMetadataManagerTestContext|GeneralUniformAssignmentBuilder|GroupCoordinatorShard).java"/>
     <suppress checks="ClassFanOutComplexity"
               files="(GroupMetadataManager|GroupMetadataManagerTest|GroupMetadataManagerTestContext|GroupCoordinatorService|GroupCoordinatorServiceTest).java"/>
     <suppress checks="ParameterNumber"
