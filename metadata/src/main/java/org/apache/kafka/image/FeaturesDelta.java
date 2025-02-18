@@ -98,11 +98,11 @@ public final class FeaturesDelta {
             }
         }
 
-        final MetadataVersion metadataVersion;
+        final Optional<MetadataVersion> metadataVersion;
         if (metadataVersionChange == null) {
-            metadataVersion = image.metadataVersionOrThrow();
+            metadataVersion = image.metadataVersion();
         } else {
-            metadataVersion = metadataVersionChange;
+            metadataVersion = Optional.of(metadataVersionChange);
         }
 
         return new FeaturesImage(newFinalizedVersions, metadataVersion);

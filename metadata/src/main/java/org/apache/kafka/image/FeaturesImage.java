@@ -52,7 +52,7 @@ public final class FeaturesImage {
         this(finalizedVersions, Optional.of(metadataVersion));
     }
 
-    private FeaturesImage(
+    FeaturesImage(
             Map<String, Short> finalizedVersions,
             Optional<MetadataVersion> metadataVersion) {
         this.finalizedVersions = Collections.unmodifiableMap(finalizedVersions);
