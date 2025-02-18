@@ -1220,9 +1220,6 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    *
    * If no such message is found, the log end offset is returned.
    *
-   * `NOTE:` ListOffsets requests V0 does not use this method, the behavior of ListOffsets V0 remains the same as before
-   * , i.e. it only gives back the timestamp based on the last modification time of the log segments.
-   *
    * @param targetTimestamp The given timestamp for offset fetching.
    * @param remoteOffsetReader Optional AsyncOffsetReader instance if it exists.
    * @return the offset-result holder
