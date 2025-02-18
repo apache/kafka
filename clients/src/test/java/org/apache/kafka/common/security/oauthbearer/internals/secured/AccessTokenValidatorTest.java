@@ -15,11 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.security.oauthbearer;
-
-import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenBuilder;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerTest;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.ValidateException;
+package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
 import org.jose4j.jws.AlgorithmIdentifiers;
 import org.jose4j.jwx.HeaderParameterNames;

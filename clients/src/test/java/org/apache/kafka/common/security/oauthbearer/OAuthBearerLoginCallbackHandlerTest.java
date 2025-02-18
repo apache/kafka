@@ -22,7 +22,10 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.security.auth.SaslExtensionsCallback;
 import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerClientInitialResponse;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenBuilder;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenRetriever;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenValidator;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ClientAccessTokenValidator;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.DefaultAccessTokenRetriever;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.FileAccessTokenRetriever;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpAccessTokenRetriever;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerTest;
@@ -67,7 +70,6 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
 
     @Test
     public void testHandleTokenCallback() throws Exception {
-        Map<String, ?> configs = getSaslConfigs();
         AccessTokenBuilder builder = new AccessTokenBuilder()
             .jwk(createRsaJwk())
             .alg(AlgorithmIdentifiers.RSA_USING_SHA256);
@@ -75,7 +77,7 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
         AccessTokenRetriever accessTokenRetriever = mock(AccessTokenRetriever.class);
         when(accessTokenRetriever.retrieve()).thenReturn(accessToken);
 
-        try (OAuthBearerLoginCallbackHandler handler = createHandler(accessTokenRetriever, configs)) {
+        try (OAuthBearerLoginCallbackHandler handler = createHandler(accessTokenRetriever)) {
             OAuthBearerTokenCallback callback = new OAuthBearerTokenCallback();
             handler.handle(new Callback[]{callback});
 
@@ -194,7 +196,7 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
         AccessTokenRetriever accessTokenRetriever = mock(AccessTokenRetriever.class);
         when(accessTokenRetriever.retrieve()).thenThrow(new IOException("The token endpoint response access_token value must be non-null"));
 
-        try (OAuthBearerLoginCallbackHandler handler = createHandler(accessTokenRetriever, getSaslConfigs())) {
+        try (OAuthBearerLoginCallbackHandler handler = createHandler(accessTokenRetriever)) {
             OAuthBearerTokenCallback callback = new OAuthBearerTokenCallback();
             assertThrowsWithMessage(
                 IOException.class,
@@ -241,11 +243,10 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
     }
 
     private void testInvalidAccessToken(String accessToken, String expectedMessageSubstring) throws Exception {
-        Map<String, ?> configs = getSaslConfigs();
         AccessTokenRetriever accessTokenRetriever = mock(AccessTokenRetriever.class);
         when(accessTokenRetriever.retrieve()).thenReturn(accessToken);
 
-        try (OAuthBearerLoginCallbackHandler handler = createHandler(accessTokenRetriever, configs)) {
+        try (OAuthBearerLoginCallbackHandler handler = createHandler(accessTokenRetriever)) {
             OAuthBearerTokenCallback callback = new OAuthBearerTokenCallback();
             handler.handle(new Callback[]{callback});
 
@@ -256,5 +257,13 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
                 "The error message \"%s\" didn't contain the expected substring \"%s\"",
                 actualMessage, expectedMessageSubstring));
         }
+    }
+
+    protected OAuthBearerLoginCallbackHandler createHandler(AccessTokenRetriever accessTokenRetriever) {
+        Map<String, ?> configs = getSaslConfigs();
+        OAuthBearerLoginCallbackHandler handler = new OAuthBearerLoginCallbackHandler();
+        AccessTokenValidator accessTokenValidator = new ClientAccessTokenValidator();
+        handler.configure(accessTokenRetriever, accessTokenValidator, configs, OAUTHBEARER_MECHANISM, List.of());
+        return handler;
     }
 }

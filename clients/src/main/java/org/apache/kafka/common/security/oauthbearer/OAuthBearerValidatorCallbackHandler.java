@@ -18,8 +18,9 @@
 package org.apache.kafka.common.security.oauthbearer;
 
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenValidator;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.DefaultAccessTokenValidator;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ValidateException;
 import org.apache.kafka.common.utils.Utils;
 
@@ -105,21 +106,19 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
         try {
-            AccessTokenValidator validator = newInstance(configs);
-            configure(validator, configs, saslMechanism, jaasConfigEntries);
+            configure(new DefaultAccessTokenValidator(), configs, saslMechanism, jaasConfigEntries);
         } catch (Throwable t) {
             throw new KafkaException("The OAuth validator configuration encountered an error during initialization", t);
         }
     }
 
-    public void configure(AccessTokenValidator accessTokenValidator,
+    void configure(AccessTokenValidator accessTokenValidator,
                           Map<String, ?> configs,
                           String saslMechanism,
                           List<AppConfigurationEntry> jaasConfigEntries) {
         this.accessTokenValidator = accessTokenValidator;
         this.accessTokenValidator.configure(configs, saslMechanism, jaasConfigEntries);
-
-        isInitialized = true;
+        this.isInitialized = true;
     }
 
     @Override
@@ -165,15 +164,5 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
     private void checkInitialized() {
         if (!isInitialized)
             throw new IllegalStateException(String.format("To use %s, first call the configure or init method", getClass().getSimpleName()));
-    }
-
-    @SuppressWarnings("unchecked")
-    private <T extends AccessTokenValidator> T newInstance(Map<String, ?> configs) {
-        Class<T> clazz = (Class<T>) configs.get(SaslConfigs.SASL_OAUTHBEARER_ACCESS_TOKEN_VALIDATOR_CLASS);
-
-        if (clazz == null)
-            clazz = (Class<T>) DefaultAccessTokenValidator.class;
-
-        return Utils.newInstance(clazz);
     }
 }

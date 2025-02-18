@@ -19,7 +19,6 @@ package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SaslConfigs;
-import org.apache.kafka.common.security.oauthbearer.AccessTokenRetriever;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerHttpClient;
 
 import com.fasterxml.jackson.databind.JsonNode;

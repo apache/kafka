@@ -24,14 +24,20 @@ import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.TimeZone;
 
 import javax.security.auth.callback.Callback;
+import javax.security.auth.login.AppConfigurationEntry;
 
+import static javax.security.auth.login.AppConfigurationEntry.LoginModuleControlFlag.OPTIONAL;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
 import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG;
+import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule.OAUTHBEARER_MECHANISM;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -50,12 +56,14 @@ public class FileAccessTokenRetrieverTest extends OAuthBearerTest {
         File tmpDir = createTempDir("access-token");
         File accessTokenFile = createTempFile(tmpDir, "access-token-", ".json", withNewline);
 
+        List<AppConfigurationEntry> jaasConfigEntries = new ArrayList<>();
+        jaasConfigEntries.add(new AppConfigurationEntry("dummy", OPTIONAL, Collections.emptyMap()));
+
         System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, accessTokenFile.toURI().toString());
-
         Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, accessTokenFile.toURI().toString());
-        FileAccessTokenRetriever accessTokenRetriever = new FileAccessTokenRetriever();
 
-        try (OAuthBearerLoginCallbackHandler handler = createHandler(accessTokenRetriever, configs)) {
+        try (OAuthBearerLoginCallbackHandler handler = new OAuthBearerLoginCallbackHandler()) {
+            handler.configure(configs, OAUTHBEARER_MECHANISM, jaasConfigEntries);
             OAuthBearerTokenCallback callback = new OAuthBearerTokenCallback();
             handler.handle(new Callback[]{callback});
             assertEquals(callback.token().value(), expected);
@@ -63,5 +71,4 @@ public class FileAccessTokenRetrieverTest extends OAuthBearerTest {
             fail(e);
         }
     }
-
 }

@@ -21,9 +21,6 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.authenticator.TestJaasConfig;
-import org.apache.kafka.common.security.oauthbearer.AccessTokenRetriever;
-import org.apache.kafka.common.security.oauthbearer.AccessTokenValidator;
-import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
@@ -53,7 +50,6 @@ import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
@@ -107,17 +103,6 @@ public abstract class OAuthBearerTest {
         payload = enc.encodeToString(Utils.utf8(payload));
         signature = enc.encodeToString(Utils.utf8(signature));
         return String.format("%s.%s.%s", header, payload, signature);
-    }
-
-    protected OAuthBearerLoginCallbackHandler createHandler(AccessTokenRetriever accessTokenRetriever,
-                                                            Map<String, ?> configs) {
-        List<AppConfigurationEntry> jaasConfigEntries = List.of();
-        OAuthBearerLoginCallbackHandler handler = new OAuthBearerLoginCallbackHandler();
-        AccessTokenValidator accessTokenValidator = new ClientAccessTokenValidator();
-        accessTokenRetriever.configure(configs, null, jaasConfigEntries);
-        accessTokenValidator.configure(configs, null, jaasConfigEntries);
-        handler.configure(accessTokenRetriever, accessTokenValidator, configs, OAUTHBEARER_MECHANISM, List.of());
-        return handler;
     }
 
     protected String createBase64JsonJwtSection(Consumer<ObjectNode> c) {
@@ -239,5 +224,4 @@ public abstract class OAuthBearerTest {
         jwk.setKeyId("key-1");
         return jwk;
     }
-
 }

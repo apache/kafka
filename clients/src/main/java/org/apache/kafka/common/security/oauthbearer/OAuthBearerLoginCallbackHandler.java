@@ -20,11 +20,14 @@ package org.apache.kafka.common.security.oauthbearer;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.auth.SaslExtensions;
 import org.apache.kafka.common.security.auth.SaslExtensionsCallback;
 import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerClientInitialResponse;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenRetriever;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenValidator;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.DefaultAccessTokenRetriever;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.DefaultAccessTokenValidator;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.JaasOptionsUtils;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ValidateException;
 import org.apache.kafka.common.utils.Utils;
@@ -189,25 +192,19 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
         moduleOptions = JaasOptionsUtils.getOptions(saslMechanism, jaasConfigEntries);
 
         try {
-            AccessTokenRetriever retriever = newInstance(
-                SaslConfigs.SASL_OAUTHBEARER_ACCESS_TOKEN_RETRIEVER_CLASS,
-                DefaultAccessTokenRetriever.class,
-                configs
+            configure(
+                new DefaultAccessTokenRetriever(),
+                new DefaultAccessTokenValidator(),
+                configs,
+                saslMechanism,
+                jaasConfigEntries
             );
-
-            AccessTokenValidator validator = newInstance(
-                SaslConfigs.SASL_OAUTHBEARER_ACCESS_TOKEN_VALIDATOR_CLASS,
-                DefaultAccessTokenValidator.class,
-                configs
-            );
-
-            configure(retriever, validator, configs, saslMechanism, jaasConfigEntries);
         } catch (Throwable t) {
             throw new KafkaException("The OAuth login configuration encountered an error during initialization", t);
         }
     }
 
-    public void configure(AccessTokenRetriever accessTokenRetriever,
+    void configure(AccessTokenRetriever accessTokenRetriever,
                    AccessTokenValidator accessTokenValidator,
                    Map<String, ?> configs,
                    String saslMechanism,
@@ -218,7 +215,7 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
         this.accessTokenRetriever.configure(configs, saslMechanism, jaasConfigEntries);
         this.accessTokenValidator.configure(configs, saslMechanism, jaasConfigEntries);
 
-        isInitialized = true;
+        this.isInitialized = true;
     }
 
     @Override

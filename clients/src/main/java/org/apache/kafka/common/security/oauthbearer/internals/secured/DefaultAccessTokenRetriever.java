@@ -15,11 +15,8 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.security.oauthbearer;
+package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
-import org.apache.kafka.common.security.oauthbearer.internals.secured.ClientCredentialsAccessTokenRetriever;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.FileAccessTokenRetriever;
 import org.apache.kafka.common.utils.Utils;
 
 import java.io.IOException;
@@ -60,7 +57,7 @@ public class DefaultAccessTokenRetriever implements AccessTokenRetriever {
         Utils.closeQuietly(delegate, "delegate");
     }
 
-    AccessTokenRetriever delegate() {
+    public AccessTokenRetriever delegate() {
         return delegate;
     }
 }

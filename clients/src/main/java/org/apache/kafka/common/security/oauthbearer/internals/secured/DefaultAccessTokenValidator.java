@@ -15,11 +15,9 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.security.oauthbearer;
+package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
-import org.apache.kafka.common.security.oauthbearer.internals.secured.BrokerAccessTokenValidator;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.ClientAccessTokenValidator;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.ValidateException;
+import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
 import org.apache.kafka.common.utils.Utils;
 
 import java.util.List;
