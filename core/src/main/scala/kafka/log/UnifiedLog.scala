@@ -691,7 +691,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    *
    * Also see #appendAsLeader.
    */
-  private[log] def appendAsLeaderWithRecordVersion(records: MemoryRecords, leaderEpoch: Int, recordVersion: RecordVersion): LogAppendInfo = {
+  private[kafka] def appendAsLeaderWithRecordVersion(records: MemoryRecords, leaderEpoch: Int, recordVersion: RecordVersion): LogAppendInfo = {
     append(records, AppendOrigin.CLIENT, true, leaderEpoch, Some(RequestLocal.noCaching),
       VerificationGuard.SENTINEL, ignoreRecordSize = false, recordVersion.value)
   }
