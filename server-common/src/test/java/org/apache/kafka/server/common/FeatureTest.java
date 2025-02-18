@@ -25,6 +25,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.apache.kafka.server.common.Feature.validateDefaultValueAndLatestProductionValue;
+import static org.apache.kafka.server.common.Feature.validateVersion;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -289,5 +291,15 @@ public class FeatureTest {
                 validateDefaultValueAndLatestProductionValue(Feature.UNIT_TEST_VERSION_7),
             "Feature UNIT_TEST_VERSION_7 has default FeatureVersion UT_FV7_0 when MV=3.0-IV1 with " +
                 "MV dependency 3.7-IV0 that is behind its bootstrap MV 3.0-IV1.");
+    }
+
+    @Test
+    public void testValidateEligibleLeaderReplicasVersion() {
+        assertThrows(IllegalArgumentException.class, () ->
+            validateVersion(EligibleLeaderReplicasVersion.ELRV_1, Map.of(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_4_0_IV0.featureLevel())),
+            "ELR requires MV to be at least 4.0IV1.");
+        assertDoesNotThrow(() ->
+            validateVersion(EligibleLeaderReplicasVersion.ELRV_1, Map.of(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_4_0_IV1.featureLevel())),
+            "ELR requires MV to be at least 4.0IV1.");
     }
 }
