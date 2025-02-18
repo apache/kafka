@@ -1724,12 +1724,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val acl = new AclBinding(new ResourcePattern(ResourceType.TOPIC, "mytopic3", PatternType.LITERAL),
       new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.DESCRIBE, AclPermissionType.ALLOW))
     client = createAdminClient
-    assertFutureThrows(classOf[SecurityDisabledException],
-      client.describeAcls(AclBindingFilter.ANY).values())
-    assertFutureThrows(classOf[SecurityDisabledException],
-      client.createAcls(Collections.singleton(acl)).all())
-    assertFutureThrows(classOf[SecurityDisabledException],
-      client.deleteAcls(Collections.singleton(acl.toFilter())).all())
+    assertFutureThrows(classOf[SecurityDisabledException], client.describeAcls(AclBindingFilter.ANY).values())
+    assertFutureThrows(classOf[SecurityDisabledException], client.createAcls(Collections.singleton(acl)).all())
+    assertFutureThrows(classOf[SecurityDisabledException], client.deleteAcls(Collections.singleton(acl.toFilter())).all())
   }
 
   /**
@@ -2338,15 +2335,15 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         // Start consumer polling threads in the background
         backgroundConsumerSet.start()
 
-          // Test delete non-exist consumer instance
-          val invalidInstanceId = "invalid-instance-id"
-          var removeMembersResult = client.removeMembersFromConsumerGroup(testGroupId, new RemoveMembersFromConsumerGroupOptions(
-            Collections.singleton(new MemberToRemove(invalidInstanceId))
-          ))
+        // Test delete non-exist consumer instance
+        val invalidInstanceId = "invalid-instance-id"
+        var removeMembersResult = client.removeMembersFromConsumerGroup(testGroupId, new RemoveMembersFromConsumerGroupOptions(
+          Collections.singleton(new MemberToRemove(invalidInstanceId))
+        ))
 
-          assertFutureThrows(classOf[UnknownMemberIdException], removeMembersResult.all)
-          val firstMemberFuture = removeMembersResult.memberResult(new MemberToRemove(invalidInstanceId))
-          assertFutureThrows(classOf[UnknownMemberIdException], firstMemberFuture)
+        assertFutureThrows(classOf[UnknownMemberIdException], removeMembersResult.all)
+        val firstMemberFuture = removeMembersResult.memberResult(new MemberToRemove(invalidInstanceId))
+        assertFutureThrows(classOf[UnknownMemberIdException], firstMemberFuture)
 
         // Test consumer group deletion
         var deleteResult = client.deleteConsumerGroups(Seq(testGroupId, fakeGroupId).asJava)

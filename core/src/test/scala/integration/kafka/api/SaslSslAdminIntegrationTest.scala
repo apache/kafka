@@ -602,15 +602,9 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
       assertEquals(LogConfig.DEFAULT_COMPRESSION_TYPE, compressionConfig.value)
       assertEquals(ConfigEntry.ConfigSource.DEFAULT_CONFIG, compressionConfig.source)
 
-      assertFutureThrows(
-        classOf[TopicAuthorizationException],
-        result.numPartitions(topic2))
-      assertFutureThrows(
-        classOf[TopicAuthorizationException],
-        result.replicationFactor(topic2))
-      assertFutureThrows(
-        classOf[TopicAuthorizationException],
-        result.config(topic2))
+      assertFutureThrows(classOf[TopicAuthorizationException], result.numPartitions(topic2))
+      assertFutureThrows(classOf[TopicAuthorizationException], result.replicationFactor(topic2))
+      assertFutureThrows(classOf[TopicAuthorizationException], result.config(topic2))
     }
     validateMetadataAndConfigs(validateResult)
 

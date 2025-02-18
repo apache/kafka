@@ -601,9 +601,9 @@ public class TestUtils {
     }
 
     public static <T extends Throwable> void assertFutureThrows(
-            Class<T> expectedCauseClassApiException,
-            Future<?> future,
-            String expectedMessage
+        Class<T> expectedCauseClassApiException,
+        Future<?> future,
+        String expectedMessage
     ) {
         T receivedException = assertFutureThrows(expectedCauseClassApiException, future);
         assertEquals(expectedMessage, receivedException.getMessage());
