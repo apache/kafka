@@ -99,7 +99,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
     private final CompletableFuture<Void> closeFuture;
     private boolean isAcknowledgementCommitCallbackRegistered = false;
     private final Map<IdAndPartition, String> topicNamesMap = new HashMap<>();
-    private final InvalidRecordStateException INVALID_RESPONSE = new InvalidRecordStateException("Acknowledgement not successful due to invalid response from broker");
+    private static final InvalidRecordStateException INVALID_RESPONSE = new InvalidRecordStateException("Acknowledgement not successful due to invalid response from broker");
 
     ShareConsumeRequestManager(final Time time,
                                final LogContext logContext,
