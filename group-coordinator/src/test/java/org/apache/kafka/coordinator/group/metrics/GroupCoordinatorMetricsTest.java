@@ -220,6 +220,13 @@ public class GroupCoordinatorMetricsTest {
             ConsumerGroupState.DEAD, 1L
         ));
 
+        shard0.setStreamsGroupGauges(Collections.singletonMap(StreamsGroupState.ASSIGNING, 2L));
+        shard1.setStreamsGroupGauges(Map.of(
+            StreamsGroupState.RECONCILING, 1L,
+            StreamsGroupState.DEAD, 1L,
+            StreamsGroupState.NOT_READY, 1L
+        ));
+
         IntStream.range(0, 6).forEach(__ -> shard0.incrementNumOffsets());
         IntStream.range(0, 2).forEach(__ -> shard1.incrementNumOffsets());
         IntStream.range(0, 1).forEach(__ -> shard1.decrementNumOffsets());
@@ -227,10 +234,6 @@ public class GroupCoordinatorMetricsTest {
         IntStream.range(0, 5).forEach(__ -> shard0.incrementNumShareGroups(ShareGroup.ShareGroupState.STABLE));
         IntStream.range(0, 5).forEach(__ -> shard1.incrementNumShareGroups(ShareGroup.ShareGroupState.EMPTY));
         IntStream.range(0, 3).forEach(__ -> shard1.decrementNumShareGroups(ShareGroup.ShareGroupState.DEAD));
-        
-        IntStream.range(0, 5).forEach(__ -> shard0.incrementNumStreamsGroups(StreamsGroupState.STABLE));
-        IntStream.range(0, 5).forEach(__ -> shard1.incrementNumStreamsGroups(StreamsGroupState.EMPTY));
-        IntStream.range(0, 3).forEach(__ -> shard1.decrementNumStreamsGroups(StreamsGroupState.DEAD));
 
         assertEquals(4, shard0.numClassicGroups());
         assertEquals(5, shard1.numClassicGroups());
@@ -248,6 +251,7 @@ public class GroupCoordinatorMetricsTest {
 
         assertEquals(5, shard0.numConsumerGroups());
         assertEquals(2, shard1.numConsumerGroups());
+
         assertEquals(6, shard0.numOffsets());
         assertEquals(1, shard1.numOffsets());
         assertGaugeValue(
@@ -265,12 +269,12 @@ public class GroupCoordinatorMetricsTest {
             7
         );
         
-        assertEquals(5, shard0.numStreamsGroups());
-        assertEquals(2, shard1.numStreamsGroups());
+        assertEquals(2, shard0.numStreamsGroups());
+        assertEquals(3, shard1.numStreamsGroups());
         assertGaugeValue(
             metrics,
             metrics.metricName("group-count", METRICS_GROUP, Collections.singletonMap("protocol", "streams")),
-            7
+            5
         );
     }
 

@@ -18,107 +18,142 @@ package kafka.api
 
 import kafka.utils.TestInfoUtils
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.compress.Compression
+import org.apache.kafka.common.record.{AbstractRecords, CompressionType, MemoryRecords, RecordBatch, RecordVersion, SimpleRecord, TimestampType}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNull, assertThrows}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 
+import java.nio.ByteBuffer
 import java.util
 import java.util.{Collections, Optional}
 import scala.jdk.CollectionConverters._
 
 class ConsumerWithLegacyMessageFormatIntegrationTest extends AbstractConsumerTest {
 
+  val topic1 = "part-test-topic-1"
+  val topic2 = "part-test-topic-2"
+  val topic3 = "part-test-topic-3"
+
+  val t1p0 = new TopicPartition(topic1, 0)
+  val t1p1 = new TopicPartition(topic1, 1)
+  val t2p0 = new TopicPartition(topic2, 0)
+  val t2p1 = new TopicPartition(topic2, 1)
+  val t3p0 = new TopicPartition(topic3, 0)
+  val t3p1 = new TopicPartition(topic3, 1)
+
+  private def appendLegacyRecords(numRecords: Int, tp: TopicPartition, brokerId: Int, magicValue: Byte): Unit = {
+    val records = (0 until numRecords).map { i =>
+      new SimpleRecord(i, s"key $i".getBytes, s"value $i".getBytes)
+    }
+    val buffer = ByteBuffer.allocate(AbstractRecords.estimateSizeInBytes(magicValue, CompressionType.NONE, records.asJava))
+    val builder = MemoryRecords.builder(buffer, magicValue, Compression.of(CompressionType.NONE).build,
+      TimestampType.CREATE_TIME, 0L, RecordBatch.NO_TIMESTAMP, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH,
+      0, false, RecordBatch.NO_PARTITION_LEADER_EPOCH)
+
+    records.foreach(builder.append)
+
+    brokers.filter(_.config.brokerId == brokerId).foreach(b => {
+      val unifiedLog = b.replicaManager.logManager.getLog(tp).get
+      unifiedLog.appendAsLeaderWithRecordVersion(
+        records = builder.build(),
+        leaderEpoch = 0,
+        recordVersion = RecordVersion.lookup(magicValue)
+      )
+      // Default isolation.level is read_uncommitted. It makes Partition#fetchOffsetForTimestamp to return UnifiedLog#highWatermark,
+      // so increasing high watermark to make it return the correct offset.
+      unifiedLog.maybeIncrementHighWatermark(unifiedLog.logEndOffsetMetadata)
+    })
+  }
+
+  private def setupTopics(): Unit = {
+    val producer = createProducer()
+    createTopic(topic1, numPartitions = 2)
+    createTopicWithAssignment(topic2, Map(0 -> List(0), 1 -> List(1)))
+    createTopicWithAssignment(topic3, Map(0 -> List(0), 1 -> List(1)))
+
+    // v2 message format for topic1
+    sendRecords(producer, numRecords = 100, t1p0, startingTimestamp = 0)
+    sendRecords(producer, numRecords = 100, t1p1, startingTimestamp = 0)
+    // v0 message format for topic2
+    appendLegacyRecords(100, t2p0, 0, RecordBatch.MAGIC_VALUE_V0)
+    appendLegacyRecords(100, t2p1, 1, RecordBatch.MAGIC_VALUE_V0)
+    // v1 message format for topic3
+    appendLegacyRecords(100, t3p0, 0, RecordBatch.MAGIC_VALUE_V1)
+    appendLegacyRecords(100, t3p1, 1, RecordBatch.MAGIC_VALUE_V1)
+
+    producer.close()
+  }
+
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testOffsetsForTimes(quorum: String, groupProtocol: String): Unit = {
-    val numParts = 2
-    val topic1 = "part-test-topic-1"
-    val topic2 = "part-test-topic-2"
-    val topic3 = "part-test-topic-3"
-    createTopic(topic1, numParts)
-    createTopic(topic2, numParts)
-    createTopic(topic3, numParts)
-
+    setupTopics()
     val consumer = createConsumer()
 
     // Test negative target time
     assertThrows(classOf[IllegalArgumentException],
-      () => consumer.offsetsForTimes(Collections.singletonMap(new TopicPartition(topic1, 0), -1)))
+      () => consumer.offsetsForTimes(Collections.singletonMap(t1p0, -1)))
 
-    val producer = createProducer()
-    val timestampsToSearch = new util.HashMap[TopicPartition, java.lang.Long]()
-    var i = 0
-    for (topic <- List(topic1, topic2, topic3)) {
-      for (part <- 0 until numParts) {
-        val tp = new TopicPartition(topic, part)
-        // In sendRecords(), each message will have key, value and timestamp equal to the sequence number.
-        sendRecords(producer, numRecords = 100, tp, startingTimestamp = 0)
-        timestampsToSearch.put(tp, (i * 20).toLong)
-        i += 1
-      }
-    }
-    // The timestampToSearch map should contain:
-    // (topic1Partition0 -> 0,
-    //  topic1Partition1 -> 20,
-    //  topic2Partition0 -> 40,
-    //  topic2Partition1 -> 60,
-    //  topic3Partition0 -> 80,
-    //  topic3Partition1 -> 100)
+    val timestampsToSearch = util.Map.of[TopicPartition, java.lang.Long](
+      t1p0, 0L,
+      t1p1, 20L,
+      t2p0, 40L,
+      t2p1, 60L,
+      t3p0, 80L,
+      t3p1, 100L
+    )
+
     val timestampOffsets = consumer.offsetsForTimes(timestampsToSearch)
 
-    val timestampTopic1P0 = timestampOffsets.get(new TopicPartition(topic1, 0))
+    val timestampTopic1P0 = timestampOffsets.get(t1p0)
     assertEquals(0, timestampTopic1P0.offset)
     assertEquals(0, timestampTopic1P0.timestamp)
     assertEquals(Optional.of(0), timestampTopic1P0.leaderEpoch)
 
-    val timestampTopic1P1 = timestampOffsets.get(new TopicPartition(topic1, 1))
+    val timestampTopic1P1 = timestampOffsets.get(t1p1)
     assertEquals(20, timestampTopic1P1.offset)
     assertEquals(20, timestampTopic1P1.timestamp)
     assertEquals(Optional.of(0), timestampTopic1P1.leaderEpoch)
 
-    // legacy message formats are supported for IBP version < 3.0 and KRaft runs on minimum version 3.0-IV1
-    val timestampTopic2P0 = timestampOffsets.get(new TopicPartition(topic2, 0))
-    assertEquals(40, timestampTopic2P0.offset)
-    assertEquals(40, timestampTopic2P0.timestamp)
-    assertEquals(Optional.of(0), timestampTopic2P0.leaderEpoch)
+    // v0 message format doesn't have timestamp
+    val timestampTopic2P0 = timestampOffsets.get(t2p0)
+    assertNull(timestampTopic2P0)
 
-    val timestampTopic2P1 = timestampOffsets.get(new TopicPartition(topic2, 1))
-    assertEquals(60, timestampTopic2P1.offset)
-    assertEquals(60, timestampTopic2P1.timestamp)
-    assertEquals(Optional.of(0), timestampTopic2P1.leaderEpoch)
+    val timestampTopic2P1 = timestampOffsets.get(t2p1)
+    assertNull(timestampTopic2P1)
 
-    val timestampTopic3P0 = timestampOffsets.get(new TopicPartition(topic3, 0))
+    // v1 message format doesn't have leader epoch
+    val timestampTopic3P0 = timestampOffsets.get(t3p0)
     assertEquals(80, timestampTopic3P0.offset)
     assertEquals(80, timestampTopic3P0.timestamp)
-    assertEquals(Optional.of(0), timestampTopic3P0.leaderEpoch)
+    assertEquals(Optional.empty, timestampTopic3P0.leaderEpoch)
 
-    assertNull(timestampOffsets.get(new TopicPartition(topic3, 1)))
+    assertNull(timestampOffsets.get(t3p1))
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testEarliestOrLatestOffsets(quorum: String, groupProtocol: String): Unit = {
-    val topic0 = "topic0"
-    val topic1 = "topic1"
-    val producer = createProducer()
-    createTopicAndSendRecords(producer, topicName = topic0, numPartitions = 2, recordsPerPartition = 100)
-    createTopic(topic1)
-    sendRecords(producer, numRecords = 100, new TopicPartition(topic1, 0))
+    setupTopics()
 
-    val t0p0 = new TopicPartition(topic0, 0)
-    val t0p1 = new TopicPartition(topic0, 1)
-    val t1p0 = new TopicPartition(topic1, 0)
-    val partitions = Set(t0p0, t0p1, t1p0).asJava
+    val partitions = Set(t1p0, t1p1, t2p0, t2p1, t3p0, t3p1).asJava
     val consumer = createConsumer()
 
     val earliests = consumer.beginningOffsets(partitions)
-    assertEquals(0L, earliests.get(t0p0))
-    assertEquals(0L, earliests.get(t0p1))
     assertEquals(0L, earliests.get(t1p0))
+    assertEquals(0L, earliests.get(t1p1))
+    assertEquals(0L, earliests.get(t2p0))
+    assertEquals(0L, earliests.get(t2p1))
+    assertEquals(0L, earliests.get(t3p0))
+    assertEquals(0L, earliests.get(t3p1))
 
     val latests = consumer.endOffsets(partitions)
-    assertEquals(100L, latests.get(t0p0))
-    assertEquals(100L, latests.get(t0p1))
     assertEquals(100L, latests.get(t1p0))
+    assertEquals(100L, latests.get(t1p1))
+    assertEquals(100L, latests.get(t2p0))
+    assertEquals(100L, latests.get(t2p1))
+    assertEquals(100L, latests.get(t3p0))
+    assertEquals(100L, latests.get(t3p1))
   }
 }

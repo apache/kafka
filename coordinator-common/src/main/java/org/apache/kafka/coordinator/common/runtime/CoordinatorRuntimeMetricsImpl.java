@@ -300,7 +300,7 @@ public class CoordinatorRuntimeMetricsImpl implements CoordinatorRuntimeMetrics 
     }
 
     @Override
-    public void recordThreadIdleTime(long idleTimeMs) {
+    public void recordThreadIdleTime(double idleTimeMs) {
         threadIdleSensor.record(idleTimeMs);
     }
 
