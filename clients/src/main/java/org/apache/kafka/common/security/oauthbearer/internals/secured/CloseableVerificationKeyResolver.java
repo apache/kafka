@@ -17,7 +17,6 @@
 
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
-import org.apache.kafka.common.security.oauthbearer.OAuthBearerConfigurable;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerValidatorCallbackHandler;
 
 import org.jose4j.keys.resolvers.VerificationKeyResolver;

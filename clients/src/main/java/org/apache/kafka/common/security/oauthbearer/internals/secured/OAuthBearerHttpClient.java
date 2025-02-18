@@ -15,9 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.security.oauthbearer;
-
-import org.apache.kafka.common.security.oauthbearer.internals.secured.UnretryableException;
+package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

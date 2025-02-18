@@ -18,7 +18,6 @@
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.security.oauthbearer.OAuthBearerConfigurable;
 import org.apache.kafka.common.utils.Time;
 
 import org.jose4j.http.Get;

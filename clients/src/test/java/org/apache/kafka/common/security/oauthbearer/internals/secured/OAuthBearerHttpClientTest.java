@@ -15,9 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.security.oauthbearer;
-
-import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerTest;
+package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
 import org.junit.jupiter.api.Test;
 
