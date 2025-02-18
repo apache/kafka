@@ -88,7 +88,7 @@ public class SkipRepartitionNode<K, V> extends ProcessorGraphNode<K, V> {
      * @throws IllegalArgumentException if an attempt is made to mark this node as key-changing
      */
     @Override
-    public void keyChangingOperation(final boolean keyChangingOperation) {
+    public void setKeyChangingOperation(final boolean keyChangingOperation) {
         if (keyChangingOperation) throw new IllegalArgumentException(
             "SkipRepartitionNode cannot be key-changing as it preserves partitioning."
         );

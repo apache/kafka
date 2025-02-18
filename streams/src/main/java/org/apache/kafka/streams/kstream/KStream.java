@@ -150,7 +150,7 @@ public interface KStream<K, V> {
                                       final Named named);
 
     /**
-     * Skips unnecessary repartitioning.
+     * Skip unnecessary repartitioning.
      *
      * <p>By default, Kafka Streams triggers repartitioning when an operation modifies the key (e.g., {@link #selectKey}
      * and {@link #map}). This ensures proper partitioning before stateful operations. However, if the input stream is
@@ -178,30 +178,9 @@ public interface KStream<K, V> {
     KStream<K, V> skipRepartition();
 
     /**
-     * Skips unnecessary repartitioning.
+     * See {@link #skipRepartition()}.
      *
-     * <p>By default, Kafka Streams triggers repartitioning when an operation modifies the key (e.g., {@link #selectKey}
-     * and {@link #map}). This ensures proper partitioning before stateful operations. However, if the input stream is
-     * already partitioned correctly, this method can be used to optimize performance by skipping the repartitioning
-     * step.</p>
-     *
-     * <h2>When Not to Use This Method</h2>
-     *
-     * <ul>
-     * <li><b>Do not use this method with Interactive Queries (IQ) or joins.</b> These operations rely on composite keys
-     * generated during repartitioning, and disabling it may lead to incorrect results.</li>
-     * <li>Ensure that the input stream is <b>already partitioned correctly</b> before using this method. If
-     * repartitioning is needed but skipped, aggregations may produce incorrect results.</li>
-     * </ul>
-     *
-     * <h2>Default Behavior and Overriding It</h2>
-     *
-     * <p>Kafka Streams automatically repartitions records before stateful operations if needed. However, if the input stream is already partitioned correctly, this method allows bypassing that behavior.</p>
-     *
-     * @return a new {@code KStream} instance that will not trigger automatic repartitioning.
-     *
-     * @see #groupByKey()
-     * @see #selectKey(KeyValueMapper)
+     * @see #skipRepartition()
      */
     KStream<K, V> skipRepartition(final Named named);
 
