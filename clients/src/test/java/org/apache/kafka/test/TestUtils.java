@@ -597,12 +597,14 @@ public class TestUtils {
             fail("Should throw expected exception " + exceptionCauseClass.getSimpleName() + " but nothing was thrown.");
         } catch (InterruptedException | ExecutionException | CancellationException e) {
             Throwable cause = e instanceof ExecutionException ? e.getCause() : e;
-            return assertInstanceOf(
-                exceptionCauseClass, cause,
-                "Expected " + exceptionCauseClass.getSimpleName() + ", but got " + cause
+            assertEquals(
+                exceptionCauseClass, 
+                cause.getClass(), 
+                "Expected " + exceptionCauseClass.getSimpleName() + ", but got " + cause.getClass().getSimpleName()
             );
+            return exceptionCauseClass.cast(cause);
         } catch (TimeoutException e) {
-            fail("Future is not completed within " + DEFAULT_MAX_WAIT_MS + " millisecond.");
+            fail("Future is not completed within " + DEFAULT_MAX_WAIT_MS + " milliseconds.");
         } catch (Exception e) {
             fail("Unexpected error happened: " + e);
         }
