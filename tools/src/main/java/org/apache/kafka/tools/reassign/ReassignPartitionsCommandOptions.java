@@ -37,6 +37,7 @@ public class ReassignPartitionsCommandOptions extends CommandDefaultOptions {
     final OptionSpec<String> brokerListOpt;
     final OptionSpec<String> bootstrapControllerOpt;
     final OptionSpec<?> disableRackAware;
+    final OptionSpec<?> sticky;
     final OptionSpec<Long> interBrokerThrottleOpt;
     final OptionSpec<Long> replicaAlterLogDirsThrottleOpt;
     final OptionSpec<Long> timeoutOpt;
@@ -92,6 +93,7 @@ public class ReassignPartitionsCommandOptions extends CommandDefaultOptions {
             .ofType(String.class);
         
         disableRackAware = parser.accepts("disable-rack-aware", "Disable rack aware replica assignment");
+        sticky = parser.accepts("sticky", "Use a sticky reassignment strategy to reduce the number of replica moves needed to balance out brokers");
         interBrokerThrottleOpt = parser.accepts("throttle", "The movement of partitions between brokers will be throttled to this value (bytes/sec). " +
                 "This option can be included with --execute when a reassignment is started, and it can be altered by resubmitting the current reassignment " +
                 "along with the --additional flag. The throttle rate should be at least 1 KB/s.")

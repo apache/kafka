@@ -175,7 +175,7 @@ public class ReassignPartitionsCommandTest {
             String assignment = "{\"version\":1,\"partitions\":" +
                     "[{\"topic\":\"foo\",\"partition\":0,\"replicas\":[3,1,2],\"log_dirs\":[\"any\",\"any\",\"any\"]}" +
                     "]}";
-            generateAssignment(admin, assignment, "1,2,3", false);
+            generateAssignment(admin, assignment, "1,2,3", false, false);
             Map<TopicPartition, PartitionReassignmentState> finalAssignment = singletonMap(foo0,
                     new PartitionReassignmentState(asList(0, 1, 2), asList(3, 1, 2), true));
             waitForVerifyAssignment(admin, assignment, false,
