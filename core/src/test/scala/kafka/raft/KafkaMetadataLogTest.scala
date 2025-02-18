@@ -46,7 +46,6 @@ import java.io.File
 import java.nio.ByteBuffer
 import java.nio.file.{Files, Path}
 import java.util
-import java.util.Random
 import java.util.{Collections, Optional, Properties}
 import scala.jdk.CollectionConverters._
 import scala.util.Using
@@ -147,7 +146,7 @@ final class KafkaMetadataLogTest {
 
   @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
   def testRandomRecords(
-    @ForAll seed: Long
+    @ForAll(supplier = classOf[ArbitraryRecords]) records: MemoryRecords
   ): Unit = {
     val tempDir = TestUtils.tempDir()
     try {
@@ -156,9 +155,7 @@ final class KafkaMetadataLogTest {
 
       assertThrows(
         classOf[CorruptRecordException],
-        () => log.appendAsFollower(
-          InvalidMemoryRecordsProvider.buildRandomRecords(new Random(seed)),
-          Int.MaxValue)
+        () => log.appendAsFollower(records, Int.MaxValue)
       )
 
       assertEquals(previousEndOffset, log.endOffset().offset())

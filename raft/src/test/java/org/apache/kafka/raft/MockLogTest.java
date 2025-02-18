@@ -19,6 +19,7 @@ package org.apache.kafka.raft;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
+import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.record.ControlRecordUtils;
@@ -31,6 +32,10 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
+
+import net.jqwik.api.AfterFailureMode;
+import net.jqwik.api.ForAll;
+import net.jqwik.api.Property;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -52,7 +57,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-// TODO: Test random memory records
 public class MockLogTest {
 
     private MockLog log;
@@ -398,6 +402,22 @@ public class MockLogTest {
         );
 
         assertEquals(previousEndOffset, log.endOffset().offset());
+    }
+
+    @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
+    void testRandomRecords(
+        @ForAll(supplier = ArbitraryRecords.class) MemoryRecords records
+    ) {
+        try (MockLog log = new MockLog(topicPartition, topicId, new LogContext())) {
+            long previousEndOffset = log.endOffset().offset();
+
+            assertThrows(
+                CorruptRecordException.class,
+                () -> log.appendAsFollower(records, InvalidMemoryRecordsProvider.EPOCH)
+            );
+
+            assertEquals(previousEndOffset, log.endOffset().offset());
+        }
     }
 
     @Test

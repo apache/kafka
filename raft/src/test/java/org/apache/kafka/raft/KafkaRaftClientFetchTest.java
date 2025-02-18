@@ -27,7 +27,6 @@ import net.jqwik.api.Property;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ArgumentsSource;
 
-import java.util.Random;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -35,9 +34,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 public final class KafkaRaftClientFetchTest {
     @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
     void testRandomRecords(
-        @ForAll long seed
+        @ForAll(supplier = ArbitraryRecords.class) MemoryRecords memoryRecords
     ) throws Exception {
-        testFetchResponseWithInvalidRecord(InvalidMemoryRecordsProvider.buildRandomRecords(new Random(seed)));
+        testFetchResponseWithInvalidRecord(memoryRecords);
     }
 
     @ParameterizedTest

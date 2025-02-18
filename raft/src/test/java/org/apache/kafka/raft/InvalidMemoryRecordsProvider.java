@@ -27,22 +27,12 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.ArgumentsProvider;
 
 import java.nio.ByteBuffer;
-import java.util.Random;
 import java.util.stream.Stream;
 
 public final class InvalidMemoryRecordsProvider implements ArgumentsProvider {
     // Use a baseOffset that not zero so that is less likely to match the LEO
     private static final long BASE_OFFSET = 1234;
     public static final int EPOCH = 4321;
-
-    // TODO: use jqwik support for random generators
-    public static MemoryRecords buildRandomRecords(Random random) {
-        int size = random.nextInt(255) + 1;
-        byte[] bytes = new byte[size];
-        random.nextBytes(bytes);
-
-        return MemoryRecords.readableRecords(ByteBuffer.wrap(bytes));
-    }
 
     /** Returns a stream of arguements for invalid memory records and the expected exception.
      *
