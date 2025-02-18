@@ -120,18 +120,21 @@ def main():
         extra_in_license = license_deps - libs
 
         if missing_in_license:
-            print("\nThe following libs (from ./libs) are missing in the LICENSE file:")
+            print("\nThe following libs (from ./libs) are missing in the LICENSE file. These should be added to the LICENSE-binary file:")
             for dep in sorted(missing_in_license):
                 print(" -", dep)
         else:
             print("\nAll libs from ./libs are present in the LICENSE file.")
         
         if extra_in_license:
-            print("\nThe following entries are in the LICENSE file but not present in ./libs:")
+            print("\nThe following entries are in the LICENSE file but not present in ./libs. These should be removed from the LICENSE-binary file:")
             for dep in sorted(extra_in_license):
                 print(" -", dep)
         else:
             print("\nNo extra dependencies in the LICENSE file.")
+
+        if missing_in_license or extra_in_license:
+            sys.exit(1)
 
 if __name__ == "__main__":
     main()
