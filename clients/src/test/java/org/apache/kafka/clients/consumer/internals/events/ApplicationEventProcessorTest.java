@@ -438,7 +438,7 @@ public class ApplicationEventProcessorTest {
         processor.process(event);
 
         verify(subscriptionState).subscribe(pattern, listener);
-        Exception thrown = assertFutureThrows(mixedSubscriptionError.getClass(), event.future());
+        Exception thrown = assertFutureThrows(IllegalStateException.class, event.future());
         assertEquals(mixedSubscriptionError, thrown);
     }
 
