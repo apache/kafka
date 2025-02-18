@@ -23,7 +23,6 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
-import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -45,7 +44,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class ListValueStoreTest {
-    private enum StoreType { InMemory, RocksDB }
+    public enum StoreType { InMemory, RocksDB }
 
     private KeyValueStore<Integer, String> listStore;
 
@@ -66,7 +65,7 @@ public class ListValueStoreTest {
                 new MockStreamsMetrics(new Metrics())));
         context.setTime(1L);
 
-        listStore.init((StateStoreContext) context, listStore);
+        listStore.init(context, listStore);
     }
 
     @AfterEach

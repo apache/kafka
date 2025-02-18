@@ -19,6 +19,7 @@ package org.apache.kafka.connect.runtime;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
@@ -71,10 +72,10 @@ class WorkerSourceTask extends AbstractWorkerSourceTask {
                             SourceTask task,
                             TaskStatus.Listener statusListener,
                             TargetState initialState,
-                            Converter keyConverter,
-                            Converter valueConverter,
+                            Plugin<Converter> keyConverterPlugin,
+                            Plugin<Converter> valueConverterPlugin,
                             ErrorHandlingMetrics errorMetrics,
-                            HeaderConverter headerConverter,
+                            Plugin<HeaderConverter> headerConverterPlugin,
                             TransformationChain<SourceRecord, SourceRecord> transformationChain,
                             Producer<byte[], byte[]> producer,
                             TopicAdmin admin,
@@ -92,8 +93,8 @@ class WorkerSourceTask extends AbstractWorkerSourceTask {
                             Executor closeExecutor,
                             Supplier<List<ErrorReporter<SourceRecord>>> errorReportersSupplier) {
 
-        super(id, task, statusListener, initialState, keyConverter, valueConverter, headerConverter, transformationChain,
-                new WorkerSourceTaskContext(offsetReader, id, configState, null), producer,
+        super(id, task, statusListener, initialState, configState, keyConverterPlugin, valueConverterPlugin, headerConverterPlugin, transformationChain,
+                null, producer,
                 admin, topicGroups, offsetReader, offsetWriter, offsetStore, workerConfig, connectMetrics, errorMetrics, loader,
                 time, retryWithToleranceOperator, statusBackingStore, closeExecutor, errorReportersSupplier);
 
@@ -262,11 +263,11 @@ class WorkerSourceTask extends AbstractWorkerSourceTask {
             shouldFlush = offsetWriter.beginFlush(timeout - time.milliseconds(), TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
             log.warn("{} Interrupted while waiting for previous offset flush to complete, cancelling", this);
-            recordCommitFailure(time.milliseconds() - started, e);
+            recordCommitFailure(time.milliseconds() - started);
             return false;
         } catch (TimeoutException e) {
             log.warn("{} Timed out while waiting for previous offset flush to complete, cancelling", this);
-            recordCommitFailure(time.milliseconds() - started, e);
+            recordCommitFailure(time.milliseconds() - started);
             return false;
         }
         if (!shouldFlush) {
@@ -292,7 +293,7 @@ class WorkerSourceTask extends AbstractWorkerSourceTask {
         // any data
         if (flushFuture == null) {
             offsetWriter.cancelFlush();
-            recordCommitFailure(time.milliseconds() - started, null);
+            recordCommitFailure(time.milliseconds() - started);
             return false;
         }
         try {
@@ -304,17 +305,17 @@ class WorkerSourceTask extends AbstractWorkerSourceTask {
         } catch (InterruptedException e) {
             log.warn("{} Flush of offsets interrupted, cancelling", this);
             offsetWriter.cancelFlush();
-            recordCommitFailure(time.milliseconds() - started, e);
+            recordCommitFailure(time.milliseconds() - started);
             return false;
         } catch (ExecutionException e) {
             log.error("{} Flush of offsets threw an unexpected exception: ", this, e);
             offsetWriter.cancelFlush();
-            recordCommitFailure(time.milliseconds() - started, e);
+            recordCommitFailure(time.milliseconds() - started);
             return false;
         } catch (TimeoutException e) {
             log.error("{} Timed out waiting to flush offsets to storage; will try again on next flush interval with latest offsets", this);
             offsetWriter.cancelFlush();
-            recordCommitFailure(time.milliseconds() - started, null);
+            recordCommitFailure(time.milliseconds() - started);
             return false;
         }
 

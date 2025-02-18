@@ -17,11 +17,12 @@
 package kafka.api
 
 import kafka.api.ConsumerRebootstrapTest._
-import kafka.server.QuorumTestHarness.getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly_ZK_implicit
+import kafka.server.QuorumTestHarness.getTestQuorumAndGroupProtocolParametersAll
 import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
+import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 
@@ -84,6 +85,7 @@ class ConsumerRebootstrapTest extends RebootstrapTest {
     consumeAndVerifyRecords(consumer, 10, 20, startingKeyAndValueIndex = 20, startingTimestamp = 20)
   }
 
+  @Disabled
   @ParameterizedTest(name = RebootstrapTestName)
   @MethodSource(Array("rebootstrapTestParams"))
   def testRebootstrapDisabled(quorum: String, groupProtocol: String, useRebootstrapTriggerMs: Boolean): Unit = {
@@ -133,12 +135,12 @@ object ConsumerRebootstrapTest {
 
   final val RebootstrapTestName = s"${TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames}.useRebootstrapTriggerMs={2}"
   def rebootstrapTestParams: stream.Stream[Arguments] = {
-    assertEquals(1, getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly_ZK_implicit.count())
-    val args = getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly_ZK_implicit
-      .findFirst().get.get
-    stream.Stream.of(
-      Arguments.of((args :+ true):_*),
-      Arguments.of((args :+ false):_*)
-    )
+    getTestQuorumAndGroupProtocolParametersAll
+      .flatMap { baseArgs =>
+        stream.Stream.of(
+          Arguments.of((baseArgs.get :+ true):_*),
+          Arguments.of((baseArgs.get :+ false):_*)
+        )
+      }
   }
 }

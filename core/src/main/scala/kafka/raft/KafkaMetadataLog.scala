@@ -28,7 +28,7 @@ import org.apache.kafka.common.errors.InvalidConfigurationException
 import org.apache.kafka.common.record.{MemoryRecords, Records}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
-import org.apache.kafka.raft.{Isolation, KafkaRaftClient, LogAppendInfo, LogFetchInfo, LogOffsetMetadata, OffsetAndEpoch, OffsetMetadata, ReplicatedLog, ValidOffsetAndEpoch}
+import org.apache.kafka.raft.{Isolation, KafkaRaftClient, LogAppendInfo, LogFetchInfo, LogOffsetMetadata, OffsetAndEpoch, OffsetMetadata, ReplicatedLog, SegmentPosition, ValidOffsetAndEpoch}
 import org.apache.kafka.server.common.RequestLocal
 import org.apache.kafka.server.config.{KRaftConfigs, ServerLogConfigs}
 import org.apache.kafka.server.storage.log.FetchIsolation
@@ -41,7 +41,7 @@ import org.apache.kafka.snapshot.RawSnapshotWriter
 import org.apache.kafka.snapshot.SnapshotPath
 import org.apache.kafka.snapshot.Snapshots
 import org.apache.kafka.storage.internals
-import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, LogDirFailureChannel, LogStartOffsetIncrementReason, ProducerStateManagerConfig}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, LogDirFailureChannel, LogStartOffsetIncrementReason, ProducerStateManagerConfig, UnifiedLog => JUnifiedLog}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 
 import java.io.File
@@ -81,7 +81,7 @@ final class KafkaMetadataLog private (
 
       new LogOffsetMetadata(
         fetchInfo.fetchOffsetMetadata.messageOffset,
-        Optional.of(SegmentPosition(
+        Optional.of(new SegmentPosition(
           fetchInfo.fetchOffsetMetadata.segmentBaseOffset,
           fetchInfo.fetchOffsetMetadata.relativePositionInSegment))
         )
@@ -109,7 +109,7 @@ final class KafkaMetadataLog private (
   }
 
   private def handleAndConvertLogAppendInfo(appendInfo: internals.log.LogAppendInfo): LogAppendInfo = {
-    if (appendInfo.firstOffset != UnifiedLog.UnknownOffset)
+    if (appendInfo.firstOffset != JUnifiedLog.UNKNOWN_OFFSET)
       new LogAppendInfo(appendInfo.firstOffset, appendInfo.lastOffset)
     else
       throw new KafkaException(s"Append failed unexpectedly")
@@ -155,7 +155,7 @@ final class KafkaMetadataLog private (
     val endOffsetMetadata = log.logEndOffsetMetadata
     new LogOffsetMetadata(
       endOffsetMetadata.messageOffset,
-      Optional.of(SegmentPosition(
+      Optional.of(new SegmentPosition(
         endOffsetMetadata.segmentBaseOffset,
         endOffsetMetadata.relativePositionInSegment)
       )
@@ -197,7 +197,7 @@ final class KafkaMetadataLog private (
   }
 
   override def initializeLeaderEpoch(epoch: Int): Unit = {
-    log.maybeAssignEpochStartOffset(epoch, log.logEndOffset)
+    log.assignEpochStartOffset(epoch, log.logEndOffset)
   }
 
   override def updateHighWatermark(offsetMetadata: LogOffsetMetadata): Unit = {
@@ -226,7 +226,7 @@ final class KafkaMetadataLog private (
   override def highWatermark: LogOffsetMetadata = {
     val hwm = log.fetchOffsetSnapshot.highWatermark
     val segmentPosition: Optional[OffsetMetadata] = if (!hwm.messageOffsetOnly) {
-      Optional.of(SegmentPosition(hwm.segmentBaseOffset, hwm.relativePositionInSegment))
+      Optional.of(new SegmentPosition(hwm.segmentBaseOffset, hwm.relativePositionInSegment))
     } else {
       Optional.empty()
     }
@@ -269,6 +269,25 @@ final class KafkaMetadataLog private (
     if (validOffsetAndEpoch.kind() != ValidOffsetAndEpoch.Kind.VALID) {
       throw new IllegalArgumentException(
         s"Snapshot id ($snapshotId) is not valid according to the log: $validOffsetAndEpoch"
+      )
+    }
+
+    /*
+      Perform a check that the requested snapshot offset is batch aligned via a log read, which
+      returns the base offset of the batch that contains the requested offset. A snapshot offset
+      is one greater than the last offset contained in the snapshot, and cannot go past the high
+      watermark.
+
+      This check is necessary because Raft replication code assumes the snapshot offset is the
+      start of a batch. If a follower applies a non-batch aligned snapshot at offset (X) and
+      fetches from this offset, the returned batch will start at offset (X - M), and the
+      follower will be unable to append it since (X - M) < (X).
+     */
+    val baseOffset = read(snapshotId.offset, Isolation.COMMITTED).startOffsetMetadata.offset
+    if (snapshotId.offset != baseOffset) {
+      throw new IllegalArgumentException(
+        s"Cannot create snapshot at offset (${snapshotId.offset}) because it is not batch aligned. " +
+        s"The batch containing the requested offset has a base offset of ($baseOffset)"
       )
     }
 
@@ -601,8 +620,7 @@ object KafkaMetadataLog extends Logging {
       producerIdExpirationCheckIntervalMs = Int.MaxValue,
       logDirFailureChannel = new LogDirFailureChannel(5),
       lastShutdownClean = false,
-      topicId = Some(topicId),
-      keepPartitionMetadataFile = true
+      topicId = Some(topicId)
     )
 
     val metadataLog = new KafkaMetadataLog(

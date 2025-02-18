@@ -233,7 +233,11 @@ public class BrokerRegistration {
         if (endpoint == null) {
             return Optional.empty();
         }
-        return Optional.of(new Node(id, endpoint.host(), endpoint.port(), rack.orElse(null)));
+        return Optional.of(new Node(id, endpoint.host(), endpoint.port(), rack.orElse(null), fenced));
+    }
+    
+    public List<Node> nodes() {
+        return listeners.keySet().stream().flatMap(l -> node(l).stream()).toList();
     }
 
     public Map<String, VersionRange> supportedFeatures() {
@@ -342,8 +346,7 @@ public class BrokerRegistration {
 
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof BrokerRegistration)) return false;
-        BrokerRegistration other = (BrokerRegistration) o;
+        if (!(o instanceof BrokerRegistration other)) return false;
         return other.id == id &&
             other.epoch == epoch &&
             other.incarnationId.equals(incarnationId) &&

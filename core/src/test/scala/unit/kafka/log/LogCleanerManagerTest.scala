@@ -19,7 +19,7 @@ package kafka.log
 
 import java.io.File
 import java.nio.file.Files
-import java.util.Properties
+import java.util.{Optional, Properties}
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.compress.Compression
@@ -28,7 +28,7 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.server.util.MockTime
-import org.apache.kafka.storage.internals.log.{AppendOrigin, LocalLog, LogConfig, LogDirFailureChannel, LogLoader, LogSegment, LogSegments, LogStartOffsetIncrementReason, ProducerStateManager, ProducerStateManagerConfig}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, LocalLog, LogConfig, LogDirFailureChannel, LogLoader, LogSegment, LogSegments, LogStartOffsetIncrementReason, ProducerStateManager, ProducerStateManagerConfig, UnifiedLog => JUnifiedLog}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
@@ -37,7 +37,6 @@ import java.lang.{Long => JLong}
 import java.util
 import java.util.concurrent.ConcurrentHashMap
 import scala.collection.mutable
-import scala.jdk.OptionConverters.RichOption
 
 /**
   * Unit tests for the log cleaning logic
@@ -110,8 +109,8 @@ class LogCleanerManagerTest extends Logging {
     val maxTransactionTimeoutMs = 5 * 60 * 1000
     val producerIdExpirationCheckIntervalMs = TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT
     val segments = new LogSegments(tp)
-    val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(
-      tpDir, topicPartition, logDirFailureChannel, config.recordVersion, "", None, time.scheduler)
+    val leaderEpochCache = JUnifiedLog.createLeaderEpochCache(
+      tpDir, topicPartition, logDirFailureChannel, Optional.empty, time.scheduler)
     val producerStateManager = new ProducerStateManager(topicPartition, tpDir, maxTransactionTimeoutMs, producerStateManagerConfig, time)
     val offsets = new LogLoader(
       tpDir,
@@ -124,7 +123,7 @@ class LogCleanerManagerTest extends Logging {
       segments,
       0L,
       0L,
-      leaderEpochCache.toJava,
+      leaderEpochCache,
       producerStateManager,
       new ConcurrentHashMap[String, Integer],
       false
@@ -134,7 +133,7 @@ class LogCleanerManagerTest extends Logging {
     // the exception should be caught and the partition that caused it marked as uncleanable
     class LogMock extends UnifiedLog(offsets.logStartOffset, localLog, new BrokerTopicStats,
         producerIdExpirationCheckIntervalMs, leaderEpochCache,
-        producerStateManager, _topicId = None, keepPartitionMetadataFile = true) {
+        producerStateManager, _topicId = None) {
       // Throw an error in getFirstBatchTimestampForSegments since it is called in grabFilthiestLog()
       override def getFirstBatchTimestampForSegments(segments: util.Collection[LogSegment]): util.Collection[java.lang.Long] =
         throw new IllegalStateException("Error!")
@@ -359,7 +358,7 @@ class LogCleanerManagerTest extends Logging {
 
     log.appendAsLeader(records, leaderEpoch = 0)
     log.roll()
-    log.appendAsLeader(records, leaderEpoch = 0)
+    log.appendAsLeader(TestUtils.singletonRecords("test2".getBytes, key="test2".getBytes), leaderEpoch = 0)
     log.updateHighWatermark(2L)
 
     // simulate cleanup thread working on the log partition
@@ -808,7 +807,7 @@ class LogCleanerManagerTest extends Logging {
                         cleanupPolicy: String,
                         topicPartition: TopicPartition = new TopicPartition("log", 0)): UnifiedLog = {
     val config = createLowRetentionLogConfig(segmentSize, cleanupPolicy)
-    val partitionDir = new File(logDir, UnifiedLog.logDirName(topicPartition))
+    val partitionDir = new File(logDir, JUnifiedLog.logDirName(topicPartition))
 
     UnifiedLog(
       dir = partitionDir,
@@ -822,8 +821,7 @@ class LogCleanerManagerTest extends Logging {
       producerStateManagerConfig = producerStateManagerConfig,
       producerIdExpirationCheckIntervalMs = TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
       logDirFailureChannel = new LogDirFailureChannel(10),
-      topicId = None,
-      keepPartitionMetadataFile = true)
+      topicId = None)
   }
 
   private def createLowRetentionLogConfig(segmentSize: Int, cleanupPolicy: String): LogConfig = {
@@ -876,8 +874,7 @@ class LogCleanerManagerTest extends Logging {
       producerStateManagerConfig = producerStateManagerConfig,
       producerIdExpirationCheckIntervalMs = TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
       logDirFailureChannel = new LogDirFailureChannel(10),
-      topicId = None,
-      keepPartitionMetadataFile = true
+      topicId = None
     )
   }
 

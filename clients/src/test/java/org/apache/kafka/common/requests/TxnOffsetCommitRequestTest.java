@@ -70,7 +70,8 @@ public class TxnOffsetCommitRequestTest extends OffsetCommitRequestTest {
             groupId,
             producerId,
             producerEpoch,
-            OFFSETS
+            OFFSETS,
+            true
         );
 
         int generationId = 5;
@@ -82,14 +83,14 @@ public class TxnOffsetCommitRequestTest extends OffsetCommitRequestTest {
             OFFSETS,
             memberId,
             generationId,
-            Optional.of(groupInstanceId)
+            Optional.of(groupInstanceId),
+            true
         );
     }
 
     @Test
     @Override
     public void testConstructor() {
-
         Map<TopicPartition, Errors> errorsMap = new HashMap<>();
         errorsMap.put(new TopicPartition(topicOne, partitionOne), Errors.NOT_COORDINATOR);
         errorsMap.put(new TopicPartition(topicTwo, partitionTwo), Errors.NOT_COORDINATOR);

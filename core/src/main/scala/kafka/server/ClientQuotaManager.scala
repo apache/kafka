@@ -29,7 +29,7 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.metrics.stats.{Avg, CumulativeSum, Rate}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{Sanitizer, Time}
-import org.apache.kafka.server.config.{ClientQuotaManagerConfig, ZooKeeperInternals}
+import org.apache.kafka.server.config.ClientQuotaManagerConfig
 import org.apache.kafka.server.quota.{ClientQuotaCallback, ClientQuotaEntity, ClientQuotaType, QuotaType, QuotaUtils, SensorAccess, ThrottleCallback, ThrottledChannel}
 import org.apache.kafka.server.util.ShutdownableThread
 import org.apache.kafka.network.Session
@@ -55,7 +55,7 @@ object QuotaTypes {
 object ClientQuotaManager {
   // Purge sensors after 1 hour of inactivity
   val InactiveSensorExpirationTimeSeconds = 3600
-
+  private val DefaultName = "<default>"
   val DefaultClientIdQuotaEntity: KafkaQuotaEntity = KafkaQuotaEntity(None, Some(DefaultClientIdEntity))
   val DefaultUserQuotaEntity: KafkaQuotaEntity = KafkaQuotaEntity(Some(DefaultUserEntity), None)
   val DefaultUserClientIdQuotaEntity: KafkaQuotaEntity = KafkaQuotaEntity(Some(DefaultUserEntity), Some(DefaultClientIdEntity))
@@ -76,13 +76,13 @@ object ClientQuotaManager {
 
   case object DefaultUserEntity extends BaseUserEntity {
     override def entityType: ClientQuotaEntity.ConfigEntityType = ClientQuotaEntity.ConfigEntityType.DEFAULT_USER
-    override def name: String = ZooKeeperInternals.DEFAULT_STRING
+    override def name: String = DefaultName
     override def toString: String = "default user"
   }
 
   case object DefaultClientIdEntity extends ClientQuotaEntity.ConfigEntity {
     override def entityType: ClientQuotaEntity.ConfigEntityType = ClientQuotaEntity.ConfigEntityType.DEFAULT_CLIENT_ID
-    override def name: String = ZooKeeperInternals.DEFAULT_STRING
+    override def name: String = DefaultName
     override def toString: String = "default client-id"
   }
 
@@ -93,7 +93,7 @@ object ClientQuotaManager {
 
     def sanitizedUser: String = userEntity.map {
       case entity: UserEntity => entity.sanitizedUser
-      case DefaultUserEntity => ZooKeeperInternals.DEFAULT_STRING
+      case DefaultUserEntity => DefaultName
     }.getOrElse("")
 
     def clientId: String = clientIdEntity.map(_.name).getOrElse("")
@@ -216,7 +216,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
 
   /**
    * Records that a user/clientId accumulated or would like to accumulate the provided amount at the
-   * the specified time, returns throttle time in milliseconds.
+   * specified time, returns throttle time in milliseconds.
    *
    * @param session The session from which the user is extracted
    * @param clientId The client id
@@ -260,7 +260,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
    */
   def unrecordQuotaSensor(request: RequestChannel.Request, value: Double, timeMs: Long): Unit = {
     val clientSensors = getOrCreateQuotaSensors(request.session, request.header.clientId)
-    clientSensors.quotaSensor.record(value * (-1), timeMs, false)
+    clientSensors.quotaSensor.record(value * -1, timeMs, false)
   }
 
   /**
@@ -403,12 +403,15 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
    * Overrides quotas for <user>, <client-id> or <user, client-id> or the dynamic defaults
    * for any of these levels.
    *
-   * @param sanitizedUser     user to override if quota applies to <user> or <user, client-id>
-   * @param clientId          client to override if quota applies to <client-id> or <user, client-id>
-   * @param sanitizedClientId sanitized client ID to override if quota applies to <client-id> or <user, client-id>
-   * @param quota             custom quota to apply or None if quota override is being removed
+   * @param userEntity   user to override if quota applies to <user> or <user, client-id>
+   * @param clientEntity sanitized client entity to override if quota applies to <client-id> or <user, client-id>
+   * @param quota        custom quota to apply or None if quota override is being removed
    */
-  def updateQuota(sanitizedUser: Option[String], clientId: Option[String], sanitizedClientId: Option[String], quota: Option[Quota]): Unit = {
+  def updateQuota(
+    userEntity: Option[BaseUserEntity],
+    clientEntity: Option[ClientQuotaEntity.ConfigEntity],
+    quota: Option[Quota]
+  ): Unit = {
     /*
      * Acquire the write lock to apply changes in the quota objects.
      * This method changes the quota in the overriddenQuota map and applies the update on the actual KafkaMetric object (if it exists).
@@ -418,29 +421,21 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
      */
     lock.writeLock().lock()
     try {
-      val userEntity = sanitizedUser.map {
-        case ZooKeeperInternals.DEFAULT_STRING => DefaultUserEntity
-        case user => UserEntity(user)
-      }
-      val clientIdEntity = sanitizedClientId.map {
-        case ZooKeeperInternals.DEFAULT_STRING => DefaultClientIdEntity
-        case _ => ClientIdEntity(clientId.getOrElse(throw new IllegalStateException("Client-id not provided")))
-      }
-      val quotaEntity = KafkaQuotaEntity(userEntity, clientIdEntity)
+      val quotaEntity = KafkaQuotaEntity(userEntity, clientEntity)
 
       if (userEntity.nonEmpty) {
         if (quotaEntity.clientIdEntity.nonEmpty)
           quotaTypesEnabled |= QuotaTypes.UserClientIdQuotaEnabled
         else
           quotaTypesEnabled |= QuotaTypes.UserQuotaEnabled
-      } else if (clientIdEntity.nonEmpty)
+      } else if (clientEntity.nonEmpty)
         quotaTypesEnabled |= QuotaTypes.ClientIdQuotaEnabled
 
       quota match {
         case Some(newQuota) => quotaCallback.updateQuota(clientQuotaType, quotaEntity, newQuota.bound)
         case None => quotaCallback.removeQuota(clientQuotaType, quotaEntity)
       }
-      val updatedEntity = if (userEntity.contains(DefaultUserEntity) || clientIdEntity.contains(DefaultClientIdEntity))
+      val updatedEntity = if (userEntity.contains(DefaultUserEntity) || clientEntity.contains(DefaultClientIdEntity))
         None // more than one entity may need updating, so `updateQuotaMetricConfigs` will go through all metrics
       else
         Some(quotaEntity)
@@ -452,9 +447,8 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
   }
 
   /**
-   * Updates metrics configs. This is invoked when quota configs are updated in ZooKeeper
-   * or when partitions leaders change and custom callbacks that implement partition-based quotas
-   * have updated quotas.
+   * Updates metrics configs. This is invoked when quota configs are updated when partitions leaders change 
+   * and custom callbacks that implement partition-based quotas have updated quotas.
    *
    * @param updatedQuotaEntity If set to one entity and quotas have only been enabled at one
    *    level, then an optimized update is performed with a single metric update. If None is provided,

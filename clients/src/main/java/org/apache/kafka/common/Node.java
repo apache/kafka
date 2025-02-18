@@ -30,12 +30,13 @@ public class Node {
     private final String host;
     private final int port;
     private final String rack;
+    private final boolean isFenced;
 
     // Cache hashCode as it is called in performance sensitive parts of the code (e.g. RecordAccumulator.ready)
     private Integer hash;
 
     public Node(int id, String host, int port) {
-        this(id, host, port, null);
+        this(id, host, port, null, false);
     }
 
     public Node(int id, String host, int port, String rack) {
@@ -44,6 +45,16 @@ public class Node {
         this.host = host;
         this.port = port;
         this.rack = rack;
+        this.isFenced = false;
+    }
+
+    public Node(int id, String host, int port, String rack, boolean isFenced) {
+        this.id = id;
+        this.idString = Integer.toString(id);
+        this.host = host;
+        this.port = port;
+        this.rack = rack;
+        this.isFenced = isFenced;
     }
 
     public static Node noNode() {
@@ -102,6 +113,13 @@ public class Node {
         return rack;
     }
 
+    /**
+     * Whether if this node is fenced
+     */
+    public boolean isFenced() {
+        return isFenced;
+    }
+
     @Override
     public int hashCode() {
         Integer h = this.hash;
@@ -110,6 +128,7 @@ public class Node {
             result = 31 * result + id;
             result = 31 * result + port;
             result = 31 * result + ((rack == null) ? 0 : rack.hashCode());
+            result = 31 * result + Objects.hashCode(isFenced);
             this.hash = result;
             return result;
         } else {
@@ -127,12 +146,13 @@ public class Node {
         return id == other.id &&
             port == other.port &&
             Objects.equals(host, other.host) &&
-            Objects.equals(rack, other.rack);
+            Objects.equals(rack, other.rack) &&
+            Objects.equals(isFenced, other.isFenced);
     }
 
     @Override
     public String toString() {
-        return host + ":" + port + " (id: " + idString + " rack: " + rack + ")";
+        return host + ":" + port + " (id: " + idString + " rack: " + rack + " isFenced: " + isFenced + ")";
     }
 
 }

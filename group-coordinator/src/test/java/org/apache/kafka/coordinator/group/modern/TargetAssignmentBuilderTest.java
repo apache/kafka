@@ -37,7 +37,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
-import static org.apache.kafka.coordinator.group.Assertions.assertUnorderedListEquals;
+import static org.apache.kafka.coordinator.group.Assertions.assertRecordsEquals;
+import static org.apache.kafka.coordinator.group.Assertions.assertUnorderedRecordsEquals;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord;
@@ -411,23 +412,27 @@ public class TargetAssignmentBuilderTest {
 
         TargetAssignmentBuilder.TargetAssignmentResult result = context.build();
 
-        assertEquals(3, result.records().size());
-
-        assertUnorderedListEquals(Arrays.asList(
-            newConsumerGroupTargetAssignmentRecord("my-group", "member-1", mkAssignment(
-                mkTopicAssignment(fooTopicId, 4, 5, 6),
-                mkTopicAssignment(barTopicId, 4, 5, 6)
-            )),
-            newConsumerGroupTargetAssignmentRecord("my-group", "member-2", mkAssignment(
-                mkTopicAssignment(fooTopicId, 1, 2, 3),
-                mkTopicAssignment(barTopicId, 1, 2, 3)
-            ))
-        ), result.records().subList(0, 2));
-
-        assertEquals(newConsumerGroupTargetAssignmentEpochRecord(
-            "my-group",
-            20
-        ), result.records().get(2));
+        assertUnorderedRecordsEquals(
+            List.of(
+                List.of(
+                    newConsumerGroupTargetAssignmentRecord("my-group", "member-1", mkAssignment(
+                        mkTopicAssignment(fooTopicId, 4, 5, 6),
+                        mkTopicAssignment(barTopicId, 4, 5, 6)
+                    )),
+                    newConsumerGroupTargetAssignmentRecord("my-group", "member-2", mkAssignment(
+                        mkTopicAssignment(fooTopicId, 1, 2, 3),
+                        mkTopicAssignment(barTopicId, 1, 2, 3)
+                    ))
+                ),
+                List.of(
+                    newConsumerGroupTargetAssignmentEpochRecord(
+                        "my-group",
+                        20
+                    )
+                )
+            ),
+            result.records()
+        );
 
         Map<String, MemberAssignment> expectedAssignment = new HashMap<>();
         expectedAssignment.put("member-2", new MemberAssignmentImpl(mkAssignment(
@@ -481,27 +486,31 @@ public class TargetAssignmentBuilderTest {
 
         TargetAssignmentBuilder.TargetAssignmentResult result = context.build();
 
-        assertEquals(4, result.records().size());
-
-        assertUnorderedListEquals(Arrays.asList(
-            newConsumerGroupTargetAssignmentRecord("my-group", "member-1", mkAssignment(
-                mkTopicAssignment(fooTopicId, 1, 2),
-                mkTopicAssignment(barTopicId, 1, 2)
-            )),
-            newConsumerGroupTargetAssignmentRecord("my-group", "member-2", mkAssignment(
-                mkTopicAssignment(fooTopicId, 3, 4),
-                mkTopicAssignment(barTopicId, 3, 4)
-            )),
-            newConsumerGroupTargetAssignmentRecord("my-group", "member-3", mkAssignment(
-                mkTopicAssignment(fooTopicId, 5, 6),
-                mkTopicAssignment(barTopicId, 5, 6)
-            ))
-        ), result.records().subList(0, 3));
-
-        assertEquals(newConsumerGroupTargetAssignmentEpochRecord(
-            "my-group",
-            20
-        ), result.records().get(3));
+        assertUnorderedRecordsEquals(
+            List.of(
+                List.of(
+                    newConsumerGroupTargetAssignmentRecord("my-group", "member-1", mkAssignment(
+                        mkTopicAssignment(fooTopicId, 1, 2),
+                        mkTopicAssignment(barTopicId, 1, 2)
+                    )),
+                    newConsumerGroupTargetAssignmentRecord("my-group", "member-2", mkAssignment(
+                        mkTopicAssignment(fooTopicId, 3, 4),
+                        mkTopicAssignment(barTopicId, 3, 4)
+                    )),
+                    newConsumerGroupTargetAssignmentRecord("my-group", "member-3", mkAssignment(
+                        mkTopicAssignment(fooTopicId, 5, 6),
+                        mkTopicAssignment(barTopicId, 5, 6)
+                    ))
+                ),
+                List.of(
+                    newConsumerGroupTargetAssignmentEpochRecord(
+                        "my-group",
+                        20
+                    )
+                )
+            ),
+            result.records()
+        );
 
         Map<String, MemberAssignment> expectedAssignment = new HashMap<>();
         expectedAssignment.put("member-1", new MemberAssignmentImpl(mkAssignment(
@@ -568,27 +577,31 @@ public class TargetAssignmentBuilderTest {
 
         TargetAssignmentBuilder.TargetAssignmentResult result = context.build();
 
-        assertEquals(4, result.records().size());
-
-        assertUnorderedListEquals(Arrays.asList(
-            newConsumerGroupTargetAssignmentRecord("my-group", "member-1", mkAssignment(
-                mkTopicAssignment(fooTopicId, 1, 2),
-                mkTopicAssignment(barTopicId, 1, 2)
-            )),
-            newConsumerGroupTargetAssignmentRecord("my-group", "member-2", mkAssignment(
-                mkTopicAssignment(fooTopicId, 3, 4),
-                mkTopicAssignment(barTopicId, 3, 4)
-            )),
-            newConsumerGroupTargetAssignmentRecord("my-group", "member-3", mkAssignment(
-                mkTopicAssignment(fooTopicId, 5, 6),
-                mkTopicAssignment(barTopicId, 5, 6)
-            ))
-        ), result.records().subList(0, 3));
-
-        assertEquals(newConsumerGroupTargetAssignmentEpochRecord(
-            "my-group",
-            20
-        ), result.records().get(3));
+        assertUnorderedRecordsEquals(
+            List.of(
+                List.of(
+                    newConsumerGroupTargetAssignmentRecord("my-group", "member-1", mkAssignment(
+                        mkTopicAssignment(fooTopicId, 1, 2),
+                        mkTopicAssignment(barTopicId, 1, 2)
+                    )),
+                    newConsumerGroupTargetAssignmentRecord("my-group", "member-2", mkAssignment(
+                        mkTopicAssignment(fooTopicId, 3, 4),
+                        mkTopicAssignment(barTopicId, 3, 4)
+                    )),
+                    newConsumerGroupTargetAssignmentRecord("my-group", "member-3", mkAssignment(
+                        mkTopicAssignment(fooTopicId, 5, 6),
+                        mkTopicAssignment(barTopicId, 5, 6)
+                    ))
+                ),
+                List.of(
+                    newConsumerGroupTargetAssignmentEpochRecord(
+                        "my-group",
+                        20
+                    )
+                )
+            ),
+            result.records()
+        );
 
         Map<String, MemberAssignment> expectedAssignment = new HashMap<>();
         expectedAssignment.put("member-1", new MemberAssignmentImpl(mkAssignment(
@@ -649,24 +662,28 @@ public class TargetAssignmentBuilderTest {
 
         TargetAssignmentBuilder.TargetAssignmentResult result = context.build();
 
-        assertEquals(3, result.records().size());
-
-        // Member 1 has no record because its assignment did not change.
-        assertUnorderedListEquals(Arrays.asList(
-            newConsumerGroupTargetAssignmentRecord("my-group", "member-2", mkAssignment(
-                mkTopicAssignment(fooTopicId, 3, 4, 5),
-                mkTopicAssignment(barTopicId, 3, 4, 5)
-            )),
-            newConsumerGroupTargetAssignmentRecord("my-group", "member-3", mkAssignment(
-                mkTopicAssignment(fooTopicId, 6),
-                mkTopicAssignment(barTopicId, 6)
-            ))
-        ), result.records().subList(0, 2));
-
-        assertEquals(newConsumerGroupTargetAssignmentEpochRecord(
-            "my-group",
-            20
-        ), result.records().get(2));
+        assertUnorderedRecordsEquals(
+            List.of(
+                List.of(
+                    // Member 1 has no record because its assignment did not change.
+                    newConsumerGroupTargetAssignmentRecord("my-group", "member-2", mkAssignment(
+                        mkTopicAssignment(fooTopicId, 3, 4, 5),
+                        mkTopicAssignment(barTopicId, 3, 4, 5)
+                    )),
+                    newConsumerGroupTargetAssignmentRecord("my-group", "member-3", mkAssignment(
+                        mkTopicAssignment(fooTopicId, 6),
+                        mkTopicAssignment(barTopicId, 6)
+                    ))
+                ),
+                List.of(
+                    newConsumerGroupTargetAssignmentEpochRecord(
+                        "my-group",
+                        20
+                    )
+                )
+            ),
+            result.records()
+        );
 
         Map<String, MemberAssignment> expectedAssignment = new HashMap<>();
         expectedAssignment.put("member-1", new MemberAssignmentImpl(mkAssignment(
@@ -724,23 +741,27 @@ public class TargetAssignmentBuilderTest {
 
         TargetAssignmentBuilder.TargetAssignmentResult result = context.build();
 
-        assertEquals(3, result.records().size());
-
-        assertUnorderedListEquals(Arrays.asList(
-            newConsumerGroupTargetAssignmentRecord("my-group", "member-1", mkAssignment(
-                mkTopicAssignment(fooTopicId, 1, 2, 3),
-                mkTopicAssignment(barTopicId, 1, 2, 3)
-            )),
-            newConsumerGroupTargetAssignmentRecord("my-group", "member-2", mkAssignment(
-                mkTopicAssignment(fooTopicId, 4, 5, 6),
-                mkTopicAssignment(barTopicId, 4, 5, 6)
-            ))
-        ), result.records().subList(0, 2));
-
-        assertEquals(newConsumerGroupTargetAssignmentEpochRecord(
-            "my-group",
-            20
-        ), result.records().get(2));
+        assertUnorderedRecordsEquals(
+            List.of(
+                List.of(
+                    newConsumerGroupTargetAssignmentRecord("my-group", "member-1", mkAssignment(
+                        mkTopicAssignment(fooTopicId, 1, 2, 3),
+                        mkTopicAssignment(barTopicId, 1, 2, 3)
+                    )),
+                    newConsumerGroupTargetAssignmentRecord("my-group", "member-2", mkAssignment(
+                        mkTopicAssignment(fooTopicId, 4, 5, 6),
+                        mkTopicAssignment(barTopicId, 4, 5, 6)
+                    ))
+                ),
+                List.of(
+                    newConsumerGroupTargetAssignmentEpochRecord(
+                        "my-group",
+                        20
+                    )
+                )
+            ),
+            result.records()
+        );
 
         Map<String, MemberAssignment> expectedAssignment = new HashMap<>();
         expectedAssignment.put("member-1", new MemberAssignmentImpl(mkAssignment(
@@ -803,19 +824,19 @@ public class TargetAssignmentBuilderTest {
 
         TargetAssignmentBuilder.TargetAssignmentResult result = context.build();
 
-        assertEquals(2, result.records().size());
-
-        assertUnorderedListEquals(Collections.singletonList(
-            newConsumerGroupTargetAssignmentRecord("my-group", "member-3-a", mkAssignment(
-                mkTopicAssignment(fooTopicId, 5, 6),
-                mkTopicAssignment(barTopicId, 5, 6)
-            ))
-        ), result.records().subList(0, 1));
-
-        assertEquals(newConsumerGroupTargetAssignmentEpochRecord(
-            "my-group",
-            20
-        ), result.records().get(1));
+        assertRecordsEquals(
+            List.of(
+                newConsumerGroupTargetAssignmentRecord("my-group", "member-3-a", mkAssignment(
+                    mkTopicAssignment(fooTopicId, 5, 6),
+                    mkTopicAssignment(barTopicId, 5, 6)
+                )),
+                newConsumerGroupTargetAssignmentEpochRecord(
+                    "my-group",
+                    20
+                )
+            ),
+            result.records()
+        );
 
         Map<String, MemberAssignment> expectedAssignment = new HashMap<>();
         expectedAssignment.put("member-1", new MemberAssignmentImpl(mkAssignment(
@@ -873,26 +894,30 @@ public class TargetAssignmentBuilderTest {
 
         TargetAssignmentBuilder.TargetAssignmentResult result = context.build();
 
-        assertEquals(4, result.records().size());
-
-        assertUnorderedListEquals(Arrays.asList(
-            newConsumerGroupTargetAssignmentRecord("my-group", "member-1", mkAssignment(
-                mkTopicAssignment(fooTopicId, 1, 2),
-                mkTopicAssignment(barTopicId, 1, 2, 3)
-            )),
-            newConsumerGroupTargetAssignmentRecord("my-group", "member-2", mkAssignment(
-                mkTopicAssignment(fooTopicId, 3, 4),
-                mkTopicAssignment(barTopicId, 4, 5, 6)
-            )),
-            newConsumerGroupTargetAssignmentRecord("my-group", "member-3", mkAssignment(
-                mkTopicAssignment(fooTopicId, 5, 6)
-            ))
-        ), result.records().subList(0, 3));
-
-        assertEquals(newConsumerGroupTargetAssignmentEpochRecord(
-            "my-group",
-            20
-        ), result.records().get(3));
+        assertUnorderedRecordsEquals(
+            List.of(
+                List.of(
+                    newConsumerGroupTargetAssignmentRecord("my-group", "member-1", mkAssignment(
+                        mkTopicAssignment(fooTopicId, 1, 2),
+                        mkTopicAssignment(barTopicId, 1, 2, 3)
+                    )),
+                    newConsumerGroupTargetAssignmentRecord("my-group", "member-2", mkAssignment(
+                        mkTopicAssignment(fooTopicId, 3, 4),
+                        mkTopicAssignment(barTopicId, 4, 5, 6)
+                    )),
+                    newConsumerGroupTargetAssignmentRecord("my-group", "member-3", mkAssignment(
+                        mkTopicAssignment(fooTopicId, 5, 6)
+                    ))
+                ),
+                List.of(
+                    newConsumerGroupTargetAssignmentEpochRecord(
+                        "my-group",
+                        20
+                    )
+                )
+            ),
+            result.records()
+        );
 
         Map<String, MemberAssignment> expectedAssignment = new HashMap<>();
         expectedAssignment.put("member-1", new MemberAssignmentImpl(mkAssignment(

@@ -184,7 +184,7 @@ public class ReadOnlySessionStoreStub<K, V> implements ReadOnlySessionStore<K, V
     }
 
     @Override
-    public void init(StateStoreContext context, StateStore root) {}
+    public void init(StateStoreContext stateStoreContext, StateStore root) {}
 
     @Override
     public void flush() {

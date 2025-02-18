@@ -25,8 +25,14 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.GroupAuthorizationException;
+import org.apache.kafka.common.errors.InvalidCommitOffsetSizeException;
+import org.apache.kafka.common.errors.OffsetMetadataTooLarge;
 import org.apache.kafka.common.errors.RetriableException;
+import org.apache.kafka.common.errors.StaleMemberEpochException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.TopicAuthorizationException;
+import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
 import org.apache.kafka.common.message.OffsetFetchRequestData;
@@ -778,7 +784,8 @@ public class CommitRequestManagerTest {
 
     @ParameterizedTest
     @MethodSource("offsetFetchExceptionSupplier")
-    public void testOffsetFetchRequestTimeoutRequests(final Errors error) {
+    public void testOffsetFetchRequestTimeoutRequests(final Errors error, 
+                                                     final Class<? extends Exception> expectedExceptionClass) {
         CommitRequestManager commitRequestManager = create(true, 100);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
 
@@ -799,10 +806,10 @@ public class CommitRequestManagerTest {
             assertFalse(commitRequestManager.pendingRequests.unsentOffsetFetches.isEmpty());
             NetworkClientDelegate.PollResult poll = commitRequestManager.poll(time.milliseconds());
             mimicResponse(error, poll);
-            futures.forEach(f -> assertFutureThrows(f, TimeoutException.class));
+            futures.forEach(f -> assertFutureThrows(f, expectedExceptionClass));
             assertTrue(commitRequestManager.pendingRequests.unsentOffsetFetches.isEmpty());
         } else {
-            futures.forEach(f -> assertFutureThrows(f, KafkaException.class));
+            futures.forEach(f -> assertFutureThrows(f, expectedExceptionClass));
             assertEmptyPendingRequests(commitRequestManager);
         }
     }
@@ -965,7 +972,9 @@ public class CommitRequestManagerTest {
      */
     @ParameterizedTest
     @MethodSource("offsetCommitExceptionSupplier")
-    public void testOffsetCommitSyncFailedWithRetriableThrowsTimeoutWhenRetryTimeExpires(final Errors error) {
+    public void testOffsetCommitSyncFailedWithRetriableThrowsTimeoutWhenRetryTimeExpires(
+            final Errors error, 
+            final Class<? extends Exception> expectedExceptionClass) {
         CommitRequestManager commitRequestManager = create(false, 100);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
 
@@ -985,10 +994,7 @@ public class CommitRequestManagerTest {
         assertEquals(0, res.unsentRequests.size());
         assertTrue(commitResult.isDone());
 
-        if (error.exception() instanceof RetriableException)
-            assertFutureThrows(commitResult, TimeoutException.class);
-        else
-            assertFutureThrows(commitResult, KafkaException.class);
+        assertFutureThrows(commitResult, expectedExceptionClass);
     }
 
     /**
@@ -1383,18 +1389,23 @@ public class CommitRequestManagerTest {
      */
     private static Stream<Arguments> offsetCommitExceptionSupplier() {
         return Stream.of(
-            Arguments.of(Errors.NOT_COORDINATOR),
-            Arguments.of(Errors.COORDINATOR_LOAD_IN_PROGRESS),
-            Arguments.of(Errors.UNKNOWN_SERVER_ERROR),
-            Arguments.of(Errors.GROUP_AUTHORIZATION_FAILED),
-            Arguments.of(Errors.OFFSET_METADATA_TOO_LARGE),
-            Arguments.of(Errors.INVALID_COMMIT_OFFSET_SIZE),
-            Arguments.of(Errors.UNKNOWN_TOPIC_OR_PARTITION),
-            Arguments.of(Errors.COORDINATOR_NOT_AVAILABLE),
-            Arguments.of(Errors.REQUEST_TIMED_OUT),
-            Arguments.of(Errors.TOPIC_AUTHORIZATION_FAILED),
-            Arguments.of(Errors.STALE_MEMBER_EPOCH),
-            Arguments.of(Errors.UNKNOWN_MEMBER_ID));
+            // Retriable errors should result in TimeoutException when retry time expires
+            Arguments.of(Errors.NOT_COORDINATOR, TimeoutException.class),
+            Arguments.of(Errors.COORDINATOR_LOAD_IN_PROGRESS, TimeoutException.class),
+            Arguments.of(Errors.COORDINATOR_NOT_AVAILABLE, TimeoutException.class),
+            Arguments.of(Errors.REQUEST_TIMED_OUT, TimeoutException.class),
+            Arguments.of(Errors.UNKNOWN_TOPIC_OR_PARTITION, TimeoutException.class),
+            
+            // Non-retriable errors should result in their specific exceptions
+            Arguments.of(Errors.GROUP_AUTHORIZATION_FAILED, GroupAuthorizationException.class),
+            Arguments.of(Errors.OFFSET_METADATA_TOO_LARGE, OffsetMetadataTooLarge.class),
+            Arguments.of(Errors.INVALID_COMMIT_OFFSET_SIZE, InvalidCommitOffsetSizeException.class),
+            Arguments.of(Errors.TOPIC_AUTHORIZATION_FAILED, TopicAuthorizationException.class),
+            Arguments.of(Errors.UNKNOWN_MEMBER_ID, CommitFailedException.class),
+            Arguments.of(Errors.STALE_MEMBER_EPOCH, CommitFailedException.class),
+            
+            // Generic errors should result in KafkaException
+            Arguments.of(Errors.UNKNOWN_SERVER_ERROR, KafkaException.class));
     }
 
     /**
@@ -1402,21 +1413,27 @@ public class CommitRequestManagerTest {
      */
     private static Stream<Arguments> offsetFetchExceptionSupplier() {
         return Stream.of(
-            Arguments.of(Errors.NOT_COORDINATOR),
-            Arguments.of(Errors.COORDINATOR_LOAD_IN_PROGRESS),
-            Arguments.of(Errors.UNKNOWN_SERVER_ERROR),
-            Arguments.of(Errors.GROUP_AUTHORIZATION_FAILED),
-            Arguments.of(Errors.OFFSET_METADATA_TOO_LARGE),
-            Arguments.of(Errors.INVALID_COMMIT_OFFSET_SIZE),
-            Arguments.of(Errors.UNKNOWN_TOPIC_OR_PARTITION),
-            Arguments.of(Errors.COORDINATOR_NOT_AVAILABLE),
-            Arguments.of(Errors.REQUEST_TIMED_OUT),
-            Arguments.of(Errors.TOPIC_AUTHORIZATION_FAILED),
-            Arguments.of(Errors.UNKNOWN_MEMBER_ID),
+            // Retriable errors should result in TimeoutException when retry time expires
+            Arguments.of(Errors.NOT_COORDINATOR, TimeoutException.class),
+            Arguments.of(Errors.COORDINATOR_LOAD_IN_PROGRESS, TimeoutException.class),
+            Arguments.of(Errors.COORDINATOR_NOT_AVAILABLE, TimeoutException.class),
+            Arguments.of(Errors.REQUEST_TIMED_OUT, TimeoutException.class),
+            Arguments.of(Errors.UNSTABLE_OFFSET_COMMIT, TimeoutException.class),
+            Arguments.of(Errors.UNKNOWN_TOPIC_OR_PARTITION, TimeoutException.class),
+            
+            // Non-retriable errors should result in their specific exceptions
+            Arguments.of(Errors.GROUP_AUTHORIZATION_FAILED, GroupAuthorizationException.class),
+            Arguments.of(Errors.OFFSET_METADATA_TOO_LARGE, KafkaException.class),
+            Arguments.of(Errors.INVALID_COMMIT_OFFSET_SIZE, KafkaException.class),
+
+            Arguments.of(Errors.TOPIC_AUTHORIZATION_FAILED, KafkaException.class),
+            Arguments.of(Errors.UNKNOWN_MEMBER_ID, UnknownMemberIdException.class),
             // Adding STALE_MEMBER_EPOCH as non-retriable here because it is only retried if a new
             // member epoch is received. Tested separately.
-            Arguments.of(Errors.STALE_MEMBER_EPOCH),
-            Arguments.of(Errors.UNSTABLE_OFFSET_COMMIT));
+            Arguments.of(Errors.STALE_MEMBER_EPOCH, StaleMemberEpochException.class),
+            
+            // Generic errors should result in KafkaException
+            Arguments.of(Errors.UNKNOWN_SERVER_ERROR, KafkaException.class));
     }
 
     /**
@@ -1482,6 +1499,23 @@ public class CommitRequestManagerTest {
         assertEquals("topic", data.topics().get(0).name());
     }
 
+    @Test
+    public void testPollWithFatalErrorShouldFailAllUnsentRequests() {
+        CommitRequestManager commitRequestManager = create(true, 100);
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
+
+        commitRequestManager.fetchOffsets(Collections.singleton(new TopicPartition("test", 0)), 200);
+        assertEquals(1, commitRequestManager.pendingRequests.unsentOffsetFetches.size());
+
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.empty());
+        when(coordinatorRequestManager.fatalError())
+                .thenReturn(Optional.of(new GroupAuthorizationException("Group authorization exception")));
+
+        assertEquals(NetworkClientDelegate.PollResult.EMPTY, commitRequestManager.poll(200));
+
+        assertEmptyPendingRequests(commitRequestManager);
+    }
+    
     private static void assertEmptyPendingRequests(CommitRequestManager commitRequestManager) {
         assertTrue(commitRequestManager.pendingRequests.inflightOffsetFetches.isEmpty());
         assertTrue(commitRequestManager.pendingRequests.unsentOffsetFetches.isEmpty());

@@ -21,6 +21,7 @@ import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackCompletedEvent;
 import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackNeededEvent;
+import org.apache.kafka.clients.consumer.internals.metrics.AsyncConsumerMetrics;
 import org.apache.kafka.clients.consumer.internals.metrics.ConsumerRebalanceMetricsManager;
 import org.apache.kafka.clients.consumer.internals.metrics.RebalanceCallbackMetricsManager;
 import org.apache.kafka.common.KafkaException;
@@ -28,6 +29,8 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.InterruptException;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData.Assignment;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData.TopicPartitions;
@@ -95,6 +98,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+@SuppressWarnings("ClassDataAbstractionCoupling")
 public class ConsumerMembershipManagerTest {
 
     private static final String GROUP_ID = "test-group";
@@ -117,8 +121,8 @@ public class ConsumerMembershipManagerTest {
         subscriptionState = mock(SubscriptionState.class);
         commitRequestManager = mock(CommitRequestManager.class);
         backgroundEventQueue = new LinkedBlockingQueue<>();
-        backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue);
         time = new MockTime(0);
+        backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue, time, mock(AsyncConsumerMetrics.class));
         metrics = new Metrics(time);
         rebalanceMetricsManager = new ConsumerRebalanceMetricsManager(metrics);
 
@@ -1737,6 +1741,12 @@ public class ConsumerMembershipManagerTest {
 
     @Test
     public void testListenerCallbacksThrowsErrorOnPartitionsRevoked() {
+        testErrorsOnPartitionsRevoked(new WakeupException());
+        testErrorsOnPartitionsRevoked(new InterruptException("Intentional onPartitionsRevoked() error"));
+        testErrorsOnPartitionsRevoked(new IllegalArgumentException("Intentional onPartitionsRevoked() error"));
+    }
+
+    private void testErrorsOnPartitionsRevoked(RuntimeException error) {
         // Step 1: set up mocks
         String topicName = "topic1";
         Uuid topicId = Uuid.randomUuid();
@@ -1744,7 +1754,7 @@ public class ConsumerMembershipManagerTest {
         ConsumerMembershipManager membershipManager = createMemberInStableState();
         mockOwnedPartition(membershipManager, topicId, topicName);
         CounterConsumerRebalanceListener listener = new CounterConsumerRebalanceListener(
-                Optional.of(new IllegalArgumentException("Intentional onPartitionsRevoked() error")),
+                Optional.ofNullable(error),
                 Optional.empty(),
                 Optional.empty()
         );
@@ -1791,6 +1801,12 @@ public class ConsumerMembershipManagerTest {
 
     @Test
     public void testListenerCallbacksThrowsErrorOnPartitionsAssigned() {
+        testErrorsOnPartitionsAssigned(new WakeupException());
+        testErrorsOnPartitionsAssigned(new InterruptException("Intentional error"));
+        testErrorsOnPartitionsAssigned(new IllegalArgumentException("Intentional error"));
+    }
+
+    private void testErrorsOnPartitionsAssigned(RuntimeException error) {
         // Step 1: set up mocks
         ConsumerMembershipManager membershipManager = createMemberInStableState();
         String topicName = "topic1";
@@ -1798,7 +1814,7 @@ public class ConsumerMembershipManagerTest {
         mockOwnedPartition(membershipManager, topicId, topicName);
         CounterConsumerRebalanceListener listener = new CounterConsumerRebalanceListener(
                 Optional.empty(),
-                Optional.of(new IllegalArgumentException("Intentional onPartitionsAssigned() error")),
+                Optional.ofNullable(error),
                 Optional.empty()
         );
         ConsumerRebalanceListenerInvoker invoker = consumerRebalanceListenerInvoker();
@@ -1878,7 +1894,7 @@ public class ConsumerMembershipManagerTest {
             true
         );
 
-        verify(subscriptionState).enablePartitionsAwaitingCallback(addedPartitions);
+        verify(subscriptionState).enablePartitionsAwaitingCallback(assignedPartitions);
     }
 
     @Test
@@ -1914,12 +1930,14 @@ public class ConsumerMembershipManagerTest {
 
     @Test
     public void testOnPartitionsLostNoError() {
-        testOnPartitionsLost(Optional.empty());
+        testOnPartitionsLost(null);
     }
 
     @Test
     public void testOnPartitionsLostError() {
-        testOnPartitionsLost(Optional.of(new KafkaException("Intentional error for test")));
+        testOnPartitionsLost(new KafkaException("Intentional error for test"));
+        testOnPartitionsLost(new WakeupException());
+        testOnPartitionsLost(new InterruptException("Intentional error for test"));
     }
 
     private void assertLeaveGroupDueToExpiredPollAndTransitionToStale(ConsumerMembershipManager membershipManager) {
@@ -2053,7 +2071,7 @@ public class ConsumerMembershipManagerTest {
         receiveAssignment(topicId, Arrays.asList(partitionOwned, partitionAdded), membershipManager);
     }
 
-    private void testOnPartitionsLost(Optional<RuntimeException> lostError) {
+    private void testOnPartitionsLost(RuntimeException lostError) {
         // Step 1: set up mocks
         ConsumerMembershipManager membershipManager = createMemberInStableState();
         String topicName = "topic1";
@@ -2062,7 +2080,7 @@ public class ConsumerMembershipManagerTest {
         CounterConsumerRebalanceListener listener = new CounterConsumerRebalanceListener(
                 Optional.empty(),
                 Optional.empty(),
-                lostError
+                Optional.ofNullable(lostError)
         );
         ConsumerRebalanceListenerInvoker invoker = consumerRebalanceListenerInvoker();
 

@@ -26,7 +26,9 @@
   // Starting in version 4, the response will optionally include group.instance.id info for members.
   //
   // Version 5 is the first flexible version.
-  "validVersions": "0-5",
+  //
+  // Version 6 returns error code GROUP_ID_NOT_FOUND if the group ID is not found (KIP-1043).
+  "validVersions": "0-6",
   "flexibleVersions": "5+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "1+", "ignorable": true,
@@ -35,6 +37,8 @@
       "about": "Each described group.", "fields": [
       { "name": "ErrorCode", "type": "int16", "versions": "0+",
         "about": "The describe error, or 0 if there was no error." },
+      { "name": "ErrorMessage", "type": "string", "versions": "6+", "nullableVersions": "6+", "default": "null",
+        "about": "The describe error message, or null if there was no error." },
       { "name": "GroupId", "type": "string", "versions": "0+", "entityType": "groupId",
         "about": "The group ID string." },
       { "name": "GroupState", "type": "string", "versions": "0+",
@@ -48,7 +52,7 @@
       { "name": "Members", "type": "[]DescribedGroupMember", "versions": "0+",
         "about": "The group members.", "fields": [
         { "name": "MemberId", "type": "string", "versions": "0+",
-          "about": "The member id" },
+          "about": "The member id." },
         { "name": "GroupInstanceId", "type": "string", "versions": "4+", "ignorable": true,
           "nullableVersions": "4+", "default": "null",
           "about": "The unique identifier of the consumer instance provided by end user." },

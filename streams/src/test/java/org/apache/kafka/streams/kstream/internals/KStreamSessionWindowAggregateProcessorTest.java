@@ -33,7 +33,6 @@ import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.Merger;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
@@ -88,7 +87,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
     private final Merger<String, Long> sessionMerger = (aggKey, aggOne, aggTwo) -> aggOne + aggTwo;
     private final List<KeyValueTimestamp<Windowed<String>, Change<Long>>> results = new ArrayList<>();
 
-    private InternalMockProcessorContext<Windowed<String>, Change<Long>> context;
+    private InternalMockProcessorContext<Windowed<String>, Change<Long>> mockContext;
     private KStreamSessionWindowAggregate<String, String, Long> sessionAggregator;
     private Processor<String, String, Windowed<String>, Change<Long>> processor;
     private SessionStore<String, Long> sessionStore;
@@ -105,7 +104,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
         prop.put(StreamsConfig.InternalConfig.EMIT_INTERVAL_MS_KSTREAMS_WINDOWED_AGGREGATION, 0);
         final StreamsConfig config = new StreamsConfig(prop);
 
-        context = new InternalMockProcessorContext<Windowed<String>, Change<Long>>(
+        mockContext = new InternalMockProcessorContext<>(
             TestUtils.tempDirectory(),
             Serdes.String(),
             Serdes.String(),
@@ -140,11 +139,11 @@ public class KStreamSessionWindowAggregateProcessorTest {
 
         // Set initial timestamp for CachingSessionStore to prepare entry from as default
         // InternalMockProcessorContext#timestamp returns -1.
-        context.setTime(0L);
-        TaskMetrics.droppedRecordsSensor(threadId, context.taskId().toString(), streamsMetrics);
+        mockContext.setTime(0L);
+        TaskMetrics.droppedRecordsSensor(threadId, mockContext.taskId().toString(), streamsMetrics);
 
         initStore(enableCaching);
-        processor.init(context);
+        processor.init(mockContext);
     }
 
     private void initStore(final boolean enableCaching) {
@@ -163,7 +162,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
             sessionStore.close();
         }
         sessionStore = storeBuilder.build();
-        sessionStore.init((StateStoreContext) context, sessionStore);
+        sessionStore.init(mockContext, sessionStore);
     }
 
     @AfterEach
@@ -192,13 +191,19 @@ public class KStreamSessionWindowAggregateProcessorTest {
         setup(inputType, true);
         final String sessionId = "mel";
         processor.process(new Record<>(sessionId, "first", 0L));
-        assertTrue(sessionStore.findSessions(sessionId, 0, 0).hasNext());
+        try (final KeyValueIterator<Windowed<String>, Long> iterator = sessionStore.findSessions(sessionId, 0, 0)) {
+            assertTrue(iterator.hasNext());
+        }
 
         // move time beyond gap
         processor.process(new Record<>(sessionId, "second", GAP_MS + 1));
-        assertTrue(sessionStore.findSessions(sessionId, GAP_MS + 1, GAP_MS + 1).hasNext());
+        try (final KeyValueIterator<Windowed<String>, Long> iterator = sessionStore.findSessions(sessionId, GAP_MS + 1, GAP_MS + 1)) {
+            assertTrue(iterator.hasNext());
+        }
         // should still exist as not within gap
-        assertTrue(sessionStore.findSessions(sessionId, 0, 0).hasNext());
+        try (final KeyValueIterator<Windowed<String>, Long> iterator = sessionStore.findSessions(sessionId, 0, 0)) {
+            assertTrue(iterator.hasNext());
+        }
         // move time back
         processor.process(new Record<>(sessionId, "third", GAP_MS / 2));
 
@@ -377,7 +382,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
     public void shouldGetAggregatedValuesFromValueGetter(final EmitStrategy.StrategyType inputType) {
         setup(inputType, true);
         final KTableValueGetter<Windowed<String>, Long> getter = sessionAggregator.view().get();
-        getter.init(context);
+        getter.init(mockContext);
         processor.process(new Record<>("a", "1", 0L));
         processor.process(new Record<>("a", "1", GAP_MS + 1));
         processor.process(new Record<>("a", "2", GAP_MS + 1));
@@ -395,7 +400,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
             return;
 
         initStore(false);
-        processor.init(context);
+        processor.init(mockContext);
 
         processor.process(new Record<>("a", "1", 0L));
         processor.process(new Record<>("b", "1", 0L));
@@ -428,7 +433,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
             return;
 
         initStore(false);
-        processor.init(context);
+        processor.init(mockContext);
 
         processor.process(new Record<>("a", "1", 0L));
         processor.process(new Record<>("a", "1", 5L));
@@ -455,7 +460,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
     @EnumSource(EmitStrategy.StrategyType.class)
     public void shouldLogAndMeterWhenSkippingNullKeyWithBuiltInMetrics(final EmitStrategy.StrategyType inputType) {
         setup(inputType, false);
-        context.setRecordContext(
+        mockContext.setRecordContext(
             new ProcessorRecordContext(-1, -2, -3, "topic", new RecordHeaders())
         );
 
@@ -475,7 +480,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
 
         assertEquals(
             1.0,
-            getMetricByName(context.metrics().metrics(), "dropped-records-total", "stream-task-metrics").metricValue()
+            getMetricByName(mockContext.metrics().metrics(), "dropped-records-total", "stream-task-metrics").metricValue()
         );
     }
 
@@ -491,25 +496,25 @@ public class KStreamSessionWindowAggregateProcessorTest {
             aggregator,
             sessionMerger
         ).get();
-        processor.init(context);
+        processor.init(mockContext);
 
         // dummy record to establish stream time = 0
-        context.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", new RecordHeaders()));
+        mockContext.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", new RecordHeaders()));
         processor.process(new Record<>("dummy", "dummy", 0L));
 
         // record arrives on time, should not be skipped
-        context.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", new RecordHeaders()));
+        mockContext.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", new RecordHeaders()));
         processor.process(new Record<>("OnTime1", "1", 0L));
 
         // dummy record to advance stream time = 11, 10 for gap time plus 1 to place outside window
-        context.setRecordContext(new ProcessorRecordContext(11, -2, -3, "topic", new RecordHeaders()));
+        mockContext.setRecordContext(new ProcessorRecordContext(11, -2, -3, "topic", new RecordHeaders()));
         processor.process(new Record<>("dummy", "dummy", 11L));
 
         try (final LogCaptureAppender appender =
                  LogCaptureAppender.createAndRegister(KStreamSessionWindowAggregate.class)) {
 
             // record is late
-            context.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", new RecordHeaders()));
+            mockContext.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", new RecordHeaders()));
             processor.process(new Record<>("Late1", "1", 0L));
 
             assertThat(
@@ -558,33 +563,33 @@ public class KStreamSessionWindowAggregateProcessorTest {
             aggregator,
             sessionMerger
         ).get();
-        processor.init(context);
+        processor.init(mockContext);
 
         try (final LogCaptureAppender appender =
                  LogCaptureAppender.createAndRegister(KStreamSessionWindowAggregate.class)) {
 
             // dummy record to establish stream time = 0
-            context.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", new RecordHeaders()));
+            mockContext.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", new RecordHeaders()));
             processor.process(new Record<>("dummy", "dummy", 0L));
 
             // record arrives on time, should not be skipped
-            context.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", new RecordHeaders()));
+            mockContext.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", new RecordHeaders()));
             processor.process(new Record<>("OnTime1", "1", 0L));
 
             // dummy record to advance stream time = 11, 10 for gap time plus 1 to place at edge of window
-            context.setRecordContext(new ProcessorRecordContext(11, -2, -3, "topic", new RecordHeaders()));
+            mockContext.setRecordContext(new ProcessorRecordContext(11, -2, -3, "topic", new RecordHeaders()));
             processor.process(new Record<>("dummy", "dummy", 11L));
 
             // delayed record arrives on time, should not be skipped
-            context.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", new RecordHeaders()));
+            mockContext.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", new RecordHeaders()));
             processor.process(new Record<>("OnTime2", "1", 0L));
 
             // dummy record to advance stream time = 12, 10 for gap time plus 2 to place outside window
-            context.setRecordContext(new ProcessorRecordContext(12, -2, -3, "topic", new RecordHeaders()));
+            mockContext.setRecordContext(new ProcessorRecordContext(12, -2, -3, "topic", new RecordHeaders()));
             processor.process(new Record<>("dummy", "dummy", 12L));
 
             // delayed record arrives late
-            context.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", new RecordHeaders()));
+            mockContext.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", new RecordHeaders()));
             processor.process(new Record<>("Late1", "1", 0L));
 
             assertThat(

@@ -19,18 +19,32 @@ package org.apache.kafka.tools.consumer.group;
 import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.Node;
 
+import java.util.Optional;
+
 class GroupInformation {
     final String group;
     final Node coordinator;
     final String assignmentStrategy;
     final GroupState groupState;
     final int numMembers;
+    final Optional<Integer> groupEpoch;
+    final Optional<Integer> targetAssignmentEpoch;
 
-    GroupInformation(String group, Node coordinator, String assignmentStrategy, GroupState groupState, int numMembers) {
+    GroupInformation(
+        String group,
+        Node coordinator,
+        String assignmentStrategy,
+        GroupState groupState,
+        int numMembers,
+        Optional<Integer> groupEpoch,
+        Optional<Integer> targetAssignmentEpoch
+    ) {
         this.group = group;
         this.coordinator = coordinator;
         this.assignmentStrategy = assignmentStrategy;
         this.groupState = groupState;
         this.numMembers = numMembers;
+        this.groupEpoch = groupEpoch;
+        this.targetAssignmentEpoch = targetAssignmentEpoch;
     }
 }

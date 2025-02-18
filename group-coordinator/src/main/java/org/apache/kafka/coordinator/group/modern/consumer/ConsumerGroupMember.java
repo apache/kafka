@@ -518,4 +518,12 @@ public class ConsumerGroupMember extends ModernGroupMember {
             ", classicMemberMetadata='" + classicMemberMetadata + '\'' +
             ')';
     }
+
+    public static String subscribedTopicRegexOrNull(ConsumerGroupMember member) {
+        if (member != null && member.subscribedTopicRegex() != null && !member.subscribedTopicRegex().isEmpty()) {
+            return member.subscribedTopicRegex();
+        } else {
+            return null;
+        }
+    }
 }

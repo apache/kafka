@@ -17,7 +17,7 @@
 
 package kafka.server
 
-import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterInstance, ClusterTest, ClusterTestExtensions, Type}
+import org.apache.kafka.common.test.api.{ClusterTest, Type}
 import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
 import org.apache.kafka.common.message.{BrokerRegistrationRequestData, CreateTopicsRequestData}
@@ -26,11 +26,11 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{Node, Uuid}
-import org.apache.kafka.server.common.{ControllerRequestCompletionHandler, Features, MetadataVersion, NodeToControllerChannelManager}
+import org.apache.kafka.server.common.{ControllerRequestCompletionHandler, Feature, MetadataVersion, NodeToControllerChannelManager}
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.extension.ExtendWith
 
 import java.util
 import java.util.Collections
@@ -39,7 +39,6 @@ import java.util.concurrent.{CompletableFuture, TimeUnit, TimeoutException}
 /**
  * This test simulates a broker registering with the KRaft quorum under different configurations.
  */
-@ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 class BrokerRegistrationRequestTest {
 
   def brokerToControllerChannelManager(clusterInstance: ClusterInstance): NodeToControllerChannelManager = {
@@ -57,10 +56,8 @@ class BrokerRegistrationRequestTest {
 
         val saslMechanism: String = ""
 
-        def isZkController: Boolean = false
-
         override def getControllerInfo(): ControllerInformation =
-          ControllerInformation(node, listenerName, securityProtocol, saslMechanism, isZkController)
+          ControllerInformation(node, listenerName, securityProtocol, saslMechanism)
       },
       Time.SYSTEM,
       new Metrics(),
@@ -102,7 +99,7 @@ class BrokerRegistrationRequestTest {
           .setMaxSupportedVersion(max.featureLevel())
         )
     }
-    Features.PRODUCTION_FEATURES.stream().filter(_.featureName != MetadataVersion.FEATURE_NAME).forEach {
+    Feature.PRODUCTION_FEATURES.stream().filter(_.featureName != MetadataVersion.FEATURE_NAME).forEach {
       feature =>
         features.add(new BrokerRegistrationRequestData.Feature()
           .setName(feature.featureName)
@@ -143,36 +140,7 @@ class BrokerRegistrationRequestTest {
     Errors.forCode(resp.topics().find(topicName).errorCode())
   }
 
-  @ClusterTest(types = Array(Type.KRAFT), brokers = 0, controllers = 1, metadataVersion = MetadataVersion.IBP_3_4_IV0,
-    serverProperties = Array(new ClusterConfigProperty(key = "zookeeper.metadata.migration.enable", value = "false")))
-  def testRegisterZkWithKRaftMigrationDisabled(clusterInstance: ClusterInstance): Unit = {
-    val clusterId = clusterInstance.clusterId()
-    val channelManager = brokerToControllerChannelManager(clusterInstance)
-    try {
-      channelManager.start()
-
-      assertEquals(
-        Errors.BROKER_ID_NOT_REGISTERED,
-        registerBroker(channelManager, clusterId, 100, Some(1), Some((MetadataVersion.IBP_3_3_IV0, MetadataVersion.IBP_3_3_IV0))))
-
-      assertEquals(
-        Errors.BROKER_ID_NOT_REGISTERED,
-        registerBroker(channelManager, clusterId, 100, Some(1), None))
-
-      assertEquals(
-        Errors.BROKER_ID_NOT_REGISTERED,
-        registerBroker(channelManager, clusterId, 100, Some(1), Some((MetadataVersion.IBP_3_4_IV0, MetadataVersion.IBP_3_4_IV0))))
-
-      assertEquals(
-        Errors.NONE,
-        registerBroker(channelManager, clusterId, 100, None, Some((MetadataVersion.IBP_3_4_IV0, MetadataVersion.IBP_3_4_IV0))))
-    } finally {
-      channelManager.shutdown()
-    }
-  }
-
-  @ClusterTest(types = Array(Type.KRAFT), brokers = 0, controllers = 1, metadataVersion = MetadataVersion.IBP_3_3_IV3,
-    serverProperties = Array(new ClusterConfigProperty(key = "zookeeper.metadata.migration.enable", value = "false")))
+  @ClusterTest(types = Array(Type.KRAFT), brokers = 0, controllers = 1, metadataVersion = MetadataVersion.IBP_3_3_IV3)
   def testRegisterZkWith33Controller(clusterInstance: ClusterInstance): Unit = {
     // Verify that a controller running an old metadata.version cannot register a ZK broker
     val clusterId = clusterInstance.clusterId()

@@ -206,91 +206,6 @@ public class SenderTest {
         assertEquals(offset, future.get().offset());
     }
 
-    @Test
-    public void testMessageFormatDownConversion() throws Exception {
-        // this test case verifies the behavior when the version of the produce request supported by the
-        // broker changes after the record set is created
-
-        long offset = 0;
-
-        // start off support produce request v3
-        apiVersions.update("0", NodeApiVersions.create());
-
-        Future<RecordMetadata> future = appendToAccumulator(tp0, 0L, "key", "value");
-
-        // now the partition leader supports only v2
-        apiVersions.update("0", NodeApiVersions.create(ApiKeys.PRODUCE.id, (short) 0, (short) 2));
-
-        client.prepareResponse(body -> {
-            ProduceRequest request = (ProduceRequest) body;
-            if (request.version() != 2)
-                return false;
-
-            MemoryRecords records = partitionRecords(request).get(tp0);
-            return records != null &&
-                    records.sizeInBytes() > 0 &&
-                    records.hasMatchingMagic(RecordBatch.MAGIC_VALUE_V1);
-        }, produceResponse(tp0, offset, Errors.NONE, 0));
-
-        sender.runOnce(); // connect
-        sender.runOnce(); // send produce request
-
-        assertTrue(future.isDone(), "Request should be completed");
-        assertEquals(offset, future.get().offset());
-    }
-
-    @SuppressWarnings("deprecation")
-    @Test
-    public void testDownConversionForMismatchedMagicValues() throws Exception {
-        // it can happen that we construct a record set with mismatching magic values (perhaps
-        // because the partition leader changed after the record set was initially constructed)
-        // in this case, we down-convert record sets with newer magic values to match the oldest
-        // created record set
-
-        long offset = 0;
-
-        // start off support produce request v3
-        apiVersions.update("0", NodeApiVersions.create());
-
-        Future<RecordMetadata> future1 = appendToAccumulator(tp0, 0L, "key", "value");
-
-        // now the partition leader supports only v2
-        apiVersions.update("0", NodeApiVersions.create(ApiKeys.PRODUCE.id, (short) 0, (short) 2));
-
-        Future<RecordMetadata> future2 = appendToAccumulator(tp1, 0L, "key", "value");
-
-        // start off support produce request v3
-        apiVersions.update("0", NodeApiVersions.create());
-
-        ProduceResponse.PartitionResponse resp = new ProduceResponse.PartitionResponse(Errors.NONE, offset, RecordBatch.NO_TIMESTAMP, 100);
-        Map<TopicPartition, ProduceResponse.PartitionResponse> partResp = new HashMap<>();
-        partResp.put(tp0, resp);
-        partResp.put(tp1, resp);
-        ProduceResponse produceResponse = new ProduceResponse(partResp, 0);
-
-        client.prepareResponse(body -> {
-            ProduceRequest request = (ProduceRequest) body;
-            if (request.version() != 2)
-                return false;
-
-            Map<TopicPartition, MemoryRecords> recordsMap = partitionRecords(request);
-            if (recordsMap.size() != 2)
-                return false;
-
-            for (MemoryRecords records : recordsMap.values()) {
-                if (records == null || records.sizeInBytes() == 0 || !records.hasMatchingMagic(RecordBatch.MAGIC_VALUE_V1))
-                    return false;
-            }
-            return true;
-        }, produceResponse);
-
-        sender.runOnce(); // connect
-        sender.runOnce(); // send produce request
-
-        assertTrue(future1.isDone(), "Request should be completed");
-        assertTrue(future2.isDone(), "Request should be completed");
-    }
-
     /*
      * Send multiple requests. Verify that the client side quota metrics have the right values
      */
@@ -306,7 +221,7 @@ public class SenderTest {
                 MetadataRecoveryStrategy.NONE);
 
         ApiVersionsResponse apiVersionsResponse = TestUtils.defaultApiVersionsResponse(
-            400, ApiMessageType.ListenerType.ZK_BROKER);
+            400, ApiMessageType.ListenerType.BROKER);
         ByteBuffer buffer = RequestTestUtils.serializeResponseWithHeader(apiVersionsResponse, ApiKeys.API_VERSIONS.latestVersion(), 0);
 
         selector.delayedReceive(new DelayedReceive(node.idString(), new NetworkReceive(node.idString(), buffer)));
@@ -319,7 +234,7 @@ public class SenderTest {
 
         for (int i = 1; i <= 3; i++) {
             int throttleTimeMs = 100 * i;
-            ProduceRequest.Builder builder = ProduceRequest.forCurrentMagic(new ProduceRequestData()
+            ProduceRequest.Builder builder = ProduceRequest.builder(new ProduceRequestData()
                     .setTopicData(new ProduceRequestData.TopicProduceDataCollection())
                     .setAcks((short) 1)
                     .setTimeoutMs(1000));
@@ -492,7 +407,7 @@ public class SenderTest {
                     expiryCallbackCount.incrementAndGet();
                     try {
                         accumulator.append(tp1.topic(), tp1.partition(), 0L, key, value,
-                            Record.EMPTY_HEADERS, null, maxBlockTimeMs, false, time.milliseconds(), metadataCache.cluster());
+                            Record.EMPTY_HEADERS, null, maxBlockTimeMs, time.milliseconds(), metadataCache.cluster());
                     } catch (InterruptedException e) {
                         throw new RuntimeException("Unexpected interruption", e);
                     }
@@ -503,7 +418,7 @@ public class SenderTest {
 
         final long nowMs = time.milliseconds();
         for (int i = 0; i < messagesPerBatch; i++)
-            accumulator.append(tp1.topic(), tp1.partition(), 0L, key, value, null, callbacks, maxBlockTimeMs, false, nowMs, metadataCache.cluster());
+            accumulator.append(tp1.topic(), tp1.partition(), 0L, key, value, null, callbacks, maxBlockTimeMs, nowMs, metadataCache.cluster());
 
         // Advance the clock to expire the first batch.
         time.sleep(10000);
@@ -565,6 +480,46 @@ public class SenderTest {
         assertEquals(0, sender.inFlightBatches(tp0).size());
         sender.runOnce();
         assertTrue(future.isDone(), "Request should be completed");
+    }
+
+    @Test
+    public void senderThreadShouldNotGetStuckWhenThrottledAndAddingPartitionsToTxn() {
+        // We want MockClient#poll() to advance time so that eventually the backoff expires.
+        try {
+            client.advanceTimeDuringPoll(true);
+
+            ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(123456L, (short) 0);
+            apiVersions.update("0", NodeApiVersions.create(ApiKeys.INIT_PRODUCER_ID.id, (short) 0, (short) 3));
+            TransactionManager txnManager = new TransactionManager(logContext, "testUnresolvedSeq", 60000, 100, apiVersions);
+
+            setupWithTransactionState(txnManager);
+            doInitTransactions(txnManager, producerIdAndEpoch);
+
+            int throttleTimeMs = 1000;
+            long startTime = time.milliseconds();
+            Node nodeToThrottle = metadata.fetch().nodeById(0);
+            client.throttle(nodeToThrottle, throttleTimeMs);
+
+            // Verify node is throttled a little bit. In real-life Apache Kafka, we observe that this can happen
+            // as done above by throttling or with a disconnect / backoff.
+            long currentPollDelay = client.pollDelayMs(nodeToThrottle, startTime);
+            assertEquals(currentPollDelay, throttleTimeMs);
+
+            txnManager.beginTransaction();
+            txnManager.maybeAddPartition(tp0);
+
+            assertFalse(txnManager.hasInFlightRequest());
+            sender.runOnce();
+            assertTrue(txnManager.hasInFlightRequest());
+
+            long totalTimeToRunOnce = time.milliseconds() - startTime;
+
+            // It should have blocked roughly only the backoffTimeMs and some change.
+            assertTrue(totalTimeToRunOnce < REQUEST_TIMEOUT);
+
+        } finally {
+            client.advanceTimeDuringPoll(false);
+        }
     }
 
     @Test
@@ -2435,9 +2390,9 @@ public class SenderTest {
             long nowMs = time.milliseconds();
             Cluster cluster = TestUtils.singletonCluster();
             Future<RecordMetadata> f1 =
-                    accumulator.append(tp.topic(), tp.partition(), 0L, "key1".getBytes(), new byte[batchSize / 2], null, null, MAX_BLOCK_TIMEOUT, false, nowMs, cluster).future;
+                    accumulator.append(tp.topic(), tp.partition(), 0L, "key1".getBytes(), new byte[batchSize / 2], null, null, MAX_BLOCK_TIMEOUT, nowMs, cluster).future;
             Future<RecordMetadata> f2 =
-                    accumulator.append(tp.topic(), tp.partition(), 0L, "key2".getBytes(), new byte[batchSize / 2], null, null, MAX_BLOCK_TIMEOUT, false, nowMs, cluster).future;
+                    accumulator.append(tp.topic(), tp.partition(), 0L, "key2".getBytes(), new byte[batchSize / 2], null, null, MAX_BLOCK_TIMEOUT, nowMs, cluster).future;
             sender.runOnce(); // connect
             sender.runOnce(); // send produce request
 
@@ -2577,15 +2532,17 @@ public class SenderTest {
             FutureRecordMetadata future = futureEntry.getValue();
             assertTrue(future.isDone());
 
-            KafkaException exception = TestUtils.assertFutureThrows(future, KafkaException.class);
             Integer index = futureEntry.getKey();
             if (index == 0 || index == 2) {
+                InvalidRecordException exception = TestUtils.assertFutureThrows(future, InvalidRecordException.class);
                 assertInstanceOf(InvalidRecordException.class, exception);
                 assertEquals(index.toString(), exception.getMessage());
             } else if (index == 3) {
+                InvalidRecordException exception = TestUtils.assertFutureThrows(future, InvalidRecordException.class);
                 assertInstanceOf(InvalidRecordException.class, exception);
                 assertEquals(Errors.INVALID_RECORD.message(), exception.getMessage());
             } else {
+                KafkaException exception = TestUtils.assertFutureThrows(future, KafkaException.class);
                 assertEquals(KafkaException.class, exception.getClass());
             }
         }
@@ -2870,7 +2827,7 @@ public class SenderTest {
     private void addPartitionToTxn(Sender sender, TransactionManager txnManager, TopicPartition tp) {
         txnManager.maybeAddPartition(tp);
         client.prepareResponse(buildAddPartitionsToTxnResponseData(0, Collections.singletonMap(tp, Errors.NONE)));
-        runUntil(sender, () -> txnManager.isPartitionAdded(tp));
+        runUntil(sender, () -> txnManager.transactionContainsPartition(tp));
         assertFalse(txnManager.hasInFlightRequest());
     }
 
@@ -3600,7 +3557,7 @@ public class SenderTest {
 
     private FutureRecordMetadata appendToAccumulator(TopicPartition tp, long timestamp, String key, String value) throws InterruptedException {
         return accumulator.append(tp.topic(), tp.partition(), timestamp, key.getBytes(), value.getBytes(), Record.EMPTY_HEADERS,
-                null, MAX_BLOCK_TIMEOUT, false, time.milliseconds(), TestUtils.singletonCluster()).future;
+                null, MAX_BLOCK_TIMEOUT, time.milliseconds(), TestUtils.singletonCluster()).future;
     }
 
     @SuppressWarnings("deprecation")

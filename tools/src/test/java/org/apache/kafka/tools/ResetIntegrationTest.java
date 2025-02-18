@@ -17,6 +17,7 @@
 package org.apache.kafka.tools;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.network.SocketServerConfigs;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
@@ -134,6 +135,59 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
 
         final int exitCode = new StreamsResetter().execute(parameters, cleanUpConfig);
         assertEquals(1, exitCode);
+    }
+
+    @Test
+    public void shouldDefaultToClassicGroupProtocol(final TestInfo testInfo) {
+        final String appID = safeUniqueTestName(testInfo);
+        final String[] parameters = new String[] {
+            "--application-id", appID,
+            "--bootstrap-server", cluster.bootstrapServers(),
+            "--input-topics", INPUT_TOPIC
+        };
+        final Properties cleanUpConfig = new Properties();
+
+        // Set properties that are only allowed under the CLASSIC group protocol.
+        cleanUpConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
+        cleanUpConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, Integer.toString(CLEANUP_CONSUMER_TIMEOUT));
+        final int exitCode = new StreamsResetter().execute(parameters, cleanUpConfig);
+        assertEquals(0, exitCode, "Resetter should use the CLASSIC group protocol");
+    }
+
+    @Test
+    public void shouldAllowGroupProtocolClassic(final TestInfo testInfo) {
+        final String appID = safeUniqueTestName(testInfo);
+        final String[] parameters = new String[] {
+            "--application-id", appID,
+            "--bootstrap-server", cluster.bootstrapServers(),
+            "--input-topics", INPUT_TOPIC
+        };
+        final Properties cleanUpConfig = new Properties();
+
+        // Protocol config CLASSIC not needed but allowed.
+        cleanUpConfig.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
+        cleanUpConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
+        cleanUpConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, Integer.toString(CLEANUP_CONSUMER_TIMEOUT));
+        int exitCode = new StreamsResetter().execute(parameters, cleanUpConfig);
+        assertEquals(0, exitCode, "Resetter should allow setting group protocol to CLASSIC");
+    }
+
+    @Test
+    public void shouldOverwriteGroupProtocolOtherThanClassic(final TestInfo testInfo) {
+        final String appID = safeUniqueTestName(testInfo);
+        final String[] parameters = new String[] {
+            "--application-id", appID,
+            "--bootstrap-server", cluster.bootstrapServers(),
+            "--input-topics", INPUT_TOPIC
+        };
+        final Properties cleanUpConfig = new Properties();
+
+        // Protocol config other than CLASSIC allowed but overwritten to CLASSIC.
+        cleanUpConfig.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name());
+        cleanUpConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
+        cleanUpConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, Integer.toString(CLEANUP_CONSUMER_TIMEOUT));
+        int exitCode = new StreamsResetter().execute(parameters, cleanUpConfig);
+        assertEquals(0, exitCode, "Resetter should overwrite the group protocol to CLASSIC");
     }
 
     @Test

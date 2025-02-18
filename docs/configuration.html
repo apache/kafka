@@ -256,6 +256,16 @@
   Below are the supported system properties.
   <ul class="config-list">
     <li>
+      <h4><a id="org.apache.kafka.sasl.oauthbearer.allowed.urls"></a><a id="systemproperties_org.apache.kafka.sasl.oauthbearer.allowed.urls" href="#systemproperties_org.apache.kafka.sasl.oauthbearer.allowed.urls">org.apache.kafka.sasl.oauthbearer.allowed.urls</a></h4>
+      <p>This system property is used to set the allowed URLs as SASL OAUTHBEARER token or jwks endpoints. This property accepts comma-separated list of URLs. By default the value is an empty list.
+      <p>If users want to enable some URLs, users need to explicitly set the system property like below.
+      <p><pre><code class="language-bash">-Dorg.apache.kafka.sasl.oauthbearer.allowed.urls=https://www.example.com,file:///tmp/token</code></pre>
+      <table><tbody>
+      <tr><th>Since:</th><td>4.0.0</td></tr>
+      <tr><th>Default Value:</th><td></td></tr>
+      </tbody></table>
+    </li>
+    <li>
       <h4><a id="org.apache.kafka.disallowed.login.modules"></a><a id="systemproperties_org.apache.kafka.disallowed.login.modules" href="#systemproperties_org.apache.kafka.disallowed.login.modules">org.apache.kafka.disallowed.login.modules</a></h4>
       <p>This system property is used to disable the problematic login modules usage in SASL JAAS configuration. This property accepts comma-separated list of loginModule names. By default <b>com.sun.security.auth.module.JndiLoginModule</b> loginModule is disabled.
       <p>If users want to enable JndiLoginModule, users need to explicitly reset the system property like below. We advise the users to validate configurations and only allow trusted JNDI configurations. For more details <a href="https://kafka.apache.org/cve-list#CVE-2023-25194">CVE-2023-25194</a>.

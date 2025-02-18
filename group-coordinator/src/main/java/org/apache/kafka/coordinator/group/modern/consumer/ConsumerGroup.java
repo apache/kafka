@@ -24,14 +24,17 @@ import org.apache.kafka.common.errors.StaleMemberEpochException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
+import org.apache.kafka.common.message.ConsumerProtocolAssignment;
 import org.apache.kafka.common.message.ConsumerProtocolSubscription;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
 import org.apache.kafka.coordinator.group.Utils;
+import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.classic.ClassicGroup;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
@@ -39,6 +42,7 @@ import org.apache.kafka.coordinator.group.modern.Assignment;
 import org.apache.kafka.coordinator.group.modern.MemberState;
 import org.apache.kafka.coordinator.group.modern.ModernGroup;
 import org.apache.kafka.coordinator.group.modern.ModernGroupMember;
+import org.apache.kafka.coordinator.group.modern.SubscriptionCount;
 import org.apache.kafka.image.TopicsImage;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
@@ -59,11 +63,14 @@ import java.util.Set;
 
 import static org.apache.kafka.coordinator.group.Utils.toOptional;
 import static org.apache.kafka.coordinator.group.Utils.toTopicPartitionMap;
+import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HETEROGENEOUS;
+import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HOMOGENEOUS;
 import static org.apache.kafka.coordinator.group.classic.ClassicGroupMember.EMPTY_ASSIGNMENT;
 import static org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup.ConsumerGroupState.ASSIGNING;
 import static org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup.ConsumerGroupState.EMPTY;
 import static org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup.ConsumerGroupState.RECONCILING;
 import static org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup.ConsumerGroupState.STABLE;
+import static org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember.subscribedTopicRegexOrNull;
 
 /**
  * A Consumer Group. All the metadata in this class are backed by
@@ -307,12 +314,13 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
             throw new IllegalArgumentException("newMember cannot be null.");
         }
         ConsumerGroupMember oldMember = members.put(newMember.memberId(), newMember);
-        maybeUpdateSubscribedTopicNamesAndGroupSubscriptionType(oldMember, newMember);
+        maybeUpdateSubscribedTopicNames(oldMember, newMember);
         maybeUpdateServerAssignors(oldMember, newMember);
         maybeUpdatePartitionEpoch(oldMember, newMember);
         maybeUpdateSubscribedRegularExpression(oldMember, newMember);
         updateStaticMember(newMember);
         maybeUpdateGroupState();
+        maybeUpdateGroupSubscriptionType();
         maybeUpdateNumClassicProtocolMembers(oldMember, newMember);
         maybeUpdateClassicProtocolMembersSupportedProtocols(oldMember, newMember);
     }
@@ -331,12 +339,13 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
     @Override
     public void removeMember(String memberId) {
         ConsumerGroupMember oldMember = members.remove(memberId);
-        maybeUpdateSubscribedTopicNamesAndGroupSubscriptionType(oldMember, null);
+        maybeUpdateSubscribedTopicNames(oldMember, null);
         maybeUpdateServerAssignors(oldMember, null);
         maybeRemovePartitionEpoch(oldMember);
         maybeUpdateSubscribedRegularExpression(oldMember, null);
         removeStaticMember(oldMember);
         maybeUpdateGroupState();
+        maybeUpdateGroupSubscriptionType();
         maybeUpdateNumClassicProtocolMembers(oldMember, null);
         maybeUpdateClassicProtocolMembersSupportedProtocols(oldMember, null);
     }
@@ -353,6 +362,91 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
     }
 
     /**
+     * Updates the subscription count.
+     *
+     * @param oldMember             The old member.
+     * @param newMember             The new member.
+     *
+     * @return Copy of the map of topics to the count of number of subscribers.
+     */
+    public Map<String, SubscriptionCount> computeSubscribedTopicNames(
+        ConsumerGroupMember oldMember,
+        ConsumerGroupMember newMember
+    ) {
+        Map<String, SubscriptionCount> subscribedTopicsNames = super.computeSubscribedTopicNames(oldMember, newMember);
+        String oldSubscribedTopicRegex = subscribedTopicRegexOrNull(oldMember);
+
+        if (oldSubscribedTopicRegex != null) {
+            String newSubscribedTopicRegex = subscribedTopicRegexOrNull(newMember);
+
+            // If the old member was the last one subscribed to the regex and the new member
+            // is not subscribed to it, we must remove it from the subscribed topic names.
+            if (!oldSubscribedTopicRegex.equals(newSubscribedTopicRegex) && numSubscribedMembers(oldSubscribedTopicRegex) == 1) {
+                resolvedRegularExpression(oldSubscribedTopicRegex).ifPresent(resolvedRegularExpression ->
+                    resolvedRegularExpression.topics.forEach(topic -> subscribedTopicsNames.compute(topic, SubscriptionCount::decRegexCount))
+                );
+            }
+        }
+
+        return subscribedTopicsNames;
+    }
+
+    /**
+     * Computes an updated version of the subscribed regular expressions based on
+     * the new/old members.
+     *
+     * @param oldMember The old member.
+     * @param newMember The new member.
+     * @return An unmodifiable and updated copy of the map.
+     */
+    public Map<String, Integer> computeSubscribedRegularExpressions(
+        ConsumerGroupMember oldMember,
+        ConsumerGroupMember newMember
+    ) {
+        String oldRegex = subscribedTopicRegexOrNull(oldMember);
+        String newRegex = subscribedTopicRegexOrNull(newMember);
+
+        if (!Objects.equals(oldRegex, newRegex)) {
+            Map<String, Integer> newSubscribedRegularExpressions = new HashMap<>(subscribedRegularExpressions);
+            if (oldRegex != null) {
+                newSubscribedRegularExpressions.compute(oldRegex, Utils::decValue);
+            }
+            if (newRegex != null) {
+                newSubscribedRegularExpressions.compute(newRegex, Utils::incValue);
+            }
+            return Collections.unmodifiableMap(newSubscribedRegularExpressions);
+        } else {
+            return Collections.unmodifiableMap(subscribedRegularExpressions);
+        }
+    }
+
+    /**
+     * Computes an updated copy of the subscribed topic names without the provided
+     * removed members and removed regular expressions.
+     *
+     * @param removedMembers    The set of removed members.
+     * @param removedRegexes    The set of removed regular expressions.
+     *
+     * @return Copy of the map of topics to the count of number of subscribers.
+     */
+    public Map<String, SubscriptionCount> computeSubscribedTopicNamesWithoutDeletedMembers(
+        Set<ConsumerGroupMember> removedMembers,
+        Set<String> removedRegexes
+    ) {
+        Map<String, SubscriptionCount> subscribedTopicsNames = super.computeSubscribedTopicNames(removedMembers);
+
+        removedRegexes.forEach(regex ->
+            resolvedRegularExpression(regex).ifPresent(resolvedRegularExpression ->
+                resolvedRegularExpression.topics.forEach(topic ->
+                    subscribedTopicsNames.compute(topic, SubscriptionCount::decRegexCount)
+                )
+            )
+        );
+
+        return subscribedTopicsNames;
+    }
+
+    /**
      * Update the resolved regular expression.
      *
      * @param regex                         The regular expression.
@@ -365,7 +459,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         removeResolvedRegularExpression(regex);
         if (newResolvedRegularExpression != null) {
             resolvedRegularExpressions.put(regex, newResolvedRegularExpression);
-            newResolvedRegularExpression.topics.forEach(topicName -> subscribedTopicNames.compute(topicName, Utils::incValue));
+            newResolvedRegularExpression.topics.forEach(topicName -> subscribedTopicNames.compute(topicName, SubscriptionCount::incRegexCount));
         }
     }
 
@@ -377,7 +471,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
     public void removeResolvedRegularExpression(String regex) {
         ResolvedRegularExpression oldResolvedRegularExpression = resolvedRegularExpressions.remove(regex);
         if (oldResolvedRegularExpression != null) {
-            oldResolvedRegularExpression.topics.forEach(topicName -> subscribedTopicNames.compute(topicName, Utils::decValue));
+            oldResolvedRegularExpression.topics.forEach(topicName -> subscribedTopicNames.compute(topicName, SubscriptionCount::decRegexCount));
         }
     }
 
@@ -631,21 +725,25 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
      */
     @Override
     public void createGroupTombstoneRecords(List<CoordinatorRecord> records) {
-        members().forEach((memberId, member) ->
-            records.add(GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentTombstoneRecord(groupId(), memberId))
+        members.keySet().forEach(memberId ->
+            records.add(GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentTombstoneRecord(groupId, memberId))
         );
 
-        members().forEach((memberId, member) ->
-            records.add(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentTombstoneRecord(groupId(), memberId))
+        members.keySet().forEach(memberId ->
+            records.add(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentTombstoneRecord(groupId, memberId))
         );
-        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochTombstoneRecord(groupId()));
+        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochTombstoneRecord(groupId));
 
-        members().forEach((memberId, member) ->
-            records.add(GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord(groupId(), memberId))
+        members.keySet().forEach(memberId ->
+            records.add(GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord(groupId, memberId))
         );
 
-        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataTombstoneRecord(groupId()));
-        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupEpochTombstoneRecord(groupId()));
+        resolvedRegularExpressions.keySet().forEach(regex ->
+            records.add(GroupCoordinatorRecordHelpers.newConsumerGroupRegularExpressionTombstone(groupId, regex))
+        );
+
+        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataTombstoneRecord(groupId));
+        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupEpochTombstoneRecord(groupId));
     }
 
     /**
@@ -662,24 +760,28 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         String leavingMemberId,
         String joiningMemberId
     ) {
-        members().forEach((memberId, __) -> {
+        members.keySet().forEach(memberId -> {
             String removedMemberId = memberId.equals(leavingMemberId) ? joiningMemberId : memberId;
-            records.add(GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentTombstoneRecord(groupId(), removedMemberId));
+            records.add(GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentTombstoneRecord(groupId, removedMemberId));
         });
 
-        members().forEach((memberId, __) -> {
+        members.keySet().forEach(memberId -> {
             String removedMemberId = memberId.equals(leavingMemberId) ? joiningMemberId : memberId;
-            records.add(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentTombstoneRecord(groupId(), removedMemberId));
+            records.add(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentTombstoneRecord(groupId, removedMemberId));
         });
-        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochTombstoneRecord(groupId()));
+        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochTombstoneRecord(groupId));
 
-        members().forEach((memberId,  __) -> {
+        members.keySet().forEach(memberId -> {
             String removedMemberId = memberId.equals(leavingMemberId) ? joiningMemberId : memberId;
-            records.add(GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord(groupId(), removedMemberId));
+            records.add(GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord(groupId, removedMemberId));
         });
 
-        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataTombstoneRecord(groupId()));
-        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupEpochTombstoneRecord(groupId()));
+        resolvedRegularExpressions.keySet().forEach(regex ->
+            records.add(GroupCoordinatorRecordHelpers.newConsumerGroupRegularExpressionTombstone(groupId, regex))
+        );
+
+        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataTombstoneRecord(groupId));
+        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupEpochTombstoneRecord(groupId));
     }
 
     @Override
@@ -727,9 +829,62 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         }
     }
 
+    /**
+     * Computes the subscription type based on the provided information.
+     *
+     * @param subscribedRegularExpressions  The subscribed regular expression count.
+     * @param subscribedTopicNames          The subscribed topic name count.
+     * @param numberOfMembers               The number of members in the group.
+     *
+     * @return The subscription type.
+     */
+    public static SubscriptionType subscriptionType(
+        Map<String, Integer> subscribedRegularExpressions,
+        Map<String, SubscriptionCount> subscribedTopicNames,
+        int numberOfMembers
+    ) {
+        if (subscribedRegularExpressions.isEmpty()) {
+            // If the members do not use regular expressions, the subscription is
+            // considered as homogeneous if all the members are subscribed to the
+            // same topics. Otherwise, it is considered as heterogeneous.
+            for (SubscriptionCount subscriberCount : subscribedTopicNames.values()) {
+                if (subscriberCount.byNameCount != numberOfMembers) {
+                    return HETEROGENEOUS;
+                }
+            }
+            return HOMOGENEOUS;
+        } else {
+            int count = subscribedRegularExpressions.values().iterator().next();
+            if (count == numberOfMembers) {
+                // If all the members are subscribed to a single regular expressions
+                // and none of them are subscribed to topic names, the subscription
+                // is considered as homogeneous. If some members are subscribed to
+                // topic names too, the subscription is considered as heterogeneous.
+                for (SubscriptionCount subscriberCount : subscribedTopicNames.values()) {
+                    if (subscriberCount.byRegexCount != 1 || subscriberCount.byNameCount > 0) {
+                        return HETEROGENEOUS;
+                    }
+                }
+                return HOMOGENEOUS;
+            } else {
+                // The subscription is considered as heterogeneous because
+                // there is a mix of regular expressions.
+                return SubscriptionType.HETEROGENEOUS;
+            }
+        }
+    }
+
+    @Override
+    protected void maybeUpdateGroupSubscriptionType() {
+        subscriptionType.set(subscriptionType(
+            subscribedRegularExpressions,
+            subscribedTopicNames,
+            members.size()
+        ));
+    }
+
     @Override
     protected void maybeUpdateGroupState() {
-        ConsumerGroupState previousState = state.get();
         ConsumerGroupState newState = STABLE;
         if (members.isEmpty()) {
             newState = EMPTY;
@@ -745,7 +900,6 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         }
 
         state.set(newState);
-        metrics.onConsumerGroupStateTransition(previousState, newState);
     }
 
     /**
@@ -977,6 +1131,9 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
      * @param classicGroup      The converted classic group.
      * @param topicsImage       The TopicsImage for topic id and topic name conversion.
      * @return  The created ConsumerGroup.
+     *
+     * @throws SchemaException if any member's subscription or assignment cannot be deserialized.
+     * @throws UnsupportedVersionException if userData from a custom assignor would be lost.
      */
     public static ConsumerGroup fromClassicGroup(
         SnapshotRegistry snapshotRegistry,
@@ -996,12 +1153,13 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
             if (Arrays.equals(classicGroupMember.assignment(), EMPTY_ASSIGNMENT)) {
                 assignedPartitions = Collections.emptyMap();
             } else {
-                assignedPartitions = toTopicPartitionMap(
-                    ConsumerProtocol.deserializeConsumerProtocolAssignment(
-                        ByteBuffer.wrap(classicGroupMember.assignment())
-                    ),
-                    topicsImage
+                ConsumerProtocolAssignment assignment = ConsumerProtocol.deserializeConsumerProtocolAssignment(
+                    ByteBuffer.wrap(classicGroupMember.assignment())
                 );
+                if (assignment.userData() != null && assignment.userData().hasRemaining()) {
+                    throw new UnsupportedVersionException("userData from a custom assignor would be lost");
+                }
+                assignedPartitions = toTopicPartitionMap(assignment, topicsImage);
             }
 
             // Every member is guaranteed to have metadata set when it joins,
@@ -1095,12 +1253,27 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
     /**
      * Checks whether all the members use the classic protocol except the given member.
      *
-     * @param memberId The member to remove.
+     * @param member The member to remove.
      * @return A boolean indicating whether all the members use the classic protocol.
      */
-    public boolean allMembersUseClassicProtocolExcept(String memberId) {
-        return numClassicProtocolMembers() == members().size() - 1 &&
-            !getOrMaybeCreateMember(memberId, false).useClassicProtocol();
+    public boolean allMembersUseClassicProtocolExcept(ConsumerGroupMember member) {
+        return numClassicProtocolMembers() == members().size() - 1 && !member.useClassicProtocol();
+    }
+
+    /**
+     * Checks whether all the members use the classic protocol except the given members.
+     *
+     * @param members The members to remove.
+     * @return A boolean indicating whether all the members use the classic protocol.
+     */
+    public boolean allMembersUseClassicProtocolExcept(Set<ConsumerGroupMember> members) {
+        int numExcludedClassicProtocolMembers = 0;
+        for (ConsumerGroupMember member : members) {
+            if (member.useClassicProtocol()) {
+                numExcludedClassicProtocolMembers++;
+            }
+        }
+        return numClassicProtocolMembers() - numExcludedClassicProtocolMembers == members().size() - members.size();
     }
 
     /**

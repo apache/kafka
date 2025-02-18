@@ -46,6 +46,10 @@ public class ConsumerGroupHeartbeatRequest extends AbstractRequest {
      */
     public static final int CONSUMER_GENERATED_MEMBER_ID_REQUIRED_VERSION = 1;
 
+    public static final String REGEX_RESOLUTION_NOT_SUPPORTED_MSG = "The cluster does not support " +
+        "regular expressions resolution on ConsumerGroupHeartbeat API version 0. It must be upgraded to use " +
+        "ConsumerGroupHeartbeat API version >= 1 to allow to subscribe to a SubscriptionPattern.";
+
     public static class Builder extends AbstractRequest.Builder<ConsumerGroupHeartbeatRequest> {
         private final ConsumerGroupHeartbeatRequestData data;
 
@@ -61,9 +65,7 @@ public class ConsumerGroupHeartbeatRequest extends AbstractRequest {
         @Override
         public ConsumerGroupHeartbeatRequest build(short version) {
             if (version == 0 && data.subscribedTopicRegex() != null) {
-                throw new UnsupportedVersionException("The cluster does not support regular expressions resolution " +
-                    "on ConsumerGroupHeartbeat API version " + version + ". It must be upgraded to use " +
-                    "ConsumerGroupHeartbeat API version >= 1 to allow to subscribe to a SubscriptionPattern.");
+                throw new UnsupportedVersionException(REGEX_RESOLUTION_NOT_SUPPORTED_MSG);
             }
             return new ConsumerGroupHeartbeatRequest(data, version);
         }

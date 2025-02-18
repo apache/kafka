@@ -16,7 +16,6 @@
  */
 package kafka.raft
 
-import kafka.log.UnifiedLog
 import kafka.server.{KafkaConfig, KafkaRaftServer}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.compress.Compression
@@ -31,7 +30,7 @@ import org.apache.kafka.server.common.serialization.RecordSerde
 import org.apache.kafka.server.config.{KRaftConfigs, ServerLogConfigs}
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.snapshot.{FileRawSnapshotWriter, RawSnapshotReader, RawSnapshotWriter, SnapshotPath, Snapshots}
-import org.apache.kafka.storage.internals.log.{LogConfig, LogStartOffsetIncrementReason}
+import org.apache.kafka.storage.internals.log.{LogConfig, LogStartOffsetIncrementReason, UnifiedLog}
 import org.apache.kafka.test.TestUtils.assertOptional
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
@@ -142,13 +141,24 @@ final class KafkaMetadataLogTest {
 
     // Test finding the first epoch
     log.createNewSnapshot(new OffsetAndEpoch(numberOfRecords, firstEpoch)).get().close()
-    log.createNewSnapshot(new OffsetAndEpoch(numberOfRecords - 1, firstEpoch)).get().close()
-    log.createNewSnapshot(new OffsetAndEpoch(1, firstEpoch)).get().close()
 
     // Test finding the second epoch
     log.createNewSnapshot(new OffsetAndEpoch(2 * numberOfRecords, secondEpoch)).get().close()
-    log.createNewSnapshot(new OffsetAndEpoch(2 * numberOfRecords - 1, secondEpoch)).get().close()
-    log.createNewSnapshot(new OffsetAndEpoch(numberOfRecords + 1, secondEpoch)).get().close()
+  }
+
+  @Test
+  def testCreateSnapshotInMiddleOfBatch(): Unit = {
+    val numberOfRecords = 10
+    val epoch = 1
+    val log = buildMetadataLog(tempDir, mockTime)
+
+    append(log, numberOfRecords, epoch)
+    log.updateHighWatermark(new LogOffsetMetadata(numberOfRecords))
+
+    assertThrows(
+      classOf[IllegalArgumentException],
+      () => log.createNewSnapshot(new OffsetAndEpoch(numberOfRecords - 1, epoch))
+    )
   }
 
   @Test
@@ -206,7 +216,7 @@ final class KafkaMetadataLogTest {
     val snapshotId = new OffsetAndEpoch(numberOfRecords-4, epoch)
     val log = buildMetadataLog(tempDir, mockTime)
 
-    append(log, numberOfRecords, epoch)
+    (1 to numberOfRecords).foreach(_ => append(log, 1, epoch))
     log.updateHighWatermark(new LogOffsetMetadata(numberOfRecords))
     createNewSnapshot(log, snapshotId)
 
@@ -282,7 +292,7 @@ final class KafkaMetadataLogTest {
   def testCreateExistingSnapshot(): Unit = {
     val numberOfRecords = 10
     val epoch = 1
-    val snapshotId = new OffsetAndEpoch(numberOfRecords - 1, epoch)
+    val snapshotId = new OffsetAndEpoch(numberOfRecords, epoch)
     val log = buildMetadataLog(tempDir, mockTime)
 
     append(log, numberOfRecords, epoch)

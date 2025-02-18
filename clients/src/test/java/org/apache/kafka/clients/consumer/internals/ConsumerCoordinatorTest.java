@@ -76,6 +76,7 @@ import org.apache.kafka.common.requests.OffsetFetchResponse.PartitionData;
 import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.requests.SyncGroupRequest;
 import org.apache.kafka.common.requests.SyncGroupResponse;
+import org.apache.kafka.common.test.api.Flaky;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
@@ -223,7 +224,7 @@ public abstract class ConsumerCoordinatorTest {
                                         groupInstanceId,
                                         retryBackoffMs,
                                         retryBackoffMaxMs,
-                                        !groupInstanceId.isPresent());
+                                        groupInstanceId.isEmpty());
     }
 
     @AfterEach
@@ -677,7 +678,6 @@ public abstract class ConsumerCoordinatorTest {
                                                 .setCommittedLeaderEpoch(RecordBatch.NO_PARTITION_LEADER_EPOCH)
                                                 .setCommittedMetadata("")
                                                 .setCommittedOffset(13L)
-                                                .setCommitTimestamp(0)
                                 ))
                         )
                 );
@@ -1010,6 +1010,8 @@ public abstract class ConsumerCoordinatorTest {
         assertEquals(getAdded(owned, assigned), rebalanceListener.assigned);
     }
 
+
+    @Flaky("KAFKA-15900")
     @Test
     public void testOutdatedCoordinatorAssignment() {
         final String consumerId = "outdated_assignment";
@@ -4136,7 +4138,7 @@ public abstract class ConsumerCoordinatorTest {
         @Override
         public Map<String, List<TopicPartition>> assign(Map<String, Integer> partitionsPerTopic, Map<String, Subscription> subscriptions) {
             subscriptions.forEach((consumer, subscription) -> {
-                if (!subscription.rackId().isPresent())
+                if (subscription.rackId().isEmpty())
                     throw new IllegalStateException("Rack id not provided in subscription for " + consumer);
                 rackIds.add(subscription.rackId().get());
             });

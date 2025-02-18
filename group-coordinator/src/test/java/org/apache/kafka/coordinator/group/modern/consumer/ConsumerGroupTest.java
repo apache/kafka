@@ -46,12 +46,14 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataV
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.modern.Assignment;
 import org.apache.kafka.coordinator.group.modern.MemberState;
+import org.apache.kafka.coordinator.group.modern.SubscriptionCount;
 import org.apache.kafka.coordinator.group.modern.TopicMetadata;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -66,9 +68,7 @@ import java.util.Set;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.coordinator.group.Assertions.assertRecordEquals;
-import static org.apache.kafka.coordinator.group.Assertions.assertRecordsEquals;
-import static org.apache.kafka.coordinator.group.Assertions.assertUnorderedListEquals;
+import static org.apache.kafka.coordinator.group.Assertions.assertUnorderedRecordsEquals;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
 import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HETEROGENEOUS;
@@ -81,8 +81,6 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
 
 public class ConsumerGroupTest {
 
@@ -426,7 +424,6 @@ public class ConsumerGroupTest {
 
     @Test
     public void testGroupState() {
-        Uuid fooTopicId = Uuid.randomUuid();
         ConsumerGroup consumerGroup = createConsumerGroup("foo");
         assertEquals(ConsumerGroup.ConsumerGroupState.EMPTY, consumerGroup.state());
 
@@ -1296,46 +1293,6 @@ public class ConsumerGroupTest {
     }
 
     @Test
-    public void testStateTransitionMetrics() {
-        // Confirm metrics is not updated when a new ConsumerGroup is created but only when the group transitions
-        // its state.
-        GroupCoordinatorMetricsShard metrics = mock(GroupCoordinatorMetricsShard.class);
-        ConsumerGroup consumerGroup = new ConsumerGroup(
-            new SnapshotRegistry(new LogContext()),
-            "group-id",
-            metrics
-        );
-
-        assertEquals(ConsumerGroup.ConsumerGroupState.EMPTY, consumerGroup.state());
-        verify(metrics, times(0)).onConsumerGroupStateTransition(null, ConsumerGroup.ConsumerGroupState.EMPTY);
-
-        ConsumerGroupMember member = new ConsumerGroupMember.Builder("member")
-            .setMemberEpoch(1)
-            .setPreviousMemberEpoch(0)
-            .build();
-
-        consumerGroup.updateMember(member);
-
-        assertEquals(ConsumerGroup.ConsumerGroupState.RECONCILING, consumerGroup.state());
-        verify(metrics, times(1)).onConsumerGroupStateTransition(ConsumerGroup.ConsumerGroupState.EMPTY, ConsumerGroup.ConsumerGroupState.RECONCILING);
-
-        consumerGroup.setGroupEpoch(1);
-
-        assertEquals(ConsumerGroup.ConsumerGroupState.ASSIGNING, consumerGroup.state());
-        verify(metrics, times(1)).onConsumerGroupStateTransition(ConsumerGroup.ConsumerGroupState.RECONCILING, ConsumerGroup.ConsumerGroupState.ASSIGNING);
-
-        consumerGroup.setTargetAssignmentEpoch(1);
-
-        assertEquals(ConsumerGroup.ConsumerGroupState.STABLE, consumerGroup.state());
-        verify(metrics, times(1)).onConsumerGroupStateTransition(ConsumerGroup.ConsumerGroupState.ASSIGNING, ConsumerGroup.ConsumerGroupState.STABLE);
-
-        consumerGroup.removeMember("member");
-
-        assertEquals(ConsumerGroup.ConsumerGroupState.EMPTY, consumerGroup.state());
-        verify(metrics, times(1)).onConsumerGroupStateTransition(ConsumerGroup.ConsumerGroupState.STABLE, ConsumerGroup.ConsumerGroupState.EMPTY);
-    }
-
-    @Test
     public void testIsInStatesCaseInsensitive() {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         GroupCoordinatorMetricsShard metricsShard = new GroupCoordinatorMetricsShard(
@@ -1436,8 +1393,8 @@ public class ConsumerGroupTest {
             .build();
         consumerGroup.updateMember(member2);
         assertEquals(1, consumerGroup.numClassicProtocolMembers());
-        assertFalse(consumerGroup.allMembersUseClassicProtocolExcept("member-1"));
-        assertTrue(consumerGroup.allMembersUseClassicProtocolExcept("member-2"));
+        assertFalse(consumerGroup.allMembersUseClassicProtocolExcept(member1));
+        assertTrue(consumerGroup.allMembersUseClassicProtocolExcept(member2));
 
         // The group has member 2 (using the consumer protocol) and member 3 (using the consumer protocol).
         consumerGroup.removeMember(member1.memberId());
@@ -1445,7 +1402,7 @@ public class ConsumerGroupTest {
             .build();
         consumerGroup.updateMember(member3);
         assertEquals(0, consumerGroup.numClassicProtocolMembers());
-        assertFalse(consumerGroup.allMembersUseClassicProtocolExcept("member-2"));
+        assertFalse(consumerGroup.allMembersUseClassicProtocolExcept(member2));
 
         // The group has member 2 (using the classic protocol).
         consumerGroup.removeMember(member2.memberId());
@@ -1457,50 +1414,64 @@ public class ConsumerGroupTest {
         assertEquals(1, consumerGroup.numClassicProtocolMembers());
     }
 
-    @Test
-    public void testCreateGroupTombstoneRecordsWithReplacedMember() {
-        String groupId = "group";
-        String memberId1 = "member-1";
-        String memberId2 = "member-2";
-        String newMemberId2 = "new-member-2";
-
-        ConsumerGroup consumerGroup = createConsumerGroup(groupId);
+    @ParameterizedTest
+    @CsvSource({
+        "5, 5, 0, 0, false", // remove no consumer protocol members
+        "5, 5, 0, 4, false", // remove 4 out of 5 consumer protocol members
+        "5, 5, 1, 4, false", // remove 4 out of 5 consumer protocol members and 1 classic protocol member
+        "5, 5, 0, 5, true", // remove 5 out of 5 consumer protocol members
+        "5, 5, 1, 5, true", // remove 5 out of 5 consumer protocol members and 1 classic protocol member
+        "5, 5, 5, 5, true", // an empty consumer group is considered to have only classic protocol members
+        "5, 0, 0, 0, true", // a consumer group with only classic protocol members, which should not happen
+        "5, 0, 1, 0, true", // a consumer group with only classic protocol members, which should not happen
+    })
+    public void testAllMembersUseClassicProtocolExcept(
+        int numClassicProtocolMembers,
+        int numConsumerProtocolMembers,
+        int numRemovedClassicProtocolMembers,
+        int numRemovedConsumerProtocolMembers,
+        boolean expectedResult
+    ) {
+        ConsumerGroup consumerGroup = createConsumerGroup("foo");
         List<ConsumerGroupMemberMetadataValue.ClassicProtocol> protocols = new ArrayList<>();
         protocols.add(new ConsumerGroupMemberMetadataValue.ClassicProtocol()
             .setName("range")
             .setMetadata(new byte[0]));
 
-        ConsumerGroupMember member1 = new ConsumerGroupMember.Builder(memberId1)
-            .setClassicMemberMetadata(new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
-                .setSupportedProtocols(protocols))
-            .build();
-        consumerGroup.updateMember(member1);
+        List<ConsumerGroupMember> classicProtocolMembers = new ArrayList<>();
+        List<ConsumerGroupMember> consumerProtocolMembers = new ArrayList<>();
 
-        ConsumerGroupMember member2 = new ConsumerGroupMember.Builder(memberId2)
-            .setInstanceId("instance-id-2")
-            .build();
-        consumerGroup.updateMember(member2);
+        // Add classic and consumer protocol members to the group
+        for (int i = 0; i < numClassicProtocolMembers; i++) {
+            ConsumerGroupMember member = new ConsumerGroupMember.Builder("classic-member-" + i)
+                .setClassicMemberMetadata(new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                    .setSupportedProtocols(protocols))
+                .build();
+            classicProtocolMembers.add(member);
+            consumerGroup.updateMember(member);
+        }
 
-        List<CoordinatorRecord> records = new ArrayList<>();
-        consumerGroup.createGroupTombstoneRecordsWithReplacedMember(records, memberId2, newMemberId2);
+        for (int i = 0; i < numConsumerProtocolMembers; i++) {
+            ConsumerGroupMember member = new ConsumerGroupMember.Builder("consumer-member-" + i)
+                .build();
+            consumerProtocolMembers.add(member);
+            consumerGroup.updateMember(member);
+        }
 
-        List<CoordinatorRecord> expectedRecords = Arrays.asList(
-            GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentTombstoneRecord(groupId, memberId1),
-            GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentTombstoneRecord(groupId, newMemberId2),
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentTombstoneRecord(groupId, memberId1),
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentTombstoneRecord(groupId, newMemberId2),
-            GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochTombstoneRecord(groupId),
-            GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord(groupId, memberId1),
-            GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord(groupId, newMemberId2),
-            GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataTombstoneRecord(groupId),
-            GroupCoordinatorRecordHelpers.newConsumerGroupEpochTombstoneRecord(groupId)
-        );
-        assertEquals(expectedRecords.size(), records.size());
-        assertUnorderedListEquals(expectedRecords.subList(0, 2), records.subList(0, 2));
-        assertUnorderedListEquals(expectedRecords.subList(2, 4), records.subList(2, 4));
-        assertRecordEquals(expectedRecords.get(4), records.get(4));
-        assertUnorderedListEquals(expectedRecords.subList(5, 7), records.subList(5, 7));
-        assertRecordsEquals(expectedRecords.subList(7, 9), records.subList(7, 9));
+        assertEquals(numClassicProtocolMembers, consumerGroup.numClassicProtocolMembers());
+
+        // Test allMembersUseClassicProtocolExcept
+        Set<ConsumerGroupMember> removedMembers = new HashSet<>();
+
+        for (int i = 0; i < numRemovedClassicProtocolMembers; i++) {
+            removedMembers.add(classicProtocolMembers.get(i));
+        }
+
+        for (int i = 0; i < numRemovedConsumerProtocolMembers; i++) {
+            removedMembers.add(consumerProtocolMembers.get(i));
+        }
+
+        assertEquals(expectedResult, consumerGroup.allMembersUseClassicProtocolExcept(removedMembers));
     }
 
     @Test
@@ -1708,9 +1679,9 @@ public class ConsumerGroupTest {
         // Verify initial state.
         assertEquals(
             Map.of(
-                "foo", 2,
-                "bar", 2,
-                "zar", 1
+                "foo", new SubscriptionCount(2, 0),
+                "bar", new SubscriptionCount(2, 0),
+                "zar", new SubscriptionCount(1, 0)
             ),
             consumerGroup.subscribedTopicNames()
         );
@@ -1727,9 +1698,9 @@ public class ConsumerGroupTest {
 
         assertEquals(
             Map.of(
-                "foo", 3,
-                "bar", 3,
-                "zar", 1
+                "foo", new SubscriptionCount(2, 1),
+                "bar", new SubscriptionCount(2, 1),
+                "zar", new SubscriptionCount(1, 0)
             ),
             consumerGroup.subscribedTopicNames()
         );
@@ -1746,10 +1717,10 @@ public class ConsumerGroupTest {
 
         assertEquals(
             Map.of(
-                "foo", 3,
-                "bar", 3,
-                "zar", 1,
-                "foobar", 1
+                "foo", new SubscriptionCount(2, 1),
+                "bar", new SubscriptionCount(2, 1),
+                "zar", new SubscriptionCount(1, 0),
+                "foobar", new SubscriptionCount(0, 1)
             ),
             consumerGroup.subscribedTopicNames()
         );
@@ -1766,10 +1737,10 @@ public class ConsumerGroupTest {
 
         assertEquals(
             Map.of(
-                "foo", 3,
-                "bar", 2,
-                "zar", 1,
-                "foobar", 1
+                "foo", new SubscriptionCount(2, 1),
+                "bar", new SubscriptionCount(2, 0),
+                "zar", new SubscriptionCount(1, 0),
+                "foobar", new SubscriptionCount(0, 1)
             ),
             consumerGroup.subscribedTopicNames()
         );
@@ -1779,10 +1750,10 @@ public class ConsumerGroupTest {
 
         assertEquals(
             Map.of(
-                "foo", 2,
-                "bar", 2,
-                "zar", 1,
-                "foobar", 1
+                "foo", new SubscriptionCount(2, 0),
+                "bar", new SubscriptionCount(2, 0),
+                "zar", new SubscriptionCount(1, 0),
+                "foobar", new SubscriptionCount(0, 1)
             ),
             consumerGroup.subscribedTopicNames()
         );
@@ -1792,11 +1763,498 @@ public class ConsumerGroupTest {
 
         assertEquals(
             Map.of(
-                "foo", 2,
-                "bar", 2,
-                "zar", 1
+                "foo", new SubscriptionCount(2, 0),
+                "bar", new SubscriptionCount(2, 0),
+                "zar", new SubscriptionCount(1, 0)
             ),
             consumerGroup.subscribedTopicNames()
+        );
+    }
+
+    @Test
+    public void testComputeSubscribedTopicNamesWithoutDeletedMembers() {
+        ConsumerGroup consumerGroup = createConsumerGroup("foo");
+
+        ConsumerGroupMember member1 = new ConsumerGroupMember.Builder("member1")
+            .setSubscribedTopicNames(Arrays.asList("foo", "bar", "zar"))
+            .build();
+        consumerGroup.updateMember(member1);
+
+        ConsumerGroupMember member2 = new ConsumerGroupMember.Builder("member2")
+            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+            .build();
+        consumerGroup.updateMember(member2);
+
+        ConsumerGroupMember member3 = new ConsumerGroupMember.Builder("member3")
+            .setSubscribedTopicRegex("foo*")
+            .build();
+        consumerGroup.updateMember(member3);
+
+        ConsumerGroupMember member4 = new ConsumerGroupMember.Builder("member4")
+            .setSubscribedTopicRegex("foo*")
+            .build();
+        consumerGroup.updateMember(member4);
+
+        ConsumerGroupMember member5 = new ConsumerGroupMember.Builder("member5")
+            .setSubscribedTopicRegex("bar*")
+            .build();
+        consumerGroup.updateMember(member5);
+
+        ConsumerGroupMember member6 = new ConsumerGroupMember.Builder("member6")
+            .setSubscribedTopicRegex("bar*")
+            .build();
+        consumerGroup.updateMember(member6);
+
+        consumerGroup.updateResolvedRegularExpression(
+            "foo*",
+            new ResolvedRegularExpression(
+                Set.of("foo", "fooo"),
+                10L,
+                12345L
+            )
+        );
+
+        consumerGroup.updateResolvedRegularExpression(
+            "bar*",
+            new ResolvedRegularExpression(
+                Set.of("bar", "barr"),
+                10L,
+                12345L
+            )
+        );
+
+        // Verify initial state.
+        assertEquals(
+            Map.of(
+                "foo", new SubscriptionCount(2, 1),
+                "fooo", new SubscriptionCount(0, 1),
+                "bar", new SubscriptionCount(2, 1),
+                "barr", new SubscriptionCount(0, 1),
+                "zar", new SubscriptionCount(1, 0)
+            ),
+            consumerGroup.subscribedTopicNames()
+        );
+
+        // Compute with removed members and regexes.
+        assertEquals(
+            Map.of(
+                "foo", new SubscriptionCount(1, 0),
+                "bar", new SubscriptionCount(1, 1),
+                "barr", new SubscriptionCount(0, 1),
+                "zar", new SubscriptionCount(1, 0)
+            ),
+            consumerGroup.computeSubscribedTopicNamesWithoutDeletedMembers(
+                Set.of(member2, member3, member4, member5),
+                Set.of("foo*")
+            )
+        );
+    }
+
+    @Test
+    public void testComputeSubscribedTopicNames() {
+        ConsumerGroup consumerGroup = createConsumerGroup("foo");
+
+        ConsumerGroupMember member1 = new ConsumerGroupMember.Builder("member1")
+            .setSubscribedTopicNames(List.of("foo", "bar", "zar"))
+            .build();
+        consumerGroup.updateMember(member1);
+
+        ConsumerGroupMember member2 = new ConsumerGroupMember.Builder("member2")
+            .setSubscribedTopicNames(List.of("foo", "bar"))
+            .build();
+        consumerGroup.updateMember(member2);
+
+        ConsumerGroupMember member3 = new ConsumerGroupMember.Builder("member3")
+            .setSubscribedTopicNames(List.of("foo"))
+            .setSubscribedTopicRegex("foo*")
+            .build();
+        consumerGroup.updateMember(member3);
+
+        consumerGroup.updateResolvedRegularExpression(
+            "foo*",
+            new ResolvedRegularExpression(
+                Set.of("foo", "fooo"),
+                10L,
+                12345L
+            )
+        );
+
+        // Verify initial state.
+        assertEquals(
+            Map.of(
+                "foo", new SubscriptionCount(3, 1),
+                "fooo", new SubscriptionCount(0, 1),
+                "bar", new SubscriptionCount(2, 0),
+                "zar", new SubscriptionCount(1, 0)
+            ),
+            consumerGroup.subscribedTopicNames()
+        );
+
+        // Compute subscribed topic names without changing anything.
+        assertEquals(
+            Map.of(
+                "foo", new SubscriptionCount(3, 1),
+                "fooo", new SubscriptionCount(0, 1),
+                "bar", new SubscriptionCount(2, 0),
+                "zar", new SubscriptionCount(1, 0)
+            ),
+            consumerGroup.computeSubscribedTopicNames(member3, member3)
+        );
+
+        // Compute subscribed topic names with removing the regex.
+        assertEquals(
+            Map.of(
+                "foo", new SubscriptionCount(3, 0),
+                "bar", new SubscriptionCount(2, 0),
+                "zar", new SubscriptionCount(1, 0)
+            ),
+            consumerGroup.computeSubscribedTopicNames(
+                member3,
+                new ConsumerGroupMember.Builder(member3)
+                    .setSubscribedTopicRegex("")
+                    .build()
+            )
+        );
+
+        // Compute subscribed topic names with removing the names.
+        assertEquals(
+            Map.of(
+                "foo", new SubscriptionCount(2, 1),
+                "fooo", new SubscriptionCount(0, 1),
+                "bar", new SubscriptionCount(2, 0),
+                "zar", new SubscriptionCount(1, 0)
+            ),
+            consumerGroup.computeSubscribedTopicNames(
+                member3,
+                new ConsumerGroupMember.Builder(member3)
+                    .setSubscribedTopicNames(Collections.emptyList())
+                    .build()
+            )
+        );
+
+        // Compute subscribed topic names with removing both.
+        assertEquals(
+            Map.of(
+                "foo", new SubscriptionCount(2, 0),
+                "bar", new SubscriptionCount(2, 0),
+                "zar", new SubscriptionCount(1, 0)
+            ),
+            consumerGroup.computeSubscribedTopicNames(
+                member3,
+                new ConsumerGroupMember.Builder(member3)
+                    .setSubscribedTopicNames(Collections.emptyList())
+                    .setSubscribedTopicRegex("")
+                    .build()
+            )
+        );
+    }
+
+    @Test
+    public void testCreateGroupTombstoneRecords() {
+        ConsumerGroup consumerGroup = createConsumerGroup("foo");
+        consumerGroup.setGroupEpoch(10);
+
+        ConsumerGroupMember member1 = new ConsumerGroupMember.Builder("member1")
+            .setMemberEpoch(10)
+            .setSubscribedTopicNames(Arrays.asList("foo", "bar", "zar"))
+            .setAssignedPartitions(mkAssignment(mkTopicAssignment(Uuid.randomUuid(), 0, 1, 2)))
+            .build();
+        consumerGroup.updateMember(member1);
+
+        ConsumerGroupMember member2 = new ConsumerGroupMember.Builder("member2")
+            .setMemberEpoch(10)
+            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+            .setAssignedPartitions(mkAssignment(mkTopicAssignment(Uuid.randomUuid(), 0, 1, 2)))
+            .build();
+        consumerGroup.updateMember(member2);
+
+        ConsumerGroupMember member3 = new ConsumerGroupMember.Builder("member3")
+            .setMemberEpoch(10)
+            .setSubscribedTopicRegex("foo*")
+            .setAssignedPartitions(mkAssignment(mkTopicAssignment(Uuid.randomUuid(), 0, 1, 2)))
+            .build();
+        consumerGroup.updateMember(member3);
+
+        consumerGroup.updateResolvedRegularExpression(
+            "foo*",
+            new ResolvedRegularExpression(
+                Set.of("foo", "fooo"),
+                10L,
+                12345L
+            )
+        );
+
+        consumerGroup.updateTargetAssignment("member1", new Assignment(mkAssignment(
+            mkTopicAssignment(Uuid.randomUuid(), 0, 1, 2))
+        ));
+
+        consumerGroup.updateTargetAssignment("member2", new Assignment(mkAssignment(
+            mkTopicAssignment(Uuid.randomUuid(), 0, 1, 2))
+        ));
+
+        consumerGroup.updateTargetAssignment("member3", new Assignment(mkAssignment(
+            mkTopicAssignment(Uuid.randomUuid(), 0, 1, 2))
+        ));
+
+        List<CoordinatorRecord> records = new ArrayList<>();
+        consumerGroup.createGroupTombstoneRecords(records);
+
+        assertUnorderedRecordsEquals(
+            List.of(
+                List.of(
+                    GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentTombstoneRecord("foo", "member1"),
+                    GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentTombstoneRecord("foo", "member2"),
+                    GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentTombstoneRecord("foo", "member3")
+                ),
+                List.of(
+                    GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentTombstoneRecord("foo", "member1"),
+                    GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentTombstoneRecord("foo", "member2"),
+                    GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentTombstoneRecord("foo", "member3")
+                ),
+                List.of(
+                    GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochTombstoneRecord("foo")
+                ),
+                List.of(
+                    GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord("foo", "member1"),
+                    GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord("foo", "member2"),
+                    GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord("foo", "member3")
+                ),
+                List.of(
+                    GroupCoordinatorRecordHelpers.newConsumerGroupRegularExpressionTombstone("foo", "foo*")
+                ),
+                List.of(
+                    GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataTombstoneRecord("foo")
+                ),
+                List.of(
+                    GroupCoordinatorRecordHelpers.newConsumerGroupEpochTombstoneRecord("foo")
+                )
+            ),
+            records
+        );
+    }
+
+    @Test
+    public void testCreateGroupTombstoneRecordsWithReplacedMember() {
+        ConsumerGroup consumerGroup = createConsumerGroup("foo");
+        consumerGroup.setGroupEpoch(10);
+
+        ConsumerGroupMember member1 = new ConsumerGroupMember.Builder("member1")
+            .setMemberEpoch(10)
+            .setSubscribedTopicNames(Arrays.asList("foo", "bar", "zar"))
+            .setAssignedPartitions(mkAssignment(mkTopicAssignment(Uuid.randomUuid(), 0, 1, 2)))
+            .build();
+        consumerGroup.updateMember(member1);
+
+        ConsumerGroupMember member2 = new ConsumerGroupMember.Builder("member2")
+            .setMemberEpoch(10)
+            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+            .setAssignedPartitions(mkAssignment(mkTopicAssignment(Uuid.randomUuid(), 0, 1, 2)))
+            .build();
+        consumerGroup.updateMember(member2);
+
+        ConsumerGroupMember member3 = new ConsumerGroupMember.Builder("member3")
+            .setMemberEpoch(10)
+            .setSubscribedTopicRegex("foo*")
+            .setAssignedPartitions(mkAssignment(mkTopicAssignment(Uuid.randomUuid(), 0, 1, 2)))
+            .build();
+        consumerGroup.updateMember(member3);
+
+        consumerGroup.updateResolvedRegularExpression(
+            "foo*",
+            new ResolvedRegularExpression(
+                Set.of("foo", "fooo"),
+                10L,
+                12345L
+            )
+        );
+
+        consumerGroup.updateTargetAssignment("member1", new Assignment(mkAssignment(
+            mkTopicAssignment(Uuid.randomUuid(), 0, 1, 2))
+        ));
+
+        consumerGroup.updateTargetAssignment("member2", new Assignment(mkAssignment(
+            mkTopicAssignment(Uuid.randomUuid(), 0, 1, 2))
+        ));
+
+        consumerGroup.updateTargetAssignment("member3", new Assignment(mkAssignment(
+            mkTopicAssignment(Uuid.randomUuid(), 0, 1, 2))
+        ));
+
+        List<CoordinatorRecord> records = new ArrayList<>();
+        consumerGroup.createGroupTombstoneRecordsWithReplacedMember(records, "member3", "member4");
+
+        assertUnorderedRecordsEquals(
+            List.of(
+                List.of(
+                    GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentTombstoneRecord("foo", "member1"),
+                    GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentTombstoneRecord("foo", "member2"),
+                    GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentTombstoneRecord("foo", "member4")
+                ),
+                List.of(
+                    GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentTombstoneRecord("foo", "member1"),
+                    GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentTombstoneRecord("foo", "member2"),
+                    GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentTombstoneRecord("foo", "member4")
+                ),
+                List.of(
+                    GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochTombstoneRecord("foo")
+                ),
+                List.of(
+                    GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord("foo", "member1"),
+                    GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord("foo", "member2"),
+                    GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord("foo", "member4")
+                ),
+                List.of(
+                    GroupCoordinatorRecordHelpers.newConsumerGroupRegularExpressionTombstone("foo", "foo*")
+                ),
+                List.of(
+                    GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataTombstoneRecord("foo")
+                ),
+                List.of(
+                    GroupCoordinatorRecordHelpers.newConsumerGroupEpochTombstoneRecord("foo")
+                )
+            ),
+            records
+        );
+    }
+
+    @Test
+    public void testSubscriptionType() {
+        assertEquals(
+            HOMOGENEOUS,
+            ConsumerGroup.subscriptionType(
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                0
+            )
+        );
+
+        assertEquals(
+            HOMOGENEOUS,
+            ConsumerGroup.subscriptionType(
+                Collections.emptyMap(),
+                Map.of("foo", new SubscriptionCount(5, 0)),
+                5
+            )
+        );
+
+        assertEquals(
+            HETEROGENEOUS,
+            ConsumerGroup.subscriptionType(
+                Collections.emptyMap(),
+                Map.of(
+                    "foo", new SubscriptionCount(4, 0),
+                    "bar", new SubscriptionCount(1, 0)
+                ),
+                5
+            )
+        );
+
+        assertEquals(
+            HOMOGENEOUS,
+            ConsumerGroup.subscriptionType(
+                Map.of("foo*", 5),
+                Map.of("foo", new SubscriptionCount(0, 1)),
+                5
+            )
+        );
+
+        assertEquals(
+            HOMOGENEOUS,
+            ConsumerGroup.subscriptionType(
+                Map.of("foo*", 5),
+                Map.of(
+                    "foo", new SubscriptionCount(0, 1),
+                    "food", new SubscriptionCount(0, 1)),
+                5
+            )
+        );
+
+        assertEquals(
+            HETEROGENEOUS,
+            ConsumerGroup.subscriptionType(
+                Map.of("foo*", 5),
+                Map.of("foo", new SubscriptionCount(1, 1)),
+                5
+            )
+        );
+
+        assertEquals(
+            HETEROGENEOUS,
+            ConsumerGroup.subscriptionType(
+                Map.of("foo*", 5),
+                Map.of(
+                    "foo", new SubscriptionCount(0, 1),
+                    "bar", new SubscriptionCount(1, 0)
+                ),
+                5
+            )
+        );
+
+        assertEquals(
+            HETEROGENEOUS,
+            ConsumerGroup.subscriptionType(
+                Map.of("foo*", 4, "bar*", 1),
+                Map.of(
+                    "foo", new SubscriptionCount(0, 1),
+                    "bar", new SubscriptionCount(0, 1)),
+                5
+            )
+        );
+    }
+
+    @Test
+    public void testComputeSubscribedRegularExpressions() {
+        ConsumerGroup consumerGroup = createConsumerGroup("foo");
+        consumerGroup.setGroupEpoch(10);
+
+        consumerGroup.updateMember(new ConsumerGroupMember.Builder("m1")
+            .setSubscribedTopicRegex("foo*")
+            .build());
+
+        consumerGroup.updateMember(new ConsumerGroupMember.Builder("m2")
+            .setSubscribedTopicRegex("foo*")
+            .build());
+
+        assertEquals(
+            Map.of("foo*", 3),
+            consumerGroup.computeSubscribedRegularExpressions(
+                null,
+                new ConsumerGroupMember.Builder("m3")
+                    .setSubscribedTopicRegex("foo*")
+                    .build()
+            )
+        );
+
+        assertEquals(
+            Map.of("foo*", 1),
+            consumerGroup.computeSubscribedRegularExpressions(
+                new ConsumerGroupMember.Builder("m2")
+                    .setSubscribedTopicRegex("foo*")
+                    .build(),
+                null
+            )
+        );
+
+        assertEquals(
+            Map.of("foo*", 2, "bar*", 1),
+            consumerGroup.computeSubscribedRegularExpressions(
+                null,
+                new ConsumerGroupMember.Builder("m4")
+                    .setSubscribedTopicRegex("bar*")
+                    .build()
+            )
+        );
+
+        assertEquals(
+            Map.of("foo*", 1, "bar*", 1),
+            consumerGroup.computeSubscribedRegularExpressions(
+                new ConsumerGroupMember.Builder("m2")
+                    .setSubscribedTopicRegex("foo*")
+                    .build(),
+                new ConsumerGroupMember.Builder("m2")
+                    .setSubscribedTopicRegex("bar*")
+                    .build()
+            )
         );
     }
 }

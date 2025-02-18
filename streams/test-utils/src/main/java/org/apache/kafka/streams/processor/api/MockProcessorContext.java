@@ -419,7 +419,7 @@ public class MockProcessorContext<KForward, VForward> implements ProcessorContex
     public List<CapturedForward<? extends KForward, ? extends VForward>> forwarded(final String childName) {
         final LinkedList<CapturedForward<? extends KForward, ? extends VForward>> result = new LinkedList<>();
         for (final CapturedForward<? extends KForward, ? extends VForward> capture : capturedForwards) {
-            if (!capture.childName().isPresent() || capture.childName().equals(Optional.of(childName))) {
+            if (capture.childName().isEmpty() || capture.childName().equals(Optional.of(childName))) {
                 result.add(capture);
             }
         }

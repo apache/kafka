@@ -29,6 +29,8 @@ public enum GroupVersion implements FeatureVersion {
 
     public static final String FEATURE_NAME = "group.version";
 
+    public static final GroupVersion LATEST_PRODUCTION = GV_1;
+
     private final short featureLevel;
     private final MetadataVersion bootstrapMetadataVersion;
     private final Map<String, Short> dependencies;

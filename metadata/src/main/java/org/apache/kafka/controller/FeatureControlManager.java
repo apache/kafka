@@ -19,15 +19,14 @@ package org.apache.kafka.controller;
 
 import org.apache.kafka.clients.admin.FeatureUpdate;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
-import org.apache.kafka.common.metadata.ZkMigrationStateRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.metadata.FinalizedControllerFeatures;
 import org.apache.kafka.metadata.VersionRange;
-import org.apache.kafka.metadata.migration.ZkMigrationState;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
-import org.apache.kafka.server.common.Features;
+import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
+import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.mutable.BoundedList;
 import org.apache.kafka.timeline.SnapshotRegistry;
@@ -138,11 +137,6 @@ public class FeatureControlManager {
     private final TimelineObject<MetadataVersion> metadataVersion;
 
     /**
-     * The current ZK migration state
-     */
-    private final TimelineObject<ZkMigrationState> migrationControlState;
-
-    /**
      * The minimum bootstrap version that we can't downgrade before.
      */
     private final MetadataVersion minimumBootstrapVersion;
@@ -165,7 +159,6 @@ public class FeatureControlManager {
         this.finalizedVersions = new TimelineHashMap<>(snapshotRegistry, 0);
         this.metadataVersion = new TimelineObject<>(snapshotRegistry, metadataVersion);
         this.minimumBootstrapVersion = minimumBootstrapVersion;
-        this.migrationControlState = new TimelineObject<>(snapshotRegistry, ZkMigrationState.NONE);
         this.clusterSupportDescriber = clusterSupportDescriber;
     }
 
@@ -198,10 +191,6 @@ public class FeatureControlManager {
 
     MetadataVersion metadataVersion() {
         return metadataVersion.get();
-    }
-
-    ZkMigrationState zkMigrationState() {
-        return migrationControlState.get();
     }
 
     private ApiError updateFeature(
@@ -251,9 +240,9 @@ public class FeatureControlManager {
         } else {
             // Validate dependencies for features that are not metadata.version
             try {
-                Features.validateVersion(
+                Feature.validateVersion(
                     // Allow unstable feature versions is true because the version range is already checked above.
-                    Features.featureFromName(featureName).fromFeatureLevel(newVersion, true),
+                    Feature.featureFromName(featureName).fromFeatureLevel(newVersion, true),
                     proposedUpdatedVersions);
             } catch (IllegalArgumentException e) {
                 return invalidUpdateVersion(featureName, newVersion, e.getMessage());
@@ -335,18 +324,11 @@ public class FeatureControlManager {
         Consumer<ApiMessageAndVersion> recordConsumer
     ) {
         MetadataVersion currentVersion = metadataVersion();
-        ZkMigrationState zkMigrationState = zkMigrationState();
         final MetadataVersion newVersion;
         try {
             newVersion = MetadataVersion.fromFeatureLevel(newVersionLevel);
         } catch (IllegalArgumentException e) {
             return invalidMetadataVersion(newVersionLevel, "Unknown metadata.version.");
-        }
-
-        // Don't allow metadata.version changes while we're migrating
-        if (zkMigrationState.inProgress()) {
-            return invalidMetadataVersion(newVersionLevel, "Unable to modify metadata.version while a " +
-                "ZK migration is in progress.");
         }
 
         // We cannot set a version earlier than IBP_3_3_IV0, since that was the first version that contained
@@ -427,20 +409,12 @@ public class FeatureControlManager {
         }
     }
 
-    public void replay(ZkMigrationStateRecord record) {
-        ZkMigrationState newState = ZkMigrationState.of(record.zkMigrationState());
-        ZkMigrationState previousState = migrationControlState.get();
-        if (previousState.equals(newState)) {
-            log.debug("Replayed a ZkMigrationStateRecord which did not alter the state from {}.",
-                    previousState);
-        } else {
-            migrationControlState.set(newState);
-            log.info("Replayed a ZkMigrationStateRecord changing the migration state from {} to {}.",
-                    previousState, newState);
-        }
-    }
-
     boolean isControllerId(int nodeId) {
         return quorumFeatures.isControllerId(nodeId);
+    }
+
+    boolean isElrFeatureEnabled() {
+        return latestFinalizedFeatures().versionOrDefault(EligibleLeaderReplicasVersion.FEATURE_NAME, (short) 0) >=
+            EligibleLeaderReplicasVersion.ELRV_1.featureLevel();
     }
 }

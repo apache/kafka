@@ -23,14 +23,18 @@
   "fields": [
       { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",
         "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
-      { "name": "ErrorCode", "type": "int16", "versions": "0+" },
+      { "name": "ErrorCode", "type": "int16", "versions": "0+",
+        "about": "The error code, or 0 if there was no error." },
       { "name": "UnknownStateFilters", "type": "[]string", "versions": "0+",
-        "about": "Set of state filters provided in the request which were unknown to the transaction coordinator" },
-      { "name": "TransactionStates", "type": "[]TransactionState", "versions": "0+", "fields": [
-        { "name": "TransactionalId", "type": "string", "versions": "0+", "entityType": "transactionalId" },
-        { "name": "ProducerId", "type": "int64", "versions": "0+", "entityType": "producerId" },
+        "about": "Set of state filters provided in the request which were unknown to the transaction coordinator." },
+      { "name": "TransactionStates", "type": "[]TransactionState", "versions": "0+",
+        "about": "The current state of the transaction for the transactional id.", "fields": [
+        { "name": "TransactionalId", "type": "string", "versions": "0+", "entityType": "transactionalId",
+          "about": "The transactional id." },
+        { "name": "ProducerId", "type": "int64", "versions": "0+", "entityType": "producerId",
+          "about": "The producer id." },
         { "name": "TransactionState", "type": "string", "versions": "0+",
-          "about": "The current transaction state of the producer" }
+          "about": "The current transaction state of the producer." }
     ]}
   ]
 }

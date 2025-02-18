@@ -29,7 +29,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.server.common.Features.PRODUCTION_FEATURES;
+import static org.apache.kafka.server.common.Feature.PRODUCTION_FEATURES;
 
 /**
  * A class that encapsulates the latest features supported by the Broker and also provides APIs to

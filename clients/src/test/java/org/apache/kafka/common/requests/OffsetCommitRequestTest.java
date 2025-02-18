@@ -92,7 +92,7 @@ public class OffsetCommitRequestTest {
 
         OffsetCommitRequest.Builder builder = new OffsetCommitRequest.Builder(data);
 
-        for (short version : ApiKeys.TXN_OFFSET_COMMIT.allVersions()) {
+        for (short version : ApiKeys.OFFSET_COMMIT.allVersions()) {
             OffsetCommitRequest request = builder.build(version);
             assertEquals(expectedOffsets, request.offsets());
 

@@ -16,11 +16,18 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.common.internals.Plugin;
+import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.runtime.distributed.ExtendedAssignment;
-import org.apache.kafka.connect.runtime.distributed.ExtendedWorkerState;
+import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.storage.AppliedConnectorConfig;
 import org.apache.kafka.connect.storage.ClusterConfigState;
+import org.apache.kafka.connect.transforms.Transformation;
+import org.apache.kafka.connect.transforms.predicates.Predicate;
 import org.apache.kafka.connect.util.ConnectorTaskId;
+
+import org.mockito.Mockito;
+import org.mockito.stubbing.OngoingStubbing;
 
 import java.util.AbstractMap.SimpleEntry;
 import java.util.Collections;
@@ -30,34 +37,13 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import static org.apache.kafka.connect.runtime.distributed.WorkerCoordinator.WorkerLoad;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class WorkerTestUtils {
-
-    public static WorkerLoad emptyWorkerLoad(String worker) {
-        return new WorkerLoad.Builder(worker).build();
-    }
-
-    public WorkerLoad workerLoad(String worker, int connectorStart, int connectorNum,
-                                  int taskStart, int taskNum) {
-        return new WorkerLoad.Builder(worker).with(
-                newConnectors(connectorStart, connectorStart + connectorNum),
-                newTasks(taskStart, taskStart + taskNum)).build();
-    }
-
-    public static List<String> newConnectors(int start, int end) {
-        return IntStream.range(start, end)
-                .mapToObj(i -> "connector" + i)
-                .collect(Collectors.toList());
-    }
-
-    public static List<ConnectorTaskId> newTasks(int start, int end) {
-        return IntStream.range(start, end)
-                .mapToObj(i -> new ConnectorTaskId("task", i))
-                .collect(Collectors.toList());
-    }
 
     public static ClusterConfigState clusterConfigState(long offset,
                                                         int connectorNum,
@@ -80,24 +66,6 @@ public class WorkerTestUtils {
                 appliedConnectorConfigs,
                 Collections.emptySet(),
                 Collections.emptySet());
-    }
-
-    public static Map<String, ExtendedWorkerState> memberConfigs(String givenLeader,
-                                                                 long givenOffset,
-                                                                 Map<String, ExtendedAssignment> givenAssignments) {
-        return givenAssignments.entrySet().stream()
-                .collect(Collectors.toMap(
-                    Map.Entry::getKey,
-                    e -> new ExtendedWorkerState(expectedLeaderUrl(givenLeader), givenOffset, e.getValue())));
-    }
-
-    public static Map<String, ExtendedWorkerState> memberConfigs(String givenLeader,
-                                                                 long givenOffset,
-                                                                 int start,
-                                                                 int connectorNum) {
-        return IntStream.range(start, connectorNum + 1)
-                .mapToObj(i -> new SimpleEntry<>("worker" + i, new ExtendedWorkerState(expectedLeaderUrl(givenLeader), givenOffset, null)))
-                .collect(Collectors.toMap(SimpleEntry::getKey, SimpleEntry::getValue));
     }
 
     public static Map<String, Integer> connectorTaskCounts(int start,
@@ -197,5 +165,39 @@ public class WorkerTestUtils {
 
         assertEquals(expectedDelay, assignment.delay(),
                 "Wrong rebalance delay in " + assignment);
+    }
+
+    public static <T, R extends ConnectRecord<R>> TransformationChain<T, R> getTransformationChain(
+            RetryWithToleranceOperator<T> toleranceOperator,
+            List<Object> results) {
+        Transformation<R> transformation = mock(Transformation.class);
+        OngoingStubbing<R> stub = when(transformation.apply(any()));
+        for (Object result: results) {
+            if (result instanceof Exception) {
+                stub = stub.thenThrow((Exception) result);
+            } else {
+                stub = stub.thenReturn((R) result);
+            }
+        }
+        return buildTransformationChain(transformation, toleranceOperator);
+    }
+
+    @SuppressWarnings("unchecked")
+    public static <T, R extends ConnectRecord<R>> TransformationChain<T, R> buildTransformationChain(
+            Transformation<R> transformation,
+            RetryWithToleranceOperator<T> toleranceOperator) {
+        Predicate<R> predicate = mock(Predicate.class);
+        when(predicate.test(any())).thenReturn(true);
+        Plugin<Predicate<R>> predicatePlugin = mock(Plugin.class);
+        when(predicatePlugin.get()).thenReturn(predicate);
+        Plugin<Transformation<R>> transformationPlugin = mock(Plugin.class);
+        when(transformationPlugin.get()).thenReturn(transformation);
+        TransformationStage<R> stage = new TransformationStage<>(
+                predicatePlugin,
+                false,
+                transformationPlugin);
+        TransformationChain<T, R> realTransformationChainRetriableException = new TransformationChain(List.of(stage), toleranceOperator);
+        TransformationChain<T, R> transformationChainRetriableException = Mockito.spy(realTransformationChainRetriableException);
+        return transformationChainRetriableException;
     }
 }

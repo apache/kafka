@@ -22,6 +22,8 @@ import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.DeleteGroupsResponseData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData;
+import org.apache.kafka.common.message.DescribeShareGroupOffsetsRequestData;
+import org.apache.kafka.common.message.DescribeShareGroupOffsetsResponseData;
 import org.apache.kafka.common.message.HeartbeatRequestData;
 import org.apache.kafka.common.message.HeartbeatResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
@@ -257,6 +259,20 @@ public interface GroupCoordinator {
     );
 
     /**
+     * Describe the Share Group Offsets for a given group.
+     *
+     * @param context           The request context
+     * @param request           The DescribeShareGroupOffsetsRequestGroup request.
+     *
+     * @return  A future yielding the results.
+     *          The error codes of the response are set to indicate the errors occurred during the execution.
+     */
+    CompletableFuture<DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup> describeShareGroupOffsets(
+        RequestContext context,
+        DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup request
+    );
+
+    /**
      * Commit offsets for a given Group.
      *
      * @param context           The request context.
@@ -339,11 +355,18 @@ public interface GroupCoordinator {
     /**
      * Commit or abort the pending transactional offsets for the given partitions.
      *
+     * This method is only used by the old group coordinator. Internally, the old
+     * group coordinator completes the transaction asynchronously in order to
+     * avoid deadlocks. Hence, this method returns a future that the caller
+     * can wait on.
+     *
      * @param producerId        The producer id.
      * @param partitions        The partitions.
      * @param transactionResult The result of the transaction.
+     *
+     * @return A future yielding the result.
      */
-    void onTransactionCompleted(
+    CompletableFuture<Void> onTransactionCompleted(
         long producerId,
         Iterable<TopicPartition> partitions,
         TransactionResult transactionResult

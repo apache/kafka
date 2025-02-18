@@ -45,7 +45,7 @@ class RackAwareAutoTopicCreationTest extends KafkaServerTestHarness with RackAwa
 
   def generateConfigs =
     (0 until numServers) map { node =>
-      TestUtils.createBrokerConfig(node, null, enableControlledShutdown = false, rack = Some((node / 2).toString))
+      TestUtils.createBrokerConfig(node, enableControlledShutdown = false, rack = Some((node / 2).toString))
     } map (KafkaConfig.fromProps(_, overridingProps))
 
   private val topic = "topic"

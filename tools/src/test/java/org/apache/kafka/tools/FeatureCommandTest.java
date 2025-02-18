@@ -17,17 +17,15 @@
 package org.apache.kafka.tools;
 
 import org.apache.kafka.clients.admin.MockAdminClient;
-import org.apache.kafka.common.test.api.ClusterInstance;
+import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTest;
-import org.apache.kafka.common.test.api.ClusterTestExtensions;
 import org.apache.kafka.common.test.api.Type;
-import org.apache.kafka.server.common.Features;
+import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.MetadataVersion;
 
 import net.sourceforge.argparse4j.inf.Namespace;
 
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -46,10 +44,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@ExtendWith(value = ClusterTestExtensions.class)
 public class FeatureCommandTest {
 
-    private final List<Features> testingFeatures = Arrays.stream(Features.FEATURES).collect(Collectors.toList());
+    private final List<Feature> testingFeatures = Arrays.stream(Feature.FEATURES).collect(Collectors.toList());
 
     @ClusterTest(types = {Type.KRAFT}, metadataVersion = MetadataVersion.IBP_3_3_IV1)
     public void testDescribeWithKRaft(ClusterInstance cluster) {
@@ -67,7 +64,7 @@ public class FeatureCommandTest {
         assertEquals("Feature: kraft.version\tSupportedMinVersion: 0\t" +
                 "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(2)));
         assertEquals("Feature: metadata.version\tSupportedMinVersion: 3.0-IV1\t" +
-                "SupportedMaxVersion: 4.0-IV3\tFinalizedVersionLevel: 3.3-IV1\t", outputWithoutEpoch(features.get(3)));
+                "SupportedMaxVersion: 4.1-IV0\tFinalizedVersionLevel: 3.3-IV1\t", outputWithoutEpoch(features.get(3)));
         assertEquals("Feature: transaction.version\tSupportedMinVersion: 0\t" +
                 "SupportedMaxVersion: 2\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(4)));
     }
@@ -89,7 +86,7 @@ public class FeatureCommandTest {
         assertEquals("Feature: kraft.version\tSupportedMinVersion: 0\t" +
                 "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(2)));
         assertEquals("Feature: metadata.version\tSupportedMinVersion: 3.0-IV1\t" +
-                "SupportedMaxVersion: 4.0-IV3\tFinalizedVersionLevel: 3.7-IV0\t", outputWithoutEpoch(features.get(3)));
+                "SupportedMaxVersion: 4.1-IV0\tFinalizedVersionLevel: 3.7-IV0\t", outputWithoutEpoch(features.get(3)));
         assertEquals("Feature: transaction.version\tSupportedMinVersion: 0\t" +
                 "SupportedMaxVersion: 2\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(4)));
     }
@@ -117,7 +114,7 @@ public class FeatureCommandTest {
         );
         // Change expected message to reflect possible MetadataVersion range 1-N (N increases when adding a new version)
         assertEquals("Could not disable metadata.version. The update failed for all features since the following " +
-                "feature had an error: Invalid update version 0 for feature metadata.version. Local controller 3000 only supports versions 1-25", commandOutput);
+                "feature had an error: Invalid update version 0 for feature metadata.version. Local controller 3000 only supports versions 1-26", commandOutput);
 
         commandOutput = ToolsTestUtils.captureStandardOut(() ->
                 assertEquals(1, FeatureCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(),
@@ -390,8 +387,8 @@ public class FeatureCommandTest {
         assertTrue(versionMappingOutput.contains("metadata.version=" + metadataVersion.featureLevel() + " (" + metadataVersion.version() + ")"),
             "Output did not contain expected Metadata Version: " + versionMappingOutput);
 
-        for (Features feature : Features.values()) {
-            int featureLevel = feature.defaultValue(metadataVersion);
+        for (Feature feature : Feature.values()) {
+            int featureLevel = feature.defaultLevel(metadataVersion);
             assertTrue(versionMappingOutput.contains(feature.featureName() + "=" + featureLevel),
                 "Output did not contain expected feature mapping: " + versionMappingOutput);
         }
@@ -414,8 +411,8 @@ public class FeatureCommandTest {
         assertTrue(versionMappingOutput.contains("metadata.version=" + metadataVersion.featureLevel() + " (" + metadataVersion.version() + ")"),
             "Output did not contain expected Metadata Version: " + versionMappingOutput);
 
-        for (Features feature : Features.values()) {
-            int featureLevel = feature.defaultValue(metadataVersion);
+        for (Feature feature : Feature.values()) {
+            int featureLevel = feature.defaultLevel(metadataVersion);
             assertTrue(versionMappingOutput.contains(feature.featureName() + "=" + featureLevel),
                 "Output did not contain expected feature mapping: " + versionMappingOutput);
         }
