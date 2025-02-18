@@ -37,8 +37,7 @@ public class ShareConsumerConfigTest {
         verifyUnsupportedShareConsumerConfig(Map.of(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, "org.apache.kafka.clients.consumer.StickyAssignor"));
         verifyUnsupportedShareConsumerConfig(Map.of(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, "org.apache.kafka.clients.consumer.ConsumerInterceptor"));
         verifyUnsupportedShareConsumerConfig(Map.of(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "3000"));
-        verifyUnsupportedShareConsumerConfig(Map.of(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 3000));
-        verifyUnsupportedShareConsumerConfig(Map.of(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 3000));
+        verifyUnsupportedShareConsumerConfig(Map.of(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "3000"));
         verifyUnsupportedShareConsumerConfig(Map.of(ConsumerConfig.GROUP_PROTOCOL_CONFIG, "classic"));
         verifyUnsupportedShareConsumerConfig(Map.of(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG, "null"));
     }

@@ -155,7 +155,7 @@ public class AbstractConfig {
      * @return a map of updates that should be applied to the configuration (will be validated to prevent bad updates)
      */
     protected Map<String, Object> preProcessParsedConfig(Map<String, Object> parsedValues) {
-        return Collections.emptyMap();
+        return Map.of();
     }
 
     /**

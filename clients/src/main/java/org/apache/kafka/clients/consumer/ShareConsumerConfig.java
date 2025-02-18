@@ -30,7 +30,7 @@ public class ShareConsumerConfig extends ConsumerConfig {
     /**
      * A list of configuration keys not supported for SHARE consumer.
      */
-    private static final List<String> SHARE_PROTOCOL_UNSUPPORTED_CONFIGS = List.of(
+    private static final List<String> SHARE_GROUP_UNSUPPORTED_CONFIGS = List.of(
             ConsumerConfig.AUTO_OFFSET_RESET_CONFIG,
             ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG,
             ConsumerConfig.GROUP_INSTANCE_ID_CONFIG,
@@ -63,7 +63,7 @@ public class ShareConsumerConfig extends ConsumerConfig {
 
     private void checkUnsupportedConfigs(Map<String, Object> parsedValues) {
         List<String> invalidConfigs = new ArrayList<>();
-        SHARE_PROTOCOL_UNSUPPORTED_CONFIGS.forEach(configName -> {
+        SHARE_GROUP_UNSUPPORTED_CONFIGS.forEach(configName -> {
             if (parsedValues.containsKey(configName)) {
                 invalidConfigs.add(configName);
             }
