@@ -2227,14 +2227,14 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         val expectedOperations = AclEntry.supportedOperations(ResourceType.GROUP)
         assertEquals(expectedOperations, testGroupDescription.authorizedOperations())
 
-          // Test that the fake group throws GroupIdNotFoundException
-          assertTrue(describeWithFakeGroupResult.describedGroups().containsKey(fakeGroupId))
-          assertFutureThrows(classOf[GroupIdNotFoundException],
-            describeWithFakeGroupResult.describedGroups().get(fakeGroupId), s"Group $fakeGroupId not found.")
+        // Test that the fake group throws GroupIdNotFoundException
+        assertTrue(describeWithFakeGroupResult.describedGroups().containsKey(fakeGroupId))
+        assertFutureThrows(classOf[GroupIdNotFoundException],
+          describeWithFakeGroupResult.describedGroups().get(fakeGroupId), s"Group $fakeGroupId not found.")
 
-          // Test that all() also throws GroupIdNotFoundException
-          assertFutureThrows(classOf[GroupIdNotFoundException],
-            describeWithFakeGroupResult.all(), s"Group $fakeGroupId not found.")
+        // Test that all() also throws GroupIdNotFoundException
+        assertFutureThrows(classOf[GroupIdNotFoundException],
+          describeWithFakeGroupResult.all(), s"Group $fakeGroupId not found.")
 
         val testTopicPart0 = new TopicPartition(testTopicName, 0)
 

@@ -1125,8 +1125,7 @@ public class KafkaAdminClientTest {
             time.sleep(defaultApiTimeout + 1);
 
             assertNull(result.values().get("topic1").get());
-            ThrottlingQuotaExceededException e = TestUtils.assertFutureThrows(ThrottlingQuotaExceededException.class, result.values().get("topic2")
-            );
+            ThrottlingQuotaExceededException e = TestUtils.assertFutureThrows(ThrottlingQuotaExceededException.class, result.values().get("topic2"));
             assertEquals(0, e.throttleTimeMs());
             TestUtils.assertFutureThrows(TopicExistsException.class, result.values().get("topic3"));
         }
@@ -1152,8 +1151,7 @@ public class KafkaAdminClientTest {
                 new CreateTopicsOptions().retryOnQuotaViolation(false));
 
             assertNull(result.values().get("topic1").get());
-            ThrottlingQuotaExceededException e = TestUtils.assertFutureThrows(ThrottlingQuotaExceededException.class, result.values().get("topic2")
-            );
+            ThrottlingQuotaExceededException e = TestUtils.assertFutureThrows(ThrottlingQuotaExceededException.class, result.values().get("topic2"));
             assertEquals(1000, e.throttleTimeMs());
             TestUtils.assertFutureThrows(TopicExistsException.class, result.values().get("topic3"));
         }
@@ -1358,8 +1356,7 @@ public class KafkaAdminClientTest {
             time.sleep(defaultApiTimeout + 1);
 
             assertNull(result.topicNameValues().get("topic1").get());
-            ThrottlingQuotaExceededException e = TestUtils.assertFutureThrows(ThrottlingQuotaExceededException.class, result.topicNameValues().get("topic2")
-            );
+            ThrottlingQuotaExceededException e = TestUtils.assertFutureThrows(ThrottlingQuotaExceededException.class, result.topicNameValues().get("topic2"));
             assertEquals(0, e.throttleTimeMs());
             TestUtils.assertFutureThrows(TopicExistsException.class, result.topicNameValues().get("topic3"));
 
@@ -1395,8 +1392,7 @@ public class KafkaAdminClientTest {
             time.sleep(defaultApiTimeout + 1);
 
             assertNull(resultIds.topicIdValues().get(topicId1).get());
-            e = TestUtils.assertFutureThrows(ThrottlingQuotaExceededException.class, resultIds.topicIdValues().get(topicId2)
-            );
+            e = TestUtils.assertFutureThrows(ThrottlingQuotaExceededException.class, resultIds.topicIdValues().get(topicId2));
             assertEquals(0, e.throttleTimeMs());
             TestUtils.assertFutureThrows(UnknownTopicIdException.class, resultIds.topicIdValues().get(topicId3));
         }
@@ -1419,8 +1415,7 @@ public class KafkaAdminClientTest {
                 new DeleteTopicsOptions().retryOnQuotaViolation(false));
 
             assertNull(result.topicNameValues().get("topic1").get());
-            ThrottlingQuotaExceededException e = TestUtils.assertFutureThrows(ThrottlingQuotaExceededException.class, result.topicNameValues().get("topic2")
-            );
+            ThrottlingQuotaExceededException e = TestUtils.assertFutureThrows(ThrottlingQuotaExceededException.class, result.topicNameValues().get("topic2"));
             assertEquals(1000, e.throttleTimeMs());
             TestUtils.assertFutureThrows(TopicExistsException.class, result.topicNameValues().get("topic3"));
 
@@ -1440,8 +1435,7 @@ public class KafkaAdminClientTest {
                     new DeleteTopicsOptions().retryOnQuotaViolation(false));
 
             assertNull(resultIds.topicIdValues().get(topicId1).get());
-            e = TestUtils.assertFutureThrows(ThrottlingQuotaExceededException.class, resultIds.topicIdValues().get(topicId2)
-            );
+            e = TestUtils.assertFutureThrows(ThrottlingQuotaExceededException.class, resultIds.topicIdValues().get(topicId2));
             assertEquals(1000, e.throttleTimeMs());
             TestUtils.assertFutureThrows(UnknownTopicIdException.class, resultIds.topicIdValues().get(topicId3));
         }
@@ -1493,7 +1487,7 @@ public class KafkaAdminClientTest {
 
             Map<String, KafkaFuture<Void>> createFutures = env.adminClient().createTopics(newTopics).values();
             for (String sillyTopicName : sillyTopicNames) {
-                TestUtils.assertFutureThrows(InvalidTopicException.class, createFutures .get(sillyTopicName));
+                TestUtils.assertFutureThrows(InvalidTopicException.class, createFutures.get(sillyTopicName));
             }
             assertEquals(0, env.kafkaClient().inFlightRequestCount());
         }
@@ -1891,8 +1885,7 @@ public class KafkaAdminClientTest {
             TestUtils.assertFutureThrows(SecurityDisabledException.class, env.adminClient().describeAcls(FILTER2).values());
 
             // Test a call where we supply an invalid filter.
-            TestUtils.assertFutureThrows(InvalidRequestException.class, env.adminClient().describeAcls(UNKNOWN_FILTER).values()
-            );
+            TestUtils.assertFutureThrows(InvalidRequestException.class, env.adminClient().describeAcls(UNKNOWN_FILTER).values());
         }
     }
 
@@ -2625,8 +2618,7 @@ public class KafkaAdminClientTest {
             time.sleep(defaultApiTimeout + 1);
 
             assertNull(result.values().get("topic1").get());
-            ThrottlingQuotaExceededException e = TestUtils.assertFutureThrows(ThrottlingQuotaExceededException.class, result.values().get("topic2")
-            );
+            ThrottlingQuotaExceededException e = TestUtils.assertFutureThrows(ThrottlingQuotaExceededException.class, result.values().get("topic2"));
             assertEquals(0, e.throttleTimeMs());
             TestUtils.assertFutureThrows(TopicExistsException.class, result.values().get("topic3"));
         }
@@ -2653,8 +2645,7 @@ public class KafkaAdminClientTest {
                 counts, new CreatePartitionsOptions().retryOnQuotaViolation(false));
 
             assertNull(result.values().get("topic1").get());
-            ThrottlingQuotaExceededException e = TestUtils.assertFutureThrows(ThrottlingQuotaExceededException.class, result.values().get("topic2")
-            );
+            ThrottlingQuotaExceededException e = TestUtils.assertFutureThrows(ThrottlingQuotaExceededException.class, result.values().get("topic2"));
             assertEquals(1000, e.throttleTimeMs());
             TestUtils.assertFutureThrows(TopicExistsException.class, result.values().get("topic3"));
         }
@@ -2927,14 +2918,10 @@ public class KafkaAdminClientTest {
                     .setErrorMessage(errorMessage)));
 
             final DescribeClusterResult result = env.adminClient().describeCluster();
-            TestUtils.assertFutureThrows(InvalidRequestException.class, result.clusterId(),
-                    errorMessage);
-            TestUtils.assertFutureThrows(InvalidRequestException.class, result.controller(),
-                    errorMessage);
-            TestUtils.assertFutureThrows(InvalidRequestException.class, result.nodes(),
-                    errorMessage);
-            TestUtils.assertFutureThrows(InvalidRequestException.class, result.authorizedOperations(),
-                    errorMessage);
+            TestUtils.assertFutureThrows(InvalidRequestException.class, result.clusterId(), errorMessage);
+            TestUtils.assertFutureThrows(InvalidRequestException.class, result.controller(), errorMessage);
+            TestUtils.assertFutureThrows(InvalidRequestException.class, result.nodes(), errorMessage);
+            TestUtils.assertFutureThrows(InvalidRequestException.class, result.authorizedOperations(), errorMessage);
         }
     }
 
