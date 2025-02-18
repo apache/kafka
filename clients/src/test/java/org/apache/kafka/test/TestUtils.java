@@ -583,7 +583,7 @@ public class TestUtils {
 
     /**
      * Assert that a future raises an expected exception cause type.
-     * This method will wait for the future to complete or timeout(15000 milliseconds) after a default period.
+     * This method will wait for the future to complete or timeout(15000 milliseconds).
      *
      * @param future The future to await
      * @param exceptionCauseClass Class of the expected exception cause
@@ -605,7 +605,7 @@ public class TestUtils {
         } catch (TimeoutException e) {
             fail("Future is not completed within " + DEFAULT_MAX_WAIT_MS + " milliseconds.");
         } catch (Exception e) {
-            fail("Unexpected error happened: " + e);
+            fail("Expected " + exceptionCauseClass.getSimpleName() + ", but got " + e.getClass().getSimpleName());
         }
         return null;
     }
