@@ -646,6 +646,7 @@ class RemoteIndexCacheTest {
     // Reduce cache capacity to only store 1 entry and check two entries are marked as deleted.
     cache.resizeCacheSize(1 * estimateEntryBytesSize)
     assertCacheSize(1)
+    // After resize, we need to check an entry is deleted from cache and exist segmentMetadata
     val entryInCache = entries.filterNot(evictedEntry.contains(_))
     val existSegmentMetadata = metadataList.filterNot(evictedSegmentMetadata.contains(_))
     verifyEntryIsEvicted(existSegmentMetadata, entryInCache, 1)
