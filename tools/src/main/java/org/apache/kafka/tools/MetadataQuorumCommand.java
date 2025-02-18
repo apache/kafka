@@ -266,13 +266,13 @@ public class MetadataQuorumCommand {
 
         System.out.println(
             "ClusterId:              " + clusterId +
-            "\nLeaderId:               " + quorumInfo.leaderId() +
-            "\nLeaderEpoch:            " + quorumInfo.leaderEpoch() +
-            "\nHighWatermark:          " + quorumInfo.highWatermark() +
-            "\nMaxFollowerLag:         " + maxFollowerLag +
-            "\nMaxFollowerLagTimeMs:   " + maxFollowerLagTimeMs +
-            "\nCurrentVoters:          " + printVoterState(quorumInfo) +
-            "\nCurrentObservers:       " + printObserverState(quorumInfo)
+                "\nLeaderId:               " + quorumInfo.leaderId() +
+                "\nLeaderEpoch:            " + quorumInfo.leaderEpoch() +
+                "\nHighWatermark:          " + quorumInfo.highWatermark() +
+                "\nMaxFollowerLag:         " + maxFollowerLag +
+                "\nMaxFollowerLagTimeMs:   " + maxFollowerLagTimeMs +
+                "\nCurrentVoters:          " + printVoterState(quorumInfo) +
+                "\nCurrentObservers:       " + printObserverState(quorumInfo)
         );
     }
 
@@ -373,7 +373,7 @@ public class MetadataQuorumCommand {
             "configuration file?");
     }
 
-    static Uuid getMetadataDirectoryId(String metadataDirectory) throws Exception {
+    static Uuid getMetadataDirectoryId(String metadataDirectory) throws TerseException {
         MetaPropertiesEnsemble ensemble = new MetaPropertiesEnsemble.Loader().
             addLogDirs(Collections.singletonList(metadataDirectory)).
             addMetadataLogDir(metadataDirectory).
@@ -390,7 +390,7 @@ public class MetadataQuorumCommand {
 
     static Set<RaftVoterEndpoint> getControllerAdvertisedListeners(
         Properties props
-    ) throws Exception {
+    ) throws TerseException {
         Map<String, Endpoint> listeners = new HashMap<>();
         SocketServerConfigs.listenerListToEndPoints(
             props.getOrDefault(SocketServerConfigs.LISTENERS_CONFIG, "").toString(),
@@ -404,7 +404,7 @@ public class MetadataQuorumCommand {
         }
         LinkedHashSet<RaftVoterEndpoint> results = new LinkedHashSet<>();
         for (String listenerName : props.getProperty(
-                KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG).split(",")) {
+            KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG).split(",")) {
             listenerName = ListenerName.normalised(listenerName).value();
             Endpoint endpoint = listeners.get(listenerName);
             if (endpoint == null) {
@@ -412,8 +412,8 @@ public class MetadataQuorumCommand {
                     listenerName);
             }
             results.add(new RaftVoterEndpoint(endpoint.listenerName().get(),
-                    endpoint.host() == null ? "localhost" : endpoint.host(),
-                    endpoint.port()));
+                endpoint.host() == null ? "localhost" : endpoint.host(),
+                endpoint.port()));
         }
         return results;
     }
