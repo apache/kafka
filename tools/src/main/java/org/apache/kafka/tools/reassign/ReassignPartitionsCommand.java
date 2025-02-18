@@ -38,7 +38,6 @@ import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.metadata.placement.ClusterDescriber;
-import org.apache.kafka.metadata.placement.PartitionAssignment;
 import org.apache.kafka.metadata.placement.PlacementSpec;
 import org.apache.kafka.metadata.placement.ReplicaPlacer;
 import org.apache.kafka.metadata.placement.StripedReplicaPlacer;
@@ -613,8 +612,8 @@ public class ReassignPartitionsCommand {
                         }
                     });
 
-            for (PartitionAssignment partitionAssignment : topicAssignment.assignments()) {
-                proposedAssignments.put(new TopicPartition(topic, partitionNum), partitionAssignment.replicas());
+            for (int i = 0; i < topicAssignment.assignments().size(); i++) {
+                proposedAssignments.put(new TopicPartition(topic, i), topicAssignment.assignments().get(i).replicas());
             }
         });
         return proposedAssignments;
