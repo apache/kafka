@@ -2349,13 +2349,13 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         var deleteResult = client.deleteConsumerGroups(Seq(testGroupId, fakeGroupId).asJava)
         assertEquals(2, deleteResult.deletedGroups().size())
 
-          // Deleting the fake group ID should get GroupIdNotFoundException.
-          assertTrue(deleteResult.deletedGroups().containsKey(fakeGroupId))
-          assertFutureThrows(classOf[GroupIdNotFoundException], deleteResult.deletedGroups().get(fakeGroupId))
+        // Deleting the fake group ID should get GroupIdNotFoundException.
+        assertTrue(deleteResult.deletedGroups().containsKey(fakeGroupId))
+        assertFutureThrows(classOf[GroupIdNotFoundException], deleteResult.deletedGroups().get(fakeGroupId))
 
-          // Deleting the real group ID should get GroupNotEmptyException
-          assertTrue(deleteResult.deletedGroups().containsKey(testGroupId))
-          assertFutureThrows(classOf[GroupNotEmptyException], deleteResult.deletedGroups().get(testGroupId))
+        // Deleting the real group ID should get GroupNotEmptyException
+        assertTrue(deleteResult.deletedGroups().containsKey(testGroupId))
+        assertFutureThrows(classOf[GroupNotEmptyException], deleteResult.deletedGroups().get(testGroupId))
 
         // Stop the consumer threads and close consumers to prevent member rejoining.
         backgroundConsumerSet.stop()
