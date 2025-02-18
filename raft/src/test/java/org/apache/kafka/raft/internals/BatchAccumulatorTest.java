@@ -103,6 +103,35 @@ class BatchAccumulatorTest {
     }
 
     @Test
+    public void testKRaftVersionRecordWritten() {
+        int leaderEpoch = 17;
+        long baseOffset = 0;
+        int lingerMs = 50;
+        int maxBatchSize = 512;
+
+        ByteBuffer buffer = ByteBuffer.allocate(maxBatchSize);
+        Mockito.when(memoryPool.tryAllocate(maxBatchSize))
+                .thenReturn(buffer);
+
+        BatchAccumulator<String> acc = buildAccumulator(
+                leaderEpoch,
+                baseOffset,
+                lingerMs,
+                maxBatchSize
+        );
+
+        acc.appendKRaftVersionRecord(new KRaftVersionRecord(), time.milliseconds());
+        assertTrue(acc.needsDrain(time.milliseconds()));
+
+        List<BatchAccumulator.CompletedBatch<String>> batches = acc.drain();
+        assertEquals(1, batches.size());
+
+        BatchAccumulator.CompletedBatch<String> batch = batches.get(0);
+        batch.release();
+        Mockito.verify(memoryPool).release(buffer);
+    }
+
+    @Test
     public void testForceDrain() {
         int leaderEpoch = 17;
         long baseOffset = 157;

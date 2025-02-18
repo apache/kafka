@@ -19,6 +19,7 @@ package org.apache.kafka.raft.internals;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.RecordBatchTooLargeException;
 import org.apache.kafka.common.memory.MemoryPool;
+import org.apache.kafka.common.message.KRaftVersionRecord;
 import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.message.SnapshotFooterRecord;
 import org.apache.kafka.common.message.SnapshotHeaderRecord;
@@ -354,6 +355,27 @@ public class BatchAccumulator<T> implements Closeable {
         );
     }
 
+    /**
+     * Append a {@link KRaftVersionRecord} record to the batch
+     *
+     * @param kraftVersionRecord The message to append
+     * @param currentTimestamp The current time in milliseconds
+     * @throws IllegalStateException on failure to allocate a buffer for the record
+     */
+    public void appendKRaftVersionRecord(
+            KRaftVersionRecord kraftVersionRecord,
+            long currentTimestamp
+    ) {
+        appendControlMessages((baseOffset, epoch, compression, buffer) ->
+                MemoryRecords.withKRaftVersionRecord(
+                        baseOffset,
+                        currentTimestamp,
+                        epoch,
+                        buffer,
+                        kraftVersionRecord
+                )
+        );
+    }
 
     /**
      * Append a {@link SnapshotHeaderRecord} record to the batch
