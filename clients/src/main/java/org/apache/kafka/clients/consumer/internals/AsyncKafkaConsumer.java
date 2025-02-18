@@ -755,7 +755,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 applicationEventHandler.add(event);
                 // Wait for reconciliation and auto-commit to be triggered, to ensure all commit requests
                 // retrieve the positions to commit before proceeding with fetching new records
-                ConsumerUtils.getResult(event.reconcileAndAutoCommit());
+                ConsumerUtils.getResult(event.reconcileAndAutoCommit(), defaultApiTimeoutMs.toMillis());
 
                 // We must not allow wake-ups between polling for fetches and returning the records.
                 // If the polled fetches are not empty the consumed position has already been updated in the polling
@@ -853,7 +853,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
         // This blocks until the background thread retrieves allConsumed positions to commit if none were explicitly specified.
         // This operation will ensure that the offsets to commit are not affected by fetches which may start after this
-        ConsumerUtils.getResult(commitEvent.offsetsReady());
+        ConsumerUtils.getResult(commitEvent.offsetsReady(), defaultApiTimeoutMs.toMillis());
         return commitEvent.future();
     }
 
