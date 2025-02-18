@@ -479,7 +479,7 @@ public class SubscriptionSendProcessorSupplierTest {
     }
 
     @Test
-    public void biFunctionLeftJoinShouldNotPropagateDeletionOfAPrimaryKey() {
+    public void biFunctionLeftJoinShouldPropagateDeletionOfAPrimaryKey() {
         final MockInternalProcessorContext<String, SubscriptionWrapper<String>> context = new MockInternalProcessorContext<>();
         biFunctionLeftJoinProcessor.init(context);
         context.setRecordMetadata("topic", 0, 0);
