@@ -24,10 +24,11 @@ Usage:
         Get detailed description of each option
 
     Example command:-
-        docker_build_test.py <image_name> --image-tag <image_tag> --image-type <image_type> --kafka-url <kafka_url>
+        docker_build_test.py <image_name> --image-tag <image_tag> --image-type <image_type> --kafka-url <kafka_url> --skip_signing <skip_signing>
 
         This command will build an image with <image_name> as image name, <image_tag> as image_tag (it will be latest by default),
         <image_type> as image type (jvm by default), <kafka_url> for the kafka inside the image and run tests on the image.
+        <skip_signing> controls GPG signature verification, default is false.
         -b can be passed as additional argument if you just want to build the image.
         -t can be passed if you just want to run tests on the image.
 """
@@ -41,9 +42,10 @@ from common import execute, build_docker_image_runner
 import tempfile
 import os
 
-def build_docker_image(image, tag, kafka_url, image_type):
+def build_docker_image(image, tag, kafka_url, image_type, skip_signing="false"):
     image = f'{image}:{tag}'
-    build_docker_image_runner(f"docker build -f $DOCKER_FILE -t {image} --build-arg kafka_url={kafka_url} --build-arg build_date={date.today()} $DOCKER_DIR", image_type)
+    build_docker_image_runner(f"docker build -f $DOCKER_FILE -t {image} --build-arg kafka_url={kafka_url} "
+                              f"--build-arg build_date={date.today()} --build-arg skip_signing={skip_signing} $DOCKER_DIR", image_type)
 
 def run_docker_tests(image, tag, kafka_url, image_type):
     temp_dir_path = tempfile.mkdtemp()
@@ -70,13 +72,14 @@ if __name__ == '__main__':
     parser.add_argument("--image-tag", "-tag", default="latest", dest="tag", help="Image tag that you want to add to the image")
     parser.add_argument("--image-type", "-type", choices=["jvm", "native"], default="jvm", dest="image_type", help="Image type you want to build")
     parser.add_argument("--kafka-url", "-u", dest="kafka_url", help="Kafka url to be used to download kafka binary tarball in the docker image")
+    parser.add_argument("--skip_signing", "-s", dest="skip_signing", help="Controls GPG signature verification (default: false)")
     parser.add_argument("--build", "-b", action="store_true", dest="build_only", default=False, help="Only build the image, don't run tests")
     parser.add_argument("--test", "-t", action="store_true", dest="test_only", default=False, help="Only run the tests, don't build the image")
     args = parser.parse_args()
 
     if args.build_only or not (args.build_only or args.test_only):
         if args.kafka_url:
-            build_docker_image(args.image, args.tag, args.kafka_url, args.image_type)
+            build_docker_image(args.image, args.tag, args.kafka_url, args.image_type, args.skip_signing)
         else:
             raise ValueError("--kafka-url is a required argument for docker image")
     

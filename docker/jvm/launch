@@ -65,4 +65,4 @@ export KAFKA_JVM_PERFORMANCE_OPTS="$TEMP_KAFKA_JVM_PERFORMANCE_OPTS"
 export KAFKA_JVM_PERFORMANCE_OPTS="$KAFKA_JVM_PERFORMANCE_OPTS -XX:SharedArchiveFile=/opt/kafka/kafka.jsa"
 
 # Start kafka broker
-exec /opt/kafka/bin/kafka-server-start.sh /etc/kafka/docker/server.properties
+exec /opt/kafka/bin/kafka-server-start.sh /opt/kafka/config/server.properties
