@@ -212,7 +212,7 @@ License Version 2.0:
 - commons-lang3-3.12.0
 - commons-logging-1.3.2
 - commons-validator-1.9.0
-- error_prone_annotations-2.14.0
+- error_prone_annotations-2.21.1
 - jackson-annotations-2.16.2
 - jackson-core-2.16.2
 - jackson-databind-2.16.2
@@ -223,7 +223,6 @@ License Version 2.0:
 - jackson-jakarta-rs-json-provider-2.16.2
 - jackson-module-blackbird-2.16.2
 - jackson-module-jakarta-xmlbind-annotations-2.16.2
-- jackson-module-scala_2.13-2.16.2
 - jakarta.inject-api-2.0.1
 - jakarta.validation-api-3.0.2
 - javassist-3.29.2-GA
@@ -314,7 +313,6 @@ BSD 2-Clause
 BSD 3-Clause
 
 - jline-3.25.1, see: licenses/jline-BSD-3-clause
-- paranamer-2.8, see: licenses/paranamer-BSD-3-clause
 - protobuf-java-3.25.5, see: licenses/protobuf-java-BSD-3-clause
 - jakarta.activation-2.0.1, see: licenses/jakarta-BSD-3-clause
 
