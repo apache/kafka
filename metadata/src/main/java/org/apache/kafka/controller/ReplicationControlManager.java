@@ -848,8 +848,9 @@ public class ReplicationControlManager {
             int partitionIndex = partEntry.getKey();
             PartitionRegistration info = partEntry.getValue();
             records.add(info.toRecord(topicId, partitionIndex, new ImageWriterOptions.Builder().
-                    setMetadataVersion(featureControl.metadataVersion()).
-                    build()));
+                setMetadataVersion(featureControl.metadataVersion()).
+                setEligibleLeaderReplicasEnabled(featureControl.isElrFeatureEnabled()).
+                build()));
         }
         return ApiError.NONE;
     }
@@ -1461,21 +1462,22 @@ public class ReplicationControlManager {
     }
 
     /**
-     * Create partition change records to remove replicas from any ISR or ELR for brokers doing unclean shutdown.
+     * Create partition change records to remove replicas from any ISR or ELR for brokers when the shutdown is detected.
      *
-     * @param brokerId      The broker id.
-     * @param records       The record list to append to.
+     * @param brokerId           The broker id to be shut down.
+     * @param isCleanShutdown    Whether the broker has a clean shutdown.
+     * @param records            The record list to append to.
      */
-    void handleBrokerUncleanShutdown(int brokerId, List<ApiMessageAndVersion> records) {
-        if (featureControl.metadataVersion().isElrSupported()) {
+    void handleBrokerShutdown(int brokerId, boolean isCleanShutdown, List<ApiMessageAndVersion> records) {
+        if (featureControl.isElrFeatureEnabled() && !isCleanShutdown) {
             // ELR is enabled, generate unclean shutdown partition change records
             generateLeaderAndIsrUpdates("handleBrokerUncleanShutdown", NO_LEADER, NO_LEADER, brokerId, records,
                 brokersToIsrs.partitionsWithBrokerInIsr(brokerId));
             generateLeaderAndIsrUpdates("handleBrokerUncleanShutdown", NO_LEADER, NO_LEADER, brokerId, records,
                 brokersToElrs.partitionsWithBrokerInElr(brokerId));
         } else {
-            // ELR is not enabled, handle the unclean shutdown as if the broker was fenced
-            generateLeaderAndIsrUpdates("handleBrokerUncleanShutdown", brokerId, NO_LEADER, NO_LEADER, records,
+            // ELR is not enabled or if it is a clean shutdown, handle the shutdown as if the broker was fenced
+            generateLeaderAndIsrUpdates("handleBrokerShutdown", brokerId, NO_LEADER, NO_LEADER, records,
                 brokersToIsrs.partitionsWithBrokerInIsr(brokerId));
         }
     }
@@ -1941,6 +1943,7 @@ public class ReplicationControlManager {
             records.add(buildPartitionRegistration(partitionAssignment, isr)
                 .toRecord(topicId, partitionId, new ImageWriterOptions.Builder().
                         setMetadataVersion(featureControl.metadataVersion()).
+                        setEligibleLeaderReplicasEnabled(featureControl.isElrFeatureEnabled()).
                         build()));
             partitionId++;
         }

@@ -33,6 +33,11 @@
     <h5><a id="upgrade_400_notable" href="#upgrade_400_notable">Notable changes in 4.0.0</a></h5>
     <ul>
         <li>
+            Since Apache Kafka 4.0.0, we have added a system property ("org.apache.kafka.sasl.oauthbearer.allowed.urls") to
+            set the allowed URLs as SASL OAUTHBEARER token or jwks endpoints. By default the value is an empty list.
+            Users should explicitly set the allowed list if necessary.
+        </li>
+        <li>
             Old protocol API versions have been removed. Users should ensure brokers are version 2.1 or higher before upgrading the Java clients
 	    (including Connect and Kafka Streams which use the clients internally) to 4.0.
             Similarly, users should ensure their Java clients (including Connect and Kafka Streams) version is 2.1 or higher before upgrading the brokers to 4.0.
@@ -44,6 +49,27 @@
             are between Zookeeper mode and Kraft mode. See the following page to learn about some of the significant changes in 
             latest Kafka releases.
             <!--#include virtual="zk2kraft.html" -->
+        </li>
+        <li>
+            Apache Kafka 4.0 ships with a brand-new group coordinator implementation (See <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=217387038#KIP848:TheNextGenerationoftheConsumerRebalanceProtocol-GroupCoordinator">here</a>.
+            Functionally speaking, it implements all the same APIs. However, the group coordinator runs in its own dedicated threads.
+            The number of threads can be defined with the <code>group.coordinator.threads</code> configuration. It defaults to 1 and
+            must certainly be adjusted for production deployments.
+        </li>
+        <li>
+            The Next Generation of the Consumer Rebalance Protocol (<a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-848%3A+The+Next+Generation+of+the+Consumer+Rebalance+Protocol">KIP-848</a>)
+            is now Generally Available (GA) in Apache Kafka 4.0. The protocol is automatically enabled on the server when the upgrade to 4.0 is finalized.
+            Note that once the new protocol is used by consumer groups, care must be taken to downgrade to a previous version. Downgrading
+            to version 3.4.1 or above is safe. Downgrading to an earlier version requires to ensure that all the records in the
+            <code>__consumer_offsets</code> are removed because those versions cannot handle them. This can be achieved by deleting all the
+            consumer groups using the new protocol, disabling the new protocol and letting compaction remove the tombstones.
+            Check <a href="/{{version}}/documentation.html#consumer_rebalance_protocol">here</a> for details.
+        </li>
+        <li>
+            Transactions Server Side Defense (<a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-890%3A+Transactions+Server-Side+Defense">KIP-890</a>)
+            brings a strengthened transactional protocol to Apache Kafka 4.0. The new and improved transactional protocol is enabled when the upgrade to 4.0 is finalized.
+            When using 4.0 producer clients, the producer epoch is bumped on every transaction to ensure every transaction includes the intended messages and duplicates are not
+            written as part of the next transaction. Downgrading the protocol is safe. For more information check <a href="/{{version}}/documentation.html#transaction_protocol">here</a>
         </li>
         <li>A number of deprecated classes, methods, configurations and tools have been removed.
             <ul>
@@ -84,6 +110,9 @@
                         </li>
                         <li>The default properties files for KRaft mode are no longer stored in the separate <code>config/kraft</code> directory since Zookeeper has been removed. These files have been consolidated with other configuration files.
                             Now all configuration files are in <code>config</code> directory.
+                        </li>
+                        <li>The valid format for <code>--bootstrap-server</code> only supports comma-separated value, such as <code>host1:port1,host2:port2,...</code>.
+                            Providing other formats, like space-separated bootstrap servers (e.g., <code>host1:port1 host2:port2 host3:port3</code>), will result in an exception, even though this was allowed in Apache Kafka versions prior to 4.0.
                         </li>
                     </ul>
                 </li>
@@ -282,7 +311,7 @@
 			    See <a href="https://issues.apache.org/jira/browse/KAFKA-17531">KAFKA-17531</a> for details.
                         </li>
                         <li>
-			    The most important changes are highlighted in the <a href=""/{{version}}/documentation/streams/upgrade-guide.html#streams_api_changes_400">Kafka Streams upgrade guide</a>.
+			    The most important changes are highlighted in the <a href="/{{version}}/documentation/streams/upgrade-guide.html#streams_api_changes_400">Kafka Streams upgrade guide</a>.
                         </li>
                         <li>
 			    For a full list of changes, see <a href="https://issues.apache.org/jira/browse/KAFKA-12822">KAFKA-12822</a>.
@@ -336,6 +365,7 @@
 		    This allows to not only collect the metric of the internally used clients of a Kafka Streams appliction via a broker-side plugin,
 		    but also to collect the <a href="/{{version}}/documentation/#kafka_streams_monitoring">metrics</a> of the Kafka Streams runtime itself.
             </li>
+                <li>
                     The default value of 'num.recovery.threads.per.data.dir' has been changed from 1 to 2. The impact of this is faster
                     recovery post unclean shutdown at the expense of extra IO cycles.
                     See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-1030%3A+Change+constraints+and+default+values+for+various+configurations">KIP-1030</a> 

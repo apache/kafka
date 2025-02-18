@@ -19,6 +19,8 @@ package org.apache.kafka.connect.util;
 
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.runtime.ConnectMetrics;
+import org.apache.kafka.connect.runtime.MockConnectMetrics;
 import org.apache.kafka.connect.runtime.SourceConnectorConfig;
 import org.apache.kafka.connect.runtime.TransformationStage;
 import org.apache.kafka.connect.runtime.WorkerConfig;
@@ -80,6 +82,8 @@ public class TopicCreationTest {
 
     private static final short DEFAULT_REPLICATION_FACTOR = -1;
     private static final int DEFAULT_PARTITIONS = -1;
+    private static final ConnectMetrics METRICS = new MockConnectMetrics();
+    private static final ConnectorTaskId CONNECTOR_TASK_ID = new ConnectorTaskId("test", 0);
 
     Map<String, String> workerProps;
     WorkerConfig workerConfig;
@@ -515,7 +519,7 @@ public class TopicCreationTest {
         topicCreation.addTopic(FOO_TOPIC);
         assertFalse(topicCreation.isTopicCreationRequired(FOO_TOPIC));
 
-        List<TransformationStage<SourceRecord>> transformationStages = sourceConfig.transformationStages();
+        List<TransformationStage<SourceRecord>> transformationStages = sourceConfig.transformationStages(CONNECTOR_TASK_ID, METRICS);
         assertEquals(1, transformationStages.size());
         TransformationStage<SourceRecord> xform = transformationStages.get(0);
         SourceRecord transformed = xform.apply(new SourceRecord(null, null, "topic", 0, null, null, Schema.INT8_SCHEMA, 42));
@@ -622,7 +626,7 @@ public class TopicCreationTest {
         assertEquals(barPartitions, barTopicSpec.numPartitions());
         assertEquals(barTopicProps, barTopicSpec.configs());
 
-        List<TransformationStage<SourceRecord>> transformationStages = sourceConfig.transformationStages();
+        List<TransformationStage<SourceRecord>> transformationStages = sourceConfig.transformationStages(CONNECTOR_TASK_ID, METRICS);
         assertEquals(2, transformationStages.size());
 
         TransformationStage<SourceRecord> castXForm = transformationStages.get(0);

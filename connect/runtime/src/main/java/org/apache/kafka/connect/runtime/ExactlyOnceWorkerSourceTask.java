@@ -20,6 +20,7 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.errors.InvalidProducerEpochException;
+import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Max;
@@ -78,9 +79,9 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
                                        SourceTask task,
                                        TaskStatus.Listener statusListener,
                                        TargetState initialState,
-                                       Converter keyConverter,
-                                       Converter valueConverter,
-                                       HeaderConverter headerConverter,
+                                       Plugin<Converter> keyConverterPlugin,
+                                       Plugin<Converter> valueConverterPlugin,
+                                       Plugin<HeaderConverter> headerConverterPlugin,
                                        TransformationChain<SourceRecord, SourceRecord> transformationChain,
                                        Producer<byte[], byte[]> producer,
                                        TopicAdmin admin,
@@ -101,8 +102,8 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
                                        Runnable preProducerCheck,
                                        Runnable postProducerCheck,
                                        Supplier<List<ErrorReporter<SourceRecord>>> errorReportersSupplier) {
-        super(id, task, statusListener, initialState, keyConverter, valueConverter, headerConverter, transformationChain,
-                new WorkerSourceTaskContext(offsetReader, id, configState, buildTransactionContext(sourceConfig)),
+        super(id, task, statusListener, initialState, configState, keyConverterPlugin, valueConverterPlugin, headerConverterPlugin, transformationChain,
+                buildTransactionContext(sourceConfig),
                 producer, admin, topicGroups, offsetReader, offsetWriter, offsetStore, workerConfig, connectMetrics, errorMetrics,
                 loader, time, retryWithToleranceOperator, statusBackingStore, closeExecutor, errorReportersSupplier);
 

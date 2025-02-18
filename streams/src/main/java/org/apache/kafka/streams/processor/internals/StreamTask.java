@@ -1024,7 +1024,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             log.warn(
                 "Encountered {} while trying to fetch committed offsets, will retry initializing the metadata in the next loop." +
                     "\nConsider overwriting consumer config {} to a larger value to avoid timeout errors",
-                time.toString(),
+                timeoutException.toString(),
                 ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
 
             // re-throw to trigger `task.timeout.ms`

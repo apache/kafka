@@ -14,12 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.storage.internals.log;
 
-package org.apache.kafka.common.test.api;
+import java.util.List;
 
-import java.util.function.Consumer;
+public class LogMetricNames {
 
-@FunctionalInterface
-public interface ClusterGenerator extends Consumer<ClusterConfig> {
+    public static final String NUM_LOG_SEGMENTS = "NumLogSegments";
+    public static final String LOG_START_OFFSET = "LogStartOffset";
+    public static final String LOG_END_OFFSET = "LogEndOffset";
+    public static final String SIZE = "Size";
 
+    public static final List<String> ALL_METRIC_NAMES = List.of(NUM_LOG_SEGMENTS, LOG_START_OFFSET, LOG_END_OFFSET, SIZE);
 }

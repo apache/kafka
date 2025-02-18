@@ -29,13 +29,14 @@ import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.header.ConnectHeaders;
-import org.apache.kafka.connect.integration.MonitorableSourceConnector;
+import org.apache.kafka.connect.integration.TestableSourceConnector;
 import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
 import org.apache.kafka.connect.runtime.errors.ErrorReporter;
 import org.apache.kafka.connect.runtime.errors.ProcessingContext;
@@ -46,6 +47,7 @@ import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.storage.CloseableOffsetStorageReader;
+import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.storage.ConnectorOffsetBackingStore;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
@@ -82,7 +84,7 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.kafka.connect.integration.MonitorableSourceConnector.TOPIC_CONFIG;
+import static org.apache.kafka.connect.integration.TestableSourceConnector.TOPIC_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
@@ -131,8 +133,7 @@ public class AbstractWorkerSourceTaskTest {
     private static final byte[] SERIALIZED_KEY = "converted-key".getBytes();
     private static final byte[] SERIALIZED_RECORD = "converted-record".getBytes();
 
-    @Mock
-    private SourceTask sourceTask;
+    @Mock private SourceTask sourceTask;
     @Mock private TopicAdmin admin;
     @Mock private KafkaProducer<byte[], byte[]> producer;
     @Mock private Converter keyConverter;
@@ -143,8 +144,9 @@ public class AbstractWorkerSourceTaskTest {
     @Mock private OffsetStorageWriter offsetWriter;
     @Mock private ConnectorOffsetBackingStore offsetStore;
     @Mock private StatusBackingStore statusBackingStore;
-    @Mock private WorkerSourceTaskContext sourceTaskContext;
+    @Mock private WorkerTransactionContext workerTransactionContext;
     @Mock private TaskStatus.Listener statusListener;
+    @Mock private ClusterConfigState configState;
 
     private final ConnectorTaskId taskId = new ConnectorTaskId("job", 0);
     private final ConnectorTaskId taskId1 = new ConnectorTaskId("job", 1);
@@ -179,7 +181,7 @@ public class AbstractWorkerSourceTaskTest {
         // setup up props for the source connector
         Map<String, String> props = new HashMap<>();
         props.put("name", "foo-connector");
-        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getSimpleName());
+        props.put(CONNECTOR_CLASS_CONFIG, TestableSourceConnector.class.getSimpleName());
         props.put(TASKS_MAX_CONFIG, String.valueOf(1));
         props.put(TOPIC_CONFIG, TOPIC);
         props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
@@ -815,7 +817,7 @@ public class AbstractWorkerSourceTaskTest {
 
         workerTask.toSend = Arrays.asList(record1, record2, record3);
 
-        // With errors.tolerance to all, the faiiled conversion should simply skip the record, and record successful batch
+        // With errors.tolerance to all, the failed conversion should simply skip the record, and record successful batch
         assertTrue(workerTask.sendRecords());
     }
 
@@ -956,10 +958,13 @@ public class AbstractWorkerSourceTaskTest {
 
     private void createWorkerTask(Converter keyConverter, Converter valueConverter, HeaderConverter headerConverter,
                                   RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator, Supplier<List<ErrorReporter<SourceRecord>>> errorReportersSupplier,
-                                  TransformationChain transformationChain) {
+                                  TransformationChain<SourceRecord, SourceRecord> transformationChain) {
+        Plugin<Converter> keyConverterPlugin = metrics.wrap(keyConverter, taskId,  true);
+        Plugin<Converter> valueConverterPlugin = metrics.wrap(valueConverter, taskId,  false);
+        Plugin<HeaderConverter> headerConverterPlugin = metrics.wrap(headerConverter, taskId);
         workerTask = new AbstractWorkerSourceTask(
-                taskId, sourceTask, statusListener, TargetState.STARTED, keyConverter, valueConverter, headerConverter, transformationChain,
-                sourceTaskContext, producer, admin, TopicCreationGroup.configuredGroups(sourceConfig), offsetReader, offsetWriter, offsetStore,
+                taskId, sourceTask, statusListener, TargetState.STARTED, configState, keyConverterPlugin, valueConverterPlugin, headerConverterPlugin, transformationChain,
+                workerTransactionContext, producer, admin, TopicCreationGroup.configuredGroups(sourceConfig), offsetReader, offsetWriter, offsetStore,
                 config, metrics, errorHandlingMetrics,  plugins.delegatingLoader(), Time.SYSTEM, retryWithToleranceOperator,
                 statusBackingStore, Runnable::run, errorReportersSupplier) {
             @Override
