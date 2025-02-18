@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.tools.consumer.group;
 
+
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientTestUtils;
 import org.apache.kafka.clients.admin.DeleteShareGroupsResult;
@@ -71,6 +72,8 @@ import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class ShareGroupCommandTest {
@@ -592,18 +595,34 @@ public class ShareGroupCommandTest {
     }
 
     @Test
+    public void testDeleteShareGroupsArgs() {
+        String bootstrapServer = "localhost:9092";
+        Admin adminClient = mock(KafkaAdminClient.class);
+
+        mockListShareGroups(adminClient, List.of());
+
+        // no group spec args
+        String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServer, "--delete"};
+        try (ShareGroupService service = getShareGroupService(cgcArgs, adminClient)) {
+            assertThrows(IllegalArgumentException.class, service::deleteShareGroups);
+        }
+    }
+
+    @Test
     public void testDeleteShareGroupsSuccess() {
         String firstGroup = "first-group";
         String secondGroup = "second-group";
         String bootstrapServer = "localhost:9092";
 
-        String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServer, "--delete"};
+        String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServer, "--delete", "--group", firstGroup, "--group", secondGroup};
         Admin adminClient = mock(KafkaAdminClient.class);
         DeleteShareGroupsResult result = mock(DeleteShareGroupsResult.class);
         Map<String, KafkaFuture<Void>> deletedGroups = Map.of(
             firstGroup, KafkaFuture.completedFuture(null),
             secondGroup, KafkaFuture.completedFuture(null)
         );
+
+        mockListShareGroups(adminClient, List.of(firstGroup, secondGroup));
 
         when(result.deletedGroups()).thenReturn(deletedGroups);
 
@@ -619,14 +638,78 @@ public class ShareGroupCommandTest {
     }
 
     @Test
-    public void testDeleteShareGroupsFailure() throws Exception {
+    public void testDeleteShareGroupsAllGroupsSuccess() {
         String firstGroup = "first-group";
         String secondGroup = "second-group";
         String bootstrapServer = "localhost:9092";
 
-        String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServer, "--delete"};
+        String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServer, "--delete", "--all-groups"};
         Admin adminClient = mock(KafkaAdminClient.class);
         DeleteShareGroupsResult result = mock(DeleteShareGroupsResult.class);
+        Map<String, KafkaFuture<Void>> deletedGroups = Map.of(
+            firstGroup, KafkaFuture.completedFuture(null),
+            secondGroup, KafkaFuture.completedFuture(null)
+        );
+
+        mockListShareGroups(adminClient, List.of(firstGroup, secondGroup));
+
+        when(result.deletedGroups()).thenReturn(deletedGroups);
+
+        Map<String, Throwable> expectedResults = new HashMap<>();
+        expectedResults.put(firstGroup, null);
+        expectedResults.put(secondGroup, null);
+
+        when(adminClient.deleteShareGroups(anyList(), any())).thenReturn(result);
+
+        try (ShareGroupService service = getShareGroupService(cgcArgs, adminClient)) {
+            assertEquals(expectedResults, service.deleteShareGroups());
+        }
+    }
+
+    @Test
+    public void testDeleteShareGroupsAllGroupsPartialFail() {
+        String firstGroup = "first-group";
+        String secondGroup = "second-group";
+        String bootstrapServer = "localhost:9092";
+
+        String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServer, "--delete", "--all-groups"};
+        Admin adminClient = mock(KafkaAdminClient.class);
+        DeleteShareGroupsResult result = mock(DeleteShareGroupsResult.class);
+        KafkaFutureImpl<Void> future1 = new KafkaFutureImpl<>();
+        KafkaFutureImpl<Void> future2 = new KafkaFutureImpl<>();
+        future1.complete(null);
+        Exception exp = new Exception("bad");
+        future2.completeExceptionally(exp);
+        Map<String, KafkaFuture<Void>> deletedGroups = Map.of(
+            firstGroup, future1,
+            secondGroup, future2
+        );
+
+        mockListShareGroups(adminClient, List.of(firstGroup, secondGroup));
+
+        when(result.deletedGroups()).thenReturn(deletedGroups);
+
+        Map<String, Throwable> expectedResults = new HashMap<>();
+        expectedResults.put(firstGroup, null);
+        expectedResults.put(secondGroup, exp);
+
+        when(adminClient.deleteShareGroups(anyList(), any())).thenReturn(result);
+
+        try (ShareGroupService service = getShareGroupService(cgcArgs, adminClient)) {
+            assertEquals(expectedResults, service.deleteShareGroups());
+        }
+    }
+
+    @Test
+    public void testDeleteShareGroupsDeleteFailure() {
+        String firstGroup = "first-group";
+        String secondGroup = "second-group";
+        String bootstrapServer = "localhost:9092";
+
+        String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServer, "--delete", "--group", firstGroup, "--group", secondGroup};
+        Admin adminClient = mock(KafkaAdminClient.class);
+        DeleteShareGroupsResult result = mock(DeleteShareGroupsResult.class);
+        mockListShareGroups(adminClient, List.of(firstGroup, secondGroup));
         KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
         Exception exp = new Exception("bad");
         future.completeExceptionally(exp);
@@ -649,14 +732,36 @@ public class ShareGroupCommandTest {
     }
 
     @Test
+    public void testDeleteShareGroupsFailureNonShareGroup() {
+        String firstGroup = "first-group";
+        String bootstrapServer = "localhost:9092";
+
+        String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServer, "--delete", "--group", firstGroup};
+        Admin adminClient = mock(KafkaAdminClient.class);
+        DeleteShareGroupsResult result = mock(DeleteShareGroupsResult.class);
+        mockListShareGroups(adminClient, List.of());
+
+        when(result.deletedGroups()).thenReturn(Map.of());
+
+        when(adminClient.deleteShareGroups(anyList(), any())).thenReturn(result);
+
+        try (ShareGroupService service = getShareGroupService(cgcArgs, adminClient)) {
+            assertThrows(IllegalArgumentException.class, service::deleteShareGroups);
+            verify(result, times(0)).deletedGroups();
+            verify(adminClient, times(0)).deleteShareGroups(anyList());
+        }
+    }
+
+    @Test
     public void testDeleteShareGroupsPartialFailure() {
         String firstGroup = "first-group";
         String secondGroup = "second-group";
         String bootstrapServer = "localhost:9092";
 
-        String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServer, "--delete"};
+        String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServer, "--delete", "--group", firstGroup, "--group", secondGroup};
         Admin adminClient = mock(KafkaAdminClient.class);
         DeleteShareGroupsResult result = mock(DeleteShareGroupsResult.class);
+        mockListShareGroups(adminClient, List.of(firstGroup, secondGroup));
         KafkaFutureImpl<Void> future1 = new KafkaFutureImpl<>();
         KafkaFutureImpl<Void> future2 = new KafkaFutureImpl<>();
         future1.complete(null);
@@ -677,6 +782,18 @@ public class ShareGroupCommandTest {
         try (ShareGroupService service = getShareGroupService(cgcArgs, adminClient)) {
             assertEquals(expectedResults, service.deleteShareGroups());
         }
+    }
+
+    private void mockListShareGroups(Admin client, List<String> groupIds) {
+        ListGroupsResult listResult = mock(ListGroupsResult.class);
+        KafkaFutureImpl<Collection<GroupListing>> listFuture = new KafkaFutureImpl<>();
+        List<GroupListing> groupListings = new ArrayList<>();
+        groupIds.forEach(groupId -> groupListings.add(
+            new GroupListing(groupId, Optional.of(GroupType.SHARE), "share", Optional.of(GroupState.EMPTY))
+        ));
+        listFuture.complete(groupListings);
+        when(listResult.all()).thenReturn(listFuture);
+        when(client.listGroups(any())).thenReturn(listResult);
     }
 
     ShareGroupService getShareGroupService(String[] args, Admin adminClient) {

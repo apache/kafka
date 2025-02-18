@@ -211,9 +211,20 @@ public class ShareGroupCommand {
         }
 
         Map<String, Throwable> deleteShareGroups() {
+            List<String> shareGroupIds = listShareGroups();
             List<String> groupIds = opts.options.has(opts.allGroupsOpt)
-                ? listShareGroups()
+                ? shareGroupIds
                 : opts.options.valuesOf(opts.groupOpt);
+
+            if (groupIds.isEmpty()) {
+                throw new IllegalArgumentException("--groups or --all-groups argument is mandatory");
+            }
+
+            for (String groupId : groupIds) {
+                if (!shareGroupIds.contains(groupId)) {
+                    throw new IllegalArgumentException("Share group '" + groupId + "' is not a share group.");
+                }
+            }
 
             Map<String, KafkaFuture<Void>> groupsToDelete = adminClient.deleteShareGroups(
                 groupIds,
