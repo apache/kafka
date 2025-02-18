@@ -17,10 +17,26 @@
 
 package org.apache.kafka.image.writer;
 
+import org.apache.kafka.common.metadata.FeatureLevelRecord;
+import org.apache.kafka.image.AclsImageTest;
+import org.apache.kafka.image.ClientQuotasImageTest;
+import org.apache.kafka.image.ClusterImageTest;
+import org.apache.kafka.image.ConfigurationsImageTest;
+import org.apache.kafka.image.DelegationTokenImageTest;
+import org.apache.kafka.image.FeaturesDelta;
+import org.apache.kafka.image.FeaturesImage;
+import org.apache.kafka.image.MetadataImage;
+import org.apache.kafka.image.MetadataProvenance;
+import org.apache.kafka.image.ProducerIdsImageTest;
+import org.apache.kafka.image.ScramImageTest;
+import org.apache.kafka.image.TopicsImageTest;
+import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.function.Consumer;
 
@@ -69,6 +85,55 @@ public class ImageWriterOptionsTest {
                     .setLossHandler(customLossHandler)
                     .build();
             options.handleLoss(expectedMessage);
+        }
+    }
+
+    @Test
+    public void testSetEligibleLeaderReplicasEnabled() {
+        MetadataVersion version = MetadataVersion.MINIMUM_BOOTSTRAP_VERSION;
+        ImageWriterOptions options = new ImageWriterOptions.Builder().
+            setMetadataVersion(version).
+            setEligibleLeaderReplicasEnabled(true).build();
+        assertEquals(true, options.isEligibleLeaderReplicasEnabled());
+
+        options = new ImageWriterOptions.Builder().
+            setMetadataVersion(version).build();
+        assertEquals(false, options.isEligibleLeaderReplicasEnabled());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testConstructionWithImage(boolean isElrEnabled) {
+        FeaturesDelta featuresDelta = new FeaturesDelta(FeaturesImage.EMPTY);
+        featuresDelta.replay(new FeatureLevelRecord().
+            setName(EligibleLeaderReplicasVersion.FEATURE_NAME).
+            setFeatureLevel(isElrEnabled ?
+                EligibleLeaderReplicasVersion.ELRV_1.featureLevel() : EligibleLeaderReplicasVersion.ELRV_0.featureLevel()
+            )
+        );
+        featuresDelta.replay(new FeatureLevelRecord().
+            setName(MetadataVersion.FEATURE_NAME).
+            setFeatureLevel(MetadataVersion.IBP_4_0_IV1.featureLevel())
+        );
+        MetadataImage metadataImage = new MetadataImage(
+            new MetadataProvenance(100, 4, 2000, true),
+            featuresDelta.apply(),
+            ClusterImageTest.IMAGE1,
+            TopicsImageTest.IMAGE1,
+            ConfigurationsImageTest.IMAGE1,
+            ClientQuotasImageTest.IMAGE1,
+            ProducerIdsImageTest.IMAGE1,
+            AclsImageTest.IMAGE1,
+            ScramImageTest.IMAGE1,
+            DelegationTokenImageTest.IMAGE1
+        );
+
+        ImageWriterOptions options = new ImageWriterOptions.Builder(metadataImage).build();
+        assertEquals(MetadataVersion.IBP_4_0_IV1, options.metadataVersion());
+        if (isElrEnabled) {
+            assertEquals(true, options.isEligibleLeaderReplicasEnabled());
+        } else {
+            assertEquals(false, options.isEligibleLeaderReplicasEnabled());
         }
     }
 }

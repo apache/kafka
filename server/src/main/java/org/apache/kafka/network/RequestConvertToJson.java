@@ -34,6 +34,8 @@ import org.apache.kafka.common.message.AlterPartitionRequestDataJsonConverter;
 import org.apache.kafka.common.message.AlterPartitionResponseDataJsonConverter;
 import org.apache.kafka.common.message.AlterReplicaLogDirsRequestDataJsonConverter;
 import org.apache.kafka.common.message.AlterReplicaLogDirsResponseDataJsonConverter;
+import org.apache.kafka.common.message.AlterShareGroupOffsetsRequestDataJsonConverter;
+import org.apache.kafka.common.message.AlterShareGroupOffsetsResponseDataJsonConverter;
 import org.apache.kafka.common.message.AlterUserScramCredentialsRequestDataJsonConverter;
 import org.apache.kafka.common.message.AlterUserScramCredentialsResponseDataJsonConverter;
 import org.apache.kafka.common.message.ApiVersionsRequestDataJsonConverter;
@@ -212,6 +214,8 @@ import org.apache.kafka.common.requests.AlterPartitionRequest;
 import org.apache.kafka.common.requests.AlterPartitionResponse;
 import org.apache.kafka.common.requests.AlterReplicaLogDirsRequest;
 import org.apache.kafka.common.requests.AlterReplicaLogDirsResponse;
+import org.apache.kafka.common.requests.AlterShareGroupOffsetsRequest;
+import org.apache.kafka.common.requests.AlterShareGroupOffsetsResponse;
 import org.apache.kafka.common.requests.AlterUserScramCredentialsRequest;
 import org.apache.kafka.common.requests.AlterUserScramCredentialsResponse;
 import org.apache.kafka.common.requests.ApiVersionsRequest;
@@ -459,6 +463,8 @@ public class RequestConvertToJson {
                 return DescribeQuorumRequestDataJsonConverter.write(((DescribeQuorumRequest) request).data(), request.version());
             case DESCRIBE_SHARE_GROUP_OFFSETS:
                 return DescribeShareGroupOffsetsRequestDataJsonConverter.write(((DescribeShareGroupOffsetsRequest) request).data(), request.version());
+            case ALTER_SHARE_GROUP_OFFSETS:
+                return AlterShareGroupOffsetsRequestDataJsonConverter.write(((AlterShareGroupOffsetsRequest) request).data(), request.version());
             case DESCRIBE_TOPIC_PARTITIONS:
                 return DescribeTopicPartitionsRequestDataJsonConverter.write(((DescribeTopicPartitionsRequest) request).data(), request.version());
             case DESCRIBE_TRANSACTIONS:
@@ -641,6 +647,8 @@ public class RequestConvertToJson {
                 return DescribeQuorumResponseDataJsonConverter.write(((DescribeQuorumResponse) response).data(), version);
             case DESCRIBE_SHARE_GROUP_OFFSETS:
                 return DescribeShareGroupOffsetsResponseDataJsonConverter.write(((DescribeShareGroupOffsetsResponse) response).data(), version);
+            case ALTER_SHARE_GROUP_OFFSETS:
+                return AlterShareGroupOffsetsResponseDataJsonConverter.write(((AlterShareGroupOffsetsResponse) response).data(), version);
             case DESCRIBE_TOPIC_PARTITIONS:
                 return DescribeTopicPartitionsResponseDataJsonConverter.write(((DescribeTopicPartitionsResponse) response).data(), version);
             case DESCRIBE_TRANSACTIONS:

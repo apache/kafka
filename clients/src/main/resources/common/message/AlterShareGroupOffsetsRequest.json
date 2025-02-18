@@ -14,24 +14,26 @@
 // limitations under the License.
 
 {
-  "apiKey": 90,
+  "apiKey": 91,
   "type": "request",
   "listeners": ["broker"],
-  "name": "DescribeShareGroupOffsetsRequest",
+  "name": "AlterShareGroupOffsetsRequest",
   "validVersions": "0",
   "flexibleVersions": "0+",
   "latestVersionUnstable": true,
   "fields": [
-    { "name": "Groups", "type": "[]DescribeShareGroupOffsetsRequestGroup", "versions": "0+",
-      "about": "The groups to describe offsets for.", "fields": [
-      { "name": "GroupId", "type": "string", "versions": "0+", "entityType": "groupId",
-        "about": "The group identifier." },
-      { "name": "Topics", "type": "[]DescribeShareGroupOffsetsRequestTopic", "versions": "0+",
-        "about": "The topics to describe offsets for.", "fields": [
-        { "name": "TopicName", "type": "string", "versions": "0+", "entityType": "topicName",
-          "about": "The topic name." },
-        { "name": "Partitions", "type": "[]int32", "versions": "0+",
-          "about": "The partitions." }
+    { "name": "GroupId", "type": "string", "versions": "0+", "entityType": "groupId",
+      "about": "The group identifier." },
+    { "name": "Topics", "type": "[]AlterShareGroupOffsetsRequestTopic", "versions": "0+",
+      "about": "The topics to alter offsets for.",  "fields": [
+      { "name": "TopicName", "type": "string", "versions": "0+", "entityType": "topicName", "mapKey": true,
+        "about": "The topic name." },
+      { "name": "Partitions", "type": "[]AlterShareGroupOffsetsRequestPartition", "versions": "0+",
+        "about": "Each partition to alter offsets for.", "fields": [
+        { "name": "PartitionIndex", "type": "int32", "versions": "0+",
+          "about": "The partition index." },
+        { "name": "StartOffset", "type": "int64", "versions": "0+",
+          "about": "The share-partition start offset." }
       ]}
     ]}
   ]

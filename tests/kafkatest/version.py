@@ -114,7 +114,7 @@ DEV_VERSION = KafkaVersion("4.1.0-SNAPSHOT")
 
 LATEST_STABLE_TRANSACTION_VERSION = 2
 # This should match the LATEST_PRODUCTION version defined in MetadataVersion.java
-LATEST_STABLE_METADATA_VERSION = "4.0-IV0"
+LATEST_STABLE_METADATA_VERSION = "4.0-IV3"
 
 # 0.11.0.x versions
 V_0_11_0_3 = KafkaVersion("0.11.0.3")
