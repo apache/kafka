@@ -582,6 +582,8 @@ class RemoteIndexCacheTest {
           s"Time index file for evicted entry should not be present on disk at ${cache.cacheDir()}")
         TestUtils.waitUntilTrue(() => getIndexFileFromRemoteCacheDir(cache, remoteTransactionIndexFileName(metadata)).isEmpty,
           s"Txn index file for evicted entry should not be present on disk at ${cache.cacheDir()}")
+        System.err.println("verify1 " + remoteDeletedSuffixIndexFileName(metadata))
+        System.err.println("verify2 " + getIndexFileFromRemoteCacheDir(cache, remoteDeletedSuffixIndexFileName(metadata)))
         TestUtils.waitUntilTrue(() => getIndexFileFromRemoteCacheDir(cache, remoteDeletedSuffixIndexFileName(metadata)).isEmpty,
           s"Index file marked for deletion for evicted entry should not be present on disk at ${cache.cacheDir()}")
       }
@@ -1134,6 +1136,7 @@ class RemoteIndexCacheTest {
 
   private def getIndexFileFromRemoteCacheDir(cache: RemoteIndexCache, suffix: String) = {
     try {
+      Files.walk(cache.cacheDir().toPath).forEach(file => System.err.println("getIndexFileFromRemoteCacheDir " + file.toString))
       Files.walk(cache.cacheDir().toPath)
         .filter(Files.isRegularFile(_))
         .filter(path => path.getFileName.toString.endsWith(suffix))
