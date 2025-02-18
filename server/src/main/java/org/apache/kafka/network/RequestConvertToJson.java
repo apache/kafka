@@ -443,6 +443,8 @@ public class RequestConvertToJson {
                 return DeleteGroupsRequestDataJsonConverter.write(((DeleteGroupsRequest) request).data(), request.version());
             case DELETE_RECORDS:
                 return DeleteRecordsRequestDataJsonConverter.write(((DeleteRecordsRequest) request).data(), request.version());
+            case DELETE_SHARE_GROUP_OFFSETS:
+                return DeleteShareGroupOffsetsRequestDataJsonConverter.write(((DeleteShareGroupOffsetsRequest) request).data(), request.version());
             case DELETE_SHARE_GROUP_STATE:
                 return DeleteShareGroupStateRequestDataJsonConverter.write(((DeleteShareGroupStateRequest) request).data(), request.version());
             case DELETE_TOPICS:
@@ -469,8 +471,6 @@ public class RequestConvertToJson {
                 return DescribeShareGroupOffsetsRequestDataJsonConverter.write(((DescribeShareGroupOffsetsRequest) request).data(), request.version());
             case ALTER_SHARE_GROUP_OFFSETS:
                 return AlterShareGroupOffsetsRequestDataJsonConverter.write(((AlterShareGroupOffsetsRequest) request).data(), request.version());
-            case DELETE_SHARE_GROUP_OFFSETS:
-                return DeleteShareGroupOffsetsRequestDataJsonConverter.write(((DeleteShareGroupOffsetsRequest) request).data(), request.version());
             case DESCRIBE_TOPIC_PARTITIONS:
                 return DescribeTopicPartitionsRequestDataJsonConverter.write(((DescribeTopicPartitionsRequest) request).data(), request.version());
             case DESCRIBE_TRANSACTIONS:
@@ -629,6 +629,8 @@ public class RequestConvertToJson {
                 return DeleteGroupsResponseDataJsonConverter.write(((DeleteGroupsResponse) response).data(), version);
             case DELETE_RECORDS:
                 return DeleteRecordsResponseDataJsonConverter.write(((DeleteRecordsResponse) response).data(), version);
+            case DELETE_SHARE_GROUP_OFFSETS:
+                return DeleteShareGroupOffsetsResponseDataJsonConverter.write(((DeleteShareGroupOffsetsResponse) response).data(), version);
             case DELETE_SHARE_GROUP_STATE:
                 return DeleteShareGroupStateResponseDataJsonConverter.write(((DeleteShareGroupStateResponse) response).data(), version);
             case DELETE_TOPICS:
@@ -655,8 +657,6 @@ public class RequestConvertToJson {
                 return DescribeShareGroupOffsetsResponseDataJsonConverter.write(((DescribeShareGroupOffsetsResponse) response).data(), version);
             case ALTER_SHARE_GROUP_OFFSETS:
                 return AlterShareGroupOffsetsResponseDataJsonConverter.write(((AlterShareGroupOffsetsResponse) response).data(), version);
-            case DELETE_SHARE_GROUP_OFFSETS:
-                return DeleteShareGroupOffsetsResponseDataJsonConverter.write(((DeleteShareGroupOffsetsResponse) response).data(), version);
             case DESCRIBE_TOPIC_PARTITIONS:
                 return DescribeTopicPartitionsResponseDataJsonConverter.write(((DescribeTopicPartitionsResponse) response).data(), version);
             case DESCRIBE_TRANSACTIONS:
