@@ -582,7 +582,7 @@ class RemoteIndexCacheTest {
           s"Time index file for evicted entry should not be present on disk at ${cache.cacheDir()}")
         TestUtils.waitUntilTrue(() => getIndexFileFromRemoteCacheDir(cache, remoteTransactionIndexFileName(metadata)).isEmpty,
           s"Txn index file for evicted entry should not be present on disk at ${cache.cacheDir()}")
-        TestUtils.waitUntilTrue(() => getIndexFileFromRemoteCacheDir(cache, remoteDeletedSuffixIndexFileName(metadata)).isEmpty,
+        TestUtils.waitUntilTrue(() => getIndexFileFromRemoteCacheDir(cache, LogFileUtils.DELETED_FILE_SUFFIX).isEmpty,
           s"Index file marked for deletion for evicted entry should not be present on disk at ${cache.cacheDir()}")
       }
       (metadataDeleted, entriesIsMarkedForCleanup)
@@ -593,7 +593,7 @@ class RemoteIndexCacheTest {
         assertTrue(getIndexFileFromRemoteCacheDir(cache, remoteOffsetIndexFileName(metadata)).isPresent)
         assertTrue(getIndexFileFromRemoteCacheDir(cache, remoteTimeIndexFileName(metadata)).isPresent)
         assertTrue(getIndexFileFromRemoteCacheDir(cache, remoteTransactionIndexFileName(metadata)).isPresent)
-        assertTrue(getIndexFileFromRemoteCacheDir(cache, remoteDeletedSuffixIndexFileName(metadata)).isEmpty)
+        assertTrue(getIndexFileFromRemoteCacheDir(cache, LogFileUtils.DELETED_FILE_SUFFIX).isEmpty)
       }
     }
 
