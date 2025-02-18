@@ -560,11 +560,11 @@ class RemoteIndexCacheTest {
       metadataToVerify.filter(s => { cache.internalCache().asMap().keySet().contains(s.remoteLogSegmentId().id())})
     }
 
-    def verifyEntryIsEvicted(metadataToVerify: List[RemoteLogSegmentMetadata], entriesToVerify: List[Entry], numOfDeleted: Int): Unit = {
-      TestUtils.waitUntilTrue(() => entriesToVerify.count(_.isMarkedForCleanup).equals(numOfDeleted),
+    def verifyEntryIsEvicted(metadataToVerify: List[RemoteLogSegmentMetadata], entriesToVerify: List[Entry], numOfMarkAsDeleted: Int): Unit = {
+      TestUtils.waitUntilTrue(() => entriesToVerify.count(_.isMarkedForCleanup).equals(numOfMarkAsDeleted),
         "Failed to mark evicted cache entry for cleanup after resizing cache.")
 
-      TestUtils.waitUntilTrue(() => entriesToVerify.count(_.isCleanStarted).equals(numOfDeleted),
+      TestUtils.waitUntilTrue(() => entriesToVerify.count(_.isCleanStarted).equals(numOfMarkAsDeleted),
         "Failed to cleanup evicted cache entry after resizing cache.")
 
       val entriesIsMarkedForCleanup = entriesToVerify.filter(_.isMarkedForCleanup)
@@ -574,7 +574,7 @@ class RemoteIndexCacheTest {
 
       // get the logSegMetadata are evicted
       val metedataDeleted = metadataToVerify.filter(s => { !cache.internalCache().asMap().keySet().contains(s.remoteLogSegmentId().id())})
-      assertEquals(numOfDeleted, metedataDeleted.size)
+      assertEquals(numOfMarkAsDeleted, metedataDeleted.size)
       for (metadata <- metedataDeleted) {
         // verify no index files for `entryToVerify` on remote cache dir
         TestUtils.waitUntilTrue(() => !getIndexFileFromRemoteCacheDir(cache, remoteOffsetIndexFileName(metadata)).isPresent,
@@ -643,7 +643,7 @@ class RemoteIndexCacheTest {
     assertCacheSize(2)
     verifyEntryIsEvicted(metadataList, entries, 1)
 
-    // Reduce cache capacity to only store 1 entry
+    // Reduce cache capacity to only store 1 entry and check two entries are marked as deleted.
     cache.resizeCacheSize(1 * estimateEntryBytesSize)
     assertCacheSize(1)
     verifyEntryIsEvicted(metadataList, entries, 2)
