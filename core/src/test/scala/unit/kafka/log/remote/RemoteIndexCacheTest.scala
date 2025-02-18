@@ -560,7 +560,8 @@ class RemoteIndexCacheTest {
       metadataToVerify.filter(s => { cache.internalCache().asMap().keySet().contains(s.remoteLogSegmentId().id())})
     }
 
-    def verifyEntryIsEvicted(metadataToVerify: List[RemoteLogSegmentMetadata], entriesToVerify: List[Entry], numOfMarkAsDeleted: Int): Unit = {
+    def verifyEntryIsEvicted(metadataToVerify: List[RemoteLogSegmentMetadata], entriesToVerify: List[Entry],
+                             numOfMarkAsDeleted: Int): (List[RemoteLogSegmentMetadata], List[Entry]) = {
       TestUtils.waitUntilTrue(() => entriesToVerify.count(_.isMarkedForCleanup).equals(numOfMarkAsDeleted),
         "Failed to mark evicted cache entry for cleanup after resizing cache.")
 
@@ -586,6 +587,7 @@ class RemoteIndexCacheTest {
         TestUtils.waitUntilTrue(() => !getIndexFileFromRemoteCacheDir(cache, remoteDeletedSuffixIndexFileName(metadata)).isPresent,
           s"Index file marked for deletion for evicted entry should not be present on disk at ${cache.cacheDir()}")
       }
+      (metedataDeleted, entriesIsMarkedForCleanup)
     }
 
     def verifyEntryIsKept(metadataToVerify: List[RemoteLogSegmentMetadata]): Unit = {
@@ -641,12 +643,14 @@ class RemoteIndexCacheTest {
     val entry2 = cache.getIndexEntry(metadataList(2))
     val entries = List(entry0, entry1, entry2)
     assertCacheSize(2)
-    verifyEntryIsEvicted(metadataList, entries, 1)
+    val (evictedSegmentMetadata, evictedEntry) = verifyEntryIsEvicted(metadataList, entries, 1)
 
     // Reduce cache capacity to only store 1 entry and check two entries are marked as deleted.
     cache.resizeCacheSize(1 * estimateEntryBytesSize)
     assertCacheSize(1)
-    verifyEntryIsEvicted(metadataList, entries, 2)
+    val entryInCache = entries.filterNot(evictedEntry.contains(_))
+    val existSegmentMetadata = metadataList.filterNot(evictedSegmentMetadata.contains(_))
+    verifyEntryIsEvicted(existSegmentMetadata, entryInCache, 1)
 
     // resize to the same size, all entries should be kept
     cache.resizeCacheSize(1 * estimateEntryBytesSize)
