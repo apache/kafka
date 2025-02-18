@@ -212,10 +212,15 @@ public class KTableKTableForeignKeyLeftJoinDistributedTest {
             expectedResult.size()));
 
         final Set<KeyValue<String, String>> expectedResultAfterFkChange = new HashSet<>();
-        expectedResultAfterFkChange.add(new KeyValue<>("lhsValue1", "(lhsValue1|rhs2,null)"));
+        /*
+        If DELETE_KEY_AND_PROPAGATE instruction is used in leftJoinInstructions method of SubscriptionSendProcessorSupplier
+        class, expected value will be
+        KeyValue<>("lhsValue1", "(lhsValue1|rhs2,null)")
 
-        System.out.println("resultAfterFkChange: " + resultAfterFkChange);
-
+        But after the fix of DELETE_KEY_NO_PROPAGATE instruction expected value will be
+        KeyValue<>("lhsValue1", "(lhsValue1|rhs2,rhsValue2)")
+         */
+        expectedResultAfterFkChange.add(new KeyValue<>("lhsValue1", "(lhsValue1|rhs2,rhsValue2)"));
         assertEquals(expectedResultAfterFkChange, resultAfterFkChange);
 
         //Check that both clients are still running
