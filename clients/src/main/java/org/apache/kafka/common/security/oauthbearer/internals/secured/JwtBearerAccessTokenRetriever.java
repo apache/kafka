@@ -41,7 +41,7 @@ import java.util.Map;
 
 public class JwtBearerAccessTokenRetriever extends HttpAccessTokenRetriever {
 
-    private final static String GRANT_TYPE = "urn:ietf:params:oauth:grant-type:jwt-bearer";
+    public final static String GRANT_TYPE = "urn:ietf:params:oauth:grant-type:jwt-bearer";
 
     private String assertion;
 

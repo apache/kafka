@@ -39,10 +39,17 @@ public class DefaultAccessTokenRetriever implements AccessTokenRetriever {
         ConfigurationUtils cu = new ConfigurationUtils(saslMechanism, configs);
         URL tokenEndpointUrl = cu.validateUrl(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL);
 
-        if (tokenEndpointUrl.getProtocol().toLowerCase(Locale.ROOT).equals("file"))
+        if (tokenEndpointUrl.getProtocol().toLowerCase(Locale.ROOT).equals("file")) {
             delegate = new FileAccessTokenRetriever();
-        else
-            delegate = new ClientCredentialsAccessTokenRetriever();
+        } else {
+            String grantType = cu.validateString(OAuthBearerConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_GRANT_TYPE, false);
+
+            if (grantType != null && grantType.equalsIgnoreCase(JwtBearerAccessTokenRetriever.GRANT_TYPE)) {
+                delegate = new JwtBearerAccessTokenRetriever();
+            } else {
+                delegate = new ClientCredentialsAccessTokenRetriever();
+            }
+        }
 
         delegate.configure(configs, saslMechanism, jaasConfigEntries);
     }
