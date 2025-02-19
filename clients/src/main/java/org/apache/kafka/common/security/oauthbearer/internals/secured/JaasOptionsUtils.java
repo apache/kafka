@@ -71,6 +71,8 @@ public class JaasOptionsUtils {
             SslFactory sslFactory = new SslFactory(ConnectionMode.CLIENT);
             sslFactory.configure(sslClientConfig);
             SSLSocketFactory sslSocketFactory = ((DefaultSslEngineFactory) sslFactory.sslEngineFactory()).sslContext().getSocketFactory();
+            log.debug("Created SSLSocketFactory from: {}", sslClientConfig);
+            return Optional.of(new SslResource(sslFactory, sslSocketFactory));
         } else {
             return Optional.empty();
         }
