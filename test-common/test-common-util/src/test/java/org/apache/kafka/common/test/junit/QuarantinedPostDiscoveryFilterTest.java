@@ -105,37 +105,59 @@ public class QuarantinedPostDiscoveryFilterTest {
         }
     }
 
-    QuarantinedPostDiscoveryFilter setupFilter(boolean runQuarantined, boolean runFlaky) {
+    QuarantinedPostDiscoveryFilter setupFilter(boolean runNew, boolean runFlaky) {
         Set<AutoQuarantinedTestFilter.TestAndMethod> testCatalog = new HashSet<>();
         testCatalog.add(new AutoQuarantinedTestFilter.TestAndMethod("o.a.k.Foo", "testBar1"));
         testCatalog.add(new AutoQuarantinedTestFilter.TestAndMethod("o.a.k.Foo", "testBar2"));
         testCatalog.add(new AutoQuarantinedTestFilter.TestAndMethod("o.a.k.Spam", "testEggs"));
 
-        AutoQuarantinedTestFilter autoQuarantinedTestFilter = new AutoQuarantinedTestFilter(testCatalog, runQuarantined);
-        return new QuarantinedPostDiscoveryFilter(autoQuarantinedTestFilter, runQuarantined, runFlaky);
+        AutoQuarantinedTestFilter autoQuarantinedTestFilter = new AutoQuarantinedTestFilter(testCatalog);
+        return new QuarantinedPostDiscoveryFilter(autoQuarantinedTestFilter, runNew, runFlaky);
     }
 
     @Test
-    public void testQuarantinedExistingTestNonFlaky() {
-        QuarantinedPostDiscoveryFilter filter = setupFilter(true, true);
+    public void testExcludeExistingNonFlaky() {
+        QuarantinedPostDiscoveryFilter filter = setupFilter(false, true);
         assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Foo", "testBar1")).excluded());
         assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Foo", "testBar2")).excluded());
         assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Spam", "testEggs")).excluded());
     }
 
     @Test
-    public void testQuarantinedExistingTestFlaky() {
-        QuarantinedPostDiscoveryFilter filter = setupFilter(true, true);
+    public void testIncludeExistingFlaky() {
+        QuarantinedPostDiscoveryFilter filter = setupFilter(false, true);
         assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Foo", "testBar1", "flaky")).included());
         assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Foo", "testBar2", "flaky")).included());
         assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Spam", "testEggs", "flaky", "integration")).included());
     }
 
     @Test
-    public void testQuarantinedNewTest() {
+    public void testIncludeAutoQuarantinedAndFlaky() {
         QuarantinedPostDiscoveryFilter filter = setupFilter(true, true);
         assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Foo", "testBar3")).included());
         assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Spam", "testEggz", "flaky")).included());
+    }
+
+    @Test
+    public void testIncludeAutoQuarantinedNoFlaky() {
+        QuarantinedPostDiscoveryFilter filter = setupFilter(true, false);
+        assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Foo", "testBar3")).included());
+        assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Spam", "testEggz", "flaky")).excluded());
+    }
+
+    @Test
+    public void testExcludeFlakyAndNew() {
+        QuarantinedPostDiscoveryFilter filter = setupFilter(false, false);
+        assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Foo", "testBar3")).excluded());
+        assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Spam", "testEggz", "flaky")).excluded());
+    }
+
+    @Test
+    public void testExcludeFlaky() {
+        QuarantinedPostDiscoveryFilter filter = setupFilter(false, false);
+        assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Foo", "testBar1", "flaky")).excluded());
+        assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Foo", "testBar2", "flaky")).excluded());
+        assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Spam", "testEggs", "flaky", "integration")).excluded());
     }
 
     @Test
@@ -146,30 +168,39 @@ public class QuarantinedPostDiscoveryFilterTest {
         assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Spam", "testEggs")).included());
     }
 
-
     @Test
-    public void testExistingTestFlaky() {
-        QuarantinedPostDiscoveryFilter filter = setupFilter(false, false);
-        assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Foo", "testBar1", "flaky")).excluded());
-        assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Foo", "testBar2", "flaky")).excluded());
-        assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Spam", "testEggs", "flaky", "integration")).excluded());
-    }
-
-    @Test
-    public void testNewTest() {
-        QuarantinedPostDiscoveryFilter filter = setupFilter(false, false);
-        assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Foo", "testBar3")).excluded());
-        assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Spam", "testEggz", "flaky")).excluded());
-    }
-
-    @Test
-    public void testNoCatalogQuarantinedTest() {
+    public void testNoCatalogRunFlakyTests() {
         QuarantinedPostDiscoveryFilter filter = new QuarantinedPostDiscoveryFilter(
-            AutoQuarantinedTestFilter.create(null, true),
-            true, true
+            AutoQuarantinedTestFilter.create(null),
+            false, true
         );
         assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Foo", "testBar1", "flaky")).included());
         assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Foo", "testBar2", "flaky")).included());
         assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Spam", "testEggs")).excluded());
+    }
+
+    @Test
+    public void testNoCatalogRunNewTest() {
+        QuarantinedPostDiscoveryFilter filter = new QuarantinedPostDiscoveryFilter(
+                AutoQuarantinedTestFilter.create(null),
+                true, false
+        );
+        assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Foo", "testBar1", "flaky")).excluded());
+        assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Foo", "testBar2", "flaky")).excluded());
+        assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Spam", "testEggs")).excluded());
+        assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Spam", "testNew")).excluded(),
+            "Should not select a new test because there is no catalog loaded");
+    }
+
+    @Test
+    public void testNoCatalogRunMainTests() {
+        QuarantinedPostDiscoveryFilter filter = new QuarantinedPostDiscoveryFilter(
+                AutoQuarantinedTestFilter.create(null),
+                false, false
+        );
+        assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Foo", "testBar1", "flaky")).excluded());
+        assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Foo", "testBar2", "flaky")).excluded());
+        assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Spam", "testEggs")).included());
+        assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Spam", "testNew")).included());
     }
 }

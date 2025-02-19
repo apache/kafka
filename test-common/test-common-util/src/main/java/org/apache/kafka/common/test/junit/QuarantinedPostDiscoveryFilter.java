@@ -22,6 +22,8 @@ import org.junit.platform.engine.FilterResult;
 import org.junit.platform.engine.TestDescriptor;
 import org.junit.platform.engine.TestTag;
 import org.junit.platform.launcher.PostDiscoveryFilter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * A JUnit test filter which can include or exclude discovered tests before
@@ -45,11 +47,17 @@ public class QuarantinedPostDiscoveryFilter implements PostDiscoveryFilter {
 
     public static final String CATALOG_FILE_PROP = "kafka.test.catalog.file";
 
+    public static final String VERBOSE_PROP = "kafka.test.verbose";
+
+    private static final Logger log = LoggerFactory.getLogger(QuarantinedPostDiscoveryFilter.class);
+
     private final Filter<TestDescriptor> autoQuarantinedFilter;
 
     private final boolean runNew;
 
     private final boolean runFlaky;
+
+    private final boolean verbose;
 
     // No-arg public constructor for SPI
     @SuppressWarnings("unused")
@@ -60,8 +68,11 @@ public class QuarantinedPostDiscoveryFilter implements PostDiscoveryFilter {
         runFlaky = System.getProperty(RUN_FLAKY_PROP, "false")
             .equalsIgnoreCase("true");
 
+        verbose = System.getProperty(VERBOSE_PROP, "false")
+            .equalsIgnoreCase("true");
+
         String testCatalogFileName = System.getProperty(CATALOG_FILE_PROP);
-        autoQuarantinedFilter = AutoQuarantinedTestFilter.create(testCatalogFileName, runNew);
+        autoQuarantinedFilter = AutoQuarantinedTestFilter.create(testCatalogFileName);
     }
 
     // Visible for tests
@@ -73,35 +84,58 @@ public class QuarantinedPostDiscoveryFilter implements PostDiscoveryFilter {
         this.autoQuarantinedFilter = autoQuarantinedFilter;
         this.runNew = runNew;
         this.runFlaky = runFlaky;
+        this.verbose = false;
     }
 
     @Override
     public FilterResult apply(TestDescriptor testDescriptor) {
         boolean hasFlakyTag = testDescriptor.getTags().contains(FLAKY_TEST_TAG);
-        FilterResult result = autoQuarantinedFilter.apply(testDescriptor);
+        FilterResult autoQuarantinedResult = autoQuarantinedFilter.apply(testDescriptor);
 
+        final FilterResult result;
         if (runFlaky && runNew) {
             //  If selecting flaky and quarantined tests, we first check for explicitly flaky tests.
             //  If no flaky tag is set, defer to the auto-quarantined filter.
             if (hasFlakyTag) {
-                return FilterResult.included("flaky");
+                result = FilterResult.included("flaky");
             } else {
-                return result;
+                result = autoQuarantinedResult;
             }
         } else if (runFlaky) {
             // If selecting only flaky, just check the tag. Don't use the auto-quarantined filter
             if (hasFlakyTag) {
-                return FilterResult.included("flaky");
+                result = FilterResult.included("flaky");
             } else {
-                return FilterResult.excluded("non-flaky");
+                result = FilterResult.excluded("non-flaky");
+            }
+        } else if (runNew) {
+            // Running only auto-quarantined
+            if (autoQuarantinedResult.included() && hasFlakyTag) {
+                result = FilterResult.excluded("flaky");
+            } else {
+                result = autoQuarantinedResult;
             }
         } else {
-            // Running only auto-quarantined
-            if (result.included() && hasFlakyTag) {
-                return FilterResult.excluded("flaky");
+            // The main test suite
+            if (hasFlakyTag) {
+                result = FilterResult.excluded("flaky");
+            } else if (autoQuarantinedResult.included()) {
+                result = FilterResult.excluded("new");
             } else {
-                return result;
+                result = FilterResult.included(null);
             }
         }
+
+        if (verbose) {
+            log.info(
+                "{} Test '{}' with reason '{}'. Flaky tag is {}, auto-quarantined filter has {} this test.",
+                result.included() ? "Including" : "Excluding",
+                testDescriptor.getDisplayName(),
+                result.getReason().orElse("null"),
+                hasFlakyTag ? "present" : "not present",
+                autoQuarantinedResult.included() ? "included" : "not included"
+            );
+        }
+        return result;
     }
 }

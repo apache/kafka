@@ -537,6 +537,7 @@ subprojects {
     systemProperty("kafka.test.catalog.file", project.findProperty("kafka.test.catalog.file"))
     systemProperty("kafka.test.run.new", project.findProperty("kafka.test.run.new"))
     systemProperty("kafka.test.run.flaky", project.findProperty("kafka.test.run.flaky"))
+    systemProperty("kafka.test.verbose", project.findProperty("kafka.test.verbose"))
 
     testLogging {
       events = userTestLoggingEvents ?: testLoggingEvents

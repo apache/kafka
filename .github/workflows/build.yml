@@ -221,6 +221,7 @@ jobs:
           test-retries: ${{ matrix.run-flaky == true && '3' || '1' }}
           test-xml-output: ${{ env.job-variation }}
           test-repeat: ${{ !inputs.is-trunk && matrix.run-new && '3' || '1' }}
+          test-verbose: ${{ runner.debug == '1' }}
 
       - name: Archive JUnit HTML reports
         uses: actions/upload-artifact@v4

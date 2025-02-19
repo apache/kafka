@@ -44,18 +44,24 @@ inputs:
     description: "The number of times to repeat the integration tests"
     required: true
     default: "1"
+  test-verbose:
+    description: "Enable additional logging by the JUnit infrastructure"
+    required: true
+    default: "false"
   run-new-tests:
-    description: "Should we run tests not present in the test catalog?"
+    description: "Run tests not present in the given test catalog"
     required: true
     default: "false"
   run-flaky-tests:
-    description: "Should we run tests marked as flaky?"
+    description: "Run tests marked as flaky"
     required: true
     default: "false"
+
 outputs:
   gradle-exitcode:
     description: "The result of the Gradle test task."
     value: ${{ steps.run-tests.outputs.exitcode }}
+
 runs:
   using: "composite"
   steps:
@@ -76,6 +82,7 @@ runs:
         RUN_NEW_TESTS: ${{ inputs.run-new-tests }}
         RUN_FLAKY_TESTS: ${{ inputs.run-flaky-tests }}
         TEST_XML_OUTPUT_DIR: ${{ inputs.test-xml-output }}
+        TEST_VERBOSE: ${{ inputs.test-verbose }}
       run: |
         set +e
         ./.github/scripts/thread-dump.sh &
@@ -88,6 +95,7 @@ runs:
         -Pkafka.test.run.flaky=$RUN_FLAKY_TESTS \
         -Pkafka.test.xml.output.dir=$TEST_XML_OUTPUT_DIR \
         -Pkafka.cluster.test.repeat=$TEST_REPEAT \
+        -Pkafka.test.verbose=$TEST_VERBOSE \
         -PcommitId=xxxxxxxxxxxxxxxx \
         $TEST_TASK
         exitcode="$?"
