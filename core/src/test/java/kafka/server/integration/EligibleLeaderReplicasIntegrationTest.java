@@ -70,6 +70,7 @@ import scala.collection.JavaConverters;
 import scala.collection.Seq;
 import scala.collection.mutable.HashMap;
 
+import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -202,7 +203,7 @@ public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarnes
     }
 
     void waitUntilOneMessageIsConsumed(Consumer consumer) {
-        kafka.utils.TestUtils.waitUntilTrue(
+        TestUtils.waitUntilTrue(
             () -> {
                 try {
                     ConsumerRecords record = consumer.poll(Duration.ofMillis(100L));
@@ -212,7 +213,7 @@ public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarnes
                 }
             },
             () -> "fail to consume messages",
-            org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS, 100L
+            DEFAULT_MAX_WAIT_MS, 100L
         );
     }
 
@@ -418,7 +419,7 @@ public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarnes
                 return isrSize > 0 && elrSize == 0;
             });
 
-            kafka.utils.TestUtils.waitUntilTrue(
+            TestUtils.waitUntilTrue(
                 () -> {
                     try {
                         TopicPartitionInfo partition = adminClient.describeTopics(Collections.singletonList(testTopicName))
@@ -430,7 +431,7 @@ public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarnes
                     }
                 },
                 () -> String.format("Partition metadata for %s is not correct", testTopicName),
-                org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS, 100L
+                DEFAULT_MAX_WAIT_MS, 100L
             );
         } finally {
             restartDeadBrokers(false);
@@ -438,7 +439,7 @@ public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarnes
     }
 
     void waitForIsrAndElr(BiFunction<Integer, Integer, Boolean> isIsrAndElrSizeSatisfied) {
-        kafka.utils.TestUtils.waitUntilTrue(
+        TestUtils.waitUntilTrue(
             () -> {
                 try {
                     TopicDescription topicDescription = adminClient.describeTopics(Collections.singletonList(testTopicName))
@@ -450,6 +451,6 @@ public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarnes
                 }
             },
             () -> String.format("Partition metadata for %s is not propagated", testTopicName),
-            org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS, 100L);
+            DEFAULT_MAX_WAIT_MS, 100L);
     }
 }
