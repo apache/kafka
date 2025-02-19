@@ -26,11 +26,11 @@ import org.apache.kafka.coordinator.group.modern.GroupSpecImpl;
 import org.apache.kafka.coordinator.group.modern.MemberSubscriptionAndAssignmentImpl;
 import org.apache.kafka.coordinator.group.modern.SubscribedTopicDescriberImpl;
 import org.apache.kafka.coordinator.group.modern.TopicMetadata;
+import org.apache.kafka.server.common.TopicIdPartition;
 
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -44,7 +44,6 @@ import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
 import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HETEROGENEOUS;
 import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HOMOGENEOUS;
-import static org.apache.kafka.coordinator.group.assignor.SimpleAssignor.TargetPartition;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -73,13 +72,13 @@ public class SimpleAssignorTest {
     @Test
     public void testAssignWithEmptyMembers() {
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            Collections.emptyMap()
+            Map.of()
         );
 
         GroupSpec groupSpec = new GroupSpecImpl(
-            Collections.emptyMap(),
+            Map.of(),
             HOMOGENEOUS,
-            Collections.emptyMap()
+            Map.of()
         );
 
         GroupAssignment groupAssignment = assignor.assign(
@@ -87,24 +86,24 @@ public class SimpleAssignorTest {
             subscribedTopicMetadata
         );
 
-        assertEquals(Collections.emptyMap(), groupAssignment.members());
+        assertEquals(Map.of(), groupAssignment.members());
 
         groupSpec = new GroupSpecImpl(
-            Collections.emptyMap(),
+            Map.of(),
             HETEROGENEOUS,
-            Collections.emptyMap()
+            Map.of()
         );
         groupAssignment = assignor.assign(
             groupSpec,
             subscribedTopicMetadata
         );
-        assertEquals(Collections.emptyMap(), groupAssignment.members());
+        assertEquals(Map.of(), groupAssignment.members());
     }
 
     @Test
     public void testAssignWithNoSubscribedTopic() {
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            Collections.singletonMap(
+            Map.of(
                 TOPIC_1_UUID,
                 new TopicMetadata(
                     TOPIC_1_UUID,
@@ -114,12 +113,12 @@ public class SimpleAssignorTest {
             )
         );
 
-        Map<String, MemberSubscriptionAndAssignmentImpl> members = Collections.singletonMap(
+        Map<String, MemberSubscriptionAndAssignmentImpl> members = Map.of(
             MEMBER_A,
             new MemberSubscriptionAndAssignmentImpl(
                 Optional.empty(),
                 Optional.empty(),
-                Collections.emptySet(),
+                Set.of(),
                 Assignment.EMPTY
             )
         );
@@ -127,7 +126,7 @@ public class SimpleAssignorTest {
         GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HOMOGENEOUS,
-            Collections.emptyMap()
+            Map.of()
         );
 
         GroupAssignment groupAssignment = assignor.assign(
@@ -135,13 +134,13 @@ public class SimpleAssignorTest {
             subscribedTopicMetadata
         );
 
-        assertEquals(Collections.emptyMap(), groupAssignment.members());
+        assertEquals(Map.of(), groupAssignment.members());
     }
 
     @Test
     public void testAssignWithSubscribedToNonExistentTopic() {
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            Collections.singletonMap(
+            Map.of(
                 TOPIC_1_UUID,
                 new TopicMetadata(
                     TOPIC_1_UUID,
@@ -151,7 +150,7 @@ public class SimpleAssignorTest {
             )
         );
 
-        Map<String, MemberSubscriptionAndAssignmentImpl> members = Collections.singletonMap(
+        Map<String, MemberSubscriptionAndAssignmentImpl> members = Map.of(
             MEMBER_A,
             new MemberSubscriptionAndAssignmentImpl(
                 Optional.empty(),
@@ -164,7 +163,7 @@ public class SimpleAssignorTest {
         GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HOMOGENEOUS,
-            Collections.emptyMap()
+            Map.of()
         );
 
         assertThrows(PartitionAssignorException.class,
@@ -208,7 +207,7 @@ public class SimpleAssignorTest {
         GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HOMOGENEOUS,
-            Collections.emptyMap()
+            Map.of()
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(topicMetadata);
 
@@ -288,7 +287,7 @@ public class SimpleAssignorTest {
         GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
-            Collections.emptyMap()
+            Map.of()
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(topicMetadata);
 
@@ -347,14 +346,14 @@ public class SimpleAssignorTest {
         members.put(MEMBER_B, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             Optional.empty(),
-            Collections.emptySet(),
+            Set.of(),
             Assignment.EMPTY
         ));
 
         GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
-            Collections.emptyMap()
+            Map.of()
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(topicMetadata);
 
@@ -388,16 +387,16 @@ public class SimpleAssignorTest {
         String member5 = "AaAaAaAa";
         List<String> members = Arrays.asList(member1, member2, member3, member4, member5);
 
-        TargetPartition partition1 = new TargetPartition(TOPIC_1_UUID, 0);
-        TargetPartition partition2 = new TargetPartition(TOPIC_2_UUID, 0);
-        TargetPartition partition3 = new TargetPartition(TOPIC_3_UUID, 0);
-        List<TargetPartition> partitions = Arrays.asList(partition1, partition2, partition3);
+        TopicIdPartition partition1 = new TopicIdPartition(TOPIC_1_UUID, 0);
+        TopicIdPartition partition2 = new TopicIdPartition(TOPIC_2_UUID, 0);
+        TopicIdPartition partition3 = new TopicIdPartition(TOPIC_3_UUID, 0);
+        List<TopicIdPartition> partitions = Arrays.asList(partition1, partition2, partition3);
 
-        Map<TargetPartition, List<String>> computedAssignment = new HashMap<>();
+        Map<TopicIdPartition, List<String>> computedAssignment = new HashMap<>();
         assignor.memberHashAssignment(partitions, members, computedAssignment);
 
-        Map<TargetPartition, List<String>> expectedAssignment = new HashMap<>();
-        expectedAssignment.put(partition1, Collections.singletonList(member3));
+        Map<TopicIdPartition, List<String>> expectedAssignment = new HashMap<>();
+        expectedAssignment.put(partition1, List.of(member3));
         expectedAssignment.put(partition2, Arrays.asList(member1, member4));
         expectedAssignment.put(partition3, Arrays.asList(member2, member5));
         assertAssignment(expectedAssignment, computedAssignment);
@@ -408,21 +407,21 @@ public class SimpleAssignorTest {
         String member1 = "member1";
         String member2 = "member2";
         List<String> members = Arrays.asList(member1, member2);
-        TargetPartition partition1 = new TargetPartition(TOPIC_1_UUID, 0);
-        TargetPartition partition2 = new TargetPartition(TOPIC_2_UUID, 0);
-        TargetPartition partition3 = new TargetPartition(TOPIC_3_UUID, 0);
-        TargetPartition partition4 = new TargetPartition(TOPIC_4_UUID, 0);
-        List<TargetPartition> unassignedPartitions = Arrays.asList(partition2, partition3, partition4);
+        TopicIdPartition partition1 = new TopicIdPartition(TOPIC_1_UUID, 0);
+        TopicIdPartition partition2 = new TopicIdPartition(TOPIC_2_UUID, 0);
+        TopicIdPartition partition3 = new TopicIdPartition(TOPIC_3_UUID, 0);
+        TopicIdPartition partition4 = new TopicIdPartition(TOPIC_4_UUID, 0);
+        List<TopicIdPartition> unassignedPartitions = Arrays.asList(partition2, partition3, partition4);
 
-        Map<TargetPartition, List<String>> assignment = new HashMap<>();
-        assignment.put(partition1, Collections.singletonList(member1));
+        Map<TopicIdPartition, List<String>> assignment = new HashMap<>();
+        assignment.put(partition1, List.of(member1));
 
         assignor.roundRobinAssignment(members, unassignedPartitions, assignment);
-        Map<TargetPartition, List<String>> expectedAssignment = new HashMap<>();
-        expectedAssignment.put(partition1, Collections.singletonList(member1));
-        expectedAssignment.put(partition2, Collections.singletonList(member1));
-        expectedAssignment.put(partition3, Collections.singletonList(member2));
-        expectedAssignment.put(partition4, Collections.singletonList(member1));
+        Map<TopicIdPartition, List<String>> expectedAssignment = new HashMap<>();
+        expectedAssignment.put(partition1, List.of(member1));
+        expectedAssignment.put(partition2, List.of(member1));
+        expectedAssignment.put(partition3, List.of(member2));
+        expectedAssignment.put(partition4, List.of(member1));
 
         assertAssignment(expectedAssignment, assignment);
     }
@@ -465,7 +464,7 @@ public class SimpleAssignorTest {
         GroupSpec groupSpec1 = new GroupSpecImpl(
             members1,
             HOMOGENEOUS,
-            Collections.emptyMap()
+            Map.of()
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata1 = new SubscribedTopicDescriberImpl(topicMetadata1);
 
@@ -540,7 +539,7 @@ public class SimpleAssignorTest {
         GroupSpec groupSpec2 = new GroupSpecImpl(
             members2,
             HOMOGENEOUS,
-            Collections.emptyMap()
+            Map.of()
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata2 = new SubscribedTopicDescriberImpl(topicMetadata2);
 
@@ -624,7 +623,7 @@ public class SimpleAssignorTest {
         GroupSpec groupSpec1 = new GroupSpecImpl(
             members1,
             HETEROGENEOUS,
-            Collections.emptyMap()
+            Map.of()
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata1 = new SubscribedTopicDescriberImpl(topicMetadata1);
 
@@ -708,7 +707,7 @@ public class SimpleAssignorTest {
         GroupSpec groupSpec2 = new GroupSpecImpl(
             members2,
             HETEROGENEOUS,
-            Collections.emptyMap()
+            Map.of()
         );
 
         SubscribedTopicDescriberImpl subscribedTopicMetadata2 = new SubscribedTopicDescriberImpl(topicMetadata2);
@@ -749,12 +748,12 @@ public class SimpleAssignorTest {
     }
 
     private void assertAssignment(
-        Map<TargetPartition, List<String>> expectedAssignment,
-        Map<TargetPartition, List<String>> computedAssignment
+        Map<TopicIdPartition, List<String>> expectedAssignment,
+        Map<TopicIdPartition, List<String>> computedAssignment
     ) {
         assertEquals(expectedAssignment.size(), computedAssignment.size());
-        expectedAssignment.forEach((targetPartition, members) -> {
-            List<String> computedMembers = computedAssignment.getOrDefault(targetPartition, Collections.emptyList());
+        expectedAssignment.forEach((topicIdPartition, members) -> {
+            List<String> computedMembers = computedAssignment.getOrDefault(topicIdPartition, List.of());
             assertEquals(members.size(), computedMembers.size());
             members.forEach(member -> assertTrue(computedMembers.contains(member)));
         });
@@ -765,11 +764,11 @@ public class SimpleAssignorTest {
         GroupAssignment computedGroupAssignment
     ) {
         Map<String, MemberAssignment> memberAssignments = computedGroupAssignment.members();
-        Set<TargetPartition> topicPartitionAssignments = new HashSet<>();
+        Set<TopicIdPartition> topicPartitionAssignments = new HashSet<>();
         memberAssignments.values().forEach(memberAssignment -> {
-            Map<Uuid, Set<Integer>> targetPartitions = memberAssignment.partitions();
-            targetPartitions.forEach((topicId, partitions) ->
-                partitions.forEach(partition -> topicPartitionAssignments.add(new TargetPartition(topicId, partition)))
+            Map<Uuid, Set<Integer>> topicIdPartitions = memberAssignment.partitions();
+            topicIdPartitions.forEach((topicId, partitions) ->
+                partitions.forEach(partition -> topicPartitionAssignments.add(new TopicIdPartition(topicId, partition)))
             );
         });
         assertEquals(expectedPartitions, topicPartitionAssignments.size());

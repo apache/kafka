@@ -25,6 +25,7 @@ import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorExceptio
 import org.apache.kafka.coordinator.group.api.assignor.ShareGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.SubscribedTopicDescriber;
 import org.apache.kafka.coordinator.group.modern.MemberAssignmentImpl;
+import org.apache.kafka.server.common.TopicIdPartition;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -35,14 +36,12 @@ import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HOMOGENEOUS;
 
 /**
- * A simple partition assignor that assigns each member all partitions of the subscribed topics.
+ * A simple partition assignor that assigns partitions of the subscribed topics based on the rules defined in KIP-932 to different members.
  */
 public class SimpleAssignor implements ShareGroupPartitionAssignor {
 
@@ -59,7 +58,7 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
         SubscribedTopicDescriber subscribedTopicDescriber
     ) throws PartitionAssignorException {
         if (groupSpec.memberIds().isEmpty())
-            return new GroupAssignment(Collections.emptyMap());
+            return new GroupAssignment(Map.of());
 
         if (groupSpec.subscriptionType().equals(HOMOGENEOUS)) {
             return assignHomogenous(groupSpec, subscribedTopicDescriber);
@@ -72,78 +71,84 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
         GroupSpec groupSpec,
         SubscribedTopicDescriber subscribedTopicDescriber
     ) {
-        Set<Uuid> subscribeTopicIds = groupSpec.memberSubscription(groupSpec.memberIds().iterator().next())
+        Set<Uuid> subscribedTopicIds = groupSpec.memberSubscription(groupSpec.memberIds().iterator().next())
             .subscribedTopicIds();
-        if (subscribeTopicIds.isEmpty())
-            return new GroupAssignment(Collections.emptyMap());
+        if (subscribedTopicIds.isEmpty())
+            return new GroupAssignment(Map.of());
 
         // Subscribed topic partitions for the share group.
-        List<TargetPartition> targetPartitions = computeTargetPartitions(
-            subscribeTopicIds, subscribedTopicDescriber);
+        List<TopicIdPartition> targetPartitions = computeTargetPartitions(
+            subscribedTopicIds, subscribedTopicDescriber);
 
         // The current assignment from topic partition to members.
-        Map<TargetPartition, List<String>> currentAssignment = currentAssignment(groupSpec);
-        return newAssignmentHomogeneous(groupSpec, subscribeTopicIds, targetPartitions, currentAssignment);
+        Map<TopicIdPartition, List<String>> currentAssignment = currentAssignment(groupSpec);
+        return newAssignmentHomogeneous(groupSpec, subscribedTopicIds, targetPartitions, currentAssignment);
     }
 
     private GroupAssignment assignHeterogeneous(
         GroupSpec groupSpec,
         SubscribedTopicDescriber subscribedTopicDescriber
     ) {
-        Map<String, List<TargetPartition>> memberToPartitionsSubscription = new HashMap<>();
+        Map<String, List<TopicIdPartition>> memberToPartitionsSubscription = new HashMap<>();
         for (String memberId : groupSpec.memberIds()) {
             MemberSubscription spec = groupSpec.memberSubscription(memberId);
             if (spec.subscribedTopicIds().isEmpty())
                 continue;
 
             // Subscribed topic partitions for the share group member.
-            List<TargetPartition> targetPartitions = computeTargetPartitions(
+            List<TopicIdPartition> targetPartitions = computeTargetPartitions(
                 spec.subscribedTopicIds(), subscribedTopicDescriber);
             memberToPartitionsSubscription.put(memberId, targetPartitions);
         }
 
         // The current assignment from topic partition to members.
-        Map<TargetPartition, List<String>> currentAssignment = currentAssignment(groupSpec);
+        Map<TopicIdPartition, List<String>> currentAssignment = currentAssignment(groupSpec);
         return newAssignmentHeterogeneous(groupSpec, memberToPartitionsSubscription, currentAssignment);
     }
 
-    // Get the current assignment for subscribed topic partitions to share group members.
-    private Map<TargetPartition, List<String>> currentAssignment(GroupSpec groupSpec) {
-        Map<TargetPartition, List<String>> assignment = new HashMap<>();
+    /**
+     * Get the current assignment by topic partitions.
+     * @param groupSpec - The group metadata specifications.
+     * @return the current assignment for subscribed topic partitions to memberIds.
+     */
+    private Map<TopicIdPartition, List<String>> currentAssignment(GroupSpec groupSpec) {
+        Map<TopicIdPartition, List<String>> assignment = new HashMap<>();
 
         for (String member : groupSpec.memberIds()) {
             Map<Uuid, Set<Integer>> assignedTopicPartitions = groupSpec.memberAssignment(member).partitions();
             assignedTopicPartitions.forEach((topicId, partitions) -> partitions.forEach(
-                partition -> assignment.computeIfAbsent(new TargetPartition(topicId, partition), k -> new ArrayList<>()).add(member)));
+                partition -> assignment.computeIfAbsent(new TopicIdPartition(topicId, partition), k -> new ArrayList<>()).add(member)));
         }
         return assignment;
     }
 
     private GroupAssignment newAssignmentHomogeneous(
         GroupSpec groupSpec,
-        Set<Uuid> subscribeTopicIds,
-        List<TargetPartition> targetPartitions,
-        Map<TargetPartition, List<String>> currentAssignment) {
+        Set<Uuid> subscribedTopicIds,
+        List<TopicIdPartition> targetPartitions,
+        Map<TopicIdPartition, List<String>> currentAssignment
+    ) {
 
-        Map<TargetPartition, List<String>> newAssignment = new HashMap<>();
+        Map<TopicIdPartition, List<String>> newAssignment = new HashMap<>();
+
         // Step 1: Hash member IDs to partitions.
         memberHashAssignment(targetPartitions, groupSpec.memberIds(), newAssignment);
 
         // Step 2: Round-robin assignment for unassigned partitions which do not have members already assigned in the current assignment.
-        Set<TargetPartition> assignedPartitions = new HashSet<>(newAssignment.keySet());
-        List<TargetPartition> unassignedPartitions = targetPartitions.stream()
+        Set<TopicIdPartition> assignedPartitions = newAssignment.keySet();
+        List<TopicIdPartition> unassignedPartitions = targetPartitions.stream()
             .filter(targetPartition -> !assignedPartitions.contains(targetPartition))
             .filter(targetPartition -> !currentAssignment.containsKey(targetPartition))
-            .collect(Collectors.toList());
+            .toList();
 
         roundRobinAssignment(groupSpec.memberIds(), unassignedPartitions, newAssignment);
 
-        Map<String, Set<TargetPartition>> finalAssignment = new HashMap<>();
+        Map<String, Set<TopicIdPartition>> finalAssignment = new HashMap<>();
 
         // When combining current assignment, we need to only consider the topics in current assignment that are also being
         // subscribed in the new assignment as well.
         currentAssignment.forEach((targetPartition, members) -> {
-            if (subscribeTopicIds.contains(targetPartition.topicId))
+            if (subscribedTopicIds.contains(targetPartition.topicId()))
                 members.forEach(member -> {
                     if (groupSpec.memberIds().contains(member))
                         finalAssignment.computeIfAbsent(member, k -> new HashSet<>()).add(targetPartition);
@@ -157,11 +162,12 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
 
     private GroupAssignment newAssignmentHeterogeneous(
         GroupSpec groupSpec,
-        Map<String, List<TargetPartition>> memberToPartitionsSubscription,
-        Map<TargetPartition, List<String>> currentAssignment) {
+        Map<String, List<TopicIdPartition>> memberToPartitionsSubscription,
+        Map<TopicIdPartition, List<String>> currentAssignment
+    ) {
 
         // Exhaustive set of all subscribed topic partitions.
-        Set<TargetPartition> targetPartitions = new LinkedHashSet<>();
+        Set<TopicIdPartition> targetPartitions = new LinkedHashSet<>();
         memberToPartitionsSubscription.values().forEach(targetPartitions::addAll);
 
         // Create a map for topic to members subscription.
@@ -169,14 +175,15 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
         memberToPartitionsSubscription.forEach((member, partitions) ->
             partitions.forEach(partition -> topicToMemberSubscription.computeIfAbsent(partition.topicId(), k -> new LinkedHashSet<>()).add(member)));
 
-        Map<TargetPartition, List<String>> newAssignment = new HashMap<>();
+        Map<TopicIdPartition, List<String>> newAssignment = new HashMap<>();
+
         // Step 1: Hash member IDs to partitions.
         memberToPartitionsSubscription.forEach((member, partitions) ->
-            memberHashAssignment(partitions, Collections.singletonList(member), newAssignment));
+            memberHashAssignment(partitions, List.of(member), newAssignment));
 
         // Step 2: Round-robin assignment for unassigned partitions which do not have members already assigned in the current assignment.
-        Set<TargetPartition> assignedPartitions = new LinkedHashSet<>(newAssignment.keySet());
-        Map<Uuid, List<TargetPartition>> unassignedPartitions = new HashMap<>();
+        Set<TopicIdPartition> assignedPartitions = new LinkedHashSet<>(newAssignment.keySet());
+        Map<Uuid, List<TopicIdPartition>> unassignedPartitions = new HashMap<>();
         targetPartitions.forEach(targetPartition -> {
             if (!assignedPartitions.contains(targetPartition) && !currentAssignment.containsKey(targetPartition))
                 unassignedPartitions.computeIfAbsent(targetPartition.topicId(), k -> new ArrayList<>()).add(targetPartition);
@@ -186,7 +193,7 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
             roundRobinAssignment(topicToMemberSubscription.get(unassignedTopic), unassignedPartitions.get(unassignedTopic), newAssignment));
 
         // Step 3: We combine current assignment and new assignment.
-        Map<String, Set<TargetPartition>> finalAssignment = new HashMap<>();
+        Map<String, Set<TopicIdPartition>> finalAssignment = new HashMap<>();
 
         // When combining current assignment, we need to only consider the member topic subscription in current assignment
         // which is being subscribed in the new assignment as well.
@@ -201,12 +208,13 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
     }
 
     private GroupAssignment groupAssignment(
-        Map<String, Set<TargetPartition>> assignmentByMember,
-        Collection<String> allGroupMembers) {
+        Map<String, Set<TopicIdPartition>> assignmentByMember,
+        Collection<String> allGroupMembers
+    ) {
         Map<String, MemberAssignment> members = new HashMap<>();
-        for (Map.Entry<String, Set<TargetPartition>> entry : assignmentByMember.entrySet()) {
+        for (Map.Entry<String, Set<TopicIdPartition>> entry : assignmentByMember.entrySet()) {
             Map<Uuid, Set<Integer>> targetPartitions = new HashMap<>();
-            entry.getValue().forEach(targetPartition -> targetPartitions.computeIfAbsent(targetPartition.topicId(), k -> new HashSet<>()).add(targetPartition.partition()));
+            entry.getValue().forEach(targetPartition -> targetPartitions.computeIfAbsent(targetPartition.topicId(), k -> new HashSet<>()).add(targetPartition.partitionId()));
             members.put(entry.getKey(), new MemberAssignmentImpl(targetPartitions));
         }
         allGroupMembers.forEach(member -> {
@@ -217,39 +225,48 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
         return new GroupAssignment(members);
     }
 
-    // Visible for testing.
+    /**
+     * This function updates assignment by hashing the member IDs of the members and maps the partitions assigned to the members based on the hash. This gives approximately even balance.
+     * @param targetPartitions - the subscribed topic partitions.
+     * @param memberIds - the member ids to which the topic partitions need to be assigned.
+     * @param assignment - the existing assignment by topic partition. We need to pass it as a parameter because this
+     *                   function would be called multiple times for heterogeneous assignment.
+     */
     void memberHashAssignment(
-        List<TargetPartition> targetPartitions,
+        List<TopicIdPartition> targetPartitions,
         Collection<String> memberIds,
-        Map<TargetPartition, List<String>> assignment) {
+        Map<TopicIdPartition, List<String>> assignment
+    ) {
         if (!targetPartitions.isEmpty())
             for (String memberId : memberIds) {
                 int topicPartitionIndex = Math.abs(memberId.hashCode() % targetPartitions.size());
-                TargetPartition topicPartition = targetPartitions.get(topicPartitionIndex);
+                TopicIdPartition topicPartition = targetPartitions.get(topicPartitionIndex);
                 assignment.computeIfAbsent(topicPartition, k -> new ArrayList<>()).add(memberId);
             }
     }
 
     // Visible for testing.
     void roundRobinAssignment(
-        Collection<String> members,
-        List<TargetPartition> partitions,
-        Map<TargetPartition, List<String>> assignment) {
-        Iterator<String> memberIterator = members.iterator();
-        for (TargetPartition targetPartition : partitions) {
-            if (!memberIterator.hasNext()) {
-                memberIterator = members.iterator();
+        Collection<String> memberIds,
+        List<TopicIdPartition> partitions,
+        Map<TopicIdPartition, List<String>> assignment
+    ) {
+        Iterator<String> memberIdIterator = memberIds.iterator();
+        for (TopicIdPartition targetPartition : partitions) {
+            if (!memberIdIterator.hasNext()) {
+                memberIdIterator = memberIds.iterator();
             }
-            String member = memberIterator.next();
+            String member = memberIdIterator.next();
             assignment.computeIfAbsent(targetPartition, k -> new ArrayList<>()).add(member);
         }
     }
 
-    private List<TargetPartition> computeTargetPartitions(
-        Set<Uuid> subscribeTopicIds,
-        SubscribedTopicDescriber subscribedTopicDescriber) {
-        List<TargetPartition> targetPartitions = new ArrayList<>();
-        subscribeTopicIds.forEach(topicId -> {
+    private List<TopicIdPartition> computeTargetPartitions(
+        Set<Uuid> subscribedTopicIds,
+        SubscribedTopicDescriber subscribedTopicDescriber
+    ) {
+        List<TopicIdPartition> targetPartitions = new ArrayList<>();
+        subscribedTopicIds.forEach(topicId -> {
             int numPartitions = subscribedTopicDescriber.numPartitions(topicId);
             if (numPartitions == -1) {
                 throw new PartitionAssignorException(
@@ -259,25 +276,9 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
             }
 
             for (int i = 0; i < numPartitions; i++) {
-                targetPartitions.add(new TargetPartition(topicId, i));
+                targetPartitions.add(new TopicIdPartition(topicId, i));
             }
         });
         return targetPartitions;
-    }
-
-    record TargetPartition(Uuid topicId, int partition) {
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-            TargetPartition that = (TargetPartition) o;
-            return topicId.equals(that.topicId) && partition == that.partition;
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(topicId, partition);
-        }
     }
 }
