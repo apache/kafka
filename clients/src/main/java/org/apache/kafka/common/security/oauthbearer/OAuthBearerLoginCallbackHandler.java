@@ -46,8 +46,6 @@ import javax.security.auth.callback.UnsupportedCallbackException;
 import javax.security.auth.login.AppConfigurationEntry;
 import javax.security.sasl.SaslException;
 
-import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
-
 /**
  * <p>
  * <code>OAuthBearerLoginCallbackHandler</code> is an {@link AuthenticateCallbackHandler} that
@@ -154,28 +152,6 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_
 public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHandler, Closeable {
 
     private static final Logger log = LoggerFactory.getLogger(OAuthBearerLoginCallbackHandler.class);
-
-    public static final String CLIENT_ID_CONFIG = "clientId";
-    public static final String CLIENT_SECRET_CONFIG = "clientSecret";
-    public static final String SCOPE_CONFIG = "scope";
-
-    public static final String CLIENT_ID_DOC = "The OAuth/OIDC identity provider-issued " +
-        "client ID to uniquely identify the service account to use for authentication for " +
-        "this client. The value must be paired with a corresponding " + CLIENT_SECRET_CONFIG + " " +
-        "value and is provided to the OAuth provider using the OAuth " +
-        "client_credentials grant type.";
-
-    public static final String CLIENT_SECRET_DOC = "The OAuth/OIDC identity provider-issued " +
-        "client secret serves a similar function as a password to the " + CLIENT_ID_CONFIG + " " +
-        "account and identifies the service account to use for authentication for " +
-        "this client. The value must be paired with a corresponding " + CLIENT_ID_CONFIG + " " +
-        "value and is provided to the OAuth provider using the OAuth " +
-        "client_credentials grant type.";
-
-    public static final String SCOPE_DOC = "The (optional) HTTP/HTTPS login request to the " +
-        "token endpoint (" + SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL + ") may need to specify an " +
-        "OAuth \"scope\". If so, the " + SCOPE_CONFIG + " is used to provide the value to " +
-        "include with the login request.";
 
     private static final String EXTENSION_PREFIX = "extension_";
 

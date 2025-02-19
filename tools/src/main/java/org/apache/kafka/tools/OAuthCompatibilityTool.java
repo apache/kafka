@@ -107,12 +107,12 @@ import static org.apache.kafka.common.config.SslConfigs.SSL_TRUSTSTORE_PASSWORD_
 import static org.apache.kafka.common.config.SslConfigs.SSL_TRUSTSTORE_PASSWORD_DOC;
 import static org.apache.kafka.common.config.SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG;
 import static org.apache.kafka.common.config.SslConfigs.SSL_TRUSTSTORE_TYPE_DOC;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.CLIENT_ID_CONFIG;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.CLIENT_ID_DOC;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.CLIENT_SECRET_CONFIG;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.CLIENT_SECRET_DOC;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.SCOPE_CONFIG;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.SCOPE_DOC;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.ClientCredentialsAccessTokenRetriever.CLIENT_ID_CONFIG;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.ClientCredentialsAccessTokenRetriever.CLIENT_ID_DOC;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.ClientCredentialsAccessTokenRetriever.CLIENT_SECRET_CONFIG;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.ClientCredentialsAccessTokenRetriever.CLIENT_SECRET_DOC;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.ClientCredentialsAccessTokenRetriever.SCOPE_CONFIG;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.ClientCredentialsAccessTokenRetriever.SCOPE_DOC;
 
 public class OAuthCompatibilityTool {
 

@@ -18,7 +18,6 @@
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
 import org.apache.kafka.common.config.SaslConfigs;
-import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler;
 import org.apache.kafka.common.utils.Utils;
 
 import java.net.URLEncoder;
@@ -32,27 +31,44 @@ import javax.security.auth.login.AppConfigurationEntry;
 
 import static org.apache.kafka.common.config.SaslConfigs.DEFAULT_SASL_OAUTHBEARER_HEADER_URLENCODE;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_HEADER_URLENCODE;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.CLIENT_ID_CONFIG;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.CLIENT_SECRET_CONFIG;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.SCOPE_CONFIG;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
 
 /**
  * <code>HttpAccessTokenRetriever</code> is an {@link AccessTokenRetriever} that will
  * communicate with an OAuth/OIDC provider directly via HTTP to post client credentials
- * ({@link OAuthBearerLoginCallbackHandler#CLIENT_ID_CONFIG}/{@link OAuthBearerLoginCallbackHandler#CLIENT_SECRET_CONFIG})
+ * ({@link #CLIENT_ID_CONFIG}/{@link #CLIENT_SECRET_CONFIG})
  * to a publicized token endpoint URL
  * ({@link SaslConfigs#SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL}).
  *
  * @see AccessTokenRetriever
- * @see OAuthBearerLoginCallbackHandler#CLIENT_ID_CONFIG
- * @see OAuthBearerLoginCallbackHandler#CLIENT_SECRET_CONFIG
- * @see OAuthBearerLoginCallbackHandler#SCOPE_CONFIG
  * @see SaslConfigs#SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL
  */
 
 public class ClientCredentialsAccessTokenRetriever extends HttpAccessTokenRetriever {
 
     public static final String GRANT_TYPE = "client_credentials";
+
+    public static final String CLIENT_ID_CONFIG = "clientId";
+    public static final String CLIENT_SECRET_CONFIG = "clientSecret";
+    public static final String SCOPE_CONFIG = "scope";
+
+    public static final String CLIENT_ID_DOC = "The OAuth/OIDC identity provider-issued " +
+        "client ID to uniquely identify the service account to use for authentication for " +
+        "this client. The value must be paired with a corresponding " + CLIENT_SECRET_CONFIG + " " +
+        "value and is provided to the OAuth provider using the OAuth " +
+        "client_credentials grant type.";
+
+    public static final String CLIENT_SECRET_DOC = "The OAuth/OIDC identity provider-issued " +
+        "client secret serves a similar function as a password to the " + CLIENT_ID_CONFIG + " " +
+        "account and identifies the service account to use for authentication for " +
+        "this client. The value must be paired with a corresponding " + CLIENT_ID_CONFIG + " " +
+        "value and is provided to the OAuth provider using the OAuth " +
+        "client_credentials grant type.";
+
+    public static final String SCOPE_DOC = "The (optional) HTTP/HTTPS login request to the " +
+        "token endpoint (" + SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL + ") may need to specify an " +
+        "OAuth \"scope\". If so, the " + SCOPE_CONFIG + " is used to provide the value to " +
+        "include with the login request.";
 
     private String clientId;
 
