@@ -25,11 +25,13 @@ import org.jose4j.lang.InvalidAlgorithmException;
 import org.junit.jupiter.api.Test;
 
 import java.security.Key;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
 import javax.security.auth.login.AppConfigurationEntry;
 
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SUB_CLAIM_NAME;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule.OAUTHBEARER_MECHANISM;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
@@ -85,7 +87,8 @@ public class BrokerAccessTokenValidatorTest extends AccessTokenValidatorTest {
             .subjectClaimName(subClaimName)
             .subject(null);
         AccessTokenValidator validator = createAccessTokenValidator(tokenBuilder);
-        validator.configure(getSaslConfigs(), OAUTHBEARER_MECHANISM, List.of());
+        Map<String, Object> configs = Collections.singletonMap(SASL_OAUTHBEARER_SUB_CLAIM_NAME, tokenBuilder.subjectClaimName());
+        validator.configure(getSaslConfigs(configs), OAUTHBEARER_MECHANISM, List.of());
 
         // Validation should succeed (e.g. signature verification) even if sub claim is missing
         OAuthBearerToken token = validator.validate(tokenBuilder.build());
