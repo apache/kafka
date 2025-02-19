@@ -183,7 +183,7 @@ public class StreamsGroupCommand {
                 } else if (opts.options.has(opts.stateOpt)) {
                     printStates(description, verbose);
                 } else {
-                    printOffsets2(description, verbose);
+                    printOffsets(description, verbose);
                 }
             }
         }
@@ -263,32 +263,7 @@ public class StreamsGroupCommand {
         }
 
         private void printOffsets(StreamsGroupDescription description, boolean verbose) throws ExecutionException, InterruptedException {
-            Map<TopicPartition, Long> offsets = getOffsets(description.members(), description);
-            if (maybePrintEmptyGroupState(description.groupId(), description.groupState(), offsets.size())) {
-                int groupLen = Math.max(15, description.groupId().length());
-                int maxTopicLen = 15;
-                for (TopicPartition topicPartition : offsets.keySet()) {
-                    maxTopicLen = Math.max(maxTopicLen, topicPartition.topic().length());
-                }
-
-                if (!verbose) {
-                    String fmt =  "%" + (-groupLen) + "s %" + (-maxTopicLen) + "s %-10s %s%n";
-                    System.out.printf(fmt, "GROUP", "TOPIC", "PARTITION", "OFFSET-LAG");
-                    for (Map.Entry<TopicPartition, Long> offset : offsets.entrySet()) {
-                        System.out.printf(fmt, description.groupId(), offset.getKey().topic(), offset.getKey().partition(), offset.getValue());
-                    }
-                } else {
-                    String fmt =  "%" + (-groupLen) + "s %" + (-maxTopicLen) + "s %-10s %-15s %s%n";
-                    System.out.printf(fmt, "GROUP", "TOPIC", "PARTITION", "LEADER-EPOCH", "OFFSET-LAG");
-                    for (Map.Entry<TopicPartition, Long> offset : offsets.entrySet()) {
-                        System.out.printf(fmt, description.groupId(), offset.getKey().topic(), offset.getKey().partition(), description.groupEpoch(), offset.getValue());
-                    }
-                }
-            }
-        }
-
-        private void printOffsets2(StreamsGroupDescription description, boolean verbose) throws ExecutionException, InterruptedException {
-            Map<TopicPartition, OffsetsAndLag> offsets = getOffsets2(description);
+            Map<TopicPartition, OffsetsAndLag> offsets = getOffsets(description);
             if (maybePrintEmptyGroupState(description.groupId(), description.groupState(), offsets.size())) {
                 int groupLen = Math.max(15, description.groupId().length());
                 int maxTopicLen = 15;
@@ -313,30 +288,7 @@ public class StreamsGroupCommand {
             }
         }
 
-        Map<TopicPartition, Long> getOffsets(Collection<StreamsGroupMemberDescription> members, StreamsGroupDescription description) throws ExecutionException, InterruptedException {
-            Set<TopicPartition> allTp = new HashSet<>();
-            for (StreamsGroupMemberDescription memberDescription : members) {
-                allTp.addAll(getTopicPartitions(memberDescription.assignment().activeTasks(), description));
-            }
-            // fetch latest and earliest offsets
-            Map<TopicPartition, OffsetSpec> earliest = new HashMap<>();
-            Map<TopicPartition, OffsetSpec> latest = new HashMap<>();
-
-            for (TopicPartition tp : allTp) {
-                earliest.put(tp, OffsetSpec.earliest());
-                latest.put(tp, OffsetSpec.latest());
-            }
-            Map<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> earliestResult = adminClient.listOffsets(earliest).all().get();
-            Map<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> latestResult = adminClient.listOffsets(latest).all().get();
-
-            Map<TopicPartition, Long> lag = new HashMap<>();
-            for (Map.Entry<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> tp : earliestResult.entrySet()) {
-                lag.put(tp.getKey(), latestResult.get(tp.getKey()).offset() - earliestResult.get(tp.getKey()).offset());
-            }
-            return lag;
-        }
-
-        Map<TopicPartition, OffsetsAndLag> getOffsets2(StreamsGroupDescription description) throws ExecutionException, InterruptedException {
+        Map<TopicPartition, OffsetsAndLag> getOffsets(StreamsGroupDescription description) throws ExecutionException, InterruptedException {
             final Collection<StreamsGroupMemberDescription> members = description.members();
             Set<TopicPartition> allTp = new HashSet<>();
             for (StreamsGroupMemberDescription memberDescription : members) {
@@ -356,16 +308,18 @@ public class StreamsGroupCommand {
 
             Map<TopicPartition, OffsetsAndLag> output = new HashMap<>();
             for (Map.Entry<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> tp : earliestResult.entrySet()) {
+                final Optional<Long> currentOffset = committedOffsets.containsKey(tp.getKey()) ? Optional.of(committedOffsets.get(tp.getKey()).offset()) : Optional.empty();
+                final long lag = currentOffset.map(aLong -> latestResult.get(tp.getKey()).offset() - aLong).orElseGet(() -> latestResult.get(tp.getKey()).offset() - earliestResult.get(tp.getKey()).offset());
                 output.put(tp.getKey(),
                     new OffsetsAndLag(
-                        committedOffsets.containsKey(tp.getKey()) ? Optional.of(committedOffsets.get(tp.getKey()).offset()) : Optional.empty(),
+                        currentOffset,
                         latestResult.get(tp.getKey()).offset(),
-                        latestResult.get(tp.getKey()).offset() - earliestResult.get(tp.getKey()).offset()));
+                        lag));
             }
             return output;
         }
 
-        private Map<TopicPartition, OffsetAndMetadata> getCommittedOffsets(String groupId) {
+        Map<TopicPartition, OffsetAndMetadata> getCommittedOffsets(String groupId) {
             try {
                 return adminClient.listConsumerGroupOffsets(
                     Collections.singletonMap(groupId, new ListConsumerGroupOffsetsSpec())).partitionsToOffsetAndMetadata(groupId).get();
