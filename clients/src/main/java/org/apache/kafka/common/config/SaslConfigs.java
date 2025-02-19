@@ -18,6 +18,8 @@ package org.apache.kafka.common.config;
 
 import org.apache.kafka.common.config.ConfigDef.Range;
 
+import java.util.List;
+
 public class SaslConfigs {
 
     private static final String OAUTHBEARER_NOTE = " Currently applies only to OAUTHBEARER.";
@@ -129,6 +131,16 @@ public class SaslConfigs {
             + " authentication provider."
             + LOGIN_EXPONENTIAL_BACKOFF_NOTE;
 
+
+
+
+
+
+
+
+
+
+
     public static final String SASL_OAUTHBEARER_SCOPE_CLAIM_NAME = "sasl.oauthbearer.scope.claim.name";
     public static final String DEFAULT_SASL_OAUTHBEARER_SCOPE_CLAIM_NAME = "scope";
     public static final String SASL_OAUTHBEARER_SCOPE_CLAIM_NAME_DOC = "The OAuth claim for the scope is often named \"" + DEFAULT_SASL_OAUTHBEARER_SCOPE_CLAIM_NAME + "\", but this (optional)"
@@ -140,6 +152,16 @@ public class SaslConfigs {
     public static final String SASL_OAUTHBEARER_SUB_CLAIM_NAME_DOC = "The OAuth claim for the subject is often named \"" + DEFAULT_SASL_OAUTHBEARER_SUB_CLAIM_NAME + "\", but this (optional)"
             + " setting can provide a different name to use for the subject included in the JWT payload's claims if the OAuth/OIDC provider uses a different"
             + " name for that claim.";
+
+    public static final String SASL_OAUTHBEARER_TOKEN_ENDPOINT_GRANT_TYPE = "sasl.oauthbearer.token.endpoint.grant.type";
+    public static final String DEFAULT_SASL_OAUTHBEARER_TOKEN_ENDPOINT_GRANT_TYPE = "client_credentials";
+    public static final List<String> SUPPORTED_SASL_OAUTHBEARER_TOKEN_ENDPOINT_GRANT_TYPES = List.of(
+            "client_credentials",
+            "urn:ietf:params:oauth:grant-type:jwt-bearer"
+    );
+    public static final String SASL_OAUTHBEARER_TOKEN_ENDPOINT_GRANT_TYPE_DOC = "The grant type used when sending the JWT token to the token endpoint. "
+        + "This should be set explicitly to determine which token retriever to use. The supported values are "
+        + SUPPORTED_SASL_OAUTHBEARER_TOKEN_ENDPOINT_GRANT_TYPES;
 
     public static final String SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL = "sasl.oauthbearer.token.endpoint.url";
     public static final String SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL_DOC = "The URL for the OAuth/OIDC identity provider. If the URL is HTTP(S)-based, it is the issuer's token"
@@ -217,6 +239,7 @@ public class SaslConfigs {
                 .define(SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MS, ConfigDef.Type.LONG, DEFAULT_SASL_LOGIN_RETRY_BACKOFF_MS, ConfigDef.Importance.LOW, SASL_LOGIN_RETRY_BACKOFF_MS_DOC)
                 .define(SaslConfigs.SASL_OAUTHBEARER_SCOPE_CLAIM_NAME, ConfigDef.Type.STRING, DEFAULT_SASL_OAUTHBEARER_SCOPE_CLAIM_NAME, ConfigDef.Importance.LOW, SASL_OAUTHBEARER_SCOPE_CLAIM_NAME_DOC)
                 .define(SaslConfigs.SASL_OAUTHBEARER_SUB_CLAIM_NAME, ConfigDef.Type.STRING, DEFAULT_SASL_OAUTHBEARER_SUB_CLAIM_NAME, ConfigDef.Importance.LOW, SASL_OAUTHBEARER_SUB_CLAIM_NAME_DOC)
+                .define(SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_GRANT_TYPE, ConfigDef.Type.STRING, DEFAULT_SASL_OAUTHBEARER_TOKEN_ENDPOINT_GRANT_TYPE, ConfigDef.Importance.MEDIUM, SASL_OAUTHBEARER_TOKEN_ENDPOINT_GRANT_TYPE_DOC)
                 .define(SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM, SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL_DOC)
                 .define(SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_URL, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM, SASL_OAUTHBEARER_JWKS_ENDPOINT_URL_DOC)
                 .define(SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS, ConfigDef.Type.LONG, DEFAULT_SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS, ConfigDef.Importance.LOW, SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS_DOC)

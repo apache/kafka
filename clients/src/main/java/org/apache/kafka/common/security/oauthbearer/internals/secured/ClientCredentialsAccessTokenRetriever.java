@@ -30,7 +30,6 @@ import javax.security.auth.login.AppConfigurationEntry;
 
 import static org.apache.kafka.common.config.SaslConfigs.DEFAULT_SASL_OAUTHBEARER_HEADER_URLENCODE;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_HEADER_URLENCODE;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
 
 /**
  * <code>HttpAccessTokenRetriever</code> is an {@link AccessTokenRetriever} that will
@@ -47,27 +46,9 @@ public class ClientCredentialsAccessTokenRetriever extends HttpAccessTokenRetrie
 
     public static final String GRANT_TYPE = "client_credentials";
 
-    public static final String CLIENT_ID_CONFIG = "clientId";
-    public static final String CLIENT_SECRET_CONFIG = "clientSecret";
-    public static final String SCOPE_CONFIG = "scope";
-
-    public static final String CLIENT_ID_DOC = "The OAuth/OIDC identity provider-issued " +
-        "client ID to uniquely identify the service account to use for authentication for " +
-        "this client. The value must be paired with a corresponding " + CLIENT_SECRET_CONFIG + " " +
-        "value and is provided to the OAuth provider using the OAuth " +
-        "client_credentials grant type.";
-
-    public static final String CLIENT_SECRET_DOC = "The OAuth/OIDC identity provider-issued " +
-        "client secret serves a similar function as a password to the " + CLIENT_ID_CONFIG + " " +
-        "account and identifies the service account to use for authentication for " +
-        "this client. The value must be paired with a corresponding " + CLIENT_ID_CONFIG + " " +
-        "value and is provided to the OAuth provider using the OAuth " +
-        "client_credentials grant type.";
-
-    public static final String SCOPE_DOC = "The (optional) HTTP/HTTPS login request to the " +
-        "token endpoint (" + SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL + ") may need to specify an " +
-        "OAuth \"scope\". If so, the " + SCOPE_CONFIG + " is used to provide the value to " +
-        "include with the login request.";
+    private static final String CLIENT_ID_CONFIG = "clientId";
+    private static final String CLIENT_SECRET_CONFIG = "clientSecret";
+    private static final String SCOPE_CONFIG = "scope";
 
     private String clientId;
 

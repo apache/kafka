@@ -107,14 +107,31 @@ import static org.apache.kafka.common.config.SslConfigs.SSL_TRUSTSTORE_PASSWORD_
 import static org.apache.kafka.common.config.SslConfigs.SSL_TRUSTSTORE_PASSWORD_DOC;
 import static org.apache.kafka.common.config.SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG;
 import static org.apache.kafka.common.config.SslConfigs.SSL_TRUSTSTORE_TYPE_DOC;
-import static org.apache.kafka.common.security.oauthbearer.internals.secured.ClientCredentialsAccessTokenRetriever.CLIENT_ID_CONFIG;
-import static org.apache.kafka.common.security.oauthbearer.internals.secured.ClientCredentialsAccessTokenRetriever.CLIENT_ID_DOC;
-import static org.apache.kafka.common.security.oauthbearer.internals.secured.ClientCredentialsAccessTokenRetriever.CLIENT_SECRET_CONFIG;
-import static org.apache.kafka.common.security.oauthbearer.internals.secured.ClientCredentialsAccessTokenRetriever.CLIENT_SECRET_DOC;
-import static org.apache.kafka.common.security.oauthbearer.internals.secured.ClientCredentialsAccessTokenRetriever.SCOPE_CONFIG;
-import static org.apache.kafka.common.security.oauthbearer.internals.secured.ClientCredentialsAccessTokenRetriever.SCOPE_DOC;
 
 public class OAuthCompatibilityTool {
+
+    private static final String OAUTHBEARER_MECHANISM = "OAUTHBEARER";
+    private static final String CLIENT_ID_JAAS_OPTION = "clientId";
+    private static final String CLIENT_SECRET_JAAS_OPTION = "clientSecret";
+    private static final String SCOPE_JAAS_OPTION = "scope";
+
+    private static final String CLIENT_ID_DOC = "The OAuth/OIDC identity provider-issued " +
+        "client ID to uniquely identify the service account to use for authentication for " +
+        "this client. The value must be paired with a corresponding " + CLIENT_SECRET_JAAS_OPTION + " " +
+        "value and is provided to the OAuth provider using the OAuth " +
+        "client_credentials grant type.";
+
+    private static final String CLIENT_SECRET_DOC = "The OAuth/OIDC identity provider-issued " +
+        "client secret serves a similar function as a password to the " + CLIENT_ID_JAAS_OPTION + " " +
+        "account and identifies the service account to use for authentication for " +
+        "this client. The value must be paired with a corresponding " + CLIENT_ID_JAAS_OPTION + " " +
+        "value and is provided to the OAuth provider using the OAuth " +
+        "client_credentials grant type.";
+
+    private static final String SCOPE_DOC = "The (optional) HTTP/HTTPS login request to the " +
+        "token endpoint (" + SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL + ") may need to specify an " +
+        "OAuth \"scope\". If so, the " + SCOPE_JAAS_OPTION + " is used to provide the value to " +
+        "include with the login request.";
 
     public static void main(String[] args) {
         ArgsHandler argsHandler = new ArgsHandler();
@@ -130,14 +147,14 @@ public class OAuthCompatibilityTool {
         ConfigHandler configHandler = new ConfigHandler(namespace);
 
         Map<String, ?> configs = configHandler.getConfigs();
-        Map<String, Object> jaasConfigs = configHandler.getJaasOptions();
+        Map<String, Object> jaasConfig = configHandler.getJaasOptions();
 
         try {
             String accessToken;
 
             // Client side...
             try (AccessTokenRetriever retriever = new DefaultAccessTokenRetriever()) {
-                retriever.configure(configs, null, List.of());
+                retriever.configure(configs, OAUTHBEARER_MECHANISM, List.of());
 
                 try (AccessTokenValidator validator = new DefaultAccessTokenValidator()) {
                     validator.configure(configs, null, List.of());
@@ -177,7 +194,6 @@ public class OAuthCompatibilityTool {
         }
     }
 
-
     private static class ArgsHandler {
 
         private static final String DESCRIPTION = String.format(
@@ -202,8 +218,7 @@ public class OAuthCompatibilityTool {
             addArgument(SASL_LOGIN_RETRY_BACKOFF_MAX_MS, SASL_LOGIN_RETRY_BACKOFF_MAX_MS_DOC, Long.class);
             addArgument(SASL_LOGIN_RETRY_BACKOFF_MS, SASL_LOGIN_RETRY_BACKOFF_MS_DOC, Long.class);
             addArgument(SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS, SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS_DOC, Integer.class);
-            addArgument(SASL_OAUTHBEARER_EXPECTED_AUDIENCE, SASL_OAUTHBEARER_EXPECTED_AUDIENCE_DOC)
-                .action(Arguments.append());
+            addArgument(SASL_OAUTHBEARER_EXPECTED_AUDIENCE, SASL_OAUTHBEARER_EXPECTED_AUDIENCE_DOC).action(Arguments.append());
             addArgument(SASL_OAUTHBEARER_EXPECTED_ISSUER, SASL_OAUTHBEARER_EXPECTED_ISSUER_DOC);
             addArgument(SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS, SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS_DOC, Long.class);
             addArgument(SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS, SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS_DOC, Long.class);
@@ -214,10 +229,8 @@ public class OAuthCompatibilityTool {
             addArgument(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL_DOC);
 
             // SSL
-            addArgument(SSL_CIPHER_SUITES_CONFIG, SSL_CIPHER_SUITES_DOC)
-                .action(Arguments.append());
-            addArgument(SSL_ENABLED_PROTOCOLS_CONFIG, SSL_ENABLED_PROTOCOLS_DOC)
-                .action(Arguments.append());
+            addArgument(SSL_CIPHER_SUITES_CONFIG, SSL_CIPHER_SUITES_DOC).action(Arguments.append());
+            addArgument(SSL_ENABLED_PROTOCOLS_CONFIG, SSL_ENABLED_PROTOCOLS_DOC).action(Arguments.append());
             addArgument(SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_DOC);
             addArgument(SSL_ENGINE_FACTORY_CLASS_CONFIG, SSL_ENGINE_FACTORY_CLASS_DOC);
             addArgument(SSL_KEYMANAGER_ALGORITHM_CONFIG, SSL_KEYMANAGER_ALGORITHM_DOC);
@@ -237,9 +250,9 @@ public class OAuthCompatibilityTool {
             addArgument(SSL_TRUSTSTORE_TYPE_CONFIG, SSL_TRUSTSTORE_TYPE_DOC);
 
             // JAAS options...
-            addArgument(CLIENT_ID_CONFIG, CLIENT_ID_DOC);
-            addArgument(CLIENT_SECRET_CONFIG, CLIENT_SECRET_DOC);
-            addArgument(SCOPE_CONFIG, SCOPE_DOC);
+            addArgument(CLIENT_ID_JAAS_OPTION, CLIENT_ID_DOC);
+            addArgument(CLIENT_SECRET_JAAS_OPTION, CLIENT_SECRET_DOC);
+            addArgument(SCOPE_JAAS_OPTION, SCOPE_DOC);
 
             try {
                 return parser.parseArgs(args);
@@ -263,13 +276,11 @@ public class OAuthCompatibilityTool {
                 .dest(option)
                 .help(help);
         }
-
     }
 
     private static class ConfigHandler {
 
         private final Namespace namespace;
-
 
         private ConfigHandler(Namespace namespace) {
             this.namespace = namespace;
@@ -306,9 +317,9 @@ public class OAuthCompatibilityTool {
             Map<String, Object> m = new HashMap<>();
 
             // SASL/OAuth
-            maybeAddString(m, CLIENT_ID_CONFIG);
-            maybeAddString(m, CLIENT_SECRET_CONFIG);
-            maybeAddString(m, SCOPE_CONFIG);
+            maybeAddString(m, CLIENT_ID_JAAS_OPTION);
+            maybeAddString(m, CLIENT_SECRET_JAAS_OPTION);
+            maybeAddString(m, SCOPE_JAAS_OPTION);
 
             // SSL
             maybeAddStringList(m, SSL_CIPHER_SUITES_CONFIG);
@@ -380,7 +391,5 @@ public class OAuthCompatibilityTool {
             if (value != null)
                 m.put(option, value);
         }
-
     }
-
 }

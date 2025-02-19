@@ -43,6 +43,32 @@ public class JwtBearerAccessTokenRetriever extends HttpAccessTokenRetriever {
 
     public final static String GRANT_TYPE = "urn:ietf:params:oauth:grant-type:jwt-bearer";
 
+    // The private key ID of the private key used to sign the JWT token sent to the token endpoint. This will
+    // be added as a header in the JWT token sent to the token endpoint.
+    private static final String TOKEN_ENDPOINT_PRIVATE_KEY_ID = "privateKeyId";
+
+    // The private key used to sign the JWT token sent to the token endpoint. This must be in PEM format without
+    // the header and footer.
+    private static final String TOKEN_ENDPOINT_PRIVATE_KEY_SECRET = "privateKeySecret";
+
+    private final static String RS256 = "RS256";
+    private final static String ES256 = "ES256";
+
+    // The algorithm used to sign the JWT token sent to the token endpoint.
+    private static final String TOKEN_ENDPOINT_SIGNING_ALGO = "tokenSigningAlgo";
+
+    // The subject of the JWT token sent to the token endpoint.
+    private static final String TOKEN_SUBJECT = "tokenSubject";
+
+    // The issuer of the JWT token sent to the token endpoint.
+    private static final String TOKEN_ISSUER = "tokenIssuer";
+
+    // The audience of the JWT token sent to the token endpoint.
+    private static final String TOKEN_AUDIENCE = "tokenAudience";
+
+    // The target audience of the JWT token sent to the token endpoint.
+    private static final String TOKEN_TARGET_AUDIENCE = "tokenTargetAudience";
+
     private final Time time;
 
     private String assertion;
@@ -60,13 +86,13 @@ public class JwtBearerAccessTokenRetriever extends HttpAccessTokenRetriever {
         super.configure(configs, saslMechanism, jaasConfigEntries);
 
         JaasOptionsUtils jou = new JaasOptionsUtils(saslMechanism, jaasConfigEntries);
-        String privateKeyId = jou.validateString(OAuthBearerConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_PRIVATE_KEY_ID);
-        String privateKeySecret = jou.validateString(OAuthBearerConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_PRIVATE_KEY_SECRET);
-        String tokenSigningAlgo = jou.validateString(OAuthBearerConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_SIGNING_ALGO);
-        String tokenSubject = jou.validateString(OAuthBearerConfigs.SASL_OAUTHBEARER_TOKEN_SUBJECT);
-        String tokenIssuer = jou.validateString(OAuthBearerConfigs.SASL_OAUTHBEARER_TOKEN_ISSUER);
-        String tokenAudience = jou.validateString(OAuthBearerConfigs.SASL_OAUTHBEARER_TOKEN_AUDIENCE);
-        String tokenTargetAudience = jou.validateString(OAuthBearerConfigs.SASL_OAUTHBEARER_TOKEN_TARGET_AUDIENCE, false);
+        String privateKeyId = jou.validateString(TOKEN_ENDPOINT_PRIVATE_KEY_ID);
+        String privateKeySecret = jou.validateString(TOKEN_ENDPOINT_PRIVATE_KEY_SECRET);
+        String tokenSigningAlgo = jou.validateString(TOKEN_ENDPOINT_SIGNING_ALGO);
+        String tokenSubject = jou.validateString(TOKEN_SUBJECT);
+        String tokenIssuer = jou.validateString(TOKEN_ISSUER);
+        String tokenAudience = jou.validateString(TOKEN_AUDIENCE);
+        String tokenTargetAudience = jou.validateString(TOKEN_TARGET_AUDIENCE, false);
 
         try {
             byte[] pkcs8EncodedBytes = Base64.getDecoder().decode(privateKeySecret);
@@ -171,9 +197,9 @@ public class JwtBearerAccessTokenRetriever extends HttpAccessTokenRetriever {
         }
 
         static Signature getSignature(String algorithm) throws NoSuchAlgorithmException {
-            if (algorithm.equalsIgnoreCase("RS256")) {
+            if (algorithm.equalsIgnoreCase(RS256)) {
                 return Signature.getInstance("SHA256withRSA");
-            } else if (algorithm.equalsIgnoreCase("ES256")) {
+            } else if (algorithm.equalsIgnoreCase(ES256)) {
                 return Signature.getInstance("SHA256withECDSA");
             } else {
                 throw new NoSuchAlgorithmException(String.format("Unsupported signing algorithm: %s", algorithm));
