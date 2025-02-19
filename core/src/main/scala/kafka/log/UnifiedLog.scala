@@ -1092,7 +1092,10 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
     records.batches.forEach { batch =>
       if (origin == AppendOrigin.RAFT_LEADER && batch.partitionLeaderEpoch != leaderEpoch) {
-        throw new InvalidRecordException("Append from Raft leader did not set the batch epoch correctly")
+        throw new InvalidRecordException(
+          s"Append from Raft leader did not set the batch epoch correctly, expected $leaderEpoch " +
+          s"but the batch has ${batch.partitionLeaderEpoch}"
+        )
       }
       // we only validate V2 and higher to avoid potential compatibility issues with older clients
       if (batch.magic >= RecordBatch.MAGIC_VALUE_V2 && origin == AppendOrigin.CLIENT && batch.baseOffset != 0) {
@@ -1101,7 +1104,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
       }
 
       /* During replication of uncommitted data it is possible for the remote replica to send record batches after it lost
-       * leadership. This can happend if sending FETCH responses is slowed because there is a race between sending the FETCH
+       * leadership. This can happen if sending FETCH responses is slow. There is a race between sending the FETCH
        * response and the replica truncating and appending to the log. The replicating replica resolves this issue by only
        * persisting up to the partition leader epoch of the leader when the FETCH request was handled. See KAFKA-18723 for
        * more details.
@@ -1178,13 +1181,13 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   }
 
   /**
-   * Return true if the record batch should not be appending to the log.
+   * Return true if the record batch has a higher leader epoch than the specified leader epoch
    *
    * @param batch the batch to validate
    * @param origin the reason for appending the record batch
    * @param leaderEpoch the epoch to compare
-   * @return true if the append reason is replication and the partition leader epoch is greater
-   *         than the leader epoch, otherwise false
+   * @return true if the append reason is replication and the batch's partition leader epoch is
+   *         greater than the leader epoch, otherwise false
    */
   private def hasInvalidPartitionLeaderEpoch(
     batch: RecordBatch,

@@ -14,41 +14,39 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.raft;
+package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.errors.CorruptRecordException;
-import org.apache.kafka.common.record.LegacyRecord;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.record.Records;
 
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.ArgumentsProvider;
 
 import java.nio.ByteBuffer;
+import java.util.Optional;
 import java.util.stream.Stream;
 
 public final class InvalidMemoryRecordsProvider implements ArgumentsProvider {
     // Use a baseOffset that not zero so that is less likely to match the LEO
     private static final long BASE_OFFSET = 1234;
-    public static final int EPOCH = 4321;
+    private static final int EPOCH = 4321;
 
     /** Returns a stream of arguements for invalid memory records and the expected exception.
      *
      * The first object in the Arguments is a MemoryRecords.
      *
-     * The second object in the Arguments is an Class<Exception> which is the expected exception from the log layer
+     * The second object in the Arguments is an Optional<Class<Exception>> which is the expected
+     * exception from the log layer.
      */
     @Override
     public Stream<? extends Arguments> provideArguments(ExtensionContext context) {
         return Stream.of(
-            Arguments.of(MemoryRecords.readableRecords(notEnoughtBytes()), CorruptRecordException.class),
-            Arguments.of(MemoryRecords.readableRecords(recordsSizeTooSmall()), CorruptRecordException.class),
-            Arguments.of(MemoryRecords.readableRecords(notEnoughBytesToMagic()), CorruptRecordException.class),
-            Arguments.of(MemoryRecords.readableRecords(negativeMagic()), CorruptRecordException.class),
-            Arguments.of(MemoryRecords.readableRecords(largeMagic()), CorruptRecordException.class),
-            Arguments.of(MemoryRecords.readableRecords(lessBytesThanRecordSize()), CorruptRecordException.class)
+            Arguments.of(MemoryRecords.readableRecords(notEnoughtBytes()), Optional.empty()),
+            Arguments.of(MemoryRecords.readableRecords(recordsSizeTooSmall()), Optional.of(CorruptRecordException.class)),
+            Arguments.of(MemoryRecords.readableRecords(notEnoughBytesToMagic()), Optional.empty()),
+            Arguments.of(MemoryRecords.readableRecords(negativeMagic()), Optional.of(CorruptRecordException.class)),
+            Arguments.of(MemoryRecords.readableRecords(largeMagic()), Optional.of(CorruptRecordException.class)),
+            Arguments.of(MemoryRecords.readableRecords(lessBytesThanRecordSize()), Optional.empty())
         );
     }
 

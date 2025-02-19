@@ -22,7 +22,9 @@ import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 import org.apache.kafka.common.message.LeaderChangeMessage;
+import org.apache.kafka.common.record.ArbitraryMemoryRecords;
 import org.apache.kafka.common.record.ControlRecordUtils;
+import org.apache.kafka.common.record.InvalidMemoryRecordsProvider;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
@@ -40,6 +42,7 @@ import net.jqwik.api.Property;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.function.Executable;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ArgumentsSource;
 
@@ -51,6 +54,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -393,31 +397,74 @@ public class MockLogTest {
 
     @ParameterizedTest
     @ArgumentsSource(InvalidMemoryRecordsProvider.class)
-    void testInvalidMemoryRecords(MemoryRecords records, Class<Exception> expectedException) {
+    void testInvalidMemoryRecords(MemoryRecords records, Optional<Class<Exception>> expectedException) {
         long previousEndOffset = log.endOffset().offset();
 
-        assertThrows(
-            expectedException,
-            () -> log.appendAsFollower(records, InvalidMemoryRecordsProvider.EPOCH)
-        );
+        Executable action = () -> log.appendAsFollower(records, Integer.MAX_VALUE);
+        if (expectedException.isPresent()) {
+            assertThrows(expectedException.get(), action);
+        } else {
+            assertThrows(CorruptRecordException.class, action);
+        }
 
         assertEquals(previousEndOffset, log.endOffset().offset());
     }
 
     @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
     void testRandomRecords(
-        @ForAll(supplier = ArbitraryRecords.class) MemoryRecords records
+        @ForAll(supplier = ArbitraryMemoryRecords.class) MemoryRecords records
     ) {
         try (MockLog log = new MockLog(topicPartition, topicId, new LogContext())) {
             long previousEndOffset = log.endOffset().offset();
 
             assertThrows(
                 CorruptRecordException.class,
-                () -> log.appendAsFollower(records, InvalidMemoryRecordsProvider.EPOCH)
+                () -> log.appendAsFollower(records, Integer.MAX_VALUE)
             );
 
             assertEquals(previousEndOffset, log.endOffset().offset());
         }
+    }
+
+    @Test
+    void testInvalidLeaderEpoch() {
+        var previousEndOffset = log.endOffset().offset();
+        var epoch = log.lastFetchedEpoch() + 1;
+        var numberOfRecords = 10;
+
+        MemoryRecords batchWithValidEpoch = MemoryRecords.withRecords(
+            previousEndOffset,
+            Compression.NONE,
+            epoch,
+            IntStream
+                .range(0, numberOfRecords)
+                .mapToObj(number -> new SimpleRecord(Integer.toString(number).getBytes()))
+                .toArray(SimpleRecord[]::new)
+        );
+
+        MemoryRecords batchWithInvalidEpoch = MemoryRecords.withRecords(
+            previousEndOffset + numberOfRecords,
+            Compression.NONE,
+            epoch + 1,
+            IntStream
+                .range(0, numberOfRecords)
+                .mapToObj(number -> new SimpleRecord(Integer.toString(number).getBytes()))
+                .toArray(SimpleRecord[]::new)
+        );
+
+        var buffer = ByteBuffer.allocate(batchWithValidEpoch.sizeInBytes() + batchWithInvalidEpoch.sizeInBytes());
+        buffer.put(batchWithValidEpoch.buffer());
+        buffer.put(batchWithInvalidEpoch.buffer());
+        buffer.flip();
+
+        var records = MemoryRecords.readableRecords(buffer);
+
+        log.appendAsFollower(records, epoch);
+
+        // Check that only the first batch was appended
+        assertEquals(previousEndOffset + numberOfRecords, log.endOffset().offset());
+        // Check that the last fetched epoch matches the first batch
+        assertEquals(epoch, log.lastFetchedEpoch());
     }
 
     @Test

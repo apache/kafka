@@ -17,6 +17,8 @@
 package org.apache.kafka.raft;
 
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.record.ArbitraryMemoryRecords;
+import org.apache.kafka.common.record.InvalidMemoryRecordsProvider;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.server.common.KRaftVersion;
 
@@ -27,6 +29,7 @@ import net.jqwik.api.Property;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ArgumentsSource;
 
+import java.util.Optional;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -34,14 +37,14 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 public final class KafkaRaftClientFetchTest {
     @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
     void testRandomRecords(
-        @ForAll(supplier = ArbitraryRecords.class) MemoryRecords memoryRecords
+        @ForAll(supplier = ArbitraryMemoryRecords.class) MemoryRecords memoryRecords
     ) throws Exception {
         testFetchResponseWithInvalidRecord(memoryRecords);
     }
 
     @ParameterizedTest
     @ArgumentsSource(InvalidMemoryRecordsProvider.class)
-    void testInvalidMemoryRecords(MemoryRecords records, Class<Exception> expectedException) throws Exception {
+    void testInvalidMemoryRecords(MemoryRecords records, Optional<Class<Exception>> expectedException) throws Exception {
         // CorruptRecordException are handled by the KafkaRaftClient so ignore the expected exception
         testFetchResponseWithInvalidRecord(records);
     }

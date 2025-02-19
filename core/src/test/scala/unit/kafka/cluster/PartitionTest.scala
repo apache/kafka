@@ -1004,7 +1004,7 @@ class PartitionTest extends AbstractPartitionTest {
       () => partition.appendRecordsToFollowerOrFutureReplica(
         createRecords(List(new SimpleRecord("k1".getBytes, "v1".getBytes)), baseOffset = 3L),
         isFuture = false,
-        maxEpoch = epoch
+        partitionLeaderEpoch = epoch
       )
     )
     assertEquals(initialLogStartOffset, log.logEndOffset,
@@ -1017,7 +1017,7 @@ class PartitionTest extends AbstractPartitionTest {
                                      new SimpleRecord("k2".getBytes, "v2".getBytes),
                                      new SimpleRecord("k3".getBytes, "v3".getBytes)),
                                 baseOffset = newLogStartOffset)
-    partition.appendRecordsToFollowerOrFutureReplica(records, isFuture = false, maxEpoch = epoch)
+    partition.appendRecordsToFollowerOrFutureReplica(records, isFuture = false, partitionLeaderEpoch = epoch)
     assertEquals(7L, log.logEndOffset, s"Log end offset after append of 3 records with base offset $newLogStartOffset:")
     assertEquals(newLogStartOffset, log.logStartOffset, s"Log start offset after append of 3 records with base offset $newLogStartOffset:")
 
@@ -1025,7 +1025,7 @@ class PartitionTest extends AbstractPartitionTest {
     partition.appendRecordsToFollowerOrFutureReplica(
       createRecords(List(new SimpleRecord("k1".getBytes, "v1".getBytes)), baseOffset = 7L),
       isFuture = false,
-      maxEpoch = epoch
+      partitionLeaderEpoch = epoch
     )
     assertEquals(8L, log.logEndOffset, s"Log end offset after append of 1 record at offset 7:")
     assertEquals(newLogStartOffset, log.logStartOffset, s"Log start offset not expected to change:")
@@ -1036,7 +1036,7 @@ class PartitionTest extends AbstractPartitionTest {
       baseOffset = 3L)
     assertThrows(
       classOf[UnexpectedAppendOffsetException],
-      () => partition.appendRecordsToFollowerOrFutureReplica(records2, isFuture = false, maxEpoch = epoch)
+      () => partition.appendRecordsToFollowerOrFutureReplica(records2, isFuture = false, partitionLeaderEpoch = epoch)
     )
     assertEquals(8L, log.logEndOffset, s"Log end offset should not change after failure to append")
 
@@ -1044,7 +1044,7 @@ class PartitionTest extends AbstractPartitionTest {
     partition.appendRecordsToFollowerOrFutureReplica(
       createRecords(List(new SimpleRecord("k1".getBytes, "v1".getBytes)), baseOffset = 8L),
       isFuture = false,
-      maxEpoch = epoch
+      partitionLeaderEpoch = epoch
     )
     assertEquals(9L, log.logEndOffset, s"Log end offset after append of 1 record at offset 8:")
     assertEquals(newLogStartOffset, log.logStartOffset, s"Log start offset not expected to change:")
@@ -1133,7 +1133,7 @@ class PartitionTest extends AbstractPartitionTest {
       () => partition.appendRecordsToFollowerOrFutureReplica(
         createRecords(List(new SimpleRecord("k1".getBytes, "v1".getBytes)), baseOffset = 0L),
         isFuture = false,
-        maxEpoch = 0
+        partitionLeaderEpoch = 0
       )
     )
   }
@@ -3553,7 +3553,7 @@ class PartitionTest extends AbstractPartitionTest {
     partition.appendRecordsToFollowerOrFutureReplica(
       records = records,
       isFuture = true,
-      maxEpoch = epoch
+      partitionLeaderEpoch = epoch
     )
 
     listener.verify()

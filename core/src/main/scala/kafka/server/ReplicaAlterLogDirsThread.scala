@@ -69,7 +69,7 @@ class ReplicaAlterLogDirsThread(name: String,
   override def processPartitionData(
     topicPartition: TopicPartition,
     fetchOffset: Long,
-    maxEpoch: Int,
+    partitionLeaderEpoch: Int,
     partitionData: FetchData
   ): Option[LogAppendInfo] = {
     val partition = replicaMgr.getPartitionOrException(topicPartition)
@@ -81,7 +81,7 @@ class ReplicaAlterLogDirsThread(name: String,
         topicPartition, fetchOffset, futureLog.logEndOffset))
 
     val logAppendInfo = if (records.sizeInBytes() > 0)
-      partition.appendRecordsToFollowerOrFutureReplica(records, isFuture = true, maxEpoch)
+      partition.appendRecordsToFollowerOrFutureReplica(records, isFuture = true, partitionLeaderEpoch)
     else
       None
 

@@ -338,7 +338,7 @@ public class ReplicaFetcherThreadBenchmark {
         public Option<LogAppendInfo> processPartitionData(
             TopicPartition topicPartition,
             long fetchOffset,
-            int maxEpoch,
+            int partitionLeaderEpoch,
             FetchResponseData.PartitionData partitionData
         ) {
             return Option.empty();

@@ -5182,7 +5182,7 @@ class ReplicaManagerTest {
                 new SimpleRecord("first message".getBytes)
               ),
               isFuture = false,
-              maxEpoch = Int.MaxValue
+              partitionLeaderEpoch = Int.MaxValue
             )
 
           case _ =>

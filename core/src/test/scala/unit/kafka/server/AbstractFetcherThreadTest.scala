@@ -907,13 +907,13 @@ class AbstractFetcherThreadTest {
       override def processPartitionData(
         topicPartition: TopicPartition,
         fetchOffset: Long,
-        maxEpoch: Int,
+        partitionLeaderEpoch: Int,
         partitionData: FetchData
       ): Option[LogAppendInfo] = {
         if (topicPartition == partition1) {
           throw new KafkaException()
         } else {
-          super.processPartitionData(topicPartition, fetchOffset, maxEpoch, partitionData)
+          super.processPartitionData(topicPartition, fetchOffset, partitionLeaderEpoch, partitionData)
         }
       }
     }
@@ -1021,11 +1021,11 @@ class AbstractFetcherThreadTest {
       override def processPartitionData(
         topicPartition: TopicPartition,
         fetchOffset: Long,
-        maxEpoch: Int,
+        partitionLeaderEpoch: Int,
         partitionData: FetchData
       ): Option[LogAppendInfo] = {
         processPartitionDataCalls += 1
-        super.processPartitionData(topicPartition, fetchOffset, maxEpoch, partitionData)
+        super.processPartitionData(topicPartition, fetchOffset, partitionLeaderEpoch, partitionData)
       }
 
       override def truncate(topicPartition: TopicPartition, truncationState: OffsetTruncationState): Unit = {

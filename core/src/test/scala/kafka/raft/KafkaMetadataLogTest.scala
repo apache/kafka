@@ -23,6 +23,8 @@ import org.apache.kafka.common.errors.CorruptRecordException
 import org.apache.kafka.common.errors.{InvalidConfigurationException, RecordTooLargeException}
 import org.apache.kafka.common.protocol
 import org.apache.kafka.common.protocol.{ObjectSerializationCache, Writable}
+import org.apache.kafka.common.record.ArbitraryMemoryRecords
+import org.apache.kafka.common.record.InvalidMemoryRecordsProvider
 import org.apache.kafka.common.record.{MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.raft._
@@ -34,6 +36,7 @@ import org.apache.kafka.snapshot.{FileRawSnapshotWriter, RawSnapshotReader, RawS
 import org.apache.kafka.storage.internals.log.{LogConfig, LogStartOffsetIncrementReason, UnifiedLog}
 import org.apache.kafka.test.TestUtils.assertOptional
 import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.function.Executable
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ArgumentsSource
@@ -132,21 +135,23 @@ final class KafkaMetadataLogTest {
 
   @ParameterizedTest
   @ArgumentsSource(classOf[InvalidMemoryRecordsProvider])
-  def testInvalidMemoryRecords(records: MemoryRecords, expectedException: Class[Exception]): Unit = {
+  def testInvalidMemoryRecords(records: MemoryRecords, expectedException: Optional[Class[Exception]]): Unit = {
     val log = buildMetadataLog(tempDir, mockTime)
     val previousEndOffset = log.endOffset().offset()
 
-    assertThrows(
-      expectedException,
-      () => log.appendAsFollower(records, InvalidMemoryRecordsProvider.EPOCH)
-    );
+    val action: Executable = () => log.appendAsFollower(records, Int.MaxValue)
+    if (expectedException.isPresent()) {
+      assertThrows(expectedException.get, action)
+    } else {
+      assertThrows(classOf[CorruptRecordException], action)
+    }
 
     assertEquals(previousEndOffset, log.endOffset().offset())
   }
 
   @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
   def testRandomRecords(
-    @ForAll(supplier = classOf[ArbitraryRecords]) records: MemoryRecords
+    @ForAll(supplier = classOf[ArbitraryMemoryRecords]) records: MemoryRecords
   ): Unit = {
     val tempDir = TestUtils.tempDir()
     try {
@@ -162,6 +167,42 @@ final class KafkaMetadataLogTest {
     } finally {
       Utils.delete(tempDir)
     }
+  }
+
+  @Test
+  def testInvalidLeaderEpoch(): Unit = {
+    val log = buildMetadataLog(tempDir, mockTime)
+    val previousEndOffset = log.endOffset().offset()
+    val epoch = log.lastFetchedEpoch() + 1
+    val numberOfRecords = 10
+
+    val batchWithValidEpoch = MemoryRecords.withRecords(
+      previousEndOffset,
+      Compression.NONE,
+      epoch,
+      (0 until numberOfRecords).map(number => new SimpleRecord(number.toString.getBytes)): _*
+    )
+
+    val batchWithInvalidEpoch = MemoryRecords.withRecords(
+      previousEndOffset + numberOfRecords,
+      Compression.NONE,
+      epoch + 1,
+      (0 until numberOfRecords).map(number => new SimpleRecord(number.toString.getBytes)): _*
+    )
+
+    val buffer = ByteBuffer.allocate(batchWithValidEpoch.sizeInBytes() + batchWithInvalidEpoch.sizeInBytes())
+    buffer.put(batchWithValidEpoch.buffer())
+    buffer.put(batchWithInvalidEpoch.buffer())
+    buffer.flip()
+
+    val records = MemoryRecords.readableRecords(buffer)
+
+    log.appendAsFollower(records, epoch)
+
+    // Check that only the first batch was appended
+    assertEquals(previousEndOffset + numberOfRecords, log.endOffset().offset())
+    // Check that the last fetched epoch matches the first batch
+    assertEquals(epoch, log.lastFetchedEpoch())
   }
 
   @Test

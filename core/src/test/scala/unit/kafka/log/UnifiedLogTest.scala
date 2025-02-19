@@ -48,10 +48,15 @@ import org.apache.kafka.storage.log.metrics.{BrokerTopicMetrics, BrokerTopicStat
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ArgumentsSource
 import org.junit.jupiter.params.provider.{EnumSource, ValueSource}
 import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers.{any, anyLong}
 import org.mockito.Mockito.{doAnswer, doThrow, spy}
+
+import net.jqwik.api.AfterFailureMode
+import net.jqwik.api.ForAll
+import net.jqwik.api.Property
 
 import java.io._
 import java.nio.ByteBuffer
@@ -1986,6 +1991,91 @@ class UnifiedLogTest {
     log.appendAsFollower(first, Int.MaxValue)
     // the second record is larger then limit but appendAsFollower does not validate the size.
     log.appendAsFollower(second, Int.MaxValue)
+  }
+
+  @ParameterizedTest
+  @ArgumentsSource(classOf[InvalidMemoryRecordsProvider])
+  def testInvalidMemoryRecords(records: MemoryRecords, expectedException: Optional[Class[Exception]]): Unit = {
+    val logConfig = LogTestUtils.createLogConfig()
+    val log = createLog(logDir, logConfig)
+    val previousEndOffset = log.logEndOffsetMetadata.messageOffset
+
+    if (expectedException.isPresent()) {
+      assertThrows(
+        expectedException.get(),
+        () => log.appendAsFollower(records, Int.MaxValue)
+      );
+    } else {
+        log.appendAsFollower(records, Int.MaxValue)
+    }
+
+    assertEquals(previousEndOffset, log.logEndOffsetMetadata.messageOffset)
+  }
+
+  @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
+  def testRandomRecords(
+    @ForAll(supplier = classOf[ArbitraryMemoryRecords]) records: MemoryRecords
+  ): Unit = {
+    val tempDir = TestUtils.tempDir()
+    val logDir = TestUtils.randomPartitionLogDir(tempDir)
+    try {
+      val logConfig = LogTestUtils.createLogConfig()
+      val log = createLog(logDir, logConfig)
+      val previousEndOffset = log.logEndOffsetMetadata.messageOffset
+
+      // Depedning on the random corruption, unified log sometimes throws and sometimes returns an
+      // empty set of batches
+      assertThrows(
+        classOf[CorruptRecordException],
+        () => {
+          val info = log.appendAsFollower(records, Int.MaxValue)
+          if (info.firstOffset == JUnifiedLog.UNKNOWN_OFFSET) {
+            throw new CorruptRecordException("Unknown offset is test")
+          }
+        }
+      )
+
+      assertEquals(previousEndOffset, log.logEndOffsetMetadata.messageOffset)
+    } finally {
+      Utils.delete(tempDir)
+    }
+  }
+
+  @Test
+  def testInvalidLeaderEpoch(): Unit = {
+    val logConfig = LogTestUtils.createLogConfig()
+    val log = createLog(logDir, logConfig)
+    val previousEndOffset = log.logEndOffsetMetadata.messageOffset
+    val epoch = log.latestEpoch.getOrElse(0) + 1
+    val numberOfRecords = 10
+
+    val batchWithValidEpoch = MemoryRecords.withRecords(
+      previousEndOffset,
+      Compression.NONE,
+      epoch,
+      (0 until numberOfRecords).map(number => new SimpleRecord(number.toString.getBytes)): _*
+    )
+
+    val batchWithInvalidEpoch = MemoryRecords.withRecords(
+      previousEndOffset + numberOfRecords,
+      Compression.NONE,
+      epoch + 1,
+      (0 until numberOfRecords).map(number => new SimpleRecord(number.toString.getBytes)): _*
+    )
+
+    val buffer = ByteBuffer.allocate(batchWithValidEpoch.sizeInBytes() + batchWithInvalidEpoch.sizeInBytes())
+    buffer.put(batchWithValidEpoch.buffer())
+    buffer.put(batchWithInvalidEpoch.buffer())
+    buffer.flip()
+
+    val records = MemoryRecords.readableRecords(buffer)
+
+    log.appendAsFollower(records, epoch)
+
+    // Check that only the first batch was appended
+    assertEquals(previousEndOffset + numberOfRecords, log.logEndOffsetMetadata.messageOffset)
+    // Check that the last fetched epoch matches the first batch
+    assertEquals(epoch, log.latestEpoch.get)
   }
 
   @Test

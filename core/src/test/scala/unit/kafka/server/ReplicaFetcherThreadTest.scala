@@ -294,7 +294,7 @@ class ReplicaFetcherThreadTest {
       override def processPartitionData(
         topicPartition: TopicPartition,
         fetchOffset: Long,
-        maxEpoch: Int,
+        partitionLeaderEpoch: Int,
         partitionData: FetchData
       ): Option[LogAppendInfo] = None
     }

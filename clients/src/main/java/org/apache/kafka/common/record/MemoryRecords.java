@@ -33,9 +33,6 @@ import org.apache.kafka.common.utils.CloseableIterator;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.GatheringByteChannel;
@@ -50,7 +47,6 @@ import java.util.Objects;
  * or one of the {@link #builder(ByteBuffer, byte, Compression, TimestampType, long)} variants.
  */
 public class MemoryRecords extends AbstractRecords {
-    private static final Logger log = LoggerFactory.getLogger(MemoryRecords.class);
     public static final MemoryRecords EMPTY = MemoryRecords.readableRecords(ByteBuffer.allocate(0));
 
     private final ByteBuffer buffer;
