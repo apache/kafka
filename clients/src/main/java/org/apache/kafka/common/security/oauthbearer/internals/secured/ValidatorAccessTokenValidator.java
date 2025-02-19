@@ -80,9 +80,9 @@ import static org.jose4j.jwa.AlgorithmConstraints.DISALLOW_NONE;
  * </ol>
  */
 
-public class BrokerAccessTokenValidator implements AccessTokenValidator {
+public class ValidatorAccessTokenValidator implements AccessTokenValidator {
 
-    private static final Logger log = LoggerFactory.getLogger(BrokerAccessTokenValidator.class);
+    private static final Logger log = LoggerFactory.getLogger(ValidatorAccessTokenValidator.class);
 
     /**
      * Because a {@link CloseableVerificationKeyResolver} instance can spawn threads and issue
@@ -103,11 +103,11 @@ public class BrokerAccessTokenValidator implements AccessTokenValidator {
 
     protected String subClaimName;
 
-    public BrokerAccessTokenValidator() {
+    public ValidatorAccessTokenValidator() {
         this(Time.SYSTEM);
     }
 
-    public BrokerAccessTokenValidator(Time time) {
+    public ValidatorAccessTokenValidator(Time time) {
         this.time = time;
     }
 

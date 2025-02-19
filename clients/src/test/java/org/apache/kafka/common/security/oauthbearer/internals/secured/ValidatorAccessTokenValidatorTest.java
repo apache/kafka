@@ -38,7 +38,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-public class BrokerAccessTokenValidatorTest extends AccessTokenValidatorTest {
+public class ValidatorAccessTokenValidatorTest extends AccessTokenValidatorTest {
 
     @Override
     protected AccessTokenValidator createAccessTokenValidator(AccessTokenBuilder builder) throws Exception {
@@ -46,7 +46,7 @@ public class BrokerAccessTokenValidatorTest extends AccessTokenValidatorTest {
         CloseableVerificationKeyResolver keyResolver = mock(CloseableVerificationKeyResolver.class);
         when(keyResolver.resolveKey(any(), any())).thenReturn(key);
 
-        return new BrokerAccessTokenValidator() {
+        return new ValidatorAccessTokenValidator() {
             @Override
             public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
                 super.configure(keyResolver, configs, saslMechanism, jaasConfigEntries);

@@ -55,9 +55,9 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SUB_CL
  * </ol>
  */
 
-public class ClientAccessTokenValidator implements AccessTokenValidator {
+public class LoginAccessTokenValidator implements AccessTokenValidator {
 
-    private static final Logger log = LoggerFactory.getLogger(ClientAccessTokenValidator.class);
+    private static final Logger log = LoggerFactory.getLogger(LoginAccessTokenValidator.class);
 
     public static final String EXPIRATION_CLAIM_NAME = "exp";
 

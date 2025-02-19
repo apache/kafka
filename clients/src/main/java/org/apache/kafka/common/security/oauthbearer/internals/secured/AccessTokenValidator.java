@@ -40,7 +40,7 @@ import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
  *     <li><a href="https://datatracker.ietf.org/doc/html/draft-ietf-oauth-access-token-jwt">RFC 6750, Section 2.1</a></li>
  * </ul>
  *
- * @see ClientAccessTokenValidator A basic AccessTokenValidator used by client-side login
+ * @see LoginAccessTokenValidator A basic AccessTokenValidator used by client-side login
  *                                authentication
  * @see DefaultAccessTokenValidator A more robust AccessTokenValidator that is used on the broker
  *                                    to validate the token's contents and verify the signature

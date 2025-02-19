@@ -24,7 +24,7 @@ import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerClientI
 import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenBuilder;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenRetriever;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenValidator;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.ClientAccessTokenValidator;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.LoginAccessTokenValidator;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.DefaultAccessTokenRetriever;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.FileTokenRetriever;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpAccessTokenRetriever;
@@ -172,7 +172,7 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
         OAuthBearerLoginCallbackHandler handler = new OAuthBearerLoginCallbackHandler();
         AccessTokenRetriever accessTokenRetriever = mock(AccessTokenRetriever.class);
         when(accessTokenRetriever.retrieve()).thenReturn("foo");
-        AccessTokenValidator accessTokenValidator = new ClientAccessTokenValidator();
+        AccessTokenValidator accessTokenValidator = new LoginAccessTokenValidator();
         handler.configure(accessTokenRetriever, accessTokenValidator, getSaslConfigs(), OAUTHBEARER_MECHANISM, List.of());
 
         try {
@@ -262,7 +262,7 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
     protected OAuthBearerLoginCallbackHandler createHandler(AccessTokenRetriever accessTokenRetriever) {
         Map<String, ?> configs = getSaslConfigs();
         OAuthBearerLoginCallbackHandler handler = new OAuthBearerLoginCallbackHandler();
-        AccessTokenValidator accessTokenValidator = new ClientAccessTokenValidator();
+        AccessTokenValidator accessTokenValidator = new LoginAccessTokenValidator();
         handler.configure(accessTokenRetriever, accessTokenValidator, configs, OAUTHBEARER_MECHANISM, List.of());
         return handler;
     }

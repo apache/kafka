@@ -62,9 +62,9 @@ public class DefaultAccessTokenValidator implements AccessTokenValidator {
         AccessTokenValidator validator;
 
         if (configs.get(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL) != null)
-            validator = new BrokerAccessTokenValidator();
+            validator = new ValidatorAccessTokenValidator();
         else
-            validator = new ClientAccessTokenValidator();
+            validator = new LoginAccessTokenValidator();
 
         configure(validator, configs, saslMechanism, jaasConfigEntries);
     }
