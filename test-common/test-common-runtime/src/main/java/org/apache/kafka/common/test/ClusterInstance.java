@@ -17,7 +17,6 @@
 
 package org.apache.kafka.common.test;
 
-import kafka.log.UnifiedLog;
 import kafka.network.SocketServer;
 import kafka.server.BrokerServer;
 import kafka.server.ControllerServer;
@@ -51,6 +50,7 @@ import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.server.fault.FaultHandlerException;
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpointFile;
+import org.apache.kafka.storage.internals.log.UnifiedLog;
 
 import java.io.File;
 import java.io.IOException;
@@ -199,7 +199,6 @@ public interface ClusterInstance {
         Map<String, Object> props = new HashMap<>(configs);
         props.putIfAbsent(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
         props.putIfAbsent(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
-        props.putIfAbsent(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         props.putIfAbsent(ConsumerConfig.GROUP_ID_CONFIG, "group_" + TestUtils.randomString(5));
         props.putIfAbsent(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
         return new KafkaShareConsumer<>(setClientSaslConfig(props));
@@ -349,7 +348,7 @@ public interface ClusterInstance {
                     topicPartitions.stream().allMatch(tp ->
                         Arrays.stream(Objects.requireNonNull(new File(logDir).list())).noneMatch(partitionDirectoryName ->
                             partitionDirectoryName.startsWith(tp.topic() + "-" + tp.partition()) &&
-                                partitionDirectoryName.endsWith(UnifiedLog.DeleteDirSuffix())))
+                                partitionDirectoryName.endsWith(UnifiedLog.DELETE_DIR_SUFFIX)))
                 )
             ), "Failed to hard-delete the delete directory");
         }

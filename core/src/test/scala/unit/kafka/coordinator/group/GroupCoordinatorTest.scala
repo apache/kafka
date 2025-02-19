@@ -4163,7 +4163,7 @@ class GroupCoordinatorTest {
     // a non request handler thread. Set this to avoid error.
     KafkaRequestHandler.setBypassThreadCheck(true)
 
-    when(replicaManager.maybeStartTransactionVerificationForPartition(
+    when(replicaManager.maybeSendPartitionToTransactionCoordinator(
       ArgumentMatchers.eq(offsetTopicPartition),
       ArgumentMatchers.eq(transactionalId),
       ArgumentMatchers.eq(producerId),

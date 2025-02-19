@@ -18,13 +18,13 @@ package kafka.cluster
 
 import kafka.log.LogManager
 import kafka.server.MetadataCache
-import kafka.server.metadata.MockConfigRepository
 import kafka.utils.TestUtils
 import kafka.utils.TestUtils.MockAlterPartitionManager
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.requests.LeaderAndIsrRequest
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.metadata.MockConfigRepository
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.server.util.MockTime
@@ -77,7 +77,7 @@ class AbstractPartitionTest {
     logDir1 = TestUtils.randomPartitionLogDir(tmpDir)
     logDir2 = TestUtils.randomPartitionLogDir(tmpDir)
     logManager = TestUtils.createLogManager(Seq(logDir1, logDir2), logConfig, configRepository,
-      new CleanerConfig(false), time, interBrokerProtocolVersion, transactionVerificationEnabled = true)
+      new CleanerConfig(false), time, transactionVerificationEnabled = true)
     logManager.startup(Set.empty)
 
     alterPartitionManager = TestUtils.createAlterIsrManager()

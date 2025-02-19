@@ -16,7 +16,7 @@
  */
 package kafka.server.logger;
 
-import kafka.utils.Log4jController;
+import kafka.utils.LoggingController;
 
 import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType;
@@ -82,18 +82,18 @@ public class RuntimeLoggerManagerTest {
     @Test
     public void testValidateSetRootLogLevelConfig() {
         MANAGER.validateLogLevelConfigs(Arrays.asList(new AlterableConfig().
-                setName(Log4jController.ROOT_LOGGER()).
+                setName(LoggingController.ROOT_LOGGER()).
                 setConfigOperation(OpType.SET.id()).
                 setValue("TRACE")));
     }
 
     @Test
     public void testValidateRemoveRootLogLevelConfigNotAllowed() {
-        assertEquals("Removing the log level of the " + Log4jController.ROOT_LOGGER() +
+        assertEquals("Removing the log level of the " + LoggingController.ROOT_LOGGER() +
             " logger is not allowed",
             Assertions.assertThrows(InvalidRequestException.class,
                 () -> MANAGER.validateLogLevelConfigs(Arrays.asList(new AlterableConfig().
-                    setName(Log4jController.ROOT_LOGGER()).
+                    setName(LoggingController.ROOT_LOGGER()).
                     setConfigOperation(OpType.DELETE.id()).
                     setValue("")))).getMessage());
     }

@@ -50,6 +50,6 @@ public class DeleteConsumerGroupsResult {
      * Return a future which succeeds only if all the consumer group deletions succeed.
      */
     public KafkaFuture<Void> all() {
-        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0]));
+        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture<?>[0]));
     }
 }

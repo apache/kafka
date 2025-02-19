@@ -70,6 +70,7 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import static java.util.Arrays.asList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -151,6 +152,28 @@ public class TestUtils {
             }
         }
         return new MetadataSnapshot("kafka-cluster", nodesById, partsMetadatas, Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), null, Collections.emptyMap());
+    }
+
+    /**
+     * Asserts that there are no leaked threads with a specified name prefix and daemon status.
+     * This method checks all threads in the JVM, filters them by the provided thread name prefix
+     * and daemon status, and verifies that no matching threads are alive.
+     * If any matching threads are found, the test will fail.
+     *
+     * @param threadName The prefix of the thread names to check. Only threads whose names
+     *                   start with this prefix will be considered.
+     * @param isDaemon   The daemon status to check. Only threads with the specified
+     *                   daemon status (either true for daemon threads or false for non-daemon threads)
+     *                   will be considered.
+     *
+     * @throws AssertionError If any thread with the specified name prefix and daemon status is found and is alive.
+     */
+    public static void assertNoLeakedThreadsWithNameAndDaemonStatus(String threadName, boolean isDaemon) {
+        List<Thread> threads = Thread.getAllStackTraces().keySet().stream()
+                .filter(t -> t.isDaemon() == isDaemon && t.isAlive() && t.getName().startsWith(threadName))
+                .collect(Collectors.toList());
+        int threadCount = threads.size();
+        assertEquals(0, threadCount);
     }
 
     /**
@@ -560,14 +583,17 @@ public class TestUtils {
      * Assert that a future raises an expected exception cause type. Return the exception cause
      * if the assertion succeeds; otherwise raise AssertionError.
      *
-     * @param future The future to await
-     * @param exceptionCauseClass Class of the expected exception cause
      * @param <T> Exception cause type parameter
+     * @param exceptionCauseClass Class of the expected exception cause
+     * @param future The future to await
      * @return The caught exception cause
      */
-    public static <T extends Throwable> T assertFutureThrows(Future<?> future, Class<T> exceptionCauseClass) {
+    public static <T extends Throwable> T assertFutureThrows(Class<T> exceptionCauseClass, Future<?> future) {
         ExecutionException exception = assertThrows(ExecutionException.class, future::get);
         Throwable cause = exception.getCause();
+        
+        // Enable strict type checking.
+        // This ensures we're testing for the exact exception type, not its subclasses.
         assertEquals(exceptionCauseClass, cause.getClass(),
             "Expected a " + exceptionCauseClass.getSimpleName() + " exception, but got " +
                         cause.getClass().getSimpleName());
@@ -575,11 +601,11 @@ public class TestUtils {
     }
 
     public static <T extends Throwable> void assertFutureThrows(
-        Future<?> future,
         Class<T> expectedCauseClassApiException,
+        Future<?> future,
         String expectedMessage
     ) {
-        T receivedException = assertFutureThrows(future, expectedCauseClassApiException);
+        T receivedException = assertFutureThrows(expectedCauseClassApiException, future);
         assertEquals(expectedMessage, receivedException.getMessage());
     }
 

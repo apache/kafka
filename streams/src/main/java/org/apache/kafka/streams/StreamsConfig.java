@@ -682,7 +682,7 @@ public class StreamsConfig extends AbstractConfig {
 
     /** {@code processor.wrapper.class} */
     public static final String PROCESSOR_WRAPPER_CLASS_CONFIG = "processor.wrapper.class";
-    public static final String PROCESSOR_WRAPPER_CLASS_DOC = "A processor wrapper class or class name that implements the <code>org.apache.kafka.streams.state.ProcessorWrapper</code> interface. "
+    static final String PROCESSOR_WRAPPER_CLASS_DOC = "A processor wrapper class or class name that implements the <code>org.apache.kafka.streams.state.ProcessorWrapper</code> interface. "
         + "Must be passed in to the StreamsBuilder or Topology constructor in order to take effect";
 
     /** {@code repartition.purge.interval.ms} */
@@ -1293,6 +1293,11 @@ public class StreamsConfig extends AbstractConfig {
         public static final String PROCESSING_THREADS_ENABLED = "__processing.threads.enabled__";
 
         public static boolean processingThreadsEnabled(final Map<String, Object> configs) {
+            // note: we did disable testing "processing threads"` in SmokeTestDriverIntegrationTest due to
+            // high failure rate, and the feature being incomplete with no active work
+            //
+            // we should re-enable testing this feature in SmokeTestDriverIntegrationTest
+            // once it is complete (or maybe even earlier when we resumg working on it
             return InternalConfig.getBoolean(configs, InternalConfig.PROCESSING_THREADS_ENABLED, false);
         }
 

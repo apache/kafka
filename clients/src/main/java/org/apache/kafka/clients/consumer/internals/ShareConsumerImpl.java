@@ -54,7 +54,6 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -62,7 +61,6 @@ import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
-import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryUtils;
@@ -257,12 +255,12 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             this.metrics = createMetrics(config, time, reporters);
             this.asyncConsumerMetrics = new AsyncConsumerMetrics(metrics);
 
-            this.deserializers = new Deserializers<>(config, keyDeserializer, valueDeserializer);
+            this.deserializers = new Deserializers<>(config, keyDeserializer, valueDeserializer, metrics);
             this.currentFetch = ShareFetch.empty();
             this.subscriptions = createSubscriptionState(config, logContext);
             ClusterResourceListeners clusterResourceListeners = ClientUtils.configureClusterResourceListeners(
                     metrics.reporters(),
-                    Arrays.asList(deserializers.keyDeserializer, deserializers.valueDeserializer));
+                    Arrays.asList(deserializers.keyDeserializer(), deserializers.valueDeserializer()));
             this.metadata = new ConsumerMetadata(config, subscriptions, logContext, clusterResourceListeners);
             final List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config);
             metadata.bootstrap(addresses);
@@ -363,7 +361,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         this.time = time;
         this.metrics = new Metrics(time);
         this.clientTelemetryReporter = Optional.empty();
-        this.deserializers = new Deserializers<>(config, keyDeserializer, valueDeserializer);
+        this.deserializers = new Deserializers<>(config, keyDeserializer, valueDeserializer, metrics);
         this.currentFetch = ShareFetch.empty();
         this.subscriptions = subscriptions;
         this.metadata = metadata;
@@ -462,7 +460,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         this.metrics = metrics;
         this.metadata = metadata;
         this.defaultApiTimeoutMs = defaultApiTimeoutMs;
-        this.deserializers = new Deserializers<>(keyDeserializer, valueDeserializer);
+        this.deserializers = new Deserializers<>(keyDeserializer, valueDeserializer, metrics);
         this.currentFetch = ShareFetch.empty();
         this.applicationEventHandler = applicationEventHandler;
         this.kafkaShareConsumerMetrics = new KafkaShareConsumerMetrics(metrics, CONSUMER_SHARE_METRIC_GROUP_PREFIX);
@@ -611,7 +609,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
     private ShareFetch<K, V> pollForFetches(final Timer timer) {
         long pollTimeout = Math.min(applicationEventHandler.maximumTimeToWait(), timer.remainingMs());
 
-        Map<TopicIdPartition, Acknowledgements> acknowledgementsMap = currentFetch.takeAcknowledgedRecords();
+        Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap = currentFetch.takeAcknowledgedRecords();
 
         // If data is available already, return it immediately
         final ShareFetch<K, V> fetch = collect(acknowledgementsMap);
@@ -636,7 +634,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         return collect(Collections.emptyMap());
     }
 
-    private ShareFetch<K, V> collect(Map<TopicIdPartition, Acknowledgements> acknowledgementsMap) {
+    private ShareFetch<K, V> collect(Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap) {
         if (currentFetch.isEmpty()) {
             final ShareFetch<K, V> fetch = fetchCollector.collect(fetchBuffer);
             if (fetch.isEmpty()) {
@@ -709,7 +707,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             acknowledgeBatchIfImplicitAcknowledgement(false);
 
             Timer requestTimer = time.timer(timeout.toMillis());
-            Map<TopicIdPartition, Acknowledgements> acknowledgementsMap = acknowledgementsToSend();
+            Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap = acknowledgementsToSend();
             if (acknowledgementsMap.isEmpty()) {
                 return Collections.emptyMap();
             } else {
@@ -721,16 +719,11 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                     Map<TopicIdPartition, Optional<KafkaException>> result = new HashMap<>();
                     Map<TopicIdPartition, Acknowledgements> completedAcknowledgements = ConsumerUtils.getResult(commitFuture);
                     completedAcknowledgements.forEach((tip, acks) -> {
-                        Errors ackErrorCode = acks.getAcknowledgeErrorCode();
-                        if (ackErrorCode == null) {
+                        KafkaException exception = acks.getAcknowledgeException();
+                        if (exception == null) {
                             result.put(tip, Optional.empty());
                         } else {
-                            ApiException exception = ackErrorCode.exception();
-                            if (exception == null) {
-                                result.put(tip, Optional.empty());
-                            } else {
-                                result.put(tip, Optional.of(ackErrorCode.exception()));
-                            }
+                            result.put(tip, Optional.of(exception));
                         }
                     });
                     return result;
@@ -757,7 +750,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             // If using implicit acknowledgement, acknowledge the previously fetched records
             acknowledgeBatchIfImplicitAcknowledgement(false);
 
-            Map<TopicIdPartition, Acknowledgements> acknowledgementsMap = acknowledgementsToSend();
+            Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap = acknowledgementsToSend();
             if (!acknowledgementsMap.isEmpty()) {
                 ShareAcknowledgeAsyncEvent event = new ShareAcknowledgeAsyncEvent(acknowledgementsMap);
                 applicationEventHandler.add(event);
@@ -1025,8 +1018,8 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             if (acknowledgementMode == AcknowledgementMode.UNKNOWN) {
                 // The first call to poll(Duration) moves into PENDING
                 acknowledgementMode = AcknowledgementMode.PENDING;
-            } else if (acknowledgementMode == AcknowledgementMode.PENDING) {
-                // The second call to poll(Duration) if PENDING moves into IMPLICIT
+            } else if (acknowledgementMode == AcknowledgementMode.PENDING && !currentFetch.isEmpty()) {
+                // If there are records to acknowledge and PENDING, moves into IMPLICIT
                 acknowledgementMode = AcknowledgementMode.IMPLICIT;
             }
         } else {
@@ -1045,7 +1038,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
     /**
      * Returns any ready acknowledgements to be sent to the cluster.
      */
-    private Map<TopicIdPartition, Acknowledgements> acknowledgementsToSend() {
+    private Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsToSend() {
         return currentFetch.takeAcknowledgedRecords();
     }
 

@@ -58,6 +58,8 @@ import org.apache.kafka.common.message.AlterReplicaLogDirsRequestData;
 import org.apache.kafka.common.message.AlterReplicaLogDirsRequestData.AlterReplicaLogDirTopic;
 import org.apache.kafka.common.message.AlterReplicaLogDirsRequestData.AlterReplicaLogDirTopicCollection;
 import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData;
+import org.apache.kafka.common.message.AlterShareGroupOffsetsRequestData;
+import org.apache.kafka.common.message.AlterShareGroupOffsetsResponseData;
 import org.apache.kafka.common.message.AlterUserScramCredentialsRequestData;
 import org.apache.kafka.common.message.AlterUserScramCredentialsResponseData;
 import org.apache.kafka.common.message.ApiMessageType;
@@ -106,6 +108,8 @@ import org.apache.kafka.common.message.DeleteGroupsResponseData.DeletableGroupRe
 import org.apache.kafka.common.message.DeleteGroupsResponseData.DeletableGroupResultCollection;
 import org.apache.kafka.common.message.DeleteRecordsRequestData;
 import org.apache.kafka.common.message.DeleteRecordsResponseData;
+import org.apache.kafka.common.message.DeleteShareGroupOffsetsRequestData;
+import org.apache.kafka.common.message.DeleteShareGroupOffsetsResponseData;
 import org.apache.kafka.common.message.DeleteShareGroupStateRequestData;
 import org.apache.kafka.common.message.DeleteShareGroupStateResponseData;
 import org.apache.kafka.common.message.DeleteTopicsRequestData;
@@ -1039,6 +1043,8 @@ public class RequestResponseTest {
             case STREAMS_GROUP_HEARTBEAT: return createStreamsGroupHeartbeatRequest(version);
             case STREAMS_GROUP_DESCRIBE: return createStreamsGroupDescribeRequest(version);
             case DESCRIBE_SHARE_GROUP_OFFSETS: return createDescribeShareGroupOffsetsRequest(version);
+            case ALTER_SHARE_GROUP_OFFSETS: return createAlterShareGroupOffsetsRequest(version);
+            case DELETE_SHARE_GROUP_OFFSETS: return createDeleteShareGroupOffsetsRequest(version);
             default: throw new IllegalArgumentException("Unknown API key " + apikey);
         }
     }
@@ -1097,7 +1103,7 @@ public class RequestResponseTest {
             case BEGIN_QUORUM_EPOCH: return createBeginQuorumEpochResponse();
             case END_QUORUM_EPOCH: return createEndQuorumEpochResponse();
             case DESCRIBE_QUORUM: return createDescribeQuorumResponse();
-            case ALTER_PARTITION: return createAlterPartitionResponse(version);
+            case ALTER_PARTITION: return createAlterPartitionResponse();
             case UPDATE_FEATURES: return createUpdateFeaturesResponse();
             case ENVELOPE: return createEnvelopeResponse();
             case FETCH_SNAPSHOT: return createFetchSnapshotResponse();
@@ -1132,6 +1138,8 @@ public class RequestResponseTest {
             case STREAMS_GROUP_HEARTBEAT: return createStreamsGroupHeartbeatResponse();
             case STREAMS_GROUP_DESCRIBE: return createStreamsGroupDescribeResponse();
             case DESCRIBE_SHARE_GROUP_OFFSETS: return createDescribeShareGroupOffsetsResponse();
+            case ALTER_SHARE_GROUP_OFFSETS: return createAlterShareGroupOffsetsResponse();
+            case DELETE_SHARE_GROUP_OFFSETS: return createDeleteShareGroupOffsetsResponse();
             default: throw new IllegalArgumentException("Unknown API key " + apikey);
         }
     }
@@ -1695,41 +1703,31 @@ public class RequestResponseTest {
             .setPartitionIndex(1)
             .setPartitionEpoch(2)
             .setLeaderEpoch(3)
-            .setNewIsrWithEpochs(AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(asList(1, 2)));
-
-        if (version >= 1) {
-            // Use the none default value; 1 - RECOVERING
-            partitionData.setLeaderRecoveryState((byte) 1);
-        }
+            .setNewIsrWithEpochs(AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(asList(1, 2)))
+            .setLeaderRecoveryState((byte) 1); // non-default value
 
         AlterPartitionRequestData data = new AlterPartitionRequestData()
             .setBrokerEpoch(123L)
             .setBrokerId(1)
             .setTopics(singletonList(new AlterPartitionRequestData.TopicData()
-                .setTopicName("topic1")
                 .setTopicId(Uuid.randomUuid())
                 .setPartitions(singletonList(partitionData))));
         return new AlterPartitionRequest.Builder(data).build(version);
     }
 
-    private AlterPartitionResponse createAlterPartitionResponse(int version) {
+    private AlterPartitionResponse createAlterPartitionResponse() {
         AlterPartitionResponseData.PartitionData partitionData = new AlterPartitionResponseData.PartitionData()
             .setPartitionEpoch(1)
             .setIsr(asList(0, 1, 2))
             .setErrorCode(Errors.NONE.code())
             .setLeaderEpoch(2)
-            .setLeaderId(3);
-
-        if (version >= 1) {
-            // Use the none default value; 1 - RECOVERING
-            partitionData.setLeaderRecoveryState((byte) 1);
-        }
+            .setLeaderId(3)
+            .setLeaderRecoveryState((byte) 1); // non-default value
 
         AlterPartitionResponseData data = new AlterPartitionResponseData()
                 .setErrorCode(Errors.NONE.code())
                 .setThrottleTimeMs(123)
                 .setTopics(singletonList(new AlterPartitionResponseData.TopicData()
-                    .setTopicName("topic1")
                     .setTopicId(Uuid.randomUuid())
                     .setPartitions(singletonList(partitionData))));
         return new AlterPartitionResponse(data);
@@ -2024,7 +2022,8 @@ public class RequestResponseTest {
                         .setPartitionIndex(1)
                         .setHighWatermark(1000000)
                         .setLogStartOffset(0)
-                        .setAbortedTransactions(abortedTransactions));
+                        .setAbortedTransactions(abortedTransactions)
+                        .setRecords(MemoryRecords.EMPTY));
         return FetchResponse.parse(FetchResponse.of(Errors.NONE, 25, sessionId,
             responseData).serialize(FETCH.latestVersion()), FETCH.latestVersion());
     }
@@ -2048,7 +2047,8 @@ public class RequestResponseTest {
                         .setPartitionIndex(1)
                         .setHighWatermark(1000000)
                         .setLogStartOffset(0)
-                        .setAbortedTransactions(abortedTransactions));
+                        .setAbortedTransactions(abortedTransactions)
+                        .setRecords(MemoryRecords.EMPTY));
         return FetchResponse.parse(FetchResponse.of(Errors.NONE, 25, INVALID_SESSION_ID,
             responseData).serialize(FETCH.latestVersion()), FETCH.latestVersion());
     }
@@ -3581,142 +3581,190 @@ public class RequestResponseTest {
 
     private InitializeShareGroupStateRequest createInitializeShareGroupStateRequest(short version) {
         InitializeShareGroupStateRequestData data = new InitializeShareGroupStateRequestData()
-                .setGroupId("group")
-                .setTopics(Collections.singletonList(new InitializeShareGroupStateRequestData.InitializeStateData()
-                        .setTopicId(Uuid.randomUuid())
-                        .setPartitions(Collections.singletonList(new InitializeShareGroupStateRequestData.PartitionData()
-                                .setPartition(0)
-                                .setStateEpoch(0)
-                                .setStartOffset(0)))));
+            .setGroupId("group")
+            .setTopics(Collections.singletonList(new InitializeShareGroupStateRequestData.InitializeStateData()
+                .setTopicId(Uuid.randomUuid())
+                .setPartitions(Collections.singletonList(new InitializeShareGroupStateRequestData.PartitionData()
+                    .setPartition(0)
+                    .setStateEpoch(0)
+                    .setStartOffset(0)))));
         return new InitializeShareGroupStateRequest.Builder(data).build(version);
     }
 
     private InitializeShareGroupStateResponse createInitializeShareGroupStateResponse() {
         InitializeShareGroupStateResponseData data = new InitializeShareGroupStateResponseData();
         data.setResults(Collections.singletonList(new InitializeShareGroupStateResponseData.InitializeStateResult()
-                .setTopicId(Uuid.randomUuid())
-                .setPartitions(Collections.singletonList(new InitializeShareGroupStateResponseData.PartitionResult()
-                        .setPartition(0)
-                        .setErrorCode(Errors.NONE.code())))));
+            .setTopicId(Uuid.randomUuid())
+            .setPartitions(Collections.singletonList(new InitializeShareGroupStateResponseData.PartitionResult()
+                .setPartition(0)
+                .setErrorCode(Errors.NONE.code())))));
         return new InitializeShareGroupStateResponse(data);
     }
 
     private ReadShareGroupStateRequest createReadShareGroupStateRequest(short version) {
         ReadShareGroupStateRequestData data = new ReadShareGroupStateRequestData()
-                .setGroupId("group")
-                .setTopics(Collections.singletonList(new ReadShareGroupStateRequestData.ReadStateData()
-                        .setTopicId(Uuid.randomUuid())
-                        .setPartitions(Collections.singletonList(new ReadShareGroupStateRequestData.PartitionData()
-                                .setPartition(0)))));
+            .setGroupId("group")
+            .setTopics(Collections.singletonList(new ReadShareGroupStateRequestData.ReadStateData()
+                .setTopicId(Uuid.randomUuid())
+                .setPartitions(Collections.singletonList(new ReadShareGroupStateRequestData.PartitionData()
+                    .setPartition(0)))));
         return new ReadShareGroupStateRequest.Builder(data).build(version);
     }
 
     private ReadShareGroupStateResponse createReadShareGroupStateResponse() {
         ReadShareGroupStateResponseData data = new ReadShareGroupStateResponseData()
-                .setResults(Collections.singletonList(new ReadShareGroupStateResponseData.ReadStateResult()
-                        .setTopicId(Uuid.randomUuid())
-                        .setPartitions(Collections.singletonList(new ReadShareGroupStateResponseData.PartitionResult()
-                                .setPartition(0)
-                                .setErrorCode(Errors.NONE.code())
-                                .setStateEpoch(0)
-                                .setStartOffset(0)
-                                .setStateBatches(Collections.singletonList(new ReadShareGroupStateResponseData.StateBatch()
-                                        .setFirstOffset(0)
-                                        .setLastOffset(0)
-                                        .setDeliveryState((byte) 0x0)
-                                        .setDeliveryCount((short) 0)))))));
+            .setResults(Collections.singletonList(new ReadShareGroupStateResponseData.ReadStateResult()
+                .setTopicId(Uuid.randomUuid())
+                .setPartitions(Collections.singletonList(new ReadShareGroupStateResponseData.PartitionResult()
+                    .setPartition(0)
+                    .setErrorCode(Errors.NONE.code())
+                    .setStateEpoch(0)
+                    .setStartOffset(0)
+                    .setStateBatches(Collections.singletonList(new ReadShareGroupStateResponseData.StateBatch()
+                        .setFirstOffset(0)
+                        .setLastOffset(0)
+                        .setDeliveryState((byte) 0x0)
+                        .setDeliveryCount((short) 0)))))));
         return new ReadShareGroupStateResponse(data);
     }
 
     private WriteShareGroupStateRequest createWriteShareGroupStateRequest(short version) {
         WriteShareGroupStateRequestData data = new WriteShareGroupStateRequestData()
-                .setGroupId("group")
-                .setTopics(Collections.singletonList(new WriteShareGroupStateRequestData.WriteStateData()
-                        .setTopicId(Uuid.randomUuid())
-                        .setPartitions(Collections.singletonList(new WriteShareGroupStateRequestData.PartitionData()
-                                .setPartition(0)
-                                .setStateEpoch(0)
-                                .setStartOffset(0)
-                                .setStateBatches(singletonList(new WriteShareGroupStateRequestData.StateBatch()
-                                        .setFirstOffset(0)
-                                        .setLastOffset(0)
-                                        .setDeliveryState((byte) 0x0)
-                                        .setDeliveryCount((short) 0)))))));
+            .setGroupId("group")
+            .setTopics(Collections.singletonList(new WriteShareGroupStateRequestData.WriteStateData()
+                .setTopicId(Uuid.randomUuid())
+                .setPartitions(Collections.singletonList(new WriteShareGroupStateRequestData.PartitionData()
+                    .setPartition(0)
+                    .setStateEpoch(0)
+                    .setStartOffset(0)
+                    .setStateBatches(singletonList(new WriteShareGroupStateRequestData.StateBatch()
+                        .setFirstOffset(0)
+                        .setLastOffset(0)
+                        .setDeliveryState((byte) 0x0)
+                        .setDeliveryCount((short) 0)))))));
         return new WriteShareGroupStateRequest.Builder(data).build(version);
     }
 
     private WriteShareGroupStateResponse createWriteShareGroupStateResponse() {
         WriteShareGroupStateResponseData data = new WriteShareGroupStateResponseData()
-                .setResults(Collections.singletonList(new WriteShareGroupStateResponseData.WriteStateResult()
-                        .setTopicId(Uuid.randomUuid())
-                        .setPartitions(Collections.singletonList(new WriteShareGroupStateResponseData.PartitionResult()
-                                .setPartition(0)
-                                .setErrorCode(Errors.NONE.code())))));
+            .setResults(Collections.singletonList(new WriteShareGroupStateResponseData.WriteStateResult()
+                .setTopicId(Uuid.randomUuid())
+                .setPartitions(Collections.singletonList(new WriteShareGroupStateResponseData.PartitionResult()
+                    .setPartition(0)
+                    .setErrorCode(Errors.NONE.code())))));
         return new WriteShareGroupStateResponse(data);
     }
 
     private DeleteShareGroupStateRequest createDeleteShareGroupStateRequest(short version) {
         DeleteShareGroupStateRequestData data = new DeleteShareGroupStateRequestData()
-                .setGroupId("group")
-                .setTopics(Collections.singletonList(new DeleteShareGroupStateRequestData.DeleteStateData()
-                        .setTopicId(Uuid.randomUuid())
-                        .setPartitions(Collections.singletonList(new DeleteShareGroupStateRequestData.PartitionData()
-                                .setPartition(0)))));
+            .setGroupId("group")
+            .setTopics(Collections.singletonList(new DeleteShareGroupStateRequestData.DeleteStateData()
+                .setTopicId(Uuid.randomUuid())
+                .setPartitions(Collections.singletonList(new DeleteShareGroupStateRequestData.PartitionData()
+                    .setPartition(0)))));
         return new DeleteShareGroupStateRequest.Builder(data).build(version);
     }
 
     private DeleteShareGroupStateResponse createDeleteShareGroupStateResponse() {
         DeleteShareGroupStateResponseData data = new DeleteShareGroupStateResponseData()
-                .setResults(Collections.singletonList(new DeleteShareGroupStateResponseData.DeleteStateResult()
-                        .setTopicId(Uuid.randomUuid())
-                        .setPartitions(Collections.singletonList(new DeleteShareGroupStateResponseData.PartitionResult()
-                                .setPartition(0)
-                                .setErrorCode(Errors.NONE.code())))));
+            .setResults(Collections.singletonList(new DeleteShareGroupStateResponseData.DeleteStateResult()
+                .setTopicId(Uuid.randomUuid())
+                .setPartitions(Collections.singletonList(new DeleteShareGroupStateResponseData.PartitionResult()
+                    .setPartition(0)
+                    .setErrorCode(Errors.NONE.code())))));
         return new DeleteShareGroupStateResponse(data);
     }
 
     private ReadShareGroupStateSummaryRequest createReadShareGroupStateSummaryRequest(short version) {
         ReadShareGroupStateSummaryRequestData data = new ReadShareGroupStateSummaryRequestData()
-                .setGroupId("group")
-                .setTopics(Collections.singletonList(new ReadShareGroupStateSummaryRequestData.ReadStateSummaryData()
-                        .setTopicId(Uuid.randomUuid())
-                        .setPartitions(Collections.singletonList(new ReadShareGroupStateSummaryRequestData.PartitionData()
-                                .setPartition(0)))));
+            .setGroupId("group")
+            .setTopics(Collections.singletonList(new ReadShareGroupStateSummaryRequestData.ReadStateSummaryData()
+                .setTopicId(Uuid.randomUuid())
+                .setPartitions(Collections.singletonList(new ReadShareGroupStateSummaryRequestData.PartitionData()
+                    .setPartition(0)))));
         return new ReadShareGroupStateSummaryRequest.Builder(data).build(version);
     }
 
     private ReadShareGroupStateSummaryResponse createReadShareGroupStateSummaryResponse() {
         ReadShareGroupStateSummaryResponseData data = new ReadShareGroupStateSummaryResponseData()
-                .setResults(Collections.singletonList(new ReadShareGroupStateSummaryResponseData.ReadStateSummaryResult()
-                        .setTopicId(Uuid.randomUuid())
-                        .setPartitions(Collections.singletonList(new ReadShareGroupStateSummaryResponseData.PartitionResult()
-                                .setPartition(0)
-                                .setErrorCode(Errors.NONE.code())
-                                .setStartOffset(0)
-                                .setStateEpoch(0)))));
+            .setResults(Collections.singletonList(new ReadShareGroupStateSummaryResponseData.ReadStateSummaryResult()
+                .setTopicId(Uuid.randomUuid())
+                .setPartitions(Collections.singletonList(new ReadShareGroupStateSummaryResponseData.PartitionResult()
+                    .setPartition(0)
+                    .setErrorCode(Errors.NONE.code())
+                    .setStartOffset(0)
+                    .setStateEpoch(0)))));
         return new ReadShareGroupStateSummaryResponse(data);
     }
 
     private DescribeShareGroupOffsetsRequest createDescribeShareGroupOffsetsRequest(short version) {
         DescribeShareGroupOffsetsRequestData data = new DescribeShareGroupOffsetsRequestData()
+            .setGroups(Collections.singletonList(new DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup()
                 .setGroupId("group")
                 .setTopics(Collections.singletonList(new DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestTopic()
-                        .setTopicName("topic-1")
-                        .setPartitions(Collections.singletonList(0))));
+                    .setTopicName("topic-1")
+                    .setPartitions(Collections.singletonList(0))))));
         return new DescribeShareGroupOffsetsRequest.Builder(data).build(version);
+    }
+
+    private AlterShareGroupOffsetsRequest createAlterShareGroupOffsetsRequest(short version) {
+        AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestTopicCollection alterShareGroupOffsetsRequestTopics = new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestTopicCollection();
+        alterShareGroupOffsetsRequestTopics.add(new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestTopic()
+            .setTopicName("topic")
+            .setPartitions(List.of(new AlterShareGroupOffsetsRequestData.AlterShareGroupOffsetsRequestPartition()
+                .setPartitionIndex(0)
+                .setStartOffset(0)))
+        );
+        AlterShareGroupOffsetsRequestData data = new AlterShareGroupOffsetsRequestData()
+            .setGroupId("group")
+            .setTopics(alterShareGroupOffsetsRequestTopics);
+        return new AlterShareGroupOffsetsRequest.Builder(data).build(version);
+    }
+
+    private DeleteShareGroupOffsetsRequest createDeleteShareGroupOffsetsRequest(short version) {
+        DeleteShareGroupOffsetsRequestData data = new DeleteShareGroupOffsetsRequestData()
+            .setGroupId("group")
+            .setTopics(List.of(new DeleteShareGroupOffsetsRequestData.DeleteShareGroupOffsetsRequestTopic()
+                .setTopicName("topic-1")
+                .setPartitions(List.of(0))));
+        return new DeleteShareGroupOffsetsRequest.Builder(data).build(version);
     }
 
     private DescribeShareGroupOffsetsResponse createDescribeShareGroupOffsetsResponse() {
         DescribeShareGroupOffsetsResponseData data = new DescribeShareGroupOffsetsResponseData()
-                .setResponses(Collections.singletonList(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic()
-                        .setTopicName("group")
-                        .setTopicId(Uuid.randomUuid())
-                        .setPartitions(Collections.singletonList(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition()
-                                .setPartitionIndex(0)
-                                .setErrorCode(Errors.NONE.code())
-                                .setStartOffset(0)
-                                .setLeaderEpoch(0)))));
+            .setGroups(Collections.singletonList(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup()
+                .setGroupId("group")
+                .setTopics(Collections.singletonList(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic()
+                .setTopicName("topic-1")
+                .setTopicId(Uuid.randomUuid())
+                .setPartitions(Collections.singletonList(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition()
+                    .setPartitionIndex(0)
+                    .setErrorCode(Errors.NONE.code())
+                    .setStartOffset(0)
+                    .setLeaderEpoch(0)))))));
         return new DescribeShareGroupOffsetsResponse(data);
+    }
+
+    private AlterShareGroupOffsetsResponse createAlterShareGroupOffsetsResponse() {
+        AlterShareGroupOffsetsResponseData data = new AlterShareGroupOffsetsResponseData()
+            .setResponses(List.of(new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic()
+                .setPartitions(List.of(new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition()
+                    .setPartitionIndex(0)
+                    .setErrorCode(Errors.NONE.code())))
+                .setTopicName("topic")
+                .setTopicId(Uuid.randomUuid())));
+        return new AlterShareGroupOffsetsResponse(data);
+    }
+
+    private DeleteShareGroupOffsetsResponse createDeleteShareGroupOffsetsResponse() {
+        DeleteShareGroupOffsetsResponseData data = new DeleteShareGroupOffsetsResponseData()
+            .setResponses(List.of(new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic()
+                .setTopicName("topic-1")
+                .setTopicId(Uuid.randomUuid())
+                .setPartitions(List.of(new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponsePartition()
+                    .setPartitionIndex(0)
+                    .setErrorCode(Errors.NONE.code())))));
+        return new DeleteShareGroupOffsetsResponse(data);
     }
 
     private AbstractRequest createStreamsGroupDescribeRequest(final short version) {

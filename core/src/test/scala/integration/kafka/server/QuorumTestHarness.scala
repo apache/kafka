@@ -420,11 +420,24 @@ object QuorumTestHarness {
     )
   }
 
+  def getTestGroupProtocolParametersAll: java.util.stream.Stream[Arguments] = {
+    stream.Stream.of(
+      Arguments.of(GroupProtocol.CLASSIC.name.toLowerCase(Locale.ROOT)),
+      Arguments.of(GroupProtocol.CONSUMER.name.toLowerCase(Locale.ROOT))
+    )
+  }
+
   // For tests that only work with the classic group protocol, we want to test the following combinations:
   // * KRaft and the classic group protocol
   def getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly: java.util.stream.Stream[Arguments] = {
     stream.Stream.of(
       Arguments.of("kraft", GroupProtocol.CLASSIC.name.toLowerCase(Locale.ROOT))
+    )
+  }
+
+  def getTestGroupProtocolParametersClassicGroupProtocolOnly: java.util.stream.Stream[Arguments] = {
+    stream.Stream.of(
+      Arguments.of(GroupProtocol.CLASSIC.name.toLowerCase(Locale.ROOT))
     )
   }
 
@@ -435,8 +448,4 @@ object QuorumTestHarness {
       Arguments.of("kraft", GroupProtocol.CONSUMER.name.toLowerCase(Locale.ROOT))
     )
   }
-
-  // The following parameter groups are to *temporarily* avoid bugs with the CONSUMER group protocol Consumer
-  // implementation that would otherwise cause tests to fail.
-  def getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly_KAFKA_18034: stream.Stream[Arguments] = getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly
 }

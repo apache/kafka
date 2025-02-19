@@ -199,7 +199,7 @@ public class ClusterImageTest {
             setFeatures(new BrokerFeatureCollection(
                 Collections.singleton(new BrokerFeature().
                     setName(MetadataVersion.FEATURE_NAME).
-                    setMinSupportedVersion(MetadataVersion.IBP_3_3_IV3.featureLevel()).
+                    setMinSupportedVersion(MetadataVersion.MINIMUM_VERSION.featureLevel()).
                     setMaxSupportedVersion(MetadataVersion.IBP_3_6_IV0.featureLevel())).iterator())).
             setRack("rack3"),
             REGISTER_BROKER_RECORD.highestSupportedVersion()));
@@ -232,7 +232,7 @@ public class ClusterImageTest {
             setIncarnationId(Uuid.fromString("Am5Yse7GQxaw0b2alM74bP")).
             setListeners(Collections.singletonList(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9094))).
             setSupportedFeatures(Collections.singletonMap("metadata.version",
-                VersionRange.of(MetadataVersion.IBP_3_3_IV3.featureLevel(), MetadataVersion.IBP_3_6_IV0.featureLevel()))).
+                VersionRange.of(MetadataVersion.MINIMUM_VERSION.featureLevel(), MetadataVersion.IBP_3_6_IV0.featureLevel()))).
             setRack(Optional.of("rack3")).
             setFenced(true).
             setIsMigratingZkBroker(true).build());
@@ -296,7 +296,7 @@ public class ClusterImageTest {
 
     private static List<ApiMessageAndVersion> getImageRecords(ClusterImage image) {
         RecordListWriter writer = new RecordListWriter();
-        image.write(writer, new ImageWriterOptions.Builder().build());
+        image.write(writer, new ImageWriterOptions.Builder(MetadataVersion.latestProduction()).build());
         return writer.records();
     }
 
@@ -311,8 +311,7 @@ public class ClusterImageTest {
                 setSupportedFeatures(Collections.emptyMap()).build()));
         RecordListWriter writer = new RecordListWriter();
         final AtomicReference<String> lossString = new AtomicReference<>("");
-        testImage.write(writer, new ImageWriterOptions.Builder().
-            setMetadataVersion(MetadataVersion.IBP_3_6_IV2).
+        testImage.write(writer, new ImageWriterOptions.Builder(MetadataVersion.IBP_3_6_IV2).
             setLossHandler(loss -> lossString.compareAndSet("", loss.loss())).
                 build());
         assertEquals("controller registration data", lossString.get());

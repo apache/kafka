@@ -79,7 +79,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     private final LinkedHashSet<GraphNode> mergeNodes = new LinkedHashSet<>();
     private final LinkedHashSet<GraphNode> tableSourceNodes = new LinkedHashSet<>();
     private final LinkedHashSet<GraphNode> versionedSemanticsNodes = new LinkedHashSet<>();
-    private final LinkedHashSet<TableSuppressNode> tableSuppressNodesNodes = new LinkedHashSet<>();
+    private final LinkedHashSet<TableSuppressNode<?, ?>> tableSuppressNodesNodes = new LinkedHashSet<>();
 
     private static final String TOPOLOGY_ROOT = "root";
     private static final Logger LOG = LoggerFactory.getLogger(InternalStreamsBuilder.class);
@@ -431,12 +431,11 @@ public class InternalStreamsBuilder implements InternalNameProvider {
      * We iterate over all the siblings to identify these two nodes so that we can remove the
      * latter.
      */
-    @SuppressWarnings("unchecked")
     private void rewriteSingleStoreSelfJoin(
         final GraphNode currentNode, final Map<GraphNode, Boolean> visited) {
         visited.put(currentNode, true);
         if (currentNode instanceof StreamStreamJoinNode && currentNode.parentNodes().size() == 1) {
-            final StreamStreamJoinNode joinNode = (StreamStreamJoinNode) currentNode;
+            final StreamStreamJoinNode<?, ?, ?, ?> joinNode = (StreamStreamJoinNode<?, ?, ?, ?>) currentNode;
             // Remove JoinOtherWindowed node
             final GraphNode parent = joinNode.parentNodes().stream().findFirst().get();
             GraphNode left = null, right = null;

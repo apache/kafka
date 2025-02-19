@@ -507,7 +507,7 @@ public class CommitRequestManagerTest {
         NetworkClientDelegate.PollResult res = commitRequestManager.poll(time.milliseconds());
         assertEquals(0, res.unsentRequests.size());
         assertTrue(commitResult.isDone());
-        assertFutureThrows(commitResult, CommitFailedException.class);
+        assertFutureThrows(CommitFailedException.class, commitResult);
     }
 
     @Test
@@ -528,7 +528,7 @@ public class CommitRequestManagerTest {
 
         // Commit should fail with CommitFailedException
         assertTrue(commitResult.isDone());
-        assertFutureThrows(commitResult, CommitFailedException.class);
+        assertFutureThrows(CommitFailedException.class, commitResult);
     }
 
     /**
@@ -583,7 +583,7 @@ public class CommitRequestManagerTest {
 
         // Commit should mark the coordinator unknown and fail with RetriableCommitFailedException.
         assertTrue(commitResult.isDone());
-        assertFutureThrows(commitResult, RetriableCommitFailedException.class);
+        assertFutureThrows(RetriableCommitFailedException.class, commitResult);
         assertCoordinatorDisconnectHandling();
     }
 
@@ -806,10 +806,10 @@ public class CommitRequestManagerTest {
             assertFalse(commitRequestManager.pendingRequests.unsentOffsetFetches.isEmpty());
             NetworkClientDelegate.PollResult poll = commitRequestManager.poll(time.milliseconds());
             mimicResponse(error, poll);
-            futures.forEach(f -> assertFutureThrows(f, expectedExceptionClass));
+            futures.forEach(f -> assertFutureThrows(expectedExceptionClass, f));
             assertTrue(commitRequestManager.pendingRequests.unsentOffsetFetches.isEmpty());
         } else {
-            futures.forEach(f -> assertFutureThrows(f, expectedExceptionClass));
+            futures.forEach(f -> assertFutureThrows(expectedExceptionClass, f));
             assertEmptyPendingRequests(commitRequestManager);
         }
     }
@@ -931,7 +931,7 @@ public class CommitRequestManagerTest {
         assertTrue(commitResult.isDone());
         assertTrue(commitResult.isCompletedExceptionally());
         if (error.exception() instanceof RetriableException) {
-            assertFutureThrows(commitResult, RetriableCommitFailedException.class);
+            assertFutureThrows(RetriableCommitFailedException.class, commitResult);
         }
 
         // We expect that the request should not have been retried on this async commit.
@@ -994,7 +994,7 @@ public class CommitRequestManagerTest {
         assertEquals(0, res.unsentRequests.size());
         assertTrue(commitResult.isDone());
 
-        assertFutureThrows(commitResult, expectedExceptionClass);
+        assertFutureThrows(expectedExceptionClass, commitResult);
     }
 
     /**
@@ -1022,7 +1022,7 @@ public class CommitRequestManagerTest {
         assertExceptionHandling(commitRequestManager, retriableError, false);
 
         // Request should complete with a RetriableCommitException
-        assertFutureThrows(commitResult, RetriableCommitFailedException.class);
+        assertFutureThrows(RetriableCommitFailedException.class, commitResult);
     }
 
     @ParameterizedTest
@@ -1372,7 +1372,7 @@ public class CommitRequestManagerTest {
         mimicResponse(error, poll);
         futures.forEach(f -> {
             assertTrue(f.isCompletedExceptionally());
-            assertFutureThrows(f, TimeoutException.class);
+            assertFutureThrows(TimeoutException.class, f);
         });
     }
 
@@ -1499,6 +1499,23 @@ public class CommitRequestManagerTest {
         assertEquals("topic", data.topics().get(0).name());
     }
 
+    @Test
+    public void testPollWithFatalErrorShouldFailAllUnsentRequests() {
+        CommitRequestManager commitRequestManager = create(true, 100);
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
+
+        commitRequestManager.fetchOffsets(Collections.singleton(new TopicPartition("test", 0)), 200);
+        assertEquals(1, commitRequestManager.pendingRequests.unsentOffsetFetches.size());
+
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.empty());
+        when(coordinatorRequestManager.fatalError())
+                .thenReturn(Optional.of(new GroupAuthorizationException("Group authorization exception")));
+
+        assertEquals(NetworkClientDelegate.PollResult.EMPTY, commitRequestManager.poll(200));
+
+        assertEmptyPendingRequests(commitRequestManager);
+    }
+    
     private static void assertEmptyPendingRequests(CommitRequestManager commitRequestManager) {
         assertTrue(commitRequestManager.pendingRequests.inflightOffsetFetches.isEmpty());
         assertTrue(commitRequestManager.pendingRequests.unsentOffsetFetches.isEmpty());

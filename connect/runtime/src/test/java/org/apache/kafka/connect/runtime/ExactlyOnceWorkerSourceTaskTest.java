@@ -26,11 +26,12 @@ import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.errors.ConnectException;
-import org.apache.kafka.connect.integration.MonitorableSourceConnector;
+import org.apache.kafka.connect.integration.TestableSourceConnector;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperatorTest;
@@ -83,7 +84,7 @@ import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import static java.util.Collections.emptySet;
-import static org.apache.kafka.connect.integration.MonitorableSourceConnector.TOPIC_CONFIG;
+import static org.apache.kafka.connect.integration.TestableSourceConnector.TOPIC_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
@@ -248,7 +249,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
         // setup up props for the source connector
         Map<String, String> props = new HashMap<>();
         props.put("name", "foo-connector");
-        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getSimpleName());
+        props.put(CONNECTOR_CLASS_CONFIG, TestableSourceConnector.class.getSimpleName());
         props.put(TASKS_MAX_CONFIG, String.valueOf(1));
         props.put(TOPIC_CONFIG, TOPIC);
         props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
@@ -276,7 +277,10 @@ public class ExactlyOnceWorkerSourceTaskTest {
     }
 
     private void createWorkerTask(TargetState initialState, Converter keyConverter, Converter valueConverter, HeaderConverter headerConverter) {
-        workerTask = new ExactlyOnceWorkerSourceTask(taskId, sourceTask, statusListener, initialState, keyConverter, valueConverter, headerConverter,
+        Plugin<Converter> keyConverterPlugin = metrics.wrap(keyConverter, taskId,  true);
+        Plugin<Converter> valueConverterPlugin = metrics.wrap(valueConverter, taskId,  false);
+        Plugin<HeaderConverter> headerConverterPlugin = metrics.wrap(headerConverter, taskId);
+        workerTask = new ExactlyOnceWorkerSourceTask(taskId, sourceTask, statusListener, initialState, keyConverterPlugin, valueConverterPlugin, headerConverterPlugin,
                 transformationChain, producer, admin, TopicCreationGroup.configuredGroups(sourceConfig), offsetReader, offsetWriter, offsetStore,
                 config, clusterConfigState, metrics, errorHandlingMetrics, plugins.delegatingLoader(), time, RetryWithToleranceOperatorTest.noneOperator(), statusBackingStore,
                 sourceConfig, Runnable::run, preProducerCheck, postProducerCheck, Collections::emptyList);
