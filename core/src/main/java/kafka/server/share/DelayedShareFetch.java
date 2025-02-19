@@ -105,7 +105,8 @@ public class DelayedShareFetch extends DelayedOperation {
         LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions,
         PartitionMaxBytesStrategy partitionMaxBytesStrategy,
         ShareGroupMetrics shareGroupMetrics,
-        Time time) {
+        Time time
+    ) {
         super(shareFetch.fetchParams().maxWaitMs, Optional.empty());
         this.shareFetch = shareFetch;
         this.replicaManager = replicaManager;
