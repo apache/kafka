@@ -689,7 +689,7 @@ public class ShareConsumerTest {
     }
 
     @ClusterTest
-    public void testExplicitModeSwitchOnEmptyPoll() throws InterruptedException {
+    public void testImplicitModeNotTriggerByPollWhenNoAcksToSend() throws InterruptedException {
         setup();
         alterShareAutoOffsetReset("group1", "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
@@ -701,6 +701,7 @@ public class ShareConsumerTest {
             Map<TopicPartition, Exception> partitionExceptionMap1 = new HashMap<>();
             shareConsumer.setAcknowledgementCommitCallback(new TestableAcknowledgementCommitCallback(partitionOffsetsMap1, partitionExceptionMap1));
 
+            // The acknowledgement mode moves to PENDING from UNKNOWN.
             ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(5000));
             assertEquals(0, records.count());
             shareConsumer.commitAsync();
@@ -709,9 +710,11 @@ public class ShareConsumerTest {
             producer.send(record1);
             producer.flush();
 
+            // The acknowledgement mode remains in PENDING because no records were returned.
             records = shareConsumer.poll(Duration.ofMillis(5000));
             assertEquals(1, records.count());
 
+            // The acknowledgement mode now moves to EXPLICIT.
             shareConsumer.acknowledge(records.iterator().next());
             shareConsumer.commitAsync();
 

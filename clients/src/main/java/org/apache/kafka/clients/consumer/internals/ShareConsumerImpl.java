@@ -1019,7 +1019,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                 // The first call to poll(Duration) moves into PENDING
                 acknowledgementMode = AcknowledgementMode.PENDING;
             } else if (acknowledgementMode == AcknowledgementMode.PENDING && !currentFetch.isEmpty()) {
-                // The second call to poll(Duration) if PENDING moves into IMPLICIT
+                // If there are records to acknowledge and PENDING, moves into IMPLICIT
                 acknowledgementMode = AcknowledgementMode.IMPLICIT;
             }
         } else {
