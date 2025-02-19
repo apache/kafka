@@ -40,7 +40,7 @@ public class DefaultAccessTokenRetriever implements AccessTokenRetriever {
         URL tokenEndpointUrl = cu.validateUrl(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL);
 
         if (tokenEndpointUrl.getProtocol().toLowerCase(Locale.ROOT).equals("file")) {
-            delegate = new FileAccessTokenRetriever();
+            delegate = new FileTokenRetriever();
         } else {
             String grantType = cu.validateString(OAuthBearerConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_GRANT_TYPE, false);
 

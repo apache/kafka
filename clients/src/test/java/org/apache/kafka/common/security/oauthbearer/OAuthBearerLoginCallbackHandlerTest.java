@@ -26,7 +26,7 @@ import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessToke
 import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenValidator;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ClientAccessTokenValidator;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.DefaultAccessTokenRetriever;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.FileAccessTokenRetriever;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.FileTokenRetriever;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpAccessTokenRetriever;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerTest;
 
@@ -226,7 +226,7 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
         Map<String, Object> jaasConfigs = Collections.emptyMap();
         configureHandler(handler, configs, jaasConfigs);
         assertInstanceOf(DefaultAccessTokenRetriever.class, handler.accessTokenRetriever);
-        assertInstanceOf(FileAccessTokenRetriever.class, ((DefaultAccessTokenRetriever) handler.accessTokenRetriever).delegate());
+        assertInstanceOf(FileTokenRetriever.class, ((DefaultAccessTokenRetriever) handler.accessTokenRetriever).delegate());
     }
 
     @Test

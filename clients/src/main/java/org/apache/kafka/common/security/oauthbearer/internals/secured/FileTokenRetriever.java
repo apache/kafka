@@ -36,7 +36,7 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_
  * @see AccessTokenRetriever
  */
 
-public class FileAccessTokenRetriever implements AccessTokenRetriever {
+public class FileTokenRetriever implements AccessTokenRetriever {
 
     protected String accessToken;
 

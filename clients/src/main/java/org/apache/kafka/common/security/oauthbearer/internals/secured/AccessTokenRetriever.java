@@ -30,7 +30,7 @@ import java.io.IOException;
  * access token.
  *
  * @see HttpAccessTokenRetriever
- * @see FileAccessTokenRetriever
+ * @see FileTokenRetriever
  */
 
 public interface AccessTokenRetriever extends OAuthBearerConfigurable {
