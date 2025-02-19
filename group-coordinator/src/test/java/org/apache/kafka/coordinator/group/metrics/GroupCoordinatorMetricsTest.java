@@ -28,7 +28,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.Group;
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup.ConsumerGroupState;
-import org.apache.kafka.coordinator.group.modern.share.ShareGroup;
+import org.apache.kafka.coordinator.group.modern.share.ShareGroup.ShareGroupState;
 import org.apache.kafka.coordinator.group.streams.StreamsGroup.StreamsGroupState;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
@@ -227,13 +227,16 @@ public class GroupCoordinatorMetricsTest {
             StreamsGroupState.NOT_READY, 1L
         ));
 
+        shard0.setShareGroupGauges(Map.of(ShareGroupState.STABLE, 2L));
+        shard1.setShareGroupGauges(Map.of(
+            ShareGroupState.EMPTY, 2L,
+            ShareGroupState.STABLE, 3L,
+            ShareGroupState.DEAD, 1L
+        ));
+
         IntStream.range(0, 6).forEach(__ -> shard0.incrementNumOffsets());
         IntStream.range(0, 2).forEach(__ -> shard1.incrementNumOffsets());
         IntStream.range(0, 1).forEach(__ -> shard1.decrementNumOffsets());
-
-        IntStream.range(0, 5).forEach(__ -> shard0.incrementNumShareGroups(ShareGroup.ShareGroupState.STABLE));
-        IntStream.range(0, 5).forEach(__ -> shard1.incrementNumShareGroups(ShareGroup.ShareGroupState.EMPTY));
-        IntStream.range(0, 3).forEach(__ -> shard1.decrementNumShareGroups(ShareGroup.ShareGroupState.DEAD));
 
         assertEquals(4, shard0.numClassicGroups());
         assertEquals(5, shard1.numClassicGroups());
@@ -261,12 +264,12 @@ public class GroupCoordinatorMetricsTest {
         );
         assertGaugeValue(registry, metricName("GroupMetadataManager", "NumOffsets"), 7);
 
-        assertEquals(5, shard0.numShareGroups());
-        assertEquals(2, shard1.numShareGroups());
+        assertEquals(2, shard0.numShareGroups());
+        assertEquals(6, shard1.numShareGroups());
         assertGaugeValue(
             metrics,
             metrics.metricName("group-count", METRICS_GROUP, Collections.singletonMap("protocol", "share")),
-            7
+            8
         );
         
         assertEquals(2, shard0.numStreamsGroups());
