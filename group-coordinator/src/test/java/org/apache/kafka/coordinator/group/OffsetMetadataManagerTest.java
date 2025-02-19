@@ -2967,7 +2967,7 @@ public class OffsetMetadataManagerTest {
         assertEquals(1, group.generationId());
         group.transitionTo(ClassicGroupState.STABLE);
 
-        CoordinatorResult<OffsetCommitResponseData, CoordinatorRecord> result = context.commitOffset(
+        context.commitOffset(
             new OffsetCommitRequestData()
                 .setGroupId("foo")
                 .setMemberId("member")

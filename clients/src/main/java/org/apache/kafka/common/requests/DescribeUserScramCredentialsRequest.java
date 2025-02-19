@@ -68,7 +68,8 @@ public class DescribeUserScramCredentialsRequest extends AbstractRequest {
                 .setThrottleTimeMs(throttleTimeMs)
                 .setErrorCode(apiError.error().code())
                 .setErrorMessage(apiError.message());
-        for (DescribeUserScramCredentialsRequestData.UserName user : data.users()) {
+
+        for (@SuppressWarnings("UnusedLocalVariable") DescribeUserScramCredentialsRequestData.UserName ignored : data.users()) {
             response.results().add(new DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult()
                     .setErrorCode(apiError.error().code())
                     .setErrorMessage(apiError.message()));

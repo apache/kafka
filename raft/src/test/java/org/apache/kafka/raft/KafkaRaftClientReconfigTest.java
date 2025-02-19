@@ -189,24 +189,6 @@ public class KafkaRaftClientReconfigTest {
             .withUnknownLeader(0)
             .build();
 
-        List<List<ControlRecord>> expectedBootstrapRecords = Arrays.asList(
-            Arrays.asList(
-                new ControlRecord(
-                    ControlRecordType.SNAPSHOT_HEADER,
-                    new SnapshotHeaderRecord()
-                        .setVersion((short) 0)
-                        .setLastContainedLogTimestamp(0)
-                )
-            ),
-            Arrays.asList(
-                new ControlRecord(
-                    ControlRecordType.SNAPSHOT_FOOTER,
-                    new SnapshotFooterRecord()
-                        .setVersion((short) 0)
-                )
-            )
-        );
-
         // check leader does not write bootstrap records to log
         context.unattachedToLeader();
 

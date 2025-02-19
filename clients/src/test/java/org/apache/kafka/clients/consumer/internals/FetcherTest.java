@@ -2881,7 +2881,7 @@ public class FetcherTest {
                                 field.setAccessible(true);
                                 LinkedHashMap<?, ?> sessionPartitions =
                                         (LinkedHashMap<?, ?>) field.get(handler);
-                                for (Map.Entry<?, ?> entry : sessionPartitions.entrySet()) {
+                                for (@SuppressWarnings("UnusedLocalVariable") Map.Entry<?, ?> ignored : sessionPartitions.entrySet()) {
                                     // If `sessionPartitions` are modified on another thread, Thread.yield will increase the
                                     // possibility of ConcurrentModificationException if appropriate synchronization is not used.
                                     Thread.yield();
