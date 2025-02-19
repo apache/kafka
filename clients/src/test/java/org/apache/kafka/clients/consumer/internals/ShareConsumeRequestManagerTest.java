@@ -1325,7 +1325,7 @@ public class ShareConsumeRequestManagerTest {
         subscriptions.assignFromSubscribed(Collections.singleton(tp0));
 
         client.updateMetadata(
-                RequestTestUtils.metadataUpdateWithIds(1, singletonMap(topicName, 1),
+                RequestTestUtils.metadataUpdateWithIds(1, Map.of(topicName, 1),
                         tp -> validLeaderEpoch, topicIds, false));
 
         assertEquals(1, sendFetches());
@@ -1345,7 +1345,7 @@ public class ShareConsumeRequestManagerTest {
         subscriptions.assignFromSubscribed(Collections.singleton(tp0));
 
         client.updateMetadata(
-                RequestTestUtils.metadataUpdateWithIds(1, singletonMap(topicName, 1),
+                RequestTestUtils.metadataUpdateWithIds(1, Map.of(topicName, 1),
                         tp -> validLeaderEpoch, topicIds, false));
 
         assertEquals(1, sendFetches());
