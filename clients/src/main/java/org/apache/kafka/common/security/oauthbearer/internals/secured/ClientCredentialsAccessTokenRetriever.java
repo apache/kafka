@@ -52,7 +52,7 @@ import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallb
 
 public class ClientCredentialsAccessTokenRetriever extends HttpAccessTokenRetriever {
 
-    public static final String AUTHORIZATION_HEADER = "Authorization";
+    public static final String GRANT_TYPE = "client_credentials";
 
     private String clientId;
 
@@ -82,7 +82,7 @@ public class ClientCredentialsAccessTokenRetriever extends HttpAccessTokenRetrie
 
     static String formatRequestBody(String scope) {
         StringBuilder requestParameters = new StringBuilder();
-        requestParameters.append("grant_type=client_credentials");
+        requestParameters.append("grant_type=").append(GRANT_TYPE);
 
         if (scope != null && !scope.trim().isEmpty()) {
             scope = scope.trim();
@@ -96,7 +96,7 @@ public class ClientCredentialsAccessTokenRetriever extends HttpAccessTokenRetrie
     @Override
     protected Map<String, String> formatRequestHeaders(int contentLength) {
         Map<String, String> headers = new HashMap<>(super.formatRequestHeaders(contentLength));
-        headers.put(AUTHORIZATION_HEADER, formatAuthorizationHeader(clientId, clientSecret, urlencodeHeader));
+        headers.put("Authorization", formatAuthorizationHeader(clientId, clientSecret, urlencodeHeader));
         return headers;
     }
 
@@ -149,5 +149,4 @@ public class ClientCredentialsAccessTokenRetriever extends HttpAccessTokenRetrie
         else
             return DEFAULT_SASL_OAUTHBEARER_HEADER_URLENCODE;
     }
-
 }
