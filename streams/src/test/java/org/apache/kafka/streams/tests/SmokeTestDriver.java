@@ -372,7 +372,8 @@ public class SmokeTestDriver extends SmokeTestUtil {
 
     public static VerificationResult verify(final String kafka,
                                             final Map<String, Set<Integer>> inputs,
-                                            final int maxRecordsPerKey) {
+                                            final int maxRecordsPerKey,
+                                            final boolean eosEnabled) {
         final Properties props = new Properties();
         props.put(ConsumerConfig.CLIENT_ID_CONFIG, "verifier");
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
@@ -399,7 +400,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
         while (System.currentTimeMillis() - start < TimeUnit.MINUTES.toMillis(6)) {
             final ConsumerRecords<String, Number> records = consumer.poll(Duration.ofSeconds(5));
             if (records.isEmpty() && recordsProcessed >= recordsGenerated) {
-                verificationResult = verifyAll(inputs, events, false);
+                verificationResult = verifyAll(inputs, events, false, eosEnabled);
                 if (verificationResult.passed()) {
                     break;
                 } else if (retry++ > MAX_RECORD_EMPTY_RETRIES) {
@@ -465,7 +466,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
 
         // give it one more try if it's not already passing.
         if (!verificationResult.passed()) {
-            verificationResult = verifyAll(inputs, events, true);
+            verificationResult = verifyAll(inputs, events, true, eosEnabled);
         }
         success &= verificationResult.passed();
 
@@ -508,7 +509,8 @@ public class SmokeTestDriver extends SmokeTestUtil {
 
     private static VerificationResult verifyAll(final Map<String, Set<Integer>> inputs,
                                                 final Map<String, Map<String, LinkedList<ConsumerRecord<String, Number>>>> events,
-                                                final boolean printResults) {
+                                                final boolean printResults,
+                                                final boolean eosEnabled) {
         final ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
         boolean pass;
         try (final PrintStream resultStream = new PrintStream(byteArrayOutputStream)) {
@@ -517,14 +519,14 @@ public class SmokeTestDriver extends SmokeTestUtil {
             pass &= verify(resultStream, "min-suppressed", inputs, events, windowedKey -> {
                 final String unwindowedKey = windowedKey.substring(1, windowedKey.length() - 1).replaceAll("@.*", "");
                 return getMin(unwindowedKey);
-            }, printResults);
+            }, printResults, eosEnabled);
             pass &= verifySuppressed(resultStream, "sws-suppressed", events, printResults);
-            pass &= verify(resultStream, "min", inputs, events, SmokeTestDriver::getMin, printResults);
-            pass &= verify(resultStream, "max", inputs, events, SmokeTestDriver::getMax, printResults);
-            pass &= verify(resultStream, "dif", inputs, events, key -> getMax(key).intValue() - getMin(key).intValue(), printResults);
-            pass &= verify(resultStream, "sum", inputs, events, SmokeTestDriver::getSum, printResults);
-            pass &= verify(resultStream, "cnt", inputs, events, key1 -> getMax(key1).intValue() - getMin(key1).intValue() + 1L, printResults);
-            pass &= verify(resultStream, "avg", inputs, events, SmokeTestDriver::getAvg, printResults);
+            pass &= verify(resultStream, "min", inputs, events, SmokeTestDriver::getMin, printResults, eosEnabled);
+            pass &= verify(resultStream, "max", inputs, events, SmokeTestDriver::getMax, printResults, eosEnabled);
+            pass &= verify(resultStream, "dif", inputs, events, key -> getMax(key).intValue() - getMin(key).intValue(), printResults, eosEnabled);
+            pass &= verify(resultStream, "sum", inputs, events, SmokeTestDriver::getSum, printResults, eosEnabled);
+            pass &= verify(resultStream, "cnt", inputs, events, key1 -> getMax(key1).intValue() - getMin(key1).intValue() + 1L, printResults, eosEnabled);
+            pass &= verify(resultStream, "avg", inputs, events, SmokeTestDriver::getAvg, printResults, eosEnabled);
         }
         return new VerificationResult(pass, new String(byteArrayOutputStream.toByteArray(), StandardCharsets.UTF_8));
     }
@@ -534,7 +536,8 @@ public class SmokeTestDriver extends SmokeTestUtil {
                                   final Map<String, Set<Integer>> inputData,
                                   final Map<String, Map<String, LinkedList<ConsumerRecord<String, Number>>>> events,
                                   final Function<String, Number> keyToExpectation,
-                                  final boolean printResults) {
+                                  final boolean printResults,
+                                  final boolean eosEnabled) {
         resultStream.printf("verifying topic '%s'%n", topic);
         final Map<String, LinkedList<ConsumerRecord<String, Number>>> observedInputEvents = events.get("data");
         final Map<String, LinkedList<ConsumerRecord<String, Number>>> outputEvents = events.getOrDefault(topic, emptyMap());
@@ -542,16 +545,23 @@ public class SmokeTestDriver extends SmokeTestUtil {
             resultStream.println("fail: missing result data; topic '" + topic + "' is empty, expected " + inputData.size() + " keys");
             return false;
         } else {
-            if (outputEvents.size() < inputData.size()) {
-                resultStream.println("fail: missing result data; got " + inputData.size() + " keys, expected: " + outputEvents.size() + " keys");
-                return false;
+            if (outputEvents.size() != inputData.size()) {
+                if (outputEvents.size() < inputData.size()) {
+                    resultStream.println("fail: missing result data; got " + inputData.size() + " keys, expected: " + outputEvents.size() + " keys");
+                    return false;
+                } else {
+                    if (eosEnabled) {
+                        resultStream.printf("fail: resultCount=%d expectedCount=%s%n\tresult=%s%n\texpected=%s%n",
+                            outputEvents.size(), inputData.size(), outputEvents.keySet(), inputData.keySet());
+                        return false;
+                    } else {
+                        resultStream.printf("duplicated detected (ok for ALOS): resultCount=%d expectedCount=%s%n\tresult=%s%n\texpected=%s%n",
+                            outputEvents.size(), inputData.size(), outputEvents.keySet(), inputData.keySet());
+                    }
+                }
             }
 
-            if (outputEvents.size() != inputData.size()) {
-                resultStream.printf("fail: resultCount=%d expectedCount=%s%n\tresult=%s%n\texpected=%s%n",
-                                    outputEvents.size(), inputData.size(), outputEvents.keySet(), inputData.keySet());
-                return false;
-            }
+
             for (final Map.Entry<String, LinkedList<ConsumerRecord<String, Number>>> entry : outputEvents.entrySet()) {
                 final String key = entry.getKey();
                 final Number expected = keyToExpectation.apply(key);
