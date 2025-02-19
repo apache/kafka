@@ -134,8 +134,6 @@ public class RaftEventSimulationTest {
         scheduler.schedule(router::deliverAll, 0, 2, 1);
         scheduler.schedule(new SequentialAppendAction(cluster), 0, 2, 3);
         scheduler.runUntil(cluster::hasConsistentLeader);
-        System.out.println(cluster.latestLeader().getAsInt());
-        System.out.println(cluster.leaderWithMaxEpoch().get());
         scheduler.runUntil(() -> cluster.allReachedHighWatermark(10));
     }
 
@@ -1045,7 +1043,7 @@ public class RaftEventSimulationTest {
                 .values()
                 .stream()
                 .collect(Collectors.toMap(Node::id, Cluster::nodeAddress));
-            if (withKip853 && initialVoters.containsKey(nodeId)) {
+            if (withKip853 && persistentState.log.endOffset().offset() == 0) {
                 RaftTestUtils.writeBootstrapSnapshot(
                     persistentState.log,
                     startingVoterSet,
@@ -1262,7 +1260,7 @@ public class RaftEventSimulationTest {
             if (cluster.withKip853) {
                 cluster.leaderWithMaxEpoch().ifPresent(leaderNode -> {
                     leaderNode.client.highWatermark().ifPresent(highWatermark -> {
-                        leaderNode.client.partitionState().voterSetAtOffset(highWatermark).ifPresent(voterSet -> {
+                        leaderNode.client.partitionState().voterSetAtOffset(highWatermark - 1).ifPresent(voterSet -> {
                             long numReachedHighWatermark = cluster.persistentStates.entrySet().stream()
                                 .filter(entry -> voterSet.voterIds().contains(entry.getKey()))
                                 .filter(entry -> entry.getValue().log.endOffset().offset() >= highWatermark)
@@ -1474,42 +1472,47 @@ public class RaftEventSimulationTest {
                 return;
             }
 
-            AtomicLong startOffset = new AtomicLong(0);
-            log.earliestSnapshotId().ifPresent(snapshotId -> {
-                assertTrue(snapshotId.offset() <= highWatermark.getAsLong());
-                startOffset.set(snapshotId.offset());
+            AtomicLong startOffset = new AtomicLong(log.startOffset());
 
-                try (SnapshotReader<Integer> snapshot = RecordsSnapshotReader.of(
+            // We do not perform this check with KIP-853 enabled
+            // because we write the bootstrap snapshot to all initial voters
+            if (!cluster.withKip853) {
+                log.earliestSnapshotId().ifPresent(snapshotId -> {
+                    assertTrue(snapshotId.offset() <= highWatermark.getAsLong());
+                    startOffset.set(snapshotId.offset());
+
+                    try (SnapshotReader<Integer> snapshot = RecordsSnapshotReader.of(
                         log.readSnapshot(snapshotId).get(),
                         node.intSerde,
                         BufferSupplier.create(),
                         Integer.MAX_VALUE,
                         true
                     )
-                ) {
-                    // Since the state machine is only on e value we only expect one data record in the snapshot
-                    // Expect only one batch with only one record
-                    OptionalInt sequence = OptionalInt.empty();
-                    while (snapshot.hasNext()) {
-                        Batch<Integer> batch = snapshot.next();
-                        if (!batch.records().isEmpty()) {
-                            assertEquals(1, batch.records().size());
-                            assertFalse(sequence.isPresent());
-                            sequence = OptionalInt.of(batch.records().get(0));
+                    ) {
+                        // Since the state machine is only one value we only expect one data record in the snapshot
+                        // Expect only one batch with only one record
+                        OptionalInt sequence = OptionalInt.empty();
+                        while (snapshot.hasNext()) {
+                            Batch<Integer> batch = snapshot.next();
+                            if (!batch.records().isEmpty()) {
+                                assertEquals(1, batch.records().size());
+                                assertFalse(sequence.isPresent());
+                                sequence = OptionalInt.of(batch.records().get(0));
+                            }
                         }
+
+                        // The snapshotId offset is an "end offset"
+                        long offset = snapshotId.offset() - 1;
+                        committedSequenceNumbers.putIfAbsent(offset, sequence.getAsInt());
+
+                        assertEquals(
+                            committedSequenceNumbers.get(offset),
+                            sequence.getAsInt(),
+                            String.format("Committed sequence at offset %s changed on node %s", offset, nodeId)
+                        );
                     }
-
-                    // The snapshotId offset is an "end offset"
-                    long offset = snapshotId.offset() - 1;
-                    committedSequenceNumbers.putIfAbsent(offset, sequence.getAsInt());
-
-                    assertEquals(
-                        committedSequenceNumbers.get(offset),
-                        sequence.getAsInt(),
-                        String.format("Committed sequence at offset %s changed on node %s", offset, nodeId)
-                    );
-                }
-            });
+                });
+            }
 
             for (LogBatch batch : log.readBatches(startOffset.get(), highWatermark)) {
                 if (batch.isControlBatch) {
