@@ -42,7 +42,7 @@ import org.apache.kafka.common.config.{ConfigResource, LogLevelConfig, SslConfig
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.KafkaException
-import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter}
+import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter, ClientQuotaFilterComponent}
 import org.apache.kafka.common.record.FileRecords
 import org.apache.kafka.common.requests.DeleteRecordsRequest
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceType}
@@ -136,6 +136,50 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val quotaEntities = client.describeClientQuotas(ClientQuotaFilter.all()).entities().get()
 
     assertEquals(configEntries, quotaEntities.get(entity).asScala)
+  }
+
+  @Test
+  def testDefaultNameQuotaIsNotEqualToDefaultQuota(): Unit = {
+    val config = createConfig
+    val defaultQuota = "<default>"
+    client = Admin.create(config)
+
+    val userEntity = new ClientQuotaEntity(Map(ClientQuotaEntity.USER -> defaultQuota).asJava)
+    val clientEntity = new ClientQuotaEntity(Map(ClientQuotaEntity.CLIENT_ID -> defaultQuota).asJava)
+
+    val userAlterations = new ClientQuotaAlteration(userEntity,
+      Collections.singleton(new ClientQuotaAlteration.Op("consumer_byte_rate", 10000D)))
+    val clientAlterations = new ClientQuotaAlteration(clientEntity,
+      Collections.singleton(new ClientQuotaAlteration.Op("producer_byte_rate", 10000D)))
+    val alterations = List(userAlterations, clientAlterations)
+    val result = client.alterClientQuotas(alterations.asJava)
+    result.all().get()
+
+    val values = result.values()
+    assertEquals(2, values.size())
+    values.forEach((entity, future) => {
+      val entityName = entity.entries().values().iterator().next()
+      assertEquals(defaultQuota, entityName)
+    })
+
+    TestUtils.waitUntilTrue(() => {
+      try {
+        val userQuotas = client.describeClientQuotas(ClientQuotaFilter.containsOnly(Collections.singletonList(
+          ClientQuotaFilterComponent.ofDefaultEntity(ClientQuotaEntity.USER)))).entities().get()
+        val clientQuotas = client.describeClientQuotas(ClientQuotaFilter.containsOnly(Collections.singletonList(
+          ClientQuotaFilterComponent.ofDefaultEntity(ClientQuotaEntity.CLIENT_ID)))).entities().get()
+        userQuotas.size() == 0 && clientQuotas.size() == 0
+      } catch {
+        case _: Exception => false
+      }
+    }, "Timed out waiting for quota config to be propagated to all servers")
+
+    val userQuotas = client.describeClientQuotas(ClientQuotaFilter.containsOnly(Collections.singletonList(
+      ClientQuotaFilterComponent.ofDefaultEntity(ClientQuotaEntity.USER)))).entities().get()
+    val clientQuotas = client.describeClientQuotas(ClientQuotaFilter.containsOnly(Collections.singletonList(
+      ClientQuotaFilterComponent.ofDefaultEntity(ClientQuotaEntity.CLIENT_ID)))).entities().get()
+    assertEquals(0, userQuotas.size())
+    assertEquals(0, clientQuotas.size())
   }
 
   @Test
