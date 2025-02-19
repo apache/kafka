@@ -16,11 +16,13 @@
  */
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
+import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -31,19 +33,18 @@ import java.util.Map;
 import java.util.Optional;
 
 import javax.net.ssl.HttpsURLConnection;
-import javax.net.ssl.SSLSocketFactory;
 
 /**
  * <code>OAuthBearerHttpClient</code> is a lightweight client that can be used by callback handlers to
  * communicate with an OAuth/OIDC provider directly via HTTP.
  */
-public class OAuthBearerHttpClient {
+public class OAuthBearerHttpClient implements Closeable {
 
     private static final Logger log = LoggerFactory.getLogger(OAuthBearerHttpClient.class);
 
     private final String url;
 
-    private final Optional<SSLSocketFactory> sslSocketFactory;
+    private final Optional<SslResource> sslResource;
 
     private final Optional<Integer> connectTimeoutMs;
 
@@ -54,13 +55,18 @@ public class OAuthBearerHttpClient {
     }
 
     public OAuthBearerHttpClient(String url,
-                                 Optional<SSLSocketFactory> sslSocketFactory,
+                                 Optional<SslResource> sslResource,
                                  Optional<Integer> connectTimeoutMs,
                                  Optional<Integer> readTimeoutMs) {
         this.url = url;
-        this.sslSocketFactory = sslSocketFactory;
+        this.sslResource = sslResource;
         this.connectTimeoutMs = connectTimeoutMs;
         this.readTimeoutMs = readTimeoutMs;
+    }
+
+    @Override
+    public void close() throws IOException {
+        sslResource.ifPresent(r -> Utils.closeQuietly(r, "sslResource"));
     }
 
     public HttpURLConnection connect(String url,
@@ -70,8 +76,8 @@ public class OAuthBearerHttpClient {
 
         HttpURLConnection con = (HttpURLConnection) new URL(url).openConnection();
 
-        if (sslSocketFactory.isPresent() && con instanceof HttpsURLConnection)
-            ((HttpsURLConnection) con).setSSLSocketFactory(sslSocketFactory.get());
+        if (sslResource.isPresent() && con instanceof HttpsURLConnection)
+            ((HttpsURLConnection) con).setSSLSocketFactory(sslResource.get().sslSocketFactory());
 
         con.setRequestMethod(requestMethod.toUpperCase(Locale.ROOT));
 

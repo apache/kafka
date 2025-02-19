@@ -88,7 +88,7 @@ public class RefreshingHttpsJwksTest extends OAuthBearerTest {
      */
 
     @Test
-    public void testMaybeExpediteRefreshNoDelay() throws Exception {
+    public void testMaybeExpediteRefreshNoDelay() {
         String keyId = "abc123";
         MockTime time = new MockTime();
         HttpsJwks httpsJwks = spyHttpsJwks();
@@ -106,7 +106,7 @@ public class RefreshingHttpsJwksTest extends OAuthBearerTest {
      */
 
     @Test
-    public void testMaybeExpediteRefreshDelays() throws Exception {
+    public void testMaybeExpediteRefreshDelays() {
         assertMaybeExpediteRefreshWithDelay(MISSING_KEY_ID_CACHE_IN_FLIGHT_MS - 1, false);
         assertMaybeExpediteRefreshWithDelay(MISSING_KEY_ID_CACHE_IN_FLIGHT_MS, true);
         assertMaybeExpediteRefreshWithDelay(MISSING_KEY_ID_CACHE_IN_FLIGHT_MS + 1, true);
@@ -181,7 +181,7 @@ public class RefreshingHttpsJwksTest extends OAuthBearerTest {
         return executorService;
     }
 
-    private void assertMaybeExpediteRefreshWithDelay(long sleepDelay, boolean shouldBeScheduled) throws Exception {
+    private void assertMaybeExpediteRefreshWithDelay(long sleepDelay, boolean shouldBeScheduled) {
         String keyId = "abc123";
         MockTime time = new MockTime();
         HttpsJwks httpsJwks = spyHttpsJwks();
@@ -198,7 +198,7 @@ public class RefreshingHttpsJwksTest extends OAuthBearerTest {
         return new RefreshingHttpsJwks(time, mockExecutorService(time)) {
             @Override
             public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
-                super.configure(jwks, configs, saslMechanism, jaasConfigEntries);
+                super.configure(jwks, configs, saslMechanism);
             }
         };
     }

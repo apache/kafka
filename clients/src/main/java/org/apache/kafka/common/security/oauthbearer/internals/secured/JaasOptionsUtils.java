@@ -65,9 +65,12 @@ public class JaasOptionsUtils {
         return Collections.unmodifiableMap(jaasConfigEntries.get(0).getOptions());
     }
 
-    public Optional<SSLSocketFactory> maybeCreateSSLSocketFactory(URL url) {
+    public Optional<SslResource> maybeCreateSslResource(URL url) {
         if (url.getProtocol().equalsIgnoreCase("https")) {
-            return Optional.of(createSSLSocketFactory());
+            Map<String, ?> sslClientConfig = getSslClientConfig();
+            SslFactory sslFactory = new SslFactory(ConnectionMode.CLIENT);
+            sslFactory.configure(sslClientConfig);
+            SSLSocketFactory sslSocketFactory = ((DefaultSslEngineFactory) sslFactory.sslEngineFactory()).sslContext().getSocketFactory();
         } else {
             return Optional.empty();
         }
@@ -80,15 +83,6 @@ public class JaasOptionsUtils {
         return sslClientConfig.values();
     }
 
-    public SSLSocketFactory createSSLSocketFactory() {
-        Map<String, ?> sslClientConfig = getSslClientConfig();
-        SslFactory sslFactory = new SslFactory(ConnectionMode.CLIENT);
-        sslFactory.configure(sslClientConfig);
-        SSLSocketFactory socketFactory = ((DefaultSslEngineFactory) sslFactory.sslEngineFactory()).sslContext().getSocketFactory();
-        log.debug("Created SSLSocketFactory: {}", sslClientConfig);
-        return socketFactory;
-    }
-
     public String validateString(String name) throws ValidateException {
         return validateString(name, true);
     }
@@ -98,7 +92,7 @@ public class JaasOptionsUtils {
 
         if (value == null) {
             if (isRequired)
-                throw new ConfigException(String.format("The OAuth configuration option %s value must be non-null", name));
+                throw new ConfigException(String.format("The OAuth JAAS option %s value must be non-null", name));
             else
                 return null;
         }
@@ -107,7 +101,7 @@ public class JaasOptionsUtils {
 
         if (value.isEmpty()) {
             if (isRequired)
-                throw new ConfigException(String.format("The OAuth configuration option %s value must not contain only whitespace", name));
+                throw new ConfigException(String.format("The OAuth JAAS option %s value must not contain only whitespace", name));
             else
                 return null;
         }

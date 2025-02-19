@@ -85,8 +85,4 @@ public class DefaultAccessTokenValidator implements AccessTokenValidator {
     public void close() {
         Utils.closeQuietly(delegate, "delegate");
     }
-
-    AccessTokenValidator delegate() {
-        return delegate;
-    }
 }

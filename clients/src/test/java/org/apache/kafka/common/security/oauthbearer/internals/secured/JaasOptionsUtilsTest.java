@@ -53,9 +53,9 @@ public class JaasOptionsUtilsTest extends OAuthBearerTest {
     @Test
     public void testShouldUseSslClientConfig() throws Exception {
         JaasOptionsUtils jou = new JaasOptionsUtils(Collections.emptyMap());
-        assertFalse(jou.maybeCreateSSLSocketFactory(new URL("http://www.example.com")).isPresent());
-        assertTrue(jou.maybeCreateSSLSocketFactory(new URL("https://www.example.com")).isPresent());
-        assertFalse(jou.maybeCreateSSLSocketFactory(new URL("file:///tmp/test.txt")).isPresent());
+        assertFalse(jou.maybeCreateSslResource(new URL("http://www.example.com")).isPresent());
+        assertTrue(jou.maybeCreateSslResource(new URL("https://www.example.com")).isPresent());
+        assertFalse(jou.maybeCreateSslResource(new URL("file:///tmp/test.txt")).isPresent());
     }
 
 }

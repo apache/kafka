@@ -107,10 +107,10 @@ import static org.apache.kafka.common.config.SslConfigs.SSL_TRUSTSTORE_PASSWORD_
 import static org.apache.kafka.common.config.SslConfigs.SSL_TRUSTSTORE_PASSWORD_DOC;
 import static org.apache.kafka.common.config.SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG;
 import static org.apache.kafka.common.config.SslConfigs.SSL_TRUSTSTORE_TYPE_DOC;
+import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule.OAUTHBEARER_MECHANISM;
 
 public class OAuthCompatibilityTool {
 
-    private static final String OAUTHBEARER_MECHANISM = "OAUTHBEARER";
     private static final String CLIENT_ID_JAAS_OPTION = "clientId";
     private static final String CLIENT_SECRET_JAAS_OPTION = "clientSecret";
     private static final String SCOPE_JAAS_OPTION = "scope";

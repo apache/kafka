@@ -36,7 +36,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
-import javax.net.ssl.SSLSocketFactory;
 import javax.security.auth.login.AppConfigurationEntry;
 
 import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_CONNECT_TIMEOUT_MS;
@@ -102,11 +101,11 @@ public abstract class HttpAccessTokenRetriever implements AccessTokenRetriever {
         retryBackoffMs = cu.validateLong(SASL_LOGIN_RETRY_BACKOFF_MS);
         retryBackoffMaxMs = cu.validateLong(SASL_LOGIN_RETRY_BACKOFF_MAX_MS);
 
-        Optional<SSLSocketFactory> sslSocketFactory = jou.maybeCreateSSLSocketFactory(url);
+        Optional<SslResource> sslResource = jou.maybeCreateSslResource(url);
         Optional<Integer> connectTimeoutMs = Optional.ofNullable(cu.validateInteger(SASL_LOGIN_CONNECT_TIMEOUT_MS, false));
         Optional<Integer> readTimeoutMs = Optional.ofNullable(cu.validateInteger(SASL_LOGIN_READ_TIMEOUT_MS, false));
 
-        client = new OAuthBearerHttpClient(tokenEndpointUrl, sslSocketFactory, connectTimeoutMs, readTimeoutMs);
+        client = new OAuthBearerHttpClient(tokenEndpointUrl, sslResource, connectTimeoutMs, readTimeoutMs);
     }
 
     protected abstract byte[] formatRequestBody();
@@ -140,7 +139,7 @@ public abstract class HttpAccessTokenRetriever implements AccessTokenRetriever {
         Map<String, String> headers = formatRequestHeaders(requestBody.length);
 
         Retry<String> retry = new Retry<>(retryBackoffMs, retryBackoffMaxMs);
-        String responseBody = null;
+        String responseBody;
 
         try {
             responseBody = retry.execute(() -> {

@@ -19,7 +19,6 @@ package org.apache.kafka.common.security.oauthbearer.internals.secured;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.Time;
 
 import javax.security.auth.login.AppConfigurationEntry;
@@ -31,7 +30,6 @@ import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
 import java.security.Signature;
 import java.security.SignatureException;
-import java.security.spec.InvalidKeySpecException;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.time.Duration;
 import java.util.Base64;
@@ -112,8 +110,8 @@ public class JwtBearerAccessTokenRetriever extends HttpAccessTokenRetriever {
             );
 
             assertion = assertionCreator.create();
-        } catch (NoSuchAlgorithmException | InvalidKeySpecException exception) {
-            throw new ConfigException(String.format("Error getting private key from secret: %s", exception.getMessage()));
+        } catch (Throwable t) {
+            throw new KafkaException("Error generating assertion for jwt-bearer", t);
         }
     }
 

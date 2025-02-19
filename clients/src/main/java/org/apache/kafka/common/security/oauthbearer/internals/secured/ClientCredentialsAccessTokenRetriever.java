@@ -25,6 +25,7 @@ import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import javax.security.auth.login.AppConfigurationEntry;
 
@@ -139,10 +140,6 @@ public class ClientCredentialsAccessTokenRetriever extends HttpAccessTokenRetrie
      */
     public static boolean validateUrlencodeHeader(ConfigurationUtils configurationUtils) {
         Boolean urlencodeHeader = configurationUtils.validateBoolean(SASL_OAUTHBEARER_HEADER_URLENCODE, false);
-
-        if (urlencodeHeader != null)
-            return urlencodeHeader;
-        else
-            return DEFAULT_SASL_OAUTHBEARER_HEADER_URLENCODE;
+        return Objects.requireNonNullElse(urlencodeHeader, DEFAULT_SASL_OAUTHBEARER_HEADER_URLENCODE);
     }
 }
