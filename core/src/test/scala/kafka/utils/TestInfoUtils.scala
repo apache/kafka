@@ -37,7 +37,7 @@ object TestInfoUtils {
   final val TestWithParameterizedGroupProtocolNames = "{displayName}.groupProtocol={0}"
 
   def isShareGroupTest(testInfo: TestInfo): Boolean = {
-    testInfo.getDisplayName.contains("kraft+kip932")
+    testInfo.getDisplayName.contains("kip932")
   }
 
   def maybeGroupProtocolSpecified(testInfo: TestInfo): Option[GroupProtocol] = {

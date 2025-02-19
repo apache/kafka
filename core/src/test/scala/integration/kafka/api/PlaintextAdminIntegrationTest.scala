@@ -2457,8 +2457,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("kraft+kip932"))
-  def testListGroups(quorum: String): Unit = {
+  @ValueSource(strings = Array("kip932"))
+  def testListGroups(unused: String): Unit = {
     val classicGroupId = "classic_group_id"
     val consumerGroupId = "consumer_group_id"
     val shareGroupId = "share_group_id"
@@ -2589,8 +2589,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("kraft+kip932"))
-  def testShareGroups(quorum: String): Unit = {
+  @ValueSource(strings = Array("kip932"))
+  def testShareGroups(unused: String): Unit = {
     val testGroupId = "test_group_id"
     val testClientId = "test_client_id"
     val fakeGroupId = "fake_group_id"

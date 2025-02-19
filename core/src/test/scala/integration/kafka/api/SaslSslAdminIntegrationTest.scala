@@ -37,7 +37,6 @@ import org.apache.kafka.storage.internals.log.LogConfig
 import org.apache.kafka.test.TestUtils.assertFutureThrows
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo, Timeout}
-import org.junit.jupiter.params.provider.ValueSource
 
 import java.util
 import java.util.Collections
@@ -132,7 +131,6 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
 
   @Test
   @Timeout(30)
-  @ValueSource(strings = Array("kraft"))
   def testAclOperationsWithOptionTimeoutMs(): Unit = {
     val config = createConfig
     // this will cause timeout connecting to broker
