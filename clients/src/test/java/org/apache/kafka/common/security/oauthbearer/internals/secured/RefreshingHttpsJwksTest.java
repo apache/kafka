@@ -41,6 +41,9 @@ import java.util.concurrent.TimeUnit;
 
 import javax.security.auth.login.AppConfigurationEntry;
 
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule.OAUTHBEARER_MECHANISM;
 import static org.apache.kafka.common.security.oauthbearer.internals.secured.RefreshingHttpsJwks.MISSING_KEY_ID_CACHE_IN_FLIGHT_MS;
 import static org.apache.kafka.common.security.oauthbearer.internals.secured.RefreshingHttpsJwks.MISSING_KEY_ID_MAX_KEY_LENGTH;
@@ -53,7 +56,11 @@ import static org.mockito.Mockito.verify;
 
 public class RefreshingHttpsJwksTest extends OAuthBearerTest {
 
-    private static final int REFRESH_MS = 5000;
+    private static final long REFRESH_MS = 5000;
+
+    private static final long RETRY_BACKOFF_MS = 50;
+
+    private static final long RETRY_BACKOFF_MAX_MS = 2000;
 
     /**
      * Test that a key not previously scheduled for refresh will be scheduled without a refresh.
@@ -317,10 +324,12 @@ public class RefreshingHttpsJwksTest extends OAuthBearerTest {
         }
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     protected Map<String, ?> getSaslConfigs() {
-        Map<String, String> configs = new HashMap<>((Map<String, String>) super.getSaslConfigs());
+        Map<String, Object> configs = new HashMap<>(super.getSaslConfigs());
+        configs.put(SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS, REFRESH_MS);
+        configs.put(SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS, RETRY_BACKOFF_MS);
+        configs.put(SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS, RETRY_BACKOFF_MAX_MS);
         configs.put("fo", "bar");
         return configs;
     }

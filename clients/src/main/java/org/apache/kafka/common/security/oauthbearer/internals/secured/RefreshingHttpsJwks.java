@@ -153,11 +153,9 @@ public class RefreshingHttpsJwks implements OAuthBearerConfigurable {
             ConfigurationUtils cu = new ConfigurationUtils(saslMechanism, configs);
             URL jwksEndpointUrl = cu.validateUrl(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL);
 
-            long refreshIntervalMs = cu.validateLong(SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS, true, 0L);
             JaasOptionsUtils jou = new JaasOptionsUtils(saslMechanism, jaasConfigEntries);
 
             HttpsJwks httpsJwks = new HttpsJwks(jwksEndpointUrl.toString());
-            httpsJwks.setDefaultCacheDuration(refreshIntervalMs);
 
             jou.maybeCreateSSLSocketFactory(jwksEndpointUrl).ifPresent(sslSocketFactory -> {
                 Get get = new Get();
@@ -179,11 +177,13 @@ public class RefreshingHttpsJwks implements OAuthBearerConfigurable {
                    Map<String, ?> configs,
                    String saslMechanism,
                    List<AppConfigurationEntry> jaasConfigEntries) {
-        this.httpsJwks = httpsJwks;
-
         ConfigurationUtils cu = new ConfigurationUtils(saslMechanism, configs);
+        refreshMs = cu.validateLong(SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS, true, 0L);
         refreshRetryBackoffMs = cu.validateLong(SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS);
         refreshRetryBackoffMaxMs = cu.validateLong(SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS);
+
+        this.httpsJwks = httpsJwks;
+        this.httpsJwks.setDefaultCacheDuration(refreshMs);
 
         List<JsonWebKey> localJWKs;
 
