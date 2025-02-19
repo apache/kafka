@@ -16,12 +16,11 @@
 FROM ghcr.io/graalvm/graalvm-community:21 AS build-native-image
 
 ARG kafka_url
-ARG skip_signing
+ARG skip_signing=false
 
 WORKDIR /app
 
 ENV KAFKA_URL=$kafka_url
-ENV SKIP_SIGNING=$skip_signing
 ENV NATIVE_IMAGE_PATH="native-image"
 ENV KAFKA_DIR="/app/kafka"
 ENV NATIVE_CONFIGS_DIR="/app/native-image-configs"
@@ -33,23 +32,17 @@ COPY native_command.sh native_command.sh
 
 RUN mkdir $KAFKA_DIR; \
     microdnf install wget; \
-    if [ "$SKIP_SIGNING" = "false" ]; then \
-        microdnf install gpg; \
-    fi; \
     wget -nv -O kafka.tgz "$KAFKA_URL"; \
-    if [ "$SKIP_SIGNING" = "false" ]; then \
+    if [ "$skip_signing" != "true" ]; then \
         wget -nv -O kafka.tgz.asc "$KAFKA_URL.asc"; \
         wget -nv -O KEYS https://downloads.apache.org/kafka/KEYS; \
+        microdnf install gpg; \
         gpg --import KEYS; \
         gpg --batch --verify kafka.tgz.asc kafka.tgz; \
+        rm kafka.tgz.asc KEYS; \
     fi; \
     tar xfz kafka.tgz -C $KAFKA_DIR --strip-components 1; \
     rm kafka.tgz; \
-    if [ "$SKIP_SIGNING" = "false" ]; then \
-        rm kafka.tgz.asc KEYS; \
-        microdnf remove gpg; \
-    fi; \
-    microdnf remove wget; \
 # Build the native-binary of the apache kafka using graalVM native-image.
     /app/native_command.sh $NATIVE_IMAGE_PATH $NATIVE_CONFIGS_DIR $KAFKA_LIBS_DIR $TARGET_PATH
 
