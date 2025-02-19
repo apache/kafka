@@ -143,6 +143,7 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
 
         roundRobinAssignment(groupSpec.memberIds(), unassignedPartitions, newAssignment);
 
+        // Step 3: We combine current assignment and new assignment.
         Map<String, Set<TopicIdPartition>> finalAssignment = new HashMap<>();
 
         // When combining current assignment, we need to only consider the topics in current assignment that are also being
@@ -245,14 +246,21 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
             }
     }
 
-    // Visible for testing.
+    /**
+     * This functions assigns topic partitions to members by round-robin approach and updates the existing assignment.
+     * @param memberIds - the member ids to which the topic partitions need to be assigned.
+     * @param targetPartitions - the subscribed topic partitions.
+     * @param assignment - the existing assignment by topic partition.
+     */
     void roundRobinAssignment(
         Collection<String> memberIds,
-        List<TopicIdPartition> partitions,
+        List<TopicIdPartition> targetPartitions,
         Map<TopicIdPartition, List<String>> assignment
     ) {
+        // We iterate through the target partitions and assign a memberId to them. In case we run out of members (members < targetPartitions),
+        // we again start from the starting index of memberIds.
         Iterator<String> memberIdIterator = memberIds.iterator();
-        for (TopicIdPartition targetPartition : partitions) {
+        for (TopicIdPartition targetPartition : targetPartitions) {
             if (!memberIdIterator.hasNext()) {
                 memberIdIterator = memberIds.iterator();
             }
