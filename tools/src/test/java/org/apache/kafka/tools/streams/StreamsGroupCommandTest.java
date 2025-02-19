@@ -220,12 +220,12 @@ public class StreamsGroupCommandTest {
 
     @Test
     public void testDescribeStreamsGroupWithVerboseOption() throws Exception {
-        final List<String> expectedHeader = List.of("GROUP", "TOPIC", "PARTITION", "LEADER-EPOCH", "OFFSET-LAG");
+        final List<String> expectedHeader = List.of("GROUP", "TOPIC", "PARTITION", "CURRENT-OFFSET", "LOG-END-OFFSET", "OFFSET-LAG");
         final Set<List<String>> expectedRows = Set.of(
-            List.of(APP_ID, INPUT_TOPIC, "0", "3", "0"),
-            List.of(APP_ID, INPUT_TOPIC, "1", "3", "0"),
-            List.of(APP_ID, "some-state-store-topic", "0", "3", "0"),
-            List.of(APP_ID, "some-state-store-topic", "1", "3", "0"));
+            List.of(APP_ID, INPUT_TOPIC, "0", "-", "0", "0"),
+            List.of(APP_ID, INPUT_TOPIC, "1", "-", "0", "0"),
+            List.of(APP_ID, "some-state-store-topic", "0", "-", "0", "0"),
+            List.of(APP_ID, "some-state-store-topic", "1", "-", "0", "0"));
         // The state-store-topic name is not deterministic, so we don't care about topic names.
         final List<Integer> dontCares = List.of(1);
 

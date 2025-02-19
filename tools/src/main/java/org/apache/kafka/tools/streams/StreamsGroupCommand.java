@@ -20,6 +20,7 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.DescribeStreamsGroupsResult;
 import org.apache.kafka.clients.admin.GroupListing;
+import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsSpec;
 import org.apache.kafka.clients.admin.ListGroupsOptions;
 import org.apache.kafka.clients.admin.ListGroupsResult;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
@@ -28,6 +29,7 @@ import org.apache.kafka.clients.admin.StreamsGroupDescription;
 import org.apache.kafka.clients.admin.StreamsGroupMemberAssignment;
 import org.apache.kafka.clients.admin.StreamsGroupMemberDescription;
 import org.apache.kafka.clients.admin.StreamsGroupSubtopologyDescription;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.TopicPartition;
@@ -38,6 +40,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -180,7 +183,7 @@ public class StreamsGroupCommand {
                 } else if (opts.options.has(opts.stateOpt)) {
                     printStates(description, verbose);
                 } else {
-                    printOffsets(description, verbose);
+                    printOffsets2(description, verbose);
                 }
             }
         }
@@ -284,6 +287,32 @@ public class StreamsGroupCommand {
             }
         }
 
+        private void printOffsets2(StreamsGroupDescription description, boolean verbose) throws ExecutionException, InterruptedException {
+            Map<TopicPartition, OffsetsAndLag> offsets = getOffsets2(description);
+            if (maybePrintEmptyGroupState(description.groupId(), description.groupState(), offsets.size())) {
+                int groupLen = Math.max(15, description.groupId().length());
+                int maxTopicLen = 15;
+                for (TopicPartition topicPartition : offsets.keySet()) {
+                    maxTopicLen = Math.max(maxTopicLen, topicPartition.topic().length());
+                }
+
+                if (!verbose) {
+                    String fmt =  "%" + (-groupLen) + "s %" + (-maxTopicLen) + "s %-10s %-15s%n";
+                    System.out.printf(fmt, "GROUP", "TOPIC", "PARTITION", "OFFSET-LAG");
+                    for (Map.Entry<TopicPartition, OffsetsAndLag> offset : offsets.entrySet()) {
+                        System.out.printf(fmt, description.groupId(), offset.getKey().topic(), offset.getKey().partition(), offset.getValue().lag);
+                    }
+                } else {
+                    String fmt =  "%" + (-groupLen) + "s %" + (-maxTopicLen) + "s %-10s %-15s %-15s %-15s%n";
+                    System.out.printf(fmt, "GROUP", "TOPIC", "PARTITION", "CURRENT-OFFSET", "LOG-END-OFFSET", "OFFSET-LAG");
+                    for (Map.Entry<TopicPartition, OffsetsAndLag> offset : offsets.entrySet()) {
+                        System.out.printf(fmt, description.groupId(), offset.getKey().topic(), offset.getKey().partition(),
+                            offset.getValue().currentOffset.map(Object::toString).orElse("-"), offset.getValue().logEndOffset, offset.getValue().lag);
+                    }
+                }
+            }
+        }
+
         Map<TopicPartition, Long> getOffsets(Collection<StreamsGroupMemberDescription> members, StreamsGroupDescription description) throws ExecutionException, InterruptedException {
             Set<TopicPartition> allTp = new HashSet<>();
             for (StreamsGroupMemberDescription memberDescription : members) {
@@ -307,6 +336,43 @@ public class StreamsGroupCommand {
             return lag;
         }
 
+        Map<TopicPartition, OffsetsAndLag> getOffsets2(StreamsGroupDescription description) throws ExecutionException, InterruptedException {
+            final Collection<StreamsGroupMemberDescription> members = description.members();
+            Set<TopicPartition> allTp = new HashSet<>();
+            for (StreamsGroupMemberDescription memberDescription : members) {
+                allTp.addAll(getTopicPartitions(memberDescription.assignment().activeTasks(), description));
+            }
+            // fetch latest and earliest offsets
+            Map<TopicPartition, OffsetSpec> earliest = new HashMap<>();
+            Map<TopicPartition, OffsetSpec> latest = new HashMap<>();
+
+            for (TopicPartition tp : allTp) {
+                earliest.put(tp, OffsetSpec.earliest());
+                latest.put(tp, OffsetSpec.latest());
+            }
+            Map<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> earliestResult = adminClient.listOffsets(earliest).all().get();
+            Map<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> latestResult = adminClient.listOffsets(latest).all().get();
+            Map<TopicPartition, OffsetAndMetadata> committedOffsets = getCommittedOffsets(description.groupId());
+
+            Map<TopicPartition, OffsetsAndLag> output = new HashMap<>();
+            for (Map.Entry<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> tp : earliestResult.entrySet()) {
+                output.put(tp.getKey(),
+                    new OffsetsAndLag(
+                        committedOffsets.containsKey(tp.getKey()) ? Optional.of(committedOffsets.get(tp.getKey()).offset()) : Optional.empty(),
+                        latestResult.get(tp.getKey()).offset(),
+                        latestResult.get(tp.getKey()).offset() - earliestResult.get(tp.getKey()).offset()));
+            }
+            return output;
+        }
+
+        private Map<TopicPartition, OffsetAndMetadata> getCommittedOffsets(String groupId) {
+            try {
+                return adminClient.listConsumerGroupOffsets(
+                    Collections.singletonMap(groupId, new ListConsumerGroupOffsetsSpec())).partitionsToOffsetAndMetadata(groupId).get();
+            } catch (InterruptedException | ExecutionException e) {
+                throw new RuntimeException(e);
+            }
+        }
 
         /**
          * Prints a summary of the state for situations where the group is empty or dead.
@@ -354,5 +420,8 @@ public class StreamsGroupCommand {
             props.putAll(configOverrides);
             return Admin.create(props);
         }
+    }
+
+    record OffsetsAndLag(Optional<Long> currentOffset, Long logEndOffset, Long lag) {
     }
 }
