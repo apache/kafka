@@ -776,7 +776,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             fetchAcknowledgementsInFlight.forEach((integer, topicIdPartitionAcknowledgementsMap) -> {
                 topicIdPartitionAcknowledgementsMap.forEach((partition, acknowledgements) -> {
                     acknowledgements.complete(INVALID_RESPONSE);
-                    maybeSendShareAcknowledgeCommitCallbackEvent(Collections.singletonMap(partition, acknowledgements));
+                    maybeSendShareAcknowledgeCommitCallbackEvent(Map.of(partition, acknowledgements));
                 });
                 topicIdPartitionAcknowledgementsMap.clear();
             });

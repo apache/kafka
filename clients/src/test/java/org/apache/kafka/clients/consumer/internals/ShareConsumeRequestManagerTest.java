@@ -1361,7 +1361,7 @@ public class ShareConsumeRequestManagerTest {
         Acknowledgements acknowledgements = Acknowledgements.empty();
         acknowledgements.add(1L, AcknowledgeType.ACCEPT);
 
-        shareConsumeRequestManager.commitAsync(Collections.singletonMap(tip0, new NodeAcknowledgements(0, acknowledgements)));
+        shareConsumeRequestManager.commitAsync(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)));
 
         assertEquals(1, shareConsumeRequestManager.sendAcknowledgements());
 
@@ -1385,7 +1385,7 @@ public class ShareConsumeRequestManagerTest {
         acknowledgements1.add(2L, AcknowledgeType.ACCEPT);
         acknowledgements1.add(3L, AcknowledgeType.REJECT);
 
-        shareConsumeRequestManager.fetch(Collections.singletonMap(tip0, new NodeAcknowledgements(0, acknowledgements1)));
+        shareConsumeRequestManager.fetch(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements1)));
 
         assertEquals(1, sendFetches());
         assertFalse(shareConsumeRequestManager.hasCompletedFetches());
@@ -2437,7 +2437,7 @@ public class ShareConsumeRequestManagerTest {
     }
 
     private ShareAcknowledgeResponse acknowledgeResponseWithTopLevelError(TopicIdPartition tp, Errors error) {
-        Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData> partitions = Collections.singletonMap(tp,
+        Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData> partitions = Map.of(tp,
                 partitionDataForAcknowledge(tp, Errors.NONE));
         return ShareAcknowledgeResponse.of(error, 0, new LinkedHashMap<>(partitions), Collections.emptyList());
     }
