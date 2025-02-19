@@ -689,7 +689,7 @@ public class ShareConsumerTest {
     }
 
     @ClusterTest
-    public void testImplicitModeNotTriggerByPollWhenNoAcksToSend() throws InterruptedException {
+    public void testImplicitModeNotTriggeredByPollWhenNoAcksToSend() throws InterruptedException {
         setup();
         alterShareAutoOffsetReset("group1", "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
