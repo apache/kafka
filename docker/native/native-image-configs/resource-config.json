@@ -1,11 +1,17 @@
 {
   "resources":{
   "includes":[{
+    "pattern":"\\QMETA-INF/log4j-provider.properties\\E"
+  }, {
     "pattern":"\\QMETA-INF/maven/org.xerial.snappy/snappy-java/pom.properties\\E"
   }, {
     "pattern":"\\QMETA-INF/native/libnetty_transport_native_epoll.so\\E"
   }, {
     "pattern":"\\QMETA-INF/native/libnetty_transport_native_epoll_x86_64.so\\E"
+  }, {
+    "pattern":"\\QMETA-INF/org/apache/logging/log4j/core/config/plugins/Log4j2Plugins.dat\\E"
+  }, {
+    "pattern":"\\QMETA-INF/services/com.fasterxml.jackson.databind.Module\\E"
   }, {
     "pattern":"\\QMETA-INF/services/java.lang.System$LoggerFinder\\E"
   }, {
@@ -19,19 +25,65 @@
   }, {
     "pattern":"\\QMETA-INF/services/java.time.zone.ZoneRulesProvider\\E"
   }, {
+    "pattern":"\\QMETA-INF/services/java.util.spi.ResourceBundleControlProvider\\E"
+  }, {
     "pattern":"\\QMETA-INF/services/javax.management.remote.JMXConnectorServerProvider\\E"
   }, {
     "pattern":"\\QMETA-INF/services/javax.security.auth.spi.LoginModule\\E"
   }, {
-    "pattern":"\\Qkafka/kafka-version.properties\\E"
+    "pattern":"\\QMETA-INF/services/org.apache.logging.log4j.core.util.ContextDataProvider\\E"
   }, {
-    "pattern":"\\Qlinux/amd64/libzstd-jni-1.5.6-6.so\\E"
+    "pattern":"\\QMETA-INF/services/org.apache.logging.log4j.core.util.WatchEventService\\E"
+  }, {
+    "pattern":"\\QMETA-INF/services/org.apache.logging.log4j.spi.Provider\\E"
+  }, {
+    "pattern":"\\QMETA-INF/services/org.apache.logging.log4j.util.PropertySource\\E"
+  }, {
+    "pattern":"\\Qcom/fasterxml/jackson/module/scala/build.properties\\E"
+  }, {
+    "pattern":"\\Qjava/lang/Iterable.tasty\\E"
+  }, {
+    "pattern":"\\Qjava/util/AbstractCollection.tasty\\E"
+  }, {
+    "pattern":"\\Qjava/util/AbstractList.tasty\\E"
+  }, {
+    "pattern":"\\Qjava/util/ArrayList.tasty\\E"
+  }, {
+    "pattern":"\\Qjava/util/Collection.tasty\\E"
+  }, {
+    "pattern":"\\Qjava/util/LinkedHashMap.tasty\\E"
+  }, {
+    "pattern":"\\Qjava/util/List.tasty\\E"
+  }, {
+    "pattern":"\\Qkafka/docker/Appenders.tasty\\E"
+  }, {
+    "pattern":"\\Qkafka/docker/Configuration.tasty\\E"
+  }, {
+    "pattern":"\\Qkafka/docker/Log4jConfiguration.tasty\\E"
+  }, {
+    "pattern":"\\Qkafka/docker/Logger.tasty\\E"
+  }, {
+    "pattern":"\\Qkafka/docker/Loggers.tasty\\E"
+  }, {
+    "pattern":"\\Qkafka/docker/Properties.tasty\\E"
+  }, {
+    "pattern":"\\Qkafka/docker/Root.tasty\\E"
+  }, {
+    "pattern":"\\Qkafka/kafka-version.properties\\E"
   }, {
     "pattern":"\\Qlinux/aarch64/libzstd-jni-1.5.6-6.so\\E"
   }, {
-    "pattern":"\\Qnet/jpountz/util/linux/amd64/liblz4-java.so\\E"
+    "pattern":"\\Qlinux/amd64/libzstd-jni-1.5.6-6.so\\E"
+  }, {
+    "pattern":"\\Qlog4j2.StatusLogger.properties\\E"
+  }, {
+    "pattern":"\\Qlog4j2.component.properties\\E"
+  }, {
+    "pattern":"\\Qlog4j2.system.properties\\E"
   }, {
     "pattern":"\\Qnet/jpountz/util/linux/aarch64/liblz4-java.so\\E"
+  }, {
+    "pattern":"\\Qnet/jpountz/util/linux/amd64/liblz4-java.so\\E"
   }, {
     "pattern":"\\Qorg-xerial-snappy.properties\\E"
   }, {
@@ -39,19 +91,43 @@
   }, {
     "pattern":"\\Qorg/xerial/snappy/VERSION\\E"
   }, {
+    "pattern":"\\Qorg/xerial/snappy/native/Linux/aarch64/libsnappyjava.so\\E"
+  }, {
     "pattern":"\\Qorg/xerial/snappy/native/Linux/x86_64/libsnappyjava.so\\E"
   }, {
-    "pattern":"\\Qorg/xerial/snappy/native/Linux/aarch64/libsnappyjava.so\\E"
+    "pattern":"\\Qscala/collection/convert/JavaCollectionWrappers$SeqWrapper.class\\E"
+  }, {
+    "pattern":"\\Qscala/collection/convert/JavaCollectionWrappers.tasty\\E"
+  }, {
+    "pattern":"\\Qscala/collection/convert/JavaCollectionWrappers/SeqWrapper.tasty\\E"
+  }, {
+    "pattern":"java.base:\\Qjava/lang/Iterable.tasty\\E"
+  }, {
+    "pattern":"java.base:\\Qjava/util/AbstractCollection.tasty\\E"
+  }, {
+    "pattern":"java.base:\\Qjava/util/AbstractList.tasty\\E"
+  }, {
+    "pattern":"java.base:\\Qjava/util/ArrayList.tasty\\E"
+  }, {
+    "pattern":"java.base:\\Qjava/util/Collection.tasty\\E"
+  }, {
+    "pattern":"java.base:\\Qjava/util/LinkedHashMap.tasty\\E"
+  }, {
+    "pattern":"java.base:\\Qjava/util/List.tasty\\E"
   }, {
     "pattern":"java.base:\\Qjdk/internal/icu/impl/data/icudt67b/nfkc.nrm\\E"
   }, {
     "pattern":"java.base:\\Qjdk/internal/icu/impl/data/icudt67b/uprops.icu\\E"
+  }, {
+    "pattern":"java.base:\\Qjdk/internal/icu/impl/data/icudt72b/nfc.nrm\\E"
   }, {
     "pattern":"java.base:\\Qjdk/internal/icu/impl/data/icudt72b/nfkc.nrm\\E"
   }, {
     "pattern":"java.base:\\Qjdk/internal/icu/impl/data/icudt72b/uprops.icu\\E"
   }, {
     "pattern":"java.base:\\Qsun/net/idn/uidna.spp\\E"
+  }, {
+    "pattern":"java.base:\\Qsun/text/resources/LineBreakIteratorData\\E"
   }, {
     "pattern":"jdk.jfr:\\Qjdk/jfr/internal/query/view.ini\\E"
   }]},

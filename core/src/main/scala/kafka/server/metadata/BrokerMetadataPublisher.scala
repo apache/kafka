@@ -119,7 +119,7 @@ class BrokerMetadataPublisher(
       // Publish the new metadata image to the metadata cache.
       metadataCache.setImage(newImage)
 
-      val metadataVersionLogMsg = s"metadata.version ${newImage.features().metadataVersion()}"
+      def metadataVersionLogMsg = s"metadata.version ${newImage.features().metadataVersion()}"
 
       if (_firstPublish) {
         info(s"Publishing initial metadata at offset $highestOffsetAndEpoch with $metadataVersionLogMsg.")

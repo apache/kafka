@@ -29,9 +29,6 @@ import java.util.concurrent.Callable;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
-import scala.Option;
-import scala.jdk.javaapi.OptionConverters;
-
 public class RemoteLogOffsetReader implements Callable<Void> {
     private static final Logger LOGGER = LoggerFactory.getLogger(RemoteLogOffsetReader.class);
     private final RemoteLogManager rlm;
@@ -47,14 +44,14 @@ public class RemoteLogOffsetReader implements Callable<Void> {
                                  long timestamp,
                                  long startingOffset,
                                  LeaderEpochFileCache leaderEpochCache,
-                                 Supplier<Option<FileRecords.TimestampAndOffset>> searchInLocalLog,
+                                 Supplier<Optional<FileRecords.TimestampAndOffset>> searchInLocalLog,
                                  Consumer<OffsetResultHolder.FileRecordsOrError> callback) {
         this.rlm = rlm;
         this.tp = tp;
         this.timestamp = timestamp;
         this.startingOffset = startingOffset;
         this.leaderEpochCache = leaderEpochCache;
-        this.searchInLocalLog = () -> OptionConverters.toJava(searchInLocalLog.get());
+        this.searchInLocalLog = searchInLocalLog;
         this.callback = callback;
     }
 
@@ -67,7 +64,7 @@ public class RemoteLogOffsetReader implements Callable<Void> {
                     rlm.findOffsetByTimestamp(tp, timestamp, startingOffset, leaderEpochCache).or(searchInLocalLog);
             result = new OffsetResultHolder.FileRecordsOrError(Optional.empty(), timestampAndOffsetOpt);
         } catch (Exception e) {
-            // NOTE: All the exceptions from the secondary storage are catched instead of only the KafkaException.
+            // NOTE: All the exceptions from the secondary storage are caught instead of only the KafkaException.
             LOGGER.error("Error occurred while reading the remote log offset for {}", tp, e);
             result = new OffsetResultHolder.FileRecordsOrError(Optional.of(e), Optional.empty());
         }

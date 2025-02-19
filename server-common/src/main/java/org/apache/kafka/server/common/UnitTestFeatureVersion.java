@@ -27,7 +27,7 @@ public class UnitTestFeatureVersion {
      * The feature is used for testing latest production is not one of the feature versions.
      */
     public enum FV0 implements FeatureVersion {
-        UT_FV0_0(0, MetadataVersion.MINIMUM_KRAFT_VERSION, Collections.emptyMap()),
+        UT_FV0_0(0, MetadataVersion.MINIMUM_VERSION, Collections.emptyMap()),
         UT_FV0_1(1, MetadataVersion.IBP_3_7_IV0, Collections.emptyMap());
 
         private final short featureLevel;
@@ -69,7 +69,7 @@ public class UnitTestFeatureVersion {
      * The feature is used to test latest production lags behind the default value.
      */
     public enum FV1 implements FeatureVersion {
-        UT_FV1_0(0, MetadataVersion.MINIMUM_KRAFT_VERSION, Collections.emptyMap()),
+        UT_FV1_0(0, MetadataVersion.MINIMUM_VERSION, Collections.emptyMap()),
         UT_FV1_1(1, MetadataVersion.IBP_3_7_IV0, Collections.emptyMap());
 
         private final short featureLevel;
@@ -111,7 +111,7 @@ public class UnitTestFeatureVersion {
      * The feature is used to test the dependency of the latest production that is not yet production ready.
      */
     public enum FV2 implements FeatureVersion {
-        UT_FV2_0(0, MetadataVersion.MINIMUM_KRAFT_VERSION, Collections.emptyMap()),
+        UT_FV2_0(0, MetadataVersion.MINIMUM_VERSION, Collections.emptyMap()),
         UT_FV2_1(1, MetadataVersion.IBP_3_7_IV0, Collections.emptyMap());
 
         private final short featureLevel;
@@ -153,7 +153,7 @@ public class UnitTestFeatureVersion {
      * The feature is used to test the dependency of the latest production that is not yet production ready.
      */
     public enum FV3 implements FeatureVersion {
-        UT_FV3_0(0, MetadataVersion.MINIMUM_KRAFT_VERSION, Collections.emptyMap()),
+        UT_FV3_0(0, MetadataVersion.MINIMUM_VERSION, Collections.emptyMap()),
         UT_FV3_1(1, MetadataVersion.IBP_3_7_IV0, Collections.singletonMap(FV2.FEATURE_NAME, (short) 1));
 
         private final short featureLevel;
@@ -195,7 +195,7 @@ public class UnitTestFeatureVersion {
      * The feature is used to test the dependency of the default value that is not yet default ready.
      */
     public enum FV4 implements FeatureVersion {
-        UT_FV4_0(0, MetadataVersion.MINIMUM_KRAFT_VERSION, Collections.emptyMap()),
+        UT_FV4_0(0, MetadataVersion.MINIMUM_VERSION, Collections.emptyMap()),
         UT_FV4_1(1, MetadataVersion.latestTesting(), Collections.emptyMap());
 
         private final short featureLevel;
@@ -237,7 +237,7 @@ public class UnitTestFeatureVersion {
      * The feature is used to test the dependency of the default value that is not yet default ready.
      */
     public enum FV5 implements FeatureVersion {
-        UT_FV5_0(0, MetadataVersion.MINIMUM_KRAFT_VERSION, Collections.emptyMap()),
+        UT_FV5_0(0, MetadataVersion.MINIMUM_VERSION, Collections.emptyMap()),
         UT_FV5_1(1, MetadataVersion.IBP_3_7_IV0, Collections.singletonMap(FV4.FEATURE_NAME, (short) 1));
 
         private final short featureLevel;
@@ -279,7 +279,7 @@ public class UnitTestFeatureVersion {
      * The feature is used to test the latest production has MV dependency that is not yet production ready.
      */
     public enum FV6 implements FeatureVersion {
-        UT_FV6_0(0, MetadataVersion.MINIMUM_KRAFT_VERSION, Collections.emptyMap()),
+        UT_FV6_0(0, MetadataVersion.MINIMUM_VERSION, Collections.emptyMap()),
         UT_FV6_1(1, MetadataVersion.latestTesting(), Collections.singletonMap(MetadataVersion.FEATURE_NAME, MetadataVersion.latestTesting().featureLevel()));
 
         private final short featureLevel;
@@ -321,7 +321,7 @@ public class UnitTestFeatureVersion {
      * The feature is used to test the default value has MV dependency that is behind the bootstrap MV.
      */
     public enum FV7 implements FeatureVersion {
-        UT_FV7_0(0, MetadataVersion.MINIMUM_KRAFT_VERSION, Collections.singletonMap(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_7_IV0.featureLevel())),
+        UT_FV7_0(0, MetadataVersion.MINIMUM_VERSION, Collections.singletonMap(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_7_IV0.featureLevel())),
         UT_FV7_1(1, MetadataVersion.IBP_3_8_IV0, Collections.singletonMap(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_8_IV0.featureLevel()));
 
         private final short featureLevel;

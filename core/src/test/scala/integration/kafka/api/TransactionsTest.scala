@@ -730,7 +730,7 @@ class TransactionsTest extends IntegrationTestHarness {
       Thread.sleep(6000) // Wait for the record to time out
       restartDeadBrokers()
 
-      org.apache.kafka.test.TestUtils.assertFutureThrows(failedFuture, classOf[TimeoutException])
+      org.apache.kafka.test.TestUtils.assertFutureThrows(classOf[TimeoutException], failedFuture)
       // Ensure the producer transitions to abortable_error state.
       TestUtils.waitUntilTrue(() => {
         var failed = false
@@ -815,7 +815,7 @@ class TransactionsTest extends IntegrationTestHarness {
       Thread.sleep(6000) // Wait for the record to time out
       restartDeadBrokers()
 
-      org.apache.kafka.test.TestUtils.assertFutureThrows(failedFuture, classOf[TimeoutException])
+      org.apache.kafka.test.TestUtils.assertFutureThrows(classOf[TimeoutException], failedFuture)
       producer.abortTransaction()
 
       // Third transaction: commit

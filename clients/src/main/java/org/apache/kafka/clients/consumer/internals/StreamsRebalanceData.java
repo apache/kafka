@@ -16,13 +16,18 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.common.TopicPartition;
+
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -75,6 +80,46 @@ public class StreamsRebalanceData {
                 ", partitionId=" + partitionId +
                 '}';
         }
+    }
+
+    public static class HostInfo {
+
+        private final String host;
+        private final int port;
+
+        public HostInfo(final String host, final int port) {
+            this.host = Objects.requireNonNull(host);
+            this.port = port;
+        }
+
+        public String host() {
+            return host;
+        }
+
+        public int port() {
+            return port;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (o == null || getClass() != o.getClass()) return false;
+            HostInfo hostInfo = (HostInfo) o;
+            return port == hostInfo.port && Objects.equals(host, hostInfo.host);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(host, port);
+        }
+
+        @Override
+        public String toString() {
+            return "HostInfo{" +
+                "host='" + host + '\'' +
+                ", port=" + port +
+                '}';
+        }
+
     }
 
     public static class Assignment {
@@ -244,16 +289,48 @@ public class StreamsRebalanceData {
         }
     }
 
+    private final UUID processId;
+
+    private final Optional<HostInfo> endpoint;
+
+    private final Map<String, String> clientTags;
+
     private final Map<String, Subtopology> subtopologies;
 
     private final AtomicReference<Assignment> reconciledAssignment = new AtomicReference<>(Assignment.EMPTY);
 
-    public StreamsRebalanceData(Map<String, Subtopology> subtopologies) {
+    private final AtomicReference<Map<HostInfo, List<TopicPartition>>> partitionsByHost = new AtomicReference<>(Collections.emptyMap());
+
+    private final AtomicBoolean shutdownRequested = new AtomicBoolean(false);
+
+    public StreamsRebalanceData(final UUID processId,
+                                final Optional<HostInfo> endpoint,
+                                final Map<String, Subtopology> subtopologies,
+                                final Map<String, String> clientTags) {
+        this.processId = Objects.requireNonNull(processId, "Process ID cannot be null");
+        this.endpoint = Objects.requireNonNull(endpoint, "Endpoint cannot be null");
         this.subtopologies = Map.copyOf(Objects.requireNonNull(subtopologies, "Subtopologies cannot be null"));
+        this.clientTags = Map.copyOf(Objects.requireNonNull(clientTags, "Client tags cannot be null"));
+    }
+
+    public UUID processId() {
+        return processId;
+    }
+
+    public Optional<HostInfo> endpoint() {
+        return endpoint;
+    }
+
+    public Map<String, String> clientTags() {
+        return clientTags;
     }
 
     public Map<String, Subtopology> subtopologies() {
         return subtopologies;
+    }
+
+    public int topologyEpoch() {
+        return 0;
     }
 
     public void setReconciledAssignment(final Assignment assignment) {
@@ -262,5 +339,21 @@ public class StreamsRebalanceData {
 
     public Assignment reconciledAssignment() {
         return reconciledAssignment.get();
+    }
+
+    public void setPartitionsByHost(final Map<HostInfo, List<TopicPartition>> partitionsByHost) {
+        this.partitionsByHost.set(partitionsByHost);
+    }
+
+    public Map<HostInfo, List<TopicPartition>> partitionsByHost() {
+        return partitionsByHost.get();
+    }
+
+    public void requestShutdown() {
+        shutdownRequested.set(true);
+    }
+
+    public boolean shutdownRequested() {
+        return shutdownRequested.get();
     }
 }

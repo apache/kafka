@@ -118,12 +118,12 @@ public class ControllerRegistrationTest {
 
     private void testRoundTrip(ControllerRegistration registration) {
         ApiMessageAndVersion messageAndVersion = registration.
-            toRecord(new ImageWriterOptions.Builder().build());
+            toRecord(new ImageWriterOptions.Builder(MetadataVersion.latestProduction()).build());
         ControllerRegistration registration2 = new ControllerRegistration.Builder(
             (RegisterControllerRecord) messageAndVersion.message()).build();
         assertEquals(registration, registration2);
         ApiMessageAndVersion messageAndVersion2 = registration2.
-            toRecord(new ImageWriterOptions.Builder().build());
+            toRecord(new ImageWriterOptions.Builder(MetadataVersion.latestProduction()).build());
         assertEquals(messageAndVersion, messageAndVersion2);
     }
 
