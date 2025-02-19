@@ -88,8 +88,8 @@ private[group] class GroupCoordinatorAdapter(
 
   override def describeShareGroupOffsets(
      context: RequestContext,
-     request: DescribeShareGroupOffsetsRequestData
-  ): CompletableFuture[DescribeShareGroupOffsetsResponseData] = {
+     request: DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup
+  ): CompletableFuture[DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup] = {
     FutureUtils.failedFuture(Errors.UNSUPPORTED_VERSION.exception(
       s"The old group coordinator does not support ${ApiKeys.DESCRIBE_SHARE_GROUP_OFFSETS.name} API."
     ))

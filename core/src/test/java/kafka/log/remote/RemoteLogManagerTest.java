@@ -17,7 +17,6 @@
 package kafka.log.remote;
 
 import kafka.cluster.Partition;
-import kafka.log.UnifiedLog;
 import kafka.server.KafkaConfig;
 
 import org.apache.kafka.common.Endpoint;
@@ -75,6 +74,7 @@ import org.apache.kafka.storage.internals.log.ProducerStateManager;
 import org.apache.kafka.storage.internals.log.RemoteStorageFetchInfo;
 import org.apache.kafka.storage.internals.log.TimeIndex;
 import org.apache.kafka.storage.internals.log.TransactionIndex;
+import org.apache.kafka.storage.internals.log.UnifiedLog;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 import org.apache.kafka.test.TestUtils;
 
@@ -225,7 +225,7 @@ public class RemoteLogManagerTest {
     private LeaderEpochCheckpointFile checkpoint;
     private final AtomicLong currentLogStartOffset = new AtomicLong(0L);
 
-    private UnifiedLog mockLog = mock(UnifiedLog.class);
+    private kafka.log.UnifiedLog mockLog = mock(kafka.log.UnifiedLog.class);
 
     private final MockScheduler scheduler = new MockScheduler(time);
     private final Properties brokerConfig = kafka.utils.TestUtils.createDummyBrokerConfig();
@@ -259,7 +259,7 @@ public class RemoteLogManagerTest {
                 return Duration.ofMillis(100);
             }
             @Override
-            long findLogStartOffset(TopicIdPartition topicIdPartition, UnifiedLog log) {
+            long findLogStartOffset(TopicIdPartition topicIdPartition, kafka.log.UnifiedLog log) {
                 return 0L;
             }
         };
@@ -990,10 +990,10 @@ public class RemoteLogManagerTest {
             return 0L == argument.getValue();
         }, "Timed out waiting for updateHighestOffsetInRemoteStorage(0) get invoked for dir1 log");
 
-        UnifiedLog oldMockLog = mockLog;
+        kafka.log.UnifiedLog oldMockLog = mockLog;
         Mockito.clearInvocations(oldMockLog);
         // simulate altering log dir completes, and the new partition leader changes to the same broker in different log dir (dir2)
-        mockLog = mock(UnifiedLog.class);
+        mockLog = mock(kafka.log.UnifiedLog.class);
         when(mockLog.parentDir()).thenReturn("dir2");
         when(mockLog.leaderEpochCache()).thenReturn(cache);
         when(mockLog.config()).thenReturn(logConfig);
@@ -1639,16 +1639,16 @@ public class RemoteLogManagerTest {
 
         File tpDir = new File(logDir, tp.toString());
         Files.createDirectory(tpDir.toPath());
-        File txnIdxFile = new File(tpDir, "txn-index" + UnifiedLog.TxnIndexFileSuffix());
+        File txnIdxFile = new File(tpDir, "txn-index" + UnifiedLog.TXN_INDEX_FILE_SUFFIX);
         txnIdxFile.createNewFile();
         when(remoteStorageManager.fetchIndex(any(RemoteLogSegmentMetadata.class), any(IndexType.class)))
                 .thenAnswer(ans -> {
                     RemoteLogSegmentMetadata metadata = ans.getArgument(0);
                     IndexType indexType = ans.getArgument(1);
                     int maxEntries = (int) (metadata.endOffset() - metadata.startOffset());
-                    OffsetIndex offsetIdx = new OffsetIndex(new File(tpDir, metadata.startOffset() + UnifiedLog.IndexFileSuffix()),
+                    OffsetIndex offsetIdx = new OffsetIndex(new File(tpDir, metadata.startOffset() + UnifiedLog.INDEX_FILE_SUFFIX),
                             metadata.startOffset(), maxEntries * 8);
-                    TimeIndex timeIdx = new TimeIndex(new File(tpDir, metadata.startOffset() + UnifiedLog.TimeIndexFileSuffix()),
+                    TimeIndex timeIdx = new TimeIndex(new File(tpDir, metadata.startOffset() + UnifiedLog.TIME_INDEX_FILE_SUFFIX),
                             metadata.startOffset(), maxEntries * 12);
                     switch (indexType) {
                         case OFFSET:
@@ -2041,7 +2041,7 @@ public class RemoteLogManagerTest {
 
     @Test
     public void testCandidateLogSegmentsSkipsActiveSegment() {
-        UnifiedLog log = mock(UnifiedLog.class);
+        kafka.log.UnifiedLog log = mock(kafka.log.UnifiedLog.class);
         LogSegment segment1 = mock(LogSegment.class);
         LogSegment segment2 = mock(LogSegment.class);
         LogSegment activeSegment = mock(LogSegment.class);
@@ -2065,7 +2065,7 @@ public class RemoteLogManagerTest {
 
     @Test
     public void testCandidateLogSegmentsSkipsSegmentsAfterLastStableOffset() {
-        UnifiedLog log = mock(UnifiedLog.class);
+        kafka.log.UnifiedLog log = mock(kafka.log.UnifiedLog.class);
         LogSegment segment1 = mock(LogSegment.class);
         LogSegment segment2 = mock(LogSegment.class);
         LogSegment segment3 = mock(LogSegment.class);
@@ -2335,7 +2335,7 @@ public class RemoteLogManagerTest {
                 return Duration.ofMillis(100);
             }
             @Override
-            long findLogStartOffset(TopicIdPartition topicIdPartition, UnifiedLog log) {
+            long findLogStartOffset(TopicIdPartition topicIdPartition, kafka.log.UnifiedLog log) {
                 return 0L;
             }
         };
@@ -3711,7 +3711,7 @@ public class RemoteLogManagerTest {
                 return Duration.ofMillis(100);
             }
             @Override
-            long findLogStartOffset(TopicIdPartition topicIdPartition, UnifiedLog log) {
+            long findLogStartOffset(TopicIdPartition topicIdPartition, kafka.log.UnifiedLog log) {
                 return 0L;
             }
         };
@@ -3766,7 +3766,7 @@ public class RemoteLogManagerTest {
     private Partition mockPartition(TopicIdPartition topicIdPartition) {
         TopicPartition tp = topicIdPartition.topicPartition();
         Partition partition = mock(Partition.class);
-        UnifiedLog log = mock(UnifiedLog.class);
+        kafka.log.UnifiedLog log = mock(kafka.log.UnifiedLog.class);
         when(partition.topicPartition()).thenReturn(tp);
         when(partition.topic()).thenReturn(tp.topic());
         when(log.remoteLogEnabled()).thenReturn(true);

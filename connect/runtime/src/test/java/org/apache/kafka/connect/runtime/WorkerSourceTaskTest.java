@@ -27,11 +27,12 @@ import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.errors.ConnectException;
-import org.apache.kafka.connect.integration.MonitorableSourceConnector;
+import org.apache.kafka.connect.integration.TestableSourceConnector;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
@@ -85,7 +86,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
-import static org.apache.kafka.connect.integration.MonitorableSourceConnector.TOPIC_CONFIG;
+import static org.apache.kafka.connect.integration.TestableSourceConnector.TOPIC_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
@@ -209,7 +210,7 @@ public class WorkerSourceTaskTest {
         // setup up props for the source connector
         Map<String, String> props = new HashMap<>();
         props.put("name", "foo-connector");
-        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getSimpleName());
+        props.put(CONNECTOR_CLASS_CONFIG, TestableSourceConnector.class.getSimpleName());
         props.put(TASKS_MAX_CONFIG, String.valueOf(1));
         props.put(TOPIC_CONFIG, topic);
         props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
@@ -247,7 +248,10 @@ public class WorkerSourceTaskTest {
 
     private void createWorkerTask(TargetState initialState, Converter keyConverter, Converter valueConverter,
                                   HeaderConverter headerConverter, RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator) {
-        workerTask = new WorkerSourceTask(taskId, sourceTask, statusListener, initialState, keyConverter, valueConverter, errorHandlingMetrics, headerConverter,
+        Plugin<Converter> keyConverterPlugin = metrics.wrap(keyConverter, taskId,  true);
+        Plugin<Converter> valueConverterPlugin = metrics.wrap(valueConverter, taskId,  false);
+        Plugin<HeaderConverter> headerConverterPlugin = metrics.wrap(headerConverter, taskId);
+        workerTask = new WorkerSourceTask(taskId, sourceTask, statusListener, initialState, keyConverterPlugin, valueConverterPlugin, errorHandlingMetrics, headerConverterPlugin,
                 transformationChain, producer, admin, TopicCreationGroup.configuredGroups(sourceConfig),
                 offsetReader, offsetWriter, offsetStore, config, clusterConfigState, metrics, plugins.delegatingLoader(), Time.SYSTEM,
                 retryWithToleranceOperator, statusBackingStore, Runnable::run, Collections::emptyList);

@@ -153,7 +153,7 @@ class AlterPartitionManagerTest {
 
     val failedSubmitFuture = alterPartitionManager.submit(tp0, new LeaderAndIsr(1, 1, List(1, 2).map(Int.box).asJava, LeaderRecoveryState.RECOVERED, 10))
     assertTrue(failedSubmitFuture.isCompletedExceptionally)
-    assertFutureThrows(failedSubmitFuture, classOf[OperationNotAttemptedException])
+    assertFutureThrows(classOf[OperationNotAttemptedException], failedSubmitFuture)
 
     // Simulate response
     val alterPartitionResp = partitionResponse()
@@ -379,7 +379,7 @@ class AlterPartitionManagerTest {
     val resp = makeClientResponse(alterPartitionResp, ApiKeys.ALTER_PARTITION.latestVersion)
     callbackCapture.getValue.onComplete(resp)
     assertTrue(future.isCompletedExceptionally)
-    assertFutureThrows(future, error.exception.getClass)
+    assertFutureThrows(error.exception.getClass, future)
     alterPartitionManager
   }
 
@@ -444,7 +444,7 @@ class AlterPartitionManagerTest {
       response = partitionResponse(tp0, Errors.UNKNOWN_SERVER_ERROR),
       version = expectedVersion
     ))
-    assertFutureThrows(future1, classOf[UnknownServerException])
+    assertFutureThrows(classOf[UnknownServerException], future1)
     assertFalse(future2.isDone)
     assertFalse(future3.isDone)
 
@@ -457,7 +457,7 @@ class AlterPartitionManagerTest {
       response = partitionResponse(tp2, Errors.UNKNOWN_SERVER_ERROR),
       version = expectedVersion
     ))
-    assertFutureThrows(future3, classOf[UnknownServerException])
+    assertFutureThrows(classOf[UnknownServerException], future3)
     assertFalse(future2.isDone)
 
     // The missing partition should be retried
@@ -469,7 +469,7 @@ class AlterPartitionManagerTest {
       response = partitionResponse(tp1, Errors.UNKNOWN_SERVER_ERROR),
       version = expectedVersion
     ))
-    assertFutureThrows(future2, classOf[UnknownServerException])
+    assertFutureThrows(classOf[UnknownServerException], future2)
   }
 
   private def verifySendRequest(

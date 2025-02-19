@@ -77,7 +77,7 @@ class AbstractPartitionTest {
     logDir1 = TestUtils.randomPartitionLogDir(tmpDir)
     logDir2 = TestUtils.randomPartitionLogDir(tmpDir)
     logManager = TestUtils.createLogManager(Seq(logDir1, logDir2), logConfig, configRepository,
-      new CleanerConfig(false), time, interBrokerProtocolVersion, transactionVerificationEnabled = true)
+      new CleanerConfig(false), time, transactionVerificationEnabled = true)
     logManager.startup(Set.empty)
 
     alterPartitionManager = TestUtils.createAlterIsrManager()

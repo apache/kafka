@@ -26,6 +26,7 @@ import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.predicates.Predicate;
+import org.apache.kafka.connect.util.ConnectorTaskId;
 
 import org.junit.jupiter.api.Test;
 
@@ -45,6 +46,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 public class ConnectorConfigTest<R extends ConnectRecord<R>> {
+
+    private static final ConnectMetrics METRICS = new MockConnectMetrics();
+    private static final ConnectorTaskId CONNECTOR_TASK_ID = new ConnectorTaskId("test", 0);
 
     public static final Plugins MOCK_PLUGINS = new Plugins(new HashMap<>()) {
         @Override
@@ -159,7 +163,7 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
         props.put("transforms.a.type", SimpleTransformation.class.getName());
         props.put("transforms.a.magic.number", "42");
         final ConnectorConfig config = new ConnectorConfig(MOCK_PLUGINS, props);
-        final List<TransformationStage<SinkRecord>> transformationStages = config.transformationStages();
+        final List<TransformationStage<SinkRecord>> transformationStages = config.transformationStages(CONNECTOR_TASK_ID, METRICS);
         assertEquals(1, transformationStages.size());
         final TransformationStage<SinkRecord> stage = transformationStages.get(0);
         assertEquals(SimpleTransformation.class, stage.transformClass());
@@ -188,7 +192,7 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
         props.put("transforms.b.type", SimpleTransformation.class.getName());
         props.put("transforms.b.magic.number", "84");
         final ConnectorConfig config = new ConnectorConfig(MOCK_PLUGINS, props);
-        final List<TransformationStage<SinkRecord>> transformationStages = config.transformationStages();
+        final List<TransformationStage<SinkRecord>> transformationStages = config.transformationStages(CONNECTOR_TASK_ID, METRICS);
         assertEquals(2, transformationStages.size());
         assertEquals(42, transformationStages.get(0).apply(DUMMY_RECORD).kafkaPartition().intValue());
         assertEquals(84, transformationStages.get(1).apply(DUMMY_RECORD).kafkaPartition().intValue());
@@ -289,7 +293,7 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
 
     private void assertTransformationStageWithPredicate(Map<String, String> props, boolean expectedNegated) {
         final ConnectorConfig config = new ConnectorConfig(MOCK_PLUGINS, props);
-        final List<TransformationStage<SinkRecord>> transformationStages = config.transformationStages();
+        final List<TransformationStage<SinkRecord>> transformationStages = config.transformationStages(CONNECTOR_TASK_ID, METRICS);
         assertEquals(1, transformationStages.size());
         TransformationStage<SinkRecord> stage = transformationStages.get(0);
 

@@ -18,6 +18,30 @@
   "name":"[J"
 },
 {
+  "name":"[Lcom.fasterxml.jackson.databind.deser.BeanDeserializerModifier;"
+},
+{
+  "name":"[Lcom.fasterxml.jackson.databind.deser.Deserializers;"
+},
+{
+  "name":"[Lcom.fasterxml.jackson.databind.deser.KeyDeserializers;"
+},
+{
+  "name":"[Lcom.fasterxml.jackson.databind.deser.ValueInstantiators;"
+},
+{
+  "name":"[Lcom.fasterxml.jackson.databind.ser.BeanSerializerModifier;"
+},
+{
+  "name":"[Lcom.fasterxml.jackson.databind.ser.Serializers;"
+},
+{
+  "name":"[Lcom.fasterxml.jackson.databind.type.TypeModifier;"
+},
+{
+  "name":"[Lcom.fasterxml.jackson.module.scala.introspect.PropertyDescriptor;"
+},
+{
   "name":"[Ljava.io.File;"
 },
 {
@@ -25,6 +49,9 @@
 },
 {
   "name":"[Ljava.lang.Integer;"
+},
+{
+  "name":"[Ljava.lang.Object;"
 },
 {
   "name":"[Ljava.lang.Runnable;"
@@ -45,6 +72,12 @@
   "name":"[Ljavax.management.openmbean.CompositeData;"
 },
 {
+  "name":"[Lkafka.docker.Logger;"
+},
+{
+  "name":"[Lkafka.network.DataPlaneAcceptor;"
+},
+{
   "name":"[Lkafka.server.DelayedOperationPurgatory$WatcherList;"
 },
 {
@@ -54,10 +87,28 @@
   "name":"[Lorg.apache.kafka.common.security.auth.KafkaPrincipal;"
 },
 {
+  "name":"[Lorg.apache.logging.log4j.core.Appender;"
+},
+{
+  "name":"[Lorg.apache.logging.log4j.core.config.AppenderRef;"
+},
+{
+  "name":"[Lorg.apache.logging.log4j.core.config.LoggerConfig;"
+},
+{
+  "name":"[Lorg.apache.logging.log4j.core.config.Property;"
+},
+{
   "name":"[Lscala.Option;"
 },
 {
   "name":"[Lscala.Tuple2;"
+},
+{
+  "name":"[Lscala.Tuple3;"
+},
+{
+  "name":"[Lscala.Tuple4;"
 },
 {
   "name":"[Lsun.security.pkcs.SignerInfo;"
@@ -69,7 +120,19 @@
   "name":"[Z"
 },
 {
+  "name":"[[I"
+},
+{
   "name":"[[Ljava.lang.String;"
+},
+{
+  "name":"com.fasterxml.jackson.core.JsonParser"
+},
+{
+  "name":"com.fasterxml.jackson.databind.JsonNode"
+},
+{
+  "name":"com.fasterxml.jackson.databind.ObjectMapper"
 },
 {
   "name":"com.fasterxml.jackson.databind.ext.Java7HandlersImpl",
@@ -77,6 +140,21 @@
 },
 {
   "name":"com.fasterxml.jackson.databind.ext.Java7SupportImpl",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"com.fasterxml.jackson.dataformat.yaml.YAMLFactory"
+},
+{
+  "name":"com.fasterxml.jackson.module.blackbird.deser.BBDeserializerModifier",
+  "methods":[{"name":"booleanTrampoline","parameterTypes":["com.fasterxml.jackson.module.blackbird.deser.BBDeserializerModifier$ObjBooleanBiFunction","java.lang.Object","boolean"] }, {"name":"intTrampoline","parameterTypes":["com.fasterxml.jackson.module.blackbird.deser.BBDeserializerModifier$ObjIntBiFunction","java.lang.Object","int"] }, {"name":"longTrampoline","parameterTypes":["com.fasterxml.jackson.module.blackbird.deser.BBDeserializerModifier$ObjLongBiFunction","java.lang.Object","long"] }, {"name":"trampoline","parameterTypes":["java.util.function.BiFunction","java.lang.Object","java.lang.Object"] }]
+},
+{
+  "name":"com.fasterxml.jackson.module.jakarta.xmlbind.deser.DataHandlerDeserializer",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"com.fasterxml.jackson.module.jakarta.xmlbind.ser.DataHandlerSerializer",
   "methods":[{"name":"<init>","parameterTypes":[] }]
 },
 {
@@ -337,6 +415,9 @@
   "fields":[{"name":"producerLimit"}]
 },
 {
+  "name":"jakarta.servlet.Servlet"
+},
+{
   "name":"java.beans.PropertyVetoException"
 },
 {
@@ -387,7 +468,8 @@
 },
 {
   "name":"java.lang.Iterable",
-  "queryAllDeclaredMethods":true
+  "queryAllDeclaredMethods":true,
+  "fields":[{"name":"MODULE$"}]
 },
 {
   "name":"java.lang.Long",
@@ -395,7 +477,14 @@
   "methods":[{"name":"valueOf","parameterTypes":["java.lang.String"] }]
 },
 {
+  "name":"java.lang.Number",
+  "allDeclaredFields":true,
+  "queryAllDeclaredMethods":true,
+  "fields":[{"name":"MODULE$"}]
+},
+{
   "name":"java.lang.Object",
+  "allDeclaredFields":true,
   "queryAllPublicMethods":true
 },
 {
@@ -418,7 +507,7 @@
 },
 {
   "name":"java.lang.String",
-  "fields":[{"name":"TYPE"}],
+  "fields":[{"name":"MODULE$"}, {"name":"TYPE"}],
   "methods":[{"name":"<init>","parameterTypes":["java.lang.String"] }, {"name":"valueOf","parameterTypes":["java.lang.String"] }]
 },
 {
@@ -428,6 +517,14 @@
 {
   "name":"java.lang.Void",
   "fields":[{"name":"TYPE"}]
+},
+{
+  "name":"java.lang.invoke.MethodHandles",
+  "methods":[{"name":"privateLookupIn","parameterTypes":["java.lang.Class","java.lang.invoke.MethodHandles$Lookup"] }]
+},
+{
+  "name":"java.lang.invoke.MethodHandles$Lookup",
+  "methods":[{"name":"defineClass","parameterTypes":["byte[]"] }, {"name":"hasFullPrivilegeAccess","parameterTypes":[] }]
 },
 {
   "name":"java.lang.invoke.VarHandle",
@@ -559,14 +656,25 @@
   "name":"java.security.interfaces.RSAPublicKey"
 },
 {
+  "name":"java.sql.Date"
+},
+{
+  "name":"java.sql.Time"
+},
+{
+  "name":"java.sql.Timestamp"
+},
+{
   "name":"java.util.AbstractCollection",
   "allDeclaredFields":true,
-  "queryAllDeclaredMethods":true
+  "queryAllDeclaredMethods":true,
+  "fields":[{"name":"MODULE$"}]
 },
 {
   "name":"java.util.AbstractList",
   "allDeclaredFields":true,
-  "queryAllDeclaredMethods":true
+  "queryAllDeclaredMethods":true,
+  "fields":[{"name":"MODULE$"}]
 },
 {
   "name":"java.util.AbstractMap",
@@ -574,15 +682,25 @@
   "queryAllDeclaredMethods":true
 },
 {
+  "name":"java.util.ArrayList",
+  "fields":[{"name":"MODULE$"}]
+},
+{
   "name":"java.util.Collection",
-  "queryAllDeclaredMethods":true
+  "queryAllDeclaredMethods":true,
+  "fields":[{"name":"MODULE$"}]
 },
 {
   "name":"java.util.Date"
 },
 {
+  "name":"java.util.LinkedHashMap",
+  "fields":[{"name":"MODULE$"}]
+},
+{
   "name":"java.util.List",
-  "queryAllDeclaredMethods":true
+  "queryAllDeclaredMethods":true,
+  "fields":[{"name":"MODULE$"}]
 },
 {
   "name":"java.util.Map",
@@ -683,6 +801,9 @@
   "methods":[{"name":"<init>","parameterTypes":["sun.security.x509.X500Name"] }]
 },
 {
+  "name":"javax.servlet.Servlet"
+},
+{
   "name":"jdk.internal.misc.Unsafe",
   "methods":[{"name":"getUnsafe","parameterTypes":[] }]
 },
@@ -712,8 +833,60 @@
   "queryAllPublicMethods":true
 },
 {
-  "name":"org.apache.kafka.tools.LineMessageReader",
-  "methods":[{"name":"<init>","parameterTypes":[] }]
+  "name":"kafka.docker.Appenders",
+  "allDeclaredFields":true,
+  "queryAllDeclaredMethods":true,
+  "queryAllDeclaredConstructors":true,
+  "fields":[{"name":"MODULE$"}],
+  "methods":[{"name":"<init>","parameterTypes":[] }, {"name":"getProperties","parameterTypes":[] }, {"name":"setProperties","parameterTypes":["java.lang.String","java.lang.Object"] }]
+},
+{
+  "name":"kafka.docker.Configuration",
+  "allDeclaredFields":true,
+  "queryAllDeclaredMethods":true,
+  "queryAllDeclaredConstructors":true,
+  "fields":[{"name":"MODULE$"}],
+  "methods":[{"name":"<init>","parameterTypes":[] }, {"name":"getAdditionalProperties","parameterTypes":[] }, {"name":"getAppenders","parameterTypes":[] }, {"name":"getLoggers","parameterTypes":[] }, {"name":"getProperties","parameterTypes":[] }, {"name":"setAppenders","parameterTypes":["kafka.docker.Appenders"] }, {"name":"setLoggers","parameterTypes":["kafka.docker.Loggers"] }, {"name":"setProperties","parameterTypes":["kafka.docker.Properties"] }]
+},
+{
+  "name":"kafka.docker.Log4jConfiguration",
+  "allDeclaredFields":true,
+  "queryAllDeclaredMethods":true,
+  "queryAllDeclaredConstructors":true,
+  "fields":[{"name":"MODULE$"}],
+  "methods":[{"name":"<init>","parameterTypes":[] }, {"name":"getConfiguration","parameterTypes":[] }, {"name":"setConfiguration","parameterTypes":["kafka.docker.Configuration"] }]
+},
+{
+  "name":"kafka.docker.Logger",
+  "allDeclaredFields":true,
+  "queryAllDeclaredMethods":true,
+  "queryAllDeclaredConstructors":true,
+  "fields":[{"name":"MODULE$"}],
+  "methods":[{"name":"<init>","parameterTypes":[] }, {"name":"getLevel","parameterTypes":[] }, {"name":"getName","parameterTypes":[] }, {"name":"getOtherProperties","parameterTypes":[] }, {"name":"setLevel","parameterTypes":["java.lang.String"] }, {"name":"setName","parameterTypes":["java.lang.String"] }, {"name":"setOtherProperties","parameterTypes":["java.lang.String","java.lang.Object"] }]
+},
+{
+  "name":"kafka.docker.Loggers",
+  "allDeclaredFields":true,
+  "queryAllDeclaredMethods":true,
+  "queryAllDeclaredConstructors":true,
+  "fields":[{"name":"MODULE$"}],
+  "methods":[{"name":"<init>","parameterTypes":[] }, {"name":"getLogger","parameterTypes":[] }, {"name":"getRoot","parameterTypes":[] }, {"name":"setLogger","parameterTypes":["java.util.List"] }, {"name":"setRoot","parameterTypes":["kafka.docker.Root"] }]
+},
+{
+  "name":"kafka.docker.Properties",
+  "allDeclaredFields":true,
+  "queryAllDeclaredMethods":true,
+  "queryAllDeclaredConstructors":true,
+  "fields":[{"name":"MODULE$"}],
+  "methods":[{"name":"<init>","parameterTypes":[] }, {"name":"getProperties","parameterTypes":[] }, {"name":"setProperties","parameterTypes":["java.lang.String","java.lang.Object"] }]
+},
+{
+  "name":"kafka.docker.Root",
+  "allDeclaredFields":true,
+  "queryAllDeclaredMethods":true,
+  "queryAllDeclaredConstructors":true,
+  "fields":[{"name":"MODULE$"}],
+  "methods":[{"name":"<init>","parameterTypes":[] }, {"name":"getLevel","parameterTypes":[] }, {"name":"getOtherProperties","parameterTypes":[] }, {"name":"setLevel","parameterTypes":["java.lang.String"] }, {"name":"setOtherProperties","parameterTypes":["java.lang.String","java.lang.Object"] }]
 },
 {
   "name":"kafka.tools.DefaultMessageFormatter",
@@ -726,6 +899,14 @@
 },
 {
   "name":"kafka.utils.Log4jControllerMBean",
+  "queryAllPublicMethods":true
+},
+{
+  "name":"kafka.utils.LoggingController",
+  "queryAllPublicConstructors":true
+},
+{
+  "name":"kafka.utils.LoggingControllerMBean",
   "queryAllPublicMethods":true
 },
 {
@@ -793,6 +974,18 @@
 {
   "name":"net.jpountz.xxhash.XXHash64JavaSafe",
   "fields":[{"name":"INSTANCE"}]
+},
+{
+  "name":"org.HdrHistogram.AbstractHistogram",
+  "fields":[{"name":"maxValue"}, {"name":"minNonZeroValue"}]
+},
+{
+  "name":"org.HdrHistogram.AtomicHistogram",
+  "fields":[{"name":"totalCount"}]
+},
+{
+  "name":"org.HdrHistogram.WriterReaderPhaser",
+  "fields":[{"name":"evenEndEpoch"}, {"name":"oddEndEpoch"}, {"name":"startEpoch"}]
 },
 {
   "name":"org.apache.kafka.clients.consumer.CooperativeStickyAssignor",
@@ -882,6 +1075,10 @@
   "methods":[{"name":"<init>","parameterTypes":[] }]
 },
 {
+  "name":"org.apache.kafka.tools.LineMessageReader",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
   "name":"org.apache.log4j.Appender",
   "queryAllPublicMethods":true
 },
@@ -964,8 +1161,906 @@
   "name":"org.apache.log4j.WriterAppenderCustomizer"
 },
 {
+  "name":"org.apache.log4j.builders.appender.AsyncAppenderBuilder"
+},
+{
+  "name":"org.apache.log4j.builders.appender.ConsoleAppenderBuilder"
+},
+{
+  "name":"org.apache.log4j.builders.appender.DailyRollingFileAppenderBuilder"
+},
+{
+  "name":"org.apache.log4j.builders.appender.EnhancedRollingFileAppenderBuilder"
+},
+{
+  "name":"org.apache.log4j.builders.appender.FileAppenderBuilder"
+},
+{
+  "name":"org.apache.log4j.builders.appender.NullAppenderBuilder"
+},
+{
+  "name":"org.apache.log4j.builders.appender.RewriteAppenderBuilder"
+},
+{
+  "name":"org.apache.log4j.builders.appender.RollingFileAppenderBuilder"
+},
+{
+  "name":"org.apache.log4j.builders.appender.SocketAppenderBuilder"
+},
+{
+  "name":"org.apache.log4j.builders.appender.SyslogAppenderBuilder"
+},
+{
+  "name":"org.apache.log4j.builders.filter.DenyAllFilterBuilder"
+},
+{
+  "name":"org.apache.log4j.builders.filter.LevelMatchFilterBuilder"
+},
+{
+  "name":"org.apache.log4j.builders.filter.LevelRangeFilterBuilder"
+},
+{
+  "name":"org.apache.log4j.builders.filter.StringMatchFilterBuilder"
+},
+{
+  "name":"org.apache.log4j.builders.layout.HtmlLayoutBuilder"
+},
+{
+  "name":"org.apache.log4j.builders.layout.PatternLayoutBuilder"
+},
+{
+  "name":"org.apache.log4j.builders.layout.SimpleLayoutBuilder"
+},
+{
+  "name":"org.apache.log4j.builders.layout.TTCCLayoutBuilder"
+},
+{
+  "name":"org.apache.log4j.builders.layout.XmlLayoutBuilder"
+},
+{
+  "name":"org.apache.log4j.builders.rolling.CompositeTriggeringPolicyBuilder"
+},
+{
+  "name":"org.apache.log4j.builders.rolling.SizeBasedTriggeringPolicyBuilder"
+},
+{
+  "name":"org.apache.log4j.builders.rolling.TimeBasedRollingPolicyBuilder"
+},
+{
+  "name":"org.apache.log4j.config.PropertiesConfigurationFactory",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.log4j.layout.Log4j1SyslogLayout"
+},
+{
+  "name":"org.apache.log4j.layout.Log4j1XmlLayout"
+},
+{
+  "name":"org.apache.log4j.pattern.Log4j1LevelPatternConverter"
+},
+{
+  "name":"org.apache.log4j.pattern.Log4j1MdcPatternConverter"
+},
+{
+  "name":"org.apache.log4j.pattern.Log4j1NdcPatternConverter"
+},
+{
   "name":"org.apache.log4j.spi.OptionHandler",
   "queryAllPublicMethods":true
+},
+{
+  "name":"org.apache.log4j.xml.XmlConfigurationFactory",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.appender.AbstractAppender$Builder",
+  "allDeclaredFields":true
+},
+{
+  "name":"org.apache.logging.log4j.core.appender.AbstractOutputStreamAppender$Builder",
+  "allDeclaredFields":true
+},
+{
+  "name":"org.apache.logging.log4j.core.appender.AppenderSet"
+},
+{
+  "name":"org.apache.logging.log4j.core.appender.AsyncAppender"
+},
+{
+  "name":"org.apache.logging.log4j.core.appender.ConsoleAppender",
+  "queryAllDeclaredMethods":true,
+  "methods":[{"name":"newBuilder","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.appender.ConsoleAppender$Builder",
+  "allDeclaredFields":true
+},
+{
+  "name":"org.apache.logging.log4j.core.appender.CountingNoOpAppender"
+},
+{
+  "name":"org.apache.logging.log4j.core.appender.FailoverAppender"
+},
+{
+  "name":"org.apache.logging.log4j.core.appender.FailoversPlugin"
+},
+{
+  "name":"org.apache.logging.log4j.core.appender.FileAppender"
+},
+{
+  "name":"org.apache.logging.log4j.core.appender.HttpAppender"
+},
+{
+  "name":"org.apache.logging.log4j.core.appender.MemoryMappedFileAppender"
+},
+{
+  "name":"org.apache.logging.log4j.core.appender.NullAppender"
+},
+{
+  "name":"org.apache.logging.log4j.core.appender.OutputStreamAppender"
+},
+{
+  "name":"org.apache.logging.log4j.core.appender.RandomAccessFileAppender"
+},
+{
+  "name":"org.apache.logging.log4j.core.appender.RollingFileAppender",
+  "queryAllDeclaredMethods":true,
+  "methods":[{"name":"newBuilder","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.appender.RollingFileAppender$Builder",
+  "allDeclaredFields":true
+},
+{
+  "name":"org.apache.logging.log4j.core.appender.RollingRandomAccessFileAppender"
+},
+{
+  "name":"org.apache.logging.log4j.core.appender.ScriptAppenderSelector"
+},
+{
+  "name":"org.apache.logging.log4j.core.appender.SmtpAppender"
+},
+{
+  "name":"org.apache.logging.log4j.core.appender.SocketAppender"
+},
+{
+  "name":"org.apache.logging.log4j.core.appender.SyslogAppender"
+},
+{
+  "name":"org.apache.logging.log4j.core.appender.WriterAppender"
+},
+{
+  "name":"org.apache.logging.log4j.core.appender.db.ColumnMapping"
+},
+{
+  "name":"org.apache.logging.log4j.core.appender.db.jdbc.ColumnConfig"
+},
+{
+  "name":"org.apache.logging.log4j.core.appender.db.jdbc.DataSourceConnectionSource"
+},
+{
+  "name":"org.apache.logging.log4j.core.appender.db.jdbc.DriverManagerConnectionSource"
+},
+{
+  "name":"org.apache.logging.log4j.core.appender.db.jdbc.FactoryMethodConnectionSource"
+},
+{
+  "name":"org.apache.logging.log4j.core.appender.db.jdbc.JdbcAppender"
+},
+{
+  "name":"org.apache.logging.log4j.core.appender.mom.JmsAppender"
+},
+{
+  "name":"org.apache.logging.log4j.core.appender.mom.jeromq.JeroMqAppender"
+},
+{
+  "name":"org.apache.logging.log4j.core.appender.mom.kafka.KafkaAppender"
+},
+{
+  "name":"org.apache.logging.log4j.core.appender.nosql.NoSqlAppender"
+},
+{
+  "name":"org.apache.logging.log4j.core.appender.rewrite.LoggerNameLevelRewritePolicy"
+},
+{
+  "name":"org.apache.logging.log4j.core.appender.rewrite.MapRewritePolicy"
+},
+{
+  "name":"org.apache.logging.log4j.core.appender.rewrite.PropertiesRewritePolicy"
+},
+{
+  "name":"org.apache.logging.log4j.core.appender.rewrite.RewriteAppender"
+},
+{
+  "name":"org.apache.logging.log4j.core.appender.rolling.CompositeTriggeringPolicy"
+},
+{
+  "name":"org.apache.logging.log4j.core.appender.rolling.CronTriggeringPolicy"
+},
+{
+  "name":"org.apache.logging.log4j.core.appender.rolling.DefaultRolloverStrategy"
+},
+{
+  "name":"org.apache.logging.log4j.core.appender.rolling.DirectWriteRolloverStrategy"
+},
+{
+  "name":"org.apache.logging.log4j.core.appender.rolling.NoOpTriggeringPolicy"
+},
+{
+  "name":"org.apache.logging.log4j.core.appender.rolling.OnStartupTriggeringPolicy"
+},
+{
+  "name":"org.apache.logging.log4j.core.appender.rolling.RollingFileManager",
+  "fields":[{"name":"patternProcessor"}, {"name":"rolloverStrategy"}, {"name":"triggeringPolicy"}]
+},
+{
+  "name":"org.apache.logging.log4j.core.appender.rolling.SizeBasedTriggeringPolicy"
+},
+{
+  "name":"org.apache.logging.log4j.core.appender.rolling.TimeBasedTriggeringPolicy",
+  "queryAllDeclaredMethods":true,
+  "methods":[{"name":"newBuilder","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.appender.rolling.TimeBasedTriggeringPolicy$Builder",
+  "allDeclaredFields":true
+},
+{
+  "name":"org.apache.logging.log4j.core.appender.rolling.action.DeleteAction"
+},
+{
+  "name":"org.apache.logging.log4j.core.appender.rolling.action.IfAccumulatedFileCount"
+},
+{
+  "name":"org.apache.logging.log4j.core.appender.rolling.action.IfAccumulatedFileSize"
+},
+{
+  "name":"org.apache.logging.log4j.core.appender.rolling.action.IfAll"
+},
+{
+  "name":"org.apache.logging.log4j.core.appender.rolling.action.IfAny"
+},
+{
+  "name":"org.apache.logging.log4j.core.appender.rolling.action.IfFileName"
+},
+{
+  "name":"org.apache.logging.log4j.core.appender.rolling.action.IfLastModified"
+},
+{
+  "name":"org.apache.logging.log4j.core.appender.rolling.action.IfNot"
+},
+{
+  "name":"org.apache.logging.log4j.core.appender.rolling.action.PathSortByModificationTime"
+},
+{
+  "name":"org.apache.logging.log4j.core.appender.rolling.action.PosixViewAttributeAction"
+},
+{
+  "name":"org.apache.logging.log4j.core.appender.rolling.action.ScriptCondition"
+},
+{
+  "name":"org.apache.logging.log4j.core.appender.routing.IdlePurgePolicy"
+},
+{
+  "name":"org.apache.logging.log4j.core.appender.routing.Route"
+},
+{
+  "name":"org.apache.logging.log4j.core.appender.routing.Routes"
+},
+{
+  "name":"org.apache.logging.log4j.core.appender.routing.RoutingAppender"
+},
+{
+  "name":"org.apache.logging.log4j.core.async.ArrayBlockingQueueFactory"
+},
+{
+  "name":"org.apache.logging.log4j.core.async.AsyncLoggerConfig"
+},
+{
+  "name":"org.apache.logging.log4j.core.async.AsyncLoggerConfig$RootLogger"
+},
+{
+  "name":"org.apache.logging.log4j.core.async.AsyncWaitStrategyFactoryConfig"
+},
+{
+  "name":"org.apache.logging.log4j.core.async.DisruptorBlockingQueueFactory"
+},
+{
+  "name":"org.apache.logging.log4j.core.async.JCToolsBlockingQueueFactory"
+},
+{
+  "name":"org.apache.logging.log4j.core.async.LinkedTransferQueueFactory"
+},
+{
+  "name":"org.apache.logging.log4j.core.config.AppenderControlArraySet",
+  "fields":[{"name":"appenderArray"}]
+},
+{
+  "name":"org.apache.logging.log4j.core.config.AppenderRef",
+  "queryAllDeclaredMethods":true,
+  "methods":[{"name":"createAppenderRef","parameterTypes":["java.lang.String","org.apache.logging.log4j.Level","org.apache.logging.log4j.core.Filter"] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.config.AppendersPlugin",
+  "queryAllDeclaredMethods":true,
+  "methods":[{"name":"createAppenders","parameterTypes":["org.apache.logging.log4j.core.Appender[]"] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.config.CustomLevelConfig"
+},
+{
+  "name":"org.apache.logging.log4j.core.config.CustomLevels"
+},
+{
+  "name":"org.apache.logging.log4j.core.config.DefaultAdvertiser"
+},
+{
+  "name":"org.apache.logging.log4j.core.config.HttpWatcher"
+},
+{
+  "name":"org.apache.logging.log4j.core.config.LoggerConfig",
+  "queryAllDeclaredMethods":true,
+  "methods":[{"name":"newBuilder","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.config.LoggerConfig$Builder",
+  "allDeclaredFields":true
+},
+{
+  "name":"org.apache.logging.log4j.core.config.LoggerConfig$RootLogger",
+  "queryAllDeclaredMethods":true,
+  "methods":[{"name":"newRootBuilder","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.config.LoggerConfig$RootLogger$Builder",
+  "allDeclaredFields":true
+},
+{
+  "name":"org.apache.logging.log4j.core.config.LoggersPlugin",
+  "queryAllDeclaredMethods":true,
+  "methods":[{"name":"createLoggers","parameterTypes":["org.apache.logging.log4j.core.config.LoggerConfig[]"] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.config.PropertiesPlugin",
+  "queryAllDeclaredMethods":true,
+  "methods":[{"name":"configureSubstitutor","parameterTypes":["org.apache.logging.log4j.core.config.Property[]","org.apache.logging.log4j.core.config.Configuration"] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.config.Property",
+  "queryAllDeclaredMethods":true,
+  "methods":[{"name":"createProperty","parameterTypes":["java.lang.String","java.lang.String","org.apache.logging.log4j.core.config.Configuration"] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.config.ScriptsPlugin"
+},
+{
+  "name":"org.apache.logging.log4j.core.config.arbiters.ClassArbiter"
+},
+{
+  "name":"org.apache.logging.log4j.core.config.arbiters.DefaultArbiter"
+},
+{
+  "name":"org.apache.logging.log4j.core.config.arbiters.EnvironmentArbiter"
+},
+{
+  "name":"org.apache.logging.log4j.core.config.arbiters.ScriptArbiter"
+},
+{
+  "name":"org.apache.logging.log4j.core.config.arbiters.SelectArbiter"
+},
+{
+  "name":"org.apache.logging.log4j.core.config.arbiters.SystemPropertyArbiter"
+},
+{
+  "name":"org.apache.logging.log4j.core.config.json.JsonConfigurationFactory",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.config.plugins.convert.TypeConverters$BigDecimalConverter",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.config.plugins.convert.TypeConverters$BigIntegerConverter",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.config.plugins.convert.TypeConverters$BooleanConverter",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.config.plugins.convert.TypeConverters$ByteArrayConverter",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.config.plugins.convert.TypeConverters$ByteConverter",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.config.plugins.convert.TypeConverters$CharArrayConverter",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.config.plugins.convert.TypeConverters$CharacterConverter",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.config.plugins.convert.TypeConverters$CharsetConverter",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.config.plugins.convert.TypeConverters$ClassConverter",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.config.plugins.convert.TypeConverters$CronExpressionConverter",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.config.plugins.convert.TypeConverters$DoubleConverter",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.config.plugins.convert.TypeConverters$DurationConverter",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.config.plugins.convert.TypeConverters$FileConverter",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.config.plugins.convert.TypeConverters$FloatConverter",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.config.plugins.convert.TypeConverters$InetAddressConverter",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.config.plugins.convert.TypeConverters$IntegerConverter",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.config.plugins.convert.TypeConverters$LevelConverter",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.config.plugins.convert.TypeConverters$LongConverter",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.config.plugins.convert.TypeConverters$PathConverter",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.config.plugins.convert.TypeConverters$PatternConverter",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.config.plugins.convert.TypeConverters$SecurityProviderConverter",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.config.plugins.convert.TypeConverters$ShortConverter",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.config.plugins.convert.TypeConverters$StringConverter",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.config.plugins.convert.TypeConverters$UriConverter",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.config.plugins.convert.TypeConverters$UrlConverter",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.config.plugins.convert.TypeConverters$UuidConverter",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.config.plugins.validation.validators.RequiredValidator",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.config.plugins.visitors.PluginAttributeVisitor",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.config.plugins.visitors.PluginBuilderAttributeVisitor",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.config.plugins.visitors.PluginConfigurationVisitor",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.config.plugins.visitors.PluginElementVisitor",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.config.plugins.visitors.PluginValueVisitor",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.config.properties.PropertiesConfigurationFactory",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.config.xml.XmlConfigurationFactory",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.config.yaml.YamlConfigurationFactory",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.filter.AbstractFilterable$Builder",
+  "allDeclaredFields":true
+},
+{
+  "name":"org.apache.logging.log4j.core.filter.BurstFilter"
+},
+{
+  "name":"org.apache.logging.log4j.core.filter.CompositeFilter"
+},
+{
+  "name":"org.apache.logging.log4j.core.filter.DenyAllFilter"
+},
+{
+  "name":"org.apache.logging.log4j.core.filter.DynamicThresholdFilter"
+},
+{
+  "name":"org.apache.logging.log4j.core.filter.LevelMatchFilter"
+},
+{
+  "name":"org.apache.logging.log4j.core.filter.LevelRangeFilter"
+},
+{
+  "name":"org.apache.logging.log4j.core.filter.MapFilter"
+},
+{
+  "name":"org.apache.logging.log4j.core.filter.MarkerFilter"
+},
+{
+  "name":"org.apache.logging.log4j.core.filter.MutableThreadContextMapFilter"
+},
+{
+  "name":"org.apache.logging.log4j.core.filter.NoMarkerFilter"
+},
+{
+  "name":"org.apache.logging.log4j.core.filter.RegexFilter"
+},
+{
+  "name":"org.apache.logging.log4j.core.filter.ScriptFilter"
+},
+{
+  "name":"org.apache.logging.log4j.core.filter.StringMatchFilter"
+},
+{
+  "name":"org.apache.logging.log4j.core.filter.StructuredDataFilter"
+},
+{
+  "name":"org.apache.logging.log4j.core.filter.ThreadContextMapFilter"
+},
+{
+  "name":"org.apache.logging.log4j.core.filter.ThresholdFilter"
+},
+{
+  "name":"org.apache.logging.log4j.core.filter.TimeFilter"
+},
+{
+  "name":"org.apache.logging.log4j.core.layout.CsvLogEventLayout"
+},
+{
+  "name":"org.apache.logging.log4j.core.layout.CsvParameterLayout"
+},
+{
+  "name":"org.apache.logging.log4j.core.layout.GelfLayout"
+},
+{
+  "name":"org.apache.logging.log4j.core.layout.HtmlLayout"
+},
+{
+  "name":"org.apache.logging.log4j.core.layout.JsonLayout"
+},
+{
+  "name":"org.apache.logging.log4j.core.layout.LevelPatternSelector"
+},
+{
+  "name":"org.apache.logging.log4j.core.layout.LoggerFields"
+},
+{
+  "name":"org.apache.logging.log4j.core.layout.MarkerPatternSelector"
+},
+{
+  "name":"org.apache.logging.log4j.core.layout.MessageLayout"
+},
+{
+  "name":"org.apache.logging.log4j.core.layout.PatternLayout",
+  "queryAllDeclaredMethods":true,
+  "methods":[{"name":"newBuilder","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.layout.PatternLayout$Builder",
+  "allDeclaredFields":true
+},
+{
+  "name":"org.apache.logging.log4j.core.layout.PatternMatch"
+},
+{
+  "name":"org.apache.logging.log4j.core.layout.Rfc5424Layout"
+},
+{
+  "name":"org.apache.logging.log4j.core.layout.ScriptPatternSelector"
+},
+{
+  "name":"org.apache.logging.log4j.core.layout.SerializedLayout"
+},
+{
+  "name":"org.apache.logging.log4j.core.layout.SyslogLayout"
+},
+{
+  "name":"org.apache.logging.log4j.core.layout.XmlLayout"
+},
+{
+  "name":"org.apache.logging.log4j.core.layout.YamlLayout"
+},
+{
+  "name":"org.apache.logging.log4j.core.lookup.ContextMapLookup",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.lookup.DateLookup",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.lookup.EnvironmentLookup",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.lookup.EventLookup",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.lookup.JavaLookup",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.lookup.JmxRuntimeInputArgumentsLookup",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.lookup.JndiLookup"
+},
+{
+  "name":"org.apache.logging.log4j.core.lookup.Log4jLookup",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.lookup.LowerLookup",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.lookup.MainMapLookup",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.lookup.MapLookup",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.lookup.MarkerLookup",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.lookup.ResourceBundleLookup",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.lookup.StructuredDataLookup",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.lookup.SystemPropertiesLookup",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.lookup.UpperLookup",
+  "methods":[{"name":"<init>","parameterTypes":[] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.net.MulticastDnsAdvertiser"
+},
+{
+  "name":"org.apache.logging.log4j.core.net.SocketAddress"
+},
+{
+  "name":"org.apache.logging.log4j.core.net.SocketOptions"
+},
+{
+  "name":"org.apache.logging.log4j.core.net.SocketPerformancePreferences"
+},
+{
+  "name":"org.apache.logging.log4j.core.net.ssl.KeyStoreConfiguration"
+},
+{
+  "name":"org.apache.logging.log4j.core.net.ssl.SslConfiguration"
+},
+{
+  "name":"org.apache.logging.log4j.core.net.ssl.TrustStoreConfiguration"
+},
+{
+  "name":"org.apache.logging.log4j.core.pattern.AbstractStyleNameConverter$Black"
+},
+{
+  "name":"org.apache.logging.log4j.core.pattern.AbstractStyleNameConverter$Blue"
+},
+{
+  "name":"org.apache.logging.log4j.core.pattern.AbstractStyleNameConverter$Cyan"
+},
+{
+  "name":"org.apache.logging.log4j.core.pattern.AbstractStyleNameConverter$Green"
+},
+{
+  "name":"org.apache.logging.log4j.core.pattern.AbstractStyleNameConverter$Magenta"
+},
+{
+  "name":"org.apache.logging.log4j.core.pattern.AbstractStyleNameConverter$Red"
+},
+{
+  "name":"org.apache.logging.log4j.core.pattern.AbstractStyleNameConverter$White"
+},
+{
+  "name":"org.apache.logging.log4j.core.pattern.AbstractStyleNameConverter$Yellow"
+},
+{
+  "name":"org.apache.logging.log4j.core.pattern.ClassNamePatternConverter"
+},
+{
+  "name":"org.apache.logging.log4j.core.pattern.DatePatternConverter",
+  "queryAllDeclaredMethods":true,
+  "methods":[{"name":"newInstance","parameterTypes":["java.lang.String[]"] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.pattern.EncodingPatternConverter"
+},
+{
+  "name":"org.apache.logging.log4j.core.pattern.EndOfBatchPatternConverter"
+},
+{
+  "name":"org.apache.logging.log4j.core.pattern.EqualsIgnoreCaseReplacementConverter"
+},
+{
+  "name":"org.apache.logging.log4j.core.pattern.EqualsReplacementConverter"
+},
+{
+  "name":"org.apache.logging.log4j.core.pattern.ExtendedThrowablePatternConverter"
+},
+{
+  "name":"org.apache.logging.log4j.core.pattern.FileDatePatternConverter",
+  "queryAllDeclaredMethods":true,
+  "methods":[{"name":"newInstance","parameterTypes":["java.lang.String[]"] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.pattern.FileLocationPatternConverter"
+},
+{
+  "name":"org.apache.logging.log4j.core.pattern.FullLocationPatternConverter"
+},
+{
+  "name":"org.apache.logging.log4j.core.pattern.HighlightConverter"
+},
+{
+  "name":"org.apache.logging.log4j.core.pattern.IntegerPatternConverter"
+},
+{
+  "name":"org.apache.logging.log4j.core.pattern.LevelPatternConverter",
+  "queryAllDeclaredMethods":true,
+  "methods":[{"name":"newInstance","parameterTypes":["java.lang.String[]"] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.pattern.LineLocationPatternConverter"
+},
+{
+  "name":"org.apache.logging.log4j.core.pattern.LineSeparatorPatternConverter",
+  "queryAllDeclaredMethods":true,
+  "methods":[{"name":"newInstance","parameterTypes":["java.lang.String[]"] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.pattern.LoggerFqcnPatternConverter"
+},
+{
+  "name":"org.apache.logging.log4j.core.pattern.LoggerPatternConverter",
+  "queryAllDeclaredMethods":true,
+  "methods":[{"name":"newInstance","parameterTypes":["java.lang.String[]"] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.pattern.MapPatternConverter"
+},
+{
+  "name":"org.apache.logging.log4j.core.pattern.MarkerPatternConverter"
+},
+{
+  "name":"org.apache.logging.log4j.core.pattern.MarkerSimpleNamePatternConverter"
+},
+{
+  "name":"org.apache.logging.log4j.core.pattern.MaxLengthConverter"
+},
+{
+  "name":"org.apache.logging.log4j.core.pattern.MdcPatternConverter"
+},
+{
+  "name":"org.apache.logging.log4j.core.pattern.MessagePatternConverter",
+  "queryAllDeclaredMethods":true,
+  "methods":[{"name":"newInstance","parameterTypes":["org.apache.logging.log4j.core.config.Configuration","java.lang.String[]"] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.pattern.MethodLocationPatternConverter"
+},
+{
+  "name":"org.apache.logging.log4j.core.pattern.NanoTimePatternConverter"
+},
+{
+  "name":"org.apache.logging.log4j.core.pattern.NdcPatternConverter"
+},
+{
+  "name":"org.apache.logging.log4j.core.pattern.ProcessIdPatternConverter"
+},
+{
+  "name":"org.apache.logging.log4j.core.pattern.RegexReplacement"
+},
+{
+  "name":"org.apache.logging.log4j.core.pattern.RegexReplacementConverter"
+},
+{
+  "name":"org.apache.logging.log4j.core.pattern.RelativeTimePatternConverter"
+},
+{
+  "name":"org.apache.logging.log4j.core.pattern.RepeatPatternConverter"
+},
+{
+  "name":"org.apache.logging.log4j.core.pattern.RootThrowablePatternConverter"
+},
+{
+  "name":"org.apache.logging.log4j.core.pattern.SequenceNumberPatternConverter"
+},
+{
+  "name":"org.apache.logging.log4j.core.pattern.StyleConverter"
+},
+{
+  "name":"org.apache.logging.log4j.core.pattern.ThreadIdPatternConverter"
+},
+{
+  "name":"org.apache.logging.log4j.core.pattern.ThreadNamePatternConverter",
+  "queryAllDeclaredMethods":true,
+  "methods":[{"name":"newInstance","parameterTypes":["java.lang.String[]"] }]
+},
+{
+  "name":"org.apache.logging.log4j.core.pattern.ThreadPriorityPatternConverter"
+},
+{
+  "name":"org.apache.logging.log4j.core.pattern.ThrowablePatternConverter"
+},
+{
+  "name":"org.apache.logging.log4j.core.pattern.UuidPatternConverter"
+},
+{
+  "name":"org.apache.logging.log4j.core.pattern.VariablesNotEmptyReplacementConverter"
+},
+{
+  "name":"org.apache.logging.log4j.core.script.Script"
+},
+{
+  "name":"org.apache.logging.log4j.core.script.ScriptFile"
+},
+{
+  "name":"org.apache.logging.log4j.core.script.ScriptRef"
+},
+{
+  "name":"org.apache.logging.log4j.core.util.KeyValuePair"
 },
 {
   "name":"org.apache.zookeeper.ClientCnxnSocketNIO",
@@ -984,6 +2079,108 @@
 },
 {
   "name":"org.osgi.framework.BundleEvent"
+},
+{
+  "name":"org.osgi.framework.FrameworkUtil"
+},
+{
+  "name":"scala.Equals",
+  "queryAllDeclaredMethods":true
+},
+{
+  "name":"scala.Function1",
+  "queryAllDeclaredMethods":true
+},
+{
+  "name":"scala.PartialFunction",
+  "queryAllDeclaredMethods":true
+},
+{
+  "name":"scala.Product",
+  "queryAllDeclaredMethods":true
+},
+{
+  "name":"scala.collection.AbstractIterable",
+  "allDeclaredFields":true,
+  "queryAllDeclaredMethods":true
+},
+{
+  "name":"scala.collection.AbstractMap",
+  "allDeclaredFields":true,
+  "queryAllDeclaredMethods":true
+},
+{
+  "name":"scala.collection.AbstractSeq",
+  "allDeclaredFields":true,
+  "queryAllDeclaredMethods":true
+},
+{
+  "name":"scala.collection.Iterable",
+  "queryAllDeclaredMethods":true
+},
+{
+  "name":"scala.collection.IterableFactoryDefaults",
+  "queryAllDeclaredMethods":true
+},
+{
+  "name":"scala.collection.IterableOnce",
+  "queryAllDeclaredMethods":true
+},
+{
+  "name":"scala.collection.IterableOnceOps",
+  "queryAllDeclaredMethods":true
+},
+{
+  "name":"scala.collection.IterableOps",
+  "queryAllDeclaredMethods":true
+},
+{
+  "name":"scala.collection.LinearSeq",
+  "queryAllDeclaredMethods":true
+},
+{
+  "name":"scala.collection.LinearSeqOps",
+  "queryAllDeclaredMethods":true
+},
+{
+  "name":"scala.collection.Map",
+  "queryAllDeclaredMethods":true
+},
+{
+  "name":"scala.collection.MapFactoryDefaults",
+  "queryAllDeclaredMethods":true
+},
+{
+  "name":"scala.collection.MapOps",
+  "queryAllDeclaredMethods":true
+},
+{
+  "name":"scala.collection.Seq",
+  "queryAllDeclaredMethods":true
+},
+{
+  "name":"scala.collection.SeqOps",
+  "queryAllDeclaredMethods":true
+},
+{
+  "name":"scala.collection.StrictOptimizedIterableOps",
+  "queryAllDeclaredMethods":true
+},
+{
+  "name":"scala.collection.StrictOptimizedLinearSeqOps",
+  "queryAllDeclaredMethods":true
+},
+{
+  "name":"scala.collection.StrictOptimizedMapOps",
+  "queryAllDeclaredMethods":true
+},
+{
+  "name":"scala.collection.StrictOptimizedSeqOps",
+  "queryAllDeclaredMethods":true
+},
+{
+  "name":"scala.collection.concurrent.INodeBase",
+  "fields":[{"name":"mainnode"}]
 },
 {
   "name":"scala.collection.convert.JavaCollectionWrappers$IterableWrapper",
@@ -1017,7 +2214,92 @@
   "name":"scala.collection.convert.JavaCollectionWrappers$SeqWrapper",
   "allDeclaredFields":true,
   "queryAllDeclaredMethods":true,
-  "queryAllDeclaredConstructors":true
+  "queryAllDeclaredConstructors":true,
+  "queryAllPublicConstructors":true,
+  "fields":[{"name":"MODULE$"}]
+},
+{
+  "name":"scala.collection.convert.JavaCollectionWrappers$SeqWrapper$"
+},
+{
+  "name":"scala.collection.generic.DefaultSerializable",
+  "queryAllDeclaredMethods":true
+},
+{
+  "name":"scala.collection.immutable.$colon$colon",
+  "allDeclaredFields":true,
+  "queryAllDeclaredMethods":true
+},
+{
+  "name":"scala.collection.immutable.AbstractMap",
+  "allDeclaredFields":true,
+  "queryAllDeclaredMethods":true
+},
+{
+  "name":"scala.collection.immutable.AbstractSeq",
+  "allDeclaredFields":true,
+  "queryAllDeclaredMethods":true
+},
+{
+  "name":"scala.collection.immutable.HashMap",
+  "allDeclaredFields":true,
+  "queryAllDeclaredMethods":true
+},
+{
+  "name":"scala.collection.immutable.Iterable",
+  "queryAllDeclaredMethods":true
+},
+{
+  "name":"scala.collection.immutable.LinearSeq",
+  "queryAllDeclaredMethods":true
+},
+{
+  "name":"scala.collection.immutable.LinearSeqOps",
+  "queryAllDeclaredMethods":true
+},
+{
+  "name":"scala.collection.immutable.List",
+  "allDeclaredFields":true,
+  "queryAllDeclaredMethods":true
+},
+{
+  "name":"scala.collection.immutable.Map",
+  "queryAllDeclaredMethods":true
+},
+{
+  "name":"scala.collection.immutable.Map$Map1",
+  "allDeclaredFields":true,
+  "queryAllDeclaredMethods":true
+},
+{
+  "name":"scala.collection.immutable.Map$Map2",
+  "allDeclaredFields":true,
+  "queryAllDeclaredMethods":true
+},
+{
+  "name":"scala.collection.immutable.Map$Map3",
+  "allDeclaredFields":true,
+  "queryAllDeclaredMethods":true
+},
+{
+  "name":"scala.collection.immutable.MapOps",
+  "queryAllDeclaredMethods":true
+},
+{
+  "name":"scala.collection.immutable.Seq",
+  "queryAllDeclaredMethods":true
+},
+{
+  "name":"scala.collection.immutable.SeqOps",
+  "queryAllDeclaredMethods":true
+},
+{
+  "name":"scala.collection.immutable.StrictOptimizedMapOps",
+  "queryAllDeclaredMethods":true
+},
+{
+  "name":"scala.collection.immutable.StrictOptimizedSeqOps",
+  "queryAllDeclaredMethods":true
 },
 {
   "name":"scala.reflect.ScalaSignature",

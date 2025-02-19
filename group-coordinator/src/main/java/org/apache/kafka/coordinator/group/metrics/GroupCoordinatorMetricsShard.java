@@ -23,6 +23,7 @@ import org.apache.kafka.coordinator.common.runtime.CoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup.ConsumerGroupState;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroup;
+import org.apache.kafka.coordinator.group.streams.StreamsGroup.StreamsGroupState;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineLong;
 
@@ -79,6 +80,11 @@ public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
     private final Map<ShareGroup.ShareGroupState, TimelineGaugeCounter> shareGroupGauges;
 
     /**
+     * Streams group size gauge counters keyed by the metric name.
+     */
+    private volatile Map<StreamsGroupState, Long> streamsGroupGauges;
+
+    /**
      * All sensors keyed by the sensor name. A Sensor object is shared across all metrics shards.
      */
     private final Map<String, Sensor> globalSensors;
@@ -109,6 +115,7 @@ public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
 
         this.classicGroupGauges = Collections.emptyMap();
         this.consumerGroupGauges = Collections.emptyMap();
+        this.streamsGroupGauges = Collections.emptyMap();
 
         this.shareGroupGauges = Utils.mkMap(
             Utils.mkEntry(ShareGroup.ShareGroupState.EMPTY,
@@ -142,6 +149,18 @@ public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
      */
     public void setConsumerGroupGauges(Map<ConsumerGroupState, Long> consumerGroupGauges) {
         this.consumerGroupGauges = consumerGroupGauges;
+    }
+    
+    /**
+     * Set the number of streams groups.
+     * This method should be the only way to update the map and is called by the scheduled task
+     * that updates the metrics in {@link org.apache.kafka.coordinator.group.GroupCoordinatorShard}.
+     * Breaking this will result in inconsistent behavior.
+     *
+     * @param streamsGroupGauges The map counting the number of streams groups in each state.
+     */
+    public void setStreamsGroupGauges(Map<StreamsGroupState, Long> streamsGroupGauges) {
+        this.streamsGroupGauges = streamsGroupGauges;
     }
 
     /**
@@ -203,6 +222,29 @@ public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
      */
     public long numConsumerGroups() {
         return consumerGroupGauges.values().stream()
+            .mapToLong(Long::longValue).sum();
+    }
+    
+    /**
+     * Get the number of streams groups in the specified state.
+     *
+     * @param state  the streams group state.
+     *
+     * @return   The number of streams groups in `state`.
+     */
+    public long numStreamsGroups(StreamsGroupState state) {
+        Long counter = streamsGroupGauges.get(state);
+        if (counter != null) {
+            return counter;
+        }
+        return 0L;
+    }
+
+    /**
+     * @return The total number of streams groups.
+     */
+    public long numStreamsGroups() {
+        return streamsGroupGauges.values().stream()
             .mapToLong(Long::longValue).sum();
     }
 

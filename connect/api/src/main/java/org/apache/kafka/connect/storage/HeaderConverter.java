@@ -31,6 +31,10 @@ import java.io.Closeable;
  * <p>Kafka Connect may discover implementations of this interface using the Java {@link java.util.ServiceLoader} mechanism.
  * To support this, implementations of this interface should also contain a service provider configuration file in
  * {@code META-INF/services/org.apache.kafka.connect.storage.HeaderConverter}.
+ *
+ * <p>Implement {@link org.apache.kafka.common.metrics.Monitorable} to enable the converter to register metrics.
+ * The following tags are automatically added to all metrics registered: <code>connector</code> set to connector name,
+ * <code>task</code> set to the task id and <code>converter</code> set to <code>header</code>.
  */
 public interface HeaderConverter extends Configurable, Closeable {
 
