@@ -217,7 +217,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
       new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.UNKNOWN, AclPermissionType.ALLOW))
     val results2 = client.createAcls(List(aclUnknown).asJava)
     assertEquals(Set(aclUnknown), results2.values.keySet().asScala)
-    assertFutureThrows(results2.all, classOf[InvalidRequestException])
+    assertFutureThrows(classOf[InvalidRequestException], results2.all)
     val results3 = client.deleteAcls(List(acl.toFilter, acl2.toFilter, acl3.toFilter).asJava).values
     assertEquals(Set(acl.toFilter, acl2.toFilter, acl3.toFilter), results3.keySet.asScala)
     assertEquals(0, results3.get(acl.toFilter).get.values.size())
@@ -404,8 +404,8 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
       new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.READ, AclPermissionType.ALLOW))
     val results = client.createAcls(List(clusterAcl, emptyResourceNameAcl).asJava, new CreateAclsOptions())
     assertEquals(Set(clusterAcl, emptyResourceNameAcl), results.values.keySet().asScala)
-    assertFutureThrows(results.values.get(clusterAcl), classOf[InvalidRequestException])
-    assertFutureThrows(results.values.get(emptyResourceNameAcl), classOf[InvalidRequestException])
+    assertFutureThrows(classOf[InvalidRequestException], results.values.get(clusterAcl))
+    assertFutureThrows(classOf[InvalidRequestException], results.values.get(emptyResourceNameAcl))
   }
 
   @ParameterizedTest
@@ -602,9 +602,9 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
       assertEquals(LogConfig.DEFAULT_COMPRESSION_TYPE, compressionConfig.value)
       assertEquals(ConfigEntry.ConfigSource.DEFAULT_CONFIG, compressionConfig.source)
 
-      assertFutureThrows(result.numPartitions(topic2), classOf[TopicAuthorizationException])
-      assertFutureThrows(result.replicationFactor(topic2), classOf[TopicAuthorizationException])
-      assertFutureThrows(result.config(topic2), classOf[TopicAuthorizationException])
+      assertFutureThrows(classOf[TopicAuthorizationException], result.numPartitions(topic2))
+      assertFutureThrows(classOf[TopicAuthorizationException], result.replicationFactor(topic2))
+      assertFutureThrows(classOf[TopicAuthorizationException], result.config(topic2))
     }
     validateMetadataAndConfigs(validateResult)
 
@@ -615,7 +615,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
     val topicIds = getTopicIds()
     assertNotEquals(Uuid.ZERO_UUID, createResult.topicId(topic1).get())
     assertEquals(topicIds(topic1), createResult.topicId(topic1).get())
-    assertFutureThrows(createResult.topicId(topic2), classOf[TopicAuthorizationException])
+    assertFutureThrows(classOf[TopicAuthorizationException], createResult.topicId(topic2))
     
     val createResponseConfig = createResult.config(topic1).get().entries.asScala
 
@@ -639,8 +639,8 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
 
     // Test expiration for non-exists token
     assertFutureThrows(
-      client.expireDelegationToken("".getBytes()).expiryTimestamp(),
-      classOf[DelegationTokenNotFoundException]
+      classOf[DelegationTokenNotFoundException],
+      client.expireDelegationToken("".getBytes()).expiryTimestamp()
     )
 
     // Test expiring the token immediately
@@ -652,8 +652,9 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
     // Ensure current time > maxLifeTimeMs of token
     Thread.sleep(1000)
     assertFutureThrows(
-      client.expireDelegationToken(token2.hmac(), new ExpireDelegationTokenOptions().expiryTimePeriodMs(1)).expiryTimestamp(),
-      classOf[DelegationTokenExpiredException]
+      classOf[DelegationTokenExpiredException],
+      client.expireDelegationToken(token2.hmac(),
+      new ExpireDelegationTokenOptions().expiryTimePeriodMs(1)).expiryTimestamp()
     )
 
     // Ensure expiring the expired token with negative expiryTimePeriodMs will not throw exception

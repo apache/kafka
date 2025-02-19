@@ -82,7 +82,7 @@ public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
     /**
      * Streams group size gauge counters keyed by the metric name.
      */
-    private final Map<StreamsGroupState, TimelineGaugeCounter> streamsGroupGauges;
+    private volatile Map<StreamsGroupState, Long> streamsGroupGauges;
 
     /**
      * All sensors keyed by the sensor name. A Sensor object is shared across all metrics shards.
@@ -115,6 +115,7 @@ public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
 
         this.classicGroupGauges = Collections.emptyMap();
         this.consumerGroupGauges = Collections.emptyMap();
+        this.streamsGroupGauges = Collections.emptyMap();
 
         this.shareGroupGauges = Utils.mkMap(
             Utils.mkEntry(ShareGroup.ShareGroupState.EMPTY,
@@ -122,21 +123,6 @@ public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
             Utils.mkEntry(ShareGroup.ShareGroupState.STABLE,
                 new TimelineGaugeCounter(new TimelineLong(snapshotRegistry), new AtomicLong(0))),
             Utils.mkEntry(ShareGroup.ShareGroupState.DEAD,
-                new TimelineGaugeCounter(new TimelineLong(snapshotRegistry), new AtomicLong(0)))
-        );
-
-        this.streamsGroupGauges = Utils.mkMap(
-            Utils.mkEntry(StreamsGroupState.EMPTY,
-                new TimelineGaugeCounter(new TimelineLong(snapshotRegistry), new AtomicLong(0))),
-            Utils.mkEntry(StreamsGroupState.ASSIGNING,
-                new TimelineGaugeCounter(new TimelineLong(snapshotRegistry), new AtomicLong(0))),
-            Utils.mkEntry(StreamsGroupState.RECONCILING,
-                new TimelineGaugeCounter(new TimelineLong(snapshotRegistry), new AtomicLong(0))),
-            Utils.mkEntry(StreamsGroupState.STABLE,
-                new TimelineGaugeCounter(new TimelineLong(snapshotRegistry), new AtomicLong(0))),
-            Utils.mkEntry(StreamsGroupState.DEAD,
-                new TimelineGaugeCounter(new TimelineLong(snapshotRegistry), new AtomicLong(0))),
-            Utils.mkEntry(StreamsGroupState.NOT_READY,
                 new TimelineGaugeCounter(new TimelineLong(snapshotRegistry), new AtomicLong(0)))
         );
 
@@ -164,19 +150,17 @@ public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
     public void setConsumerGroupGauges(Map<ConsumerGroupState, Long> consumerGroupGauges) {
         this.consumerGroupGauges = consumerGroupGauges;
     }
-
+    
     /**
-     * Increment the number of streams groups.
+     * Set the number of streams groups.
+     * This method should be the only way to update the map and is called by the scheduled task
+     * that updates the metrics in {@link org.apache.kafka.coordinator.group.GroupCoordinatorShard}.
+     * Breaking this will result in inconsistent behavior.
      *
-     * @param state the streams group state.
+     * @param streamsGroupGauges The map counting the number of streams groups in each state.
      */
-    public void incrementNumStreamsGroups(StreamsGroupState state) {
-        TimelineGaugeCounter gaugeCounter = streamsGroupGauges.get(state);
-        if (gaugeCounter != null) {
-            synchronized (gaugeCounter.timelineLong) {
-                gaugeCounter.timelineLong.increment();
-            }
-        }
+    public void setStreamsGroupGauges(Map<StreamsGroupState, Long> streamsGroupGauges) {
+        this.streamsGroupGauges = streamsGroupGauges;
     }
 
     /**
@@ -185,20 +169,6 @@ public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
     public void decrementNumOffsets() {
         synchronized (numOffsetsTimelineGaugeCounter.timelineLong) {
             numOffsetsTimelineGaugeCounter.timelineLong.decrement();
-        }
-    }
-
-    /**
-     * Decrement the number of streams groups.
-     *
-     * @param state the streams group state.
-     */
-    public void decrementNumStreamsGroups(StreamsGroupState state) {
-        TimelineGaugeCounter gaugeCounter = streamsGroupGauges.get(state);
-        if (gaugeCounter != null) {
-            synchronized (gaugeCounter.timelineLong) {
-                gaugeCounter.timelineLong.decrement();
-            }
         }
     }
 
@@ -256,16 +226,16 @@ public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
     }
     
     /**
-     * Obtain the number of streams groups in the specified state.
+     * Get the number of streams groups in the specified state.
      *
      * @param state  the streams group state.
      *
      * @return   The number of streams groups in `state`.
      */
     public long numStreamsGroups(StreamsGroupState state) {
-        TimelineGaugeCounter gaugeCounter = streamsGroupGauges.get(state);
-        if (gaugeCounter != null) {
-            return gaugeCounter.atomicLong.get();
+        Long counter = streamsGroupGauges.get(state);
+        if (counter != null) {
+            return counter;
         }
         return 0L;
     }
@@ -275,7 +245,7 @@ public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
      */
     public long numStreamsGroups() {
         return streamsGroupGauges.values().stream()
-            .mapToLong(timelineGaugeCounter -> timelineGaugeCounter.atomicLong.get()).sum();
+            .mapToLong(Long::longValue).sum();
     }
 
     @Override
@@ -312,14 +282,6 @@ public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
         }
 
         this.shareGroupGauges.forEach((__, gaugeCounter) -> {
-            long value;
-            synchronized (gaugeCounter.timelineLong) {
-                value = gaugeCounter.timelineLong.get(offset);
-            }
-            gaugeCounter.atomicLong.set(value);
-        });
-
-        this.streamsGroupGauges.forEach((__, gaugeCounter) -> {
             long value;
             synchronized (gaugeCounter.timelineLong) {
                 value = gaugeCounter.timelineLong.get(offset);
@@ -407,68 +369,6 @@ public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
                     break;
                 default:
                     log.warn("Unknown previous share group state: {}", oldState);
-            }
-        }
-    }
-    
-    /**
-     * Called when a streams group's state has changed. Increment/decrement
-     * the counter accordingly.
-     *
-     * @param oldState The previous state. null value means that it's a new group.
-     * @param newState The next state. null value means that the group has been removed.
-     */
-    public void onStreamsGroupStateTransition(
-        StreamsGroupState oldState,
-        StreamsGroupState newState
-    ) {
-        if (newState != null) {
-            switch (newState) {
-                case EMPTY:
-                    incrementNumStreamsGroups(StreamsGroupState.EMPTY);
-                    break;
-                case NOT_READY:
-                    incrementNumStreamsGroups(StreamsGroupState.NOT_READY);
-                    break;
-                case ASSIGNING:
-                    incrementNumStreamsGroups(StreamsGroupState.ASSIGNING);
-                    break;
-                case RECONCILING:
-                    incrementNumStreamsGroups(StreamsGroupState.RECONCILING);
-                    break;
-                case STABLE:
-                    incrementNumStreamsGroups(StreamsGroupState.STABLE);
-                    break;
-                case DEAD:
-                    incrementNumStreamsGroups(StreamsGroupState.DEAD);
-                    break;
-                default:
-                    throw new IllegalArgumentException("Unknown new state for streams group: " + newState);
-            }
-        }
-
-        if (oldState != null) {
-            switch (oldState) {
-                case EMPTY:
-                    decrementNumStreamsGroups(StreamsGroupState.EMPTY);
-                    break;
-                case NOT_READY:
-                    decrementNumStreamsGroups(StreamsGroupState.NOT_READY);
-                    break;
-                case ASSIGNING:
-                    decrementNumStreamsGroups(StreamsGroupState.ASSIGNING);
-                    break;
-                case RECONCILING:
-                    decrementNumStreamsGroups(StreamsGroupState.RECONCILING);
-                    break;
-                case STABLE:
-                    decrementNumStreamsGroups(StreamsGroupState.STABLE);
-                    break;
-                case DEAD:
-                    decrementNumStreamsGroups(StreamsGroupState.DEAD);
-                    break;
-                default:
-                    throw new IllegalArgumentException("Unknown old state for streams group: " + newState);
             }
         }
     }

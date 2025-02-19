@@ -380,7 +380,7 @@ public class ConfigCommandIntegrationTest {
     @ClusterTest(
          // Must be at greater than 1MB per cleaner thread, set to 2M+2 so that we can set 2 cleaner threads.
          serverProperties = {@ClusterConfigProperty(key = "log.cleaner.dedupe.buffer.size", value = "2097154")},
-         metadataVersion = MetadataVersion.IBP_3_3_IV0
+         metadataVersion = MetadataVersion.IBP_3_9_IV0
     )
     public void testUnsupportedVersionException() {
         try (Admin client = cluster.admin()) {

@@ -742,7 +742,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val nonExistingTopic = "non-existing"
     val results = client.describeTopics(Seq(nonExistingTopic, existingTopic).asJava).topicNameValues()
     assertEquals(existingTopic, results.get(existingTopic).get.name)
-    assertFutureThrows(results.get(nonExistingTopic), classOf[UnknownTopicOrPartitionException])
+    assertFutureThrows(classOf[UnknownTopicOrPartitionException], results.get(nonExistingTopic))
   }
 
   @ParameterizedTest
@@ -761,7 +761,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
     val results = client.describeTopics(TopicCollection.ofTopicIds(Seq(existingTopicId, nonExistingTopicId).asJava)).topicIdValues()
     assertEquals(existingTopicId, results.get(existingTopicId).get.topicId())
-    assertFutureThrows(results.get(nonExistingTopicId), classOf[UnknownTopicIdException])
+    assertFutureThrows(classOf[UnknownTopicIdException], results.get(nonExistingTopicId))
   }
 
   @ParameterizedTest
@@ -1120,7 +1120,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       groupResource -> groupAlterConfigs
     ).asJava, new AlterConfigsOptions().validateOnly(true))
 
-    assertFutureThrows(alterResult.values.get(groupResource), classOf[InvalidConfigurationException],
+    assertFutureThrows(classOf[InvalidConfigurationException],
+      alterResult.values.get(groupResource),
       "consumer.session.timeout.ms must be greater than or equal to group.consumer.min.session.timeout.ms")
   }
 
@@ -1723,11 +1724,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val acl = new AclBinding(new ResourcePattern(ResourceType.TOPIC, "mytopic3", PatternType.LITERAL),
       new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.DESCRIBE, AclPermissionType.ALLOW))
     client = createAdminClient
-    assertFutureThrows(client.describeAcls(AclBindingFilter.ANY).values(), classOf[SecurityDisabledException])
-    assertFutureThrows(client.createAcls(Collections.singleton(acl)).all(),
-      classOf[SecurityDisabledException])
-    assertFutureThrows(client.deleteAcls(Collections.singleton(acl.toFilter())).all(),
-      classOf[SecurityDisabledException])
+    assertFutureThrows(classOf[SecurityDisabledException], client.describeAcls(AclBindingFilter.ANY).values())
+    assertFutureThrows(classOf[SecurityDisabledException], client.createAcls(Collections.singleton(acl)).all())
+    assertFutureThrows(classOf[SecurityDisabledException], client.deleteAcls(Collections.singleton(acl.toFilter())).all())
   }
 
   /**
@@ -1743,7 +1742,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val future = client.createTopics(newTopics.asJava, new CreateTopicsOptions().validateOnly(true)).all()
     client.close(time.Duration.ofHours(2))
     val future2 = client.createTopics(newTopics.asJava, new CreateTopicsOptions().validateOnly(true)).all()
-    assertFutureThrows(future2, classOf[IllegalStateException])
+    assertFutureThrows(classOf[IllegalStateException], future2)
     future.get
     client.close(time.Duration.ofMinutes(30)) // multiple close-with-timeout should have no effect
   }
@@ -1763,7 +1762,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val future = client.createTopics(Seq("mytopic", "mytopic2").map(new NewTopic(_, 1, 1.toShort)).asJava,
       new CreateTopicsOptions().timeoutMs(900000)).all()
     client.close(time.Duration.ZERO)
-    assertFutureThrows(future, classOf[TimeoutException])
+    assertFutureThrows(classOf[TimeoutException], future)
   }
 
   /**
@@ -1780,7 +1779,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val startTimeMs = Time.SYSTEM.milliseconds()
     val future = client.createTopics(Seq("mytopic", "mytopic2").map(new NewTopic(_, 1, 1.toShort)).asJava,
       new CreateTopicsOptions().timeoutMs(2)).all()
-    assertFutureThrows(future, classOf[TimeoutException])
+    assertFutureThrows(classOf[TimeoutException], future)
     val endTimeMs = Time.SYSTEM.milliseconds()
     assertTrue(endTimeMs > startTimeMs, "Expected the timeout to take at least one millisecond.")
   }
@@ -1798,7 +1797,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     client = KafkaAdminClientTest.createInternal(new AdminClientConfig(config), factory)
     val future = client.createTopics(Seq("mytopic", "mytopic2").map(new NewTopic(_, 1, 1.toShort)).asJava,
         new CreateTopicsOptions().validateOnly(true)).all()
-    assertFutureThrows(future, classOf[TimeoutException])
+    assertFutureThrows(classOf[TimeoutException], future)
     val future2 = client.createTopics(Seq("mytopic3", "mytopic4").map(new NewTopic(_, 1, 1.toShort)).asJava,
       new CreateTopicsOptions().validateOnly(true)).all()
     future2.get
@@ -1944,11 +1943,11 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
         // Test that the fake group throws GroupIdNotFoundException
         assertTrue(describeWithFakeGroupResult.describedGroups().containsKey(fakeGroupId))
-        assertFutureThrows(describeWithFakeGroupResult.describedGroups().get(fakeGroupId), classOf[GroupIdNotFoundException],
+        assertFutureThrows(classOf[GroupIdNotFoundException], describeWithFakeGroupResult.describedGroups().get(fakeGroupId),
           s"Group $fakeGroupId not found.")
 
         // Test that all() also throws GroupIdNotFoundException
-        assertFutureThrows(describeWithFakeGroupResult.all(), classOf[GroupIdNotFoundException],
+        assertFutureThrows(classOf[GroupIdNotFoundException], describeWithFakeGroupResult.all(),
           s"Group $fakeGroupId not found.")
 
         val testTopicPart0 = new TopicPartition(testTopicName, 0)
@@ -2227,12 +2226,12 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
         // Test that the fake group throws GroupIdNotFoundException
         assertTrue(describeWithFakeGroupResult.describedGroups().containsKey(fakeGroupId))
-        assertFutureThrows(describeWithFakeGroupResult.describedGroups().get(fakeGroupId),
-          classOf[GroupIdNotFoundException], s"Group $fakeGroupId not found.")
+        assertFutureThrows(classOf[GroupIdNotFoundException],
+          describeWithFakeGroupResult.describedGroups().get(fakeGroupId), s"Group $fakeGroupId not found.")
 
         // Test that all() also throws GroupIdNotFoundException
-        assertFutureThrows(describeWithFakeGroupResult.all(),
-          classOf[GroupIdNotFoundException], s"Group $fakeGroupId not found.")
+        assertFutureThrows(classOf[GroupIdNotFoundException],
+          describeWithFakeGroupResult.all(), s"Group $fakeGroupId not found.")
 
         val testTopicPart0 = new TopicPartition(testTopicName, 0)
 
@@ -2341,9 +2340,10 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         var removeMembersResult = client.removeMembersFromConsumerGroup(testGroupId, new RemoveMembersFromConsumerGroupOptions(
           Collections.singleton(new MemberToRemove(invalidInstanceId))
         ))
-        assertFutureThrows(removeMembersResult.all, classOf[UnknownMemberIdException])
+
+        assertFutureThrows(classOf[UnknownMemberIdException], removeMembersResult.all)
         val firstMemberFuture = removeMembersResult.memberResult(new MemberToRemove(invalidInstanceId))
-        assertFutureThrows(firstMemberFuture, classOf[UnknownMemberIdException])
+        assertFutureThrows(classOf[UnknownMemberIdException], firstMemberFuture)
 
         // Test consumer group deletion
         var deleteResult = client.deleteConsumerGroups(Seq(testGroupId, fakeGroupId).asJava)
@@ -2351,13 +2351,11 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
         // Deleting the fake group ID should get GroupIdNotFoundException.
         assertTrue(deleteResult.deletedGroups().containsKey(fakeGroupId))
-        assertFutureThrows(deleteResult.deletedGroups().get(fakeGroupId),
-          classOf[GroupIdNotFoundException])
+        assertFutureThrows(classOf[GroupIdNotFoundException], deleteResult.deletedGroups().get(fakeGroupId))
 
         // Deleting the real group ID should get GroupNotEmptyException
         assertTrue(deleteResult.deletedGroups().containsKey(testGroupId))
-        assertFutureThrows(deleteResult.deletedGroups().get(testGroupId),
-          classOf[GroupNotEmptyException])
+        assertFutureThrows(classOf[GroupNotEmptyException], deleteResult.deletedGroups().get(testGroupId))
 
         // Stop the consumer threads and close consumers to prevent member rejoining.
         backgroundConsumerSet.stop()
@@ -2476,30 +2474,24 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         val offsetDeleteResult = client.deleteConsumerGroupOffsets(testGroupId, Set(tp1, tp2).asJava)
 
         // Top level error will equal to the first partition level error
-        assertFutureThrows(offsetDeleteResult.all(), classOf[GroupSubscribedToTopicException])
-        assertFutureThrows(offsetDeleteResult.partitionResult(tp1),
-          classOf[GroupSubscribedToTopicException])
-        assertFutureThrows(offsetDeleteResult.partitionResult(tp2),
-          classOf[UnknownTopicOrPartitionException])
+        assertFutureThrows(classOf[GroupSubscribedToTopicException], offsetDeleteResult.all())
+        assertFutureThrows(classOf[GroupSubscribedToTopicException], offsetDeleteResult.partitionResult(tp1))
+        assertFutureThrows(classOf[UnknownTopicOrPartitionException], offsetDeleteResult.partitionResult(tp2))
 
         // Test the fake group ID
         val fakeDeleteResult = client.deleteConsumerGroupOffsets(fakeGroupId, Set(tp1, tp2).asJava)
 
-        assertFutureThrows(fakeDeleteResult.all(), classOf[GroupIdNotFoundException])
-        assertFutureThrows(fakeDeleteResult.partitionResult(tp1),
-          classOf[GroupIdNotFoundException])
-        assertFutureThrows(fakeDeleteResult.partitionResult(tp2),
-          classOf[GroupIdNotFoundException])
+        assertFutureThrows(classOf[GroupIdNotFoundException], fakeDeleteResult.all())
+        assertFutureThrows(classOf[GroupIdNotFoundException], fakeDeleteResult.partitionResult(tp1))
+        assertFutureThrows(classOf[GroupIdNotFoundException], fakeDeleteResult.partitionResult(tp2))
       }
 
       // Test offset deletion when group is empty
       val offsetDeleteResult = client.deleteConsumerGroupOffsets(testGroupId, Set(tp1, tp2).asJava)
 
-      assertFutureThrows(offsetDeleteResult.all(),
-        classOf[UnknownTopicOrPartitionException])
+      assertFutureThrows(classOf[UnknownTopicOrPartitionException], offsetDeleteResult.all())
       assertNull(offsetDeleteResult.partitionResult(tp1).get())
-      assertFutureThrows(offsetDeleteResult.partitionResult(tp2),
-        classOf[UnknownTopicOrPartitionException])
+      assertFutureThrows(classOf[UnknownTopicOrPartitionException], offsetDeleteResult.partitionResult(tp2))
     } finally {
       Utils.closeQuietly(client, "adminClient")
     }
@@ -2744,12 +2736,14 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
         // Test that the fake group throws GroupIdNotFoundException
         assertTrue(describeWithFakeGroupResult.describedGroups().containsKey(fakeGroupId))
-        assertFutureThrows(describeWithFakeGroupResult.describedGroups().get(fakeGroupId),
-          classOf[GroupIdNotFoundException], s"Group $fakeGroupId not found.")
+        assertFutureThrows(classOf[GroupIdNotFoundException],
+          describeWithFakeGroupResult.describedGroups().get(fakeGroupId),
+          s"Group $fakeGroupId not found.")
 
         // Test that all() also throws GroupIdNotFoundException
-        assertFutureThrows(describeWithFakeGroupResult.all(),
-          classOf[GroupIdNotFoundException], s"Group $fakeGroupId not found.")
+        assertFutureThrows(classOf[GroupIdNotFoundException],
+          describeWithFakeGroupResult.all(),
+          s"Group $fakeGroupId not found.")
 
         val describeTestGroupResult = client.describeShareGroups(Collections.singleton(testGroupId),
           new DescribeShareGroupsOptions().includeAuthorizedOperations(true))
@@ -2765,8 +2759,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         // but the error message is different
         val describeConsumerGroupResult = client.describeConsumerGroups(Collections.singleton(testGroupId),
           new DescribeConsumerGroupsOptions().includeAuthorizedOperations(true))
-        assertFutureThrows(describeConsumerGroupResult.all(),
-          classOf[GroupIdNotFoundException], s"Group $testGroupId is not a consumer group.")
+        assertFutureThrows(classOf[GroupIdNotFoundException],
+          describeConsumerGroupResult.all(),
+          s"Group $testGroupId is not a consumer group.")
       } finally {
         consumerThreads.foreach {
           case consumerThread =>
@@ -3304,7 +3299,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       topic1Resource -> topic1AlterConfigs
     ).asJava, new AlterConfigsOptions().validateOnly(true))
 
-    assertFutureThrows(alterResult.values().get(topic1Resource), classOf[InvalidConfigurationException],
+    assertFutureThrows(classOf[InvalidConfigurationException], alterResult.values().get(topic1Resource),
       "Invalid value zip for configuration compression.type: String must be one of: uncompressed, zstd, lz4, snappy, gzip, producer")
   }
 
@@ -3453,7 +3448,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertEquals(Set(topic1Resource, topic2Resource).asJava, alterResult.values.keySet)
 
     // InvalidRequestException error for topic1
-    assertFutureThrows(alterResult.values().get(topic1Resource), classOf[InvalidRequestException],
+    assertFutureThrows(classOf[InvalidRequestException], alterResult.values().get(topic1Resource),
       "Error due to duplicate config keys")
 
     // Operation should succeed for topic2
@@ -3484,10 +3479,10 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     ).asJava)
     assertEquals(Set(topic1Resource, topic2Resource).asJava, alterResult.values.keySet)
 
-    assertFutureThrows(alterResult.values().get(topic1Resource), classOf[InvalidConfigurationException],
+    assertFutureThrows(classOf[InvalidConfigurationException],alterResult.values().get(topic1Resource),
       "Can't APPEND to key compression.type because its type is not LIST.")
 
-    assertFutureThrows(alterResult.values().get(topic2Resource), classOf[InvalidConfigurationException],
+    assertFutureThrows(classOf[InvalidConfigurationException],alterResult.values().get(topic2Resource),
       "Can't SUBTRACT to key compression.type because its type is not LIST.")
 
     // Try to add invalid config
@@ -3500,7 +3495,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     ).asJava)
     assertEquals(Set(topic1Resource).asJava, alterResult.values.keySet)
 
-    assertFutureThrows(alterResult.values().get(topic1Resource), classOf[InvalidConfigurationException],
+    assertFutureThrows(classOf[InvalidConfigurationException], alterResult.values().get(topic1Resource),
       "Invalid value 1.1 for configuration min.cleanable.dirty.ratio: Value must be no more than 1")
   }
 
@@ -3528,8 +3523,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       nonExistentTp1 -> validAssignment,
       nonExistentTp2 -> validAssignment
     ).asJava).values()
-    assertFutureThrows(nonExistentPartitionsResult.get(nonExistentTp1), classOf[UnknownTopicOrPartitionException])
-    assertFutureThrows(nonExistentPartitionsResult.get(nonExistentTp2), classOf[UnknownTopicOrPartitionException])
+    assertFutureThrows(classOf[UnknownTopicOrPartitionException], nonExistentPartitionsResult.get(nonExistentTp1))
+    assertFutureThrows(classOf[UnknownTopicOrPartitionException], nonExistentPartitionsResult.get(nonExistentTp2))
 
     val extraNonExistentReplica = Optional.of(new NewPartitionReassignment((0 until brokerCount + 1).map(_.asInstanceOf[Integer]).asJava))
     val negativeIdReplica = Optional.of(new NewPartitionReassignment(Seq(-3, -2, -1).map(_.asInstanceOf[Integer]).asJava))
@@ -3539,9 +3534,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       tp2 -> negativeIdReplica,
       tp3 -> duplicateReplica
     ).asJava).values()
-    assertFutureThrows(invalidReplicaResult.get(tp1), classOf[InvalidReplicaAssignmentException])
-    assertFutureThrows(invalidReplicaResult.get(tp2), classOf[InvalidReplicaAssignmentException])
-    assertFutureThrows(invalidReplicaResult.get(tp3), classOf[InvalidReplicaAssignmentException])
+    assertFutureThrows(classOf[InvalidReplicaAssignmentException], invalidReplicaResult.get(tp1))
+    assertFutureThrows(classOf[InvalidReplicaAssignmentException], invalidReplicaResult.get(tp2))
+    assertFutureThrows(classOf[InvalidReplicaAssignmentException], invalidReplicaResult.get(tp3))
   }
 
   @ParameterizedTest
@@ -3556,10 +3551,10 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertTrue(results.containsKey(longTopicName))
     results.get(longTopicName).get()
     assertTrue(results.containsKey(invalidTopicName))
-    assertFutureThrows(results.get(invalidTopicName), classOf[InvalidTopicException])
-    assertFutureThrows(client.alterReplicaLogDirs(
-      Map(new TopicPartitionReplica(longTopicName, 0, 0) -> brokers(0).config.logDirs(0)).asJava).all(),
-      classOf[InvalidTopicException])
+    assertFutureThrows(classOf[InvalidTopicException], results.get(invalidTopicName))
+    assertFutureThrows(classOf[InvalidTopicException],
+      client.alterReplicaLogDirs(
+        Map(new TopicPartitionReplica(longTopicName, 0, 0) -> brokers(0).config.logDirs(0)).asJava).all())
     client.close()
   }
 
@@ -3584,9 +3579,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       TopicConfig.COMPRESSION_TYPE_CONFIG -> "producer"
     ).asJava
     val newTopic = new NewTopic(topic, 2, brokerCount.toShort)
-    assertFutureThrows(
+    assertFutureThrows(classOf[InvalidConfigurationException],
       client.createTopics(Collections.singletonList(newTopic.configs(invalidConfigs))).all,
-      classOf[InvalidConfigurationException],
       "Null value not supported for topic configs: retention.bytes"
     )
 
@@ -3600,9 +3594,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       new AlterConfigOp(new ConfigEntry(TopicConfig.RETENTION_BYTES_CONFIG, null), AlterConfigOp.OpType.SET),
       new AlterConfigOp(new ConfigEntry(TopicConfig.COMPRESSION_TYPE_CONFIG, "lz4"), AlterConfigOp.OpType.SET)
     )
-    assertFutureThrows(
+    assertFutureThrows(classOf[InvalidRequestException],
       client.incrementalAlterConfigs(Map(topicResource -> alterOps.asJavaCollection).asJava).all,
-      classOf[InvalidRequestException],
       "Null value not supported for : retention.bytes"
     )
     validateLogConfig(compressionType = "producer")
@@ -4108,9 +4101,9 @@ object PlaintextAdminIntegrationTest {
     var alterResult = admin.incrementalAlterConfigs(alterConfigs)
 
     assertEquals(Set(topicResource1, topicResource2, brokerResource).asJava, alterResult.values.keySet)
-    assertFutureThrows(alterResult.values.get(topicResource1), classOf[InvalidConfigurationException])
+    assertFutureThrows(classOf[InvalidConfigurationException], alterResult.values.get(topicResource1))
     alterResult.values.get(topicResource2).get
-    assertFutureThrows(alterResult.values.get(brokerResource), classOf[InvalidRequestException])
+    assertFutureThrows(classOf[InvalidRequestException], alterResult.values.get(brokerResource))
 
     // Verify that first and third resources were not updated and second was updated
     test.ensureConsistentKRaftMetadata()
@@ -4137,9 +4130,9 @@ object PlaintextAdminIntegrationTest {
     alterResult = admin.incrementalAlterConfigs(alterConfigs, new AlterConfigsOptions().validateOnly(true))
 
     assertEquals(Set(topicResource1, topicResource2, brokerResource).asJava, alterResult.values.keySet)
-    assertFutureThrows(alterResult.values.get(topicResource1), classOf[InvalidConfigurationException])
+    assertFutureThrows(classOf[InvalidConfigurationException], alterResult.values.get(topicResource1))
     alterResult.values.get(topicResource2).get
-    assertFutureThrows(alterResult.values.get(brokerResource), classOf[InvalidRequestException])
+    assertFutureThrows(classOf[InvalidRequestException], alterResult.values.get(brokerResource))
 
     // Verify that no resources are updated since validate_only = true
     test.ensureConsistentKRaftMetadata()
