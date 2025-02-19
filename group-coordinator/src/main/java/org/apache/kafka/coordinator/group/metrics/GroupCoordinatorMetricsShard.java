@@ -252,11 +252,11 @@ public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
     }
 
     /**
-     * Get the number of streams groups in the specified state.
+     * Get the number of share groups in the specified state.
      *
-     * @param state  the streams group state.
+     * @param state  the share group state.
      *
-     * @return   The number of streams groups in `state`.
+     * @return   The number of share groups in `state`.
      */
     public long numShareGroups(ShareGroupState state) {
         Long counter = shareGroupGauges.get(state);
