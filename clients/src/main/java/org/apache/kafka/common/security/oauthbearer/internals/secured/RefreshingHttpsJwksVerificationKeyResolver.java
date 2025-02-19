@@ -91,13 +91,13 @@ public class RefreshingHttpsJwksVerificationKeyResolver implements CloseableVeri
 
     private static final Logger log = LoggerFactory.getLogger(RefreshingHttpsJwksVerificationKeyResolver.class);
 
-    protected final Time time;
+    private final Time time;
 
-    protected final VerificationJwkSelector verificationJwkSelector;
+    private final VerificationJwkSelector verificationJwkSelector;
 
-    protected RefreshingHttpsJwks refreshingHttpsJwks;
+    private RefreshingHttpsJwks refreshingHttpsJwks;
 
-    protected boolean isInitialized;
+    private boolean isInitialized;
 
     public RefreshingHttpsJwksVerificationKeyResolver(Time time) {
         this.time = time;

@@ -30,6 +30,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG;
+import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule.OAUTHBEARER_MECHANISM;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 
 public class ConfigurationUtilsTest extends OAuthBearerTest {
@@ -95,7 +96,7 @@ public class ConfigurationUtilsTest extends OAuthBearerTest {
     private void testUrl(String value) {
         System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, value == null ? "" : value);
         Map<String, Object> configs = Collections.singletonMap(URL_CONFIG_NAME, value);
-        ConfigurationUtils cu = new ConfigurationUtils(configs);
+        ConfigurationUtils cu = new ConfigurationUtils(configs, OAUTHBEARER_MECHANISM);
         cu.validateUrl(URL_CONFIG_NAME);
     }
 
@@ -148,7 +149,7 @@ public class ConfigurationUtilsTest extends OAuthBearerTest {
         Map<String, Object> configs = new HashMap<>();
         configs.put(URL_CONFIG_NAME, url);
         configs.put(FILE_CONFIG_NAME, fileUrl);
-        ConfigurationUtils cu = new ConfigurationUtils(configs);
+        ConfigurationUtils cu = new ConfigurationUtils(configs, OAUTHBEARER_MECHANISM);
 
         // By default, no URL is allowed
         assertThrowsWithMessage(ConfigException.class, () -> cu.throwIfURLIsNotAllowed(url),
@@ -171,7 +172,7 @@ public class ConfigurationUtilsTest extends OAuthBearerTest {
     protected void testFile(String value) {
         System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, value == null ? "" : value);
         Map<String, Object> configs = Collections.singletonMap(URL_CONFIG_NAME, value);
-        ConfigurationUtils cu = new ConfigurationUtils(configs);
+        ConfigurationUtils cu = new ConfigurationUtils(configs, OAUTHBEARER_MECHANISM);
         cu.validateFile(URL_CONFIG_NAME);
     }
 

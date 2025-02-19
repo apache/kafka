@@ -150,7 +150,7 @@ public class RefreshingHttpsJwks implements OAuthBearerConfigurable {
         try {
             log.debug("init started");
 
-            ConfigurationUtils cu = new ConfigurationUtils(saslMechanism, configs);
+            ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
             URL jwksEndpointUrl = cu.validateUrl(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL);
 
             JaasOptionsUtils jou = new JaasOptionsUtils(saslMechanism, jaasConfigEntries);
@@ -177,7 +177,7 @@ public class RefreshingHttpsJwks implements OAuthBearerConfigurable {
                    Map<String, ?> configs,
                    String saslMechanism,
                    List<AppConfigurationEntry> jaasConfigEntries) {
-        ConfigurationUtils cu = new ConfigurationUtils(saslMechanism, configs);
+        ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
         refreshMs = cu.validateLong(SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS, true, 0L);
         refreshRetryBackoffMs = cu.validateLong(SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS);
         refreshRetryBackoffMaxMs = cu.validateLong(SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS);

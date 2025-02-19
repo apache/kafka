@@ -55,7 +55,7 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_E
 
 public class DefaultAccessTokenValidator implements AccessTokenValidator {
 
-    protected AccessTokenValidator delegate;
+    private AccessTokenValidator delegate;
 
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {

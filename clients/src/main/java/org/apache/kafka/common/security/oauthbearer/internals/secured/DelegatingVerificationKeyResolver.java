@@ -47,7 +47,7 @@ public class DelegatingVerificationKeyResolver implements CloseableVerificationK
 
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
-        ConfigurationUtils cu = new ConfigurationUtils(saslMechanism, configs);
+        ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
         URL jwksEndpointUrl = cu.validateUrl(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL);
 
         if (jwksEndpointUrl.getProtocol().toLowerCase(Locale.ROOT).equals("file"))

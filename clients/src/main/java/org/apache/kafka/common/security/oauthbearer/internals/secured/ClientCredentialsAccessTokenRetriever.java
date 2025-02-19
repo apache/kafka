@@ -67,7 +67,7 @@ public class ClientCredentialsAccessTokenRetriever extends HttpAccessTokenRetrie
         super.configure(configs, saslMechanism, jaasConfigEntries);
 
         JaasOptionsUtils jou = new JaasOptionsUtils(saslMechanism, jaasConfigEntries);
-        ConfigurationUtils cu = new ConfigurationUtils(saslMechanism, configs);
+        ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
         clientId = jou.validateString(CLIENT_ID_CONFIG);
         clientSecret = jou.validateString(CLIENT_SECRET_CONFIG);
         scope = jou.validateString(SCOPE_CONFIG, false);

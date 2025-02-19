@@ -91,7 +91,7 @@ public class JwksFileVerificationKeyResolver implements CloseableVerificationKey
 
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
-        ConfigurationUtils cu = new ConfigurationUtils(saslMechanism, configs);
+        ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
         String jwksFileName = cu.validateFile(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL).toFile().getPath();
         log.debug("Starting creation of new VerificationKeyResolver from {}", jwksFileName);
         JsonWebKeySet jwks;

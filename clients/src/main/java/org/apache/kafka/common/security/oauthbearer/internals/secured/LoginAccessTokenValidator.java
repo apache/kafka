@@ -63,13 +63,13 @@ public class LoginAccessTokenValidator implements AccessTokenValidator {
 
     public static final String ISSUED_AT_CLAIM_NAME = "iat";
 
-    protected String scopeClaimName;
+    private String scopeClaimName;
 
-    protected String subClaimName;
+    private String subClaimName;
 
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
-        ConfigurationUtils cu = new ConfigurationUtils(saslMechanism, configs);
+        ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
         scopeClaimName = ClaimValidationUtils.validateClaimNameOverride(
             DEFAULT_SASL_OAUTHBEARER_SCOPE_CLAIM_NAME,
             cu.get(SASL_OAUTHBEARER_SCOPE_CLAIM_NAME)

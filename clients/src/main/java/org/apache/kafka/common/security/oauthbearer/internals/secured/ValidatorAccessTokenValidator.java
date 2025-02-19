@@ -95,13 +95,13 @@ public class ValidatorAccessTokenValidator implements AccessTokenValidator {
 
     private final Time time;
 
-    protected CloseableVerificationKeyResolver verificationKeyResolver;
+    private CloseableVerificationKeyResolver verificationKeyResolver;
 
-    protected JwtConsumer jwtConsumer;
+    private JwtConsumer jwtConsumer;
 
-    protected String scopeClaimName;
+    private String scopeClaimName;
 
-    protected String subClaimName;
+    private String subClaimName;
 
     public ValidatorAccessTokenValidator() {
         this(Time.SYSTEM);
@@ -134,7 +134,7 @@ public class ValidatorAccessTokenValidator implements AccessTokenValidator {
         this.verificationKeyResolver = verificationKeyResolver;
         this.verificationKeyResolver.configure(configs, saslMechanism, jaasConfigEntries);
 
-        ConfigurationUtils cu = new ConfigurationUtils(saslMechanism, configs);
+        ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
         Set<String> expectedAudiences = null;
         List<String> l = cu.get(SASL_OAUTHBEARER_EXPECTED_AUDIENCE);
 

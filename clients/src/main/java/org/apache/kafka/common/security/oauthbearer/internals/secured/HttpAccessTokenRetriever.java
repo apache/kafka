@@ -18,7 +18,6 @@
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.config.SaslConfigs;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -41,12 +40,10 @@ import java.util.concurrent.ExecutionException;
 import javax.net.ssl.SSLSocketFactory;
 import javax.security.auth.login.AppConfigurationEntry;
 
-import static org.apache.kafka.common.config.SaslConfigs.DEFAULT_SASL_OAUTHBEARER_HEADER_URLENCODE;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_CONNECT_TIMEOUT_MS;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_READ_TIMEOUT_MS;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MAX_MS;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MS;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_HEADER_URLENCODE;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
 
 /**
@@ -100,7 +97,7 @@ public abstract class HttpAccessTokenRetriever implements AccessTokenRetriever {
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
         JaasOptionsUtils jou = new JaasOptionsUtils(saslMechanism, jaasConfigEntries);
-        ConfigurationUtils cu = new ConfigurationUtils(saslMechanism, configs);
+        ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
 
         URL url = cu.validateUrl(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL);
         tokenEndpointUrl = url.toString();
@@ -279,24 +276,4 @@ public abstract class HttpAccessTokenRetriever implements AccessTokenRetriever {
 
         return value;
     }
-
-    /**
-     * In some cases, the incoming {@link Map} doesn't contain a value for
-     * {@link SaslConfigs#SASL_OAUTHBEARER_HEADER_URLENCODE}. Returning {@code null} from {@link Map#get(Object)}
-     * will cause a {@link NullPointerException} when it is later unboxed.
-     *
-     * <p/>
-     *
-     * This utility method ensures that we have a non-{@code null} value to use in the
-     * {@link HttpAccessTokenRetriever} constructor.
-     */
-    public static boolean validateUrlencodeHeader(ConfigurationUtils configurationUtils) {
-        Boolean urlencodeHeader = configurationUtils.validateBoolean(SASL_OAUTHBEARER_HEADER_URLENCODE, false);
-
-        if (urlencodeHeader != null)
-            return urlencodeHeader;
-        else
-            return DEFAULT_SASL_OAUTHBEARER_HEADER_URLENCODE;
-    }
-
 }

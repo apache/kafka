@@ -38,11 +38,11 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_
 
 public class FileTokenRetriever implements AccessTokenRetriever {
 
-    protected String accessToken;
+    private String accessToken;
 
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
-        ConfigurationUtils cu = new ConfigurationUtils(saslMechanism, configs);
+        ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
         String accessTokenFileName = cu.validateFile(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL).toFile().getPath();
 
         try {

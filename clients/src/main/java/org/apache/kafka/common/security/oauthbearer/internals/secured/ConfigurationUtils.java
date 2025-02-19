@@ -45,11 +45,7 @@ public class ConfigurationUtils {
 
     private final String prefix;
 
-    public ConfigurationUtils(Map<String, ?> configs) {
-        this(null, configs);
-    }
-
-    public ConfigurationUtils(String saslMechanism, Map<String, ?> configs) {
+    public ConfigurationUtils(Map<String, ?> configs, String saslMechanism) {
         this.configs = configs;
 
         if (saslMechanism != null && !saslMechanism.trim().isEmpty())

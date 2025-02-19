@@ -43,17 +43,20 @@ public class JwtBearerAccessTokenRetriever extends HttpAccessTokenRetriever {
 
     public final static String GRANT_TYPE = "urn:ietf:params:oauth:grant-type:jwt-bearer";
 
+    private final Time time;
+
     private String assertion;
+
+    public JwtBearerAccessTokenRetriever() {
+        this(Time.SYSTEM);
+    }
+
+    public JwtBearerAccessTokenRetriever(Time time) {
+        this.time = time;
+    }
 
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
-        configure(Time.SYSTEM, configs, saslMechanism, jaasConfigEntries);
-    }
-
-    public void configure(Time time,
-                          Map<String, ?> configs,
-                          String saslMechanism,
-                          List<AppConfigurationEntry> jaasConfigEntries) {
         super.configure(configs, saslMechanism, jaasConfigEntries);
 
         JaasOptionsUtils jou = new JaasOptionsUtils(saslMechanism, jaasConfigEntries);

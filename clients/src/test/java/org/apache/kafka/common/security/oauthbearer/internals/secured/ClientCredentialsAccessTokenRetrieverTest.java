@@ -18,7 +18,17 @@
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
+import java.util.Collections;
+import java.util.Map;
+import java.util.stream.Stream;
+
+import static org.apache.kafka.common.config.SaslConfigs.DEFAULT_SASL_OAUTHBEARER_HEADER_URLENCODE;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_HEADER_URLENCODE;
+import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule.OAUTHBEARER_MECHANISM;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -82,6 +92,23 @@ public class ClientCredentialsAccessTokenRetrieverTest extends OAuthBearerTest {
 
         actual = ClientCredentialsAccessTokenRetriever.formatRequestBody("  ");
         assertEquals(expected, actual);
+    }
+
+    @ParameterizedTest
+    @MethodSource("urlencodeHeaderSupplier")
+    public void testUrlencodeHeader(Map<String, Object> configs, boolean expectedValue) {
+        ConfigurationUtils cu = new ConfigurationUtils(configs, OAUTHBEARER_MECHANISM);
+        boolean actualValue = ClientCredentialsAccessTokenRetriever.validateUrlencodeHeader(cu);
+        assertEquals(expectedValue, actualValue);
+    }
+
+    private static Stream<Arguments> urlencodeHeaderSupplier() {
+        return Stream.of(
+            Arguments.of(Collections.emptyMap(), DEFAULT_SASL_OAUTHBEARER_HEADER_URLENCODE),
+            Arguments.of(Collections.singletonMap(SASL_OAUTHBEARER_HEADER_URLENCODE, null), DEFAULT_SASL_OAUTHBEARER_HEADER_URLENCODE),
+            Arguments.of(Collections.singletonMap(SASL_OAUTHBEARER_HEADER_URLENCODE, true), true),
+            Arguments.of(Collections.singletonMap(SASL_OAUTHBEARER_HEADER_URLENCODE, false), false)
+        );
     }
 
     private void assertAuthorizationHeader(String clientId, String clientSecret, boolean urlencode, String expected) {
