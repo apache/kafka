@@ -137,7 +137,7 @@ public class CoordinatorRuntimeMetricsImplTest {
         Metrics metrics = new Metrics(time);
 
         CoordinatorRuntimeMetricsImpl runtimeMetrics = new CoordinatorRuntimeMetricsImpl(metrics, METRICS_GROUP);
-        IntStream.range(0, 3).forEach(i -> runtimeMetrics.recordThreadIdleTime((i + 1) * 1000L));
+        IntStream.range(0, 3).forEach(i -> runtimeMetrics.recordThreadIdleTime((i + 1) * 1000.0));
 
         org.apache.kafka.common.MetricName metricName = kafkaMetricName(metrics, "thread-idle-ratio-avg");
         KafkaMetric metric = metrics.metrics().get(metricName);

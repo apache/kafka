@@ -81,7 +81,7 @@ import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.TopicsImage;
 import org.apache.kafka.server.record.BrokerCompressionType;
 import org.apache.kafka.server.share.persister.DefaultStatePersister;
-import org.apache.kafka.server.share.persister.NoOpShareStatePersister;
+import org.apache.kafka.server.share.persister.NoOpStatePersister;
 import org.apache.kafka.server.share.persister.PartitionFactory;
 import org.apache.kafka.server.share.persister.Persister;
 import org.apache.kafka.server.share.persister.ReadShareGroupStateSummaryParameters;
@@ -1915,7 +1915,7 @@ public class GroupCoordinatorServiceTest {
             Duration.ofMillis(100)
         );
 
-        assertFutureThrows(future, CoordinatorNotAvailableException.class);
+        assertFutureThrows(CoordinatorNotAvailableException.class, future);
     }
 
     @Test
@@ -1935,7 +1935,7 @@ public class GroupCoordinatorServiceTest {
             Duration.ofMillis(100)
         );
 
-        assertFutureThrows(future, IllegalStateException.class);
+        assertFutureThrows(IllegalStateException.class, future);
     }
 
     @Test
@@ -2202,15 +2202,16 @@ public class GroupCoordinatorServiceTest {
         service.startup(() -> 1);
 
         int partition = 1;
-        DescribeShareGroupOffsetsRequestData requestData = new DescribeShareGroupOffsetsRequestData()
+        DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup requestData = new DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup()
             .setGroupId("share-group-id")
             .setTopics(List.of(new DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestTopic()
                 .setTopicName(TOPIC_NAME)
                 .setPartitions(List.of(partition))
             ));
 
-        DescribeShareGroupOffsetsResponseData responseData = new DescribeShareGroupOffsetsResponseData()
-            .setResponses(
+        DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup responseData = new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup()
+            .setGroupId("share-group-id")
+            .setTopics(
                 List.of(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic()
                     .setTopicName(TOPIC_NAME)
                     .setTopicId(TOPIC_ID)
@@ -2218,11 +2219,10 @@ public class GroupCoordinatorServiceTest {
                         .setPartitionIndex(partition)
                         .setStartOffset(PartitionFactory.UNINITIALIZED_START_OFFSET)
                         .setErrorCode(PartitionFactory.DEFAULT_ERROR_CODE)
-                        .setErrorMessage(PartitionFactory.DEFAULT_ERR_MESSAGE)))
-                )
+                        .setErrorMessage(PartitionFactory.DEFAULT_ERR_MESSAGE))))
             );
 
-        CompletableFuture<DescribeShareGroupOffsetsResponseData> future =
+        CompletableFuture<DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup> future =
             service.describeShareGroupOffsets(requestContext(ApiKeys.DESCRIBE_SHARE_GROUP_OFFSETS), requestData);
 
         assertEquals(responseData, future.get());
@@ -2240,7 +2240,7 @@ public class GroupCoordinatorServiceTest {
         service.startup(() -> 1);
 
         int partition = 1;
-        DescribeShareGroupOffsetsRequestData requestData = new DescribeShareGroupOffsetsRequestData()
+        DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup requestData = new DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup()
             .setGroupId("share-group-id")
             .setTopics(List.of(new DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestTopic()
                 .setTopicName(TOPIC_NAME)
@@ -2254,8 +2254,9 @@ public class GroupCoordinatorServiceTest {
                     .setPartitions(List.of(new ReadShareGroupStateSummaryRequestData.PartitionData()
                         .setPartition(partition)))));
 
-        DescribeShareGroupOffsetsResponseData responseData = new DescribeShareGroupOffsetsResponseData()
-            .setResponses(
+        DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup responseData = new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup()
+            .setGroupId("share-group-id")
+            .setTopics(
                 List.of(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic()
                     .setTopicName(TOPIC_NAME)
                     .setTopicId(TOPIC_ID)
@@ -2263,8 +2264,7 @@ public class GroupCoordinatorServiceTest {
                         .setPartitionIndex(partition)
                         .setStartOffset(21)
                         .setErrorCode(Errors.NONE.code())
-                        .setErrorMessage(Errors.NONE.message())))
-                )
+                        .setErrorMessage(Errors.NONE.message()))))
             );
 
         ReadShareGroupStateSummaryResponseData readShareGroupStateSummaryResponseData = new ReadShareGroupStateSummaryResponseData()
@@ -2286,7 +2286,43 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.eq(readShareGroupStateSummaryParameters)
             )).thenReturn(CompletableFuture.completedFuture(readShareGroupStateSummaryResult));
 
-        CompletableFuture<DescribeShareGroupOffsetsResponseData> future =
+        CompletableFuture<DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup> future =
+            service.describeShareGroupOffsets(requestContext(ApiKeys.DESCRIBE_SHARE_GROUP_OFFSETS), requestData);
+
+        assertEquals(responseData, future.get());
+    }
+
+    @Test
+    public void testDescribeShareGroupOffsetsNonexistentTopicWithDefaultPersister() throws InterruptedException, ExecutionException {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        Persister persister = mock(DefaultStatePersister.class);
+        GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
+            .setConfig(createConfig())
+            .setRuntime(runtime)
+            .setPersister(persister)
+            .build(true);
+        service.startup(() -> 1);
+
+        int partition = 1;
+        DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup requestData = new DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup()
+            .setGroupId("share-group-id")
+            .setTopics(List.of(new DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestTopic()
+                .setTopicName("badtopic")
+                .setPartitions(List.of(partition))
+            ));
+
+        DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup responseData = new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup()
+            .setGroupId("share-group-id")
+            .setTopics(
+                List.of(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic()
+                    .setTopicName("badtopic")
+                    .setPartitions(List.of(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition()
+                        .setPartitionIndex(partition)
+                        .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
+                        .setErrorMessage(Errors.UNKNOWN_TOPIC_OR_PARTITION.message()))))
+            );
+
+        CompletableFuture<DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup> future =
             service.describeShareGroupOffsets(requestContext(ApiKeys.DESCRIBE_SHARE_GROUP_OFFSETS), requestData);
 
         assertEquals(responseData, future.get());
@@ -2304,7 +2340,7 @@ public class GroupCoordinatorServiceTest {
         service.startup(() -> 1);
 
         int partition = 1;
-        DescribeShareGroupOffsetsRequestData requestData = new DescribeShareGroupOffsetsRequestData()
+        DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup requestData = new DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup()
             .setGroupId("share-group-id")
             .setTopics(List.of(new DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestTopic()
                 .setTopicName(TOPIC_NAME)
@@ -2314,9 +2350,9 @@ public class GroupCoordinatorServiceTest {
         when(persister.readSummary(ArgumentMatchers.any()))
             .thenReturn(CompletableFuture.failedFuture(new Exception("Unable to validate read state summary request")));
 
-        CompletableFuture<DescribeShareGroupOffsetsResponseData> future =
+        CompletableFuture<DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup> future =
             service.describeShareGroupOffsets(requestContext(ApiKeys.DESCRIBE_SHARE_GROUP_OFFSETS), requestData);
-        assertFutureThrows(future, Exception.class, "Unable to validate read state summary request");
+        assertFutureThrows(Exception.class, future, "Unable to validate read state summary request");
     }
 
     @Test
@@ -2331,7 +2367,7 @@ public class GroupCoordinatorServiceTest {
         service.startup(() -> 1);
 
         int partition = 1;
-        DescribeShareGroupOffsetsRequestData requestData = new DescribeShareGroupOffsetsRequestData()
+        DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup requestData = new DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup()
             .setGroupId("share-group-id")
             .setTopics(List.of(new DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestTopic()
                 .setTopicName(TOPIC_NAME)
@@ -2341,9 +2377,9 @@ public class GroupCoordinatorServiceTest {
         when(persister.readSummary(ArgumentMatchers.any()))
             .thenReturn(CompletableFuture.completedFuture(null));
 
-        CompletableFuture<DescribeShareGroupOffsetsResponseData> future =
+        CompletableFuture<DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup> future =
             service.describeShareGroupOffsets(requestContext(ApiKeys.DESCRIBE_SHARE_GROUP_OFFSETS), requestData);
-        assertFutureThrows(future, IllegalStateException.class, "Result is null for the read state summary");
+        assertFutureThrows(IllegalStateException.class, future, "Result is null for the read state summary");
     }
 
     @Test
@@ -2358,7 +2394,7 @@ public class GroupCoordinatorServiceTest {
         service.startup(() -> 1);
 
         int partition = 1;
-        DescribeShareGroupOffsetsRequestData requestData = new DescribeShareGroupOffsetsRequestData()
+        DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup requestData = new DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup()
             .setGroupId("share-group-id")
             .setTopics(List.of(new DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestTopic()
                 .setTopicName(TOPIC_NAME)
@@ -2371,9 +2407,9 @@ public class GroupCoordinatorServiceTest {
         when(persister.readSummary(ArgumentMatchers.any()))
             .thenReturn(CompletableFuture.completedFuture(readShareGroupStateSummaryResult));
 
-        CompletableFuture<DescribeShareGroupOffsetsResponseData> future =
+        CompletableFuture<DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup> future =
             service.describeShareGroupOffsets(requestContext(ApiKeys.DESCRIBE_SHARE_GROUP_OFFSETS), requestData);
-        assertFutureThrows(future, IllegalStateException.class, "Result is null for the read state summary");
+        assertFutureThrows(IllegalStateException.class, future, "Result is null for the read state summary");
     }
 
     @Test
@@ -2385,26 +2421,19 @@ public class GroupCoordinatorServiceTest {
             .build();
 
         int partition = 1;
-        DescribeShareGroupOffsetsRequestData requestData = new DescribeShareGroupOffsetsRequestData()
+        DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup requestData = new DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup()
             .setGroupId("share-group-id")
             .setTopics(List.of(new DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestTopic()
                 .setTopicName(TOPIC_NAME)
                 .setPartitions(List.of(partition))
             ));
 
-        DescribeShareGroupOffsetsResponseData responseData = new DescribeShareGroupOffsetsResponseData()
-            .setResponses(
-                List.of(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic()
-                    .setTopicName(TOPIC_NAME)
-                    .setPartitions(List.of(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition()
-                        .setPartitionIndex(partition)
-                        .setStartOffset(0)
-                        .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
-                        .setErrorMessage(Errors.COORDINATOR_NOT_AVAILABLE.message())))
-                )
-            );
+        DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup responseData = new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup()
+            .setGroupId("share-group-id")
+            .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
+            .setErrorMessage(Errors.COORDINATOR_NOT_AVAILABLE.message());
 
-        CompletableFuture<DescribeShareGroupOffsetsResponseData> future =
+        CompletableFuture<DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup> future =
             service.describeShareGroupOffsets(requestContext(ApiKeys.DESCRIBE_SHARE_GROUP_OFFSETS), requestData);
 
         assertEquals(responseData, future.get());
@@ -2422,26 +2451,19 @@ public class GroupCoordinatorServiceTest {
         service.onNewMetadataImage(null, null);
 
         int partition = 1;
-        DescribeShareGroupOffsetsRequestData requestData = new DescribeShareGroupOffsetsRequestData()
+        DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup requestData = new DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup()
             .setGroupId("share-group-id")
             .setTopics(List.of(new DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestTopic()
                 .setTopicName(TOPIC_NAME)
                 .setPartitions(List.of(partition))
             ));
 
-        DescribeShareGroupOffsetsResponseData responseData = new DescribeShareGroupOffsetsResponseData()
-            .setResponses(
-                List.of(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic()
-                    .setTopicName(TOPIC_NAME)
-                    .setPartitions(List.of(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition()
-                        .setPartitionIndex(partition)
-                        .setStartOffset(0)
-                        .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
-                        .setErrorMessage(Errors.UNKNOWN_TOPIC_OR_PARTITION.message())))
-                )
-            );
+        DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup responseData = new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup()
+            .setGroupId("share-group-id")
+            .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
+            .setErrorMessage(Errors.COORDINATOR_NOT_AVAILABLE.message());
 
-        CompletableFuture<DescribeShareGroupOffsetsResponseData> future =
+        CompletableFuture<DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup> future =
             service.describeShareGroupOffsets(requestContext(ApiKeys.DESCRIBE_SHARE_GROUP_OFFSETS), requestData);
 
         assertEquals(responseData, future.get());
@@ -2458,7 +2480,7 @@ public class GroupCoordinatorServiceTest {
         private GroupCoordinatorConfig config;
         private CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime;
         private GroupCoordinatorMetrics metrics = new GroupCoordinatorMetrics();
-        private Persister persister = new NoOpShareStatePersister();
+        private Persister persister = new NoOpStatePersister();
         private MetadataImage metadataImage = null;
 
         GroupCoordinatorService build() {

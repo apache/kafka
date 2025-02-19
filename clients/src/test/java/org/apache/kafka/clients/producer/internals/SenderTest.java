@@ -2534,15 +2534,15 @@ public class SenderTest {
 
             Integer index = futureEntry.getKey();
             if (index == 0 || index == 2) {
-                InvalidRecordException exception = TestUtils.assertFutureThrows(future, InvalidRecordException.class);
+                InvalidRecordException exception = TestUtils.assertFutureThrows(InvalidRecordException.class, future);
                 assertInstanceOf(InvalidRecordException.class, exception);
                 assertEquals(index.toString(), exception.getMessage());
             } else if (index == 3) {
-                InvalidRecordException exception = TestUtils.assertFutureThrows(future, InvalidRecordException.class);
+                InvalidRecordException exception = TestUtils.assertFutureThrows(InvalidRecordException.class, future);
                 assertInstanceOf(InvalidRecordException.class, exception);
                 assertEquals(Errors.INVALID_RECORD.message(), exception.getMessage());
             } else {
-                KafkaException exception = TestUtils.assertFutureThrows(future, KafkaException.class);
+                KafkaException exception = TestUtils.assertFutureThrows(KafkaException.class, future);
                 assertEquals(KafkaException.class, exception.getClass());
             }
         }
@@ -2938,7 +2938,7 @@ public class SenderTest {
         // drain all the unsent batches with a TransactionAbortedException.
         sender.runOnce();
         // Now attempt to fetch the result for the record.
-        TestUtils.assertFutureThrows(metadata, TransactionAbortedException.class);
+        TestUtils.assertFutureThrows(TransactionAbortedException.class, metadata);
     }
 
     @Test
