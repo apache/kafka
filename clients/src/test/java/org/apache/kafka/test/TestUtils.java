@@ -596,6 +596,8 @@ public class TestUtils {
             fail("Should throw expected exception " + exceptionCauseClass.getSimpleName() + " but nothing was thrown.");
         } catch (InterruptedException | ExecutionException | CancellationException e) {
             Throwable cause = e instanceof ExecutionException ? e.getCause() : e;
+            // Enable strict type checking.
+            // This ensures we're testing for the exact exception type, not its subclasses.
             assertEquals(
                 exceptionCauseClass, 
                 cause.getClass(), 
