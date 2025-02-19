@@ -1620,11 +1620,14 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             describe_output = self.describe_topic(topic, node, offline_nodes=offline_nodes)
             self.logger.debug(describe_output)
             requested_partition_line = self._describe_topic_line_for_partition(partition, describe_output)
-            # e.g. Topic: test_topic	Partition: 0	Leader: 3	Replicas: 3,2	Isr: 3,2
+            # e.g. Topic: test_topic	Partition: 0	Leader: 3	Replicas: 3,2	Isr: 3,2    Elr: 4  LastKnownElr: 5
             if not requested_partition_line:
                 raise Exception("Error finding partition state for topic %s and partition %d." % (topic, partition))
             isr_csv = requested_partition_line.split()[9] # 10th column from above
-            isr_idx_list = [int(i) for i in isr_csv.split(",")]
+            if isr_csv == "Elr:":
+                isr_idx_list = []
+            else:
+                isr_idx_list = [int(i) for i in isr_csv.split(",")]
 
         self.logger.info("Isr for topic %s and partition %d is now: %s" % (topic, partition, isr_idx_list))
         return isr_idx_list
