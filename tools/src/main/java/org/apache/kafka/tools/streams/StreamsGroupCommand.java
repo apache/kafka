@@ -309,7 +309,7 @@ public class StreamsGroupCommand {
             Map<TopicPartition, OffsetsAndLag> output = new HashMap<>();
             for (Map.Entry<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> tp : earliestResult.entrySet()) {
                 final Optional<Long> currentOffset = committedOffsets.containsKey(tp.getKey()) ? Optional.of(committedOffsets.get(tp.getKey()).offset()) : Optional.empty();
-                final long lag = currentOffset.map(aLong -> latestResult.get(tp.getKey()).offset() - aLong).orElseGet(() -> latestResult.get(tp.getKey()).offset() - earliestResult.get(tp.getKey()).offset());
+                final long lag = currentOffset.map(current -> latestResult.get(tp.getKey()).offset() - current).orElseGet(() -> latestResult.get(tp.getKey()).offset() - earliestResult.get(tp.getKey()).offset());
                 output.put(tp.getKey(),
                     new OffsetsAndLag(
                         currentOffset,
