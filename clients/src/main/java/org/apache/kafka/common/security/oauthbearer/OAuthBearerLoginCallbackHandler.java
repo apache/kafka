@@ -14,12 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.common.security.oauthbearer;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.auth.SaslExtensions;
 import org.apache.kafka.common.security.auth.SaslExtensionsCallback;
@@ -50,9 +51,16 @@ import javax.security.sasl.SaslException;
  * <p>
  * <code>OAuthBearerLoginCallbackHandler</code> is an {@link AuthenticateCallbackHandler} that
  * accepts {@link OAuthBearerTokenCallback} and {@link SaslExtensionsCallback} callbacks to
- * perform the steps to request a JWT from an OAuth/OIDC provider using the
- * <code>client_credentials</code>. This grant type is commonly used for non-interactive
- * "service accounts" where there is no user available to interactively supply credentials.
+ * perform the steps to request a JWT from an OAuth/OIDC provider. The OAuth grant types that
+ * are supported include:
+ *
+ * <ul>
+ *     <li>client_credentials</li>
+ *     <li>jwt-bearer</li>
+ * </ul>
+ *
+ * These grant types are commonly used for non-interactive "service accounts" where there is
+ * no user available to interactively supply credentials.
  * </p>
  *
  * <p>
@@ -91,24 +99,40 @@ import javax.security.sasl.SaslException;
  * </p>
  *
  * <p>
- * The Kafka configuration must also include JAAS configuration which includes the following
- * OAuth-specific options:
+ * The Kafka configuration must also include JAAS configuration which includes OAuth-specific options.
+ * For <code>client_credentials</code>, use:
  *
  * <ul>
  *     <li><code>clientId</code>OAuth client ID (required)</li>
  *     <li><code>clientSecret</code>OAuth client secret (required)</li>
  *     <li><code>scope</code>OAuth scope (optional)</li>
  * </ul>
+ *
+ * For the <code>jwt-bearer</code> grant type, use:
+ *
+ * <ul>
+ *     <li><code>XXXXXXXXXXXX</code>XXXXXXXXXXXX</li>
+ *     <li><code>XXXXXXXXXXXX</code>XXXXXXXXXXXX</li>
+ *     <li><code>XXXXXXXXXXXX</code>XXXXXXXXXXXX</li>
+ *     <li><code>XXXXXXXXXXXX</code>XXXXXXXXXXXX</li>
+ *     <li><code>XXXXXXXXXXXX</code>XXXXXXXXXXXX</li>
+ *     <li><code>XXXXXXXXXXXX</code>XXXXXXXXXXXX</li>
+ *     <li><code>XXXXXXXXXXXX</code>XXXXXXXXXXXX</li>
+ *     <li><code>XXXXXXXXXXXX</code>XXXXXXXXXXXX</li>
+ *     <li><code>XXXXXXXXXXXX</code>XXXXXXXXXXXX</li>
+ *     <li><code>XXXXXXXXXXXX</code>XXXXXXXXXXXX</li>
+ * </ul>
  * </p>
  *
  * <p>
  * The JAAS configuration can also include any SSL options that are needed. The configuration
  * options are the same as those specified by the configuration in
- * {@link org.apache.kafka.common.config.SslConfigs#addClientSslSupport(ConfigDef)}.
+ * {@link SslConfigs#addClientSslSupport(ConfigDef)}.
  * </p>
  *
  * <p>
- * Here's an example of the JAAS configuration for a Kafka client:
+ * Here's an example of the JAAS configuration for a Kafka client using the
+ * <code>client_credentials</code> grant type:
  *
  * <code>
  * sasl.jaas.config=org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required \
@@ -120,15 +144,14 @@ import javax.security.sasl.SaslException;
  * </p>
  *
  * <p>
- * The configuration option
- * {@link org.apache.kafka.common.config.SaslConfigs#SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL}
+ * The configuration option {@link SaslConfigs#SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL}
  * is also required in order for the client to contact the OAuth/OIDC provider. For example:
  *
  * <code>
  * sasl.oauthbearer.token.endpoint.url=https://example.com/oauth2/v1/token
  * </code>
  *
- * Please see the OAuth/OIDC providers documentation for the token endpoint URL.
+ * Please see the OAuth/OIDC provider's documentation for the token endpoint URL.
  * </p>
  *
  * <p>
@@ -148,20 +171,19 @@ import javax.security.sasl.SaslException;
  * </ul>
  * </p>
  */
-
 public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHandler, Closeable {
 
     private static final Logger log = LoggerFactory.getLogger(OAuthBearerLoginCallbackHandler.class);
 
     private static final String EXTENSION_PREFIX = "extension_";
 
-    protected Map<String, Object> moduleOptions;
+    private Map<String, Object> moduleOptions;
+
+    private AccessTokenValidator accessTokenValidator;
+
+    private boolean isInitialized = false;
 
     protected AccessTokenRetriever accessTokenRetriever;
-
-    protected AccessTokenValidator accessTokenValidator;
-
-    protected boolean isInitialized = false;
 
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
@@ -263,16 +285,6 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
 
     protected void checkInitialized() {
         if (!isInitialized)
-            throw new IllegalStateException(String.format("To use %s, first call the configure or init method", getClass().getSimpleName()));
-    }
-
-    @SuppressWarnings("unchecked")
-    private <T> T newInstance(String configName, Class<T> defaultClazz, Map<String, ?> configs) {
-        Class<T> clazz = (Class<T>) configs.get(configName);
-
-        if (clazz == null)
-            clazz = defaultClazz;
-
-        return Utils.newInstance(clazz);
+            throw new IllegalStateException(String.format("To use %s, first call the configure method", getClass().getSimpleName()));
     }
 }

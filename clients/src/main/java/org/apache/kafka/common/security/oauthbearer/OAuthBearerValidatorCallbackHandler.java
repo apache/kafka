@@ -14,10 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.common.security.oauthbearer;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenValidator;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.DefaultAccessTokenValidator;
@@ -49,8 +50,7 @@ import javax.security.auth.login.AppConfigurationEntry;
  *
  * <p>
  * This {@link AuthenticateCallbackHandler} is enabled in the broker configuration by setting the
- * {@link org.apache.kafka.common.config.internals.BrokerSecurityConfigs#SASL_SERVER_CALLBACK_HANDLER_CLASS_CONFIG}
- * like so:
+ * {@link BrokerSecurityConfigs#SASL_SERVER_CALLBACK_HANDLER_CLASS_CONFIG} like so:
  *
  * <code>
  * listener.name.<listener name>.oauthbearer.sasl.server.callback.handler.class=org.apache.kafka.common.security.oauthbearer.OAuthBearerValidatorCallbackHandler
@@ -64,7 +64,7 @@ import javax.security.auth.login.AppConfigurationEntry;
  *
  * <p>
  * The configuration option
- * {@link org.apache.kafka.common.config.SaslConfigs#SASL_OAUTHBEARER_JWKS_ENDPOINT_URL}
+ * {@link SaslConfigs#SASL_OAUTHBEARER_JWKS_ENDPOINT_URL}
  * is also required in order to contact the OAuth/OIDC provider to retrieve the JWKS for use in
  * JWT signature validation. For example:
  *
@@ -94,14 +94,13 @@ import javax.security.auth.login.AppConfigurationEntry;
  * </ul>
  * </p>
  */
-
 public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallbackHandler, Closeable {
 
     private static final Logger log = LoggerFactory.getLogger(OAuthBearerValidatorCallbackHandler.class);
 
-    protected AccessTokenValidator accessTokenValidator;
+    private AccessTokenValidator accessTokenValidator;
 
-    protected boolean isInitialized = false;
+    private boolean isInitialized = false;
 
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
@@ -113,9 +112,9 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
     }
 
     void configure(AccessTokenValidator accessTokenValidator,
-                          Map<String, ?> configs,
-                          String saslMechanism,
-                          List<AppConfigurationEntry> jaasConfigEntries) {
+                   Map<String, ?> configs,
+                   String saslMechanism,
+                   List<AppConfigurationEntry> jaasConfigEntries) {
         this.accessTokenValidator = accessTokenValidator;
         this.accessTokenValidator.configure(configs, saslMechanism, jaasConfigEntries);
         this.isInitialized = true;
@@ -144,10 +143,8 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
     private void handleValidatorCallback(OAuthBearerValidatorCallback callback) {
         checkInitialized();
 
-        OAuthBearerToken token;
-
         try {
-            token = accessTokenValidator.validate(callback.tokenValue());
+            OAuthBearerToken token = accessTokenValidator.validate(callback.tokenValue());
             callback.token(token);
         } catch (ValidateException e) {
             log.warn(e.getMessage(), e);
@@ -163,6 +160,6 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
 
     private void checkInitialized() {
         if (!isInitialized)
-            throw new IllegalStateException(String.format("To use %s, first call the configure or init method", getClass().getSimpleName()));
+            throw new IllegalStateException(String.format("To use %s, first call the configure method", getClass().getSimpleName()));
     }
 }
