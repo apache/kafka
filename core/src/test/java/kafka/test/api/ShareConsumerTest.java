@@ -656,6 +656,43 @@ public class ShareConsumerTest {
         }
     }
 
+    @ParameterizedTest(name = "{displayName}.persister={0}")
+    @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
+    public void testImplicitModeNotTriggeredByPollWhenNoAcksToSend(String persister) throws InterruptedException {
+        alterShareAutoOffsetReset("group1", "earliest");
+        try (KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer());
+             KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(), "group1")) {
+
+            shareConsumer.subscribe(Collections.singleton(tp.topic()));
+
+            Map<TopicPartition, Set<Long>> partitionOffsetsMap1 = new HashMap<>();
+            Map<TopicPartition, Exception> partitionExceptionMap1 = new HashMap<>();
+            shareConsumer.setAcknowledgementCommitCallback(new TestableAcknowledgementCommitCallback(partitionOffsetsMap1, partitionExceptionMap1));
+
+            // The acknowledgement mode moves to PENDING from UNKNOWN.
+            ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(5000));
+            assertEquals(0, records.count());
+            shareConsumer.commitAsync();
+
+            ProducerRecord<byte[], byte[]> record1 = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
+            producer.send(record1);
+            producer.flush();
+
+            // The acknowledgement mode remains in PENDING because no records were returned.
+            records = shareConsumer.poll(Duration.ofMillis(5000));
+            assertEquals(1, records.count());
+
+            // The acknowledgement mode now moves to EXPLICIT.
+            shareConsumer.acknowledge(records.iterator().next());
+            shareConsumer.commitAsync();
+
+            TestUtils.waitForCondition(() -> {
+                shareConsumer.poll(Duration.ofMillis(500));
+                return partitionExceptionMap1.containsKey(tp);
+            }, 30000, 100L, () -> "Didn't receive call to callback");
+        }
+    }
+
     @Flaky("KAFKA-18033")
     @ParameterizedTest(name = "{displayName}.persister={0}")
     @ValueSource(strings = {NO_OP_PERSISTER, DEFAULT_STATE_PERSISTER})
