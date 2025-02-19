@@ -72,7 +72,7 @@ public class AbstractConfig {
             + "such as for externalized secrets.";
 
     private static final String CONFIG_PROVIDERS_PARAM = ".param.";
-    
+
     /**
      * Construct a configuration with a ConfigDef and the configuration properties, which can include properties
      * for zero or more {@link ConfigProvider} that will be used to resolve variables in configuration property
