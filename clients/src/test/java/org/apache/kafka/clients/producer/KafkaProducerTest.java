@@ -1294,7 +1294,7 @@ public class KafkaProducerTest {
                 "Timed out while waiting for expected `InitProducerId` request to be sent");
 
             time.sleep(maxBlockMs);
-            TestUtils.assertFutureThrows(future, TimeoutException.class);
+            TestUtils.assertFutureThrows(TimeoutException.class, future);
 
             client.respond(initProducerIdResponse(1L, (short) 5, Errors.NONE));
 
@@ -1532,7 +1532,7 @@ public class KafkaProducerTest {
 
             client.prepareResponse(endTxnResponse(Errors.NONE));
             producer.beginTransaction();
-            TestUtils.assertFutureThrows(producer.send(largeRecord), RecordTooLargeException.class);
+            TestUtils.assertFutureThrows(RecordTooLargeException.class, producer.send(largeRecord));
             assertThrows(KafkaException.class, producer::commitTransaction);
         }
     }
@@ -1569,7 +1569,7 @@ public class KafkaProducerTest {
             producer.initTransactions();
             producer.beginTransaction();
 
-            TestUtils.assertFutureThrows(producer.send(record), TimeoutException.class);
+            TestUtils.assertFutureThrows(TimeoutException.class, producer.send(record));
             assertThrows(KafkaException.class, producer::commitTransaction);
         }
     }
@@ -1606,7 +1606,7 @@ public class KafkaProducerTest {
             producer.initTransactions();
             producer.beginTransaction();
 
-            TestUtils.assertFutureThrows(producer.send(record), TimeoutException.class);
+            TestUtils.assertFutureThrows(TimeoutException.class, producer.send(record));
             assertThrows(KafkaException.class, producer::commitTransaction);
         }
     }
@@ -1645,7 +1645,7 @@ public class KafkaProducerTest {
             producer.initTransactions();
             producer.beginTransaction();
 
-            TestUtils.assertFutureThrows(producer.send(record), InvalidTopicException.class);
+            TestUtils.assertFutureThrows(InvalidTopicException.class, producer.send(record));
             assertThrows(KafkaException.class, producer::commitTransaction);
         }
     }
@@ -2080,7 +2080,7 @@ public class KafkaProducerTest {
 
         assertEquals(Collections.singleton(invalidTopicName),
                 metadata.fetch().invalidTopics(), "Cluster has incorrect invalid topic list.");
-        TestUtils.assertFutureThrows(future, InvalidTopicException.class);
+        TestUtils.assertFutureThrows(InvalidTopicException.class, future);
 
         producer.close(Duration.ofMillis(0));
     }

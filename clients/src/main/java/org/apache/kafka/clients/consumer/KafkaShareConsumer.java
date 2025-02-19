@@ -403,11 +403,11 @@ public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
     public KafkaShareConsumer(Map<String, Object> configs,
                               Deserializer<K> keyDeserializer,
                               Deserializer<V> valueDeserializer) {
-        this(new ConsumerConfig(ConsumerConfig.appendDeserializerToConfig(configs, keyDeserializer, valueDeserializer)),
+        this(new ShareConsumerConfig(ShareConsumerConfig.appendDeserializerToConfig(configs, keyDeserializer, valueDeserializer)),
                 keyDeserializer, valueDeserializer);
     }
 
-    KafkaShareConsumer(ConsumerConfig config,
+    KafkaShareConsumer(ShareConsumerConfig config,
                               Deserializer<K> keyDeserializer,
                               Deserializer<V> valueDeserializer) {
         delegate = CREATOR.create(config, keyDeserializer, valueDeserializer);
@@ -416,7 +416,7 @@ public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
     KafkaShareConsumer(final LogContext logContext,
                        final String clientId,
                        final String groupId,
-                       final ConsumerConfig config,
+                       final ShareConsumerConfig config,
                        final Deserializer<K> keyDeserializer,
                        final Deserializer<V> valueDeserializer,
                        final Time time,

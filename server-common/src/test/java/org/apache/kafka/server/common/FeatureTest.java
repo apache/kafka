@@ -42,7 +42,7 @@ public class FeatureTest {
         "UNIT_TEST_VERSION_7"}, mode = EnumSource.Mode.EXCLUDE)
     public void testV0SupportedInEarliestMV(Feature feature) {
         assertTrue(feature.featureVersions().length >= 1);
-        assertEquals(MetadataVersion.MINIMUM_KRAFT_VERSION,
+        assertEquals(MetadataVersion.MINIMUM_VERSION,
             feature.featureVersions()[0].bootstrapMetadataVersion());
     }
 
@@ -88,7 +88,7 @@ public class FeatureTest {
             Map<String, Short> deps = new HashMap<>();
             deps.putAll(featureImpl.dependencies());
             if (!deps.containsKey(MetadataVersion.FEATURE_NAME)) {
-                deps.put(MetadataVersion.FEATURE_NAME, MetadataVersion.MINIMUM_BOOTSTRAP_VERSION.featureLevel());
+                deps.put(MetadataVersion.FEATURE_NAME, MetadataVersion.MINIMUM_VERSION.featureLevel());
             }
 
             // Ensure that the feature is valid given the typical metadataVersionMapping and the dependencies.
@@ -111,7 +111,7 @@ public class FeatureTest {
         assertThrows(IllegalArgumentException.class,
             () -> Feature.validateVersion(
                 TestFeatureVersion.TEST_1,
-                Collections.singletonMap(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_0_IV1.featureLevel())
+                Collections.singletonMap(MetadataVersion.FEATURE_NAME, MetadataVersionTestUtils.IBP_3_0_IV1_FEATURE_LEVEL)
             )
         );
 
@@ -276,18 +276,19 @@ public class FeatureTest {
     @Test
     public void testValidateWithMVDependencyNotProductionReady() {
         if (MetadataVersion.latestProduction().isLessThan(MetadataVersion.latestTesting())) {
-            assertThrows(IllegalArgumentException.class, () ->
-                    validateDefaultValueAndLatestProductionValue(Feature.UNIT_TEST_VERSION_6),
-                "Feature UNIT_TEST_VERSION_6 has latest production FeatureVersion UT_FV6_1 with " +
-                    "MV dependency 4.0-IV3 that is not production ready. (MV latest production: 4.0-IV0)");
+            IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
+                validateDefaultValueAndLatestProductionValue(Feature.UNIT_TEST_VERSION_6));
+            assertEquals("Feature UNIT_TEST_VERSION_6 has latest production FeatureVersion UT_FV6_1 with MV dependency "
+                    + MetadataVersion.latestTesting() + " that is not production ready. (MV latest production: " + MetadataVersion.latestProduction() + ")",
+                exception.getMessage());
         }
     }
 
     @Test
     public void testValidateWithMVDependencyAheadOfBootstrapMV() {
-        assertThrows(IllegalArgumentException.class, () ->
-                validateDefaultValueAndLatestProductionValue(Feature.UNIT_TEST_VERSION_7),
-            "Feature UNIT_TEST_VERSION_7 has default FeatureVersion UT_FV7_0 when MV=3.0-IV1 with " +
-                "MV dependency 3.7-IV0 that is behind its bootstrap MV 3.0-IV1.");
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
+            validateDefaultValueAndLatestProductionValue(Feature.UNIT_TEST_VERSION_7));
+        assertEquals("Feature UNIT_TEST_VERSION_7 has default FeatureVersion UT_FV7_0 when MV=" + MetadataVersion.MINIMUM_VERSION
+            + " with MV dependency 3.7-IV0 that is behind its bootstrap MV " + MetadataVersion.MINIMUM_VERSION + ".", exception.getMessage());
     }
 }

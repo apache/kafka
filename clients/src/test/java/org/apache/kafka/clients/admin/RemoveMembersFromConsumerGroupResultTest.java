@@ -62,7 +62,7 @@ public class RemoveMembersFromConsumerGroupResultTest {
         memberFutures.completeExceptionally(Errors.GROUP_AUTHORIZATION_FAILED.exception());
         RemoveMembersFromConsumerGroupResult topLevelErrorResult =
             new RemoveMembersFromConsumerGroupResult(memberFutures, membersToRemove);
-        TestUtils.assertFutureThrows(topLevelErrorResult.all(), GroupAuthorizationException.class);
+        TestUtils.assertFutureThrows(GroupAuthorizationException.class, topLevelErrorResult.all());
     }
 
     @Test
@@ -78,9 +78,9 @@ public class RemoveMembersFromConsumerGroupResultTest {
         RemoveMembersFromConsumerGroupResult missingMemberResult =
             new RemoveMembersFromConsumerGroupResult(memberFutures, membersToRemove);
 
-        TestUtils.assertFutureThrows(missingMemberResult.all(), IllegalArgumentException.class);
+        TestUtils.assertFutureThrows(IllegalArgumentException.class, missingMemberResult.all());
         assertNull(missingMemberResult.memberResult(instanceOne).get());
-        TestUtils.assertFutureThrows(missingMemberResult.memberResult(instanceTwo), IllegalArgumentException.class);
+        TestUtils.assertFutureThrows(IllegalArgumentException.class, missingMemberResult.memberResult(instanceTwo));
     }
 
     @Test
@@ -111,9 +111,9 @@ public class RemoveMembersFromConsumerGroupResultTest {
         RemoveMembersFromConsumerGroupResult memberLevelErrorResult =
             new RemoveMembersFromConsumerGroupResult(memberFutures, membersToRemove);
 
-        TestUtils.assertFutureThrows(memberLevelErrorResult.all(), FencedInstanceIdException.class);
+        TestUtils.assertFutureThrows(FencedInstanceIdException.class, memberLevelErrorResult.all());
         assertNull(memberLevelErrorResult.memberResult(instanceOne).get());
-        TestUtils.assertFutureThrows(memberLevelErrorResult.memberResult(instanceTwo), FencedInstanceIdException.class);
+        TestUtils.assertFutureThrows(FencedInstanceIdException.class, memberLevelErrorResult.memberResult(instanceTwo));
         return memberLevelErrorResult;
     }
 }
