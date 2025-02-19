@@ -659,7 +659,7 @@ public class SharePartitionManager implements AutoCloseable {
         // Add the share fetch to the delayed share fetch purgatory to process the fetch request.
         // The request will be added irrespective of whether the share partition is initialized or not.
         // Once the share partition is initialized, the delayed share fetch will be completed.
-        addDelayedShareFetch(new DelayedShareFetch(shareFetch, replicaManager, fencedSharePartitionHandler(), sharePartitions), delayedShareFetchWatchKeys);
+        addDelayedShareFetch(new DelayedShareFetch(shareFetch, replicaManager, fencedSharePartitionHandler(), sharePartitions, shareGroupMetrics, time), delayedShareFetchWatchKeys);
     }
 
     private SharePartition getOrCreateSharePartition(SharePartitionKey sharePartitionKey) {
