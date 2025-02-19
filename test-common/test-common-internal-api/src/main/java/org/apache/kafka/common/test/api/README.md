@@ -104,7 +104,7 @@ For each generated invocation:
 * Non-static `@AfterEach` methods are called
 * Static `@AfterAll` methods are called
 
-`@BeforeEach` methods give an opportunity to setup additional test dependencies before the cluster is started. 
+`@BeforeEach` methods give an opportunity to set up additional test dependencies before the cluster is started. 
 
 # Dependency Injection
 
@@ -115,9 +115,9 @@ previously garnered from the test hierarchy.
 
 In order to inject the object, simply add it as a parameter to your test class, `@BeforeEach` method, or test method.
 
-| Injection | Class | BeforeEach | Test | Notes
-| --- | --- | --- | --- | --- |
-| ClusterInstance | yes* | no | yes | Injectable at class level for convenience, can only be accessed inside test |
+| Injection | Class           | BeforeEach | Test | Notes                                                                       
+| --- |-----------------|------------| --- |-----------------------------------------------------------------------------|
+| ClusterInstance | yes (see Notes) | yes        | yes | Injectable at class level for convenience, can only be accessed inside test |
 
 # Gotchas
 * Test methods annotated with JUnit's `@Test` will still be run, but no cluster will be started and no dependency 
