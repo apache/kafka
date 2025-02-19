@@ -49,7 +49,7 @@ import org.apache.kafka.server.config.ConfigType
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.{ClientMetricsReceiverPlugin, KafkaYammerMetrics}
 import org.apache.kafka.server.network.{EndpointReadyFutures, KafkaAuthorizerServerInfo}
-import org.apache.kafka.server.share.persister.{DefaultStatePersister, NoOpShareStatePersister, Persister, PersisterStateManager}
+import org.apache.kafka.server.share.persister.{DefaultStatePersister, NoOpStatePersister, Persister, PersisterStateManager}
 import org.apache.kafka.server.share.session.ShareSessionCache
 import org.apache.kafka.server.util.timer.{SystemTimer, SystemTimerReaper}
 import org.apache.kafka.server.util.{Deadline, FutureUtils, KafkaScheduler}
@@ -707,18 +707,17 @@ class BrokerServer(
               )
             )
           )
-      } else if (klass.getName.equals(classOf[NoOpShareStatePersister].getName)) {
-        info("Using no op persister")
-        new NoOpShareStatePersister()
+      } else if (klass.getName.equals(classOf[NoOpStatePersister].getName)) {
+        info("Using no-op persister")
+        new NoOpStatePersister()
       } else {
-        error("Unknown persister specified. Persister is only factory pluggable!")
-        throw new IllegalArgumentException("Unknown persiser specified " + config.shareGroupConfig.shareGroupPersisterClassName)
+        error("Unknown persister specified. Persister is only factory-pluggable!")
+        throw new IllegalArgumentException("Unknown persister specified " + config.shareGroupConfig.shareGroupPersisterClassName)
       }
     } else {
-      // in case share coordinator not enabled or
-      // persister class name deliberately empty (key=)
-      info("Using no op persister")
-      new NoOpShareStatePersister()
+      // in case share coordinator not enabled or persister class name deliberately empty (key=)
+      info("Using no-op persister")
+      new NoOpStatePersister()
     }
   }
 

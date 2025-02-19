@@ -52,17 +52,13 @@
         </li>
         <li>
             Apache Kafka 4.0 ships with a brand-new group coordinator implementation (See <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=217387038#KIP848:TheNextGenerationoftheConsumerRebalanceProtocol-GroupCoordinator">here</a>.
-            Functionally speaking, it implements all the same APIs. However, the group coordinator runs in its own dedicated threads.
-            The number of threads can be defined with the <code>group.coordinator.threads</code> configuration. It defaults to 1 and
-            must certainly be adjusted for production deployments.
+            Functionally speaking, it implements all the same APIs. There are reasonable defaults, but the behavior of the new
+            group coordinator can be tuned by setting the configurations with prefix <code>group.coordinator</code>.
         </li>
         <li>
             The Next Generation of the Consumer Rebalance Protocol (<a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-848%3A+The+Next+Generation+of+the+Consumer+Rebalance+Protocol">KIP-848</a>)
             is now Generally Available (GA) in Apache Kafka 4.0. The protocol is automatically enabled on the server when the upgrade to 4.0 is finalized.
-            Note that once the new protocol is used by consumer groups, care must be taken to downgrade to a previous version. Downgrading
-            to version 3.4.1 or above is safe. Downgrading to an earlier version requires to ensure that all the records in the
-            <code>__consumer_offsets</code> are removed because those versions cannot handle them. This can be achieved by deleting all the
-            consumer groups using the new protocol, disabling the new protocol and letting compaction remove the tombstones.
+            Note that once the new protocol is used by consumer groups, the cluster can only downgrade to version 3.4.1 or newer.
             Check <a href="/{{version}}/documentation.html#consumer_rebalance_protocol">here</a> for details.
         </li>
         <li>

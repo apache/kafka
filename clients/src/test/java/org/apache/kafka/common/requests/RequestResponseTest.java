@@ -108,6 +108,8 @@ import org.apache.kafka.common.message.DeleteGroupsResponseData.DeletableGroupRe
 import org.apache.kafka.common.message.DeleteGroupsResponseData.DeletableGroupResultCollection;
 import org.apache.kafka.common.message.DeleteRecordsRequestData;
 import org.apache.kafka.common.message.DeleteRecordsResponseData;
+import org.apache.kafka.common.message.DeleteShareGroupOffsetsRequestData;
+import org.apache.kafka.common.message.DeleteShareGroupOffsetsResponseData;
 import org.apache.kafka.common.message.DeleteShareGroupStateRequestData;
 import org.apache.kafka.common.message.DeleteShareGroupStateResponseData;
 import org.apache.kafka.common.message.DeleteTopicsRequestData;
@@ -1042,6 +1044,7 @@ public class RequestResponseTest {
             case STREAMS_GROUP_DESCRIBE: return createStreamsGroupDescribeRequest(version);
             case DESCRIBE_SHARE_GROUP_OFFSETS: return createDescribeShareGroupOffsetsRequest(version);
             case ALTER_SHARE_GROUP_OFFSETS: return createAlterShareGroupOffsetsRequest(version);
+            case DELETE_SHARE_GROUP_OFFSETS: return createDeleteShareGroupOffsetsRequest(version);
             default: throw new IllegalArgumentException("Unknown API key " + apikey);
         }
     }
@@ -1136,6 +1139,7 @@ public class RequestResponseTest {
             case STREAMS_GROUP_DESCRIBE: return createStreamsGroupDescribeResponse();
             case DESCRIBE_SHARE_GROUP_OFFSETS: return createDescribeShareGroupOffsetsResponse();
             case ALTER_SHARE_GROUP_OFFSETS: return createAlterShareGroupOffsetsResponse();
+            case DELETE_SHARE_GROUP_OFFSETS: return createDeleteShareGroupOffsetsResponse();
             default: throw new IllegalArgumentException("Unknown API key " + apikey);
         }
     }
@@ -3727,6 +3731,15 @@ public class RequestResponseTest {
         return new AlterShareGroupOffsetsRequest.Builder(data).build(version);
     }
 
+    private DeleteShareGroupOffsetsRequest createDeleteShareGroupOffsetsRequest(short version) {
+        DeleteShareGroupOffsetsRequestData data = new DeleteShareGroupOffsetsRequestData()
+            .setGroupId("group")
+            .setTopics(List.of(new DeleteShareGroupOffsetsRequestData.DeleteShareGroupOffsetsRequestTopic()
+                .setTopicName("topic-1")
+                .setPartitions(List.of(0))));
+        return new DeleteShareGroupOffsetsRequest.Builder(data).build(version);
+    }
+
     private DescribeShareGroupOffsetsResponse createDescribeShareGroupOffsetsResponse() {
         DescribeShareGroupOffsetsResponseData data = new DescribeShareGroupOffsetsResponseData()
             .setGroups(Collections.singletonList(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup()
@@ -3751,6 +3764,17 @@ public class RequestResponseTest {
                 .setTopicName("topic")
                 .setTopicId(Uuid.randomUuid())));
         return new AlterShareGroupOffsetsResponse(data);
+    }
+
+    private DeleteShareGroupOffsetsResponse createDeleteShareGroupOffsetsResponse() {
+        DeleteShareGroupOffsetsResponseData data = new DeleteShareGroupOffsetsResponseData()
+            .setResponses(List.of(new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic()
+                .setTopicName("topic-1")
+                .setTopicId(Uuid.randomUuid())
+                .setPartitions(List.of(new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponsePartition()
+                    .setPartitionIndex(0)
+                    .setErrorCode(Errors.NONE.code())))));
+        return new DeleteShareGroupOffsetsResponse(data);
     }
 
     private AbstractRequest createStreamsGroupDescribeRequest(final short version) {

@@ -189,7 +189,7 @@ class CoordinatorPartitionWriterTest {
     if (error == Errors.NONE) {
       assertEquals(verificationGuard, future.get)
     } else {
-      assertFutureThrows(future, error.exception.getClass)
+      assertFutureThrows(error.exception.getClass, future)
     }
   }
 
