@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
 import java.io.IOException;
@@ -29,10 +28,12 @@ import java.io.IOException;
  * the <code>AccessTokenRetriever</code> implementation to validate the integrity of the JWT
  * access token.
  *
- * @see HttpAccessTokenRetriever
+ * @see ClientCredentialsAccessTokenRetriever
+ * @see DefaultAccessTokenRetriever
  * @see FileTokenRetriever
+ * @see HttpAccessTokenRetriever
+ * @see JwtBearerAccessTokenRetriever
  */
-
 public interface AccessTokenRetriever extends OAuthBearerConfigurable {
 
     /**

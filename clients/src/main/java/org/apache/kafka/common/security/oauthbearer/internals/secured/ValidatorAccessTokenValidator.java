@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
@@ -79,7 +78,6 @@ import static org.jose4j.jwa.AlgorithmConstraints.DISALLOW_NONE;
  *     </li>
  * </ol>
  */
-
 public class ValidatorAccessTokenValidator implements AccessTokenValidator {
 
     private static final Logger log = LoggerFactory.getLogger(ValidatorAccessTokenValidator.class);

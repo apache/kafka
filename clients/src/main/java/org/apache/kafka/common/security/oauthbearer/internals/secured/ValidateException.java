@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
 import org.apache.kafka.common.KafkaException;
@@ -29,7 +28,6 @@ import javax.security.auth.callback.Callback;
  *
  * @see AccessTokenValidator#validate(String)
  */
-
 public class ValidateException extends KafkaException {
 
     public ValidateException(String message) {
@@ -43,5 +41,4 @@ public class ValidateException extends KafkaException {
     public ValidateException(String message, Throwable cause) {
         super(message, cause);
     }
-
 }

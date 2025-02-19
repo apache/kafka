@@ -14,10 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.utils.Utils;
 
 import org.jose4j.jwk.JsonWebKeySet;
@@ -79,10 +79,9 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_E
  * Given that the JWKS is referenced by the JWT, the JWKS must be made available by the
  * OAuth/OIDC provider so that a JWT can be validated.
  *
- * @see org.apache.kafka.common.config.SaslConfigs#SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL
+ * @see SaslConfigs#SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL
  * @see VerificationKeyResolver
  */
-
 public class JwksFileVerificationKeyResolver implements CloseableVerificationKeyResolver {
 
     private static final Logger log = LoggerFactory.getLogger(JwksFileVerificationKeyResolver.class);

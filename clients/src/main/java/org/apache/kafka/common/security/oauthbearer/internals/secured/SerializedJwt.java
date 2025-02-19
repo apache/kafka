@@ -14,14 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
 /**
  * SerializedJwt provides a modicum of structure and validation around a JWT's serialized form by
  * splitting and making the three sections (header, payload, and signature) available to the user.
  */
-
 public class SerializedJwt {
 
     private final String token;
@@ -100,5 +98,4 @@ public class SerializedJwt {
 
         return section;
     }
-
 }

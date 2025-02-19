@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
 import org.apache.kafka.common.utils.Time;
@@ -30,7 +29,6 @@ import java.util.concurrent.ExecutionException;
  *
  * @param <R> Result type
  */
-
 public class Retry<R> {
 
     private static final Logger log = LoggerFactory.getLogger(Retry.class);
@@ -104,5 +102,4 @@ public class Retry<R> {
 
         throw error;
     }
-
 }

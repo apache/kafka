@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
@@ -88,5 +87,4 @@ public class BasicOAuthBearerTokenTest {
         // Ensure that attempting to change the token's scope set directly will not throw any error.
         token.scope().clear();
     }
-
 }

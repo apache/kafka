@@ -209,7 +209,7 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
     @Test
     public void testNotConfigured() {
         try (OAuthBearerLoginCallbackHandler handler = new OAuthBearerLoginCallbackHandler()) {
-            assertThrowsWithMessage(IllegalStateException.class, () -> handler.handle(new Callback[] {}), "first call the configure or init method");
+            assertThrowsWithMessage(IllegalStateException.class, () -> handler.handle(new Callback[] {}), "first call the configure method");
         }
     }
 

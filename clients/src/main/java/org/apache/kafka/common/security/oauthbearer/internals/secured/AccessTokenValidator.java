@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
@@ -40,12 +39,12 @@ import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
  *     <li><a href="https://datatracker.ietf.org/doc/html/draft-ietf-oauth-access-token-jwt">RFC 6750, Section 2.1</a></li>
  * </ul>
  *
- * @see LoginAccessTokenValidator A basic AccessTokenValidator used by client-side login
- *                                authentication
- * @see DefaultAccessTokenValidator A more robust AccessTokenValidator that is used on the broker
+ * @see DefaultAccessTokenValidator   Default validator that acts as a wrapper over one of the other validators
+ * @see LoginAccessTokenValidator     A basic AccessTokenValidator used by client-side login
+ *                                    authentication
+ * @see ValidatorAccessTokenValidator A more robust AccessTokenValidator that is used on the broker
  *                                    to validate the token's contents and verify the signature
  */
-
 public interface AccessTokenValidator extends OAuthBearerConfigurable {
 
     /**

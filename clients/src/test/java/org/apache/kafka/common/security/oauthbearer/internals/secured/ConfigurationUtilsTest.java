@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
 import org.apache.kafka.common.config.ConfigException;
@@ -175,5 +174,4 @@ public class ConfigurationUtilsTest extends OAuthBearerTest {
         ConfigurationUtils cu = new ConfigurationUtils(configs, OAUTHBEARER_MECHANISM);
         cu.validateFile(URL_CONFIG_NAME);
     }
-
 }

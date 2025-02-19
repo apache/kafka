@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
@@ -54,7 +53,6 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SUB_CL
  *     <li>Presence of scope, <code>exp</code>, subject, and <code>iat</code> claims</li>
  * </ol>
  */
-
 public class LoginAccessTokenValidator implements AccessTokenValidator {
 
     private static final Logger log = LoggerFactory.getLogger(LoginAccessTokenValidator.class);

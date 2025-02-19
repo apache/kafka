@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
 import java.util.concurrent.ExecutionException;
@@ -27,19 +26,16 @@ import java.util.concurrent.ExecutionException;
  * @see Retry
  * @see UnretryableException
  */
-
 public interface Retryable<R> {
 
     /**
      * Perform the operation and return the data from the response.
      *
      * @return Return response data, formatted in the given data type
-     *
      * @throws ExecutionException   Thrown on errors connecting, writing, reading, timeouts, etc.
      *                              that can likely be tried again
      * @throws UnretryableException Thrown on errors that we can determine should not be tried again
      */
 
     R call() throws ExecutionException, UnretryableException;
-
 }

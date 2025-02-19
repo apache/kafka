@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
 import org.apache.kafka.common.config.ConfigException;
@@ -38,7 +37,6 @@ import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALL
  * <code>ConfigurationUtils</code> is a utility class to perform basic configuration-related
  * logic and is separated out here for easier, more direct testing.
  */
-
 public class ConfigurationUtils {
 
     private final Map<String, ?> configs;
