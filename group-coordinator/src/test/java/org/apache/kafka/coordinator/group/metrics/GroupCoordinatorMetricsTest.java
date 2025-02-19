@@ -115,22 +115,19 @@ public class GroupCoordinatorMetricsTest {
                 GroupCoordinatorMetrics.METRICS_GROUP,
                 Collections.singletonMap("protocol", Group.GroupType.SHARE.toString())),
             metrics.metricName(
-                "group-count",
+                "share-group-count",
                 GroupCoordinatorMetrics.METRICS_GROUP,
                 "The number of share groups in empty state.",
-                "protocol", Group.GroupType.SHARE.toString(),
                 "state", GroupState.EMPTY.toString()),
             metrics.metricName(
-                "group-count",
+                "share-group-count",
                 GroupCoordinatorMetrics.METRICS_GROUP,
                 "The number of share groups in stable state.",
-                "protocol", Group.GroupType.SHARE.toString(),
                 "state", GroupState.STABLE.toString()),
             metrics.metricName(
-                "group-count",
+                "share-group-count",
                 GroupCoordinatorMetrics.METRICS_GROUP,
                 "The number of share groups in dead state.",
-                "protocol", Group.GroupType.SHARE.toString(),
                 "state", GroupState.DEAD.toString()),
             metrics.metricName(
                 "group-count",
