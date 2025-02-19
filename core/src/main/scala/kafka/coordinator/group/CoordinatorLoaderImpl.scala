@@ -23,7 +23,8 @@ import org.apache.kafka.common.errors.NotLeaderOrFollowerException
 import org.apache.kafka.common.record.{ControlRecordType, FileRecords, MemoryRecords}
 import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.coordinator.common.runtime.CoordinatorLoader.{LoadSummary, UnknownRecordTypeException}
+import org.apache.kafka.coordinator.common.runtime.CoordinatorLoader.LoadSummary
+import org.apache.kafka.coordinator.common.runtime.Deserializer.UnknownRecordTypeException
 import org.apache.kafka.coordinator.common.runtime.{CoordinatorLoader, CoordinatorPlayback, Deserializer}
 import org.apache.kafka.server.storage.log.FetchIsolation
 import org.apache.kafka.server.util.KafkaScheduler

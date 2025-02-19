@@ -29,7 +29,7 @@ public enum EligibleLeaderReplicasVersion implements FeatureVersion {
 
     public static final String FEATURE_NAME = "eligible.leader.replicas.version";
 
-    public static final EligibleLeaderReplicasVersion LATEST_PRODUCTION = ELRV_0;
+    public static final EligibleLeaderReplicasVersion LATEST_PRODUCTION = ELRV_1;
 
     private final short featureLevel;
     private final MetadataVersion bootstrapMetadataVersion;
@@ -63,10 +63,6 @@ public enum EligibleLeaderReplicasVersion implements FeatureVersion {
     @Override
     public Map<String, Short> dependencies() {
         return dependencies;
-    }
-
-    public boolean isEligibleLeaderReplicasFeatureEnabeld() {
-        return featureLevel >= ELRV_1.featureLevel;
     }
 
     public static EligibleLeaderReplicasVersion fromFeatureLevel(short version) {

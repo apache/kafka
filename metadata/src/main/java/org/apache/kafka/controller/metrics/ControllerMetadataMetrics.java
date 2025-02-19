@@ -27,6 +27,7 @@ import com.yammer.metrics.core.MetricsRegistry;
 import java.util.Arrays;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -42,8 +43,6 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
         "KafkaController", "FencedBrokerCount");
     private static final MetricName ACTIVE_BROKER_COUNT = getMetricName(
         "KafkaController", "ActiveBrokerCount");
-    private static final MetricName MIGRATING_ZK_BROKER_COUNT = getMetricName(
-        "KafkaController", "MigratingZkBrokerCount");
     private static final MetricName GLOBAL_TOPIC_COUNT = getMetricName(
         "KafkaController", "GlobalTopicCount");
     private static final MetricName GLOBAL_PARTITION_COUNT = getMetricName(
@@ -54,23 +53,21 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
         "KafkaController", "PreferredReplicaImbalanceCount");
     private static final MetricName METADATA_ERROR_COUNT = getMetricName(
         "KafkaController", "MetadataErrorCount");
-    private static final MetricName ZK_MIGRATION_STATE = getMetricName(
-        "KafkaController", "ZkMigrationState");
     private static final MetricName UNCLEAN_LEADER_ELECTIONS_PER_SEC = getMetricName(
         "ControllerStats", "UncleanLeaderElectionsPerSec");
+    private static final MetricName IGNORED_STATIC_VOTERS = getMetricName(
+        "KafkaController", "IgnoredStaticVoters");
 
     private final Optional<MetricsRegistry> registry;
     private final AtomicInteger fencedBrokerCount = new AtomicInteger(0);
     private final AtomicInteger activeBrokerCount = new AtomicInteger(0);
-    private final AtomicInteger migratingZkBrokerCount = new AtomicInteger(0);
     private final AtomicInteger globalTopicCount = new AtomicInteger(0);
     private final AtomicInteger globalPartitionCount = new AtomicInteger(0);
     private final AtomicInteger offlinePartitionCount = new AtomicInteger(0);
     private final AtomicInteger preferredReplicaImbalanceCount = new AtomicInteger(0);
     private final AtomicInteger metadataErrorCount = new AtomicInteger(0);
-    private final AtomicInteger zkMigrationState = new AtomicInteger(-1);
     private Optional<Meter> uncleanLeaderElectionMeter = Optional.empty();
-
+    private final AtomicBoolean ignoredStaticVoters = new AtomicBoolean(false);
 
     /**
      * Create a new ControllerMetadataMetrics object.
@@ -121,22 +118,15 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
                 return metadataErrorCount();
             }
         }));
-        registry.ifPresent(r -> r.newGauge(ZK_MIGRATION_STATE, new Gauge<Integer>() {
-            @Override
-            public Integer value() {
-                return (int) zkMigrationState();
-            }
-        }));
-
-        registry.ifPresent(r -> r.newGauge(MIGRATING_ZK_BROKER_COUNT, new Gauge<Integer>() {
-            @Override
-            public Integer value() {
-                return migratingZkBrokerCount();
-            }
-        }));
-
         registry.ifPresent(r -> uncleanLeaderElectionMeter =
                 Optional.of(registry.get().newMeter(UNCLEAN_LEADER_ELECTIONS_PER_SEC, "elections", TimeUnit.SECONDS)));
+
+        registry.ifPresent(r -> r.newGauge(IGNORED_STATIC_VOTERS, new Gauge<Integer>() {
+            @Override
+            public Integer value() {
+                return ignoredStaticVoters() ? 1 : 0;
+            }
+        }));
     }
 
     public void setFencedBrokerCount(int brokerCount) {
@@ -162,19 +152,7 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
     public int activeBrokerCount() {
         return this.activeBrokerCount.get();
     }
-
-    public void setMigratingZkBrokerCount(int brokerCount) {
-        this.migratingZkBrokerCount.set(brokerCount);
-    }
-
-    public void addToMigratingZkBrokerCount(int brokerCountDelta) {
-        this.migratingZkBrokerCount.addAndGet(brokerCountDelta);
-    }
-
-    public int migratingZkBrokerCount() {
-        return this.migratingZkBrokerCount.get();
-    }
-
+    
     public void setGlobalTopicCount(int topicCount) {
         this.globalTopicCount.set(topicCount);
     }
@@ -230,17 +208,17 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
     public int metadataErrorCount() {
         return this.metadataErrorCount.get();
     }
-
-    public void setZkMigrationState(byte migrationStateValue) {
-        this.zkMigrationState.set(migrationStateValue);
-    }
-
-    public byte zkMigrationState() {
-        return zkMigrationState.byteValue();
-    }
-
+    
     public void updateUncleanLeaderElection(int count) {
         this.uncleanLeaderElectionMeter.ifPresent(m -> m.mark(count));
+    }
+
+    public void setIgnoredStaticVoters(boolean ignored) {
+        ignoredStaticVoters.set(ignored);
+    }
+
+    public boolean ignoredStaticVoters() {
+        return ignoredStaticVoters.get();
     }
 
     @Override
@@ -248,14 +226,13 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
         registry.ifPresent(r -> Arrays.asList(
             FENCED_BROKER_COUNT,
             ACTIVE_BROKER_COUNT,
-            MIGRATING_ZK_BROKER_COUNT,
             GLOBAL_TOPIC_COUNT,
             GLOBAL_PARTITION_COUNT,
             OFFLINE_PARTITION_COUNT,
             PREFERRED_REPLICA_IMBALANCE_COUNT,
             METADATA_ERROR_COUNT,
-            ZK_MIGRATION_STATE,
-            UNCLEAN_LEADER_ELECTIONS_PER_SEC
+            UNCLEAN_LEADER_ELECTIONS_PER_SEC,
+            IGNORED_STATIC_VOTERS
         ).forEach(r::removeMetric));
     }
 

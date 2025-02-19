@@ -57,8 +57,8 @@ public class FeaturesPublisher implements MetadataPublisher {
         if (delta.featuresDelta() != null) {
             FinalizedFeatures newFinalizedFeatures = new FinalizedFeatures(newImage.features().metadataVersion(),
                     newImage.features().finalizedVersions(),
-                    newImage.provenance().lastContainedOffset(),
-                    true);
+                    newImage.provenance().lastContainedOffset()
+            );
             if (!newFinalizedFeatures.equals(finalizedFeatures)) {
                 log.info("Loaded new metadata {}.", newFinalizedFeatures);
                 finalizedFeatures = newFinalizedFeatures;

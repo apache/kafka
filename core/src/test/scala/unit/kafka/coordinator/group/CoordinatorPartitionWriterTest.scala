@@ -163,7 +163,7 @@ class CoordinatorPartitionWriterTest {
     val callbackCapture: ArgumentCaptor[((Errors, VerificationGuard)) => Unit] =
       ArgumentCaptor.forClass(classOf[((Errors, VerificationGuard)) => Unit])
 
-    when(replicaManager.maybeStartTransactionVerificationForPartition(
+    when(replicaManager.maybeSendPartitionToTransactionCoordinator(
       ArgumentMatchers.eq(tp),
       ArgumentMatchers.eq("transactional-id"),
       ArgumentMatchers.eq(10L),
@@ -189,7 +189,7 @@ class CoordinatorPartitionWriterTest {
     if (error == Errors.NONE) {
       assertEquals(verificationGuard, future.get)
     } else {
-      assertFutureThrows(future, error.exception.getClass)
+      assertFutureThrows(error.exception.getClass, future)
     }
   }
 

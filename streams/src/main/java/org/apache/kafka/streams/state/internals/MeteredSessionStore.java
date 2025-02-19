@@ -44,9 +44,9 @@ import org.apache.kafka.streams.state.internals.StoreQueryUtils.QueryHandler;
 import org.apache.kafka.streams.state.internals.metrics.StateStoreMetrics;
 
 import java.util.Comparator;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.NavigableSet;
-import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.atomic.LongAdder;
@@ -126,11 +126,8 @@ public class MeteredSessionStore<K, V>
                 (config, now) -> numOpenIterators.sum());
         StateStoreMetrics.addOldestOpenIteratorGauge(taskId.toString(), metricsScope, name(), streamsMetrics,
                 (config, now) -> {
-                    try {
-                        return openIterators.isEmpty() ? null : openIterators.first().startTimestamp();
-                    } catch (final NoSuchElementException ignored) {
-                        return null;
-                    }
+                    final Iterator<MeteredIterator> openIteratorsIterator = openIterators.iterator();
+                    return openIteratorsIterator.hasNext() ? openIteratorsIterator.next().startTimestamp() : null;
                 }
         );
     }
@@ -497,7 +494,7 @@ public class MeteredSessionStore<K, V>
         // In that case, we _can't_ get the current timestamp, so we don't record anything.
         if (e2eLatencySensor.shouldRecord() && internalContext != null) {
             final long currentTime = time.milliseconds();
-            final long e2eLatency =  currentTime - internalContext.timestamp();
+            final long e2eLatency =  currentTime - internalContext.recordContext().timestamp();
             e2eLatencySensor.record(e2eLatency, currentTime);
         }
     }

@@ -16,7 +16,7 @@
 {
   "apiKey": 2,
   "type": "request",
-  "listeners": ["zkBroker", "broker"],
+  "listeners": ["broker"],
   "name": "ListOffsetsRequest",
   // Version 0 was removed in Apache Kafka 4.0, Version 1 is the new baseline.
   //

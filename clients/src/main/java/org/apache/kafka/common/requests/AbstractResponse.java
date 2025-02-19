@@ -62,29 +62,29 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
      */
     public abstract Map<Errors, Integer> errorCounts();
 
-    protected Map<Errors, Integer> errorCounts(Errors error) {
+    protected static Map<Errors, Integer> errorCounts(Errors error) {
         return Collections.singletonMap(error, 1);
     }
 
-    protected Map<Errors, Integer> errorCounts(Stream<Errors> errors) {
+    protected static Map<Errors, Integer> errorCounts(Stream<Errors> errors) {
         return errors.collect(Collectors.groupingBy(e -> e, Collectors.summingInt(e -> 1)));
     }
 
-    protected Map<Errors, Integer> errorCounts(Collection<Errors> errors) {
+    protected static Map<Errors, Integer> errorCounts(Collection<Errors> errors) {
         Map<Errors, Integer> errorCounts = new HashMap<>();
         for (Errors error : errors)
             updateErrorCounts(errorCounts, error);
         return errorCounts;
     }
 
-    protected Map<Errors, Integer> apiErrorCounts(Map<?, ApiError> errors) {
+    protected static Map<Errors, Integer> apiErrorCounts(Map<?, ApiError> errors) {
         Map<Errors, Integer> errorCounts = new HashMap<>();
         for (ApiError apiError : errors.values())
             updateErrorCounts(errorCounts, apiError.error());
         return errorCounts;
     }
 
-    protected void updateErrorCounts(Map<Errors, Integer> errorCounts, Errors error) {
+    protected static void updateErrorCounts(Map<Errors, Integer> errorCounts, Errors error) {
         Integer count = errorCounts.getOrDefault(error, 0);
         errorCounts.put(error, count + 1);
     }
@@ -133,14 +133,6 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
                 return LeaveGroupResponse.parse(responseBuffer, version);
             case SYNC_GROUP:
                 return SyncGroupResponse.parse(responseBuffer, version);
-            case STOP_REPLICA:
-                return StopReplicaResponse.parse(responseBuffer, version);
-            case CONTROLLED_SHUTDOWN:
-                return ControlledShutdownResponse.parse(responseBuffer, version);
-            case UPDATE_METADATA:
-                return UpdateMetadataResponse.parse(responseBuffer, version);
-            case LEADER_AND_ISR:
-                return LeaderAndIsrResponse.parse(responseBuffer, version);
             case DESCRIBE_GROUPS:
                 return DescribeGroupsResponse.parse(responseBuffer, version);
             case LIST_GROUPS:
@@ -291,6 +283,12 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
                 return StreamsGroupHeartbeatResponse.parse(responseBuffer, version);
             case STREAMS_GROUP_DESCRIBE:
                 return StreamsGroupDescribeResponse.parse(responseBuffer, version);
+            case DESCRIBE_SHARE_GROUP_OFFSETS:
+                return DescribeShareGroupOffsetsResponse.parse(responseBuffer, version);
+            case ALTER_SHARE_GROUP_OFFSETS:
+                return AlterShareGroupOffsetsResponse.parse(responseBuffer, version);
+            case DELETE_SHARE_GROUP_OFFSETS:
+                return DeleteShareGroupOffsetsResponse.parse(responseBuffer, version);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseResponse`, the " +
                         "code should be updated to do so.", apiKey));

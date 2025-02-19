@@ -549,7 +549,7 @@ public class InternalTopologyBuilderTest {
             new MockKeyValueStoreBuilder("testStore", false).withLoggingDisabled();
 
         builder.addGlobalStore(
-            "global-store",
+            "global-source",
             null,
             null,
             null,
@@ -562,11 +562,11 @@ public class InternalTopologyBuilderTest {
         final TopologyException exception = assertThrows(
             TopologyException.class,
             () -> builder.addGlobalStore(
-                "global-store-2",
+                "global-source-2",
                 null,
                 null,
                 null,
-                "global-topic",
+                "global-topic-2",
                 "global-processor-2",
                 new StoreDelegatingProcessorSupplier<>(new MockApiProcessorSupplier<>(), Set.of(secondGlobalBuilder)),
                 false

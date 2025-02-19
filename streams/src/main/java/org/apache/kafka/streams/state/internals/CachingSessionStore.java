@@ -135,12 +135,13 @@ class CachingSessionStore
         final LRUCacheEntry entry =
             new LRUCacheEntry(
                 value,
-                internalContext.headers(),
+                internalContext.recordContext().headers(),
                 true,
-                internalContext.offset(),
-                internalContext.timestamp(),
-                internalContext.partition(),
-                internalContext.topic());
+                internalContext.recordContext().offset(),
+                internalContext.recordContext().timestamp(),
+                internalContext.recordContext().partition(),
+                internalContext.recordContext().topic()
+            );
         internalContext.cache().put(cacheName, cacheFunction.cacheKey(binaryKey), entry);
 
         maxObservedTimestamp = Math.max(keySchema.segmentTimestamp(binaryKey), maxObservedTimestamp);

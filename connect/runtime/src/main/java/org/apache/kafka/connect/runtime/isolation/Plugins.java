@@ -45,6 +45,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -265,15 +266,17 @@ public class Plugins {
         };
     }
 
-    public String latestVersion(String classOrAlias) {
-        return delegatingLoader.latestVersion(classOrAlias);
+    public String latestVersion(String classOrAlias, PluginType... allowedTypes) {
+        return pluginVersion(classOrAlias, null, allowedTypes);
     }
 
-    public String pluginVersion(String classOrAlias, ClassLoader sourceLoader) {
-        if (!(sourceLoader instanceof PluginClassLoader)) {
-            return latestVersion(classOrAlias);
+    public String pluginVersion(String classOrAlias, ClassLoader sourceLoader, PluginType... allowedTypes) {
+        String location = (sourceLoader instanceof PluginClassLoader) ? ((PluginClassLoader) sourceLoader).location() : null;
+        PluginDesc<?> desc = delegatingLoader.pluginDesc(classOrAlias, location, new HashSet<>(Arrays.asList(allowedTypes)));
+        if (desc != null) {
+            return desc.version();
         }
-        return delegatingLoader.versionInLocation(classOrAlias, ((PluginClassLoader) sourceLoader).location());
+        return null;
     }
 
     public DelegatingClassLoader delegatingLoader() {
@@ -376,7 +379,7 @@ public class Plugins {
 
     public Object newPlugin(String classOrAlias, VersionRange range, ClassLoader sourceLoader) throws ClassNotFoundException {
         if (range == null && sourceLoader instanceof PluginClassLoader) {
-            sourceLoader.loadClass(classOrAlias);
+            return newPlugin(sourceLoader.loadClass(classOrAlias));
         }
         return newPlugin(classOrAlias, range);
     }
