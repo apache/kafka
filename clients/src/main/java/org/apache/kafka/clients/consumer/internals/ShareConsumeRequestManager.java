@@ -99,7 +99,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
     private final CompletableFuture<Void> closeFuture;
     private boolean isAcknowledgementCommitCallbackRegistered = false;
     private final Map<IdAndPartition, String> topicNamesMap = new HashMap<>();
-    private static final InvalidRecordStateException INVALID_RESPONSE = new InvalidRecordStateException("Acknowledgement not successful due to invalid response from broker");
+    private static final String INVALID_RESPONSE = "Acknowledgement not successful due to invalid response from broker";
 
     ShareConsumeRequestManager(final Time time,
                                final LogContext logContext,
@@ -775,7 +775,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             // Handle any acknowledgements which were not received in the response.
             fetchAcknowledgementsInFlight.forEach((integer, topicIdPartitionAcknowledgementsMap) -> {
                 topicIdPartitionAcknowledgementsMap.forEach((partition, acknowledgements) -> {
-                    acknowledgements.complete(INVALID_RESPONSE);
+                    acknowledgements.complete(new InvalidRecordStateException(INVALID_RESPONSE));
                     maybeSendShareAcknowledgeCommitCallbackEvent(Map.of(partition, acknowledgements));
                 });
                 topicIdPartitionAcknowledgementsMap.clear();
@@ -829,7 +829,6 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                     }
                 }
             }));
-
         } finally {
             log.debug("Removing pending request for node {} - failed", fetchTarget.id());
             nodesWithPendingRequests.remove(fetchTarget.id());
@@ -863,7 +862,6 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
 
                 acknowledgeRequestState.onSuccessfulAttempt(responseCompletionTimeMs);
                 acknowledgeRequestState.processingComplete();
-
             } else {
                 if (!acknowledgeRequestState.sessionHandler.handleResponse(response, resp.requestHeader().apiVersion())) {
                     // Received a response-level error code.
@@ -876,7 +874,6 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                         acknowledgeRequestState.processPendingInFlightAcknowledgements(response.error().exception());
                         acknowledgeRequestState.processingComplete();
                     }
-
                 } else {
                     AtomicBoolean shouldRetry = new AtomicBoolean(false);
                     // Check all partition level error codes
@@ -884,7 +881,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                         Errors partitionError = Errors.forCode(partitionData.errorCode());
                         TopicIdPartition tip = createTopicIdPartition(shareAcknowledgeTopicResponse.topicId(), partitionData.partitionIndex());
                         if (tip == null) {
-                            log.error("Invalid topic name in SA-2 response");
+                            log.error("Topic name not found for topic ID {}", shareAcknowledgeTopicResponse.topicId());
                             return;
                         }
 
@@ -971,7 +968,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
 
             // Check for any acknowledgements that did not receive a response.
             // These acknowledgements are failed with InvalidRecordStateException.
-            acknowledgeRequestState.processPendingInFlightAcknowledgements(INVALID_RESPONSE);
+            acknowledgeRequestState.processPendingInFlightAcknowledgements(new InvalidRecordStateException(INVALID_RESPONSE));
         } else {
             acknowledgeRequestState.onSuccessfulAttempt(responseCompletionTimeMs);
             acknowledgeRequestState.processingComplete();
@@ -1253,7 +1250,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
 
         void processingComplete() {
             // If there are any pending inFlightAcknowledgements after processing the response, we fail them with an InvalidRecordStateException.
-            processPendingInFlightAcknowledgements(INVALID_RESPONSE);
+            processPendingInFlightAcknowledgements(new InvalidRecordStateException(INVALID_RESPONSE));
             resultHandler.completeIfEmpty();
             isProcessed = true;
         }
