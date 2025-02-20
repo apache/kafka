@@ -712,8 +712,8 @@ public class ReassignPartitionsCommand {
         List<UsableBroker> results = adminClient.describeCluster().nodes().get().stream()
             .filter(node -> brokerSet.contains(node.id()))
             .map(node -> (enableRackAwareness && node.rack() != null)
-                ? new UsableBroker(node.id(), Optional.of(node.rack()), false)
-                : new UsableBroker(node.id(), Optional.empty(), false)
+                ? new UsableBroker(node.id(), Optional.of(node.rack()), Optional.empty(), false)
+                : new UsableBroker(node.id(), Optional.empty(), Optional.empty(), false)
             ).collect(Collectors.toList());
 
         long numRackless = results.stream().filter(m -> m.rack().isEmpty()).count();

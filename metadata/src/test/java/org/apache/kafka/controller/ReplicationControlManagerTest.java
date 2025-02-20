@@ -3021,11 +3021,11 @@ public class ReplicationControlManagerTest {
         HashSet<UsableBroker> brokers = new HashSet<>();
         describer.usableBrokers().forEachRemaining(brokers::add);
         assertEquals(Set.of(
-            new UsableBroker(0, Optional.empty(), true),
-            new UsableBroker(1, Optional.empty(), true),
-            new UsableBroker(2, Optional.empty(), false),
-            new UsableBroker(3, Optional.empty(), false),
-            new UsableBroker(4, Optional.empty(), false)), brokers);
+            new UsableBroker(0, Optional.empty(), Optional.empty(), true),
+            new UsableBroker(1, Optional.empty(), Optional.empty(), true),
+            new UsableBroker(2, Optional.empty(), Optional.empty(), false),
+            new UsableBroker(3, Optional.empty(), Optional.empty(), false),
+            new UsableBroker(4, Optional.empty(), Optional.empty(), false)), brokers);
         assertEquals(DirectoryId.MIGRATING, describer.defaultDir(1));
         assertEquals(Uuid.fromString("ozwqsVMFSNiYQUPSJA3j0w"), describer.defaultDir(2));
         assertEquals(DirectoryId.UNASSIGNED, describer.defaultDir(3));

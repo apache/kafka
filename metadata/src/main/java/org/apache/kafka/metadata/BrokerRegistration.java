@@ -51,6 +51,7 @@ public class BrokerRegistration {
         private Map<String, Endpoint> listeners;
         private Map<String, VersionRange> supportedFeatures;
         private Optional<String> rack;
+        private Optional<String> pod;
         private boolean fenced;
         private boolean inControlledShutdown;
         private boolean isMigratingZkBroker;
@@ -64,6 +65,7 @@ public class BrokerRegistration {
             this.listeners = new HashMap<>();
             this.supportedFeatures = new HashMap<>();
             this.rack = Optional.empty();
+            this.pod = Optional.empty();
             this.fenced = false;
             this.inControlledShutdown = false;
             this.isMigratingZkBroker = false;
@@ -112,6 +114,12 @@ public class BrokerRegistration {
             return this;
         }
 
+        public Builder setPod(Optional<String> pod) {
+            Objects.requireNonNull(pod);
+            this.pod = pod;
+            return this;
+        }
+
         public Builder setFenced(boolean fenced) {
             this.fenced = fenced;
             return this;
@@ -145,6 +153,7 @@ public class BrokerRegistration {
                 listeners,
                 supportedFeatures,
                 rack,
+                pod,
                 fenced,
                 inControlledShutdown,
                 isMigratingZkBroker,
@@ -159,6 +168,7 @@ public class BrokerRegistration {
     private final Map<String, Endpoint> listeners;
     private final Map<String, VersionRange> supportedFeatures;
     private final Optional<String> rack;
+    private final Optional<String> pod;
     private final boolean fenced;
     private final boolean inControlledShutdown;
     private final boolean isMigratingZkBroker;
@@ -172,6 +182,7 @@ public class BrokerRegistration {
         Map<String, Endpoint> listeners,
         Map<String, VersionRange> supportedFeatures,
         Optional<String> rack,
+        Optional<String> pod,
         boolean fenced,
         boolean inControlledShutdown,
         boolean isMigratingZkBroker,
@@ -192,6 +203,7 @@ public class BrokerRegistration {
         Objects.requireNonNull(supportedFeatures);
         this.supportedFeatures = new HashMap<>(supportedFeatures);
         this.rack = rack;
+        this.pod = pod;
         this.fenced = fenced;
         this.inControlledShutdown = inControlledShutdown;
         this.isMigratingZkBroker = isMigratingZkBroker;
@@ -220,6 +232,7 @@ public class BrokerRegistration {
             listeners,
             supportedFeatures,
             Optional.ofNullable(record.rack()),
+            Optional.ofNullable(record.pod()),
             record.fenced(),
             record.inControlledShutdown(),
             record.isMigratingZkBroker(),
@@ -261,6 +274,10 @@ public class BrokerRegistration {
 
     public Optional<String> rack() {
         return rack;
+    }
+
+    public Optional<String> pod() {
+        return pod;
     }
 
     public boolean fenced() {
@@ -323,6 +340,7 @@ public class BrokerRegistration {
         RegisterBrokerRecord registrationRecord = new RegisterBrokerRecord().
             setBrokerId(id).
             setRack(rack.orElse(null)).
+            setPod(pod.orElse(null)).
             setBrokerEpoch(epoch).
             setIncarnationId(incarnationId).
             setFenced(fenced).
@@ -383,6 +401,7 @@ public class BrokerRegistration {
             other.listeners.equals(listeners) &&
             other.supportedFeatures.equals(supportedFeatures) &&
             other.rack.equals(rack) &&
+            other.pod.equals(pod) &&
             other.fenced == fenced &&
             other.inControlledShutdown == inControlledShutdown &&
             other.isMigratingZkBroker == isMigratingZkBroker &&
@@ -437,6 +456,7 @@ public class BrokerRegistration {
             listeners,
             supportedFeatures,
             rack,
+            pod,
             newFenced,
             newInControlledShutdownChange,
             isMigratingZkBroker,

@@ -329,22 +329,26 @@ public class BrokerHeartbeatManager {
 
     Iterator<UsableBroker> usableBrokers(
         Function<Integer, Optional<String>> idToRack,
+        Function<Integer, Optional<String>> idToPod,
         Function<Integer, Boolean> hasUncordonedDirs
     ) {
-        return new UsableBrokerIterator(brokers.values().iterator(), idToRack, hasUncordonedDirs);
+        return new UsableBrokerIterator(brokers.values().iterator(), idToRack, idToPod, hasUncordonedDirs);
     }
 
     static class UsableBrokerIterator implements Iterator<UsableBroker> {
         private final Iterator<BrokerHeartbeatState> iterator;
         private final Function<Integer, Optional<String>> idToRack;
+        private final Function<Integer, Optional<String>> idToPod;
         private final Function<Integer, Boolean> hasUncordonedDirs;
         private UsableBroker next;
 
         UsableBrokerIterator(Iterator<BrokerHeartbeatState> iterator,
                              Function<Integer, Optional<String>> idToRack,
+                             Function<Integer, Optional<String>> idToPod,
                              Function<Integer, Boolean> hasUncordonedDirs) {
             this.iterator = iterator;
             this.idToRack = idToRack;
+            this.idToPod = idToPod;
             this.hasUncordonedDirs = hasUncordonedDirs;
             this.next = null;
         }
@@ -362,7 +366,8 @@ public class BrokerHeartbeatManager {
                 result = iterator.next();
             } while (result.shuttingDown() || !hasUncordonedDirs.apply(result.id()));
             Optional<String> rack = idToRack.apply(result.id());
-            next = new UsableBroker(result.id(), rack, result.fenced());
+            Optional<String> pod = idToPod.apply(result.id());
+            next = new UsableBroker(result.id(), rack, pod, result.fenced());
             return true;
         }
 

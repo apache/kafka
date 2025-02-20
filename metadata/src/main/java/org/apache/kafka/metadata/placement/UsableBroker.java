@@ -25,5 +25,5 @@ import java.util.Optional;
  * A broker where a replica can be placed.
  */
 @InterfaceStability.Unstable
-public record UsableBroker(int id, Optional<String> rack, boolean fenced) {
+public record UsableBroker(int id, Optional<String> rack, Optional<String> pod, boolean fenced) {
 }

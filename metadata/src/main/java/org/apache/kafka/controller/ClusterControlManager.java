@@ -712,6 +712,7 @@ public class ClusterControlManager {
         }
         return heartbeatManager.usableBrokers(
             id -> brokerRegistrations.get(id).rack(),
+            id -> brokerRegistrations.get(id).pod(),
             id -> brokerRegistrations.get(id).hasUncordonedDirs());
     }
 
