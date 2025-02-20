@@ -1420,6 +1420,39 @@ public class ConsumerMembershipManagerTest {
         verify(membershipManager, never()).markReconciliationCompleted();
         verify(subscriptionState, never()).assignFromSubscribed(anyCollection());
 
+        assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
+        mockAckSent(membershipManager);
+        assertEquals(MemberState.STABLE, membershipManager.state());
+
+        assertEquals(1.0d, getMetricValue(metrics, rebalanceMetricsManager.rebalanceTotal));
+        assertEquals(0.0d, getMetricValue(metrics, rebalanceMetricsManager.failedRebalanceTotal));
+    }
+
+    @Test
+    public void testAllAssignmentReceivedIsAcked() {
+        ConsumerMembershipManager membershipManager = createMembershipManagerJoiningGroup();
+        Uuid topicId = Uuid.randomUuid();
+        String topicName = "topic1";
+
+        // Receive assignment different from what the member owns - should reconcile and send ack
+        mockOwnedPartitionAndAssignmentReceived(membershipManager, topicId, topicName, Collections.emptyList());
+        List<TopicIdPartition> expectedAssignmentReconciled = topicIdPartitions(topicId, topicName, 0, 1);
+        receiveAssignment(topicId, Arrays.asList(0, 1), membershipManager);
+        membershipManager.poll(time.milliseconds());
+        verifyReconciliationTriggeredAndCompleted(membershipManager, expectedAssignmentReconciled);
+        assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
+
+        mockAckSent(membershipManager);
+        assertEquals(MemberState.STABLE, membershipManager.state());
+
+        // Receive same assignment again - should not trigger reconciliation but should send ack to the coordinator.
+        clearInvocations(membershipManager);
+        mockOwnedPartitionAndAssignmentReceived(membershipManager, topicId, topicName, expectedAssignmentReconciled);
+        receiveAssignment(topicId, Arrays.asList(0, 1), membershipManager);
+        verifyReconciliationNotTriggered(membershipManager);
+        assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
+
+        mockAckSent(membershipManager);
         assertEquals(MemberState.STABLE, membershipManager.state());
 
         assertEquals(1.0d, getMetricValue(metrics, rebalanceMetricsManager.rebalanceTotal));

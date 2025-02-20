@@ -995,6 +995,8 @@ public class ShareMembershipManagerTest {
         verify(membershipManager, never()).markReconciliationCompleted();
         verify(subscriptionState, never()).assignFromSubscribed(anyCollection());
 
+        assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
+        mockAckSent(membershipManager);
         assertEquals(MemberState.STABLE, membershipManager.state());
 
         assertEquals(1.0d, getMetricValue(metrics, rebalanceMetricsManager.rebalanceTotal));
