@@ -129,7 +129,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -1726,11 +1725,7 @@ public class GroupCoordinatorServiceTest {
         CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> future =
             service.deleteGroups(requestContext(ApiKeys.DELETE_GROUPS), groupIds, BufferSupplier.NO_CACHING);
 
-        try {
-            future.getNow(null);
-        } catch (Exception e) {
-            fail(e);
-        }
+        future.getNow(null);
         assertEquals(expectedResultCollection, future.get());
         verify(persister, times(1)).deleteState(any());
     }
@@ -1825,11 +1820,7 @@ public class GroupCoordinatorServiceTest {
         CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> future =
             service.deleteGroups(requestContext(ApiKeys.DELETE_GROUPS), groupIds, BufferSupplier.NO_CACHING);
 
-        try {
-            future.getNow(null);
-        } catch (Exception e) {
-            fail(e);
-        }
+        future.getNow(null);
         assertEquals(expectedResultCollection, future.get());
         verify(persister, times(2)).deleteState(any());
     }
@@ -1881,11 +1872,7 @@ public class GroupCoordinatorServiceTest {
         CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> future =
             service.deleteGroups(requestContext(ApiKeys.DELETE_GROUPS), groupIds, BufferSupplier.NO_CACHING);
 
-        try {
-            future.getNow(null);
-        } catch (Exception e) {
-            fail(e);
-        }
+        future.getNow(null);
         assertEquals(expectedResultCollection, future.get());
         verify(persister, times(0)).deleteState(any());
     }
@@ -1929,11 +1916,7 @@ public class GroupCoordinatorServiceTest {
         CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> future =
             service.deleteGroups(requestContext(ApiKeys.DELETE_GROUPS), groupIds, BufferSupplier.NO_CACHING);
 
-        try {
-            future.getNow(null);
-        } catch (Exception e) {
-            fail(e);
-        }
+        future.getNow(null);
         assertEquals(expectedResultCollection, future.get());
         // If there is error creating share group delete req
         // neither persister call nor general delete groups call is made.
@@ -2006,11 +1989,7 @@ public class GroupCoordinatorServiceTest {
         CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> future =
             service.deleteGroups(requestContext(ApiKeys.DELETE_GROUPS), groupIds, BufferSupplier.NO_CACHING);
 
-        try {
-            future.getNow(null);
-        } catch (Exception e) {
-            fail(e);
-        }
+        future.getNow(null);
         assertEquals(expectedResultCollection, future.get());
         verify(persister, times(1)).deleteState(any());
     }
@@ -2928,7 +2907,7 @@ public class GroupCoordinatorServiceTest {
         }
     }
 
-    private DeleteShareGroupStateParameters createDeleteShareRequest(String groupId, Uuid topic, List<Integer> partitions) {
+    private static DeleteShareGroupStateParameters createDeleteShareRequest(String groupId, Uuid topic, List<Integer> partitions) {
         TopicData<PartitionIdData> topicData = new TopicData<>(topic,
             partitions.stream().map(PartitionFactory::newPartitionIdData).toList()
         );

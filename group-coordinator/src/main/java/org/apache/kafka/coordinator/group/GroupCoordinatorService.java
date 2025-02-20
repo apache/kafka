@@ -847,7 +847,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             // This future object has the following stages:
             // - First it invokes the share group delete flow where the shard sharePartitionDeleteRequests
             // method is invoked, and it returns request objects for each valid share group passed to it.
-            // - Then the requests are passed to the persister.deleteStata method one at a time. The results
+            // - Then the requests are passed to the persister.deleteState method one at a time. The results
             // are collated as a Map of groupId -> persister errors
             // - The above map is then used to decide whether to invoke the group coordinator delete groups logic
             // - Share groups with failed persister delete are NOT CONSIDERED for group coordinator delete.
@@ -861,7 +861,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             (accumulator, newResults) -> newResults.forEach(result -> accumulator.add(result.duplicate())));
     }
 
-    List<String> deleteCandidateGroupIds(
+    private List<String> deleteCandidateGroupIds(
         Map<String, Errors> groupErrMap,
         List<String> groupList,
         DeleteGroupsResponseData.DeletableGroupResultCollection collection
@@ -889,7 +889,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         return groupSet.stream().toList();
     }
 
-    CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> handleDeleteGroups(
+    private CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> handleDeleteGroups(
         RequestContext context,
         TopicPartition topicPartition,
         List<String> groupIds
