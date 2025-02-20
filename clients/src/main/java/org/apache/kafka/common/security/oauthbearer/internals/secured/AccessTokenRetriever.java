@@ -16,17 +16,18 @@
  */
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
+import javax.security.auth.spi.LoginModule;
 import java.io.IOException;
 
 /**
- * An <code>AccessTokenRetriever</code> is the internal API by which the login module will
- * retrieve an access token for use in authorization by the broker. The implementation may
- * involve authentication to a remote system, or it can be as simple as loading the contents
- * of a file or configuration setting.
+ * An implementation of <code>AccessTokenRetriever</code> is the means by which the login module will
+ * retrieve an OAuth access token that is used to authorize with a broker. The implementation may
+ * involve authentication to one or more remote systems, or it can be as simple as loading the contents
+ * from a file or configuration setting.
  *
- * <i>Retrieval</i> is a separate concern from <i>validation</i>, so it isn't necessary for
- * the <code>AccessTokenRetriever</code> implementation to validate the integrity of the JWT
- * access token.
+ * <i>Retrieval</i> of a token is a separate concern from <i>validation</i>.
+ * <code>AccessTokenRetriever</code> implementations should not validate the integrity of the access
+ * token, but should rely on the companion {@link AccessTokenValidator} for that task.
  *
  * @see ClientCredentialsAccessTokenRetriever
  * @see DefaultAccessTokenRetriever
@@ -37,20 +38,22 @@ import java.io.IOException;
 public interface AccessTokenRetriever extends OAuthBearerConfigurable {
 
     /**
-     * Retrieves a JWT access token in its serialized three-part form. The implementation
-     * is free to determine how it should be retrieved but should not perform validation
-     * on the result.
+     * <p>
+     * Retrieves a JWT access token in its serialized three-part form. The implementation is free to
+     * determine how it should be retrieved but should not perform validation on the result.
+     * </p>
      *
+     * <p>
      * <b>Note</b>: This is a blocking function and callers should be aware that the
      * implementation may be communicating over a network, with the file system, coordinating
-     * threads, etc. The facility in the {@link javax.security.auth.spi.LoginModule} from
-     * which this is ultimately called does not provide an asynchronous approach.
+     * threads, etc. The facility in the {@link LoginModule} from which this is ultimately called does
+     * not provide an asynchronous approach.
+     * </p>
      *
      * @return Non-<code>null</code> JWT access token string
      *
-     * @throws IOException Thrown on errors related to IO during retrieval
+     * @throws IOException Thrown on errors related to I/O during retrieval
      */
-
     String retrieve() throws IOException;
 
     @Override
