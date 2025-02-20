@@ -45,6 +45,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.storage.internals.checkpoint.CleanShutdownFileHandler;
 
 import org.junit.jupiter.api.AfterEach;
@@ -110,6 +111,7 @@ public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarnes
     @BeforeEach
     @Override
     public void setUp(TestInfo info) {
+        setMetadataVersion(MetadataVersion.IBP_4_0_IV1);
         super.setUp(info);
         // create adminClient
         Properties props = new Properties();
