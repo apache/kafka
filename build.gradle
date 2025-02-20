@@ -131,7 +131,6 @@ ext {
     if (name in ["compileTestJava", "compileTestScala"]) {
       options.compilerArgs << "-parameters"
     } else if (name in ["compileJava", "compileScala"]) {
-      options.compilerArgs << "-Xlint:-rawtypes"
       options.compilerArgs << "-Xlint:all"
       options.compilerArgs << "-Xlint:-serial"
       options.compilerArgs << "-Xlint:-try"

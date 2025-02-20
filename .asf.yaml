@@ -39,3 +39,9 @@ github:
     - gaurav-narula
     - apourchet
     - apoorvmittal10
+
+  enabled_merge_buttons:
+    squash: true
+    squash_commit_message: PR_TITLE_AND_DESC
+    merge: false
+    rebase: false

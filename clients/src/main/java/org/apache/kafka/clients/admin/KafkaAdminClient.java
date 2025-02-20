@@ -2504,7 +2504,7 @@ public class KafkaAdminClient extends AdminClient {
             private boolean useMetadataRequest = false;
 
             @Override
-            AbstractRequest.Builder createRequest(int timeoutMs) {
+            AbstractRequest.Builder<?> createRequest(int timeoutMs) {
                 if (!useMetadataRequest) {
                     if (metadataManager.usingBootstrapControllers() && options.includeFencedBrokers()) {
                         throw new IllegalArgumentException("Cannot request fenced brokers from controller endpoint");
