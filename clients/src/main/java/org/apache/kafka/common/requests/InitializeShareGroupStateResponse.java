@@ -103,17 +103,28 @@ public class InitializeShareGroupStateResponse extends AbstractResponse {
     }
 
     public static InitializeShareGroupStateResponseData toErrorResponseData(Uuid topicId, int partitionId, Errors error, String errorMessage) {
-        return new InitializeShareGroupStateResponseData().setResults(
-            List.of(new InitializeShareGroupStateResponseData.InitializeStateResult()
+        return new InitializeShareGroupStateResponseData().setResults(List.of(
+            new InitializeShareGroupStateResponseData.InitializeStateResult()
                 .setTopicId(topicId)
                 .setPartitions(List.of(new InitializeShareGroupStateResponseData.PartitionResult()
                     .setPartition(partitionId)
                     .setErrorCode(error.code())
-                    .setErrorMessage(errorMessage)))));
+                    .setErrorMessage(errorMessage)))
+        ));
     }
 
     public static InitializeShareGroupStateResponseData.PartitionResult toResponsePartitionResult(int partitionId) {
-        return new InitializeShareGroupStateResponseData.PartitionResult()
-            .setPartition(partitionId);
+        return new InitializeShareGroupStateResponseData.PartitionResult().setPartition(partitionId);
+    }
+
+    public static InitializeShareGroupStateResponseData toResponseData(Uuid topicId, int partitionId) {
+        return new InitializeShareGroupStateResponseData().setResults(List.of(
+            new InitializeShareGroupStateResponseData.InitializeStateResult()
+                .setTopicId(topicId)
+                .setPartitions(List.of(
+                    new InitializeShareGroupStateResponseData.PartitionResult()
+                        .setPartition(partitionId)
+                ))
+        ));
     }
 }
