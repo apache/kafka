@@ -65,7 +65,9 @@ import static org.apache.kafka.common.config.ConfigResource.Type.TOPIC;
 import static org.apache.kafka.common.metadata.MetadataRecordType.CONFIG_RECORD;
 import static org.apache.kafka.server.config.ConfigSynonym.HOURS_TO_MILLISECONDS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 @Timeout(value = 40)
@@ -515,6 +517,7 @@ public class ConfigurationControlManagerTest {
             setFeatureControl(featureManager).
             setKafkaConfigSchema(SCHEMA).
             build();
+        assertFalse(featureManager.isElrFeatureEnabled());
         ControllerResult<ApiError> result = manager.updateFeatures(
             Collections.singletonMap(EligibleLeaderReplicasVersion.FEATURE_NAME,
                 EligibleLeaderReplicasVersion.ELRV_1.featureLevel()),
@@ -524,6 +527,9 @@ public class ConfigurationControlManagerTest {
         assertNotNull(result.response());
         if (isMetadataVersionElrEnabled) {
             assertEquals(Errors.NONE, result.response().error());
+            RecordTestUtils.replayAll(manager, result.records());
+            RecordTestUtils.replayAll(featureManager, result.records());
+            assertTrue(featureManager.isElrFeatureEnabled());
         } else {
             assertEquals(Errors.INVALID_UPDATE_VERSION, result.response().error());
         }
