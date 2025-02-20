@@ -95,7 +95,7 @@ class MockFetcherThread(val mockLeader: MockLeaderEndPoint,
     for (batch <- batches) {
       batch.ensureValid()
 
-      skipRemainingBatches = skipRemainingBatches || hasInvalidPartitionLeaderEpoch(batch, leaderEpochForReplica);
+      skipRemainingBatches = skipRemainingBatches || hasHigherPartitionLeaderEpoch(batch, leaderEpochForReplica);
       if (skipRemainingBatches) {
         info(s"Skipping batch $batch because leader epoch is $leaderEpochForReplica")
       } else {
@@ -125,7 +125,7 @@ class MockFetcherThread(val mockLeader: MockLeaderEndPoint,
       batches.headOption.map(_.lastOffset).getOrElse(-1)))
   }
 
-  private def hasInvalidPartitionLeaderEpoch(batch: RecordBatch, leaderEpoch: Int): Boolean = {
+  private def hasHigherPartitionLeaderEpoch(batch: RecordBatch, leaderEpoch: Int): Boolean = {
     batch.partitionLeaderEpoch() != RecordBatch.NO_PARTITION_LEADER_EPOCH &&
     batch.partitionLeaderEpoch() > leaderEpoch
   }
