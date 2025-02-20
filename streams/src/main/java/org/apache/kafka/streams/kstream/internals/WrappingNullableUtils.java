@@ -53,7 +53,7 @@ public class WrappingNullableUtils {
         return serializerToUse;
     }
 
-    @SuppressWarnings({"rawtypes", "unchecked"})
+    @SuppressWarnings("unchecked")
     private static <T> Serde<T> prepareSerde(final Serde<T> specificSerde, final SerdeGetter getter, final boolean isKey) {
         final Serde<T> serdeToUse;
         if (specificSerde == null) {
