@@ -403,7 +403,7 @@ public class SharePartitionManager implements AutoCloseable {
         Optional<Consumer<Set<String>>> failedMetricsHandler
     ) {
         CompletableFuture<Void> allFutures = CompletableFuture.allOf(
-            futuresMap.values().toArray(new CompletableFuture[0]));
+            futuresMap.values().toArray(new CompletableFuture<?>[0]));
         return allFutures.thenApply(v -> {
             Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData> result = new HashMap<>();
             // Keep the set as same topic might appear multiple times. Multiple partitions can fail for same topic.

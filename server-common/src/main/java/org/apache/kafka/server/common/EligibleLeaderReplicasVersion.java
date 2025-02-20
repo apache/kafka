@@ -22,7 +22,7 @@ import java.util.Map;
 public enum EligibleLeaderReplicasVersion implements FeatureVersion {
 
     // Version 0 is the version disable ELR.
-    ELRV_0(0, MetadataVersion.MINIMUM_KRAFT_VERSION, Collections.emptyMap()),
+    ELRV_0(0, MetadataVersion.MINIMUM_VERSION, Collections.emptyMap()),
 
     // Version 1 enables the ELR (KIP-966).
     ELRV_1(1, MetadataVersion.IBP_4_0_IV1, Collections.emptyMap());

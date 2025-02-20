@@ -1464,7 +1464,7 @@ public class ReassignPartitionsCommand {
         ));
         requiredArgs.put(opts.listOpt, Collections.emptyList());
 
-        CommandLineUtils.checkRequiredArgs(opts.parser, opts.options, requiredArgs.get(action).toArray(new OptionSpec[0]));
+        CommandLineUtils.checkRequiredArgs(opts.parser, opts.options, requiredArgs.get(action).toArray(new OptionSpec<?>[0]));
 
         Map<OptionSpec<?>, List<OptionSpec<?>>> permittedArgs = new HashMap<>();
 

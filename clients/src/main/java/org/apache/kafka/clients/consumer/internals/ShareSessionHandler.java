@@ -107,6 +107,10 @@ public class ShareSessionHandler {
         nextAcknowledgements.put(topicIdPartition, partitionAcknowledgements);
     }
 
+    public boolean isNewSession() {
+        return nextMetadata.isNewSession();
+    }
+
     public ShareFetchRequest.Builder newShareFetchBuilder(String groupId, FetchConfig fetchConfig) {
         List<TopicIdPartition> added = new ArrayList<>();
         List<TopicIdPartition> removed = new ArrayList<>();

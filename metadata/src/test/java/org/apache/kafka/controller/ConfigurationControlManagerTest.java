@@ -64,7 +64,7 @@ import static org.apache.kafka.common.config.ConfigResource.Type.TOPIC;
 import static org.apache.kafka.common.metadata.MetadataRecordType.CONFIG_RECORD;
 import static org.apache.kafka.server.config.ConfigSynonym.HOURS_TO_MILLISECONDS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 
 @Timeout(value = 40)
@@ -472,7 +472,8 @@ public class ConfigurationControlManagerTest {
             Collections.singletonMap(EligibleLeaderReplicasVersion.FEATURE_NAME,
                 FeatureUpdate.UpgradeType.UPGRADE),
             false);
-        assertNull(result.response());
+        assertNotNull(result.response());
+        assertEquals(Errors.NONE, result.response().error());
         RecordTestUtils.replayAll(manager, result.records());
         RecordTestUtils.replayAll(featureManager, result.records());
 
