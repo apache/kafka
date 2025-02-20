@@ -21,6 +21,7 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.message.DeleteShareGroupStateRequestData;
@@ -55,6 +56,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -1639,6 +1641,36 @@ class ShareCoordinatorServiceTest {
 
         checkMetrics(metrics);
         checkPruneMetric(metrics, Topic.SHARE_GROUP_STATE_TOPIC_NAME, 0, true);
+
+        service.shutdown();
+    }
+
+    @Test
+    public void testShareStateTopicConfigs() {
+        CoordinatorRuntime<ShareCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        MockTime time = new MockTime();
+        MockTimer timer = new MockTimer(time);
+        PartitionWriter writer = mock(PartitionWriter.class);
+
+        Metrics metrics = new Metrics();
+        ShareCoordinatorService service = spy(new ShareCoordinatorService(
+            new LogContext(),
+            ShareCoordinatorTestConfig.testConfig(),
+            runtime,
+            new ShareCoordinatorMetrics(metrics),
+            time,
+            timer,
+            writer
+        ));
+
+        List<String> propNames = List.of(
+            TopicConfig.CLEANUP_POLICY_CONFIG,
+            TopicConfig.COMPRESSION_TYPE_CONFIG,
+            TopicConfig.SEGMENT_BYTES_CONFIG,
+            TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG
+        );
+        Properties actual = service.shareGroupStateTopicConfigs();
+        propNames.forEach(actual::contains);
 
         service.shutdown();
     }

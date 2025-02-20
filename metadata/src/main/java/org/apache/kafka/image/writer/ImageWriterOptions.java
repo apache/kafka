@@ -29,30 +29,22 @@ import java.util.function.Consumer;
 public final class ImageWriterOptions {
     public static class Builder {
         private MetadataVersion metadataVersion;
-        private MetadataVersion requestedMetadataVersion;
-        private boolean isEligibleLeaderReplicasEnabled = false;
         private Consumer<UnwritableMetadataException> lossHandler = e -> {
             throw e;
         };
+        private boolean isEligibleLeaderReplicasEnabled = false;
 
-        public Builder() {
-            this.metadataVersion = MetadataVersion.latestProduction();
+        public Builder(MetadataVersion metadataVersion) {
+            this.metadataVersion = metadataVersion;
         }
 
         public Builder(MetadataImage image) {
-            this.metadataVersion = image.features().metadataVersion();
+            this.metadataVersion = image.features().metadataVersionOrThrow();
             this.isEligibleLeaderReplicasEnabled = image.features().isElrEnabled();
         }
 
         public Builder setMetadataVersion(MetadataVersion metadataVersion) {
-            this.requestedMetadataVersion = metadataVersion;
-            if (metadataVersion.isLessThan(MetadataVersion.MINIMUM_BOOTSTRAP_VERSION)) {
-                // When writing an image, all versions less than 3.3-IV0 are treated as 3.0-IV1.
-                // This is because those versions don't support FeatureLevelRecord.
-                this.metadataVersion = MetadataVersion.MINIMUM_KRAFT_VERSION;
-            } else {
-                this.metadataVersion = metadataVersion;
-            }
+            this.metadataVersion = metadataVersion;
             return this;
         }
 
@@ -65,10 +57,6 @@ public final class ImageWriterOptions {
             return metadataVersion;
         }
 
-        public MetadataVersion requestedMetadataVersion() {
-            return requestedMetadataVersion;
-        }
-
         public boolean isEligibleLeaderReplicasEnabled() {
             return isEligibleLeaderReplicasEnabled;
         }
@@ -79,24 +67,21 @@ public final class ImageWriterOptions {
         }
 
         public ImageWriterOptions build() {
-            return new ImageWriterOptions(metadataVersion, lossHandler, requestedMetadataVersion, isEligibleLeaderReplicasEnabled);
+            return new ImageWriterOptions(metadataVersion, lossHandler, isEligibleLeaderReplicasEnabled);
         }
     }
 
     private final MetadataVersion metadataVersion;
-    private final MetadataVersion requestedMetadataVersion;
     private final Consumer<UnwritableMetadataException> lossHandler;
     private final boolean isEligibleLeaderReplicasEnabled;
 
     private ImageWriterOptions(
         MetadataVersion metadataVersion,
         Consumer<UnwritableMetadataException> lossHandler,
-        MetadataVersion orgMetadataVersion,
         boolean isEligibleLeaderReplicasEnabled
     ) {
         this.metadataVersion = metadataVersion;
         this.lossHandler = lossHandler;
-        this.requestedMetadataVersion = orgMetadataVersion;
         this.isEligibleLeaderReplicasEnabled = isEligibleLeaderReplicasEnabled;
     }
 
@@ -108,6 +93,6 @@ public final class ImageWriterOptions {
     }
 
     public void handleLoss(String loss) {
-        lossHandler.accept(new UnwritableMetadataException(requestedMetadataVersion, loss));
+        lossHandler.accept(new UnwritableMetadataException(metadataVersion, loss));
     }
 }
