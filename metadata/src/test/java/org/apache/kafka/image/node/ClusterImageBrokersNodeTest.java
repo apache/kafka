@@ -66,6 +66,7 @@ public class ClusterImageBrokersNodeTest {
             "listeners=[], " +
             "supportedFeatures={metadata.version: 1-4}, " +
             "rack=Optional.empty, " +
+            "pod=Optional.empty, " +
             "fenced=false, " +
             "inControlledShutdown=false, " +
             "isMigratingZkBroker=false, " +

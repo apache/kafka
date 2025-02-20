@@ -93,6 +93,11 @@ public class BrokerLifecycleManager {
     private final Optional<String> rack;
 
     /**
+     * The broker pod, or null if there is no configured pod.
+     */
+    private final Optional<String> pod;
+
+    /**
      * How long to wait for registration to succeed before failing the startup process.
      */
     private final long initialTimeoutNs;
@@ -239,6 +244,7 @@ public class BrokerLifecycleManager {
         this.logger = logContext.logger(BrokerLifecycleManager.class);
         this.nodeId = config.nodeId();
         this.rack = config.rack();
+        this.pod = config.pod();
         this.initialTimeoutNs = MILLISECONDS.toNanos(config.initialRegistrationTimeoutMs());
         this.eventQueue = new KafkaEventQueue(
                 time,
@@ -490,6 +496,7 @@ public class BrokerLifecycleManager {
             .setIncarnationId(incarnationId)
             .setListeners(advertisedListeners)
             .setRack(rack.orElse(null))
+            .setPod(pod.orElse(null))
             .setPreviousBrokerEpoch(previousBrokerEpoch.orElse(-1L))
             .setLogDirs(sortedLogDirs);
         if (logger.isDebugEnabled()) {

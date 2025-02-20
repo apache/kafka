@@ -389,7 +389,7 @@ public class BrokerRegistration {
     @Override
     public int hashCode() {
         return Objects.hash(id, epoch, incarnationId, listeners, supportedFeatures,
-            rack, fenced, inControlledShutdown, isMigratingZkBroker, directories, cordonedDirectories);
+            rack, pod, fenced, inControlledShutdown, isMigratingZkBroker, directories, cordonedDirectories);
     }
 
     @Override
@@ -424,6 +424,7 @@ public class BrokerRegistration {
                         collect(Collectors.joining(", ")) +
                 "}" +
                 ", rack=" + rack +
+                ", pod=" + pod +
                 ", fenced=" + fenced +
                 ", inControlledShutdown=" + inControlledShutdown +
                 ", isMigratingZkBroker=" + isMigratingZkBroker +
