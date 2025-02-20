@@ -24,9 +24,6 @@ import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.stream.Collectors;
 
 public class DeleteShareGroupOffsetsRequest extends AbstractRequest {
     public static class Builder extends AbstractRequest.Builder<DeleteShareGroupOffsetsRequest> {
@@ -60,19 +57,16 @@ public class DeleteShareGroupOffsetsRequest extends AbstractRequest {
         this.data = data;
     }
 
+    public DeleteShareGroupOffsetsResponse getErrorResponse(int throttleTimeMs, Errors error) {
+        return new DeleteShareGroupOffsetsResponse(new DeleteShareGroupOffsetsResponseData()
+            .setThrottleTimeMs(throttleTimeMs)
+            .setErrorMessage(error.message())
+            .setErrorCode(error.code()));
+    }
+
     @Override
     public DeleteShareGroupOffsetsResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-        List<DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic> results = new ArrayList<>();
-        data.topics().forEach(
-            topicResult -> results.add(new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic()
-                .setTopicName(topicResult.topicName())
-                .setPartitions(topicResult.partitions().stream()
-                    .map(partitionData -> new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponsePartition()
-                        .setPartitionIndex(partitionData)
-                        .setErrorCode(Errors.forException(e).code()))
-                    .collect(Collectors.toList()))));
-        return new DeleteShareGroupOffsetsResponse(new DeleteShareGroupOffsetsResponseData()
-            .setResponses(results));
+        return getErrorResponse(throttleTimeMs, Errors.forException(e));
     }
 
     @Override
@@ -85,5 +79,11 @@ public class DeleteShareGroupOffsetsRequest extends AbstractRequest {
             new DeleteShareGroupOffsetsRequestData(new ByteBufferAccessor(buffer), version),
             version
         );
+    }
+
+    public static DeleteShareGroupOffsetsResponseData getErrorDeleteResponseData(Errors error) {
+        return new DeleteShareGroupOffsetsResponseData()
+            .setErrorCode(error.code())
+            .setErrorMessage(error.message());
     }
 }
