@@ -51,7 +51,7 @@ public class LoggersTest {
 
     @AfterEach
     public void restore() {
-        loggers.setLevel("", INFO.name()); // Resetting the root logger to INFO level
+        loggers.setLevel("", INFO.name());
     }
 
     @Test
