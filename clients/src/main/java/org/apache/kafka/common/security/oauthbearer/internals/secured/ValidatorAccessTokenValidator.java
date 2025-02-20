@@ -44,6 +44,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 
 import javax.security.auth.login.AppConfigurationEntry;
 
@@ -88,7 +89,6 @@ public class ValidatorAccessTokenValidator implements AccessTokenValidator {
      * a new instance for each particular set of configuration. Because each set of configuration
      * may have multiple instances, we want to reuse the single instance.
      */
-
     private static final Map<VerificationKeyResolverKey, CloseableVerificationKeyResolver> VERIFICATION_KEY_RESOLVER_CACHE = new HashMap<>();
 
     private final Time time;
@@ -178,7 +178,6 @@ public class ValidatorAccessTokenValidator implements AccessTokenValidator {
      * @return {@link OAuthBearerToken}
      * @throws ValidateException Thrown on errors performing validation of given token
      */
-
     @SuppressWarnings("unchecked")
     public OAuthBearerToken validate(String accessToken) throws ValidateException {
         SerializedJwt serializedJwt = new SerializedJwt(accessToken);
@@ -237,20 +236,24 @@ public class ValidatorAccessTokenValidator implements AccessTokenValidator {
 
     }
     /**
-     * <code>VkrKey</code> is a simple structure which encapsulates the criteria for different
-     * sets of configuration. This will allow us to use this object as a key in a {@link Map}
-     * to keep a single instance per key.
+     * <code>VerificationKeyResolverKey</code> is a simple structure which encapsulates the criteria
+     * for different sets of configuration. This will allow us to use this object as a key in a
+     * {@link Map} to keep a single instance per key.
      */
-
     private static class VerificationKeyResolverKey {
 
         private final Map<String, ?> configs;
 
-        private final List<AppConfigurationEntry> jaasConfigEntries;
+        // The equality of two lists cannot be determined with AppConfigurationEntry directly since
+        // that class does not implement hashCode() or equals(). So the JAAS options from the
+        // AppConfigurationEntry entries are extracted for comparison purposes.
+        private final List<Map<String, ?>> jaasOptions;
 
         public VerificationKeyResolverKey(Map<String, ?> configs, List<AppConfigurationEntry> jaasConfigEntries) {
             this.configs = configs;
-            this.jaasConfigEntries = jaasConfigEntries;
+            this.jaasOptions = jaasConfigEntries.stream()
+                .map(AppConfigurationEntry::getOptions)
+                .collect(Collectors.toList());
         }
 
         @Override
@@ -264,12 +267,12 @@ public class ValidatorAccessTokenValidator implements AccessTokenValidator {
             }
 
             VerificationKeyResolverKey that = (VerificationKeyResolverKey) o;
-            return configs.equals(that.configs) && jaasConfigEntries.equals(that.jaasConfigEntries);
+            return configs.equals(that.configs) && jaasOptions.equals(that.jaasOptions);
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(configs, jaasConfigEntries);
+            return Objects.hash(configs, jaasOptions);
         }
     }
 
@@ -279,7 +282,6 @@ public class ValidatorAccessTokenValidator implements AccessTokenValidator {
      * {@link AuthenticateCallbackHandler} instances and perform the lifecycle methods the
      * appropriate number of times.
      */
-
     private static class RefCountingVerificationKeyResolver implements CloseableVerificationKeyResolver {
 
         private final CloseableVerificationKeyResolver delegate;
@@ -287,7 +289,7 @@ public class ValidatorAccessTokenValidator implements AccessTokenValidator {
         private final AtomicInteger count = new AtomicInteger(0);
 
         public RefCountingVerificationKeyResolver(CloseableVerificationKeyResolver delegate) {
-            this.delegate = delegate;
+            this.delegate = Objects.requireNonNull(delegate);
         }
 
         @Override
