@@ -29,17 +29,11 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MetadataVersionTest {
-    @Test
-    public void testKRaftFeatureLevelsBefore3_0_IV1() {
-        for (int i = 0; i < MetadataVersion.IBP_3_0_IV1.ordinal(); i++) {
-            assertEquals(-1, MetadataVersion.VERSIONS[i].featureLevel());
-        }
-    }
 
     @Test
-    public void testKRaftFeatureLevelsAtAndAfter3_0_IV1() {
-        for (int i = MetadataVersion.IBP_3_0_IV1.ordinal(); i < MetadataVersion.VERSIONS.length; i++) {
-            int expectedLevel = i - MetadataVersion.IBP_3_0_IV1.ordinal() + 1;
+    public void testFeatureLevels() {
+        for (int i = MINIMUM_VERSION.ordinal(); i < MetadataVersion.VERSIONS.length; i++) {
+            int expectedLevel = i + MINIMUM_VERSION.featureLevel();
             assertEquals(expectedLevel, MetadataVersion.VERSIONS[i].featureLevel());
         }
     }
@@ -47,20 +41,8 @@ class MetadataVersionTest {
     @Test
     @SuppressWarnings("checkstyle:JavaNCSS")
     public void testFromVersionString() {
-        assertEquals(IBP_3_0_IV1, MetadataVersion.fromVersionString("3.0"));
-        assertEquals(IBP_3_0_IV1, MetadataVersion.fromVersionString("3.0-IV1"));
-
-        assertEquals(IBP_3_1_IV0, MetadataVersion.fromVersionString("3.1"));
-        assertEquals(IBP_3_1_IV0, MetadataVersion.fromVersionString("3.1-IV0"));
-
-        assertEquals(IBP_3_2_IV0, MetadataVersion.fromVersionString("3.2"));
-        assertEquals(IBP_3_2_IV0, MetadataVersion.fromVersionString("3.2-IV0"));
-
         // 3.3-IV3 is the latest production version in the 3.3 line
         assertEquals(IBP_3_3_IV3, MetadataVersion.fromVersionString("3.3"));
-        assertEquals(IBP_3_3_IV0, MetadataVersion.fromVersionString("3.3-IV0"));
-        assertEquals(IBP_3_3_IV1, MetadataVersion.fromVersionString("3.3-IV1"));
-        assertEquals(IBP_3_3_IV2, MetadataVersion.fromVersionString("3.3-IV2"));
         assertEquals(IBP_3_3_IV3, MetadataVersion.fromVersionString("3.3-IV3"));
 
         // 3.4-IV0 is the latest production version in the 3.4 line
@@ -106,12 +88,6 @@ class MetadataVersionTest {
 
     @Test
     public void testShortVersion() {
-        assertEquals("3.0", IBP_3_0_IV1.shortVersion());
-        assertEquals("3.1", IBP_3_1_IV0.shortVersion());
-        assertEquals("3.2", IBP_3_2_IV0.shortVersion());
-        assertEquals("3.3", IBP_3_3_IV0.shortVersion());
-        assertEquals("3.3", IBP_3_3_IV1.shortVersion());
-        assertEquals("3.3", IBP_3_3_IV2.shortVersion());
         assertEquals("3.3", IBP_3_3_IV3.shortVersion());
         assertEquals("3.4", IBP_3_4_IV0.shortVersion());
         assertEquals("3.5", IBP_3_5_IV0.shortVersion());
@@ -136,12 +112,6 @@ class MetadataVersionTest {
 
     @Test
     public void testVersion() {
-        assertEquals("3.0-IV1", IBP_3_0_IV1.version());
-        assertEquals("3.1-IV0", IBP_3_1_IV0.version());
-        assertEquals("3.2-IV0", IBP_3_2_IV0.version());
-        assertEquals("3.3-IV0", IBP_3_3_IV0.version());
-        assertEquals("3.3-IV1", IBP_3_3_IV1.version());
-        assertEquals("3.3-IV2", IBP_3_3_IV2.version());
         assertEquals("3.3-IV3", IBP_3_3_IV3.version());
         assertEquals("3.4-IV0", IBP_3_4_IV0.version());
         assertEquals("3.5-IV0", IBP_3_5_IV0.version());
@@ -175,41 +145,17 @@ class MetadataVersionTest {
 
     @Test
     public void testMetadataChanged() {
-        assertFalse(MetadataVersion.checkIfMetadataChanged(IBP_3_2_IV0, IBP_3_2_IV0));
-        assertTrue(MetadataVersion.checkIfMetadataChanged(IBP_3_2_IV0, IBP_3_1_IV0));
-        assertTrue(MetadataVersion.checkIfMetadataChanged(IBP_3_2_IV0, IBP_3_0_IV1));
-        assertTrue(MetadataVersion.checkIfMetadataChanged(IBP_3_2_IV0, IBP_3_0_IV1));
-        assertTrue(MetadataVersion.checkIfMetadataChanged(IBP_3_3_IV1, IBP_3_3_IV0));
+        assertTrue(MetadataVersion.checkIfMetadataChanged(IBP_3_4_IV0, IBP_3_3_IV3));
+        assertFalse(MetadataVersion.checkIfMetadataChanged(IBP_3_5_IV0, IBP_3_4_IV0));
+        assertFalse(MetadataVersion.checkIfMetadataChanged(IBP_3_5_IV1, IBP_3_5_IV0));
+        assertTrue(MetadataVersion.checkIfMetadataChanged(IBP_3_6_IV0, IBP_3_5_IV1));
+        assertTrue(MetadataVersion.checkIfMetadataChanged(IBP_3_6_IV1, IBP_3_6_IV0));
 
         // Check that argument order doesn't matter
-        assertTrue(MetadataVersion.checkIfMetadataChanged(IBP_3_1_IV0, IBP_3_2_IV0));
-        assertTrue(MetadataVersion.checkIfMetadataChanged(IBP_3_0_IV1, IBP_3_2_IV0));
-    }
-
-    @Test
-    public void testKRaftVersions() {
-        for (MetadataVersion metadataVersion : MetadataVersion.VERSIONS) {
-            if (metadataVersion.isKRaftSupported()) {
-                assertTrue(metadataVersion.featureLevel() > 0);
-            } else {
-                assertEquals(-1, metadataVersion.featureLevel());
-            }
-        }
-
-        for (MetadataVersion metadataVersion : MetadataVersion.VERSIONS) {
-            if (metadataVersion.isAtLeast(IBP_3_0_IV1)) {
-                assertTrue(metadataVersion.isKRaftSupported(), metadataVersion.toString());
-            } else {
-                assertFalse(metadataVersion.isKRaftSupported());
-            }
-        }
-    }
-
-    @ParameterizedTest
-    @EnumSource(value = MetadataVersion.class)
-    public void testIsInControlledShutdownStateSupported(MetadataVersion metadataVersion) {
-        assertEquals(metadataVersion.isAtLeast(IBP_3_3_IV3),
-            metadataVersion.isInControlledShutdownStateSupported());
+        assertTrue(MetadataVersion.checkIfMetadataChanged(IBP_3_3_IV3, IBP_3_4_IV0));
+        assertFalse(MetadataVersion.checkIfMetadataChanged(IBP_3_4_IV0, IBP_3_5_IV0));
+        assertFalse(MetadataVersion.checkIfMetadataChanged(IBP_3_5_IV0, IBP_3_5_IV1));
+        assertTrue(MetadataVersion.checkIfMetadataChanged(IBP_3_5_IV1, IBP_3_6_IV0));
     }
 
     @ParameterizedTest
@@ -284,7 +230,7 @@ class MetadataVersionTest {
 
     /**
      * We need to ensure that the latest production MV doesn't inadvertently rely on an unstable
-     * request version. Currently, the broker selects the version for some inter-broker RPCs based on the MV 
+     * request version. Currently, the broker selects the version for some inter-broker RPCs based on the MV
      * rather than using the supported version from the ApiResponse.
      */
     @Test

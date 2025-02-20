@@ -24,7 +24,6 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kafka.log._
 import kafka.server._
 import kafka.utils._
-import org.apache.kafka.common.TopicIdPartition
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.record.{MemoryRecords, SimpleRecord}
@@ -33,7 +32,7 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.metadata.{LeaderAndIsr, MockConfigRepository}
-import org.apache.kafka.server.common.RequestLocal
+import org.apache.kafka.server.common.{RequestLocal, TopicIdPartition}
 import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams}
 import org.apache.kafka.server.util.MockTime
@@ -74,6 +73,7 @@ class PartitionLockTest extends Logging {
   var partition: Partition = _
 
   private val topicPartition = new TopicPartition("test-topic", 0)
+  private val topicId = Uuid.randomUuid()
 
   @BeforeEach
   def setUp(): Unit = {
@@ -332,7 +332,7 @@ class PartitionLockTest extends Logging {
       }
     }
 
-    val topicIdPartition = new TopicIdPartition(partition.topicId.getOrElse(Uuid.ZERO_UUID), topicPartition)
+    val topicIdPartition = new TopicIdPartition(topicId, topicPartition.partition)
     when(offsetCheckpoints.fetch(
       ArgumentMatchers.anyString,
       ArgumentMatchers.eq(topicPartition)
@@ -342,7 +342,7 @@ class PartitionLockTest extends Logging {
       ArgumentMatchers.any[LeaderAndIsr]
     )).thenReturn(new CompletableFuture[LeaderAndIsr]())
 
-    partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
+    partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, Some(topicId))
 
     val controllerEpoch = 0
     val replicas = (0 to numReplicaFetchers).map(i => Integer.valueOf(brokerId + i)).toList.asJava
@@ -356,7 +356,7 @@ class PartitionLockTest extends Logging {
       .setIsr(isr)
       .setPartitionEpoch(1)
       .setReplicas(replicas)
-      .setIsNew(true), offsetCheckpoints, None), "Expected become leader transition to succeed")
+      .setIsNew(true), offsetCheckpoints, Some(topicId)), "Expected become leader transition to succeed")
 
     partition
   }

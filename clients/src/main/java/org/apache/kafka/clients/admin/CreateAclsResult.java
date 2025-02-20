@@ -49,6 +49,6 @@ public class CreateAclsResult {
      * Return a future which succeeds only if all the ACL creations succeed.
      */
     public KafkaFuture<Void> all() {
-        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0]));
+        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture<?>[0]));
     }
 }

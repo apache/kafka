@@ -54,6 +54,6 @@ public class AlterPartitionReassignmentsResult {
      * Return a future which succeeds only if all the reassignments were successfully initiated.
      */
     public KafkaFuture<Void> all() {
-        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0]));
+        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture<?>[0]));
     }
 }

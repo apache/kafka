@@ -44,7 +44,6 @@ import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
-import org.apache.kafka.common.test.api.ClusterTests;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.config.QuotaConfig;
@@ -79,7 +78,6 @@ import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.config.ConfigResource.Type.TOPIC;
-import static org.apache.kafka.server.common.MetadataVersion.IBP_3_3_IV0;
 import static org.apache.kafka.server.config.QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG;
 import static org.apache.kafka.server.config.QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG;
 import static org.apache.kafka.server.config.ReplicationConfigs.AUTO_LEADER_REBALANCE_ENABLE_CONFIG;
@@ -124,18 +122,6 @@ public class ReassignPartitionsCommandTest {
 
     @ClusterTest
     public void testReassignment() throws Exception {
-        createTopics();
-        executeAndVerifyReassignment();
-    }
-
-    @ClusterTests({
-        @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, metadataVersion = IBP_3_3_IV0)
-    })
-    public void testReassignmentWithAlterPartitionDisabled() throws Exception {
-        // Test reassignment when the IBP is on an older version which does not use
-        // the `AlterPartition` API. In this case, the controller will register individual
-        // watches for each reassigning partition so that the reassignment can be
-        // completed as soon as the ISR is expanded.
         createTopics();
         executeAndVerifyReassignment();
     }
