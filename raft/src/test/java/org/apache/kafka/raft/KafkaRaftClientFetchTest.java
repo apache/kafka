@@ -16,20 +16,25 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.ArbitraryMemoryRecords;
 import org.apache.kafka.common.record.InvalidMemoryRecordsProvider;
 import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.server.common.KRaftVersion;
 
 import net.jqwik.api.AfterFailureMode;
 import net.jqwik.api.ForAll;
 import net.jqwik.api.Property;
 
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ArgumentsSource;
 
+import java.nio.ByteBuffer;
 import java.util.Optional;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -39,21 +44,20 @@ public final class KafkaRaftClientFetchTest {
     void testRandomRecords(
         @ForAll(supplier = ArbitraryMemoryRecords.class) MemoryRecords memoryRecords
     ) throws Exception {
-        testFetchResponseWithInvalidRecord(memoryRecords);
+        testFetchResponseWithInvalidRecord(memoryRecords, Integer.MAX_VALUE);
     }
 
     @ParameterizedTest
     @ArgumentsSource(InvalidMemoryRecordsProvider.class)
     void testInvalidMemoryRecords(MemoryRecords records, Optional<Class<Exception>> expectedException) throws Exception {
         // CorruptRecordException are handled by the KafkaRaftClient so ignore the expected exception
-        testFetchResponseWithInvalidRecord(records);
+        testFetchResponseWithInvalidRecord(records, Integer.MAX_VALUE);
     }
 
-    private static void testFetchResponseWithInvalidRecord(MemoryRecords records) throws Exception {
+    private static void testFetchResponseWithInvalidRecord(MemoryRecords records, int epoch) throws Exception {
         int localId = KafkaRaftClientTest.randomReplicaId();
         ReplicaKey local = KafkaRaftClientTest.replicaKey(localId, true);
         ReplicaKey electedLeader = KafkaRaftClientTest.replicaKey(localId + 1, true);
-        int epoch = 2;
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(
             local.id(),
@@ -81,5 +85,68 @@ public final class KafkaRaftClientFetchTest {
         context.client.poll();
 
         assertEquals(oldLogEndOffset, context.log.endOffset().offset());
+    }
+
+    @Test
+    void testReplicationOfInvalidPartitionLeaderEpoch() throws Exception {
+        int epoch = 2;
+        int localId = KafkaRaftClientTest.randomReplicaId();
+        ReplicaKey local = KafkaRaftClientTest.replicaKey(localId, true);
+        ReplicaKey electedLeader = KafkaRaftClientTest.replicaKey(localId + 1, true);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(
+            local.id(),
+            local.directoryId().get()
+        )
+            .withStartingVoters(
+                VoterSetTest.voterSet(Stream.of(local, electedLeader)), KRaftVersion.KRAFT_VERSION_1
+            )
+            .withElectedLeader(epoch, electedLeader.id())
+            .withRaftProtocol(RaftClientTestContext.RaftProtocol.KIP_996_PROTOCOL)
+            .build();
+
+        context.pollUntilRequest();
+        RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
+        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+
+        long oldLogEndOffset = context.log.endOffset().offset();
+        int numberOfRecords = 10;
+        MemoryRecords batchWithValidEpoch = MemoryRecords.withRecords(
+            oldLogEndOffset,
+            Compression.NONE,
+            epoch,
+            IntStream
+                .range(0, numberOfRecords)
+                .mapToObj(number -> new SimpleRecord(Integer.toString(number).getBytes()))
+                .toArray(SimpleRecord[]::new)
+        );
+
+        MemoryRecords batchWithInvalidEpoch = MemoryRecords.withRecords(
+            oldLogEndOffset + numberOfRecords,
+            Compression.NONE,
+            epoch + 1,
+            IntStream
+                .range(0, numberOfRecords)
+                .mapToObj(number -> new SimpleRecord(Integer.toString(number).getBytes()))
+                .toArray(SimpleRecord[]::new)
+        );
+
+        var buffer = ByteBuffer.allocate(batchWithValidEpoch.sizeInBytes() + batchWithInvalidEpoch.sizeInBytes());
+        buffer.put(batchWithValidEpoch.buffer());
+        buffer.put(batchWithInvalidEpoch.buffer());
+        buffer.flip();
+
+        MemoryRecords records = MemoryRecords.readableRecords(buffer);
+
+        context.deliverResponse(
+            fetchRequest.correlationId(),
+            fetchRequest.destination(),
+            context.fetchResponse(epoch, electedLeader.id(), records, 0L, Errors.NONE)
+        );
+
+        context.client.poll();
+
+        // Check that only the first batch was appended because the second batch has a greater epoch
+        assertEquals(oldLogEndOffset + numberOfRecords, context.log.endOffset().offset());
     }
 }

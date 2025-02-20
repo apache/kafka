@@ -631,6 +631,7 @@ class AbstractFetcherThreadTest {
 
   @Test
   def testFollowerFetchOutOfRangeLow(): Unit = {
+    val leaderEpoch = 4
     val partition = new TopicPartition("topic", 0)
     val mockLeaderEndpoint = new MockLeaderEndPoint(truncateOnFetch = truncateOnFetch, version = version)
     val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint)
@@ -640,14 +641,19 @@ class AbstractFetcherThreadTest {
     val replicaLog = Seq(
       mkBatch(baseOffset = 0, leaderEpoch = 0, new SimpleRecord("a".getBytes)))
 
-    val replicaState = PartitionState(replicaLog, leaderEpoch = 0, highWatermark = 0L)
+    val replicaState = PartitionState(replicaLog, leaderEpoch = leaderEpoch, highWatermark = 0L)
     fetcher.setReplicaState(partition, replicaState)
-    fetcher.addPartitions(Map(partition -> initialFetchState(topicIds.get(partition.topic), 3L, leaderEpoch = 0)))
+    fetcher.addPartitions(
+      Map(
+        partition -> initialFetchState(topicIds.get(partition.topic), 3L, leaderEpoch = leaderEpoch)
+      )
+    )
 
     val leaderLog = Seq(
-      mkBatch(baseOffset = 2, leaderEpoch = 4, new SimpleRecord("c".getBytes)))
+      mkBatch(baseOffset = 2, leaderEpoch = leaderEpoch, new SimpleRecord("c".getBytes))
+    )
 
-    val leaderState = PartitionState(leaderLog, leaderEpoch = 0, highWatermark = 2L)
+    val leaderState = PartitionState(leaderLog, leaderEpoch = leaderEpoch, highWatermark = 2L)
     fetcher.mockLeader.setLeaderState(partition, leaderState)
     fetcher.mockLeader.setReplicaPartitionStateCallback(fetcher.replicaPartitionState)
 
@@ -674,6 +680,7 @@ class AbstractFetcherThreadTest {
 
   @Test
   def testRetryAfterUnknownLeaderEpochInLatestOffsetFetch(): Unit = {
+    val leaderEpoch = 4
     val partition = new TopicPartition("topic", 0)
     val mockLeaderEndPoint = new MockLeaderEndPoint(truncateOnFetch = truncateOnFetch, version = version) {
       val tries = new AtomicInteger(0)
@@ -688,16 +695,18 @@ class AbstractFetcherThreadTest {
 
     // The follower begins from an offset which is behind the leader's log start offset
     val replicaLog = Seq(
-      mkBatch(baseOffset = 0, leaderEpoch = 0, new SimpleRecord("a".getBytes)))
+      mkBatch(baseOffset = 0, leaderEpoch = 0, new SimpleRecord("a".getBytes))
+    )
 
-    val replicaState = PartitionState(replicaLog, leaderEpoch = 0, highWatermark = 0L)
+    val replicaState = PartitionState(replicaLog, leaderEpoch = leaderEpoch, highWatermark = 0L)
     fetcher.setReplicaState(partition, replicaState)
-    fetcher.addPartitions(Map(partition -> initialFetchState(topicIds.get(partition.topic), 3L, leaderEpoch = 0)))
+    fetcher.addPartitions(Map(partition -> initialFetchState(topicIds.get(partition.topic), 3L, leaderEpoch = leaderEpoch)))
 
     val leaderLog = Seq(
-      mkBatch(baseOffset = 2, leaderEpoch = 4, new SimpleRecord("c".getBytes)))
+      mkBatch(baseOffset = 2, leaderEpoch = 4, new SimpleRecord("c".getBytes))
+    )
 
-    val leaderState = PartitionState(leaderLog, leaderEpoch = 0, highWatermark = 2L)
+    val leaderState = PartitionState(leaderLog, leaderEpoch = leaderEpoch, highWatermark = 2L)
     fetcher.mockLeader.setLeaderState(partition, leaderState)
     fetcher.mockLeader.setReplicaPartitionStateCallback(fetcher.replicaPartitionState)
 
@@ -712,6 +721,47 @@ class AbstractFetcherThreadTest {
 
     assertEquals(leaderState.logStartOffset, replicaState.logStartOffset)
     assertEquals(leaderState.logEndOffset, replicaState.logEndOffset)
+    assertEquals(leaderState.highWatermark, replicaState.highWatermark)
+  }
+
+  @Test
+  def testReplicateBatchesUpToLeaderEpoch(): Unit = {
+    val leaderEpoch = 4
+    val partition = new TopicPartition("topic", 0)
+    val mockLeaderEndpoint = new MockLeaderEndPoint(truncateOnFetch = truncateOnFetch, version = version)
+    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint)
+    val fetcher = new MockFetcherThread(mockLeaderEndpoint, mockTierStateMachine, failedPartitions = failedPartitions)
+
+    val replicaState = PartitionState(Seq(), leaderEpoch = leaderEpoch, highWatermark = 0L)
+    fetcher.setReplicaState(partition, replicaState)
+    fetcher.addPartitions(
+      Map(
+        partition -> initialFetchState(topicIds.get(partition.topic), 3L, leaderEpoch = leaderEpoch)
+      )
+    )
+
+    val leaderLog = Seq(
+      mkBatch(baseOffset = 0, leaderEpoch = leaderEpoch - 1, new SimpleRecord("c".getBytes)),
+      mkBatch(baseOffset = 1, leaderEpoch = leaderEpoch, new SimpleRecord("d".getBytes)),
+      mkBatch(baseOffset = 2, leaderEpoch = leaderEpoch + 1, new SimpleRecord("e".getBytes))
+    )
+
+    val leaderState = PartitionState(leaderLog, leaderEpoch = leaderEpoch, highWatermark = 0L)
+    fetcher.mockLeader.setLeaderState(partition, leaderState)
+    fetcher.mockLeader.setReplicaPartitionStateCallback(fetcher.replicaPartitionState)
+
+    val expectedFetchState = if (truncateOnFetch) Fetching else Truncating
+    assertEquals(Option(expectedFetchState), fetcher.fetchState(partition).map(_.state))
+    assertEquals(0, replicaState.logStartOffset)
+    assertEquals(List(), replicaState.log.toList)
+
+    TestUtils.waitUntilTrue(() => {
+      fetcher.doWork()
+      fetcher.replicaPartitionState(partition).log == fetcher.mockLeader.leaderPartitionState(partition).log.dropRight(1)
+    }, "Failed to reconcile leader and follower logs up to the leader epoch")
+
+    assertEquals(leaderState.logStartOffset, replicaState.logStartOffset)
+    assertEquals(leaderState.logEndOffset - 1, replicaState.logEndOffset)
     assertEquals(leaderState.highWatermark, replicaState.highWatermark)
   }
 
