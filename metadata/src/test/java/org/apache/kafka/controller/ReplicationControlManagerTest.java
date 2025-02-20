@@ -147,6 +147,7 @@ import static org.apache.kafka.common.protocol.Errors.THROTTLING_QUOTA_EXCEEDED;
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_SERVER_ERROR;
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_ID;
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_OR_PARTITION;
+import static org.apache.kafka.common.protocol.Errors.DESIGNATED_LEADER_NOT_AVAILABLE;
 import static org.apache.kafka.controller.ControllerRequestContextUtil.QUOTA_EXCEEDED_IN_TEST_MSG;
 import static org.apache.kafka.controller.ControllerRequestContextUtil.anonymousContextFor;
 import static org.apache.kafka.controller.ControllerRequestContextUtil.anonymousContextWithMutationQuotaExceededFor;
@@ -2765,6 +2766,62 @@ public class ReplicationControlManagerTest {
                         setLeader(0),
                     MetadataVersion.latestTesting().partitionChangeRecordVersion())),
             election2Result.records());
+    }
+
+    @Test
+    public void testDesignatedLeaderElection() {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().build();
+        ReplicationControlManager replication = ctx.replicationControl;
+
+        ctx.registerBrokers(0, 1, 2, 3, 4);
+        ctx.unfenceBrokers(0, 1, 2, 3, 4);
+
+        Uuid fooId = ctx.createTestTopic("foo", new int[][]{
+            new int[]{0, 1, 2}, new int[]{1, 2, 3}, new int[]{2, 3, 4}}).topicId();
+
+        var t0 = new TopicIdPartition(fooId, 0);
+        var t1 = new TopicIdPartition(fooId, 1);
+        var t2 = new TopicIdPartition(fooId, 2);
+
+        ctx.fenceBrokers(0, 1, 2);
+
+        assertLeaderAndIsr(replication, t0, NO_LEADER, new int[] {2});
+        assertLeaderAndIsr(replication, t1, 3, new int[] {3});
+        assertLeaderAndIsr(replication, t2, 3, new int[] {3, 4});
+
+        ElectLeadersRequestData request1 = new ElectLeadersRequestData().
+                setElectionType(ElectionType.DESIGNATED.value).
+                setTopicPartitions(new TopicPartitionsCollection(List.of(
+                        new TopicPartitions().setTopic("foo").
+                                setPartitions(List.of(0, 1, 2)).
+                                setDesignatedLeaders(List.of(1, 3, 3))).iterator()));
+        ControllerResult<ElectLeadersResponseData> election1Result =
+                replication.electLeaders(request1);
+        ElectLeadersResponseData expectedResponse1 = buildElectLeadersResponse(NONE, false, Utils.mkMap(
+                Utils.mkEntry(
+                        new TopicPartition("foo", 0),
+                        new ApiError(DESIGNATED_LEADER_NOT_AVAILABLE)
+                ),
+                Utils.mkEntry(
+                        new TopicPartition("foo", 1),
+                        new ApiError(ELECTION_NOT_NEEDED)
+                ),
+                Utils.mkEntry(
+                        new TopicPartition("foo", 2),
+                        new ApiError(ELECTION_NOT_NEEDED)
+                )
+        ));
+        assertElectLeadersResponse(expectedResponse1, election1Result.response());
+        assertEquals(List.of(), election1Result.records());
+
+        ctx.unfenceBrokers(0);
+
+        ElectLeadersRequestData request2 = new ElectLeadersRequestData().
+                setElectionType(ElectionType.DESIGNATED.value).
+                setTopicPartitions(new TopicPartitionsCollection(List.of(
+                        new TopicPartitions().setTopic("foo").
+                                setPartitions(List.of(0)).
+                                setDesignatedLeaders(List.of(0))).iterator()));
     }
 
     @Test

@@ -19,7 +19,6 @@ package org.apache.kafka.controller;
 
 import org.apache.kafka.common.DirectoryId;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.message.AlterPartitionRequestData.BrokerState;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.metadata.LeaderRecoveryState;
@@ -103,7 +102,7 @@ public class PartitionChangeBuilder {
     private LeaderRecoveryState targetLeaderRecoveryState;
     private boolean eligibleLeaderReplicasEnabled;
     private DefaultDirProvider defaultDirProvider;
-    private int desiredLeader;
+    private int designatedLeader;
 
     // Whether allow electing last known leader in a Balanced recovery. Note, the last known leader will be stored in the
     // lastKnownElr field if enabled.
@@ -202,8 +201,8 @@ public class PartitionChangeBuilder {
         return this;
     }
 
-    public PartitionChangeBuilder setDesiredLeader(int desiredLeader) {
-        this.desiredLeader = desiredLeader;
+    public PartitionChangeBuilder setDesignatedLeader(int designatedLeader) {
+        this.designatedLeader = designatedLeader;
         return this;
     }
 
@@ -234,7 +233,6 @@ public class PartitionChangeBuilder {
         } else if (election == Election.DESIGNATED) {
             return electDesignatedLeader();
         }
-
         return electAnyLeader();
     }
 
@@ -242,11 +240,17 @@ public class PartitionChangeBuilder {
      * Assumes that the election type is Election.DESIGNATED
      */
     private ElectionResult electDesignatedLeader() {
-        if (isValidNewLeader(desiredLeader)) {
-            return new ElectionResult(desiredLeader, false);
+        if (isValidNewLeader(designatedLeader)) {
+            return new ElectionResult(designatedLeader, false);
         }
 
-        throw new UnknownServerException("Invalid desired leader");
+        // In this case, designatedLeader is outside ELR / ISR
+        // As such we designate the election as "unclean"
+        if (isAcceptableLeader.test(designatedLeader)) {
+            return new ElectionResult(designatedLeader, true);
+        }
+
+        return new ElectionResult(NO_LEADER, false);
     }
 
     /**

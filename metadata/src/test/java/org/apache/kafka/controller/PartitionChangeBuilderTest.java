@@ -279,7 +279,14 @@ public class PartitionChangeBuilderTest {
             4,
             false
         );
-
+        assertElectLeaderEquals(
+                createFooBuilder(version).setElection(Election.DESIGNATED).setDesignatedLeader(2), 2, false);
+        assertElectLeaderEquals(createBazBuilder(version)
+                .setElection(Election.DESIGNATED)
+                .setDesignatedLeader(2), 2, true);
+        assertElectLeaderEquals(createBazBuilder(version)
+                .setElection(Election.DESIGNATED)
+                .setDesignatedLeader(1), 1, false);
         assertElectLeaderEquals(createBazBuilder(version).setElection(Election.PREFERRED), 3, false);
         assertElectLeaderEquals(createBazBuilder(version), 3, false);
         assertElectLeaderEquals(createBazBuilder(version).setElection(Election.UNCLEAN), 3, false);

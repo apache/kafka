@@ -1501,10 +1501,44 @@ public class ReplicationControlManager {
         }
     }
 
-    ControllerResult<ElectLeadersResponseData> electLeaders(ElectLeadersRequestData request) {
+    private void electDesignatedLeaders(ElectLeadersRequestData request, ElectLeadersResponseData response, List<ApiMessageAndVersion> records) {
         ElectionType electionType = electionType(request.electionType());
-        List<ApiMessageAndVersion> records = BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
-        ElectLeadersResponseData response = new ElectLeadersResponseData();
+        if (request.topicPartitions() == null) {
+            // TODO Decide on whether we should have designated leadership election
+            throw new InvalidConfigurationException("No topic partitions specified for designated leader election.");
+        }
+
+        // Show a simpler "all-or-nothing" approach to clients.
+        // We don't want to trigger any elections if there is a potential administrative error like having wrong number
+        // of designated-leaders for some topic...
+        for (TopicPartitions topic : request.topicPartitions()) {
+            if (topic.designatedLeaders().size() != topic.partitions().size()) {
+                log.info("Invalid designated leaders: in topic={} {} partitions were provided but only {} designated leaders were specified",
+                        topic.topic(), topic.partitions().size(), topic.designatedLeaders().size());
+                throw new InvalidConfigurationException("Mismatch between size of topic partitions and designated leaders.");
+            }
+        }
+        for (TopicPartitions topic : request.topicPartitions()) {
+            ReplicaElectionResult topicResults =
+                    new ReplicaElectionResult().setTopic(topic.topic());
+            response.replicaElectionResults().add(topicResults);
+
+            Iterator<Integer> partitions = topic.partitions().iterator();
+            Iterator<Integer> designatedLeaders = topic.designatedLeaders().iterator();
+            while (partitions.hasNext() && designatedLeaders.hasNext()) {
+                Integer partitionId = partitions.next();
+                Integer designatedLeaderId = designatedLeaders.next();
+                ApiError error = electLeader(topic.topic(), partitionId, electionType, records, Optional.of(designatedLeaderId));
+                topicResults.partitionResult().add(new PartitionResult().
+                        setPartitionId(partitionId).
+                        setErrorCode(error.error().code()).
+                        setErrorMessage(error.message()));
+            }
+        }
+    }
+
+    private void electUncleanOrPreferredLeaders(ElectLeadersRequestData request, ElectLeadersResponseData response, List<ApiMessageAndVersion> records) {
+        ElectionType electionType = electionType(request.electionType());
         if (request.topicPartitions() == null) {
             // If topicPartitions is null, we try to elect a new leader for every partition.  There
             // are some obvious issues with this wire protocol.  For example, what if we have too
@@ -1514,49 +1548,46 @@ public class ReplicationControlManager {
             for (Entry<String, Uuid> topicEntry : topicsByName.entrySet()) {
                 String topicName = topicEntry.getKey();
                 ReplicaElectionResult topicResults =
-                    new ReplicaElectionResult().setTopic(topicName);
+                        new ReplicaElectionResult().setTopic(topicName);
                 response.replicaElectionResults().add(topicResults);
                 TopicControlInfo topic = topics.get(topicEntry.getValue());
                 if (topic != null) {
                     for (int partitionId : topic.parts.keySet()) {
-                        ApiError error = electLeader(topicName, partitionId, electionType, records, -1);
-
+                        ApiError error = electLeader(topicName, partitionId, electionType, records, Optional.empty());
                         // When electing leaders for all partitions, we do not return
                         // partitions which already have the desired leader.
                         if (error.error() != Errors.ELECTION_NOT_NEEDED) {
                             topicResults.partitionResult().add(new PartitionResult().
-                                setPartitionId(partitionId).
-                                setErrorCode(error.error().code()).
-                                setErrorMessage(error.message()));
+                                    setPartitionId(partitionId).
+                                    setErrorCode(error.error().code()).
+                                    setErrorMessage(error.message()));
                         }
                     }
                 }
             }
-        } else {
-            for (TopicPartitions topic : request.topicPartitions()) {
-                ReplicaElectionResult topicResults =
+            return;
+        }
+        for (TopicPartitions topic : request.topicPartitions()) {
+            ReplicaElectionResult topicResults =
                     new ReplicaElectionResult().setTopic(topic.topic());
-                response.replicaElectionResults().add(topicResults);
-                for (int i = 0; i < topic.partitions().size(); i++) {
-                    int partitionId = topic.partitions().get(i);
-                    int desiredLeader;
-                    if(!topic.designatedLeaders().isEmpty()) {
-                        desiredLeader = topic.designatedLeaders().get(i);
-                        if (desiredLeader < 0) {
-                            throw new UnknownServerException("Cannot pass negative number for Designated Leader");
-                        }
-                    } else if (electionType == ElectionType.DESIGNATED) {
-                        throw new InvalidConfigurationException("Designated leader input required for designated election");
-                    } else {
-                        desiredLeader = -1;
-                    }
-                    ApiError error = electLeader(topic.topic(), partitionId, electionType, records, desiredLeader);
-                    topicResults.partitionResult().add(new PartitionResult().
+            response.replicaElectionResults().add(topicResults);
+            for (int partitionId : topic.partitions()) {
+                ApiError error = electLeader(topic.topic(), partitionId, electionType, records, Optional.empty());
+                topicResults.partitionResult().add(new PartitionResult().
                         setPartitionId(partitionId).
                         setErrorCode(error.error().code()).
                         setErrorMessage(error.message()));
-                }
             }
+        }
+    }
+
+    ControllerResult<ElectLeadersResponseData> electLeaders(ElectLeadersRequestData request) {
+        var electionType = electionType(request.electionType());
+        var response = new ElectLeadersResponseData();
+        List<ApiMessageAndVersion> records = BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
+        switch (electionType) {
+            case UNCLEAN, PREFERRED -> electUncleanOrPreferredLeaders(request, response, records);
+            case DESIGNATED -> electDesignatedLeaders(request, response, records);
         }
         return ControllerResult.of(records, response);
     }
@@ -1570,7 +1601,7 @@ public class ReplicationControlManager {
     }
 
     ApiError electLeader(String topic, int partitionId, ElectionType electionType,
-                         List<ApiMessageAndVersion> records, int desiredLeader) {
+                         List<ApiMessageAndVersion> records, Optional<Integer> designatedLeader) {
         Uuid topicId = topicsByName.get(topic);
         if (topicId == null) {
             return new ApiError(UNKNOWN_TOPIC_OR_PARTITION,
@@ -1586,24 +1617,28 @@ public class ReplicationControlManager {
             return new ApiError(UNKNOWN_TOPIC_OR_PARTITION,
                 "No such partition as " + topic + "-" + partitionId);
         }
-        if ((electionType == ElectionType.PREFERRED && partition.hasPreferredLeader())
-            || (electionType == ElectionType.UNCLEAN && partition.hasLeader())
-            || (electionType == ElectionType.DESIGNATED && partition.getLeader() == desiredLeader)) {
-            return new ApiError(Errors.ELECTION_NOT_NEEDED);
+        // TODO Programmer error if this assertion crashes
+        // Need to check whether assertions are kosher in this code base...
+        assert electionType != ElectionType.DESIGNATED || designatedLeader.isPresent();
+
+        switch (electionType) {
+            case PREFERRED -> {
+                if (partition.hasPreferredLeader()) {
+                    return new ApiError(Errors.ELECTION_NOT_NEEDED);
+                }
+            }
+            case UNCLEAN, DESIGNATED -> {
+                if (partition.hasLeader()) {
+                    return new ApiError(Errors.ELECTION_NOT_NEEDED);
+                }
+            }
         }
 
-        PartitionChangeBuilder.Election election;
-        switch(electionType) {
-            case UNCLEAN:
-                election = PartitionChangeBuilder.Election.UNCLEAN;
-                break;
-            case DESIGNATED:
-                election = PartitionChangeBuilder.Election.DESIGNATED;
-                break;
-            default:
-                election = PartitionChangeBuilder.Election.PREFERRED;
-                break;
-        }
+        PartitionChangeBuilder.Election election = switch (electionType) {
+            case UNCLEAN -> PartitionChangeBuilder.Election.UNCLEAN;
+            case DESIGNATED -> PartitionChangeBuilder.Election.DESIGNATED;
+            case PREFERRED -> PartitionChangeBuilder.Election.PREFERRED;
+        };
         Optional<ApiMessageAndVersion> record = new PartitionChangeBuilder(
             partition,
             topicId,
@@ -1615,13 +1650,19 @@ public class ReplicationControlManager {
             .setElection(election)
             .setEligibleLeaderReplicasEnabled(featureControl.isElrFeatureEnabled())
             .setDefaultDirProvider(clusterDescriber)
-            .setDesiredLeader(desiredLeader)
+            .setDesignatedLeader(designatedLeader.orElse(-1))
             .build();
         if (record.isEmpty()) {
-            if (electionType == ElectionType.PREFERRED) {
-                return new ApiError(Errors.PREFERRED_LEADER_NOT_AVAILABLE);
-            } else {
-                return new ApiError(Errors.ELIGIBLE_LEADERS_NOT_AVAILABLE);
+            switch (electionType) {
+                case UNCLEAN -> {
+                    return new ApiError(Errors.ELIGIBLE_LEADERS_NOT_AVAILABLE);
+                }
+                case PREFERRED -> {
+                    return new ApiError(Errors.PREFERRED_LEADER_NOT_AVAILABLE);
+                }
+                case DESIGNATED -> {
+                    return new ApiError(Errors.DESIGNATED_LEADER_NOT_AVAILABLE);
+                }
             }
         }
         records.add(record.get());
@@ -1814,7 +1855,7 @@ public class ReplicationControlManager {
             TopicControlInfo topic = topics.get(topicIdPartition.topicId());
             if (configurationControl.uncleanLeaderElectionEnabledForTopic(topic.name)) {
                 ApiError result = electLeader(topic.name, topicIdPartition.partitionId(),
-                        ElectionType.UNCLEAN, records);
+                        ElectionType.UNCLEAN, records, Optional.empty());
                 if (result.error().equals(Errors.NONE)) {
                     log.info("Triggering unclean leader election for offline partition {}-{}.",
                             topic.name, topicIdPartition.partitionId());
