@@ -27,16 +27,17 @@ import java.util.Optional;
 import java.util.stream.Stream;
 
 public final class InvalidMemoryRecordsProvider implements ArgumentsProvider {
-    // Use a baseOffset that not zero so that is less likely to match the LEO
+    // Use a baseOffset that's not zero so that it is less likely to match the LEO
     private static final long BASE_OFFSET = 1234;
     private static final int EPOCH = 4321;
 
-    /** Returns a stream of arguements for invalid memory records and the expected exception.
+    /**
+     * Returns a stream of arguments for invalid memory records and the expected exception.
      *
-     * The first object in the Arguments is a MemoryRecords.
+     * The first object in the {@code Arguments} is a {@code MemoryRecords}.
      *
-     * The second object in the Arguments is an Optional<Class<Exception>> which is the expected
-     * exception from the log layer.
+     * The second object in the {@code Arguments} is an {@code Optional<Class<Exception>>} which is
+     * the expected exception from the log layer.
      */
     @Override
     public Stream<? extends Arguments> provideArguments(ExtensionContext context) {

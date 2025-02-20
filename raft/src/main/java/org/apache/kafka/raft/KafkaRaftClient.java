@@ -1818,9 +1818,9 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             return;
         }
 
-        Optional<LogAppendInfo> appendInfo = Optional.empty();
         try {
-            appendInfo = Optional.of(log.appendAsFollower(records, quorum.epoch()));
+            var info = log.appendAsFollower(records, quorum.epoch());
+            kafkaRaftMetrics.updateFetchedRecords(info.lastOffset - info.firstOffset + 1);
         } catch (CorruptRecordException | InvalidRecordException e) {
             logger.info(
                 "Failed to append the records with the batch header '{}' to the log",
@@ -1828,6 +1828,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                 e
             );
         }
+
         if (quorum.isVoter() || followersAlwaysFlush) {
             // the leader only requires that voters have flushed their log before sending a Fetch
             // request. Because of reconfiguration some observers (that are getting added to the
@@ -1841,10 +1842,6 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         OffsetAndEpoch endOffset = endOffset();
         kafkaRaftMetrics.updateLogEnd(endOffset);
         logger.trace("Follower end offset updated to {} after append", endOffset);
-
-        appendInfo.ifPresent(
-            info -> kafkaRaftMetrics.updateFetchedRecords(info.lastOffset - info.firstOffset + 1)
-        );
     }
 
     private LogAppendInfo appendAsLeader(Records records) {

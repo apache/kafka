@@ -5257,7 +5257,7 @@ class ReplicaManagerTest {
                 new SimpleRecord("first message".getBytes)
               ),
               isFuture = false,
-              partitionLeaderEpoch = Int.MaxValue
+              partitionLeaderEpoch = 0
             )
 
           case _ =>

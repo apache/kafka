@@ -1105,10 +1105,9 @@ class UnifiedLog(@volatile var logStartOffset: Long,
       /* During replication of uncommitted data it is possible for the remote replica to send record batches after it lost
        * leadership. This can happen if sending FETCH responses is slow. There is a race between sending the FETCH
        * response and the replica truncating and appending to the log. The replicating replica resolves this issue by only
-       * persisting up to the partition leader epoch of the leader when the FETCH request was handled. See KAFKA-18723 for
-       * more details.
+       * persisting up to the current leader epoch used in the fetch request. See KAFKA-18723 for more details.
        */
-      skipRemainingBatches = skipRemainingBatches || hasInvalidPartitionLeaderEpoch(batch, origin, leaderEpoch);
+      skipRemainingBatches = skipRemainingBatches || hasHigherPartitionLeaderEpoch(batch, origin, leaderEpoch);
       if (skipRemainingBatches) {
         info(s"Skipping batch $batch because origin is $origin and leader epoch is $leaderEpoch")
       } else {
@@ -1186,9 +1185,9 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    * @param origin the reason for appending the record batch
    * @param leaderEpoch the epoch to compare
    * @return true if the append reason is replication and the batch's partition leader epoch is
-   *         greater than the leader epoch, otherwise false
+   *         greater than the specified leaderEpoch, otherwise false
    */
-  private def hasInvalidPartitionLeaderEpoch(
+  private def hasHigherPartitionLeaderEpoch(
     batch: RecordBatch,
     origin: AppendOrigin,
     leaderEpoch: Int

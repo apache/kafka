@@ -512,7 +512,7 @@ class PartitionTest extends AbstractPartitionTest {
       .setLeader(2)
       .setLeaderEpoch(prevLeaderEpoch + 1)
       .setIsr(List[Integer](0, 1, 2, brokerId).asJava)
-      .setPartitionEpoch(1)
+      .setPartitionEpoch(2)
       .setReplicas(List[Integer](0, 1, 2, brokerId).asJava)
       .setIsNew(false)
     assertTrue(partition.makeFollower(partitionState, offsetCheckpoints, None))

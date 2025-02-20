@@ -1424,7 +1424,7 @@ class UnifiedLogTest {
   def testDuplicateAppendToFollower(): Unit = {
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024 * 5)
     val log = createLog(logDir, logConfig)
-    val epoch: Short = 0
+    val producerEpoch: Short = 0
     val pid = 1L
     val baseSequence = 0
     val partitionLeaderEpoch = 0
@@ -1437,7 +1437,7 @@ class UnifiedLogTest {
         0L,
         Compression.NONE,
         pid,
-        epoch,
+        producerEpoch,
         baseSequence,
         partitionLeaderEpoch,
         new SimpleRecord("a".getBytes),
@@ -1450,7 +1450,7 @@ class UnifiedLogTest {
         2L,
         Compression.NONE,
         pid,
-        epoch,
+        producerEpoch,
         baseSequence,
         partitionLeaderEpoch,
         new SimpleRecord("a".getBytes),
@@ -2023,7 +2023,7 @@ class UnifiedLogTest {
       val log = createLog(logDir, logConfig)
       val previousEndOffset = log.logEndOffsetMetadata.messageOffset
 
-      // Depedning on the random corruption, unified log sometimes throws and sometimes returns an
+      // Depending on the corruption, unified log sometimes throws and sometimes returns an
       // empty set of batches
       assertThrows(
         classOf[CorruptRecordException],
