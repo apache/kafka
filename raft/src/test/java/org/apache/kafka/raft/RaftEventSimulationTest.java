@@ -319,6 +319,9 @@ public class RaftEventSimulationTest {
         EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
         scheduler.addInvariant(new StableLeadership(cluster));
 
+        // Start cluster
+        cluster.startAll();
+
         // Create network partition which would result in ping-pong of leadership between nodes 2 and 3 without PreVote
         // Scenario explained in detail in KIP-996
         // 0   1
@@ -338,8 +341,6 @@ public class RaftEventSimulationTest {
         router.filter(3, new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(0))));
         router.filter(4, new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(0, 1))));
 
-        // Start cluster
-        cluster.startAll();
         schedulePolling(scheduler, cluster, 3, 5);
         scheduler.schedule(router::deliverAll, 0, 2, 1);
         scheduler.schedule(new SequentialAppendAction(cluster), 0, 2, 1);
