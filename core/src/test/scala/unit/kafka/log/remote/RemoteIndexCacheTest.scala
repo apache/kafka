@@ -450,10 +450,11 @@ class RemoteIndexCacheTest {
     // The cache max size is 2, it will remove one entry and keep the overall size to 2
     cache.getIndexEntry(metadataList(2))
     assertCacheSize(2)
-    // Calling getIndex on the same entry should not call rsm#fetchIndex again, but it should retrieve from cache
+    // Calling getIndex on the same entry may call rsm#fetchIndex or not, it only depend on cache implementation so
+    // we only need to verify the number of calling is in our range.
     cache.getIndexEntry(metadataList(2))
     assertCacheSize(2)
-    verifyFetchIndexInvocation(count = 3)
+    verifyFetchIndexInvocationWithRange(lower = 3, upper = 4)
 
     // Close the cache
     cache.close()
@@ -553,29 +554,47 @@ class RemoteIndexCacheTest {
 
   @Test
   def testCorrectnessForCacheAndIndexFilesWhenResizeCache(): Unit = {
-
-    def verifyEntryIsEvicted(metadataToVerify: RemoteLogSegmentMetadata, entryToVerify: Entry): Unit = {
-      // wait until `entryToVerify` is marked for deletion
-      TestUtils.waitUntilTrue(() => entryToVerify.isMarkedForCleanup,
-        "Failed to mark evicted cache entry for cleanup after resizing cache.")
-      TestUtils.waitUntilTrue(() => entryToVerify.isCleanStarted,
-        "Failed to cleanup evicted cache entry after resizing cache.")
-      // verify no index files for `entryToVerify` on remote cache dir
-      TestUtils.waitUntilTrue(() => getIndexFileFromRemoteCacheDir(cache, remoteOffsetIndexFileName(metadataToVerify)).isEmpty,
-        s"Offset index file for evicted entry should not be present on disk at ${cache.cacheDir()}")
-      TestUtils.waitUntilTrue(() => getIndexFileFromRemoteCacheDir(cache, remoteTimeIndexFileName(metadataToVerify)).isEmpty,
-        s"Time index file for evicted entry should not be present on disk at ${cache.cacheDir()}")
-      TestUtils.waitUntilTrue(() => getIndexFileFromRemoteCacheDir(cache, remoteTransactionIndexFileName(metadataToVerify)).isEmpty,
-        s"Txn index file for evicted entry should not be present on disk at ${cache.cacheDir()}")
-      TestUtils.waitUntilTrue(() => getIndexFileFromRemoteCacheDir(cache, remoteDeletedSuffixIndexFileName(metadataToVerify)).isEmpty,
-        s"Index file marked for deletion for evicted entry should not be present on disk at ${cache.cacheDir()}")
+    def getRemoteLogSegMetadataIsKept(metadataToVerify: List[RemoteLogSegmentMetadata]): List[RemoteLogSegmentMetadata] = {
+      metadataToVerify.filter(s => { cache.internalCache().asMap().containsKey(s.remoteLogSegmentId().id())})
     }
 
-    def verifyEntryIsKept(metadataToVerify: RemoteLogSegmentMetadata): Unit = {
-      assertTrue(getIndexFileFromRemoteCacheDir(cache, remoteOffsetIndexFileName(metadataToVerify)).isPresent)
-      assertTrue(getIndexFileFromRemoteCacheDir(cache, remoteTimeIndexFileName(metadataToVerify)).isPresent)
-      assertTrue(getIndexFileFromRemoteCacheDir(cache, remoteTransactionIndexFileName(metadataToVerify)).isPresent)
-      assertTrue(getIndexFileFromRemoteCacheDir(cache, remoteDeletedSuffixIndexFileName(metadataToVerify)).isEmpty)
+    def verifyEntryIsEvicted(metadataToVerify: List[RemoteLogSegmentMetadata], entriesToVerify: List[Entry],
+                             numOfMarkAsDeleted: Int): (List[RemoteLogSegmentMetadata], List[Entry]) = {
+      TestUtils.waitUntilTrue(() => entriesToVerify.count(_.isMarkedForCleanup).equals(numOfMarkAsDeleted),
+        "Failed to mark evicted cache entry for cleanup after resizing cache.")
+
+      TestUtils.waitUntilTrue(() => entriesToVerify.count(_.isCleanStarted).equals(numOfMarkAsDeleted),
+        "Failed to cleanup evicted cache entry after resizing cache.")
+
+      val entriesIsMarkedForCleanup = entriesToVerify.filter(_.isMarkedForCleanup)
+      val entriesIsCleanStarted = entriesToVerify.filter(_.isCleanStarted)
+      // clean up entries and clean start entries should be the same
+      assertTrue(entriesIsMarkedForCleanup.equals(entriesIsCleanStarted))
+
+      // get the logSegMetadata are evicted
+      val metadataDeleted = metadataToVerify.filter(s => { !cache.internalCache().asMap().containsKey(s.remoteLogSegmentId().id())})
+      assertEquals(numOfMarkAsDeleted, metadataDeleted.size)
+      for (metadata <- metadataDeleted) {
+        // verify no index files for `entryToVerify` on remote cache dir
+        TestUtils.waitUntilTrue(() => getIndexFileFromRemoteCacheDir(cache, remoteOffsetIndexFileName(metadata)).isEmpty,
+          s"Offset index file for evicted entry should not be present on disk at ${cache.cacheDir()}")
+        TestUtils.waitUntilTrue(() => getIndexFileFromRemoteCacheDir(cache, remoteTimeIndexFileName(metadata)).isEmpty,
+          s"Time index file for evicted entry should not be present on disk at ${cache.cacheDir()}")
+        TestUtils.waitUntilTrue(() => getIndexFileFromRemoteCacheDir(cache, remoteTransactionIndexFileName(metadata)).isEmpty,
+          s"Txn index file for evicted entry should not be present on disk at ${cache.cacheDir()}")
+        TestUtils.waitUntilTrue(() => getIndexFileFromRemoteCacheDir(cache, LogFileUtils.DELETED_FILE_SUFFIX).isEmpty,
+          s"Index file marked for deletion for evicted entry should not be present on disk at ${cache.cacheDir()}")
+      }
+      (metadataDeleted, entriesIsMarkedForCleanup)
+    }
+
+    def verifyEntryIsKept(metadataToVerify: List[RemoteLogSegmentMetadata]): Unit = {
+      for (metadata <- metadataToVerify) {
+        assertTrue(getIndexFileFromRemoteCacheDir(cache, remoteOffsetIndexFileName(metadata)).isPresent)
+        assertTrue(getIndexFileFromRemoteCacheDir(cache, remoteTimeIndexFileName(metadata)).isPresent)
+        assertTrue(getIndexFileFromRemoteCacheDir(cache, remoteTransactionIndexFileName(metadata)).isPresent)
+        assertTrue(getIndexFileFromRemoteCacheDir(cache, LogFileUtils.DELETED_FILE_SUFFIX).isEmpty)
+      }
     }
 
     // The test process for resizing is: put 1 entry -> evict to empty -> put 3 entries with limited capacity of 2 entries ->
@@ -619,27 +638,32 @@ class RemoteIndexCacheTest {
 
     val entry0 = cache.getIndexEntry(metadataList.head)
     val entry1 = cache.getIndexEntry(metadataList(1))
-    cache.getIndexEntry(metadataList(2))
+    val entry2 = cache.getIndexEntry(metadataList(2))
+    val entries = List(entry0, entry1, entry2)
     assertCacheSize(2)
-    verifyEntryIsEvicted(metadataList.head, entry0)
+    val (evictedSegmentMetadata, evictedEntry) = verifyEntryIsEvicted(metadataList, entries, 1)
 
     // Reduce cache capacity to only store 1 entry
     cache.resizeCacheSize(1 * estimateEntryBytesSize)
     assertCacheSize(1)
-    verifyEntryIsEvicted(metadataList(1), entry1)
+    // After resize, we need to check an entry is deleted from cache and the existing segmentMetadata
+    val entryInCache = entries.filterNot(evictedEntry.contains(_))
+    val updatedSegmentMetadata = metadataList.filterNot(evictedSegmentMetadata.contains(_))
+    verifyEntryIsEvicted(updatedSegmentMetadata, entryInCache, 1)
 
     // resize to the same size, all entries should be kept
     cache.resizeCacheSize(1 * estimateEntryBytesSize)
 
+    val entriesKept = getRemoteLogSegMetadataIsKept(metadataList)
     // verify all existing entries (`cache.getIndexEntry(metadataList(2))`) are kept
-    verifyEntryIsKept(metadataList(2))
+    verifyEntryIsKept(entriesKept)
     assertCacheSize(1)
 
     // increase the size
     cache.resizeCacheSize(2 * estimateEntryBytesSize)
 
-    // verify all existing entries (`cache.getIndexEntry(metadataList(2))`) are kept
-    verifyEntryIsKept(metadataList(2))
+    // verify all entries are kept
+    verifyEntryIsKept(entriesKept)
     assertCacheSize(1)
   }
 
@@ -978,6 +1002,16 @@ class RemoteIndexCacheTest {
                                          Seq(IndexType.OFFSET, IndexType.TIMESTAMP, IndexType.TRANSACTION)): Unit = {
     for (indexType <- indexTypes) {
       verify(rsm, times(count)).fetchIndex(any(classOf[RemoteLogSegmentMetadata]), ArgumentMatchers.eq(indexType))
+    }
+  }
+
+  private def verifyFetchIndexInvocationWithRange(lower: Int,
+                                                  upper: Int,
+                                         indexTypes: Seq[IndexType] =
+                                         Seq(IndexType.OFFSET, IndexType.TIMESTAMP, IndexType.TRANSACTION)): Unit = {
+    for (indexType <- indexTypes) {
+      verify(rsm, atLeast(lower)).fetchIndex(any(classOf[RemoteLogSegmentMetadata]), ArgumentMatchers.eq(indexType))
+      verify(rsm, atMost(upper)).fetchIndex(any(classOf[RemoteLogSegmentMetadata]), ArgumentMatchers.eq(indexType))
     }
   }
 

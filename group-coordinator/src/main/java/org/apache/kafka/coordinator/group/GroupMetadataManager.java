@@ -4672,6 +4672,7 @@ public class GroupMetadataManager {
         Map<ClassicGroupState, Long> classicGroupSizeCounter = new HashMap<>();
         Map<ConsumerGroup.ConsumerGroupState, Long> consumerGroupSizeCounter = new HashMap<>();
         Map<StreamsGroup.StreamsGroupState, Long> streamsGroupSizeCounter = new HashMap<>();
+        Map<ShareGroup.ShareGroupState, Long> shareGroupSizeCounter = new HashMap<>();
         groups.forEach((__, group) -> {
             switch (group.type()) {
                 case CLASSIC:
@@ -4683,6 +4684,9 @@ public class GroupMetadataManager {
                 case STREAMS:
                     streamsGroupSizeCounter.compute(((StreamsGroup) group).state(), Utils::incValue);
                     break;
+                case SHARE:
+                    shareGroupSizeCounter.compute(((ShareGroup) group).state(), Utils::incValue);
+                    break;
                 default:
                     break;
             }
@@ -4690,6 +4694,7 @@ public class GroupMetadataManager {
         metrics.setClassicGroupGauges(classicGroupSizeCounter);
         metrics.setConsumerGroupGauges(consumerGroupSizeCounter);
         metrics.setStreamsGroupGauges(streamsGroupSizeCounter);
+        metrics.setShareGroupGauges(shareGroupSizeCounter);
     }
 
     /**

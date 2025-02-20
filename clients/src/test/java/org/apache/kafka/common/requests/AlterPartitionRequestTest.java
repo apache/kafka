@@ -34,7 +34,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class AlterPartitionRequestTest {
-    String topic = "test-topic";
     Uuid topicId = Uuid.randomUuid();
 
     @ParameterizedTest
@@ -44,9 +43,7 @@ class AlterPartitionRequestTest {
             .setBrokerId(1)
             .setBrokerEpoch(1);
 
-        TopicData topicData = new TopicData()
-            .setTopicId(topicId)
-            .setTopicName(topic);
+        TopicData topicData = new TopicData().setTopicId(topicId);
 
         List<BrokerState> newIsrWithBrokerEpoch = new LinkedList<>();
         newIsrWithBrokerEpoch.add(new BrokerState().setBrokerId(1).setBrokerEpoch(1001));

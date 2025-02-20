@@ -49,7 +49,7 @@ public class QuorumFeaturesTest {
     public void testDefaultFeatureMap() {
         Map<String, VersionRange> expectedFeatures = new HashMap<>(1);
         expectedFeatures.put(MetadataVersion.FEATURE_NAME, VersionRange.of(
-            MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel(),
+            MetadataVersion.MINIMUM_VERSION.featureLevel(),
             MetadataVersion.LATEST_PRODUCTION.featureLevel()));
         for (Feature feature : Feature.PRODUCTION_FEATURES) {
             short maxVersion = feature.latestProduction();
@@ -67,7 +67,7 @@ public class QuorumFeaturesTest {
     public void testDefaultFeatureMapWithUnstable() {
         Map<String, VersionRange> expectedFeatures = new HashMap<>(1);
         expectedFeatures.put(MetadataVersion.FEATURE_NAME, VersionRange.of(
-            MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel(),
+            MetadataVersion.MINIMUM_VERSION.featureLevel(),
             MetadataVersion.latestTesting().featureLevel()));
         for (Feature feature : Feature.PRODUCTION_FEATURES) {
             short maxVersion = feature.defaultLevel(MetadataVersion.latestTesting());

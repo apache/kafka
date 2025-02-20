@@ -986,7 +986,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
     private CompletableFuture<Map<String, Errors>> persisterDeleteToGroupIdErrorMap(
         List<CompletableFuture<Map.Entry<String, DeleteShareGroupStateResult>>> futures
     ) {
-        return CompletableFuture.allOf(futures.toArray(new CompletableFuture[]{})).thenCompose(v -> {
+        return CompletableFuture.allOf(futures.toArray(new CompletableFuture<?>[]{})).thenCompose(v -> {
             Map<String, Errors> groupIds = new HashMap<>();
             for (CompletableFuture<Map.Entry<String, DeleteShareGroupStateResult>> future : futures) {
                 Map.Entry<String, DeleteShareGroupStateResult> entry = future.getNow(null);  // safe as within allOff
@@ -1389,7 +1389,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     );
                     return null;
                 }
-            ).toArray(new CompletableFuture[0])
+            ).toArray(new CompletableFuture<?>[0])
         ).get();
     }
 

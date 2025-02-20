@@ -22,15 +22,18 @@ import org.apache.kafka.clients.consumer.internals.events.StreamsOnTasksAssigned
 import org.apache.kafka.clients.consumer.internals.events.StreamsOnTasksRevokedCallbackCompletedEvent;
 import org.apache.kafka.common.KafkaException;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -52,9 +55,24 @@ public class StreamsRebalanceEventsProcessorTest {
     @Mock
     private ApplicationEventHandler applicationEventHandler;
 
+    private StreamsRebalanceData rebalanceData;
+
+    @BeforeEach
+    public void setup() {
+        final UUID processId = UUID.randomUUID();
+        final Optional<StreamsRebalanceData.HostInfo> endpoint = Optional.of(new StreamsRebalanceData.HostInfo("localhost", 9090));
+        final Map<String, StreamsRebalanceData.Subtopology> subtopologies = new HashMap<>();
+        final Map<String, String> clientTags = Map.of("clientTag1", "clientTagValue1");
+        rebalanceData = new StreamsRebalanceData(
+            processId,
+            endpoint,
+            subtopologies,
+            clientTags
+        );
+    }
+
     @Test
     public void shouldInvokeOnTasksAssignedCallback() {
-        final StreamsRebalanceData rebalanceData = new StreamsRebalanceData(Collections.emptyMap());
         final StreamsRebalanceEventsProcessor rebalanceEventsProcessor =
             new StreamsRebalanceEventsProcessor(rebalanceData, rebalanceCallbacks);
         rebalanceEventsProcessor.setApplicationEventHandler(applicationEventHandler);
@@ -90,7 +108,6 @@ public class StreamsRebalanceEventsProcessorTest {
 
     @Test
     public void shouldReThrowErrorFromOnTasksAssignedCallbackAndPassErrorToBackground() {
-        final StreamsRebalanceData rebalanceData = new StreamsRebalanceData(Collections.emptyMap());
         final StreamsRebalanceEventsProcessor rebalanceEventsProcessor =
             new StreamsRebalanceEventsProcessor(rebalanceData, rebalanceCallbacks);
         rebalanceEventsProcessor.setApplicationEventHandler(applicationEventHandler);
@@ -130,7 +147,6 @@ public class StreamsRebalanceEventsProcessorTest {
 
     @Test
     public void shouldInvokeOnTasksRevokedCallback() {
-        final StreamsRebalanceData rebalanceData = new StreamsRebalanceData(Collections.emptyMap());
         final StreamsRebalanceEventsProcessor rebalanceEventsProcessor =
             new StreamsRebalanceEventsProcessor(rebalanceData, rebalanceCallbacks);
         rebalanceEventsProcessor.setApplicationEventHandler(applicationEventHandler);
@@ -155,7 +171,6 @@ public class StreamsRebalanceEventsProcessorTest {
 
     @Test
     public void shouldReThrowErrorFromOnTasksRevokedCallbackAndPassErrorToBackground() {
-        final StreamsRebalanceData rebalanceData = new StreamsRebalanceData(Collections.emptyMap());
         final StreamsRebalanceEventsProcessor rebalanceEventsProcessor =
             new StreamsRebalanceEventsProcessor(rebalanceData, rebalanceCallbacks);
         rebalanceEventsProcessor.setApplicationEventHandler(applicationEventHandler);
@@ -183,7 +198,6 @@ public class StreamsRebalanceEventsProcessorTest {
 
     @Test
     public void shouldInvokeOnAllTasksLostCallback() {
-        final StreamsRebalanceData rebalanceData = new StreamsRebalanceData(Collections.emptyMap());
         final StreamsRebalanceEventsProcessor rebalanceEventsProcessor =
             new StreamsRebalanceEventsProcessor(rebalanceData, rebalanceCallbacks);
         rebalanceEventsProcessor.setApplicationEventHandler(applicationEventHandler);
@@ -223,7 +237,6 @@ public class StreamsRebalanceEventsProcessorTest {
 
     @Test
     public void shouldReThrowErrorFromOnAllTasksLostCallbackAndPassErrorToBackground() {
-        final StreamsRebalanceData rebalanceData = new StreamsRebalanceData(Collections.emptyMap());
         final StreamsRebalanceEventsProcessor rebalanceEventsProcessor =
             new StreamsRebalanceEventsProcessor(rebalanceData, rebalanceCallbacks);
         rebalanceEventsProcessor.setApplicationEventHandler(applicationEventHandler);
