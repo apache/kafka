@@ -41,7 +41,7 @@ import javax.security.auth.login.AppConfigurationEntry;
 
 public class JwtBearerAccessTokenRetriever extends HttpAccessTokenRetriever {
 
-    public final static String GRANT_TYPE = "urn:ietf:params:oauth:grant-type:jwt-bearer";
+    public static final String GRANT_TYPE = "urn:ietf:params:oauth:grant-type:jwt-bearer";
 
     // The private key ID of the private key used to sign the JWT token sent to the token endpoint. This will
     // be added as a header in the JWT token sent to the token endpoint.
@@ -51,8 +51,8 @@ public class JwtBearerAccessTokenRetriever extends HttpAccessTokenRetriever {
     // the header and footer.
     private static final String TOKEN_ENDPOINT_PRIVATE_KEY_SECRET = "privateKeySecret";
 
-    private final static String RS256 = "RS256";
-    private final static String ES256 = "ES256";
+    private static final String RS256 = "RS256";
+    private static final String ES256 = "ES256";
 
     // The algorithm used to sign the JWT token sent to the token endpoint.
     private static final String TOKEN_ENDPOINT_SIGNING_ALGO = "tokenSigningAlgo";
