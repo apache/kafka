@@ -33,11 +33,11 @@ RUN mkdir $KAFKA_DIR; \
     microdnf install wget; \
     wget -nv -O kafka.tgz "$KAFKA_URL"; \
     wget -nv -O kafka.tgz.asc "$KAFKA_URL.asc"; \
-    tar xfz kafka.tgz -C $KAFKA_DIR --strip-components 1; \
     wget -nv -O KEYS https://downloads.apache.org/kafka/KEYS; \
-    gpg --import KEYS; \
-    gpg --batch --verify kafka.tgz.asc kafka.tgz; \
-    rm kafka.tgz ; \
+    gpg --import KEYS && \
+    gpg --batch --verify kafka.tgz.asc kafka.tgz && \
+    tar xfz kafka.tgz -C $KAFKA_DIR --strip-components 1; \
+    rm kafka.tgz kafka.tgz.asc KEYS; \
 # Build the native-binary of the apache kafka using graalVM native-image.
     /app/native_command.sh $NATIVE_IMAGE_PATH $NATIVE_CONFIGS_DIR $KAFKA_LIBS_DIR $TARGET_PATH
 
