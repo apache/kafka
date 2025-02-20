@@ -54,9 +54,10 @@ public enum MemberState {
     RECONCILING,
 
     /**
-     * Member has completed reconciling an assignment received, and stays in this state only until
-     * the next heartbeat request is sent out to acknowledge the assignment to the server. This
-     * state indicates that the next heartbeat request must be sent without waiting for the
+     * Member has received and reconciled an assignment, and stays in this state only until
+     * the next heartbeat request is sent out to acknowledge the assignment to the server.
+     * Note that the member will acknowledge every assignment received (even if it is already reconciled).
+     * This state also indicates that the next heartbeat request must be sent without waiting for the
      * heartbeat interval to expire. Note that once the ack is sent, the member could go back to
      * {@link #RECONCILING} if it still has assignment waiting to be reconciled (assignments
      * waiting for metadata, assignments for which metadata was resolved, or new assignments
@@ -121,7 +122,7 @@ public enum MemberState {
 
         RECONCILING.previousValidStates = Arrays.asList(STABLE, JOINING, ACKNOWLEDGING, RECONCILING);
 
-        ACKNOWLEDGING.previousValidStates = Collections.singletonList(RECONCILING);
+        ACKNOWLEDGING.previousValidStates = Arrays.asList(RECONCILING, STABLE);
 
         FATAL.previousValidStates = Arrays.asList(JOINING, STABLE, RECONCILING, ACKNOWLEDGING,
                 PREPARE_LEAVING, LEAVING, UNSUBSCRIBED);

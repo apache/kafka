@@ -343,6 +343,9 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
             // broker), or JOINING (member joining received empty assignment).
             if (state == MemberState.RECONCILING || state == MemberState.JOINING) {
                 transitionTo(MemberState.STABLE);
+            } else {
+                // Send ack to the coordinator for the assignment received (even if it is already reconciled)
+                transitionTo(MemberState.ACKNOWLEDGING);
             }
         }
     }
