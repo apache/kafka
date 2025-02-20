@@ -3936,6 +3936,7 @@ public class KafkaAdminClient extends AdminClient {
                     data.topics().add(reassignableTopic);
                 }
                 data.setTimeoutMs(timeoutMs);
+                data.setAllowReplicationFactorChange(options.allowReplicationFactorChange());
                 return new AlterPartitionReassignmentsRequest.Builder(data);
             }
 
