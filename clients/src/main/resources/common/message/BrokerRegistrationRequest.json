@@ -60,6 +60,8 @@
     { "name": "LogDirs", "type":  "[]uuid", "versions":  "2+",
       "about": "Log directories configured in this broker which are available.", "ignorable": true },
     { "name": "PreviousBrokerEpoch", "type": "int64", "versions": "3+", "default": "-1", "ignorable": true,
-      "about": "The epoch before a clean shutdown." }
+      "about": "The epoch before a clean shutdown." },
+    { "name": "Pod", "type": "string", "versions": "0+", "nullableVersions": "0+", "taggedVersions": "0+", "tag": 0, "default": "null",
+      "about": "The Pod which this broker is in." }
   ]
 }
