@@ -125,6 +125,9 @@ if __name__ == "__main__":
     if len(body) == 0:
         errors.append("Body is empty")
 
+    if "Delete this text and replace" in body:
+        errors.append("PR template text should be removed")
+
     # Check for Reviewers
     approved = has_approval(reviews)
     if approved:
