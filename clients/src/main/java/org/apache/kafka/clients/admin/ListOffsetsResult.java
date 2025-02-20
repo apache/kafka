@@ -56,7 +56,7 @@ public class ListOffsetsResult {
      * retrieved.
      */
     public KafkaFuture<Map<TopicPartition, ListOffsetsResultInfo>> all() {
-        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0]))
+        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture<?>[0]))
                 .thenApply(v -> {
                     Map<TopicPartition, ListOffsetsResultInfo> offsets = new HashMap<>(futures.size());
                     for (Map.Entry<TopicPartition, KafkaFuture<ListOffsetsResultInfo>> entry : futures.entrySet()) {

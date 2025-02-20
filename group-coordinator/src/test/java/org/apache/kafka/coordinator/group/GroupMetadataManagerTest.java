@@ -80,6 +80,8 @@ import org.apache.kafka.coordinator.group.classic.ClassicGroupMember;
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataValue.Endpoint;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.modern.Assignment;
 import org.apache.kafka.coordinator.group.modern.MemberAssignmentImpl;
 import org.apache.kafka.coordinator.group.modern.MemberState;
@@ -91,6 +93,14 @@ import org.apache.kafka.coordinator.group.modern.consumer.ResolvedRegularExpress
 import org.apache.kafka.coordinator.group.modern.share.ShareGroup;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupBuilder;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupMember;
+import org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers;
+import org.apache.kafka.coordinator.group.streams.StreamsGroup;
+import org.apache.kafka.coordinator.group.streams.StreamsGroupBuilder;
+import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
+import org.apache.kafka.coordinator.group.streams.StreamsTopology;
+import org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil;
+import org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.TaskRole;
+import org.apache.kafka.coordinator.group.streams.TasksTuple;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
@@ -104,6 +114,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -136,7 +147,7 @@ import static org.apache.kafka.coordinator.group.GroupMetadataManager.classicGro
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.classicGroupJoinKey;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.classicGroupSyncKey;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.consumerGroupJoinKey;
-import static org.apache.kafka.coordinator.group.GroupMetadataManager.consumerGroupRebalanceTimeoutKey;
+import static org.apache.kafka.coordinator.group.GroupMetadataManager.groupRebalanceTimeoutKey;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.groupSessionTimeoutKey;
 import static org.apache.kafka.coordinator.group.GroupMetadataManagerTestContext.DEFAULT_CLIENT_ADDRESS;
 import static org.apache.kafka.coordinator.group.GroupMetadataManagerTestContext.DEFAULT_CLIENT_ID;
@@ -164,6 +175,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class GroupMetadataManagerTest {
+
     @Test
     public void testConsumerHeartbeatRequestValidation() {
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
@@ -3518,7 +3530,7 @@ public class GroupMetadataManagerTest {
         // Verify the expired timeout.
         assertEquals(
             List.of(new ExpiredTimeout<Void, CoordinatorRecord>(
-                consumerGroupRebalanceTimeoutKey(groupId, memberId1),
+                groupRebalanceTimeoutKey(groupId, memberId1),
                 new CoordinatorResult<>(
                     List.of(
                         GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentTombstoneRecord(groupId, memberId1),
@@ -3585,7 +3597,73 @@ public class GroupMetadataManagerTest {
         assertNotNull(context.timer.timeout(groupSessionTimeoutKey("foo", "foo-2")));
 
         // foo-1 should also have a revocation timeout in place.
-        assertNotNull(context.timer.timeout(consumerGroupRebalanceTimeoutKey("foo", "foo-1")));
+        assertNotNull(context.timer.timeout(groupRebalanceTimeoutKey("foo", "foo-1")));
+    }
+
+    @Test
+    public void testOnLoadedWithStreamsGroup() {
+        Uuid fooTopicId = Uuid.randomUuid();
+        String fooTopicName = "foo";
+        Uuid barTopicId = Uuid.randomUuid();
+        String barTopicName = "bar";
+
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withMetadataImage(new MetadataImageBuilder()
+                .addTopic(fooTopicId, fooTopicName, 6)
+                .addTopic(barTopicId, barTopicName, 3)
+                .build())
+            .withStreamsGroup(new StreamsGroupBuilder("foo", 10)
+                .withMember(new StreamsGroupMember.Builder("foo-1")
+                    .setState(org.apache.kafka.coordinator.group.streams.MemberState.UNREVOKED_TASKS)
+                    .setMemberEpoch(9)
+                    .setPreviousMemberEpoch(9)
+                    .setProcessId("process-id")
+                    .setRackId(null)
+                    .setInstanceId(null)
+                    .setRebalanceTimeoutMs(100)
+                    .setClientTags(new HashMap<>())
+                    .setAssignedTasks(TasksTuple.EMPTY)
+                    .setTasksPendingRevocation(TasksTuple.EMPTY)
+                    .setTopologyEpoch(1)
+                    .setUserEndpoint(new Endpoint().setHost("localhost").setPort(1500))
+                    .setClientId(DEFAULT_CLIENT_ID)
+                    .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
+                    .setAssignedTasks(TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
+                        TaskAssignmentTestUtil.mkTasks(fooTopicName, 0, 1, 2)))
+                    .setTasksPendingRevocation(TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
+                        TaskAssignmentTestUtil.mkTasks(fooTopicName, 3, 4, 5)))
+                    .build())
+                .withMember(new StreamsGroupMember.Builder("foo-2")
+                    .setState(org.apache.kafka.coordinator.group.streams.MemberState.STABLE)
+                    .setMemberEpoch(10)
+                    .setPreviousMemberEpoch(10)
+                    .setProcessId("process-id")
+                    .setRackId(null)
+                    .setInstanceId(null)
+                    .setAssignedTasks(TasksTuple.EMPTY)
+                    .setTasksPendingRevocation(TasksTuple.EMPTY)
+                    .setRebalanceTimeoutMs(100)
+                    .setClientTags(new HashMap<>())
+                    .setTopologyEpoch(1)
+                    .setUserEndpoint(new Endpoint().setHost("localhost").setPort(1500))
+                    .setClientId(DEFAULT_CLIENT_ID)
+                    .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
+                    .build())
+                .withTargetAssignment("foo-1", TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
+                    TaskAssignmentTestUtil.mkTasks(fooTopicName, 3, 4, 5)))
+                .withTargetAssignmentEpoch(10))
+            .build();
+
+        // Let's assume that all the records have been replayed and now
+        // onLoaded is called to signal it.
+        context.groupMetadataManager.onLoaded();
+
+        // All members should have a session timeout in place.
+        assertNotNull(context.timer.timeout(groupSessionTimeoutKey("foo", "foo-1")));
+        assertNotNull(context.timer.timeout(groupSessionTimeoutKey("foo", "foo-2")));
+
+        // foo-1 should also have a revocation timeout in place.
+        assertNotNull(context.timer.timeout(groupRebalanceTimeoutKey("foo", "foo-1")));
     }
 
     @Test
@@ -3656,6 +3734,77 @@ public class GroupMetadataManagerTest {
         )));
     }
 
+    @Test
+    public void testUpdateStreamsGroupSizeCounter() {
+        List<String> groupIds = new ArrayList<>();
+        IntStream.range(0, 5).forEach(i -> groupIds.add("group-" + i));
+        List<String> streamsMemberIds = List.of("streams-member-id-0", "streams-member-id-1", "streams-member-id-2", "streams-member-id-3");
+
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroup(new StreamsGroupBuilder(groupIds.get(0), 10)) // Empty group
+            .withStreamsGroup(new StreamsGroupBuilder(groupIds.get(1), 10) // Stable group
+                .withTargetAssignmentEpoch(10)
+                .withTopology(new StreamsTopology(1, Map.of()))
+                .withMember(streamsGroupMemberBuilderWithDefaults(streamsMemberIds.get(0))
+                    .setMemberEpoch(10)
+                    .build()))
+            .withStreamsGroup(new StreamsGroupBuilder(groupIds.get(2), 10) // Assigning group
+                .withTargetAssignmentEpoch(9)
+                .withTopology(new StreamsTopology(1, Map.of()))
+                .withMember(streamsGroupMemberBuilderWithDefaults(streamsMemberIds.get(1))
+                    .setMemberEpoch(9)
+                    .build()))
+            .withStreamsGroup(new StreamsGroupBuilder(groupIds.get(3), 10) // Reconciling group
+                .withTargetAssignmentEpoch(10)
+                .withTopology(new StreamsTopology(1, Map.of()))
+                .withMember(streamsGroupMemberBuilderWithDefaults(streamsMemberIds.get(2))
+                    .setMemberEpoch(9)
+                    .build()))
+            .withStreamsGroup(new StreamsGroupBuilder(groupIds.get(4), 10) // NotReady group
+                .withTargetAssignmentEpoch(10)
+                .withMember(streamsGroupMemberBuilderWithDefaults(streamsMemberIds.get(3))
+                    .build()))
+            .build();
+
+        context.groupMetadataManager.updateGroupSizeCounter();
+        verify(context.metrics, times(1)).setStreamsGroupGauges(eq(Utils.mkMap(
+            Utils.mkEntry(StreamsGroup.StreamsGroupState.EMPTY, 1L),
+            Utils.mkEntry(StreamsGroup.StreamsGroupState.ASSIGNING, 1L),
+            Utils.mkEntry(StreamsGroup.StreamsGroupState.RECONCILING, 1L),
+            Utils.mkEntry(StreamsGroup.StreamsGroupState.NOT_READY, 1L),
+            Utils.mkEntry(StreamsGroup.StreamsGroupState.STABLE, 1L)
+        )));
+
+        context.groupMetadataManager.getOrMaybeCreateStreamsGroup(groupIds.get(1), false)
+            .removeMember(streamsMemberIds.get(0));
+        context.groupMetadataManager.getOrMaybeCreateStreamsGroup(groupIds.get(3), false)
+            .updateMember(streamsGroupMemberBuilderWithDefaults(streamsMemberIds.get(2)).setMemberEpoch(10).build());
+
+        context.groupMetadataManager.updateGroupSizeCounter();
+        verify(context.metrics, times(1)).setStreamsGroupGauges(eq(Utils.mkMap(
+            Utils.mkEntry(StreamsGroup.StreamsGroupState.EMPTY, 2L),
+            Utils.mkEntry(StreamsGroup.StreamsGroupState.ASSIGNING, 1L),
+            Utils.mkEntry(StreamsGroup.StreamsGroupState.NOT_READY, 1L),
+            Utils.mkEntry(StreamsGroup.StreamsGroupState.STABLE, 1L)
+        )));
+    }
+
+    private StreamsGroupMember.Builder streamsGroupMemberBuilderWithDefaults(String memberId) {
+        return new StreamsGroupMember.Builder(memberId)
+            .setMemberEpoch(1)
+            .setPreviousMemberEpoch(0)
+            .setState(org.apache.kafka.coordinator.group.streams.MemberState.STABLE)
+            .setRackId(null)
+            .setInstanceId(null)
+            .setRebalanceTimeoutMs(1000)
+            .setAssignedTasks(TasksTuple.EMPTY)
+            .setTasksPendingRevocation(TasksTuple.EMPTY)
+            .setTopologyEpoch(1)
+            .setClientTags(Map.of())
+            .setProcessId("process-id")
+            .setUserEndpoint(new Endpoint().setHost("localhost").setPort(1500));
+    }
+    
     @Test
     public void testGenerateRecordsOnNewClassicGroup() throws Exception {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
@@ -11443,7 +11592,7 @@ public class GroupMetadataManagerTest {
         // Advance time past the session timeout.
         // Member 2 should be fenced from the group, thus triggering the downgrade.
         ExpiredTimeout<Void, CoordinatorRecord> timeout = context.sleep(30000 + 1).get(0);
-        assertEquals(consumerGroupRebalanceTimeoutKey(groupId, memberId2), timeout.key);
+        assertEquals(groupRebalanceTimeoutKey(groupId, memberId2), timeout.key);
 
         byte[] assignment = Utils.toArray(ConsumerProtocol.serializeAssignment(new ConsumerPartitionAssignor.Assignment(List.of(
             new TopicPartition(fooTopicName, 0),
@@ -15133,6 +15282,422 @@ public class GroupMetadataManagerTest {
         // should be a no-op.
         context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupCurrentAssignmentTombstoneRecord("bar", "m1"));
         assertThrows(GroupIdNotFoundException.class, () -> context.groupMetadataManager.consumerGroup("bar"));
+    }
+
+    @Test
+    public void testReplayStreamsGroupMemberMetadata() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+
+        StreamsGroupMember member = new StreamsGroupMember.Builder("member")
+            .setClientId("clientid")
+            .setClientHost("clienthost")
+            .setRackId("rackid")
+            .setInstanceId("instanceid")
+            .setRebalanceTimeoutMs(1000)
+            .setTopologyEpoch(10)
+            .setProcessId("processid")
+            .setUserEndpoint(new Endpoint().setHost("localhost").setPort(9999))
+            .setClientTags(Collections.singletonMap("key", "value"))
+            .build();
+
+        // The group and the member are created if they do not exist.
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMemberRecord("foo", member));
+        assertEquals(member, context.groupMetadataManager.streamsGroup("foo").getOrMaybeCreateMember("member", false));
+    }
+
+    @Test
+    public void testReplayStreamsGroupMemberMetadataTombstoneNotExisting() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+
+        // The group still exists but the member is already gone. Replaying the
+        // StreamsGroupMemberMetadata tombstone should be a no-op.
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupEpochRecord("foo", 10));
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMemberTombstoneRecord("foo", "m1"));
+        assertThrows(UnknownMemberIdException.class, () -> context.groupMetadataManager.streamsGroup("foo").getOrMaybeCreateMember("m1", false));
+
+        // The group may not exist at all. Replaying the StreamsGroupMemberMetadata tombstone
+        // should be a no-op.
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMemberTombstoneRecord("bar", "m1"));
+        assertThrows(GroupIdNotFoundException.class, () -> context.groupMetadataManager.streamsGroup("bar"));
+    }
+
+    @Test
+    public void testReplayStreamsGroupMemberMetadataTombstoneExisting() {
+        final TasksTuple tasks =
+            new TasksTuple(
+                TaskAssignmentTestUtil.mkTasksPerSubtopology(
+                    TaskAssignmentTestUtil.mkTasks("subtopology-1", 0, 1, 2)),
+                TaskAssignmentTestUtil.mkTasksPerSubtopology(
+                    TaskAssignmentTestUtil.mkTasks("subtopology-1", 3, 4, 5)),
+                TaskAssignmentTestUtil.mkTasksPerSubtopology(
+                    TaskAssignmentTestUtil.mkTasks("subtopology-1", 6, 7, 8))
+            );
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroup(
+                new StreamsGroupBuilder("foo", 10)
+                    .withMember(streamsGroupMemberBuilderWithDefaults("m1").build())
+                    .withTargetAssignment("m1", tasks)
+            )
+            .build();
+
+        IllegalStateException e = assertThrows(IllegalStateException.class,
+            () -> context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMemberTombstoneRecord("foo", "m1")));
+        assertEquals("Received a tombstone record to delete member m1 but did not receive "
+                + "StreamsGroupCurrentMemberAssignmentValue tombstone.",
+            e.getMessage());
+
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentTombstoneRecord("foo", "m1"));
+
+        IllegalStateException e2 = assertThrows(IllegalStateException.class,
+            () -> context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMemberTombstoneRecord("foo", "m1")));
+        assertEquals("Received a tombstone record to delete member m1 but did not receive "
+                + "StreamsGroupTargetAssignmentMetadataValue tombstone.",
+            e2.getMessage());
+
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentTombstoneRecord("foo", "m1"));
+
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMemberTombstoneRecord("foo", "m1"));
+
+        assertFalse(context.groupMetadataManager.streamsGroup("foo").hasMember("m1"));
+    }
+
+    @Test
+    public void testReplayStreamsGroupMetadata() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+
+        // The group is created if it does not exist.
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupEpochRecord("foo", 10));
+        assertEquals(10, context.groupMetadataManager.streamsGroup("foo").groupEpoch());
+    }
+
+    @Test
+    public void testReplayStreamsGroupEpochTombstoneNotExisting() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+
+        // The group may not exist at all. Replaying the StreamsGroupMetadata tombstone
+        // should be a no-op.
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupEpochTombstoneRecord("foo"));
+        assertThrows(GroupIdNotFoundException.class, () -> context.groupMetadataManager.streamsGroup("foo"));
+    }
+
+    @Test
+    public void testReplayStreamsGroupEpochTombstoneExisting() {
+        final TasksTuple tasks =
+            new TasksTuple(
+                TaskAssignmentTestUtil.mkTasksPerSubtopology(
+                    TaskAssignmentTestUtil.mkTasks("subtopology-1", 0, 1, 2)),
+                TaskAssignmentTestUtil.mkTasksPerSubtopology(
+                    TaskAssignmentTestUtil.mkTasks("subtopology-1", 3, 4, 5)),
+                TaskAssignmentTestUtil.mkTasksPerSubtopology(
+                    TaskAssignmentTestUtil.mkTasks("subtopology-1", 6, 7, 8))
+            );
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroup(
+                new StreamsGroupBuilder("foo", 10)
+                    .withTargetAssignmentEpoch(10)
+                    .withMember(streamsGroupMemberBuilderWithDefaults("m1").build())
+                    .withTargetAssignment("m1", tasks)
+            )
+            .build();
+
+        IllegalStateException e = assertThrows(IllegalStateException.class,
+            () -> context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupEpochTombstoneRecord("foo")));
+        assertEquals("Received a tombstone record to delete group foo but the group still has 1 members.",
+            e.getMessage());
+
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentTombstoneRecord("foo", "m1"));
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentTombstoneRecord("foo", "m1"));
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMemberTombstoneRecord("foo", "m1"));
+
+        IllegalStateException e2 = assertThrows(IllegalStateException.class,
+            () -> context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupEpochTombstoneRecord("foo")));
+        assertEquals("Received a tombstone record to delete group foo but did not receive StreamsGroupTargetAssignmentMetadataValue tombstone.",
+            e2.getMessage());
+
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentEpochTombstoneRecord("foo"));
+
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupEpochTombstoneRecord("foo"));
+
+        assertThrows(GroupIdNotFoundException.class, () -> context.groupMetadataManager.streamsGroup("foo"));
+    }
+
+    @Test
+    public void testReplayStreamsGroupPartitionMetadata() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+
+        Map<String, org.apache.kafka.coordinator.group.streams.TopicMetadata> metadata = Map.of(
+            "bar",
+            new org.apache.kafka.coordinator.group.streams.TopicMetadata(Uuid.randomUuid(), "bar", 10)
+        );
+
+        // The group is created if it does not exist.
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupPartitionMetadataRecord("foo", metadata));
+        assertEquals(metadata, context.groupMetadataManager.streamsGroup("foo").partitionMetadata());
+    }
+
+    @Test
+    public void testReplayStreamsGroupPartitionMetadataTombstoneNotExisting() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+
+        // The group may not exist at all. Replaying the StreamsGroupPartitionMetadata tombstone
+        // should be a no-op.
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupPartitionMetadataTombstoneRecord("foo"));
+        assertThrows(GroupIdNotFoundException.class, () -> context.groupMetadataManager.streamsGroup("foo"));
+    }
+
+    @Test
+    public void testReplayStreamsGroupPartitionMetadataTombstoneExisting() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroup(new StreamsGroupBuilder("foo", 10).withPartitionMetadata(
+                Map.of("topic1", new org.apache.kafka.coordinator.group.streams.TopicMetadata(Uuid.randomUuid(), "topic1", 10))
+            ))
+            .build();
+
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupPartitionMetadataTombstoneRecord("foo"));
+
+        assertTrue(context.groupMetadataManager.streamsGroup("foo").partitionMetadata().isEmpty());
+    }
+
+    @Test
+    public void testReplayStreamsGroupTargetAssignmentMember() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+
+        // The group is created if it does not exist.
+        final TasksTuple tasks =
+            new TasksTuple(
+                TaskAssignmentTestUtil.mkTasksPerSubtopology(
+                    TaskAssignmentTestUtil.mkTasks("subtopology-1", 0, 1, 2)),
+                TaskAssignmentTestUtil.mkTasksPerSubtopology(
+                    TaskAssignmentTestUtil.mkTasks("subtopology-1", 3, 4, 5)),
+                TaskAssignmentTestUtil.mkTasksPerSubtopology(
+                    TaskAssignmentTestUtil.mkTasks("subtopology-1", 6, 7, 8))
+            );
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord("foo", "m1", tasks));
+        assertEquals(tasks.activeTasks(), context.groupMetadataManager.streamsGroup("foo").targetAssignment("m1").activeTasks());
+        assertEquals(tasks.standbyTasks(), context.groupMetadataManager.streamsGroup("foo").targetAssignment("m1").standbyTasks());
+        assertEquals(tasks.warmupTasks(), context.groupMetadataManager.streamsGroup("foo").targetAssignment("m1").warmupTasks());
+    }
+
+    @Test
+    public void testReplayStreamsGroupTargetAssignmentMemberTombstoneNonExisting() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+
+        // The group may not exist at all. Replaying the StreamsGroupTargetAssignmentMember tombstone
+        // should be a no-op.
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentTombstoneRecord("foo", "m1"));
+        assertThrows(GroupIdNotFoundException.class, () -> context.groupMetadataManager.streamsGroup("foo"));
+    }
+
+    @Test
+    public void testReplayStreamsGroupTargetAssignmentMemberTombstoneExisting() {
+        final TasksTuple tasks =
+            new TasksTuple(
+                TaskAssignmentTestUtil.mkTasksPerSubtopology(
+                    TaskAssignmentTestUtil.mkTasks("subtopology-1", 0, 1, 2)),
+                TaskAssignmentTestUtil.mkTasksPerSubtopology(
+                    TaskAssignmentTestUtil.mkTasks("subtopology-1", 3, 4, 5)),
+                TaskAssignmentTestUtil.mkTasksPerSubtopology(
+                    TaskAssignmentTestUtil.mkTasks("subtopology-1", 6, 7, 8))
+            );
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroup(new StreamsGroupBuilder("foo", 10).withTargetAssignment("m1", tasks))
+            .build();
+
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentTombstoneRecord("foo", "m1"));
+
+        assertTrue(context.groupMetadataManager.streamsGroup("foo").targetAssignment("m1").isEmpty());
+    }
+
+    @Test
+    public void testReplayStreamsGroupTargetAssignmentMetadata() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+
+        // The group is created if it does not exist.
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentEpochRecord("foo", 10));
+        assertEquals(10, context.groupMetadataManager.streamsGroup("foo").assignmentEpoch());
+    }
+
+    @Test
+    public void testReplayStreamsGroupTargetAssignmentMetadataTombstoneNotExisting() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+
+        // The group may not exist at all. Replaying the StreamsGroupTargetAssignmentMetadata tombstone
+        // should be a no-op.
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentEpochTombstoneRecord("foo"));
+        assertThrows(GroupIdNotFoundException.class, () -> context.groupMetadataManager.streamsGroup("foo"));
+    }
+
+    @Test
+    public void testReplayStreamsGroupTargetAssignmentMetadataTombstoneExisting() {
+        final TasksTuple tasks =
+            new TasksTuple(
+                TaskAssignmentTestUtil.mkTasksPerSubtopology(
+                    TaskAssignmentTestUtil.mkTasks("subtopology-1", 0, 1, 2)),
+                TaskAssignmentTestUtil.mkTasksPerSubtopology(
+                    TaskAssignmentTestUtil.mkTasks("subtopology-1", 3, 4, 5)),
+                TaskAssignmentTestUtil.mkTasksPerSubtopology(
+                    TaskAssignmentTestUtil.mkTasks("subtopology-1", 6, 7, 8))
+            );
+
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroup(
+                new StreamsGroupBuilder("foo", 10)
+                    .withTargetAssignmentEpoch(10)
+                    .withTargetAssignment("m1", tasks)
+            )
+            .build();
+
+        IllegalStateException e = assertThrows(
+            IllegalStateException.class,
+            () -> context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentEpochTombstoneRecord("foo"))
+        );
+        assertEquals("Received a tombstone record to delete target assignment of foo but the assignment still has 1 members.",
+            e.getMessage());
+
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentTombstoneRecord("foo", "m1"));
+
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentEpochTombstoneRecord("foo"));
+
+        assertEquals(-1, context.groupMetadataManager.streamsGroup("foo").assignmentEpoch());
+    }
+
+    @Test
+    public void testReplayStreamsGroupCurrentMemberAssignment() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+
+        StreamsGroupMember member = new StreamsGroupMember.Builder("member")
+            .setMemberEpoch(10)
+            .setPreviousMemberEpoch(9)
+            .setState(org.apache.kafka.coordinator.group.streams.MemberState.UNRELEASED_TASKS)
+            .setAssignedTasks(new TasksTuple(
+                TaskAssignmentTestUtil.mkTasksPerSubtopology(TaskAssignmentTestUtil.mkTasks("subtopology-1", 0, 1, 2)),
+                TaskAssignmentTestUtil.mkTasksPerSubtopology(TaskAssignmentTestUtil.mkTasks("subtopology-1", 3, 4, 5)),
+                TaskAssignmentTestUtil.mkTasksPerSubtopology(TaskAssignmentTestUtil.mkTasks("subtopology-1", 6, 7, 8))
+            ))
+            .setTasksPendingRevocation(TasksTuple.EMPTY)
+            .build();
+
+        // The group and the member are created if they do not exist.
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord("bar", member));
+        assertEquals(member, context.groupMetadataManager.streamsGroup("bar").getOrMaybeCreateMember("member", false));
+    }
+
+    @Test
+    public void testReplayStreamsGroupCurrentMemberAssignmentTombstoneNotExisting() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+
+        // The group still exists, but the member is already gone. Replaying the
+        // StreamsGroupCurrentMemberAssignment tombstone should be a no-op.
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupEpochRecord("foo", 10));
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentTombstoneRecord("foo", "m1"));
+        assertThrows(UnknownMemberIdException.class, () -> context.groupMetadataManager.streamsGroup("foo").getOrMaybeCreateMember("m1", false));
+
+        // The group may not exist at all. Replaying the StreamsGroupCurrentMemberAssignment tombstone
+        // should be a no-op.
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentTombstoneRecord("bar", "m1"));
+        assertThrows(GroupIdNotFoundException.class, () -> context.groupMetadataManager.streamsGroup("bar"));
+    }
+
+    @Test
+    public void testReplayStreamsGroupCurrentMemberAssignmentTombstoneExisting() {
+        final TasksTuple tasks =
+            new TasksTuple(
+                TaskAssignmentTestUtil.mkTasksPerSubtopology(
+                    TaskAssignmentTestUtil.mkTasks("subtopology-1", 0, 1, 2)),
+                TaskAssignmentTestUtil.mkTasksPerSubtopology(
+                    TaskAssignmentTestUtil.mkTasks("subtopology-1", 3, 4, 5)),
+                TaskAssignmentTestUtil.mkTasksPerSubtopology(
+                    TaskAssignmentTestUtil.mkTasks("subtopology-1", 6, 7, 8))
+            );
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroup(
+                new StreamsGroupBuilder("foo", 10)
+                    .withMember(
+                        streamsGroupMemberBuilderWithDefaults("m1")
+                            .setAssignedTasks(tasks)
+                            .build()
+                    )
+            )
+            .build();
+
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentTombstoneRecord("foo", "m1"));
+
+        final StreamsGroupMember member = context.groupMetadataManager.streamsGroup("foo").getOrMaybeCreateMember("m1", false);
+        assertEquals(LEAVE_GROUP_MEMBER_EPOCH, member.memberEpoch());
+        assertEquals(LEAVE_GROUP_MEMBER_EPOCH, member.previousMemberEpoch());
+        assertTrue(member.assignedTasks().isEmpty());
+        assertTrue(member.tasksPendingRevocation().isEmpty());
+    }
+
+    @Test
+    public void testReplayStreamsGroupTopology() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+
+        StreamsGroupTopologyValue topology = new StreamsGroupTopologyValue()
+            .setEpoch(12)
+            .setSubtopologies(
+                List.of(
+                    new StreamsGroupTopologyValue.Subtopology()
+                        .setSubtopologyId("subtopology-1")
+                        .setSourceTopics(List.of("source-topic"))
+                        .setRepartitionSinkTopics(List.of("sink-topic"))
+                )
+            );
+
+        // The group and the topology are created if they do not exist.
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecord("bar", topology));
+        final Optional<StreamsTopology> actualTopology = context.groupMetadataManager.streamsGroup("bar").topology();
+        assertTrue(actualTopology.isPresent(), "topology should be set");
+        assertEquals(topology.epoch(), actualTopology.get().topologyEpoch());
+        assertEquals(topology.subtopologies().size(), actualTopology.get().subtopologies().size());
+        assertEquals(
+            topology.subtopologies().iterator().next(),
+            actualTopology.get().subtopologies().values().iterator().next()
+        );
+    }
+
+    @Test
+    public void testReplayStreamsGroupTopologyTombstoneNotExists() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+
+        // The group still exists, but the member is already gone. Replaying the
+        // StreamsGroupTopology tombstone should be a no-op.
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupEpochRecord("foo", 10));
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecordTombstone("foo"));
+        assertTrue(context.groupMetadataManager.streamsGroup("foo").topology().isEmpty());
+
+        // The group may not exist at all. Replaying the StreamsGroupTopology tombstone
+        // should be a no-op.
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecordTombstone("bar"));
+        assertThrows(GroupIdNotFoundException.class, () -> context.groupMetadataManager.streamsGroup("bar"));
+    }
+
+    @Test
+    public void testReplayStreamsGroupTopologyTombstoneExists() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroup(
+                new StreamsGroupBuilder("foo", 10)
+                    .withTopology(new StreamsTopology(10, Map.of()))
+            )
+            .build();
+
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecordTombstone("foo"));
+
+        assertTrue(context.groupMetadataManager.streamsGroup("foo").topology().isEmpty());
     }
 
     @Test

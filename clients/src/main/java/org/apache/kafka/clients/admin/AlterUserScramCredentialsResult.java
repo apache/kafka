@@ -55,6 +55,6 @@ public class AlterUserScramCredentialsResult {
      * Return a future which succeeds only if all the user SCRAM credential alterations succeed.
      */
     public KafkaFuture<Void> all() {
-        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0]));
+        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture<?>[0]));
     }
 }

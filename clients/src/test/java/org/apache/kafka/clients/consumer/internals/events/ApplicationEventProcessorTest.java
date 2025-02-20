@@ -438,7 +438,7 @@ public class ApplicationEventProcessorTest {
         processor.process(event);
 
         verify(subscriptionState).subscribe(pattern, listener);
-        Exception thrown = assertFutureThrows(event.future(), mixedSubscriptionError.getClass());
+        Exception thrown = assertFutureThrows(IllegalStateException.class, event.future());
         assertEquals(mixedSubscriptionError, thrown);
     }
 
@@ -462,7 +462,7 @@ public class ApplicationEventProcessorTest {
 
         setupProcessor(false);
         processor.process(event);
-        assertFutureThrows(event.future(), KafkaException.class);
+        assertFutureThrows(KafkaException.class, event.future());
     }
 
     @Test
@@ -476,7 +476,7 @@ public class ApplicationEventProcessorTest {
         processor.process(event);
 
         verify(commitRequestManager).commitSync(Optional.empty(), 12345);
-        assertFutureThrows(event.future(), IllegalStateException.class);
+        assertFutureThrows(IllegalStateException.class, event.future());
     }
 
     @ParameterizedTest
@@ -499,7 +499,7 @@ public class ApplicationEventProcessorTest {
 
         setupProcessor(false);
         processor.process(event);
-        assertFutureThrows(event.future(), KafkaException.class);
+        assertFutureThrows(KafkaException.class, event.future());
     }
 
     @Test
@@ -513,7 +513,7 @@ public class ApplicationEventProcessorTest {
         processor.process(event);
 
         verify(commitRequestManager).commitAsync(Optional.empty());
-        assertFutureThrows(event.future(), IllegalStateException.class);
+        assertFutureThrows(IllegalStateException.class, event.future());
     }
 
     private static Stream<Arguments> offsetsGenerator() {

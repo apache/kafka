@@ -76,7 +76,7 @@ class GroupCoordinatorAdapterTest {
 
     assertTrue(future.isDone)
     assertTrue(future.isCompletedExceptionally)
-    assertFutureThrows(future, classOf[UnsupportedVersionException])
+    assertFutureThrows(classOf[UnsupportedVersionException], future)
   }
 
   @Test
@@ -92,7 +92,7 @@ class GroupCoordinatorAdapterTest {
 
     assertTrue(future.isDone)
     assertTrue(future.isCompletedExceptionally)
-    assertFutureThrows(future, classOf[UnsupportedVersionException])
+    assertFutureThrows(classOf[UnsupportedVersionException], future)
   }
 
   @Test
@@ -101,14 +101,14 @@ class GroupCoordinatorAdapterTest {
     val adapter = new GroupCoordinatorAdapter(groupCoordinator, Time.SYSTEM)
 
     val context = makeContext(ApiKeys.DESCRIBE_SHARE_GROUP_OFFSETS, ApiKeys.DESCRIBE_SHARE_GROUP_OFFSETS.latestVersion)
-    val request = new DescribeShareGroupOffsetsRequestData()
+    val request = new DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup()
       .setGroupId("group")
 
     val future = adapter.describeShareGroupOffsets(context, request)
 
     assertTrue(future.isDone)
     assertTrue(future.isCompletedExceptionally)
-    assertFutureThrows(future, classOf[UnsupportedVersionException])
+    assertFutureThrows(classOf[UnsupportedVersionException], future)
   }
 
   @ParameterizedTest
@@ -918,7 +918,7 @@ class GroupCoordinatorAdapterTest {
     val future = adapter.deleteOffsets(ctx, data, bufferSupplier)
     assertTrue(future.isDone)
     assertTrue(future.isCompletedExceptionally)
-    assertFutureThrows(future, classOf[InvalidGroupIdException])
+    assertFutureThrows(classOf[InvalidGroupIdException], future)
   }
 
   @Test
@@ -931,7 +931,7 @@ class GroupCoordinatorAdapterTest {
     val future = adapter.consumerGroupDescribe(context, groupIds)
     assertTrue(future.isDone)
     assertTrue(future.isCompletedExceptionally)
-    assertFutureThrows(future, classOf[UnsupportedVersionException])
+    assertFutureThrows(classOf[UnsupportedVersionException], future)
   }
 
   @Test
@@ -944,7 +944,7 @@ class GroupCoordinatorAdapterTest {
     val future = adapter.shareGroupDescribe(context, groupIds)
     assertTrue(future.isDone)
     assertTrue(future.isCompletedExceptionally)
-    assertFutureThrows(future, classOf[UnsupportedVersionException])
+    assertFutureThrows(classOf[UnsupportedVersionException], future)
   }
 
   @Test
@@ -966,6 +966,6 @@ class GroupCoordinatorAdapterTest {
 
     assertTrue(future.isDone)
     assertTrue(future.isCompletedExceptionally)
-    assertFutureThrows(future, classOf[IllegalStateException])
+    assertFutureThrows(classOf[IllegalStateException], future)
   }
 }

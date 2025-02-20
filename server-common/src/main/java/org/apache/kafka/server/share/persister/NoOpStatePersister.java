@@ -26,9 +26,9 @@ import java.util.stream.Collectors;
 /**
  * A no-op singleton implementation of {@link Persister} interface.
  */
-public class NoOpShareStatePersister implements Persister {
+public class NoOpStatePersister implements Persister {
 
-    public NoOpShareStatePersister() {
+    public NoOpStatePersister() {
     }
 
     @Override

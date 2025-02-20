@@ -34,7 +34,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static org.apache.kafka.server.common.MetadataVersion.IBP_3_3_IV2;
+import static org.apache.kafka.server.common.MetadataVersion.MINIMUM_VERSION;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 
@@ -116,7 +116,7 @@ public class MetadataLoaderMetricsTest {
         MetricsRegistry registry = new MetricsRegistry();
         try {
             try (FakeMetadataLoaderMetrics fakeMetrics = new FakeMetadataLoaderMetrics(registry)) {
-                fakeMetrics.metrics.setCurrentMetadataVersion(IBP_3_3_IV2);
+                fakeMetrics.metrics.setCurrentMetadataVersion(MINIMUM_VERSION);
                 fakeMetrics.metrics.incrementHandleLoadSnapshotCount();
                 fakeMetrics.metrics.incrementHandleLoadSnapshotCount();
 
@@ -124,7 +124,7 @@ public class MetadataLoaderMetricsTest {
                 Gauge<Integer> currentMetadataVersion = (Gauge<Integer>) registry
                     .allMetrics()
                     .get(metricName("MetadataLoader", "CurrentMetadataVersion"));
-                assertEquals(IBP_3_3_IV2.featureLevel(),
+                assertEquals(MINIMUM_VERSION.featureLevel(),
                     currentMetadataVersion.value().shortValue());
 
                 @SuppressWarnings("unchecked")

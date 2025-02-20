@@ -23,7 +23,7 @@ import kafka.network.RequestChannel
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.metadata.KRaftMetadataCache
 import kafka.server.share.SharePartitionManager
-import kafka.utils.{CoreUtils, LoggingController, Logging, TestUtils}
+import kafka.utils.{CoreUtils, Logging, LoggingController, TestUtils}
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry}
 import org.apache.kafka.common._
@@ -42,8 +42,8 @@ import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData.DescribedGroup
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult
-import org.apache.kafka.common.message.DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestTopic
-import org.apache.kafka.common.message.DescribeShareGroupOffsetsResponseData.{DescribeShareGroupOffsetsResponsePartition, DescribeShareGroupOffsetsResponseTopic}
+import org.apache.kafka.common.message.DescribeShareGroupOffsetsRequestData.{DescribeShareGroupOffsetsRequestGroup, DescribeShareGroupOffsetsRequestTopic}
+import org.apache.kafka.common.message.DescribeShareGroupOffsetsResponseData.{DescribeShareGroupOffsetsResponseGroup, DescribeShareGroupOffsetsResponsePartition, DescribeShareGroupOffsetsResponseTopic}
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.{AlterConfigsResource => IAlterConfigsResource, AlterConfigsResourceCollection => IAlterConfigsResourceCollection, AlterableConfig => IAlterableConfig, AlterableConfigCollection => IAlterableConfigCollection}
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.{AlterConfigsResourceResponse => IAlterConfigsResourceResponse}
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
@@ -55,7 +55,7 @@ import org.apache.kafka.common.message.OffsetDeleteRequestData.{OffsetDeleteRequ
 import org.apache.kafka.common.message.OffsetDeleteResponseData.{OffsetDeleteResponsePartition, OffsetDeleteResponsePartitionCollection, OffsetDeleteResponseTopic, OffsetDeleteResponseTopicCollection}
 import org.apache.kafka.common.message.ShareFetchRequestData.{AcknowledgementBatch, ForgottenTopic}
 import org.apache.kafka.common.message.ShareFetchResponseData.{AcquiredRecords, PartitionData, ShareFetchableTopicResponse}
-import org.apache.kafka.common.metadata.{PartitionRecord, RegisterBrokerRecord, TopicRecord}
+import org.apache.kafka.common.metadata.{FeatureLevelRecord, PartitionRecord, RegisterBrokerRecord, TopicRecord}
 import org.apache.kafka.common.metadata.RegisterBrokerRecord.{BrokerEndpoint, BrokerEndpointCollection}
 import org.apache.kafka.common.protocol.ApiMessage
 import org.apache.kafka.common.message._
@@ -77,6 +77,7 @@ import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig
 import org.apache.kafka.coordinator.group.{GroupConfig, GroupCoordinator, GroupCoordinatorConfig}
 import org.apache.kafka.coordinator.share.{ShareCoordinator, ShareCoordinatorTestConfig}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
+import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
 import org.apache.kafka.metadata.{ConfigRepository, MockConfigRepository}
 import org.apache.kafka.network.metrics.{RequestChannelMetrics, RequestMetrics}
 import org.apache.kafka.raft.QuorumConfig
@@ -9781,7 +9782,16 @@ class KafkaApisTest extends Logging {
     val consumerGroupHeartbeatRequest = new ConsumerGroupHeartbeatRequestData().setGroupId("group")
 
     val requestChannelRequest = buildRequest(new ConsumerGroupHeartbeatRequest.Builder(consumerGroupHeartbeatRequest).build())
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+    metadataCache = {
+      val cache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      delta.replay(new FeatureLevelRecord()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+      )
+      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+      cache
+    }
     kafkaApis = createKafkaApis()
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
 
@@ -9920,7 +9930,16 @@ class KafkaApisTest extends Logging {
     val expectedDescribedGroup = new DescribedGroup().setGroupId(groupId).setErrorCode(errorCode)
     val expectedResponse = new ConsumerGroupDescribeResponseData()
     expectedResponse.groups.add(expectedDescribedGroup)
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+    metadataCache = {
+      val cache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      delta.replay(new FeatureLevelRecord()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+      )
+      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+      cache
+    }
     kafkaApis = createKafkaApis()
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
     val response = verifyNoThrottling[ConsumerGroupDescribeResponse](requestChannelRequest)
@@ -10445,8 +10464,10 @@ class KafkaApisTest extends Logging {
 
   @Test
   def testDescribeShareGroupOffsetsReturnsUnsupportedVersion(): Unit = {
-    val describeShareGroupOffsetsRequest = new DescribeShareGroupOffsetsRequestData().setGroupId("group").setTopics(
-      util.List.of(new DescribeShareGroupOffsetsRequestTopic().setTopicName("topic-1").setPartitions(util.List.of(1)))
+    val describeShareGroupOffsetsRequest = new DescribeShareGroupOffsetsRequestData().setGroups(
+      util.List.of(new DescribeShareGroupOffsetsRequestGroup().setGroupId("group").setTopics(
+        util.List.of(new DescribeShareGroupOffsetsRequestTopic().setTopicName("topic-1").setPartitions(util.List.of(1)))
+      ))
     )
 
     val requestChannelRequest = buildRequest(new DescribeShareGroupOffsetsRequest.Builder(describeShareGroupOffsetsRequest, true).build())
@@ -10455,16 +10476,18 @@ class KafkaApisTest extends Logging {
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
 
     val response = verifyNoThrottling[DescribeShareGroupOffsetsResponse](requestChannelRequest)
-    response.data.responses.forEach(topic => topic.partitions().forEach(partition => assertEquals(Errors.UNSUPPORTED_VERSION.code(), partition.errorCode())))
+    response.data.groups.forEach(group => group.topics.forEach(topic => topic.partitions.forEach(partition => assertEquals(Errors.UNSUPPORTED_VERSION.code, partition.errorCode))))
   }
 
   @Test
   def testDescribeShareGroupOffsetsRequestsAuthorizationFailed(): Unit = {
-    val describeShareGroupOffsetsRequest = new DescribeShareGroupOffsetsRequestData().setGroupId("group").setTopics(
-      util.List.of(new DescribeShareGroupOffsetsRequestTopic().setTopicName("topic-1").setPartitions(util.List.of(1)))
+    val describeShareGroupOffsetsRequest = new DescribeShareGroupOffsetsRequestData().setGroups(
+      util.List.of(new DescribeShareGroupOffsetsRequestGroup().setGroupId("group").setTopics(
+        util.List.of(new DescribeShareGroupOffsetsRequestTopic().setTopicName("topic-1").setPartitions(util.List.of(1)))
+      ))
     )
 
-    val requestChannelRequest = buildRequest(new DescribeShareGroupOffsetsRequest.Builder(describeShareGroupOffsetsRequest, true).build())
+    val requestChannelRequest = buildRequest(new DescribeShareGroupOffsetsRequest.Builder(describeShareGroupOffsetsRequest, true).build)
 
     val authorizer: Authorizer = mock(classOf[Authorizer])
     when(authorizer.authorize(any[RequestContext], any[util.List[Action]]))
@@ -10477,9 +10500,11 @@ class KafkaApisTest extends Logging {
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
 
     val response = verifyNoThrottling[DescribeShareGroupOffsetsResponse](requestChannelRequest)
-    response.data.responses.forEach(
-      topic => topic.partitions().forEach(
-        partition => assertEquals(Errors.GROUP_AUTHORIZATION_FAILED.code(), partition.errorCode())
+    response.data.groups.forEach(
+      group => group.topics.forEach(
+        topic => topic.partitions.forEach(
+          partition => assertEquals(Errors.GROUP_AUTHORIZATION_FAILED.code, partition.errorCode)
+        )
       )
     )
   }
@@ -10487,34 +10512,52 @@ class KafkaApisTest extends Logging {
   @Test
   def testDescribeShareGroupOffsetsRequestSuccess(): Unit = {
     val topicName1 = "topic-1"
-    val topicId1 = Uuid.randomUuid()
+    val topicId1 = Uuid.randomUuid
     val topicName2 = "topic-2"
-    val topicId2 = Uuid.randomUuid()
+    val topicId2 = Uuid.randomUuid
+    val topicName3 = "topic-3"
+    val topicId3 = Uuid.randomUuid
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     addTopicToMetadataCache(topicName1, 1, topicId = topicId1)
     addTopicToMetadataCache(topicName2, 1, topicId = topicId2)
+    addTopicToMetadataCache(topicName3, 1, topicId = topicId3)
 
-    val describeShareGroupOffsetsRequest = new DescribeShareGroupOffsetsRequestData().setGroupId("group").setTopics(
+    val describeShareGroupOffsetsRequestGroup1 = new DescribeShareGroupOffsetsRequestGroup().setGroupId("group1").setTopics(
       util.List.of(
         new DescribeShareGroupOffsetsRequestTopic().setTopicName(topicName1).setPartitions(util.List.of(1, 2, 3)),
         new DescribeShareGroupOffsetsRequestTopic().setTopicName(topicName2).setPartitions(util.List.of(10, 20)),
       )
     )
 
-    val requestChannelRequest = buildRequest(new DescribeShareGroupOffsetsRequest.Builder(describeShareGroupOffsetsRequest, true).build())
+    val describeShareGroupOffsetsRequestGroup2 = new DescribeShareGroupOffsetsRequestGroup().setGroupId("group2").setTopics(
+      util.List.of(
+        new DescribeShareGroupOffsetsRequestTopic().setTopicName(topicName3).setPartitions(util.List.of(0)),
+      )
+    )
 
-    val future = new CompletableFuture[DescribeShareGroupOffsetsResponseData]()
+    val describeShareGroupOffsetsRequest = new DescribeShareGroupOffsetsRequestData()
+      .setGroups(util.List.of(describeShareGroupOffsetsRequestGroup1, describeShareGroupOffsetsRequestGroup2))
+
+    val requestChannelRequest = buildRequest(new DescribeShareGroupOffsetsRequest.Builder(describeShareGroupOffsetsRequest, true).build)
+
+    val futureGroup1 = new CompletableFuture[DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup]
     when(groupCoordinator.describeShareGroupOffsets(
       requestChannelRequest.context,
-      describeShareGroupOffsetsRequest
-    )).thenReturn(future)
+      describeShareGroupOffsetsRequestGroup1
+    )).thenReturn(futureGroup1)
+    val futureGroup2 = new CompletableFuture[DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup]
+    when(groupCoordinator.describeShareGroupOffsets(
+      requestChannelRequest.context,
+      describeShareGroupOffsetsRequestGroup2
+    )).thenReturn(futureGroup2)
     kafkaApis = createKafkaApis(
       overrideProperties = Map(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
     )
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
 
-    val describeShareGroupOffsetsResponse = new DescribeShareGroupOffsetsResponseData()
-      .setResponses(util.List.of(
+    val describeShareGroupOffsetsResponseGroup1 = new DescribeShareGroupOffsetsResponseGroup()
+      .setGroupId("group1")
+      .setTopics(util.List.of(
         new DescribeShareGroupOffsetsResponseTopic()
           .setTopicName(topicName1)
           .setTopicId(topicId1)
@@ -10557,7 +10600,81 @@ class KafkaApisTest extends Logging {
           ))
       ))
 
-    future.complete(describeShareGroupOffsetsResponse)
+    val describeShareGroupOffsetsResponseGroup2 = new DescribeShareGroupOffsetsResponseGroup()
+      .setGroupId("group2")
+      .setTopics(util.List.of(
+        new DescribeShareGroupOffsetsResponseTopic()
+          .setTopicName(topicName3)
+          .setTopicId(topicId3)
+          .setPartitions(util.List.of(
+            new DescribeShareGroupOffsetsResponsePartition()
+              .setPartitionIndex(0)
+              .setStartOffset(0)
+              .setLeaderEpoch(1)
+              .setErrorMessage(null)
+              .setErrorCode(0)
+          ))
+      ))
+
+    val describeShareGroupOffsetsResponse = new DescribeShareGroupOffsetsResponseData()
+      .setGroups(util.List.of(describeShareGroupOffsetsResponseGroup1, describeShareGroupOffsetsResponseGroup2))
+
+    futureGroup1.complete(describeShareGroupOffsetsResponseGroup1)
+    futureGroup2.complete(describeShareGroupOffsetsResponseGroup2)
+    val response = verifyNoThrottling[DescribeShareGroupOffsetsResponse](requestChannelRequest)
+    assertEquals(describeShareGroupOffsetsResponse, response.data)
+  }
+
+  @Test
+  def testDescribeShareGroupOffsetsRequestEmptyGroupsSuccess(): Unit = {
+    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+
+    val describeShareGroupOffsetsRequest = new DescribeShareGroupOffsetsRequestData
+
+    val requestChannelRequest = buildRequest(new DescribeShareGroupOffsetsRequest.Builder(describeShareGroupOffsetsRequest, true).build)
+
+    val future = new CompletableFuture[DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup]
+    kafkaApis = createKafkaApis(
+      overrideProperties = Map(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
+    )
+    kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
+
+    val describeShareGroupOffsetsResponseGroup = new DescribeShareGroupOffsetsResponseGroup()
+
+    val describeShareGroupOffsetsResponse = new DescribeShareGroupOffsetsResponseData()
+
+    future.complete(describeShareGroupOffsetsResponseGroup)
+    val response = verifyNoThrottling[DescribeShareGroupOffsetsResponse](requestChannelRequest)
+    assertEquals(describeShareGroupOffsetsResponse, response.data)
+  }
+
+  @Test
+  def testDescribeShareGroupOffsetsRequestEmptyTopicsSuccess(): Unit = {
+    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+
+    val describeShareGroupOffsetsRequestGroup = new DescribeShareGroupOffsetsRequestGroup().setGroupId("group")
+
+    val describeShareGroupOffsetsRequest = new DescribeShareGroupOffsetsRequestData().setGroups(util.List.of(describeShareGroupOffsetsRequestGroup))
+
+    val requestChannelRequest = buildRequest(new DescribeShareGroupOffsetsRequest.Builder(describeShareGroupOffsetsRequest, true).build)
+
+    val future = new CompletableFuture[DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup]
+    when(groupCoordinator.describeShareGroupOffsets(
+      requestChannelRequest.context,
+      describeShareGroupOffsetsRequestGroup
+    )).thenReturn(future)
+    kafkaApis = createKafkaApis(
+      overrideProperties = Map(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
+    )
+    kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
+
+    val describeShareGroupOffsetsResponseGroup = new DescribeShareGroupOffsetsResponseGroup()
+      .setGroupId("group")
+      .setTopics(util.List.of())
+
+    val describeShareGroupOffsetsResponse = new DescribeShareGroupOffsetsResponseData().setGroups(util.List.of(describeShareGroupOffsetsResponseGroup))
+
+    future.complete(describeShareGroupOffsetsResponseGroup)
     val response = verifyNoThrottling[DescribeShareGroupOffsetsResponse](requestChannelRequest)
     assertEquals(describeShareGroupOffsetsResponse, response.data)
   }

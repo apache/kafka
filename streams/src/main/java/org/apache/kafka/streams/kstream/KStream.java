@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.kstream;
 
-import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -40,26 +39,24 @@ import org.apache.kafka.streams.state.VersionedBytesStoreSupplier;
 import java.time.Duration;
 
 /**
- * {@code KStream} is an abstraction of a <i>record stream</i> of {@link KeyValue} pairs, i.e., each record is an
- * independent entity/event in the real world.
+ * {@code KStream} is an abstraction of a <em>record stream</em> of {@link Record key-value} pairs, i.e., each record is
+ * an independent entity/event in the real world.
  * For example a user X might buy two items I1 and I2, and thus there might be two records {@code <K:I1>, <K:I2>}
  * in the stream.
- * <p>
- * A {@code KStream} is either {@link StreamsBuilder#stream(String) defined from one or multiple Kafka topics} that
+ *
+ * <p>A {@code KStream} is either {@link StreamsBuilder#stream(String) defined from one or multiple Kafka topics} that
  * are consumed message by message or the result of a {@code KStream} transformation.
- * A {@link KTable} can also be {@link KTable#toStream() converted} into a {@code KStream}.
- * <p>
- * A {@code KStream} can be transformed record by record, joined with another {@code KStream}, {@link KTable},
+ * A {@link KTable} can also be directly {@link KTable#toStream() converted} into a {@code KStream}.
+ *
+ * <p>A {@code KStream} can be transformed record by record, joined with another {@code KStream}, {@link KTable},
  * {@link GlobalKTable}, or can be aggregated into a {@link KTable}.
- * Kafka Streams DSL can be mixed-and-matched with Processor API (PAPI) (c.f. {@link Topology}) via
+ * A {@link KStream} can also be directly {@link KStream#toTable() converted} into a {@code KTable}.
+ * Kafka Streams DSL can be mixed-and-matched with the Processor API (PAPI) (cf. {@link Topology}) via
  * {@link #process(ProcessorSupplier, String...) process(...)} and {@link #processValues(FixedKeyProcessorSupplier,
  * String...) processValues(...)}.
  *
- * @param <K> Type of keys
- * @param <V> Type of values
- * @see KTable
- * @see KGroupedStream
- * @see StreamsBuilder#stream(String)
+ * @param <K> the key type of this stream
+ * @param <V> the value type of this stream
  */
 public interface KStream<K, V> {
 
@@ -486,21 +483,21 @@ public interface KStream<K, V> {
      * Relative order is preserved within each input stream though (i.e., records within one input
      * stream are processed in order).
      *
-     * @param stream
+     * @param otherStream
      *        a stream which is to be merged into this stream
      *
      * @return A merged stream containing all records from this and the provided {@code KStream}
      *
      * @see #split()
      */
-    KStream<K, V> merge(final KStream<K, V> stream);
+    KStream<K, V> merge(final KStream<K, V> otherStream);
 
     /**
      * See {@link #merge(KStream)}.
      *
      * <p>Takes an additional {@link Named} parameter that is used to name the processor in the topology.
      */
-    KStream<K, V> merge(final KStream<K, V> stream, final Named named);
+    KStream<K, V> merge(final KStream<K, V> otherStream, final Named named);
 
     /**
      * Materialize this stream to an auto-generated repartition topic and create a new {@code KStream}
@@ -913,28 +910,42 @@ public interface KStream<K, V> {
                                              final StreamJoined<K, V, VRight> streamJoined);
 
     /**
-     * Join records of this stream with another {@code KStream}'s records using windowed outer equi join with default
-     * serializers and deserializers.
-     * In contrast to {@link #join(KStream, ValueJoiner, JoinWindows) inner-join} or
-     * {@link #leftJoin(KStream, ValueJoiner, JoinWindows) left-join}, all records from both streams will produce at
-     * least one output record (cf. below).
-     * The join is computed on the records' key with join attribute {@code thisKStream.key == otherKStream.key}.
+     * Join records of this (left) stream with another (right) {@code KStream}'s records using a windowed outer equi-join.
+     * In contrast to an {@link #join(KStream, ValueJoiner, JoinWindows) inner join} or
+     * {@link #leftJoin(KStream, ValueJoiner, JoinWindows) left join}, all records from both stream will produce at
+     * least one output record (more details below).
+     * The join is computed using the records' key as join attribute, i.e., {@code leftRecord.key == rightRight.key}.
      * Furthermore, two records are only joined if their timestamps are close to each other as defined by the given
      * {@link JoinWindows}, i.e., the window defines an additional join predicate on the record timestamps.
-     * <p>
-     * For each pair of records meeting both join predicates the provided {@link ValueJoiner} will be called to compute
-     * a value (with arbitrary type) for the result record.
-     * The key of the result record is the same as for both joining input records.
-     * Furthermore, for each input record of both {@code KStream}s that does not satisfy the join predicate the provided
-     * {@link ValueJoiner} will be called with a {@code null} value for this/other stream, respectively.
-     * If an input record value is {@code null} the record will not be included in the join operation and thus no
-     * output record will be added to the resulting {@code KStream}.
-     * <p>
-     * Example (assuming all input records belong to the correct windows):
+     *
+     * <p>For each pair of records meeting both join predicates the provided {@link ValueJoiner} will be called to
+     * compute a value (with arbitrary type) for the result record.
+     * Furthermore, for each input record of either {@code KStream} that does not have any join-partner in the other
+     * stream (i.e., no record with the same key within the join interval), {@link ValueJoiner} will be called with a
+     * {@code null} value for right/left stream, respectively.
+     *
+     * <p>Note: By default, non-joining records from either stream are buffered until their join window closes, and
+     * corresponding outer-join results for these records are emitted with some delay.
+     * If you want to get outer-join results without any delay, you can use {@link JoinWindows#of(Duration)
+     * JoinWindows#of(Duration) [deprecated]} instead.
+     * However, such an "eager" outer-join result could be a spurious result, because the same record may find actual
+     * join partners later, producing additional inner-join results.
+     *
+     * <p>The key of the result record is the same as for both joining input records,
+     * or the left/right input record's key for an outer-join result, respectively.
+     * If you need read access to the join key, use {@link #outerJoin(KStream, ValueJoinerWithKey, JoinWindows)}.
+     * If an input record's value is {@code null} the input record will be dropped, and no join computation is triggered.
+     * Note, that input records with {@code null} keys are supported (in contrast to
+     * {@link #join(KStream, ValueJoiner, JoinWindows) inner join}), resulting in left/right join results.
+     * For input record of either side, so-called late records, i.e., records with a timestamp belonging to an already
+     * closed window (based on stream-time progress, window size, and grace period), will be dropped.
+     *
+     * <p>Example (assuming all input records belong to the correct windows, not taking actual emit/window-close time
+     * for outer-join result, or eager/spurious results into account):
      * <table border='1'>
      * <tr>
-     * <th>this</th>
-     * <th>other</th>
+     * <th>left</th>
+     * <th>right</th>
      * <th>result</th>
      * </tr>
      * <tr>
@@ -945,7 +956,7 @@ public interface KStream<K, V> {
      * <tr>
      * <td>&lt;K2:B&gt;</td>
      * <td>&lt;K2:b&gt;</td>
-     * <td>&lt;K2:ValueJoiner(null,b)&gt;<br></br>&lt;K2:ValueJoiner(B,b)&gt;</td>
+     * <td>&lt;K2:ValueJoiner(B,b)&gt;</td>
      * </tr>
      * <tr>
      * <td></td>
@@ -953,297 +964,48 @@ public interface KStream<K, V> {
      * <td>&lt;K3:ValueJoiner(null,c)&gt;</td>
      * </tr>
      * </table>
-     * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
-     * partitions.
-     * If this is not the case, you would need to call {@link #repartition(Repartitioned)} (for one input stream) before
-     * doing the join and specify the "correct" number of partitions via {@link Repartitioned} parameter.
-     * Furthermore, both input streams need to be co-partitioned on the join key (i.e., use the same partitioner).
-     * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
-     * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
-     * The repartitioning topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is
-     * user-specified in {@link StreamsConfig} via parameter
-     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt;" is an internally generated
-     * name, and "-repartition" is a fixed suffix.
-     * <p>
-     * Repartitioning can happen for one or both of the joining {@code KStream}s.
-     * For this case, all data of the stream will be redistributed through the repartitioning topic by writing all
-     * records to it, and rereading all records from it, such that the join input {@code KStream} is partitioned
-     * correctly on its key.
-     * <p>
-     * Both of the joining {@code KStream}s will be materialized in local state stores with auto-generated store names.
-     * For failure and recovery each store will be backed by an internal changelog topic that will be created in Kafka.
-     * The changelog topic will be named "${applicationId}-&lt;storename&gt;-changelog", where "applicationId" is user-specified
-     * in {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},
-     * "storeName" is an internally generated name, and "-changelog" is a fixed suffix.
-     * <p>
-     * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
-     * @param otherStream the {@code KStream} to be joined with this stream
-     * @param joiner      a {@link ValueJoiner} that computes the join result for a pair of matching records
-     * @param windows     the specification of the {@link JoinWindows}
-     * @param <VO>        the value type of the other stream
-     * @param <VR>        the value type of the result stream
-     * @return a {@code KStream} that contains join-records for each key and values computed by the given
-     * {@link ValueJoiner}, one for each matched record-pair with the same key plus one for each non-matching record of
-     * both {@code KStream} and within the joining window intervals
+     * For more details, about co-partitioning requirements, (auto-)repartitioning, and more see
+     * {@link #join(KStream, ValueJoiner, JoinWindows)}.
+     *
+     * @return A {@code KStream} that contains join-records, one for each matched record-pair plus one for each
+     *         non-matching record of either input {@code KStream}, with the corresponding key and a value computed
+     *         by the given {@link ValueJoiner}.
+     *
      * @see #join(KStream, ValueJoiner, JoinWindows)
      * @see #leftJoin(KStream, ValueJoiner, JoinWindows)
      */
-    <VO, VR> KStream<K, VR> outerJoin(final KStream<K, VO> otherStream,
-                                      final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
-                                      final JoinWindows windows);
-    /**
-     * Join records of this stream with another {@code KStream}'s records using windowed outer equi join with default
-     * serializers and deserializers.
-     * In contrast to {@link #join(KStream, ValueJoinerWithKey, JoinWindows) inner-join} or
-     * {@link #leftJoin(KStream, ValueJoinerWithKey, JoinWindows) left-join}, all records from both streams will produce at
-     * least one output record (cf. below).
-     * The join is computed on the records' key with join attribute {@code thisKStream.key == otherKStream.key}.
-     * Furthermore, two records are only joined if their timestamps are close to each other as defined by the given
-     * {@link JoinWindows}, i.e., the window defines an additional join predicate on the record timestamps.
-     * <p>
-     * For each pair of records meeting both join predicates the provided {@link ValueJoinerWithKey} will be called to compute
-     * a value (with arbitrary type) for the result record.
-     * Note that the key is read-only and should not be modified, as this can lead to undefined behaviour.
-     * The key of the result record is the same as for both joining input records.
-     * Furthermore, for each input record of both {@code KStream}s that does not satisfy the join predicate the provided
-     * {@link ValueJoinerWithKey} will be called with a {@code null} value for this/other stream, respectively.
-     * If an input record value is {@code null} the record will not be included in the join operation and thus no
-     * output record will be added to the resulting {@code KStream}.
-     * <p>
-     * Example (assuming all input records belong to the correct windows):
-     * <table border='1'>
-     * <tr>
-     * <th>this</th>
-     * <th>other</th>
-     * <th>result</th>
-     * </tr>
-     * <tr>
-     * <td>&lt;K1:A&gt;</td>
-     * <td></td>
-     * <td>&lt;K1:ValueJoinerWithKey(K1,A,null)&gt;</td>
-     * </tr>
-     * <tr>
-     * <td>&lt;K2:B&gt;</td>
-     * <td>&lt;K2:b&gt;</td>
-     * <td>&lt;K2:ValueJoinerWithKey(K2,null,b)&gt;<br></br>&lt;K2:ValueJoinerWithKey(K2,B,b)&gt;</td>
-     * </tr>
-     * <tr>
-     * <td></td>
-     * <td>&lt;K3:c&gt;</td>
-     * <td>&lt;K3:ValueJoinerWithKey(K3,null,c)&gt;</td>
-     * </tr>
-     * </table>
-     * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
-     * partitions.
-     * If this is not the case, you would need to call {@link #repartition(Repartitioned)} (for one input stream) before
-     * doing the join and specify the "correct" number of partitions via {@link Repartitioned} parameter.
-     * Furthermore, both input streams need to be co-partitioned on the join key (i.e., use the same partitioner).
-     * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
-     * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
-     * The repartitioning topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is
-     * user-specified in {@link StreamsConfig} via parameter
-     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt;" is an internally generated
-     * name, and "-repartition" is a fixed suffix.
-     * <p>
-     * Repartitioning can happen for one or both of the joining {@code KStream}s.
-     * For this case, all data of the stream will be redistributed through the repartitioning topic by writing all
-     * records to it, and rereading all records from it, such that the join input {@code KStream} is partitioned
-     * correctly on its key.
-     * <p>
-     * Both of the joining {@code KStream}s will be materialized in local state stores with auto-generated store names.
-     * For failure and recovery each store will be backed by an internal changelog topic that will be created in Kafka.
-     * The changelog topic will be named "${applicationId}-&lt;storename&gt;-changelog", where "applicationId" is user-specified
-     * in {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},
-     * "storeName" is an internally generated name, and "-changelog" is a fixed suffix.
-     * <p>
-     * You can retrieve all generated internal topic names via {@link Topology#describe()}.
-     *
-     * @param otherStream the {@code KStream} to be joined with this stream
-     * @param joiner      a {@link ValueJoinerWithKey} that computes the join result for a pair of matching records
-     * @param windows     the specification of the {@link JoinWindows}
-     * @param <VO>        the value type of the other stream
-     * @param <VR>        the value type of the result stream
-     * @return a {@code KStream} that contains join-records for each key and values computed by the given
-     * {@link ValueJoinerWithKey}, one for each matched record-pair with the same key plus one for each non-matching record of
-     * both {@code KStream} and within the joining window intervals
-     * @see #join(KStream, ValueJoinerWithKey, JoinWindows)
-     * @see #leftJoin(KStream, ValueJoinerWithKey, JoinWindows)
-     */
-    <VO, VR> KStream<K, VR> outerJoin(final KStream<K, VO> otherStream,
-                                      final ValueJoinerWithKey<? super K, ? super V, ? super VO, ? extends VR> joiner,
-                                      final JoinWindows windows);
+    <VRight, VOut> KStream<K, VOut> outerJoin(final KStream<K, VRight> otherStream,
+                                              final ValueJoiner<? super V, ? super VRight, ? extends VOut> joiner,
+                                              final JoinWindows windows);
 
     /**
-     * Join records of this stream with another {@code KStream}'s records using windowed outer equi join using the
-     * {@link StreamJoined} instance for configuration of the {@link Serde key serde}, {@link Serde this stream's value
-     * serde}, {@link Serde the other stream's value serde}, and used state stores.
-     * In contrast to {@link #join(KStream, ValueJoiner, JoinWindows) inner-join} or
-     * {@link #leftJoin(KStream, ValueJoiner, JoinWindows) left-join}, all records from both streams will produce at
-     * least one output record (cf. below).
-     * The join is computed on the records' key with join attribute {@code thisKStream.key == otherKStream.key}.
-     * Furthermore, two records are only joined if their timestamps are close to each other as defined by the given
-     * {@link JoinWindows}, i.e., the window defines an additional join predicate on the record timestamps.
-     * <p>
-     * For each pair of records meeting both join predicates the provided {@link ValueJoiner} will be called to compute
-     * a value (with arbitrary type) for the result record.
-     * The key of the result record is the same as for both joining input records.
-     * Furthermore, for each input record of both {@code KStream}s that does not satisfy the join predicate the provided
-     * {@link ValueJoiner} will be called with a {@code null} value for this/other stream, respectively.
-     * If an input record key or value is {@code null} the record will not be included in the join operation and thus no
-     * output record will be added to the resulting {@code KStream}.
-     * <p>
-     * Example (assuming all input records belong to the correct windows):
-     * <table border='1'>
-     * <tr>
-     * <th>this</th>
-     * <th>other</th>
-     * <th>result</th>
-     * </tr>
-     * <tr>
-     * <td>&lt;K1:A&gt;</td>
-     * <td></td>
-     * <td>&lt;K1:ValueJoiner(A,null)&gt;</td>
-     * </tr>
-     * <tr>
-     * <td>&lt;K2:B&gt;</td>
-     * <td>&lt;K2:b&gt;</td>
-     * <td>&lt;K2:ValueJoiner(null,b)&gt;<br></br>&lt;K2:ValueJoiner(B,b)&gt;</td>
-     * </tr>
-     * <tr>
-     * <td></td>
-     * <td>&lt;K3:c&gt;</td>
-     * <td>&lt;K3:ValueJoiner(null,c)&gt;</td>
-     * </tr>
-     * </table>
-     * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
-     * partitions.
-     * If this is not the case, you would need to call {@link #repartition(Repartitioned)} (for one input stream) before
-     * doing the join and specify the "correct" number of partitions via {@link Repartitioned} parameter.
-     * Furthermore, both input streams need to be co-partitioned on the join key (i.e., use the same partitioner).
-     * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
-     * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
-     * The repartitioning topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is
-     * user-specified in {@link StreamsConfig} via parameter
-     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt;" is an internally generated
-     * name, and "-repartition" is a fixed suffix.
-     * <p>
-     * Repartitioning can happen for one or both of the joining {@code KStream}s.
-     * For this case, all data of the stream will be redistributed through the repartitioning topic by writing all
-     * records to it, and rereading all records from it, such that the join input {@code KStream} is partitioned
-     * correctly on its key.
-     * <p>
-     * Both of the joining {@code KStream}s will be materialized in local state stores with auto-generated store names,
-     * unless a name is provided via a {@code Materialized} instance.
-     * For failure and recovery each store will be backed by an internal changelog topic that will be created in Kafka.
-     * The changelog topic will be named "${applicationId}-&lt;storename&gt;-changelog", where "applicationId" is user-specified
-     * in {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},
-     * "storeName" is an internally generated name, and "-changelog" is a fixed suffix.
-     * <p>
-     * You can retrieve all generated internal topic names via {@link Topology#describe()}.
+     * See {@link #outerJoin(KStream, ValueJoiner, JoinWindows)}.
      *
-     * @param <VO>         the value type of the other stream
-     * @param <VR>         the value type of the result stream
-     * @param otherStream  the {@code KStream} to be joined with this stream
-     * @param joiner       a {@link ValueJoiner} that computes the join result for a pair of matching records
-     * @param windows      the specification of the {@link JoinWindows}
-     * @param streamJoined a {@link StreamJoined} instance to configure serdes and state stores
-     * @return a {@code KStream} that contains join-records for each key and values computed by the given
-     * {@link ValueJoiner}, one for each matched record-pair with the same key plus one for each non-matching record of
-     * both {@code KStream} and within the joining window intervals
-     * @see #join(KStream, ValueJoiner, JoinWindows, StreamJoined)
-     * @see #leftJoin(KStream, ValueJoiner, JoinWindows, StreamJoined)
+     * <p>Note that the key is read-only and must not be modified, as this can lead to corrupt partitioning.
      */
-    <VO, VR> KStream<K, VR> outerJoin(final KStream<K, VO> otherStream,
-                                      final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
-                                      final JoinWindows windows,
-                                      final StreamJoined<K, V, VO> streamJoined);
+    <VRight, VOut> KStream<K, VOut> outerJoin(final KStream<K, VRight> otherStream,
+                                              final ValueJoinerWithKey<? super K, ? super V, ? super VRight, ? extends VOut> joiner,
+                                              final JoinWindows windows);
 
     /**
-     * Join records of this stream with another {@code KStream}'s records using windowed outer equi join using the
-     * {@link StreamJoined} instance for configuration of the {@link Serde key serde}, {@link Serde this stream's value
-     * serde}, {@link Serde the other stream's value serde}, and used state stores.
-     * In contrast to {@link #join(KStream, ValueJoinerWithKey, JoinWindows) inner-join} or
-     * {@link #leftJoin(KStream, ValueJoinerWithKey, JoinWindows) left-join}, all records from both streams will produce at
-     * least one output record (cf. below).
-     * The join is computed on the records' key with join attribute {@code thisKStream.key == otherKStream.key}.
-     * Furthermore, two records are only joined if their timestamps are close to each other as defined by the given
-     * {@link JoinWindows}, i.e., the window defines an additional join predicate on the record timestamps.
-     * <p>
-     * For each pair of records meeting both join predicates the provided {@link ValueJoinerWithKey} will be called to compute
-     * a value (with arbitrary type) for the result record.
-     * Note that the key is read-only and should not be modified, as this can lead to undefined behaviour.
-     * The key of the result record is the same as for both joining input records.
-     * Furthermore, for each input record of both {@code KStream}s that does not satisfy the join predicate the provided
-     * {@link ValueJoinerWithKey} will be called with a {@code null} value for this/other stream, respectively.
-     * If an input record value is {@code null} the record will not be included in the join operation and thus no
-     * output record will be added to the resulting {@code KStream}.
-     * <p>
-     * Example (assuming all input records belong to the correct windows):
-     * <table border='1'>
-     * <tr>
-     * <th>this</th>
-     * <th>other</th>
-     * <th>result</th>
-     * </tr>
-     * <tr>
-     * <td>&lt;K1:A&gt;</td>
-     * <td></td>
-     * <td>&lt;K1:ValueJoinerWithKey(K1,A,null)&gt;</td>
-     * </tr>
-     * <tr>
-     * <td>&lt;K2:B&gt;</td>
-     * <td>&lt;K2:b&gt;</td>
-     * <td>&lt;K2:ValueJoinerWithKey(K2,null,b)&gt;<br></br>&lt;K2:ValueJoinerWithKey(K2,B,b)&gt;</td>
-     * </tr>
-     * <tr>
-     * <td></td>
-     * <td>&lt;K3:c&gt;</td>
-     * <td>&lt;K3:ValueJoinerWithKey(K3,null,c)&gt;</td>
-     * </tr>
-     * </table>
-     * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
-     * partitions.
-     * If this is not the case, you would need to call {@link #repartition(Repartitioned)} (for one input stream) before
-     * doing the join and specify the "correct" number of partitions via {@link Repartitioned} parameter.
-     * Furthermore, both input streams need to be co-partitioned on the join key (i.e., use the same partitioner).
-     * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
-     * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
-     * The repartitioning topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is
-     * user-specified in {@link StreamsConfig} via parameter
-     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt;" is an internally generated
-     * name, and "-repartition" is a fixed suffix.
-     * <p>
-     * Repartitioning can happen for one or both of the joining {@code KStream}s.
-     * For this case, all data of the stream will be redistributed through the repartitioning topic by writing all
-     * records to it, and rereading all records from it, such that the join input {@code KStream} is partitioned
-     * correctly on its key.
-     * <p>
-     * Both of the joining {@code KStream}s will be materialized in local state stores with auto-generated store names,
-     * unless a name is provided via a {@code Materialized} instance.
-     * For failure and recovery each store will be backed by an internal changelog topic that will be created in Kafka.
-     * The changelog topic will be named "${applicationId}-&lt;storename&gt;-changelog", where "applicationId" is user-specified
-     * in {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},
-     * "storeName" is an internally generated name, and "-changelog" is a fixed suffix.
-     * <p>
-     * You can retrieve all generated internal topic names via {@link Topology#describe()}.
-     *
-     * @param <VO>         the value type of the other stream
-     * @param <VR>         the value type of the result stream
-     * @param otherStream  the {@code KStream} to be joined with this stream
-     * @param joiner       a {@link ValueJoinerWithKey} that computes the join result for a pair of matching records
-     * @param windows      the specification of the {@link JoinWindows}
-     * @param streamJoined a {@link StreamJoined} instance to configure serdes and state stores
-     * @return a {@code KStream} that contains join-records for each key and values computed by the given
-     * {@link ValueJoinerWithKey}, one for each matched record-pair with the same key plus one for each non-matching record of
-     * both {@code KStream} and within the joining window intervals
-     * @see #join(KStream, ValueJoinerWithKey, JoinWindows, StreamJoined)
-     * @see #leftJoin(KStream, ValueJoinerWithKey, JoinWindows, StreamJoined)
+     * See {@link #outerJoin(KStream, ValueJoiner, JoinWindows)}.
      */
-    <VO, VR> KStream<K, VR> outerJoin(final KStream<K, VO> otherStream,
-                                      final ValueJoinerWithKey<? super K, ? super V, ? super VO, ? extends VR> joiner,
-                                      final JoinWindows windows,
-                                      final StreamJoined<K, V, VO> streamJoined);
+
+    <VRight, VOut> KStream<K, VOut> outerJoin(final KStream<K, VRight> otherStream,
+                                              final ValueJoiner<? super V, ? super VRight, ? extends VOut> joiner,
+                                              final JoinWindows windows,
+                                              final StreamJoined<K, V, VRight> streamJoined);
+
+    /**
+     * See {@link #outerJoin(KStream, ValueJoiner, JoinWindows)}.
+     *
+     * <p>Note that the key is read-only and must not be modified, as this can lead to corrupt partitioning.
+     */
+    <VRight, VOut> KStream<K, VOut> outerJoin(final KStream<K, VRight> otherStream,
+                                              final ValueJoinerWithKey<? super K, ? super V, ? super VRight, ? extends VOut> joiner,
+                                              final JoinWindows windows,
+                                              final StreamJoined<K, V, VRight> streamJoined);
 
     /**
      * Join records of this stream with {@link KTable}'s records using non-windowed inner equi-join.
@@ -1611,149 +1373,117 @@ public interface KStream<K, V> {
                                                          final Named named);
 
     /**
-     * Join records of this stream with {@link GlobalKTable}'s records using non-windowed left equi join.
-     * In contrast to {@link #join(GlobalKTable, KeyValueMapper, ValueJoiner) inner-join}, all records from this stream
-     * will produce an output record (cf. below).
+     * Join records of this stream with {@link GlobalKTable}'s records using non-windowed left equi-join.
+     * In contrast to an {@link #join(GlobalKTable, KeyValueMapper, ValueJoiner) inner join}, all records from this
+     * stream will produce an output record (more details below).
      * The join is a primary key table lookup join with join attribute
-     * {@code keyValueMapper.map(stream.keyValue) == table.key}.
+     * {@code keyValueMapper.map(streamRecord) == tableRecord.key}.
      * "Table lookup join" means, that results are only computed if {@code KStream} records are processed.
-     * This is done by performing a lookup for matching records in the <em>current</em> internal {@link GlobalKTable}
-     * state.
+     * This is done by performing a lookup for matching records in the <em>current</em> (i.e., processing time)
+     * internal {@link GlobalKTable} state.
      * In contrast, processing {@link GlobalKTable} input records will only update the internal {@link GlobalKTable}
      * state and will not produce any result records.
-     * <p>
-     * For each {@code KStream} record whether or not it finds a corresponding record in {@link GlobalKTable} the
-     * provided {@link ValueJoiner} will be called to compute a value (with arbitrary type) for the result record.
-     * The key of the result record is the same as this {@code KStream}.
-     * If a {@code KStream} input value is {@code null} the record will not be included in the join operation
-     * and thus no output record will be added to the resulting {@code KStream}.
-     * If no {@link GlobalKTable} record was found during lookup, a {@code null} value will be provided to
-     * {@link ValueJoiner}.
      *
-     * @param globalTable    the {@link GlobalKTable} to be joined with this stream
-     * @param keySelector    instance of {@link KeyValueMapper} used to map from the (key, value) of this stream
-     *                       to the key of the {@link GlobalKTable}
-     * @param valueJoiner    a {@link ValueJoiner} that computes the join result for a pair of matching records
-     * @param <GK>           the key type of {@link GlobalKTable}
-     * @param <GV>           the value type of the {@link GlobalKTable}
-     * @param <RV>           the value type of the resulting {@code KStream}
-     * @return a {@code KStream} that contains join-records for each key and values computed by the given
-     * {@link ValueJoiner}, one output for each input {@code KStream} record
+     * <p>For each {@code KStream} record, regardless if it finds a joining record in the {@link GlobalKTable}, the
+     * provided {@link ValueJoiner} will be called to compute a value (with arbitrary type) for the result record.
+     * If no {@link GlobalKTable} record with matching key was found during the lookup, {@link ValueJoiner} will be
+     * called with a {@code null} value for the global table record.
+     * The key of the result record is the same as for both joining input records,
+     * or the {@code KStreams} input record's key for a left-join result.
+     * If you need read access to the {@code KStream} key, use
+     * {@link #leftJoin(GlobalKTable, KeyValueMapper, ValueJoinerWithKey)}.
+     * If a {@code KStream} input record's value is {@code null} or if the provided {@link KeyValueMapper keySelector}
+     * returns {@code null}, the input record will be dropped, and no join computation is triggered.
+     * Note, that {@code null} keys for {@code KStream} input records are supported (in contrast to
+     * {@link #join(GlobalKTable, KeyValueMapper, ValueJoiner) inner join}) resulting in a left join result.
+     * If a {@link GlobalKTable} input record's key is {@code null} the input record will be dropped, and the table
+     * state won't be updated.
+     * {@link GlobalKTable} input records with {@code null} values are considered deletes (so-called tombstone) for
+     * the table.
+     *
+     * <p>Example, using the first value attribute as join key:
+     * <table border='1'>
+     * <tr>
+     * <th>KStream</th>
+     * <th>GlobalKTable</th>
+     * <th>state</th>
+     * <th>result</th>
+     * </tr>
+     * <tr>
+     * <td>&lt;K1:(GK1,A)&gt;</td>
+     * <td></td>
+     * <td></td>
+     * <td>&lt;K1:ValueJoiner((GK1,A),null)&gt;</td>
+     * </tr>
+     * <tr>
+     * <td></td>
+     * <td>&lt;GK1:b&gt;</td>
+     * <td>&lt;GK1:b&gt;</td>
+     * <td></td>
+     * </tr>
+     * <tr>
+     * <td>&lt;K1:(GK1,C)&gt;</td>
+     * <td></td>
+     * <td>&lt;GK1:b&gt;</td>
+     * <td>&lt;K1:ValueJoiner((GK1,C),b)&gt;</td>
+     * </tr>
+     * </table>
+     *
+     * In contrast to {@link #leftJoin(KTable, ValueJoiner)}, there is no co-partitioning requirement between this
+     * {@code KStream} and the {@link GlobalKTable}.
+     * Also note that there are no ordering guarantees between the updates on the left and the right side of this join,
+     * since updates to the {@link GlobalKTable} are in no way synchronized.
+     * Therefore, the result of the join is inherently non-deterministic.
+     *
+     * @param globalTable
+     *        the {@link GlobalKTable} to be joined with this stream
+     * @param keySelector
+     *        a {@link KeyValueMapper} that computes the join key for stream input records
+     * @param joiner
+     *        a {@link ValueJoiner} that computes the join result for a pair of matching records
+     *
+     * @param <GlobalKey> the key type of the global table
+     * @param <GlobalValue> the value type of the global table
+     * @param <VOut> the value type of the result stream
+     *
+     * @return A {@code KStream} that contains join-records, one for each matched stream record plus one for each
+     *         non-matching stream record, with the corresponding key and a value computed by the given {@link ValueJoiner}.
+     *
      * @see #join(GlobalKTable, KeyValueMapper, ValueJoiner)
      */
-    <GK, GV, RV> KStream<K, RV> leftJoin(final GlobalKTable<GK, GV> globalTable,
-                                         final KeyValueMapper<? super K, ? super V, ? extends GK> keySelector,
-                                         final ValueJoiner<? super V, ? super GV, ? extends RV> valueJoiner);
+    <GlobalKey, GlobalValue, VOut> KStream<K, VOut> leftJoin(final GlobalKTable<GlobalKey, GlobalValue> globalTable,
+                                                             final KeyValueMapper<? super K, ? super V, ? extends GlobalKey> keySelector,
+                                                             final ValueJoiner<? super V, ? super GlobalValue, ? extends VOut> joiner);
 
     /**
-     * Join records of this stream with {@link GlobalKTable}'s records using non-windowed left equi join.
-     * In contrast to {@link #join(GlobalKTable, KeyValueMapper, ValueJoinerWithKey) inner-join}, all records from this stream
-     * will produce an output record (cf. below).
-     * The join is a primary key table lookup join with join attribute
-     * {@code keyValueMapper.map(stream.keyValue) == table.key}.
-     * "Table lookup join" means, that results are only computed if {@code KStream} records are processed.
-     * This is done by performing a lookup for matching records in the <em>current</em> internal {@link GlobalKTable}
-     * state.
-     * In contrast, processing {@link GlobalKTable} input records will only update the internal {@link GlobalKTable}
-     * state and will not produce any result records.
-     * <p>
-     * For each {@code KStream} record whether or not it finds a corresponding record in {@link GlobalKTable} the
-     * provided {@link ValueJoinerWithKey} will be called to compute a value (with arbitrary type) for the result record.
-     * The key of the result record is the same as this {@code KStream}.
-     * Note that the key is read-only and should not be modified, as this can lead to undefined behaviour.
-     * If a {@code KStream} input value is {@code null} the record will not be included in the join operation
-     * and thus no output record will be added to the resulting {@code KStream}.
-     * If no {@link GlobalKTable} record was found during lookup, a {@code null} value will be provided to
-     * {@link ValueJoiner}.
+     * See {@link #leftJoin(GlobalKTable, KeyValueMapper, ValueJoiner)}.
      *
-     * @param globalTable    the {@link GlobalKTable} to be joined with this stream
-     * @param keySelector    instance of {@link KeyValueMapper} used to map from the (key, value) of this stream
-     *                       to the key of the {@link GlobalKTable}
-     * @param valueJoiner    a {@link ValueJoinerWithKey} that computes the join result for a pair of matching records
-     * @param <GK>           the key type of {@link GlobalKTable}
-     * @param <GV>           the value type of the {@link GlobalKTable}
-     * @param <RV>           the value type of the resulting {@code KStream}
-     * @return a {@code KStream} that contains join-records for each key and values computed by the given
-     * {@link ValueJoinerWithKey}, one output for each input {@code KStream} record
-     * @see #join(GlobalKTable, KeyValueMapper, ValueJoinerWithKey)
+     * <p>Note that the key is read-only and must not be modified, as this can lead to corrupt partitioning and
+     * incorrect results.
      */
-    <GK, GV, RV> KStream<K, RV> leftJoin(final GlobalKTable<GK, GV> globalTable,
-                                         final KeyValueMapper<? super K, ? super V, ? extends GK> keySelector,
-                                         final ValueJoinerWithKey<? super K, ? super V, ? super GV, ? extends RV> valueJoiner);
+    <GlobalKey, GlobalValue, VOut> KStream<K, VOut> leftJoin(final GlobalKTable<GlobalKey, GlobalValue> globalTable,
+                                                             final KeyValueMapper<? super K, ? super V, ? extends GlobalKey> keySelector,
+                                                             final ValueJoinerWithKey<? super K, ? super V, ? super GlobalValue, ? extends VOut> joiner);
 
     /**
-     * Join records of this stream with {@link GlobalKTable}'s records using non-windowed left equi join.
-     * In contrast to {@link #join(GlobalKTable, KeyValueMapper, ValueJoiner) inner-join}, all records from this stream
-     * will produce an output record (cf. below).
-     * The join is a primary key table lookup join with join attribute
-     * {@code keyValueMapper.map(stream.keyValue) == table.key}.
-     * "Table lookup join" means, that results are only computed if {@code KStream} records are processed.
-     * This is done by performing a lookup for matching records in the <em>current</em> internal {@link GlobalKTable}
-     * state.
-     * In contrast, processing {@link GlobalKTable} input records will only update the internal {@link GlobalKTable}
-     * state and will not produce any result records.
-     * <p>
-     * For each {@code KStream} record whether or not it finds a corresponding record in {@link GlobalKTable} the
-     * provided {@link ValueJoiner} will be called to compute a value (with arbitrary type) for the result record.
-     * The key of the result record is the same as this {@code KStream}.
-     * If a {@code KStream} input value is {@code null} the record will not be included in the join operation
-     * and thus no output record will be added to the resulting {@code KStream}.
-     * If no {@link GlobalKTable} record was found during lookup, a {@code null} value will be provided to
-     * {@link ValueJoiner}.
+     * See {@link #leftJoin(GlobalKTable, KeyValueMapper, ValueJoiner)}.
      *
-     * @param globalTable    the {@link GlobalKTable} to be joined with this stream
-     * @param keySelector    instance of {@link KeyValueMapper} used to map from the (key, value) of this stream
-     *                       to the key of the {@link GlobalKTable}
-     * @param valueJoiner    a {@link ValueJoiner} that computes the join result for a pair of matching records
-     * @param named          a {@link Named} config used to name the processor in the topology
-     * @param <GK>           the key type of {@link GlobalKTable}
-     * @param <GV>           the value type of the {@link GlobalKTable}
-     * @param <RV>           the value type of the resulting {@code KStream}
-     * @return a {@code KStream} that contains join-records for each key and values computed by the given
-     * {@link ValueJoiner}, one output for each input {@code KStream} record
-     * @see #join(GlobalKTable, KeyValueMapper, ValueJoiner)
+     * <p>Takes an additional {@link Named} parameter that is used to name the processor in the topology.
      */
-    <GK, GV, RV> KStream<K, RV> leftJoin(final GlobalKTable<GK, GV> globalTable,
-                                         final KeyValueMapper<? super K, ? super V, ? extends GK> keySelector,
-                                         final ValueJoiner<? super V, ? super GV, ? extends RV> valueJoiner,
-                                         final Named named);
+    <GlobalKey, GlobalValue, VOut> KStream<K, VOut> leftJoin(final GlobalKTable<GlobalKey, GlobalValue> globalTable,
+                                                             final KeyValueMapper<? super K, ? super V, ? extends GlobalKey> keySelector,
+                                                             final ValueJoiner<? super V, ? super GlobalValue, ? extends VOut> joiner,
+                                                             final Named named);
 
     /**
-     * Join records of this stream with {@link GlobalKTable}'s records using non-windowed left equi join.
-     * In contrast to {@link #join(GlobalKTable, KeyValueMapper, ValueJoinerWithKey) inner-join}, all records from this stream
-     * will produce an output record (cf. below).
-     * The join is a primary key table lookup join with join attribute
-     * {@code keyValueMapper.map(stream.keyValue) == table.key}.
-     * "Table lookup join" means, that results are only computed if {@code KStream} records are processed.
-     * This is done by performing a lookup for matching records in the <em>current</em> internal {@link GlobalKTable}
-     * state.
-     * In contrast, processing {@link GlobalKTable} input records will only update the internal {@link GlobalKTable}
-     * state and will not produce any result records.
-     * <p>
-     * For each {@code KStream} record whether or not it finds a corresponding record in {@link GlobalKTable} the
-     * provided {@link ValueJoinerWithKey} will be called to compute a value (with arbitrary type) for the result record.
-     * The key of the result record is the same as this {@code KStream}.
-     * If a {@code KStream} input value is {@code null} the record will not be included in the join operation
-     * and thus no output record will be added to the resulting {@code KStream}.
-     * If no {@link GlobalKTable} record was found during lookup, a {@code null} value will be provided to
-     * {@link ValueJoinerWithKey}.
+     * See {@link #leftJoin(GlobalKTable, KeyValueMapper, ValueJoinerWithKey)}.
      *
-     * @param globalTable    the {@link GlobalKTable} to be joined with this stream
-     * @param keySelector    instance of {@link KeyValueMapper} used to map from the (key, value) of this stream
-     *                       to the key of the {@link GlobalKTable}
-     * @param valueJoiner    a {@link ValueJoinerWithKey} that computes the join result for a pair of matching records
-     * @param named          a {@link Named} config used to name the processor in the topology
-     * @param <GK>           the key type of {@link GlobalKTable}
-     * @param <GV>           the value type of the {@link GlobalKTable}
-     * @param <RV>           the value type of the resulting {@code KStream}
-     * @return a {@code KStream} that contains join-records for each key and values computed by the given
-     * {@link ValueJoinerWithKey}, one output for each input {@code KStream} record
-     * @see #join(GlobalKTable, KeyValueMapper, ValueJoinerWithKey)
+     * <p>Takes an additional {@link Named} parameter that is used to name the processor in the topology.
      */
-    <GK, GV, RV> KStream<K, RV> leftJoin(final GlobalKTable<GK, GV> globalTable,
-                                         final KeyValueMapper<? super K, ? super V, ? extends GK> keySelector,
-                                         final ValueJoinerWithKey<? super K, ? super V, ? super GV, ? extends RV> valueJoiner,
-                                         final Named named);
+    <GlobalKey, GlobalValue, VOut> KStream<K, VOut> leftJoin(final GlobalKTable<GlobalKey, GlobalValue> globalTable,
+                                                             final KeyValueMapper<? super K, ? super V, ? extends GlobalKey> keySelector,
+                                                             final ValueJoinerWithKey<? super K, ? super V, ? super GlobalValue, ? extends VOut> joiner,
+                                                             final Named named);
 
     /**
      * Process all records in this stream, one record at a time, by applying a {@link Processor} (provided by the given

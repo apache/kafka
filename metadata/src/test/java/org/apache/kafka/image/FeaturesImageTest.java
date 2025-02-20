@@ -22,6 +22,7 @@ import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.image.writer.RecordListWriter;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 
 import org.junit.jupiter.api.Test;
@@ -99,7 +100,13 @@ public class FeaturesImageTest {
 
     @Test
     public void testEmptyImageRoundTrip() {
-        testToImage(FeaturesImage.EMPTY);
+        var image = FeaturesImage.EMPTY;
+        var metadataVersion = MetadataVersion.MINIMUM_VERSION;
+        RecordListWriter writer = new RecordListWriter();
+        image.write(writer, new ImageWriterOptions.Builder(metadataVersion).build());
+        // A metadata version is required for writing, so the expected image is not actually empty
+        var expectedImage = new FeaturesImage(Collections.emptyMap(), metadataVersion);
+        testToImage(expectedImage, writer.records());
     }
 
     @Test
@@ -153,7 +160,7 @@ public class FeaturesImageTest {
 
     private static List<ApiMessageAndVersion> getImageRecords(FeaturesImage image) {
         RecordListWriter writer = new RecordListWriter();
-        image.write(writer, new ImageWriterOptions.Builder().setMetadataVersion(image.metadataVersion()).build());
+        image.write(writer, new ImageWriterOptions.Builder(image.metadataVersionOrThrow()).build());
         return writer.records();
     }
 
@@ -161,9 +168,23 @@ public class FeaturesImageTest {
     public void testEmpty() {
         assertTrue(FeaturesImage.EMPTY.isEmpty());
         assertFalse(new FeaturesImage(Collections.singletonMap("foo", (short) 1),
-            FeaturesImage.EMPTY.metadataVersion()).isEmpty());
+            MetadataVersion.MINIMUM_VERSION).isEmpty());
         assertFalse(new FeaturesImage(FeaturesImage.EMPTY.finalizedVersions(),
-            MetadataVersion.IBP_3_3_IV0).isEmpty());
-        assertTrue(new FeaturesImage(FeaturesImage.EMPTY.finalizedVersions(), FeaturesImage.EMPTY.metadataVersion()).isEmpty());
+            MetadataVersion.MINIMUM_VERSION).isEmpty());
+    }
+
+    @Test
+    public void testElrEnabled() {
+        FeaturesImage image1 = new FeaturesImage(
+            Map.of(EligibleLeaderReplicasVersion.FEATURE_NAME, EligibleLeaderReplicasVersion.ELRV_0.featureLevel()),
+            MetadataVersion.latestTesting()
+        );
+        assertFalse(image1.isElrEnabled());
+
+        FeaturesImage image2 = new FeaturesImage(
+            Map.of(EligibleLeaderReplicasVersion.FEATURE_NAME, EligibleLeaderReplicasVersion.ELRV_1.featureLevel()),
+            MetadataVersion.latestTesting()
+        );
+        assertTrue(image2.isElrEnabled());
     }
 }

@@ -48,7 +48,7 @@ import static org.apache.kafka.streams.kstream.Windows.NO_GRACE_PERIOD;
  * We'd have 2 sessions for key A.
  * One starting from time 10 and ending at time 12 and another starting and ending at time 20.
  * The length of the session is driven by the timestamps of the data within the session.
- * Thus, session windows are no fixed-size windows (c.f. {@link TimeWindows} and {@link JoinWindows}).
+ * Thus, session windows are no fixed-size windows (cf. {@link TimeWindows} and {@link JoinWindows}).
  * <p>
  * If we then received another record:
  * <pre>
