@@ -47,7 +47,6 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           python .github/scripts/pr-format.py ${{ github.event.pull_request.number }}
-          gh pr comment ${{ github.event.pull_request.number }} --body "Hello from GHA!"
 
   load-catalog:
     runs-on: ubuntu-latest

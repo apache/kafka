@@ -128,4 +128,8 @@ if __name__ == "__main__":
     if len(errors) > 0:
         for error in errors:
             print(error)
+        cmd = f"gh pr comment {pr_number} --body 'PR format is bad'"
+        p = subprocess.run(shlex.split(cmd), capture_output=True)
+        print(p.stdout)
+        print(p.stderr)
         exit(1)
