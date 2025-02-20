@@ -24,10 +24,10 @@ import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerClientI
 import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenBuilder;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenRetriever;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenValidator;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.LoginAccessTokenValidator;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.DefaultAccessTokenRetriever;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.FileTokenRetriever;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpAccessTokenRetriever;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.LoginAccessTokenValidator;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerTest;
 
 import org.jose4j.jws.AlgorithmIdentifiers;

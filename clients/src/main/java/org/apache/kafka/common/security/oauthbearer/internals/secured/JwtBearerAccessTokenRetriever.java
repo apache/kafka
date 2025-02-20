@@ -16,12 +16,12 @@
  */
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.utils.Time;
 
-import javax.security.auth.login.AppConfigurationEntry;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.security.InvalidKeyException;
@@ -36,6 +36,8 @@ import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import javax.security.auth.login.AppConfigurationEntry;
 
 public class JwtBearerAccessTokenRetriever extends HttpAccessTokenRetriever {
 

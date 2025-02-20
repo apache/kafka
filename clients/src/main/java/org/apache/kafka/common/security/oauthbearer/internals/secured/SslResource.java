@@ -19,9 +19,10 @@ package org.apache.kafka.common.security.oauthbearer.internals.secured;
 import org.apache.kafka.common.security.ssl.SslFactory;
 import org.apache.kafka.common.utils.Utils;
 
-import javax.net.ssl.SSLSocketFactory;
 import java.io.Closeable;
 import java.io.IOException;
+
+import javax.net.ssl.SSLSocketFactory;
 
 /**
  * {@code SslResource} couples the {@link SslFactory} and {@link SSLSocketFactory} so that
