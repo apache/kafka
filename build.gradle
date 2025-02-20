@@ -1072,7 +1072,6 @@ project(':core') {
     implementation libs.argparse4j
     implementation libs.commonsValidator
     implementation libs.jacksonDatabind
-    implementation libs.jacksonModuleScala
     implementation libs.jacksonDataformatCsv
     implementation libs.jacksonJDK8Datatypes
     implementation libs.jacksonDatabindYaml

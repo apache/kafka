@@ -155,8 +155,6 @@ public enum Feature {
      * For example, say feature X level x relies on feature Y level y:
      * if feature X >= x then throw an error if feature Y < y.
      *
-     * All feature levels above 0 in kraft require metadata.version=4 (IBP_3_3_IV0) in order to write the feature records to the cluster.
-     *
      * @param feature                   the feature we are validating
      * @param features                  the feature versions we have (or want to set)
      * @throws IllegalArgumentException if the feature is not valid
@@ -164,9 +162,9 @@ public enum Feature {
     public static void validateVersion(FeatureVersion feature, Map<String, Short> features) {
         Short metadataVersion = features.get(MetadataVersion.FEATURE_NAME);
 
-        if (feature.featureLevel() >= 1 && (metadataVersion == null || metadataVersion < MetadataVersion.IBP_3_3_IV0.featureLevel()))
+        if (feature.featureLevel() >= 1 && (metadataVersion == null || metadataVersion < MetadataVersion.MINIMUM_VERSION.featureLevel()))
             throw new IllegalArgumentException(feature.featureName() + " could not be set to " + feature.featureLevel() +
-                    " because it depends on metadata.version=4 (" + MetadataVersion.IBP_3_3_IV0 + ")");
+                    " because it depends on metadata.version=" + MetadataVersion.MINIMUM_VERSION.featureLevel() + " (" + MetadataVersion.MINIMUM_VERSION + ")");
 
         for (Map.Entry<String, Short> dependency: feature.dependencies().entrySet()) {
             Short featureLevel = features.get(dependency.getKey());
@@ -297,11 +295,6 @@ public enum Feature {
         }
 
         for (MetadataVersion metadataVersion: MetadataVersion.values()) {
-            // Only checking the kraft metadata versions.
-            if (metadataVersion.compareTo(MetadataVersion.MINIMUM_KRAFT_VERSION) < 0) {
-                continue;
-            }
-
             defaultVersion = feature.defaultVersion(metadataVersion);
             for (Map.Entry<String, Short> dependency: defaultVersion.dependencies().entrySet()) {
                 String dependencyFeatureName = dependency.getKey();

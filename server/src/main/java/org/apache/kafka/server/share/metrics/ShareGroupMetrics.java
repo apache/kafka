@@ -62,9 +62,13 @@ public class ShareGroupMetrics implements AutoCloseable {
     }
 
     public void recordAcknowledgement(byte ackType) {
+        recordAcknowledgement(ackType, 1);
+    }
+
+    public void recordAcknowledgement(byte ackType, long count) {
         // unknown ack types (such as gaps for control records) are intentionally ignored
         if (recordAcknowledgementMeterMap.containsKey(ackType)) {
-            recordAcknowledgementMeterMap.get(ackType).mark();
+            recordAcknowledgementMeterMap.get(ackType).mark(count);
         }
     }
 

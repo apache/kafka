@@ -142,14 +142,14 @@ class DefaultStatePersisterTest {
         CompletableFuture<WriteShareGroupStateResult> result = defaultStatePersister.writeState(null);
         assertTrue(result.isDone());
         assertTrue(result.isCompletedExceptionally());
-        assertFutureThrows(result, IllegalArgumentException.class);
+        assertFutureThrows(IllegalArgumentException.class, result);
 
         // groupTopicPartitionData is null
         defaultStatePersister = DefaultStatePersisterBuilder.builder().build();
         result = defaultStatePersister.writeState(new WriteShareGroupStateParameters.Builder().setGroupTopicPartitionData(null).build());
         assertTrue(result.isDone());
         assertTrue(result.isCompletedExceptionally());
-        assertFutureThrows(result, IllegalArgumentException.class);
+        assertFutureThrows(IllegalArgumentException.class, result);
 
         // groupId is null
         defaultStatePersister = DefaultStatePersisterBuilder.builder().build();
@@ -158,7 +158,7 @@ class DefaultStatePersisterTest {
                 .setGroupId(null).build()).build());
         assertTrue(result.isDone());
         assertTrue(result.isCompletedExceptionally());
-        assertFutureThrows(result, IllegalArgumentException.class);
+        assertFutureThrows(IllegalArgumentException.class, result);
 
         // topicsData is empty
         defaultStatePersister = DefaultStatePersisterBuilder.builder().build();
@@ -168,7 +168,7 @@ class DefaultStatePersisterTest {
                 .setTopicsData(Collections.emptyList()).build()).build());
         assertTrue(result.isDone());
         assertTrue(result.isCompletedExceptionally());
-        assertFutureThrows(result, IllegalArgumentException.class);
+        assertFutureThrows(IllegalArgumentException.class, result);
 
         // topicId is null
         defaultStatePersister = DefaultStatePersisterBuilder.builder().build();
@@ -180,7 +180,7 @@ class DefaultStatePersisterTest {
                         partition, 1, 0, 0, null))))).build()).build());
         assertTrue(result.isDone());
         assertTrue(result.isCompletedExceptionally());
-        assertFutureThrows(result, IllegalArgumentException.class);
+        assertFutureThrows(IllegalArgumentException.class, result);
 
         // partitionData is empty
         defaultStatePersister = DefaultStatePersisterBuilder.builder().build();
@@ -190,7 +190,7 @@ class DefaultStatePersisterTest {
                 .setTopicsData(Collections.singletonList(new TopicData<>(topicId, Collections.emptyList()))).build()).build());
         assertTrue(result.isDone());
         assertTrue(result.isCompletedExceptionally());
-        assertFutureThrows(result, IllegalArgumentException.class);
+        assertFutureThrows(IllegalArgumentException.class, result);
 
         // partition value is incorrect
         defaultStatePersister = DefaultStatePersisterBuilder.builder().build();
@@ -202,7 +202,7 @@ class DefaultStatePersisterTest {
                         incorrectPartition, 1, 0, 0, null))))).build()).build());
         assertTrue(result.isDone());
         assertTrue(result.isCompletedExceptionally());
-        assertFutureThrows(result, IllegalArgumentException.class);
+        assertFutureThrows(IllegalArgumentException.class, result);
     }
 
     @Test
@@ -218,14 +218,14 @@ class DefaultStatePersisterTest {
         CompletableFuture<ReadShareGroupStateResult> result = defaultStatePersister.readState(null);
         assertTrue(result.isDone());
         assertTrue(result.isCompletedExceptionally());
-        assertFutureThrows(result, IllegalArgumentException.class);
+        assertFutureThrows(IllegalArgumentException.class, result);
 
         // groupTopicPartitionData is null
         defaultStatePersister = DefaultStatePersisterBuilder.builder().build();
         result = defaultStatePersister.readState(new ReadShareGroupStateParameters.Builder().setGroupTopicPartitionData(null).build());
         assertTrue(result.isDone());
         assertTrue(result.isCompletedExceptionally());
-        assertFutureThrows(result, IllegalArgumentException.class);
+        assertFutureThrows(IllegalArgumentException.class, result);
 
         // groupId is null
         defaultStatePersister = DefaultStatePersisterBuilder.builder().build();
@@ -234,7 +234,7 @@ class DefaultStatePersisterTest {
                 .setGroupId(null).build()).build());
         assertTrue(result.isDone());
         assertTrue(result.isCompletedExceptionally());
-        assertFutureThrows(result, IllegalArgumentException.class);
+        assertFutureThrows(IllegalArgumentException.class, result);
 
         // topicsData is empty
         defaultStatePersister = DefaultStatePersisterBuilder.builder().build();
@@ -244,7 +244,7 @@ class DefaultStatePersisterTest {
                 .setTopicsData(Collections.emptyList()).build()).build());
         assertTrue(result.isDone());
         assertTrue(result.isCompletedExceptionally());
-        assertFutureThrows(result, IllegalArgumentException.class);
+        assertFutureThrows(IllegalArgumentException.class, result);
 
         // topicId is null
         defaultStatePersister = DefaultStatePersisterBuilder.builder().build();
@@ -256,7 +256,7 @@ class DefaultStatePersisterTest {
                 ).build()).build());
         assertTrue(result.isDone());
         assertTrue(result.isCompletedExceptionally());
-        assertFutureThrows(result, IllegalArgumentException.class);
+        assertFutureThrows(IllegalArgumentException.class, result);
 
         // partitionData is empty
         defaultStatePersister = DefaultStatePersisterBuilder.builder().build();
@@ -266,7 +266,7 @@ class DefaultStatePersisterTest {
                 .setTopicsData(Collections.singletonList(new TopicData<>(topicId, Collections.emptyList()))).build()).build());
         assertTrue(result.isDone());
         assertTrue(result.isCompletedExceptionally());
-        assertFutureThrows(result, IllegalArgumentException.class);
+        assertFutureThrows(IllegalArgumentException.class, result);
 
         // partition value is incorrect
         defaultStatePersister = DefaultStatePersisterBuilder.builder().build();
@@ -277,7 +277,7 @@ class DefaultStatePersisterTest {
                     Collections.singletonList(PartitionFactory.newPartitionIdLeaderEpochData(incorrectPartition, 1))))).build()).build());
         assertTrue(result.isDone());
         assertTrue(result.isCompletedExceptionally());
-        assertFutureThrows(result, IllegalArgumentException.class);
+        assertFutureThrows(IllegalArgumentException.class, result);
     }
 
     @Test
@@ -293,14 +293,14 @@ class DefaultStatePersisterTest {
         CompletableFuture<ReadShareGroupStateSummaryResult> result = defaultStatePersister.readSummary(null);
         assertTrue(result.isDone());
         assertTrue(result.isCompletedExceptionally());
-        assertFutureThrows(result, IllegalArgumentException.class);
+        assertFutureThrows(IllegalArgumentException.class, result);
 
         // groupTopicPartitionData is null
         defaultStatePersister = DefaultStatePersisterBuilder.builder().build();
         result = defaultStatePersister.readSummary(new ReadShareGroupStateSummaryParameters.Builder().setGroupTopicPartitionData(null).build());
         assertTrue(result.isDone());
         assertTrue(result.isCompletedExceptionally());
-        assertFutureThrows(result, IllegalArgumentException.class);
+        assertFutureThrows(IllegalArgumentException.class, result);
 
         // groupId is null
         defaultStatePersister = DefaultStatePersisterBuilder.builder().build();
@@ -309,7 +309,7 @@ class DefaultStatePersisterTest {
                 .setGroupId(null).build()).build());
         assertTrue(result.isDone());
         assertTrue(result.isCompletedExceptionally());
-        assertFutureThrows(result, IllegalArgumentException.class);
+        assertFutureThrows(IllegalArgumentException.class, result);
 
         // topicsData is empty
         defaultStatePersister = DefaultStatePersisterBuilder.builder().build();
@@ -319,7 +319,7 @@ class DefaultStatePersisterTest {
                 .setTopicsData(Collections.emptyList()).build()).build());
         assertTrue(result.isDone());
         assertTrue(result.isCompletedExceptionally());
-        assertFutureThrows(result, IllegalArgumentException.class);
+        assertFutureThrows(IllegalArgumentException.class, result);
 
         // topicId is null
         defaultStatePersister = DefaultStatePersisterBuilder.builder().build();
@@ -331,7 +331,7 @@ class DefaultStatePersisterTest {
                 ).build()).build());
         assertTrue(result.isDone());
         assertTrue(result.isCompletedExceptionally());
-        assertFutureThrows(result, IllegalArgumentException.class);
+        assertFutureThrows(IllegalArgumentException.class, result);
 
         // partitionData is empty
         defaultStatePersister = DefaultStatePersisterBuilder.builder().build();
@@ -341,7 +341,7 @@ class DefaultStatePersisterTest {
                 .setTopicsData(List.of(new TopicData<>(topicId, Collections.emptyList()))).build()).build());
         assertTrue(result.isDone());
         assertTrue(result.isCompletedExceptionally());
-        assertFutureThrows(result, IllegalArgumentException.class);
+        assertFutureThrows(IllegalArgumentException.class, result);
 
         // partition value is incorrect
         defaultStatePersister = DefaultStatePersisterBuilder.builder().build();
@@ -352,7 +352,7 @@ class DefaultStatePersisterTest {
                     List.of(PartitionFactory.newPartitionIdLeaderEpochData(incorrectPartition, 1))))).build()).build());
         assertTrue(result.isDone());
         assertTrue(result.isCompletedExceptionally());
-        assertFutureThrows(result, IllegalArgumentException.class);
+        assertFutureThrows(IllegalArgumentException.class, result);
     }
 
     @Test
@@ -367,14 +367,14 @@ class DefaultStatePersisterTest {
         CompletableFuture<DeleteShareGroupStateResult> result = defaultStatePersister.deleteState(null);
         assertTrue(result.isDone());
         assertTrue(result.isCompletedExceptionally());
-        assertFutureThrows(result, IllegalArgumentException.class);
+        assertFutureThrows(IllegalArgumentException.class, result);
 
         // groupTopicPartitionData is null
         defaultStatePersister = DefaultStatePersisterBuilder.builder().build();
         result = defaultStatePersister.deleteState(new DeleteShareGroupStateParameters.Builder().setGroupTopicPartitionData(null).build());
         assertTrue(result.isDone());
         assertTrue(result.isCompletedExceptionally());
-        assertFutureThrows(result, IllegalArgumentException.class);
+        assertFutureThrows(IllegalArgumentException.class, result);
 
         // groupId is null
         defaultStatePersister = DefaultStatePersisterBuilder.builder().build();
@@ -383,7 +383,7 @@ class DefaultStatePersisterTest {
                 .setGroupId(null).build()).build());
         assertTrue(result.isDone());
         assertTrue(result.isCompletedExceptionally());
-        assertFutureThrows(result, IllegalArgumentException.class);
+        assertFutureThrows(IllegalArgumentException.class, result);
 
         // topicsData is empty
         defaultStatePersister = DefaultStatePersisterBuilder.builder().build();
@@ -393,7 +393,7 @@ class DefaultStatePersisterTest {
                 .setTopicsData(List.of()).build()).build());
         assertTrue(result.isDone());
         assertTrue(result.isCompletedExceptionally());
-        assertFutureThrows(result, IllegalArgumentException.class);
+        assertFutureThrows(IllegalArgumentException.class, result);
 
         // topicId is null
         defaultStatePersister = DefaultStatePersisterBuilder.builder().build();
@@ -405,7 +405,7 @@ class DefaultStatePersisterTest {
                         partition, 1, 0, 0, null))))).build()).build());
         assertTrue(result.isDone());
         assertTrue(result.isCompletedExceptionally());
-        assertFutureThrows(result, IllegalArgumentException.class);
+        assertFutureThrows(IllegalArgumentException.class, result);
 
         // partitionData is empty
         defaultStatePersister = DefaultStatePersisterBuilder.builder().build();
@@ -415,7 +415,7 @@ class DefaultStatePersisterTest {
                 .setTopicsData(List.of(new TopicData<>(topicId, List.of()))).build()).build());
         assertTrue(result.isDone());
         assertTrue(result.isCompletedExceptionally());
-        assertFutureThrows(result, IllegalArgumentException.class);
+        assertFutureThrows(IllegalArgumentException.class, result);
 
         // partition value is incorrect
         defaultStatePersister = DefaultStatePersisterBuilder.builder().build();
@@ -427,7 +427,7 @@ class DefaultStatePersisterTest {
                         incorrectPartition))))).build()).build());
         assertTrue(result.isDone());
         assertTrue(result.isCompletedExceptionally());
-        assertFutureThrows(result, IllegalArgumentException.class);
+        assertFutureThrows(IllegalArgumentException.class, result);
     }
 
     @Test

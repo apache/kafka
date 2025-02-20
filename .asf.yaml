@@ -15,6 +15,10 @@
 # specific language governing permissions and limitations
 # under the License.
 
+# Enable the next-gen .asf.yaml parser
+meta:
+  nextgen: true
+
 notifications:
   commits: commits@kafka.apache.org
   issues: jira@kafka.apache.org
