@@ -732,10 +732,8 @@ public class RaftEventSimulationTest {
         final String clusterId = Uuid.randomUuid().toString();
         final Map<Integer, Node> initialVoters = new HashMap<>();
         final Map<Integer, PersistentState> persistentStates = new HashMap<>();
-        final Map<Integer, RaftNode> runningNodes = new HashMap<>();
+        final Map<Integer, RaftNode> running = new HashMap<>();
         final boolean withKip853;
-        // this is empty when KIP-853 is disabled
-        final Optional<VoterSet> startingVoterSet;
 
         private Cluster(int numVoters, int numObservers, Random random, boolean withKip853) {
             this.random = random;
@@ -746,8 +744,6 @@ public class RaftEventSimulationTest {
                 persistentStates.put(nodeId, new PersistentState(nodeId));
             }
 
-            startingVoterSet = voterSetFromIds();
-
             for (int nodeIdDelta = 0; nodeIdDelta < numObservers; nodeIdDelta++) {
                 int nodeId = numVoters + nodeIdDelta;
                 persistentStates.put(nodeId, new PersistentState(nodeId));
@@ -755,7 +751,7 @@ public class RaftEventSimulationTest {
         }
 
         Set<InetSocketAddress> endpointsFromIds(Set<Integer> nodeIds) {
-            return runningNodes
+            return running
                 .values()
                 .stream()
                 .filter(node -> nodeIds.contains(node.nodeId))
@@ -778,18 +774,6 @@ public class RaftEventSimulationTest {
             }
         }
 
-        Collection<InetSocketAddress> bootstrapServersFromVoterSet() {
-            if (withKip853) {
-                return startingVoterSet.get()
-                    .voterNodes(startingVoterSet.get().voterIds().stream(), MockNetworkChannel.LISTENER_NAME)
-                    .stream()
-                    .map(node -> InetSocketAddress.createUnresolved(node.host(), node.port()))
-                    .collect(Collectors.toList());
-            } else {
-                return Collections.emptyList();
-            }
-        }
-
         Set<Integer> nodeIds() {
             return persistentStates.keySet();
         }
@@ -799,7 +783,7 @@ public class RaftEventSimulationTest {
         }
 
         long maxLogEndOffset() {
-            return runningNodes
+            return running
                 .values()
                 .stream()
                 .mapToLong(RaftNode::logEndOffset)
@@ -808,7 +792,7 @@ public class RaftEventSimulationTest {
         }
 
         Optional<RaftNode> leaderWithMaxEpoch() {
-            return runningNodes
+            return running
                 .values()
                 .stream()
                 .filter(node -> node.client.quorum().isLeader())
@@ -825,19 +809,19 @@ public class RaftEventSimulationTest {
         }
 
         boolean anyReachedHighWatermark(long offset) {
-            return runningNodes.values().stream()
+            return running.values().stream()
                     .anyMatch(node -> node.highWatermark() > offset);
         }
 
         long maxHighWatermarkReached() {
-            return runningNodes.values().stream()
+            return running.values().stream()
                 .mapToLong(RaftNode::highWatermark)
                 .max()
                 .orElse(0L);
         }
 
         long maxHighWatermarkReached(Set<Integer> nodeIds) {
-            return runningNodes.values().stream()
+            return running.values().stream()
                 .filter(node -> nodeIds.contains(node.nodeId))
                 .mapToLong(RaftNode::highWatermark)
                 .max()
@@ -846,11 +830,11 @@ public class RaftEventSimulationTest {
 
         boolean allReachedHighWatermark(long offset, Set<Integer> nodeIds) {
             return nodeIds.stream()
-                .allMatch(nodeId -> runningNodes.get(nodeId).highWatermark() >= offset);
+                .allMatch(nodeId -> running.get(nodeId).highWatermark() >= offset);
         }
 
         boolean allReachedHighWatermark(long offset) {
-            return runningNodes.values().stream()
+            return running.values().stream()
                 .allMatch(node -> node.highWatermark() >= offset);
         }
 
@@ -863,7 +847,7 @@ public class RaftEventSimulationTest {
             OptionalInt latestLeader = OptionalInt.empty();
             int latestEpoch = 0;
 
-            for (RaftNode node : runningNodes.values()) {
+            for (RaftNode node : running.values()) {
                 if (node.client.quorum().epoch() > latestEpoch) {
                     latestLeader = node.client.quorum().leaderId();
                     latestEpoch = node.client.quorum().epoch();
@@ -875,7 +859,7 @@ public class RaftEventSimulationTest {
         }
 
         boolean hasConsistentLeader() {
-            Iterator<RaftNode> iter = runningNodes.values().iterator();
+            Iterator<RaftNode> iter = running.values().iterator();
             if (!iter.hasNext())
                 return false;
 
@@ -898,15 +882,15 @@ public class RaftEventSimulationTest {
         }
 
         void killAll() {
-            runningNodes.clear();
+            running.clear();
         }
 
         void kill(int nodeId) {
-            runningNodes.remove(nodeId);
+            running.remove(nodeId);
         }
 
         void shutdown(int nodeId) {
-            RaftNode node = runningNodes.get(nodeId);
+            RaftNode node = running.get(nodeId);
             if (node == null) {
                 throw new IllegalStateException("Attempt to shutdown a node which is not currently running");
             }
@@ -918,11 +902,11 @@ public class RaftEventSimulationTest {
         }
 
         Optional<RaftNode> nodeIfRunning(int nodeId) {
-            return Optional.ofNullable(runningNodes.get(nodeId));
+            return Optional.ofNullable(running.get(nodeId));
         }
 
         Collection<RaftNode> running() {
-            return runningNodes.values();
+            return running.values();
         }
 
         void ifRunning(int nodeId, Consumer<RaftNode> action) {
@@ -930,7 +914,7 @@ public class RaftEventSimulationTest {
         }
 
         Optional<RaftNode> randomRunning() {
-            List<RaftNode> nodes = new ArrayList<>(runningNodes.values());
+            List<RaftNode> nodes = new ArrayList<>(running.values());
             if (nodes.isEmpty()) {
                 return Optional.empty();
             } else {
@@ -939,7 +923,7 @@ public class RaftEventSimulationTest {
         }
 
         void withCurrentLeader(Consumer<RaftNode> action) {
-            for (RaftNode node : runningNodes.values()) {
+            for (RaftNode node : running.values()) {
                 if (node.client.quorum().isLeader()) {
                     action.accept(node);
                 }
@@ -947,11 +931,11 @@ public class RaftEventSimulationTest {
         }
 
         void forAllRunning(Consumer<RaftNode> action) {
-            runningNodes.values().forEach(action);
+            running.values().forEach(action);
         }
 
         void startAll() {
-            if (!runningNodes.isEmpty())
+            if (!running.isEmpty())
                 throw new IllegalStateException("Some nodes are already started");
             for (int voterId : persistentStates.keySet()) {
                 start(voterId);
@@ -1046,13 +1030,13 @@ public class RaftEventSimulationTest {
             if (withKip853 && persistentState.log.endOffset().offset() == 0) {
                 RaftTestUtils.writeBootstrapSnapshot(
                     persistentState.log,
-                    startingVoterSet,
+                    voterSetFromIds(),
                     KRaftVersion.KRAFT_VERSION_1,
                     serde
                 );
             }
             raftNode.initialize(voterAddressMap, metrics);
-            runningNodes.put(nodeId, raftNode);
+            running.put(nodeId, raftNode);
         }
     }
 
