@@ -22,6 +22,7 @@ import org.apache.kafka.connect.runtime.rest.entities.LoggerLevel;
 
 import org.apache.logging.log4j.Logger;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -46,6 +47,11 @@ public class LoggersTest {
     public void setup() {
         time = new MockTime(0, INITIAL_TIME, 0);
         loggers = (Loggers.Log4jLoggers) Loggers.newInstance(time);
+    }
+
+    @AfterEach
+    public void restore() {
+        loggers.setLevel("", INFO.name()); // Resetting the root logger to INFO level
     }
 
     @Test
