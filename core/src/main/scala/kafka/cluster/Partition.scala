@@ -39,7 +39,7 @@ import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.metadata.{LeaderAndIsr, LeaderRecoveryState}
 import org.apache.kafka.server.common.RequestLocal
-import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, LeaderHwChange, LogAppendInfo, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogReadInfo, LogStartOffsetIncrementReason, OffsetResultHolder, VerificationGuard}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, AsyncOffsetReader, FetchDataInfo, LeaderHwChange, LogAppendInfo, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogReadInfo, LogStartOffsetIncrementReason, OffsetResultHolder, VerificationGuard}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.purgatory.{DelayedOperationPurgatory, TopicPartitionOperationKey}
 import org.apache.kafka.server.share.fetch.DelayedShareFetchPartitionKey
@@ -49,6 +49,7 @@ import org.slf4j.event.Level
 
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
+import scala.jdk.OptionConverters.RichOption
 import scala.jdk.javaapi.OptionConverters
 
 /**
@@ -118,8 +119,8 @@ object Partition {
             time: Time,
             replicaManager: ReplicaManager): Partition = {
     Partition(
-      topicPartition = topicIdPartition.topicPartition(),
-      topicId = Option(topicIdPartition.topicId()),
+      topicPartition = topicIdPartition.topicPartition,
+      topicId = Some(topicIdPartition.topicId),
       time = time,
       replicaManager = replicaManager)
   }
@@ -1593,7 +1594,7 @@ class Partition(val topicPartition: TopicPartition,
 
     def getOffsetByTimestamp: OffsetResultHolder = {
       logManager.getLog(topicPartition)
-        .map(log => log.fetchOffsetByTimestamp(timestamp, remoteLogManager))
+        .map(log => log.fetchOffsetByTimestamp(timestamp, remoteLogManager.asInstanceOf[Option[AsyncOffsetReader]].toJava))
         .getOrElse(new OffsetResultHolder(Optional.empty[FileRecords.TimestampAndOffset]()))
     }
 
@@ -1821,7 +1822,7 @@ class Partition(val topicPartition: TopicPartition,
   private def submitAlterPartition(proposedIsrState: PendingPartitionChange): CompletableFuture[LeaderAndIsr] = {
     debug(s"Submitting ISR state change $proposedIsrState")
     val future = alterIsrManager.submit(
-      new TopicIdPartition(topicId.getOrElse(Uuid.ZERO_UUID), topicPartition),
+      new org.apache.kafka.server.common.TopicIdPartition(topicId.getOrElse(throw new IllegalStateException("Topic id not set for " + topicPartition)), topicPartition.partition),
       proposedIsrState.sentLeaderAndIsr
     )
     future.whenComplete { (leaderAndIsr, e) =>

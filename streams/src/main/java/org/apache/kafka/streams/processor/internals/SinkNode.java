@@ -56,18 +56,19 @@ public class SinkNode<KIn, VIn> extends ProcessorNode<KIn, VIn, Void, Void> {
         throw new UnsupportedOperationException("sink node does not allow addChild");
     }
 
+    @SuppressWarnings({"unchecked", "rawtypes"})
     @Override
     public void init(final InternalProcessorContext<Void, Void> context) {
         super.init(context);
         this.context = context;
         try {
-            keySerializer = prepareKeySerializer(keySerializer, context, this.name());
+            keySerializer = prepareKeySerializer(keySerializer, (InternalProcessorContext) context, this.name());
         } catch (ConfigException | StreamsException e) {
             throw new StreamsException(String.format("Failed to initialize key serdes for sink node %s", name()), e, context.taskId());
         }
 
         try {
-            valSerializer = prepareValueSerializer(valSerializer, context, this.name());
+            valSerializer = prepareValueSerializer(valSerializer, (InternalProcessorContext) context, this.name());
         } catch (final ConfigException | StreamsException e) {
             throw new StreamsException(String.format("Failed to initialize value serdes for sink node %s", name()), e, context.taskId());
         }

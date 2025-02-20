@@ -89,7 +89,7 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K, V> implements KGr
         // the passed in StreamsGraphNode must be the parent of the repartition node
         builder.addGraphNode(this.graphNode, repartitionGraphNode);
 
-        final ProcessorGraphNode statefulProcessorNode = new ProcessorGraphNode<>(
+        final ProcessorGraphNode<K, Change<V>> statefulProcessorNode = new ProcessorGraphNode<>(
             funcName,
             new ProcessorParameters<>(aggregateSupplier, funcName)
         );

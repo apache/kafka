@@ -53,7 +53,7 @@ public class CreateTopicsResult {
      * Return a future which succeeds if all the topic creations succeed.
      */
     public KafkaFuture<Void> all() {
-        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0]));
+        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture<?>[0]));
     }
 
     /**

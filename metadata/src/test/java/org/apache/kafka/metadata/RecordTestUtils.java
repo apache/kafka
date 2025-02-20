@@ -374,7 +374,7 @@ public class RecordTestUtils {
                 Collections.singletonList(
                     new RegisterControllerRecord.ControllerFeature().
                         setName(MetadataVersion.FEATURE_NAME).
-                        setMinSupportedVersion(MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel()).
+                        setMinSupportedVersion(MetadataVersion.MINIMUM_VERSION.featureLevel()).
                         setMaxSupportedVersion(MetadataVersion.IBP_3_6_IV1.featureLevel())
                 ).iterator()
             ));

@@ -270,7 +270,7 @@ public class ReplicaFetcherThreadBenchmark {
                             config,
                             replicaManager,
                             replicaQuota,
-                            () -> MetadataVersion.MINIMUM_KRAFT_VERSION,
+                            () -> MetadataVersion.MINIMUM_VERSION,
                             () -> -1L
                     ) {
                         @Override
@@ -303,7 +303,7 @@ public class ReplicaFetcherThreadBenchmark {
                     replicaManager,
                     replicaQuota,
                     String.format("[ReplicaFetcher replicaId=%d, leaderId=%d, fetcherId=%d", config.brokerId(), 3, 3),
-                    () -> MetadataVersion.MINIMUM_KRAFT_VERSION
+                    () -> MetadataVersion.MINIMUM_VERSION
             );
 
             pool = partitions;

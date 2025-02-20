@@ -437,18 +437,6 @@ class KRaftClusterTest {
     }
   }
 
-  @Test
-  def testCreateClusterInvalidMetadataVersion(): Unit = {
-    assertEquals("Bootstrap metadata.version before 3.3-IV0 are not supported. Can't load " +
-      "metadata from testkit", assertThrows(classOf[RuntimeException], () => {
-        new KafkaClusterTestKit.Builder(
-          new TestKitNodes.Builder().
-            setBootstrapMetadataVersion(MetadataVersion.IBP_3_0_IV1).
-            setNumBrokerNodes(1).
-            setNumControllerNodes(1).build()).build()
-    }).getMessage)
-  }
-
   private def doOnStartedKafkaCluster(nodes: TestKitNodes)
                                      (action: KafkaClusterTestKit => Unit): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(nodes).build()
@@ -962,11 +950,16 @@ class KRaftClusterTest {
           s"Leader ID ${quorumInfo.leaderId} was not a controller ID.")
 
         // Try to bring down the raft client in the active controller node to force the leader election.
+        // Stop raft client but not the controller, because we would like to get NOT_LEADER_OR_FOLLOWER error first.
+        // If the controller is shutdown, the client can't send request to the original leader.
         cluster.controllers().get(quorumInfo.leaderId).sharedServer.raftManager.client.shutdown(1000)
         // Send another describe metadata quorum request, it'll get NOT_LEADER_OR_FOLLOWER error first and then re-retrieve the metadata update
         // and send to the correct active controller.
-        val quorumInfo2 = admin.describeMetadataQuorum(new DescribeMetadataQuorumOptions)
-          .quorumInfo().get()
+        val quorumInfo2Future = admin.describeMetadataQuorum(new DescribeMetadataQuorumOptions).quorumInfo
+        // If raft client finishes shutdown before returning NOT_LEADER_OR_FOLLOWER error, the request will not be handled.
+        // This makes test fail. Shutdown the controller to make sure the request is handled by another controller.
+        cluster.controllers.get(quorumInfo.leaderId).shutdown()
+        val quorumInfo2 = quorumInfo2Future.get
         // Make sure the leader has changed
         assertTrue(quorumInfo.leaderId() != quorumInfo2.leaderId())
 
@@ -985,7 +978,7 @@ class KRaftClusterTest {
   def testUpdateMetadataVersion(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
-        setBootstrapMetadataVersion(MetadataVersion.MINIMUM_BOOTSTRAP_VERSION).
+        setBootstrapMetadataVersion(MetadataVersion.MINIMUM_VERSION).
         setNumBrokerNodes(4).
         setNumControllerNodes(3).build()).build()
     try {
@@ -1003,8 +996,8 @@ class KRaftClusterTest {
       } finally {
         admin.close()
       }
-      TestUtils.waitUntilTrue(() => cluster.brokers().get(0).metadataCache.currentImage().features().metadataVersion().equals(MetadataVersion.latestTesting()),
-        "Timed out waiting for metadata.version update")
+      TestUtils.waitUntilTrue(() => cluster.brokers().get(0).metadataCache.currentImage().features().metadataVersion()
+        .equals(Optional.of(MetadataVersion.latestTesting())), "Timed out waiting for metadata.version update")
     } finally {
       cluster.close()
     }
@@ -1138,7 +1131,7 @@ class KRaftClusterTest {
   def testSingleControllerSingleBrokerCluster(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
-        setBootstrapMetadataVersion(MetadataVersion.MINIMUM_BOOTSTRAP_VERSION).
+        setBootstrapMetadataVersion(MetadataVersion.MINIMUM_VERSION).
         setNumBrokerNodes(1).
         setNumControllerNodes(1).build()).build()
     try {
