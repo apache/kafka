@@ -36,7 +36,6 @@ RUN mkdir $KAFKA_DIR; \
     if [ "$skip_signing" != "true" ]; then \
         wget -nv -O kafka.tgz.asc "$KAFKA_URL.asc"; \
         wget -nv -O KEYS https://downloads.apache.org/kafka/KEYS; \
-        microdnf install gpg; \
         gpg --import KEYS; \
         gpg --batch --verify kafka.tgz.asc kafka.tgz; \
         rm kafka.tgz.asc KEYS; \

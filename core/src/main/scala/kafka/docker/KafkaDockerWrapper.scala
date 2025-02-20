@@ -110,6 +110,8 @@ object KafkaDockerWrapper extends Logging {
       case Some(str) => str
       case None => throw new RuntimeException("CLUSTER_ID environment variable is not set.")
     }
+    // We maintain static voter configurations in Docker Hub images for better version compatibility and deployment stability,
+    // despite having dynamic voter support in the latest release.
     Array("format", "--cluster-id=" + clusterId, "-c", s"${configsPath.toString}/server.properties")
   }
 
