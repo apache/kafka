@@ -67,7 +67,7 @@ import org.apache.kafka.server.share.fetch.PartitionMaxBytesStrategy;
 import org.apache.kafka.server.share.fetch.ShareAcquiredRecords;
 import org.apache.kafka.server.share.fetch.ShareFetch;
 import org.apache.kafka.server.share.metrics.ShareGroupMetrics;
-import org.apache.kafka.server.share.persister.NoOpShareStatePersister;
+import org.apache.kafka.server.share.persister.NoOpStatePersister;
 import org.apache.kafka.server.share.persister.Persister;
 import org.apache.kafka.server.share.session.ShareSession;
 import org.apache.kafka.server.share.session.ShareSessionCache;
@@ -3126,7 +3126,7 @@ public class SharePartitionManagerTest {
         private Time time = new MockTime();
         private ShareSessionCache cache = new ShareSessionCache(10, 1000);
         private Map<SharePartitionKey, SharePartition> partitionCacheMap = new HashMap<>();
-        private Persister persister = new NoOpShareStatePersister();
+        private Persister persister = new NoOpStatePersister();
         private Timer timer = new MockTimer();
         private ShareGroupMetrics shareGroupMetrics = new ShareGroupMetrics(time);
         private BrokerTopicStats brokerTopicStats;

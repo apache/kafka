@@ -61,7 +61,6 @@ import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
-import org.apache.kafka.common.test.api.Flaky;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.GroupConfig;
@@ -390,7 +389,6 @@ public class ShareConsumerTest {
         }
     }
 
-    @Flaky("KAFKA-18033")
     @ClusterTest
     public void testAcknowledgementCommitCallbackInvalidRecordStateException() throws Exception {
         setup();
@@ -684,6 +682,44 @@ public class ShareConsumerTest {
             }, 30000, 100L, () -> "Didn't receive call to callback");
 
             assertNull(partitionExceptionMap1.get(tp));
+            verifyShareGroupStateTopicRecordsProduced();
+        }
+    }
+
+    @ClusterTest
+    public void testImplicitModeNotTriggeredByPollWhenNoAcksToSend() throws InterruptedException {
+        setup();
+        alterShareAutoOffsetReset("group1", "earliest");
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
+
+            shareConsumer.subscribe(Collections.singleton(tp.topic()));
+
+            Map<TopicPartition, Set<Long>> partitionOffsetsMap1 = new HashMap<>();
+            Map<TopicPartition, Exception> partitionExceptionMap1 = new HashMap<>();
+            shareConsumer.setAcknowledgementCommitCallback(new TestableAcknowledgementCommitCallback(partitionOffsetsMap1, partitionExceptionMap1));
+
+            // The acknowledgement mode moves to PENDING from UNKNOWN.
+            ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(5000));
+            assertEquals(0, records.count());
+            shareConsumer.commitAsync();
+
+            ProducerRecord<byte[], byte[]> record1 = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
+            producer.send(record1);
+            producer.flush();
+
+            // The acknowledgement mode remains in PENDING because no records were returned.
+            records = shareConsumer.poll(Duration.ofMillis(5000));
+            assertEquals(1, records.count());
+
+            // The acknowledgement mode now moves to EXPLICIT.
+            shareConsumer.acknowledge(records.iterator().next());
+            shareConsumer.commitAsync();
+
+            TestUtils.waitForCondition(() -> {
+                shareConsumer.poll(Duration.ofMillis(500));
+                return partitionExceptionMap1.containsKey(tp);
+            }, 30000, 100L, () -> "Didn't receive call to callback");
             verifyShareGroupStateTopicRecordsProduced();
         }
     }
@@ -1041,7 +1077,6 @@ public class ShareConsumerTest {
         }
     }
 
-    @Flaky("KAFKA-18033")
     @ClusterTest
     public void testMultipleConsumersInGroupConcurrentConsumption()
             throws InterruptedException, ExecutionException, TimeoutException {
@@ -1989,7 +2024,6 @@ public class ShareConsumerTest {
         }
     )
     @Timeout(150)
-    @Flaky("KAFKA-18665")
     public void testComplexShareConsumer() throws Exception {
         setup();
         String topicName = "multipart";

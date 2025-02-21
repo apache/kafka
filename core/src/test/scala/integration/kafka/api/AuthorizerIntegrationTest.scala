@@ -1622,7 +1622,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
   def testDescribeGroupApiWithNoGroupAcl(quorum: String): Unit = {
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, DESCRIBE, ALLOW)), topicResource)
     val result = createAdminClient().describeConsumerGroups(Seq(group).asJava)
-    JTestUtils.assertFutureThrows(result.describedGroups().get(group), classOf[GroupAuthorizationException])
+    JTestUtils.assertFutureThrows(classOf[GroupAuthorizationException], result.describedGroups().get(group))
   }
 
   @ParameterizedTest
@@ -1632,7 +1632,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, DESCRIBE, ALLOW)), groupResource)
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, DESCRIBE, ALLOW)), topicResource)
     val result = createAdminClient().describeConsumerGroups(Seq(group).asJava)
-    JTestUtils.assertFutureThrows(result.describedGroups().get(group), classOf[GroupIdNotFoundException])
+    JTestUtils.assertFutureThrows(classOf[GroupIdNotFoundException], result.describedGroups().get(group))
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
@@ -1709,14 +1709,14 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     consumer.assign(List(tp).asJava)
     consumer.commitSync(Map(tp -> new OffsetAndMetadata(5, "")).asJava)
     val result = createAdminClient().deleteConsumerGroups(Seq(group).asJava)
-    JTestUtils.assertFutureThrows(result.deletedGroups().get(group), classOf[GroupAuthorizationException])
+    JTestUtils.assertFutureThrows(classOf[GroupAuthorizationException], result.deletedGroups().get(group))
   }
 
   @ParameterizedTest
   @ValueSource(strings = Array("kraft"))
   def testDeleteGroupApiWithNoDeleteGroupAcl2(quorum: String): Unit = {
     val result = createAdminClient().deleteConsumerGroups(Seq(group).asJava)
-    JTestUtils.assertFutureThrows(result.deletedGroups().get(group), classOf[GroupAuthorizationException])
+    JTestUtils.assertFutureThrows(classOf[GroupAuthorizationException], result.deletedGroups().get(group))
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
@@ -1747,7 +1747,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     consumer.commitSync(Map(tp -> new OffsetAndMetadata(5, "")).asJava)
     consumer.close()
     val result = createAdminClient().deleteConsumerGroupOffsets(group, Set(tp).asJava)
-    JTestUtils.assertFutureThrows(result.all(), classOf[GroupAuthorizationException])
+    JTestUtils.assertFutureThrows(classOf[GroupAuthorizationException], result.all())
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
@@ -1767,15 +1767,15 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, DELETE, ALLOW)), groupResource)
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, READ, ALLOW)), groupResource)
     val result = createAdminClient().deleteConsumerGroupOffsets(group, Set(tp).asJava)
-    JTestUtils.assertFutureThrows(result.all(), classOf[TopicAuthorizationException])
-    JTestUtils.assertFutureThrows(result.partitionResult(tp), classOf[TopicAuthorizationException])
+    JTestUtils.assertFutureThrows(classOf[TopicAuthorizationException], result.all())
+    JTestUtils.assertFutureThrows(classOf[TopicAuthorizationException], result.partitionResult(tp))
   }
 
   @ParameterizedTest
   @ValueSource(strings = Array("kraft"))
   def testDeleteGroupOffsetsWithNoAcl(quorum: String): Unit = {
     val result = createAdminClient().deleteConsumerGroupOffsets(group, Set(tp).asJava)
-    JTestUtils.assertFutureThrows(result.all(), classOf[GroupAuthorizationException])
+    JTestUtils.assertFutureThrows(classOf[GroupAuthorizationException], result.all())
   }
 
   @ParameterizedTest
@@ -2044,7 +2044,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     producer.beginTransaction()
 
     val future = producer.send(new ProducerRecord(tp.topic, tp.partition, "1".getBytes, "1".getBytes))
-    val e = JTestUtils.assertFutureThrows(future, classOf[TopicAuthorizationException])
+    val e = JTestUtils.assertFutureThrows(classOf[TopicAuthorizationException], future)
     assertEquals(Set(topic), e.unauthorizedTopics.asScala)
   }
 
@@ -2078,7 +2078,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, WRITE, ALLOW)), topicResource)
     producer.beginTransaction()
     val future = producer.send(new ProducerRecord(tp.topic, tp.partition, "1".getBytes, "1".getBytes))
-    JTestUtils.assertFutureThrows(future, classOf[TransactionalIdAuthorizationException])
+    JTestUtils.assertFutureThrows(classOf[TransactionalIdAuthorizationException], future)
   }
 
   @ParameterizedTest
@@ -2167,7 +2167,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     producer.send(new ProducerRecord(tp.topic, tp.partition, "1".getBytes, "1".getBytes)).get
     // try and add a partition resulting in TopicAuthorizationException
     val future = producer.send(new ProducerRecord("otherTopic", 0, "1".getBytes, "1".getBytes))
-    val e = JTestUtils.assertFutureThrows(future, classOf[TopicAuthorizationException])
+    val e = JTestUtils.assertFutureThrows(classOf[TopicAuthorizationException], future)
     assertEquals(Set("otherTopic"), e.unauthorizedTopics.asScala)
     // now rollback
     producer.abortTransaction()

@@ -31,6 +31,7 @@ import org.apache.kafka.metadata.LeaderRecoveryState;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.immutable.ImmutableMap;
 
 import org.junit.jupiter.api.Test;
@@ -595,7 +596,7 @@ public class TopicsImageTest {
 
     private static List<ApiMessageAndVersion> getImageRecords(TopicsImage image) {
         RecordListWriter writer = new RecordListWriter();
-        image.write(writer, new ImageWriterOptions.Builder().build());
+        image.write(writer, new ImageWriterOptions.Builder(MetadataVersion.latestProduction()).build());
         return writer.records();
     }
 

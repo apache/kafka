@@ -17,8 +17,7 @@
 
 package kafka.log
 
-import kafka.log.remote.RemoteLogManager
-import kafka.utils._
+import kafka.utils.{threadsafe, Logging}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.message.DescribeProducersResponseData
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
@@ -35,7 +34,7 @@ import org.apache.kafka.server.storage.log.{FetchIsolation, UnexpectedAppendOffs
 import org.apache.kafka.server.util.Scheduler
 import org.apache.kafka.storage.internals.checkpoint.PartitionMetadataFile
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
-import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, BatchMetadata, CompletedTxn, FetchDataInfo, LastRecord, LeaderHwChange, LocalLog, LogAppendInfo, LogConfig, LogDirFailureChannel, LogLoader, LogMetricNames, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogSegment, LogSegments, LogStartOffsetIncrementReason, LogValidator, OffsetResultHolder, OffsetsOutOfOrderException, ProducerAppendInfo, ProducerStateManager, ProducerStateManagerConfig, RollParams, SegmentDeletionReason, VerificationGuard, UnifiedLog => JUnifiedLog}
+import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, AsyncOffsetReader, BatchMetadata, CompletedTxn, FetchDataInfo, LastRecord, LeaderHwChange, LocalLog, LogAppendInfo, LogConfig, LogDirFailureChannel, LogLoader, LogMetricNames, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogSegment, LogSegments, LogStartOffsetIncrementReason, LogValidator, OffsetResultHolder, OffsetsOutOfOrderException, ProducerAppendInfo, ProducerStateManager, ProducerStateManagerConfig, RollParams, SegmentDeletionReason, VerificationGuard, UnifiedLog => JUnifiedLog}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 
 import java.io.{File, IOException}
@@ -1221,11 +1220,8 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    *
    * If no such message is found, the log end offset is returned.
    *
-   * `NOTE:` OffsetRequest V0 does not use this method, the behavior of OffsetRequest V0 remains the same as before
-   * , i.e. it only gives back the timestamp based on the last modification time of the log segments.
-   *
    * @param targetTimestamp The given timestamp for offset fetching.
-   * @param remoteLogManager Optional RemoteLogManager instance if it exists.
+   * @param remoteOffsetReader Optional AsyncOffsetReader instance if it exists.
    * @return the offset-result holder
    *         <ul>
    *           <li>When the partition is not enabled with remote storage, then it contains offset of the first message
@@ -1235,7 +1231,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    *           <li>All special timestamp offset results are returned immediately irrespective of the remote storage.
    *         </ul>
    */
-  def fetchOffsetByTimestamp(targetTimestamp: Long, remoteLogManager: Option[RemoteLogManager] = None): OffsetResultHolder = {
+  def fetchOffsetByTimestamp(targetTimestamp: Long, remoteOffsetReader: Optional[AsyncOffsetReader] = Optional.empty): OffsetResultHolder = {
     maybeHandleIOException(s"Error while fetching offset by timestamp for $topicPartition in dir ${dir.getParent}") {
       debug(s"Searching offset for timestamp $targetTimestamp")
 
@@ -1293,16 +1289,16 @@ class UnifiedLog(@volatile var logStartOffset: Long,
       } else {
         // We need to search the first segment whose largest timestamp is >= the target timestamp if there is one.
         if (remoteLogEnabled() && !isEmpty) {
-          if (remoteLogManager.isEmpty) {
+          if (remoteOffsetReader.isEmpty) {
             throw new KafkaException("RemoteLogManager is empty even though the remote log storage is enabled.")
           }
 
-          val asyncOffsetReadFutureHolder = remoteLogManager.get.asyncOffsetRead(topicPartition, targetTimestamp,
+          val asyncOffsetReadFutureHolder = remoteOffsetReader.get.asyncOffsetRead(topicPartition, targetTimestamp,
             logStartOffset, leaderEpochCache, () => searchOffsetInLocalLog(targetTimestamp, localLogStartOffset()))
           
           new OffsetResultHolder(Optional.empty(), Optional.of(asyncOffsetReadFutureHolder))
         } else {
-          new OffsetResultHolder(searchOffsetInLocalLog(targetTimestamp, logStartOffset).toJava)
+          new OffsetResultHolder(searchOffsetInLocalLog(targetTimestamp, logStartOffset))
         }
       }
     }
@@ -1316,12 +1312,12 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     logStartOffset == logEndOffset
   }
 
-  private def searchOffsetInLocalLog(targetTimestamp: Long, startOffset: Long): Option[TimestampAndOffset] = {
+  private def searchOffsetInLocalLog(targetTimestamp: Long, startOffset: Long): Optional[TimestampAndOffset] = {
     // Cache to avoid race conditions. `toBuffer` is faster than most alternatives and provides
     // constant time access while being safe to use with concurrent collections unlike `toArray`.
     val segmentsCopy = logSegments.asScala.toBuffer
     val targetSeg = segmentsCopy.find(_.largestTimestamp >= targetTimestamp)
-    targetSeg.flatMap(_.findOffsetByTimestamp(targetTimestamp, startOffset).toScala)
+    targetSeg.flatMap(_.findOffsetByTimestamp(targetTimestamp, startOffset).toScala).toJava
   }
 
   /**

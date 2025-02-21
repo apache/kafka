@@ -45,7 +45,7 @@ public class DescribeProducersResult {
     }
 
     public KafkaFuture<Map<TopicPartition, PartitionProducerState>> all() {
-        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0]))
+        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture<?>[0]))
             .thenApply(nil -> {
                 Map<TopicPartition, PartitionProducerState> results = new HashMap<>(futures.size());
                 for (Map.Entry<TopicPartition, KafkaFuture<PartitionProducerState>> entry : futures.entrySet()) {

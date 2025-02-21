@@ -582,6 +582,11 @@ public class ConsumerHeartbeatRequestManagerTest {
                 verify(backgroundEventHandler, never()).add(any());
                 assertNextHeartbeatTiming(0);
                 break;
+            case TOPIC_AUTHORIZATION_FAILED:
+                verify(backgroundEventHandler).add(any(ErrorEvent.class));
+                assertNextHeartbeatTiming(DEFAULT_RETRY_BACKOFF_MS);
+                verify(membershipManager, never()).transitionToFatal();
+                break;
             default:
                 if (isFatal) {
                     when(coordinatorRequestManager.coordinator()).thenReturn(Optional.empty());
