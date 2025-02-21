@@ -23,6 +23,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig;
 import org.apache.kafka.coordinator.share.ShareCoordinatorConfig;
+import org.apache.kafka.coordinator.transaction.AddPartitionsToTxnConfig;
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
 import org.apache.kafka.coordinator.transaction.TransactionStateManagerConfig;
 import org.apache.kafka.network.SocketServerConfigs;
@@ -44,7 +45,6 @@ import java.util.Map;
 public abstract class AbstractKafkaConfig extends AbstractConfig {
     public static final ConfigDef CONFIG_DEF = Utils.mergeConfigs(List.of(
         RemoteLogManagerConfig.configDef(),
-        ZkConfigs.CONFIG_DEF,
         ServerConfigs.CONFIG_DEF,
         KRaftConfigs.CONFIG_DEF,
         SocketServerConfigs.CONFIG_DEF,
@@ -64,7 +64,8 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
         MetricConfigs.CONFIG_DEF,
         QuotaConfig.CONFIG_DEF,
         BrokerSecurityConfigs.CONFIG_DEF,
-        DelegationTokenManagerConfigs.CONFIG_DEF
+        DelegationTokenManagerConfigs.CONFIG_DEF,
+        AddPartitionsToTxnConfig.CONFIG_DEF
     ));
 
     public AbstractKafkaConfig(ConfigDef definition, Map<?, ?> originals, Map<String, ?> configProviderProps, boolean doLog) {

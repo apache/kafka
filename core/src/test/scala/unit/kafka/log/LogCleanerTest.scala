@@ -17,6 +17,7 @@
 
 package kafka.log
 
+import kafka.log.LogCleaner.{MaxBufferUtilizationPercentMetricName, MaxCleanTimeMetricName, MaxCompactionDelayMetricsName}
 import kafka.server.KafkaConfig
 import kafka.utils.{CoreUtils, Logging, Pool, TestUtils}
 import org.apache.kafka.common.TopicPartition
@@ -28,7 +29,7 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
 import org.apache.kafka.server.util.MockTime
-import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, CleanerConfig, LocalLog, LogAppendInfo, LogCleaningAbortedException, LogConfig, LogDirFailureChannel, LogFileUtils, LogLoader, LogSegment, LogSegments, LogStartOffsetIncrementReason, OffsetMap, ProducerStateManager, ProducerStateManagerConfig}
+import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, CleanerConfig, LocalLog, LogAppendInfo, LogCleaningAbortedException, LogConfig, LogDirFailureChannel, LogFileUtils, LogLoader, LogSegment, LogSegments, LogStartOffsetIncrementReason, OffsetMap, ProducerStateManager, ProducerStateManagerConfig, UnifiedLog => JUnifiedLog}
 import org.apache.kafka.storage.internals.utils.Throttler
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions._
@@ -41,7 +42,7 @@ import java.io.{File, RandomAccessFile}
 import java.nio._
 import java.nio.charset.StandardCharsets
 import java.nio.file.Paths
-import java.util.Properties
+import java.util.{Optional, Properties}
 import java.util.concurrent.{ConcurrentHashMap, CountDownLatch, TimeUnit}
 import scala.collection._
 import scala.jdk.CollectionConverters._
@@ -182,13 +183,13 @@ class LogCleanerTest extends Logging {
     logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, 1024 : java.lang.Integer)
     logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT + "," + TopicConfig.CLEANUP_POLICY_DELETE)
     val config = LogConfig.fromProps(logConfig.originals, logProps)
-    val topicPartition = UnifiedLog.parseTopicPartitionName(dir)
+    val topicPartition = JUnifiedLog.parseTopicPartitionName(dir)
     val logDirFailureChannel = new LogDirFailureChannel(10)
     val maxTransactionTimeoutMs = 5 * 60 * 1000
     val producerIdExpirationCheckIntervalMs = TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT
     val logSegments = new LogSegments(topicPartition)
-    val leaderEpochCache = UnifiedLog.createLeaderEpochCache(
-      dir, topicPartition, logDirFailureChannel, None, time.scheduler)
+    val leaderEpochCache = JUnifiedLog.createLeaderEpochCache(
+      dir, topicPartition, logDirFailureChannel, Optional.empty, time.scheduler)
     val producerStateManager = new ProducerStateManager(topicPartition, dir,
       maxTransactionTimeoutMs, producerStateManagerConfig, time)
     val offsets = new LogLoader(
@@ -1708,7 +1709,7 @@ class LogCleanerTest extends Logging {
 
     // 1) Simulate recovery just after .cleaned file is created, before rename to .swap
     //    On recovery, clean operation is aborted. All messages should be present in the log
-    log.logSegments.asScala.head.changeFileSuffixes("", UnifiedLog.CleanedFileSuffix)
+    log.logSegments.asScala.head.changeFileSuffixes("", JUnifiedLog.CLEANED_FILE_SUFFIX)
     for (file <- dir.listFiles if file.getName.endsWith(LogFileUtils.DELETED_FILE_SUFFIX)) {
       Utils.atomicMoveWithFallback(file.toPath, Paths.get(Utils.replaceSuffix(file.getPath, LogFileUtils.DELETED_FILE_SUFFIX, "")), false)
     }
@@ -1724,8 +1725,8 @@ class LogCleanerTest extends Logging {
 
     // 2) Simulate recovery just after .cleaned file is created, and a subset of them are renamed to .swap
     //    On recovery, clean operation is aborted. All messages should be present in the log
-    log.logSegments.asScala.head.changeFileSuffixes("", UnifiedLog.CleanedFileSuffix)
-    log.logSegments.asScala.head.log.renameTo(new File(Utils.replaceSuffix(log.logSegments.asScala.head.log.file.getPath, UnifiedLog.CleanedFileSuffix, UnifiedLog.SwapFileSuffix)))
+    log.logSegments.asScala.head.changeFileSuffixes("", JUnifiedLog.CLEANED_FILE_SUFFIX)
+    log.logSegments.asScala.head.log.renameTo(new File(Utils.replaceSuffix(log.logSegments.asScala.head.log.file.getPath, JUnifiedLog.CLEANED_FILE_SUFFIX, JUnifiedLog.SWAP_FILE_SUFFIX)))
     for (file <- dir.listFiles if file.getName.endsWith(LogFileUtils.DELETED_FILE_SUFFIX)) {
       Utils.atomicMoveWithFallback(file.toPath, Paths.get(Utils.replaceSuffix(file.getPath, LogFileUtils.DELETED_FILE_SUFFIX, "")), false)
     }
@@ -1741,7 +1742,7 @@ class LogCleanerTest extends Logging {
 
     // 3) Simulate recovery just after swap file is created, before old segment files are
     //    renamed to .deleted. Clean operation is resumed during recovery.
-    log.logSegments.asScala.head.changeFileSuffixes("", UnifiedLog.SwapFileSuffix)
+    log.logSegments.asScala.head.changeFileSuffixes("", JUnifiedLog.SWAP_FILE_SUFFIX)
     for (file <- dir.listFiles if file.getName.endsWith(LogFileUtils.DELETED_FILE_SUFFIX)) {
       Utils.atomicMoveWithFallback(file.toPath, Paths.get(Utils.replaceSuffix(file.getPath, LogFileUtils.DELETED_FILE_SUFFIX, "")), false)
     }
@@ -1762,7 +1763,7 @@ class LogCleanerTest extends Logging {
 
     // 4) Simulate recovery after swap file is created and old segments files are renamed
     //    to .deleted. Clean operation is resumed during recovery.
-    log.logSegments.asScala.head.changeFileSuffixes("", UnifiedLog.SwapFileSuffix)
+    log.logSegments.asScala.head.changeFileSuffixes("", JUnifiedLog.SWAP_FILE_SUFFIX)
     log = recoverAndCheck(config, cleanedKeys)
 
     // add some more messages and clean the log again
@@ -1780,7 +1781,7 @@ class LogCleanerTest extends Logging {
 
     // 5) Simulate recovery after a subset of swap files are renamed to regular files and old segments files are renamed
     //    to .deleted. Clean operation is resumed during recovery.
-    log.logSegments.asScala.head.timeIndex.file.renameTo(new File(Utils.replaceSuffix(log.logSegments.asScala.head.timeIndex.file.getPath, "", UnifiedLog.SwapFileSuffix)))
+    log.logSegments.asScala.head.timeIndex.file.renameTo(new File(Utils.replaceSuffix(log.logSegments.asScala.head.timeIndex.file.getPath, "", JUnifiedLog.SWAP_FILE_SUFFIX)))
     log = recoverAndCheck(config, cleanedKeys)
 
     // add some more messages and clean the log again
@@ -2046,42 +2047,159 @@ class LogCleanerTest extends Logging {
   }
 
   @Test
-  def testMaxOverCleanerThreads(): Unit = {
-    val logCleaner =  new LogCleaner(new CleanerConfig(true),
+  def testMaxBufferUtilizationPercentMetric(): Unit = {
+    val logCleaner = new LogCleaner(
+      new CleanerConfig(true),
       logDirs = Array(TestUtils.tempDir(), TestUtils.tempDir()),
       logs = new Pool[TopicPartition, UnifiedLog](),
       logDirFailureChannel = new LogDirFailureChannel(1),
-      time = time)
+      time = time
+    )
 
-    val cleaners = logCleaner.cleaners
+    def assertMaxBufferUtilizationPercent(expected: Int): Unit = {
+      val gauge = logCleaner.metricsGroup.newGauge(MaxBufferUtilizationPercentMetricName,
+        () => (logCleaner.maxOverCleanerThreads(_.lastStats.bufferUtilization) * 100).toInt)
+      assertEquals(expected, gauge.value())
+    }
 
-    val cleaner1 = new logCleaner.CleanerThread(1)
-    cleaner1.lastStats = new CleanerStats(time)
-    cleaner1.lastStats.bufferUtilization = 0.75
-    cleaners += cleaner1
+    try {
+      // No CleanerThreads
+      assertMaxBufferUtilizationPercent(0)
 
-    val cleaner2 = new logCleaner.CleanerThread(2)
-    cleaner2.lastStats = new CleanerStats(time)
-    cleaner2.lastStats.bufferUtilization = 0.85
-    cleaners += cleaner2
+      val cleaners = logCleaner.cleaners
 
-    val cleaner3 = new logCleaner.CleanerThread(3)
-    cleaner3.lastStats = new CleanerStats(time)
-    cleaner3.lastStats.bufferUtilization = 0.65
-    cleaners += cleaner3
+      val cleaner1 = new logCleaner.CleanerThread(1)
+      cleaner1.lastStats = new CleanerStats(time)
+      cleaner1.lastStats.bufferUtilization = 0.75
+      cleaners += cleaner1
 
-    assertEquals(0, logCleaner.maxOverCleanerThreads(_.lastStats.bufferUtilization))
+      val cleaner2 = new logCleaner.CleanerThread(2)
+      cleaner2.lastStats = new CleanerStats(time)
+      cleaner2.lastStats.bufferUtilization = 0.85
+      cleaners += cleaner2
 
-    cleaners.clear()
+      val cleaner3 = new logCleaner.CleanerThread(3)
+      cleaner3.lastStats = new CleanerStats(time)
+      cleaner3.lastStats.bufferUtilization = 0.65
+      cleaners += cleaner3
 
-    cleaner1.lastStats.bufferUtilization = 5d
-    cleaners += cleaner1
-    cleaner2.lastStats.bufferUtilization = 6d
-    cleaners += cleaner2
-    cleaner3.lastStats.bufferUtilization = 7d
-    cleaners += cleaner3
+      // expect the gauge value to reflect the maximum bufferUtilization
+      assertMaxBufferUtilizationPercent(85)
 
-    assertEquals(7, logCleaner.maxOverCleanerThreads(_.lastStats.bufferUtilization))
+      // Update bufferUtilization and verify the gauge value updates
+      cleaner1.lastStats.bufferUtilization = 0.9
+      assertMaxBufferUtilizationPercent(90)
+
+      // All CleanerThreads have the same bufferUtilization
+      cleaners.foreach(_.lastStats.bufferUtilization = 0.5)
+      assertMaxBufferUtilizationPercent(50)
+    } finally {
+      logCleaner.shutdown()
+    }
+  }
+
+  @Test
+  def testMaxCleanTimeMetric(): Unit = {
+    val logCleaner = new LogCleaner(
+      new CleanerConfig(true),
+      logDirs = Array(TestUtils.tempDir(), TestUtils.tempDir()),
+      logs = new Pool[TopicPartition, UnifiedLog](),
+      logDirFailureChannel = new LogDirFailureChannel(1),
+      time = time
+    )
+
+    def assertMaxCleanTime(expected: Int): Unit = {
+      val gauge = logCleaner.metricsGroup.newGauge(MaxCleanTimeMetricName,
+        () => logCleaner.maxOverCleanerThreads(_.lastStats.elapsedSecs).toInt)
+      assertEquals(expected, gauge.value())
+    }
+
+    try {
+      // No CleanerThreads
+      assertMaxCleanTime(0)
+
+      val cleaners = logCleaner.cleaners
+
+      val cleaner1 = new logCleaner.CleanerThread(1)
+      cleaner1.lastStats = new CleanerStats(time)
+      cleaner1.lastStats.endTime = cleaner1.lastStats.startTime + 1_000L
+      cleaners += cleaner1
+
+      val cleaner2 = new logCleaner.CleanerThread(2)
+      cleaner2.lastStats = new CleanerStats(time)
+      cleaner2.lastStats.endTime = cleaner2.lastStats.startTime + 2_000L
+      cleaners += cleaner2
+
+      val cleaner3 = new logCleaner.CleanerThread(3)
+      cleaner3.lastStats = new CleanerStats(time)
+      cleaner3.lastStats.endTime = cleaner3.lastStats.startTime + 3_000L
+      cleaners += cleaner3
+
+      // expect the gauge value to reflect the maximum cleanTime
+      assertMaxCleanTime(3)
+
+      // Update cleanTime and verify the gauge value updates
+      cleaner1.lastStats.endTime = cleaner1.lastStats.startTime + 4_000L
+      assertMaxCleanTime(4)
+
+      // All CleanerThreads have the same cleanTime
+      cleaners.foreach(cleaner => cleaner.lastStats.endTime = cleaner.lastStats.startTime + 1_500L)
+      assertMaxCleanTime(1)
+    } finally {
+      logCleaner.shutdown()
+    }
+  }
+
+  @Test
+  def testMaxCompactionDelayMetrics(): Unit = {
+    val logCleaner = new LogCleaner(
+      new CleanerConfig(true),
+      logDirs = Array(TestUtils.tempDir(), TestUtils.tempDir()),
+      logs = new Pool[TopicPartition, UnifiedLog](),
+      logDirFailureChannel = new LogDirFailureChannel(1),
+      time = time
+    )
+
+    def assertMaxCompactionDelay(expected: Int): Unit = {
+      val gauge = logCleaner.metricsGroup.newGauge(MaxCompactionDelayMetricsName,
+        () => (logCleaner.maxOverCleanerThreads(_.lastPreCleanStats.maxCompactionDelayMs.toDouble) / 1000).toInt)
+      assertEquals(expected, gauge.value())
+    }
+
+    try {
+      // No CleanerThreads
+      assertMaxCompactionDelay(0)
+
+      val cleaners = logCleaner.cleaners
+
+      val cleaner1 = new logCleaner.CleanerThread(1)
+      cleaner1.lastStats = new CleanerStats(time)
+      cleaner1.lastPreCleanStats.maxCompactionDelayMs = 1_000L
+      cleaners += cleaner1
+
+      val cleaner2 = new logCleaner.CleanerThread(2)
+      cleaner2.lastStats = new CleanerStats(time)
+      cleaner2.lastPreCleanStats.maxCompactionDelayMs = 2_000L
+      cleaners += cleaner2
+
+      val cleaner3 = new logCleaner.CleanerThread(3)
+      cleaner3.lastStats = new CleanerStats(time)
+      cleaner3.lastPreCleanStats.maxCompactionDelayMs = 3_000L
+      cleaners += cleaner3
+
+      // expect the gauge value to reflect the maximum CompactionDelay
+      assertMaxCompactionDelay(3)
+
+      // Update CompactionDelay and verify the gauge value updates
+      cleaner1.lastPreCleanStats.maxCompactionDelayMs = 4_000L
+      assertMaxCompactionDelay(4)
+
+      // All CleanerThreads have the same CompactionDelay
+      cleaners.foreach(_.lastPreCleanStats.maxCompactionDelayMs = 1_500L)
+      assertMaxCompactionDelay(1)
+    } finally {
+      logCleaner.shutdown()
+    }
   }
 
   private def writeToLog(log: UnifiedLog, keysAndValues: Iterable[(Int, Int)], offsetSeq: Iterable[Long]): Iterable[Long] = {

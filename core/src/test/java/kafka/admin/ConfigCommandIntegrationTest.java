@@ -25,16 +25,14 @@ import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
-import org.apache.kafka.common.test.api.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTest;
-import org.apache.kafka.common.test.api.ClusterTestExtensions;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.test.TestUtils;
 
-import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mockito;
 
 import java.io.ByteArrayOutputStream;
@@ -71,7 +69,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 
-@ExtendWith(value = ClusterTestExtensions.class)
 public class ConfigCommandIntegrationTest {
     private final String defaultBrokerId = "0";
     private final String defaultGroupName = "group";
@@ -176,11 +173,9 @@ public class ConfigCommandIntegrationTest {
             alterConfigWithAdmin(client, Optional.of(defaultBrokerId),
                     singletonMap("listener.name.external.ssl.keystore.password", "secret"), alterOpts);
 
-            // Password config update with encoder secret should succeed and encoded password must be stored in ZK
             Map<String, String> configs = new HashMap<>();
             configs.put("listener.name.external.ssl.keystore.password", "secret");
             configs.put("log.cleaner.threads", "2");
-            // Password encoder configs
 
             // Password config update at default cluster-level should fail
             assertThrows(ExecutionException.class,
@@ -385,8 +380,7 @@ public class ConfigCommandIntegrationTest {
     @ClusterTest(
          // Must be at greater than 1MB per cleaner thread, set to 2M+2 so that we can set 2 cleaner threads.
          serverProperties = {@ClusterConfigProperty(key = "log.cleaner.dedupe.buffer.size", value = "2097154")},
-         // Zk code has been removed, use kraft and mockito to mock this situation
-         metadataVersion = MetadataVersion.IBP_3_3_IV0
+         metadataVersion = MetadataVersion.IBP_3_9_IV0
     )
     public void testUnsupportedVersionException() {
         try (Admin client = cluster.admin()) {

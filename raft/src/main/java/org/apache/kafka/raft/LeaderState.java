@@ -29,6 +29,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.raft.internals.AddVoterHandlerState;
 import org.apache.kafka.raft.internals.BatchAccumulator;
+import org.apache.kafka.raft.internals.KafkaRaftMetrics;
 import org.apache.kafka.raft.internals.RemoveVoterHandlerState;
 import org.apache.kafka.server.common.KRaftVersion;
 
@@ -81,6 +82,7 @@ public class LeaderState<T> implements EpochState {
     private final int checkQuorumTimeoutMs;
     private final Timer beginQuorumEpochTimer;
     private final int beginQuorumEpochTimeoutMs;
+    private final KafkaRaftMetrics kafkaRaftMetrics;
 
     // This is volatile because resignation can be requested from an external thread.
     private volatile boolean resignRequested = false;
@@ -97,7 +99,8 @@ public class LeaderState<T> implements EpochState {
         BatchAccumulator<T> accumulator,
         Endpoints localListeners,
         int fetchTimeoutMs,
-        LogContext logContext
+        LogContext logContext,
+        KafkaRaftMetrics kafkaRaftMetrics
     ) {
         this.localReplicaKey = localReplicaKey;
         this.epoch = epoch;
@@ -122,6 +125,9 @@ public class LeaderState<T> implements EpochState {
         this.voterSetAtEpochStart =  voterSetAtEpochStart;
         this.offsetOfVotersAtEpochStart = offsetOfVotersAtEpochStart;
         this.kraftVersionAtEpochStart = kraftVersionAtEpochStart;
+
+        kafkaRaftMetrics.addLeaderMetrics();
+        this.kafkaRaftMetrics = kafkaRaftMetrics;
     }
 
     public long timeUntilBeginQuorumEpochTimerExpires(long currentTimeMs) {
@@ -220,6 +226,7 @@ public class LeaderState<T> implements EpochState {
                 .complete(RaftUtil.addVoterResponse(error, message))
         );
         addVoterHandlerState = state;
+        updateUncommittedVoterChangeMetric();
     }
 
     public Optional<RemoveVoterHandlerState> removeVoterHandlerState() {
@@ -237,6 +244,13 @@ public class LeaderState<T> implements EpochState {
                 .complete(RaftUtil.removeVoterResponse(error, message))
         );
         removeVoterHandlerState = state;
+        updateUncommittedVoterChangeMetric();
+    }
+
+    private void updateUncommittedVoterChangeMetric() {
+        kafkaRaftMetrics.updateUncommittedVoterChange(
+            addVoterHandlerState.isPresent() || removeVoterHandlerState.isPresent()
+        );
     }
 
     public long maybeExpirePendingOperation(long currentTimeMs) {
@@ -636,6 +650,7 @@ public class LeaderState<T> implements EpochState {
         ReplicaState state = voterStates.get(replicaKey.id());
         if (state == null || !state.matchesKey(replicaKey)) {
             observerStates.putIfAbsent(replicaKey, new ReplicaState(replicaKey, false, Endpoints.empty()));
+            kafkaRaftMetrics.updateNumObservers(observerStates.size());
             return observerStates.get(replicaKey);
         }
         return state;
@@ -658,6 +673,7 @@ public class LeaderState<T> implements EpochState {
             currentTimeMs - integerReplicaStateEntry.getValue().lastFetchTimestamp >= OBSERVER_SESSION_TIMEOUT_MS &&
             !integerReplicaStateEntry.getKey().equals(localReplicaKey)
         );
+        kafkaRaftMetrics.updateNumObservers(observerStates.size());
     }
 
     private boolean isVoter(ReplicaKey remoteReplicaKey) {
@@ -692,6 +708,7 @@ public class LeaderState<T> implements EpochState {
             replicaStateEntry.clearListeners();
             observerStates.putIfAbsent(replicaStateEntry.replicaKey, replicaStateEntry);
         }
+        kafkaRaftMetrics.updateNumObservers(observerStates.size());
     }
 
     public static class ReplicaState implements Comparable<ReplicaState> {
@@ -865,6 +882,7 @@ public class LeaderState<T> implements EpochState {
     public void close() {
         resetAddVoterHandlerState(Errors.NOT_LEADER_OR_FOLLOWER, null, Optional.empty());
         resetRemoveVoterHandlerState(Errors.NOT_LEADER_OR_FOLLOWER, null, Optional.empty());
+        kafkaRaftMetrics.removeLeaderMetrics();
 
         accumulator.close();
     }

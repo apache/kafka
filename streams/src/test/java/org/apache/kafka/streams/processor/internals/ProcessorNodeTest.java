@@ -358,7 +358,7 @@ public class ProcessorNodeTest {
             assertEquals(internalProcessorContext.offset(), context.offset());
             assertEquals(internalProcessorContext.currentNode().name(), context.processorNodeId());
             assertEquals(internalProcessorContext.taskId(), context.taskId());
-            assertEquals(internalProcessorContext.timestamp(), context.timestamp());
+            assertEquals(internalProcessorContext.recordContext().timestamp(), context.timestamp());
             assertEquals(KEY, record.key());
             assertEquals(VALUE, record.value());
             assertInstanceOf(RuntimeException.class, exception);

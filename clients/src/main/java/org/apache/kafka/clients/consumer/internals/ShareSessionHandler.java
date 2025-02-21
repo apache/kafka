@@ -68,12 +68,12 @@ public class ShareSessionHandler {
      */
     private final LinkedHashMap<TopicPartition, TopicIdPartition> sessionPartitions;
 
-    /*
+    /**
      * The partitions to be included in the next ShareFetch request.
      */
     private LinkedHashMap<TopicPartition, TopicIdPartition> nextPartitions;
 
-    /*
+    /**
      * The acknowledgements to be included in the next ShareFetch/ShareAcknowledge request.
      */
     private LinkedHashMap<TopicIdPartition, Acknowledgements> nextAcknowledgements;
@@ -101,6 +101,14 @@ public class ShareSessionHandler {
         if (partitionAcknowledgements != null) {
             nextAcknowledgements.put(topicIdPartition, partitionAcknowledgements);
         }
+    }
+
+    public void addPartitionToAcknowledgeOnly(TopicIdPartition topicIdPartition, Acknowledgements partitionAcknowledgements) {
+        nextAcknowledgements.put(topicIdPartition, partitionAcknowledgements);
+    }
+
+    public boolean isNewSession() {
+        return nextMetadata.isNewSession();
     }
 
     public ShareFetchRequest.Builder newShareFetchBuilder(String groupId, FetchConfig fetchConfig) {

@@ -3666,7 +3666,7 @@ public class KafkaRaftClientTest {
         context.client.poll();
         assertFalse(context.client.isRunning());
         assertTrue(shutdownFuture.isCompletedExceptionally());
-        assertFutureThrows(shutdownFuture, TimeoutException.class);
+        assertFutureThrows(TimeoutException.class, shutdownFuture);
     }
 
     @ParameterizedTest
@@ -4045,6 +4045,9 @@ public class KafkaRaftClientTest {
         assertNotNull(getMetric(context.metrics, "election-latency-max"));
         assertNotNull(getMetric(context.metrics, "fetch-records-rate"));
         assertNotNull(getMetric(context.metrics, "append-records-rate"));
+        assertNotNull(getMetric(context.metrics, "number-of-voters"));
+        assertNotNull(getMetric(context.metrics, "number-of-observers"));
+        assertNotNull(getMetric(context.metrics, "uncommitted-voter-change"));
 
         assertEquals("leader", getMetric(context.metrics, "current-state").metricValue());
         assertEquals((double) localId, getMetric(context.metrics, "current-leader").metricValue());

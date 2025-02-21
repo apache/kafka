@@ -61,6 +61,7 @@ import org.apache.kafka.common.metadata.AbortTransactionRecord;
 import org.apache.kafka.common.metadata.AccessControlEntryRecord;
 import org.apache.kafka.common.metadata.BeginTransactionRecord;
 import org.apache.kafka.common.metadata.BrokerRegistrationChangeRecord;
+import org.apache.kafka.common.metadata.ClearElrRecord;
 import org.apache.kafka.common.metadata.ClientQuotaRecord;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.DelegationTokenRecord;
@@ -116,7 +117,6 @@ import org.apache.kafka.server.authorizer.AclCreateResult;
 import org.apache.kafka.server.authorizer.AclDeleteResult;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.KRaftVersion;
-import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.fault.FaultHandler;
 import org.apache.kafka.server.fault.FaultHandlerException;
 import org.apache.kafka.server.policy.AlterConfigPolicy;
@@ -127,7 +127,6 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 
 import org.slf4j.Logger;
 
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumSet;
@@ -1294,6 +1293,9 @@ public final class QuorumController implements Controller {
             case REGISTER_CONTROLLER_RECORD:
                 clusterControl.replay((RegisterControllerRecord) message);
                 break;
+            case CLEAR_ELR_RECORD:
+                replicationControl.replay((ClearElrRecord) message);
+                break;
             default:
                 throw new RuntimeException("Unhandled record type " + type);
         }
@@ -1535,12 +1537,6 @@ public final class QuorumController implements Controller {
             setLogContext(logContext).
             setQuorumFeatures(quorumFeatures).
             setSnapshotRegistry(snapshotRegistry).
-            // Set the default metadata version to the minimum KRaft version. This only really
-            // matters if we are upgrading from a version that didn't store metadata.version in
-            // the log, such as one of the pre-production 3.0, 3.1, or 3.2 versions. Those versions
-            // are all treated as 3.0IV1. In newer versions the metadata.version will be specified
-            // by the log.
-            setMetadataVersion(MetadataVersion.MINIMUM_KRAFT_VERSION).
             setClusterFeatureSupportDescriber(clusterSupportDescriber).
             build();
         this.clusterControl = new ClusterControlManager.Builder().
@@ -1551,7 +1547,7 @@ public final class QuorumController implements Controller {
             setSessionTimeoutNs(sessionTimeoutNs).
             setReplicaPlacer(replicaPlacer).
             setFeatureControlManager(featureControl).
-            setBrokerUncleanShutdownHandler(this::handleUncleanBrokerShutdown).
+            setBrokerShutdownHandler(this::handleBrokerShutdown).
             setInterBrokerListenerName(interBrokerListenerName).
             build();
         this.configurationControl = new ConfigurationControlManager.Builder().
@@ -1639,20 +1635,13 @@ public final class QuorumController implements Controller {
     /**
      * Register the writeNoOpRecord task.
      *
-     * This task periodically writes a NoOpRecord to the metadata log, if the MetadataVersion
-     * supports it.
+     * This task periodically writes a NoOpRecord to the metadata log.
      *
      * @param maxIdleIntervalNs     The period at which to write the NoOpRecord.
      */
     private void registerWriteNoOpRecord(long maxIdleIntervalNs) {
         periodicControl.registerTask(new PeriodicTask("writeNoOpRecord",
-            () -> {
-                ArrayList<ApiMessageAndVersion> records = new ArrayList<>(1);
-                if (featureControl.metadataVersion().isNoOpRecordSupported()) {
-                    records.add(new ApiMessageAndVersion(new NoOpRecord(), (short) 0));
-                }
-                return ControllerResult.of(records, false);
-            },
+            () -> ControllerResult.of(List.of(new ApiMessageAndVersion(new NoOpRecord(), (short) 0)), false),
             maxIdleIntervalNs,
             EnumSet.noneOf(PeriodicTaskFlag.class)));
     }
@@ -2021,7 +2010,8 @@ public final class QuorumController implements Controller {
         return appendWriteEvent("registerBroker", context.deadlineNs(),
             () -> clusterControl.
                 registerBroker(request, offsetControl.nextWriteOffset(),
-                    new FinalizedControllerFeatures(controllerFeatures, Long.MAX_VALUE)),
+                    new FinalizedControllerFeatures(controllerFeatures, Long.MAX_VALUE),
+                    context.requestHeader().requestApiVersion() >= 3),
             EnumSet.noneOf(ControllerOperationFlag.class));
     }
 
@@ -2199,7 +2189,7 @@ public final class QuorumController implements Controller {
         return controllerMetrics;
     }
 
-    void handleUncleanBrokerShutdown(int brokerId, List<ApiMessageAndVersion> records) {
-        replicationControl.handleBrokerUncleanShutdown(brokerId, records);
+    void handleBrokerShutdown(int brokerId, boolean isCleanShutdown, List<ApiMessageAndVersion> records) {
+        replicationControl.handleBrokerShutdown(brokerId, isCleanShutdown, records);
     }
 }

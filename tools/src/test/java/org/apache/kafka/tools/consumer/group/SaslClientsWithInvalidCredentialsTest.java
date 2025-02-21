@@ -136,24 +136,26 @@ public class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
 
     // NOTE: Not able to refer TestInfoUtils#TestWithParameterizedQuorumName() in the ParameterizedTest name.
     @ParameterizedTest(name = "{displayName}.quorum={0}.groupProtocol={1}")
-    @MethodSource("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly")
+    @MethodSource("getTestQuorumAndGroupProtocolParametersAll")
     public void testConsumerGroupServiceWithAuthenticationFailure(String quorum, String groupProtocol) throws Exception {
-        ConsumerGroupCommand.ConsumerGroupService consumerGroupService = prepareConsumerGroupService();
-        try (Consumer<byte[], byte[]> consumer = createConsumer()) {
+        try (
+            ConsumerGroupCommand.ConsumerGroupService consumerGroupService = prepareConsumerGroupService();
+            Consumer<byte[], byte[]> consumer = createConsumer()
+        ) {
             consumer.subscribe(Collections.singletonList(TOPIC));
-
             verifyAuthenticationException(consumerGroupService::listGroups);
-        } finally {
-            consumerGroupService.close();
         }
     }
 
+    // NOTE: Not able to refer TestInfoUtils#TestWithParameterizedQuorumName() in the ParameterizedTest name.
     @ParameterizedTest(name = "{displayName}.quorum={0}.groupProtocol={1}")
-    @MethodSource("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly")
+    @MethodSource("getTestQuorumAndGroupProtocolParametersAll")
     public void testConsumerGroupServiceWithAuthenticationSuccess(String quorum, String groupProtocol) throws Exception {
         createScramCredentialsViaPrivilegedAdminClient(JaasTestUtils.KAFKA_SCRAM_USER_2, JaasTestUtils.KAFKA_SCRAM_PASSWORD_2);
-        ConsumerGroupCommand.ConsumerGroupService consumerGroupService = prepareConsumerGroupService();
-        try (Consumer<byte[], byte[]> consumer = createConsumer()) {
+        try (
+            ConsumerGroupCommand.ConsumerGroupService consumerGroupService = prepareConsumerGroupService();
+            Consumer<byte[], byte[]> consumer = createConsumer()
+        ) {
             consumer.subscribe(Collections.singletonList(TOPIC));
 
             TestUtils.waitForCondition(() -> {
@@ -165,8 +167,6 @@ public class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
                 }
             }, "failed to poll data with authentication");
             assertEquals(1, consumerGroupService.listConsumerGroups().size());
-        } finally {
-            consumerGroupService.close();
         }
     }
 

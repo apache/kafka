@@ -41,10 +41,10 @@ public class ActivationRecordsGeneratorTest {
     public void testActivationMessageForEmptyLog() {
         ControllerResult<Void> result = ActivationRecordsGenerator.recordsForEmptyLog(
             logMsg -> assertEquals("Performing controller activation. The metadata log appears to be empty. " +
-                "Appending 1 bootstrap record(s) at metadata.version 3.0-IV1 from bootstrap source 'test'.", logMsg),
+                "Appending 1 bootstrap record(s) at metadata.version 3.3-IV3 from bootstrap source 'test'.", logMsg),
             -1L,
-            BootstrapMetadata.fromVersion(MetadataVersion.MINIMUM_BOOTSTRAP_VERSION, "test"),
-            MetadataVersion.MINIMUM_KRAFT_VERSION,
+            BootstrapMetadata.fromVersion(MetadataVersion.MINIMUM_VERSION, "test"),
+            MetadataVersion.MINIMUM_VERSION,
             2
         );
         assertTrue(result.isAtomic());
