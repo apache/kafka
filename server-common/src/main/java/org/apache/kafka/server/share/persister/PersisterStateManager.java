@@ -1511,6 +1511,8 @@ public class PersisterStateManager {
                     .add(
                         new InitializeShareGroupStateRequestData.PartitionData()
                             .setPartition(handler.partitionKey().partition())
+                            .setStateEpoch(handler.stateEpoch)
+                            .setStartOffset(handler.startOffset)
                     );
             });
 
