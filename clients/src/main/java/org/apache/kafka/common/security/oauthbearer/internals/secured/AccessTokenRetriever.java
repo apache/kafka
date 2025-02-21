@@ -16,8 +16,9 @@
  */
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
-import javax.security.auth.spi.LoginModule;
 import java.io.IOException;
+
+import javax.security.auth.spi.LoginModule;
 
 /**
  * An implementation of <code>AccessTokenRetriever</code> is the means by which the login module will
