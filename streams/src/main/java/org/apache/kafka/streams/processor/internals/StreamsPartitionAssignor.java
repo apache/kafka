@@ -217,7 +217,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     private Queue<StreamsException> nonFatalExceptionsToHandle;
     private Time time;
 
-    // since live upgrades from 2.3- to 4.0 or above are no longer supported, we can always
+    // since live upgrades from 2.3 (or earlier) to 4.0 or above are no longer supported, we can always
     // start with the latest supported metadata version since version probing will take
     // care of downgrading it if/when necessary
     protected int usedSubscriptionMetadataVersion = LATEST_SUPPORTED_VERSION;
