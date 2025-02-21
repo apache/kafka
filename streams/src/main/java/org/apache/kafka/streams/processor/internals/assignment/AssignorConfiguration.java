@@ -36,7 +36,6 @@ import java.util.Optional;
 import static org.apache.kafka.common.utils.Utils.getHost;
 import static org.apache.kafka.common.utils.Utils.getPort;
 import static org.apache.kafka.streams.StreamsConfig.InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS;
-import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
 
 public final class AssignorConfiguration {
     private final String internalTaskAssignorClass;
@@ -111,11 +110,12 @@ public final class AssignorConfiguration {
                 case UPGRADE_FROM_21:
                 case UPGRADE_FROM_22:
                 case UPGRADE_FROM_23:
-                    log.error("The eager rebalancing protocol is no longer supported in 4.0 which means live upgrades from 2.3 or below are not possible."
-                                  + " Please see the Streams upgrade guide for the bridge releases and recommended upgrade path. Got upgrade.from='{}'", upgradeFrom);
-                    throw new IllegalStateException("Upgrading from 2.3 or below to 4.0 is not supported, got upgrade.from = " + upgradeFrom);
+                    final String errMsg = String.format(
+                        "The eager rebalancing protocol is no longer supported in 4.0 which means live upgrades from 2.3 or below are not possible."
+                            + " Please see the Streams upgrade guide for the bridge releases and recommended upgrade path. Got upgrade.from='%s'", upgradeFrom);
+                    log.error(errMsg);
+                    throw new ConfigException(errMsg);
 
-                default:
             }
         }
     }
