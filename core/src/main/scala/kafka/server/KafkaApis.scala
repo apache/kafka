@@ -2608,7 +2608,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           }
 
           // Clients are not allowed to see topics that are not authorized for Describe.
-          var topicsToCheck = Set[String]()
+          val topicsToCheck = new mutable.HashSet[String]
           response.groups.forEach(_.members.forEach { member =>
             List(member.assignment, member.targetAssignment).foreach { assignment =>
               assignment.topicPartitions.asScala.foreach { tp =>
