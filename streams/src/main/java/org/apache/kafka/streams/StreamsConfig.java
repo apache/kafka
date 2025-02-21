@@ -794,7 +794,7 @@ public class StreamsConfig extends AbstractConfig {
     /** {@code upgrade.from} */
     @SuppressWarnings("WeakerAccess")
     public static final String UPGRADE_FROM_CONFIG = "upgrade.from";
-    private static final String UPGRADE_FROM_DOC = "Allows live upgrading (and downgrading) in a backward compatible way. Default is `null`. " +
+    private static final String UPGRADE_FROM_DOC = "Allows live upgrading (and downgrading in some cases -- see upgrade guide) in a backward compatible way. Default is `null`. " +
         "Please refer to the Kafka Streams upgrade guide for instructions on how and when to use this config. " +
         "Note that when upgrading from 3.5 to a newer version it is never required to specify this config, " +
         "while upgrading live directly to 4.0+ from 2.3 or below is no longer supported even with this config. " +
