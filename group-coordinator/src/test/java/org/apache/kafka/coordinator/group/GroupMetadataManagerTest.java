@@ -8996,7 +8996,6 @@ public class GroupMetadataManagerTest {
     @Test
     public void testStreamsGroupDescribeWithErrors() {
         String groupId = "groupId";
-
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
 
         List<StreamsGroupDescribeResponseData.DescribedGroup> actual = context.sendStreamsGroupDescribe(Collections.singletonList(groupId));

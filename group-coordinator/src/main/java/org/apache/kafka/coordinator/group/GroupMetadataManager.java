@@ -625,6 +625,7 @@ public class GroupMetadataManager {
      * @param committedOffset   A specified committed offset corresponding to this shard.
      *
      * @return A list containing the StreamsGroupDescribeResponseData.DescribedGroup.
+     *         If a group is not found, the DescribedGroup will contain the error code and message.
      */
     public List<StreamsGroupDescribeResponseData.DescribedGroup> streamsGroupDescribe(
         List<String> groupIds,
