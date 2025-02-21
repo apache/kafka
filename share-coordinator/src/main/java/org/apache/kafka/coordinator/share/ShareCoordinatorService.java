@@ -685,11 +685,11 @@ public class ShareCoordinatorService implements ShareCoordinator {
                 (topicId, topicEntry) -> {
                     List<ReadShareGroupStateSummaryResponseData.PartitionResult> partitionResults = new ArrayList<>(topicEntry.size());
                     topicEntry.forEach(
-                        (partitionId, responseFuture) -> {
+                        (partitionId, responseFut) -> {
                             // ResponseFut would already be completed by now since we have used
                             // CompletableFuture::allOf to create a combined future from the future map.
                             partitionResults.add(
-                                responseFuture.getNow(null).results().get(0).partitions().get(0)
+                                responseFut.getNow(null).results().get(0).partitions().get(0)
                             );
                         }
                     );
@@ -795,11 +795,11 @@ public class ShareCoordinatorService implements ShareCoordinator {
                 (topicId, topicEntry) -> {
                     List<DeleteShareGroupStateResponseData.PartitionResult> partitionResults = new ArrayList<>(topicEntry.size());
                     topicEntry.forEach(
-                        (partitionId, responseFuture) -> {
+                        (partitionId, responseFut) -> {
                             // ResponseFut would already be completed by now since we have used
                             // CompletableFuture::allOf to create a combined future from the future map.
                             partitionResults.add(
-                                responseFuture.getNow(null).results().get(0).partitions().get(0)
+                                responseFut.getNow(null).results().get(0).partitions().get(0)
                             );
                         }
                     );
@@ -865,16 +865,16 @@ public class ShareCoordinatorService implements ShareCoordinator {
                     topicPartitionFor(coordinatorKey),
                     Duration.ofMillis(config.shareCoordinatorWriteTimeoutMs()),
                     coordinator -> coordinator.initializeState(requestForCurrentPartition)
-                ).exceptionally(deleteException ->
+                ).exceptionally(initializeException ->
                     handleOperationException(
                         "initialize-share-group-state",
                         request,
-                        deleteException,
+                        initializeException,
                         (error, message) -> InitializeShareGroupStateResponse.toErrorResponseData(
                             topicData.topicId(),
                             partitionData.partition(),
                             error,
-                            "Unable to initialize share group state: " + deleteException.getMessage()
+                            "Unable to initialize share group state: " + initializeException.getMessage()
                         ),
                         log
                     ));
@@ -888,18 +888,18 @@ public class ShareCoordinatorService implements ShareCoordinator {
         CompletableFuture<Void> combinedFuture = CompletableFuture.allOf(futureMap.values().stream()
             .flatMap(map -> map.values().stream()).toArray(CompletableFuture[]::new));
 
-        // Transform the combined CompletableFuture<Void> into CompletableFuture<DeleteShareGroupStateResponseData>.
+        // Transform the combined CompletableFuture<Void> into CompletableFuture<InitializeShareGroupStateResponseData>.
         return combinedFuture.thenApply(v -> {
             List<InitializeShareGroupStateResponseData.InitializeStateResult> initializeStateResult = new ArrayList<>(futureMap.size());
             futureMap.forEach(
                 (topicId, topicEntry) -> {
                     List<InitializeShareGroupStateResponseData.PartitionResult> partitionResults = new ArrayList<>(topicEntry.size());
                     topicEntry.forEach(
-                        (partitionId, responseFuture) -> {
+                        (partitionId, responseFut) -> {
                             // ResponseFut would already be completed by now since we have used
                             // CompletableFuture::allOf to create a combined future from the future map.
                             partitionResults.add(
-                                responseFuture.getNow(null).results().get(0).partitions().get(0)
+                                responseFut.getNow(null).results().get(0).partitions().get(0)
                             );
                         }
                     );
