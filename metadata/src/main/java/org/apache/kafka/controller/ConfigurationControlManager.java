@@ -677,7 +677,7 @@ public class ConfigurationControlManager {
                 log.info("{}", logMessage);
             }
             records.addAll(result.records());
-            return ControllerResult.atomicOf(records, null);
+            return ControllerResult.atomicOf(records, ApiError.NONE);
         }
         return result;
     }

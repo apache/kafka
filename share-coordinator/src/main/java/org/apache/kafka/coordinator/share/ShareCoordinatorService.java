@@ -271,7 +271,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
                 List<CompletableFuture<Void>> futures = new ArrayList<>();
                 runtime.activeTopicPartitions().forEach(tp -> futures.add(performRecordPruning(tp)));
 
-                CompletableFuture.allOf(futures.toArray(new CompletableFuture[]{}))
+                CompletableFuture.allOf(futures.toArray(new CompletableFuture<?>[]{}))
                     .whenComplete((res, exp) -> {
                         if (exp != null) {
                             log.error("Received error in share-group state topic prune.", exp);

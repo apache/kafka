@@ -280,7 +280,6 @@ class BrokerServer(
 
       alterPartitionManager = AlterPartitionManager(
         config,
-        metadataCache,
         scheduler = kafkaScheduler,
         controllerNodeProvider,
         time = time,

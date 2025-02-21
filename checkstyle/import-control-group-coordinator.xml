@@ -73,6 +73,7 @@
             <allow pkg="org.apache.kafka.coordinator.common" />
             <allow pkg="org.apache.kafka.coordinator.common.runtime" />
             <allow pkg="com.google.re2j" />
+            <allow pkg="org.apache.kafka.metadata" />
             <subpackage name="metrics">
                 <allow pkg="com.yammer.metrics"/>
                 <allow pkg="org.HdrHistogram" />

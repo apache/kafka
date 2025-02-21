@@ -29,12 +29,11 @@ import scala.jdk.CollectionConverters._
 
 class MetadataVersionIntegrationTest {
   @ClusterTests(value = Array(
-      new ClusterTest(types = Array(Type.KRAFT), metadataVersion = MetadataVersion.IBP_3_3_IV0),
-      new ClusterTest(types = Array(Type.KRAFT), metadataVersion = MetadataVersion.IBP_3_3_IV1),
-      new ClusterTest(types = Array(Type.KRAFT), metadataVersion = MetadataVersion.IBP_3_3_IV2),
       new ClusterTest(types = Array(Type.KRAFT), metadataVersion = MetadataVersion.IBP_3_3_IV3),
       new ClusterTest(types = Array(Type.KRAFT), metadataVersion = MetadataVersion.IBP_3_4_IV0),
-      new ClusterTest(types = Array(Type.KRAFT), metadataVersion = MetadataVersion.IBP_3_4_IV0)
+      new ClusterTest(types = Array(Type.KRAFT), metadataVersion = MetadataVersion.IBP_3_5_IV0),
+      new ClusterTest(types = Array(Type.KRAFT), metadataVersion = MetadataVersion.IBP_3_6_IV0),
+      new ClusterTest(types = Array(Type.KRAFT), metadataVersion = MetadataVersion.IBP_3_6_IV1)
   ))
   def testBasicMetadataVersionUpgrade(clusterInstance: ClusterInstance): Unit = {
     val admin = clusterInstance.admin()
@@ -45,7 +44,7 @@ class MetadataVersionIntegrationTest {
       assertEquals(ff.maxVersionLevel(), clusterInstance.config().metadataVersion().featureLevel())
 
       // Update to new version
-      val updateVersion = MetadataVersion.IBP_3_5_IV1.featureLevel.shortValue
+      val updateVersion = MetadataVersion.IBP_3_7_IV1.featureLevel.shortValue
       val updateResult = admin.updateFeatures(
         Map("metadata.version" -> new FeatureUpdate(updateVersion, UpgradeType.UPGRADE)).asJava, new UpdateFeaturesOptions())
       updateResult.all().get()
@@ -61,11 +60,11 @@ class MetadataVersionIntegrationTest {
     }
   }
 
-  @ClusterTest(types = Array(Type.KRAFT), metadataVersion = MetadataVersion.IBP_3_3_IV0)
+  @ClusterTest(types = Array(Type.KRAFT), metadataVersion = MetadataVersion.IBP_3_9_IV0)
   def testUpgradeSameVersion(clusterInstance: ClusterInstance): Unit = {
     val admin = clusterInstance.admin()
     try {
-      val updateVersion = MetadataVersion.IBP_3_3_IV0.featureLevel.shortValue
+      val updateVersion = MetadataVersion.IBP_3_9_IV0.featureLevel.shortValue
       val updateResult = admin.updateFeatures(
         Map("metadata.version" -> new FeatureUpdate(updateVersion, UpgradeType.UPGRADE)).asJava, new UpdateFeaturesOptions())
       updateResult.all().get()

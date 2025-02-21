@@ -119,8 +119,8 @@ object Partition {
             time: Time,
             replicaManager: ReplicaManager): Partition = {
     Partition(
-      topicPartition = topicIdPartition.topicPartition(),
-      topicId = Option(topicIdPartition.topicId()),
+      topicPartition = topicIdPartition.topicPartition,
+      topicId = Some(topicIdPartition.topicId),
       time = time,
       replicaManager = replicaManager)
   }
@@ -1814,7 +1814,7 @@ class Partition(val topicPartition: TopicPartition,
   private def submitAlterPartition(proposedIsrState: PendingPartitionChange): CompletableFuture[LeaderAndIsr] = {
     debug(s"Submitting ISR state change $proposedIsrState")
     val future = alterIsrManager.submit(
-      new TopicIdPartition(topicId.getOrElse(Uuid.ZERO_UUID), topicPartition),
+      new org.apache.kafka.server.common.TopicIdPartition(topicId.getOrElse(throw new IllegalStateException("Topic id not set for " + topicPartition)), topicPartition.partition),
       proposedIsrState.sentLeaderAndIsr
     )
     future.whenComplete { (leaderAndIsr, e) =>
