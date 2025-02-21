@@ -218,12 +218,13 @@ public class ShareFetchUtils {
             final long lastAcquiredOffset = acquiredRecords.get(acquiredRecords.size() - 1).lastOffset();
             int startPosition = 0;
             int size = 0;
+            // Start iterating from the second batch.
             while (iterator.hasNext()) {
                 FileChannelRecordBatch batch = iterator.next();
                 // Iterate until finds the first overlap batch with the first acquired offset. All the
                 // batches before this first overlap batch should be sliced hence increment the start
                 // position.
-                if (firstOverlapBatch.baseOffset() < firstAcquiredOffset && batch.baseOffset() <= firstAcquiredOffset) {
+                if (batch.baseOffset() <= firstAcquiredOffset) {
                     startPosition += firstOverlapBatch.sizeInBytes();
                     firstOverlapBatch = batch;
                     continue;
@@ -237,7 +238,7 @@ public class ShareFetchUtils {
             // Include the first overlap batch as it's the last batch traversed which overlapped the first
             // acquired offset.
             size += firstOverlapBatch.sizeInBytes();
-            // Check if we do not slicing i.e. neither start position nor size changed.
+            // Check if we do not need slicing i.e. neither start position nor size changed.
             if (startPosition == 0 && size == fileRecords.sizeInBytes()) {
                 return records;
             }
