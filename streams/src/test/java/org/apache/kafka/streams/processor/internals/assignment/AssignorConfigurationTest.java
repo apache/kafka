@@ -30,6 +30,7 @@ import java.util.Map;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_RACK_AWARE_ASSIGNMENT_TAGS;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsString;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 
@@ -66,11 +67,7 @@ public class AssignorConfigurationTest {
             if (beforeCooperative) {
                 assertThrows(ConfigException.class, () -> new AssignorConfiguration(config));
             } else {
-                try {
-                    final AssignorConfiguration assignorConfiguration = new AssignorConfiguration(config);
-                } catch (final Exception error) {
-                    throw new AssertionError("Upgrade from " + upgradeFrom + " failed with " + error.getMessage() + "!");
-                }
+                assertDoesNotThrow(() -> new AssignorConfiguration(config));
             }
         }
     }
