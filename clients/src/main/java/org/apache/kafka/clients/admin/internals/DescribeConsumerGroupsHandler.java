@@ -331,6 +331,7 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
 
         switch (error) {
             case GROUP_AUTHORIZATION_FAILED:
+            case TOPIC_AUTHORIZATION_FAILED:
                 log.debug("`{}` request for group id {} failed due to error {}.", apiName, groupId.idValue, error);
                 failed.put(groupId, error.exception(errorMsg));
                 break;
