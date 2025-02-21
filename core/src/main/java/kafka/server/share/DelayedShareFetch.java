@@ -74,11 +74,15 @@ public class DelayedShareFetch extends DelayedOperation {
     private LinkedHashMap<TopicIdPartition, LogReadResult> partitionsAlreadyFetched;
 
     /**
-     * This function constructs an instance of delayed share fetch operation for completing share fetch requests instantaneously or with delay.
-     * @param shareFetch - The share fetch parameters of the share fetch request.
-     * @param replicaManager - The replica manager instance used to read from log/complete the request.
-     * @param exceptionHandler - The handler to complete share fetch requests with exception.
-     * @param sharePartitions - The share partitions referenced in the share fetch request.
+     * This function constructs an instance of delayed share fetch operation for completing share fetch
+     * requests instantaneously or with delay.
+     *
+     * @param shareFetch The share fetch parameters of the share fetch request.
+     * @param replicaManager The replica manager instance used to read from log/complete the request.
+     * @param exceptionHandler The handler to complete share fetch requests with exception.
+     * @param sharePartitions The share partitions referenced in the share fetch request.
+     * @param shareGroupMetrics The share group metrics to record the metrics.
+     * @param time The system time.
      */
     public DelayedShareFetch(
             ShareFetch shareFetch,
@@ -459,10 +463,11 @@ public class DelayedShareFetch extends DelayedOperation {
      * re-acquired if the fetch request is not completed because of the minBytes or some other condition.
      */
     private void updateAcquireElapsedTimeMetric() {
-        shareGroupMetrics.recordTopicPartitionsAcquireTimeMs(shareFetch.groupId(), time.hiResClockMs() - acquireStartTimeMs);
+        long currentTimeMs = time.hiResClockMs();
+        shareGroupMetrics.recordTopicPartitionsAcquireTimeMs(shareFetch.groupId(), currentTimeMs - acquireStartTimeMs);
         // Reset the acquireStartTimeMs to the current time. If the fetch request is not completed
         // and the partitions are re-acquired then metric should record value from the last acquire time.
-        acquireStartTimeMs = time.hiResClockMs();
+        acquireStartTimeMs = currentTimeMs;
     }
 
     // Visible for testing.

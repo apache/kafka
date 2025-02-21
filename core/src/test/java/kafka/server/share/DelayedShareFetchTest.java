@@ -701,7 +701,7 @@ public class DelayedShareFetchTest {
 
         BiConsumer<SharePartitionKey, Throwable> exceptionHandler = mockExceptionHandler();
         Time time = mock(Time.class);
-        when(time.hiResClockMs()).thenReturn(100L).thenReturn(110L).thenReturn(120L).thenReturn(180L);
+        when(time.hiResClockMs()).thenReturn(100L).thenReturn(110L).thenReturn(170L);
         ShareGroupMetrics shareGroupMetrics = new ShareGroupMetrics(time);
         DelayedShareFetch delayedShareFetch = spy(DelayedShareFetchBuilder.builder()
             .withShareFetchData(shareFetch)
