@@ -67,7 +67,7 @@ import org.apache.kafka.server.share.fetch.PartitionMaxBytesStrategy;
 import org.apache.kafka.server.share.fetch.ShareAcquiredRecords;
 import org.apache.kafka.server.share.fetch.ShareFetch;
 import org.apache.kafka.server.share.metrics.ShareGroupMetrics;
-import org.apache.kafka.server.share.persister.NoOpShareStatePersister;
+import org.apache.kafka.server.share.persister.NoOpStatePersister;
 import org.apache.kafka.server.share.persister.Persister;
 import org.apache.kafka.server.share.session.ShareSession;
 import org.apache.kafka.server.share.session.ShareSessionCache;
@@ -1571,9 +1571,9 @@ public class SharePartitionManagerTest {
         assertEquals(0, result.get(tp3).partitionIndex());
         assertEquals(Errors.NONE.code(), result.get(tp3).errorCode());
 
-        assertEquals(2, shareGroupMetrics.recordAcknowledgementMeter(AcknowledgeType.ACCEPT.id).count());
-        assertEquals(2, shareGroupMetrics.recordAcknowledgementMeter(AcknowledgeType.RELEASE.id).count());
-        assertEquals(2, shareGroupMetrics.recordAcknowledgementMeter(AcknowledgeType.REJECT.id).count());
+        assertEquals(42, shareGroupMetrics.recordAcknowledgementMeter(AcknowledgeType.ACCEPT.id).count());
+        assertEquals(35, shareGroupMetrics.recordAcknowledgementMeter(AcknowledgeType.RELEASE.id).count());
+        assertEquals(18, shareGroupMetrics.recordAcknowledgementMeter(AcknowledgeType.REJECT.id).count());
         assertTrue(shareGroupMetrics.recordAcknowledgementMeter(AcknowledgeType.ACCEPT.id).meanRate() > 0);
         assertTrue(shareGroupMetrics.recordAcknowledgementMeter(AcknowledgeType.RELEASE.id).meanRate() > 0);
         assertTrue(shareGroupMetrics.recordAcknowledgementMeter(AcknowledgeType.REJECT.id).meanRate() > 0);
@@ -1588,6 +1588,57 @@ public class SharePartitionManagerTest {
     }
 
     @Test
+    public void testAcknowledgeIndividualOffsets() throws Exception {
+        String groupId = "grp";
+        String memberId = Uuid.randomUuid().toString();
+
+        TopicIdPartition tp1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo1", 0));
+        TopicIdPartition tp2 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo2", 0));
+
+        SharePartition sp1 = mock(SharePartition.class);
+        SharePartition sp2 = mock(SharePartition.class);
+
+        List<ShareAcknowledgementBatch> ack1 = List.of(
+            new ShareAcknowledgementBatch(12, 12, List.of((byte) 1)));
+        List<ShareAcknowledgementBatch> ack2 = List.of(
+            new ShareAcknowledgementBatch(15, 20, List.of((byte) 2, (byte) 3, (byte) 2, (byte) 2, (byte) 3, (byte) 2)));
+        when(sp1.acknowledge(memberId, ack1)).thenReturn(CompletableFuture.completedFuture(null));
+        when(sp2.acknowledge(memberId, ack2)).thenReturn(CompletableFuture.completedFuture(null));
+
+        Map<SharePartitionKey, SharePartition> partitionCacheMap = new HashMap<>();
+        partitionCacheMap.put(new SharePartitionKey(groupId, tp1), sp1);
+        partitionCacheMap.put(new SharePartitionKey(groupId, tp2), sp2);
+
+        ShareGroupMetrics shareGroupMetrics = new ShareGroupMetrics(time);
+        sharePartitionManager = SharePartitionManagerBuilder.builder()
+            .withPartitionCacheMap(partitionCacheMap)
+            .withShareGroupMetrics(shareGroupMetrics)
+            .withBrokerTopicStats(brokerTopicStats)
+            .build();
+
+        Map<TopicIdPartition, List<ShareAcknowledgementBatch>> acknowledgeTopics = Map.of(tp1, ack1, tp2, ack2);
+        CompletableFuture<Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData>> resultFuture =
+            sharePartitionManager.acknowledge(memberId, groupId, acknowledgeTopics);
+        Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData> result = resultFuture.join();
+        assertEquals(2, result.size());
+        assertTrue(result.containsKey(tp1));
+        assertTrue(result.containsKey(tp2));
+        assertEquals(0, result.get(tp1).partitionIndex());
+        assertEquals(Errors.NONE.code(), result.get(tp1).errorCode());
+        assertEquals(0, result.get(tp2).partitionIndex());
+        assertEquals(Errors.NONE.code(), result.get(tp2).errorCode());
+
+        assertEquals(1, shareGroupMetrics.recordAcknowledgementMeter(AcknowledgeType.ACCEPT.id).count());
+        assertEquals(4, shareGroupMetrics.recordAcknowledgementMeter(AcknowledgeType.RELEASE.id).count());
+        assertEquals(2, shareGroupMetrics.recordAcknowledgementMeter(AcknowledgeType.REJECT.id).count());
+        assertTrue(shareGroupMetrics.recordAcknowledgementMeter(AcknowledgeType.ACCEPT.id).meanRate() > 0);
+        assertTrue(shareGroupMetrics.recordAcknowledgementMeter(AcknowledgeType.RELEASE.id).meanRate() > 0);
+        assertTrue(shareGroupMetrics.recordAcknowledgementMeter(AcknowledgeType.REJECT.id).meanRate() > 0);
+
+        shareGroupMetrics.close();
+    }
+
+    @Test
     public void testAcknowledgeIncorrectGroupId() {
         String groupId = "grp";
         String groupId2 = "grp2";
@@ -1598,9 +1649,11 @@ public class SharePartitionManagerTest {
 
         Map<SharePartitionKey, SharePartition> partitionCacheMap = new HashMap<>();
         partitionCacheMap.put(new SharePartitionKey(groupId, tp), sp);
+        ShareGroupMetrics shareGroupMetrics = new ShareGroupMetrics(time);
         sharePartitionManager = SharePartitionManagerBuilder.builder()
             .withPartitionCacheMap(partitionCacheMap)
             .withBrokerTopicStats(brokerTopicStats)
+            .withShareGroupMetrics(shareGroupMetrics)
             .build();
 
         Map<TopicIdPartition, List<ShareAcknowledgementBatch>> acknowledgeTopics = new HashMap<>();
@@ -1616,6 +1669,10 @@ public class SharePartitionManagerTest {
         assertEquals(0, result.get(tp).partitionIndex());
         assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.code(), result.get(tp).errorCode());
         assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.message(), result.get(tp).errorMessage());
+        // No metric should be recorded as acknowledge failed.
+        assertEquals(0, shareGroupMetrics.recordAcknowledgementMeter(AcknowledgeType.ACCEPT.id).count());
+        assertEquals(0, shareGroupMetrics.recordAcknowledgementMeter(AcknowledgeType.RELEASE.id).count());
+        assertEquals(0, shareGroupMetrics.recordAcknowledgementMeter(AcknowledgeType.REJECT.id).count());
         // Should have 1 acknowledge recorded and 1 failed.
         validateBrokerTopicStatsMetrics(
             brokerTopicStats,
@@ -1743,8 +1800,8 @@ public class SharePartitionManagerTest {
         when(sp1.canAcquireRecords()).thenReturn(false);
         when(sp2.maybeAcquireFetchLock()).thenReturn(true);
         when(sp2.canAcquireRecords()).thenReturn(false);
-        when(sp1.acquire(anyString(), anyInt(), anyInt(), any())).thenReturn(ShareAcquiredRecords.empty());
-        when(sp2.acquire(anyString(), anyInt(), anyInt(), any())).thenReturn(ShareAcquiredRecords.empty());
+        when(sp1.acquire(anyString(), anyInt(), anyInt(), anyLong(), any())).thenReturn(ShareAcquiredRecords.empty());
+        when(sp2.acquire(anyString(), anyInt(), anyInt(), anyLong(), any())).thenReturn(ShareAcquiredRecords.empty());
 
         List<DelayedOperationKey> delayedShareFetchWatchKeys = new ArrayList<>();
         partitionMaxBytes.keySet().forEach(topicIdPartition -> delayedShareFetchWatchKeys.add(new DelayedShareFetchGroupKey(groupId, topicIdPartition.topicId(), topicIdPartition.partition())));
@@ -1989,7 +2046,7 @@ public class SharePartitionManagerTest {
         when(sharePartitionManager.cachedTopicIdPartitionsInShareSession(groupId, Uuid.fromString(memberId))).thenReturn(Arrays.asList(tp1, tp3));
 
         doAnswer(invocation -> buildLogReadResult(Set.of(tp1))).when(mockReplicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
-        when(sp1.acquire(anyString(), anyInt(), anyInt(), any())).thenReturn(new ShareAcquiredRecords(Collections.emptyList(), 0));
+        when(sp1.acquire(anyString(), anyInt(), anyInt(), anyLong(), any())).thenReturn(new ShareAcquiredRecords(Collections.emptyList(), 0));
         // Release acquired records on session close request for tp1 and tp3.
         sharePartitionManager.releaseSession(groupId, memberId);
 
@@ -2202,7 +2259,7 @@ public class SharePartitionManagerTest {
         mockReplicaManagerDelayedShareFetch(mockReplicaManager, delayedShareFetchPurgatory);
 
         Time time = mock(Time.class);
-        when(time.hiResClockMs()).thenReturn(100L).thenReturn(200L);
+        when(time.hiResClockMs()).thenReturn(100L);
         ShareGroupMetrics shareGroupMetrics = new ShareGroupMetrics(time);
         sharePartitionManager = SharePartitionManagerBuilder.builder()
             .withPartitionCacheMap(partitionCacheMap)
@@ -2235,9 +2292,9 @@ public class SharePartitionManagerTest {
         pendingInitializationFuture2.complete(null);
         // Verify the partition load time metrics for both partitions.
         assertEquals(2, shareGroupMetrics.partitionLoadTimeMs().count());
-        assertEquals(90.0, shareGroupMetrics.partitionLoadTimeMs().min());
-        assertEquals(160.0, shareGroupMetrics.partitionLoadTimeMs().max());
-        assertEquals(250.0, shareGroupMetrics.partitionLoadTimeMs().sum());
+        assertEquals(60.0, shareGroupMetrics.partitionLoadTimeMs().min());
+        assertEquals(90.0, shareGroupMetrics.partitionLoadTimeMs().max());
+        assertEquals(150.0, shareGroupMetrics.partitionLoadTimeMs().sum());
         shareGroupMetrics.close();
     }
 
@@ -2560,7 +2617,7 @@ public class SharePartitionManagerTest {
         when(sp1.maybeAcquireFetchLock()).thenReturn(true);
         when(sp1.canAcquireRecords()).thenReturn(true);
         when(sp1.maybeInitialize()).thenReturn(CompletableFuture.completedFuture(null));
-        when(sp1.acquire(anyString(), anyInt(), anyInt(), any())).thenReturn(new ShareAcquiredRecords(Collections.emptyList(), 0));
+        when(sp1.acquire(anyString(), anyInt(), anyInt(), anyLong(), any())).thenReturn(new ShareAcquiredRecords(Collections.emptyList(), 0));
 
         // Fail initialization for tp2.
         SharePartition sp2 = mock(SharePartition.class);
@@ -3065,11 +3122,11 @@ public class SharePartitionManagerTest {
     ) { }
 
     static class SharePartitionManagerBuilder {
+        private final Persister persister = new NoOpStatePersister();
         private ReplicaManager replicaManager = mock(ReplicaManager.class);
         private Time time = new MockTime();
         private ShareSessionCache cache = new ShareSessionCache(10, 1000);
         private Map<SharePartitionKey, SharePartition> partitionCacheMap = new HashMap<>();
-        private Persister persister = new NoOpShareStatePersister();
         private Timer timer = new MockTimer();
         private ShareGroupMetrics shareGroupMetrics = new ShareGroupMetrics(time);
         private BrokerTopicStats brokerTopicStats;
@@ -3091,11 +3148,6 @@ public class SharePartitionManagerTest {
 
         SharePartitionManagerBuilder withPartitionCacheMap(Map<SharePartitionKey, SharePartition> partitionCacheMap) {
             this.partitionCacheMap = partitionCacheMap;
-            return this;
-        }
-
-        private SharePartitionManagerBuilder withShareGroupPersister(Persister persister) {
-            this.persister = persister;
             return this;
         }
 

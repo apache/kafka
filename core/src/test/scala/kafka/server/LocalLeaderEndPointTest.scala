@@ -23,13 +23,13 @@ import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
-import org.apache.kafka.common.metadata.{PartitionChangeRecord, PartitionRecord, TopicRecord}
+import org.apache.kafka.common.metadata.{FeatureLevelRecord, PartitionChangeRecord, PartitionRecord, TopicRecord}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
-import org.apache.kafka.server.common.{KRaftVersion, OffsetAndEpoch}
+import org.apache.kafka.server.common.{KRaftVersion, MetadataVersion, OffsetAndEpoch}
 import org.apache.kafka.server.network.BrokerEndPoint
 import org.apache.kafka.server.util.{MockScheduler, MockTime}
 import org.apache.kafka.storage.internals.log.{AppendOrigin, LogDirFailureChannel}
@@ -75,6 +75,10 @@ class LocalLeaderEndPointTest extends Logging {
     )
 
     val delta = new MetadataDelta(MetadataImage.EMPTY)
+    delta.replay(new FeatureLevelRecord()
+      .setName(MetadataVersion.FEATURE_NAME)
+      .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+    )
     delta.replay(new TopicRecord()
       .setName(topic)
       .setTopicId(topicId)

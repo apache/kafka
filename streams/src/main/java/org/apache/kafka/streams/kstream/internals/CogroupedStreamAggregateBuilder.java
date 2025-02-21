@@ -49,6 +49,8 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
     CogroupedStreamAggregateBuilder(final InternalStreamsBuilder builder) {
         this.builder = builder;
     }
+
+    @SuppressWarnings("rawtypes")
     <KR> KTable<KR, VOut> build(final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, VOut>> groupPatterns,
                                 final Initializer<VOut> initializer,
                                 final NamedInternal named,
@@ -83,7 +85,7 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
         return createTable(processors, parentProcessors, named, keySerde, valueSerde, queryableName, storeFactory.storeName());
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "rawtypes"})
     <KR, W extends Window> KTable<KR, VOut> build(final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, VOut>> groupPatterns,
                                                   final Initializer<VOut> initializer,
                                                   final NamedInternal named,
@@ -123,7 +125,7 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
         return createTable(processors, parentProcessors, named, keySerde, valueSerde, queryableName, storeFactory.storeName());
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "rawtypes"})
     <KR> KTable<KR, VOut> build(final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, VOut>> groupPatterns,
                                 final Initializer<VOut> initializer,
                                 final NamedInternal named,
@@ -164,7 +166,7 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
         return createTable(processors, parentProcessors, named, keySerde, valueSerde, queryableName, storeFactory.storeName());
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "rawtypes"})
     <KR> KTable<KR, VOut> build(final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, VOut>> groupPatterns,
                                 final Initializer<VOut> initializer,
                                 final NamedInternal named,
@@ -233,7 +235,7 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
 
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "rawtypes"})
     <KR, VIn> KTable<KR, VOut> createTable(final Collection<GraphNode> processors,
                                            final Collection<KStreamAggProcessorSupplier> parentProcessors,
                                            final NamedInternal named,
