@@ -141,10 +141,10 @@ import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsDelta;
+import org.apache.kafka.image.TopicsImage;
 import org.apache.kafka.server.authorizer.Action;
 import org.apache.kafka.server.authorizer.AuthorizationResult;
 import org.apache.kafka.server.authorizer.Authorizer;
-import org.apache.kafka.image.TopicsImage;
 import org.apache.kafka.server.share.persister.DeleteShareGroupStateParameters;
 import org.apache.kafka.server.share.persister.GroupTopicPartitionData;
 import org.apache.kafka.server.share.persister.PartitionFactory;
@@ -225,6 +225,7 @@ import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecor
 import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers.newStreamsGroupEpochRecord;
 import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers.newStreamsGroupMemberTombstoneRecord;
 import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentTombstoneRecord;
+
 
 /**
  * The GroupMetadataManager manages the metadata of all classic and consumer groups. It holds
@@ -3843,8 +3844,8 @@ public class GroupMetadataManager {
     /**
      * Handles a ConsumerGroupHeartbeat request.
      *
-     * @param context       The request context.
-     * @param request       The actual ConsumerGroupHeartbeat request.
+     * @param context The request context.
+     * @param request The actual ConsumerGroupHeartbeat request.
      *
      * @return A Result containing the ConsumerGroupHeartbeat response and
      *         a list of records to update the state machine.

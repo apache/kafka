@@ -375,8 +375,8 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     /**
      * Handles a ConsumerGroupHeartbeat request.
      *
-     * @param context       The request context.
-     * @param request       The actual ConsumerGroupHeartbeat request.
+     * @param context The request context.
+     * @param request The actual ConsumerGroupHeartbeat request.
      *
      * @return A Result containing the ConsumerGroupHeartbeat response and
      *         a list of records to update the state machine.
