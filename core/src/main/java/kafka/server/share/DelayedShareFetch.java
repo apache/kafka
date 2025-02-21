@@ -24,11 +24,13 @@ import kafka.server.ReplicaManager;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.FetchRequest;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.purgatory.DelayedOperation;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.share.fetch.DelayedShareFetchGroupKey;
 import org.apache.kafka.server.share.fetch.PartitionMaxBytesStrategy;
 import org.apache.kafka.server.share.fetch.ShareFetch;
+import org.apache.kafka.server.share.metrics.ShareGroupMetrics;
 import org.apache.kafka.server.storage.log.FetchIsolation;
 import org.apache.kafka.server.storage.log.FetchPartitionData;
 import org.apache.kafka.storage.internals.log.LogOffsetMetadata;
@@ -37,7 +39,6 @@ import org.apache.kafka.storage.internals.log.LogOffsetSnapshot;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -62,25 +63,43 @@ public class DelayedShareFetch extends DelayedOperation {
     private final ReplicaManager replicaManager;
     private final BiConsumer<SharePartitionKey, Throwable> exceptionHandler;
     private final PartitionMaxBytesStrategy partitionMaxBytesStrategy;
+    private final ShareGroupMetrics shareGroupMetrics;
+    private final Time time;
     // The topic partitions that need to be completed for the share fetch request are given by sharePartitions.
     // sharePartitions is a subset of shareFetchData. The order of insertion/deletion of entries in sharePartitions is important.
     private final LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions;
+    // Tracks the start time to acquire any share partition for a fetch request.
+    private long acquireStartTimeMs;
     private LinkedHashMap<TopicIdPartition, Long> partitionsAcquired;
     private LinkedHashMap<TopicIdPartition, LogReadResult> partitionsAlreadyFetched;
 
     /**
-     * This function constructs an instance of delayed share fetch operation for completing share fetch requests instantaneously or with delay.
-     * @param shareFetch - The share fetch parameters of the share fetch request.
-     * @param replicaManager - The replica manager instance used to read from log/complete the request.
-     * @param exceptionHandler - The handler to complete share fetch requests with exception.
-     * @param sharePartitions - The share partitions referenced in the share fetch request.
+     * This function constructs an instance of delayed share fetch operation for completing share fetch
+     * requests instantaneously or with delay.
+     *
+     * @param shareFetch The share fetch parameters of the share fetch request.
+     * @param replicaManager The replica manager instance used to read from log/complete the request.
+     * @param exceptionHandler The handler to complete share fetch requests with exception.
+     * @param sharePartitions The share partitions referenced in the share fetch request.
+     * @param shareGroupMetrics The share group metrics to record the metrics.
+     * @param time The system time.
      */
     public DelayedShareFetch(
             ShareFetch shareFetch,
             ReplicaManager replicaManager,
             BiConsumer<SharePartitionKey, Throwable> exceptionHandler,
-            LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions) {
-        this(shareFetch, replicaManager, exceptionHandler, sharePartitions, PartitionMaxBytesStrategy.type(PartitionMaxBytesStrategy.StrategyType.UNIFORM));
+            LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions,
+            ShareGroupMetrics shareGroupMetrics,
+            Time time
+    ) {
+        this(shareFetch,
+            replicaManager,
+            exceptionHandler,
+            sharePartitions,
+            PartitionMaxBytesStrategy.type(PartitionMaxBytesStrategy.StrategyType.UNIFORM),
+            shareGroupMetrics,
+            time
+        );
     }
 
     DelayedShareFetch(
@@ -88,7 +107,10 @@ public class DelayedShareFetch extends DelayedOperation {
         ReplicaManager replicaManager,
         BiConsumer<SharePartitionKey, Throwable> exceptionHandler,
         LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions,
-        PartitionMaxBytesStrategy partitionMaxBytesStrategy) {
+        PartitionMaxBytesStrategy partitionMaxBytesStrategy,
+        ShareGroupMetrics shareGroupMetrics,
+        Time time
+    ) {
         super(shareFetch.fetchParams().maxWaitMs, Optional.empty());
         this.shareFetch = shareFetch;
         this.replicaManager = replicaManager;
@@ -97,6 +119,9 @@ public class DelayedShareFetch extends DelayedOperation {
         this.exceptionHandler = exceptionHandler;
         this.sharePartitions = sharePartitions;
         this.partitionMaxBytesStrategy = partitionMaxBytesStrategy;
+        this.shareGroupMetrics = shareGroupMetrics;
+        this.time = time;
+        this.acquireStartTimeMs = time.hiResClockMs();
     }
 
     @Override
@@ -120,16 +145,28 @@ public class DelayedShareFetch extends DelayedOperation {
         try {
             LinkedHashMap<TopicIdPartition, Long> topicPartitionData;
             // tryComplete did not invoke forceComplete, so we need to check if we have any partitions to fetch.
-            if (partitionsAcquired.isEmpty())
+            if (partitionsAcquired.isEmpty()) {
                 topicPartitionData = acquirablePartitions();
-            // tryComplete invoked forceComplete, so we can use the data from tryComplete.
-            else
+                // The TopicPartitionsAcquireTimeMs metric signifies the tension when acquiring the locks
+                // for the share partition, hence if no partitions are yet acquired by tryComplete,
+                // we record the metric here. Do not check if the request has successfully acquired any
+                // partitions now or not, as then the upper bound of request timeout shall be recorded
+                // for the metric.
+                updateAcquireElapsedTimeMetric();
+            } else {
+                // tryComplete invoked forceComplete, so we can use the data from tryComplete.
                 topicPartitionData = partitionsAcquired;
+            }
 
             if (topicPartitionData.isEmpty()) {
                 // No locks for share partitions could be acquired, so we complete the request with an empty response.
-                shareFetch.maybeComplete(Collections.emptyMap());
+                shareGroupMetrics.recordTopicPartitionsFetchRatio(shareFetch.groupId(), 0);
+                shareFetch.maybeComplete(Map.of());
                 return;
+            } else {
+                // Update metric to record acquired to requested partitions.
+                double requestTopicToAcquired = (double) topicPartitionData.size() / shareFetch.partitionMaxBytes().size();
+                shareGroupMetrics.recordTopicPartitionsFetchRatio(shareFetch.groupId(), (int) (requestTopicToAcquired * 100));
             }
             log.trace("Fetchable share partitions data: {} with groupId: {} fetch params: {}",
                 topicPartitionData, shareFetch.groupId(), shareFetch.fetchParams());
@@ -183,6 +220,8 @@ public class DelayedShareFetch extends DelayedOperation {
 
         try {
             if (!topicPartitionData.isEmpty()) {
+                // Update the metric to record the time taken to acquire the locks for the share partitions.
+                updateAcquireElapsedTimeMetric();
                 // In case, fetch offset metadata doesn't exist for one or more topic partitions, we do a
                 // replicaManager.readFromLog to populate the offset metadata and update the fetch offset metadata for
                 // those topic partitions.
@@ -415,6 +454,20 @@ public class DelayedShareFetch extends DelayedOperation {
         topicIdPartitions.forEach(topicIdPartition -> exceptionHandler.accept(
             new SharePartitionKey(shareFetch.groupId(), topicIdPartition), throwable));
         shareFetch.maybeCompleteWithException(topicIdPartitions, throwable);
+    }
+
+    /**
+     * The method updates the metric for the time taken to acquire the share partition locks. Also,
+     * it resets the acquireStartTimeMs to the current time, so that the metric records the time taken
+     * to acquire the locks for the re-try, if the partitions are re-acquired. The partitions can be
+     * re-acquired if the fetch request is not completed because of the minBytes or some other condition.
+     */
+    private void updateAcquireElapsedTimeMetric() {
+        long currentTimeMs = time.hiResClockMs();
+        shareGroupMetrics.recordTopicPartitionsAcquireTimeMs(shareFetch.groupId(), currentTimeMs - acquireStartTimeMs);
+        // Reset the acquireStartTimeMs to the current time. If the fetch request is not completed
+        // and the partitions are re-acquired then metric should record value from the last acquire time.
+        acquireStartTimeMs = currentTimeMs;
     }
 
     // Visible for testing.
