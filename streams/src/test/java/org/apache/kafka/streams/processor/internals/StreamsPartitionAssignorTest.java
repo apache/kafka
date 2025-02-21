@@ -601,7 +601,7 @@ public class StreamsPartitionAssignorTest {
 
         createMockTaskManager(prevTasks, standbyTasks);
         assertThrows(
-            IllegalStateException.class,
+            ConfigException.class,
             () -> configurePartitionAssignorWith(Collections.singletonMap(StreamsConfig.UPGRADE_FROM_CONFIG, StreamsConfig.UPGRADE_FROM_23), parameterizedConfig)
         );
     }

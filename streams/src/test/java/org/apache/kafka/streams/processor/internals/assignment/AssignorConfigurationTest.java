@@ -64,7 +64,7 @@ public class AssignorConfigurationTest {
             config.put(StreamsConfig.UPGRADE_FROM_CONFIG, upgradeFrom.toString());
 
             if (beforeCooperative) {
-                assertThrows(IllegalStateException.class, () -> new AssignorConfiguration(config));
+                assertThrows(ConfigException.class, () -> new AssignorConfiguration(config));
             } else {
                 try {
                     final AssignorConfiguration assignorConfiguration = new AssignorConfiguration(config);
