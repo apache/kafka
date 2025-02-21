@@ -202,9 +202,9 @@ public class StreamsGroupCommandUnitTest {
             new Node(0, "host", 0),
             null);
         StreamsGroupCommand.StreamsGroupService service = new StreamsGroupCommand.StreamsGroupService(null, adminClient);
-        Map<TopicPartition, StreamsGroupCommand.OffsetsAndLag> lags = service.getOffsets(x);
+        Map<TopicPartition, StreamsGroupCommand.OffsetsInfo> lags = service.getOffsets(x);
         assertEquals(1, lags.size());
-        assertEquals(new StreamsGroupCommand.OffsetsAndLag(Optional.of(12L), 30L, 18L), lags.get(new TopicPartition("topic1", 0)));
+        assertEquals(new StreamsGroupCommand.OffsetsInfo(Optional.of(12L), Optional.of(0), 30L, 18L), lags.get(new TopicPartition("topic1", 0)));
         service.close();
     }
 

@@ -205,37 +205,33 @@ public class StreamsGroupCommandTest {
         final Set<List<String>> expectedRows = Set.of(
             List.of(APP_ID, INPUT_TOPIC, "0", "0"),
             List.of(APP_ID, INPUT_TOPIC, "1", "0"),
-            List.of(APP_ID, "some-state-store-topic", "0", "0"),
-            List.of(APP_ID, "some-state-store-topic", "1", "0"));
-        // The state-store-topic name is not deterministic, so we don't care about topic names.
-        final List<Integer> dontCares = List.of(1);
-
+            List.of(APP_ID, "streams-group-command-test-KSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition", "0", "0"),
+            List.of(APP_ID, "streams-group-command-test-KSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition", "1", "0"));
 
         validateDescribeOutput(
-            Arrays.asList("--bootstrap-server", cluster.bootstrapServers(), "--describe"), expectedHeader, expectedRows, dontCares);
+            Arrays.asList("--bootstrap-server", cluster.bootstrapServers(), "--describe"), expectedHeader, expectedRows, List.of());
         // --describe --offsets has the same output as --describe
         validateDescribeOutput(
-            Arrays.asList("--bootstrap-server", cluster.bootstrapServers(), "--describe", "--offsets"), expectedHeader, expectedRows, dontCares);
+            Arrays.asList("--bootstrap-server", cluster.bootstrapServers(), "--describe", "--offsets"), expectedHeader, expectedRows, List.of());
     }
 
     @Test
     public void testDescribeStreamsGroupWithVerboseOption() throws Exception {
-        final List<String> expectedHeader = List.of("GROUP", "TOPIC", "PARTITION", "CURRENT-OFFSET", "LOG-END-OFFSET", "OFFSET-LAG");
+        final List<String> expectedHeader = List.of("GROUP", "TOPIC", "PARTITION", "CURRENT-OFFSET", "LEADER-EPOCH", "LOG-END-OFFSET", "OFFSET-LAG");
         final Set<List<String>> expectedRows = Set.of(
-            List.of(APP_ID, INPUT_TOPIC, "0", "-", "0", "0"),
-            List.of(APP_ID, INPUT_TOPIC, "1", "-", "0", "0"),
-            List.of(APP_ID, "some-state-store-topic", "0", "-", "0", "0"),
-            List.of(APP_ID, "some-state-store-topic", "1", "-", "0", "0"));
+            List.of(APP_ID, INPUT_TOPIC, "0", "-", "-", "0", "0"),
+            List.of(APP_ID, INPUT_TOPIC, "1", "-", "-", "0", "0"),
+            List.of(APP_ID, "streams-group-command-test-KSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition", "0", "-", "-", "0", "0"),
+            List.of(APP_ID, "streams-group-command-test-KSTREAM-AGGREGATE-STATE-STORE-0000000003-repartition", "1", "-", "-", "0", "0"));
         // The state-store-topic name is not deterministic, so we don't care about topic names.
-        final List<Integer> dontCares = List.of(1);
 
         validateDescribeOutput(
-            Arrays.asList("--bootstrap-server", cluster.bootstrapServers(), "--describe", "--verbose"), expectedHeader, expectedRows, dontCares);
+            Arrays.asList("--bootstrap-server", cluster.bootstrapServers(), "--describe", "--verbose"), expectedHeader, expectedRows, List.of());
         // --describe --offsets has the same output as --describe
         validateDescribeOutput(
-            Arrays.asList("--bootstrap-server", cluster.bootstrapServers(), "--describe", "--offsets", "--verbose"), expectedHeader, expectedRows, dontCares);
+            Arrays.asList("--bootstrap-server", cluster.bootstrapServers(), "--describe", "--offsets", "--verbose"), expectedHeader, expectedRows, List.of());
         validateDescribeOutput(
-            Arrays.asList("--bootstrap-server", cluster.bootstrapServers(), "--describe", "--verbose", "--offsets"), expectedHeader, expectedRows, dontCares);
+            Arrays.asList("--bootstrap-server", cluster.bootstrapServers(), "--describe", "--verbose", "--offsets"), expectedHeader, expectedRows, List.of());
     }
 
     @Test
@@ -252,7 +248,7 @@ public class StreamsGroupCommandTest {
     @Test
     public void testDescribeStreamsGroupWithStateAndVerboseOptions() throws Exception {
         final List<String> expectedHeader = Arrays.asList("GROUP", "COORDINATOR", "(ID)", "STATE", "GROUP-EPOCH", "TARGET-ASSIGNMENT-EPOCH", "#MEMBERS");
-        final Set<List<String>> expectedRows = Set.of(Arrays.asList(APP_ID, "localhost:57555", "(0)", "Stable", "3", "3", "2"));
+        final Set<List<String>> expectedRows = Set.of(Arrays.asList(APP_ID, "", "", "Stable", "3", "3", "2"));
         // The coordinator is not deterministic, so we don't care about it.
         final List<Integer> dontCares = List.of(1, 2);
 
@@ -264,56 +260,30 @@ public class StreamsGroupCommandTest {
 
     @Test
     public void testDescribeStreamsGroupWithMembersOption() throws Exception {
-        final Set<List<List<String>>> expectedRows = Set.of(
-            List.of(
-                List.of("GROUP", "MEMBER", "PROCESS", "CLIENT-ID"),
-                List.of(APP_ID, "", "", ""),
-                List.of("ACTIVE-TASKS:", "0:[0,1]"),
-                List.of("STANDBY-TASKS:", ""),
-                List.of("WARMUP-TASKS:", "")),
-
-            List.of(
-                List.of("GROUP", "MEMBER", "PROCESS", "CLIENT-ID"),
-                List.of(APP_ID, "", "", ""),
-                List.of("ACTIVE-TASKS:", "1:[0,1]"),
-                List.of("STANDBY-TASKS:", ""),
-                List.of("WARMUP-TASKS:", "")));
+        final List<String> expectedHeader = List.of("GROUP", "MEMBER", "PROCESS", "CLIENT-ID", "ASSIGNMENTS");
+        final Set<List<String>> expectedRows = Set.of(
+            List.of(APP_ID, "", "", "", "ACTIVE:","0:[0,1];"),
+            List.of(APP_ID, "", "", "", "ACTIVE:","1:[0,1];"));
         // The member and process names as well as client-id are not deterministic, so we don't care about them.
         final List<Integer> dontCares = List.of(1, 2, 3);
 
         validateDescribeOutput(
-            Arrays.asList("--bootstrap-server", cluster.bootstrapServers(), "--describe", "--members"), expectedRows, dontCares, false);
+            Arrays.asList("--bootstrap-server", cluster.bootstrapServers(), "--describe", "--members"), expectedHeader, expectedRows, dontCares);
     }
 
     @Test
     public void testDescribeStreamsGroupWithMembersAndVerboseOptions() throws Exception {
-        final Set<List<List<String>>> expectedRows = Set.of(
-            List.of(
-                List.of("GROUP", "TARGET-ASSIGNMENT-EPOCH", "TOPOLOGY-EPOCH", "MEMBER", "MEMBER-PROTOCOL", "MEMBER-EPOCH", "PROCESS", "CLIENT-ID"),
-                List.of(APP_ID, "3", "0", "", "streams", "3", "", ""),
-                List.of("ACTIVE-TASKS:", "0:[0,1]"),
-                List.of("STANDBY-TASKS:", ""),
-                List.of("WARMUP-TASKS:", ""),
-                List.of("TARGET-ACTIVE-TASKS:", "0:[0,1]"),
-                List.of("TARGET-STANDBY-TASKS:", ""),
-                List.of("TARGET-WARMUP-TASKS:", "")),
-
-            List.of(
-                List.of("GROUP", "TARGET-ASSIGNMENT-EPOCH", "TOPOLOGY-EPOCH", "MEMBER", "MEMBER-PROTOCOL", "MEMBER-EPOCH", "PROCESS", "CLIENT-ID"),
-                List.of(APP_ID, "3", "0", "", "streams", "3", "", ""),
-                List.of("ACTIVE-TASKS:", "1:[0,1]"),
-                List.of("STANDBY-TASKS:", ""),
-                List.of("WARMUP-TASKS:", ""),
-                List.of("TARGET-ACTIVE-TASKS:", "1:[0,1]"),
-                List.of("TARGET-STANDBY-TASKS:", ""),
-                List.of("TARGET-WARMUP-TASKS:", "")));
+        final List<String> expectedHeader = List.of("GROUP", "TARGET-ASSIGNMENT-EPOCH", "TOPOLOGY-EPOCH", "MEMBER", "MEMBER-PROTOCOL", "MEMBER-EPOCH", "PROCESS", "CLIENT-ID", "ASSIGNMENTS");
+        final Set<List<String>> expectedRows = Set.of(
+            List.of(APP_ID, "3", "0", "", "streams", "3", "", "", "ACTIVE:","0:[0,1];", "TARGET-ACTIVE:","0:[0,1];"),
+            List.of(APP_ID, "3", "0", "", "streams", "3", "", "", "ACTIVE:","1:[0,1];", "TARGET-ACTIVE:","1:[0,1];"));
         // The member and process names as well as client-id are not deterministic, so we don't care about them.
         final List<Integer> dontCares = List.of(3, 6, 7);
 
         validateDescribeOutput(
-            Arrays.asList("--bootstrap-server", cluster.bootstrapServers(), "--describe", "--members", "--verbose"), expectedRows, dontCares, true);
+            Arrays.asList("--bootstrap-server", cluster.bootstrapServers(), "--describe", "--members", "--verbose"), expectedHeader, expectedRows, dontCares);
         validateDescribeOutput(
-            Arrays.asList("--bootstrap-server", cluster.bootstrapServers(), "--describe", "--verbose", "--members"), expectedRows, dontCares, true);
+            Arrays.asList("--bootstrap-server", cluster.bootstrapServers(), "--describe", "--verbose", "--members"), expectedHeader, expectedRows, dontCares);
     }
 
     private static Topology topology() {
@@ -382,12 +352,7 @@ public class StreamsGroupCommandTest {
                 .collect(Collectors.toSet());
             if (groupDesc.size() != expectedRows.size()) return false;
             // clear the dontCare fields and then compare two sets
-            return expectedRows.stream()
-                .map(list -> {
-                    List<String> listCloned = new ArrayList<>(list);
-                    dontCareIndices.forEach(index -> listCloned.set(index, ""));
-                    return listCloned;
-                }).collect(Collectors.toSet())
+            return expectedRows
                 .equals(
                     groupDesc.stream()
                         .map(list -> {
@@ -397,40 +362,5 @@ public class StreamsGroupCommandTest {
                         }).collect(Collectors.toSet())
                 );
         }, () -> String.format("Expected header=%s and groups=%s, but found:%n%s", expectedHeader, expectedRows, out.get()));
-    }
-
-    private static void validateDescribeOutput(
-        List<String> args,
-        Set<List<List<String>>> expectedRows,
-        List<Integer> dontCareIndices,
-        boolean verbose
-    ) throws InterruptedException {
-        final AtomicReference<String> out = new AtomicReference<>("");
-        TestUtils.waitForCondition(() -> {
-            String output = ToolsTestUtils.grabConsoleOutput(() -> StreamsGroupCommand.main(args.toArray(new String[0])));
-            out.set(output);
-
-            String[] lines = output.split("\n");
-            if (lines.length == 1 && lines[0].isEmpty()) lines = new String[]{};
-
-            Set<List<List<String>>> actualOutput = new HashSet<>();
-            int taskListSize = verbose ? 6 : 3;
-            for (int i = 0; i < lines.length; i++) {
-                List<String> header = Arrays.asList(lines[i].split("\\s+"));
-                List<String> groupDesc = Arrays.asList(lines[++i].split("\\s+"));
-                dontCareIndices.forEach(index -> groupDesc.set(index, ""));
-                List<List<String>> tasks = Arrays.stream(Arrays.copyOfRange(lines, ++i, taskListSize + i))
-                    .map(line -> {
-                        String[] task = line.split("TASKS: ");
-                        return List.of(task[0] + "TASKS:", task.length == 2 ? task[1].trim() : "");
-                    }).toList();
-                List<List<String>> outputList = new ArrayList<>(List.of(header, groupDesc));
-                outputList.addAll(tasks);
-                actualOutput.add(outputList);
-                i += taskListSize;
-            }
-
-            return expectedRows.equals(actualOutput);
-        }, () -> String.format("Expected description=%s but found:%n%s", expectedRows, out.get()));
     }
 }

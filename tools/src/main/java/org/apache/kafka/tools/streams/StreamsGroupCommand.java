@@ -206,42 +206,45 @@ public class StreamsGroupCommand {
                 }
 
                 if (!verbose) {
-                    String fmt = "%" + -groupLen + "s %" + -maxMemberIdLen + "s %" + -maxHostLen + "s %" + -maxClientIdLen + "s\n";
+                    String fmt = "%" + -groupLen + "s %" + -maxMemberIdLen + "s %" + -maxHostLen + "s %" + -maxClientIdLen + "s %s\n";
+                    System.out.printf(fmt, "GROUP", "MEMBER", "PROCESS", "CLIENT-ID", "ASSIGNMENTS");
                     for (StreamsGroupMemberDescription member : members) {
-                        System.out.printf(fmt, "GROUP", "MEMBER", "PROCESS", "CLIENT-ID");
-                        System.out.printf(fmt, description.groupId(), member.memberId(), member.processId(), member.clientId());
-                        printTasks(member.assignment(), false);
-                        System.out.println();
+                        System.out.printf(fmt, description.groupId(), member.memberId(), member.processId(), member.clientId(), getTasksForPrinting(member.assignment(), Optional.empty()));
                     }
                 } else {
-                    String fmt = "%" + -groupLen + "s %-25s %-15s%" + -maxMemberIdLen + "s %-15s %-15s %" + -maxHostLen + "s %" + -maxClientIdLen + "s\n";
+                    String fmt = "%" + -groupLen + "s %-25s %-15s%" + -maxMemberIdLen + "s %-15s %-15s %" + -maxHostLen + "s %" + -maxClientIdLen + "s %s\n";
+                    System.out.printf(fmt, "GROUP", "TARGET-ASSIGNMENT-EPOCH", "TOPOLOGY-EPOCH", "MEMBER", "MEMBER-PROTOCOL", "MEMBER-EPOCH", "PROCESS", "CLIENT-ID", "ASSIGNMENTS");
+
                     for (StreamsGroupMemberDescription member : members) {
-                        System.out.printf(fmt, "GROUP", "TARGET-ASSIGNMENT-EPOCH", "TOPOLOGY-EPOCH", "MEMBER", "MEMBER-PROTOCOL", "MEMBER-EPOCH", "PROCESS", "CLIENT-ID");
                         System.out.printf(fmt, description.groupId(), description.targetAssignmentEpoch(), description.topologyEpoch(), member.memberId(),
-                            member.isClassic() ? "classic" : "streams", member.memberEpoch(), member.processId(), member.clientId());
-                        printTasks(member.assignment(), false);
-                        printTasks(member.targetAssignment(), true);
-                        System.out.println();
+                            member.isClassic() ? "classic" : "streams", member.memberEpoch(), member.processId(), member.clientId(), getTasksForPrinting(member.assignment(), Optional.of(member.targetAssignment())));
                     }
                 }
             }
         }
 
-        private void printTaskType(List<StreamsGroupMemberAssignment.TaskIds> tasks, String taskType) {
+        private String prepareTaskType(List<StreamsGroupMemberAssignment.TaskIds> tasks, String taskType) {
+            if (tasks.isEmpty()) {
+                return "";
+            }
             StringBuilder builder = new StringBuilder(taskType).append(": ");
             for (StreamsGroupMemberAssignment.TaskIds taskIds : tasks) {
                 builder.append(taskIds.subtopologyId()).append(":[");
                 builder.append(taskIds.partitions().stream().map(String::valueOf).collect(Collectors.joining(",")));
-                builder.append("] ");
+                builder.append("]; ");
             }
-            System.out.println(builder);
+            return builder.toString();
         }
 
-        private void printTasks(StreamsGroupMemberAssignment assignment, boolean isTarget) {
-            String typePrefix = isTarget ? "TARGET-" : "";
-            printTaskType(assignment.activeTasks(), typePrefix + "ACTIVE-TASKS");
-            printTaskType(assignment.standbyTasks(), typePrefix + "STANDBY-TASKS");
-            printTaskType(assignment.warmupTasks(), typePrefix + "WARMUP-TASKS");
+        private String getTasksForPrinting(StreamsGroupMemberAssignment assignment, Optional<StreamsGroupMemberAssignment> targetAssignment) {
+            StringBuilder builder = new StringBuilder();
+            builder.append(prepareTaskType(assignment.activeTasks(), "ACTIVE"))
+                .append(prepareTaskType(assignment.standbyTasks(), "STANDBY"))
+                .append(prepareTaskType(assignment.warmupTasks(), "WARMUP"));
+            targetAssignment.ifPresent(target -> builder.append(prepareTaskType(target.activeTasks(), "TARGET-ACTIVE"))
+                .append(prepareTaskType(target.standbyTasks(), "TARGET-STANDBY"))
+                .append(prepareTaskType(target.warmupTasks(), "TARGET-WARMUP")));
+            return builder.toString();
         }
 
         private void printStates(StreamsGroupDescription description, boolean verbose) {
@@ -263,7 +266,7 @@ public class StreamsGroupCommand {
         }
 
         private void printOffsets(StreamsGroupDescription description, boolean verbose) throws ExecutionException, InterruptedException {
-            Map<TopicPartition, OffsetsAndLag> offsets = getOffsets(description);
+            Map<TopicPartition, OffsetsInfo> offsets = getOffsets(description);
             if (maybePrintEmptyGroupState(description.groupId(), description.groupState(), offsets.size())) {
                 int groupLen = Math.max(15, description.groupId().length());
                 int maxTopicLen = 15;
@@ -274,21 +277,22 @@ public class StreamsGroupCommand {
                 if (!verbose) {
                     String fmt =  "%" + (-groupLen) + "s %" + (-maxTopicLen) + "s %-10s %-15s%n";
                     System.out.printf(fmt, "GROUP", "TOPIC", "PARTITION", "OFFSET-LAG");
-                    for (Map.Entry<TopicPartition, OffsetsAndLag> offset : offsets.entrySet()) {
+                    for (Map.Entry<TopicPartition, OffsetsInfo> offset : offsets.entrySet()) {
                         System.out.printf(fmt, description.groupId(), offset.getKey().topic(), offset.getKey().partition(), offset.getValue().lag);
                     }
                 } else {
-                    String fmt =  "%" + (-groupLen) + "s %" + (-maxTopicLen) + "s %-10s %-15s %-15s %-15s%n";
-                    System.out.printf(fmt, "GROUP", "TOPIC", "PARTITION", "CURRENT-OFFSET", "LOG-END-OFFSET", "OFFSET-LAG");
-                    for (Map.Entry<TopicPartition, OffsetsAndLag> offset : offsets.entrySet()) {
+                    String fmt =  "%" + (-groupLen) + "s %" + (-maxTopicLen) + "s %-10s %-15s %-15s %-15s %-15s%n";
+                    System.out.printf(fmt, "GROUP", "TOPIC", "PARTITION", "CURRENT-OFFSET", "LEADER-EPOCH", "LOG-END-OFFSET", "OFFSET-LAG");
+                    for (Map.Entry<TopicPartition, OffsetsInfo> offset : offsets.entrySet()) {
                         System.out.printf(fmt, description.groupId(), offset.getKey().topic(), offset.getKey().partition(),
-                            offset.getValue().currentOffset.map(Object::toString).orElse("-"), offset.getValue().logEndOffset, offset.getValue().lag);
+                            offset.getValue().currentOffset.map(Object::toString).orElse("-"), offset.getValue().leaderEpoch.map(Object::toString).orElse("-"),
+                            offset.getValue().logEndOffset, offset.getValue().lag);
                     }
                 }
             }
         }
 
-        Map<TopicPartition, OffsetsAndLag> getOffsets(StreamsGroupDescription description) throws ExecutionException, InterruptedException {
+        Map<TopicPartition, OffsetsInfo> getOffsets(StreamsGroupDescription description) throws ExecutionException, InterruptedException {
             final Collection<StreamsGroupMemberDescription> members = description.members();
             Set<TopicPartition> allTp = new HashSet<>();
             for (StreamsGroupMemberDescription memberDescription : members) {
@@ -306,13 +310,15 @@ public class StreamsGroupCommand {
             Map<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> latestResult = adminClient.listOffsets(latest).all().get();
             Map<TopicPartition, OffsetAndMetadata> committedOffsets = getCommittedOffsets(description.groupId());
 
-            Map<TopicPartition, OffsetsAndLag> output = new HashMap<>();
+            Map<TopicPartition, OffsetsInfo> output = new HashMap<>();
             for (Map.Entry<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> tp : earliestResult.entrySet()) {
                 final Optional<Long> currentOffset = committedOffsets.containsKey(tp.getKey()) ? Optional.of(committedOffsets.get(tp.getKey()).offset()) : Optional.empty();
+                final Optional<Integer> leaderEpoch = committedOffsets.containsKey(tp.getKey()) ? committedOffsets.get(tp.getKey()).leaderEpoch() : Optional.empty();
                 final long lag = currentOffset.map(current -> latestResult.get(tp.getKey()).offset() - current).orElseGet(() -> latestResult.get(tp.getKey()).offset() - earliestResult.get(tp.getKey()).offset());
                 output.put(tp.getKey(),
-                    new OffsetsAndLag(
+                    new OffsetsInfo(
                         currentOffset,
+                        leaderEpoch,
                         latestResult.get(tp.getKey()).offset(),
                         lag));
             }
@@ -376,6 +382,6 @@ public class StreamsGroupCommand {
         }
     }
 
-    record OffsetsAndLag(Optional<Long> currentOffset, Long logEndOffset, Long lag) {
+    record OffsetsInfo(Optional<Long> currentOffset, Optional<Integer> leaderEpoch, Long logEndOffset, Long lag) {
     }
 }
