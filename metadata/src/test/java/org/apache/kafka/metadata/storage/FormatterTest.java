@@ -460,10 +460,10 @@ public class FormatterTest {
 
     private static Stream<Arguments> elrTestMetadataVersions() {
         return Stream.of(
-                MetadataVersion.IBP_3_9_IV0,
-                MetadataVersion.IBP_4_0_IV0,
-                MetadataVersion.IBP_4_0_IV1 // ELR minimal MV
-            ).map(Arguments::of);
+            MetadataVersion.IBP_3_9_IV0,
+            MetadataVersion.IBP_4_0_IV0,
+            MetadataVersion.IBP_4_0_IV1 // ELR minimal MV
+        ).map(Arguments::of);
     }
 
     @ParameterizedTest

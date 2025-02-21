@@ -50,6 +50,7 @@ import scala.jdk.CollectionConverters._
 class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
 
   protected var testMetadataVersion = MetadataVersion.latestTesting
+  override protected def metadataVersion = testMetadataVersion
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
@@ -57,7 +58,6 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
     if (testInfo.getDisplayName.contains("quorum=kraft-IBP_3_4")) {
       testMetadataVersion = MetadataVersion.IBP_3_4_IV0
     }
-    setMetadataVersion(testMetadataVersion)
 
     this.serverConfig.setProperty(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, classOf[AlterCredentialsTest.TestPrincipalBuilderReturningAuthorized].getName)
     this.serverConfig.setProperty(ServerConfigs.CONTROLLED_SHUTDOWN_ENABLE_CONFIG, "false")

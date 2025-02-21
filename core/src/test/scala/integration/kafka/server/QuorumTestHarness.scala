@@ -154,17 +154,13 @@ abstract class QuorumTestHarness extends Logging {
     Seq(new Properties())
   }
 
-  protected var metadataVersion: MetadataVersion = MetadataVersion.latestTesting()
+  protected def metadataVersion: MetadataVersion = MetadataVersion.latestTesting()
 
   private var testInfo: TestInfo = _
   protected var implementation: QuorumImplementation = _
 
   def isShareGroupTest(): Boolean = {
     TestInfoUtils.isShareGroupTest(testInfo)
-  }
-
-  def setMetadataVersion(metadataVersion: MetadataVersion): Unit = {
-    this.metadataVersion = metadataVersion
   }
 
   def maybeGroupProtocolSpecified(): Option[GroupProtocol] = {

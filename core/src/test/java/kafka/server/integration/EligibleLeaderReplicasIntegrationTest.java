@@ -79,6 +79,12 @@ public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarnes
     private String bootstrapServer;
     private String testTopicName;
     private Admin adminClient;
+
+    @Override
+    public MetadataVersion metadataVersion() {
+        return MetadataVersion.IBP_4_0_IV1;
+    }
+
     @Override
     public Seq<KafkaConfig> generateConfigs() {
         List<Properties> brokerConfigs = new ArrayList<>();
@@ -111,7 +117,6 @@ public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarnes
     @BeforeEach
     @Override
     public void setUp(TestInfo info) {
-        setMetadataVersion(MetadataVersion.IBP_4_0_IV1);
         super.setUp(info);
         // create adminClient
         Properties props = new Properties();
