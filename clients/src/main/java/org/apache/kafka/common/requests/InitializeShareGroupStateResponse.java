@@ -17,6 +17,7 @@
 
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.InitializeShareGroupStateResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
@@ -24,6 +25,7 @@ import org.apache.kafka.common.protocol.Errors;
 
 import java.nio.ByteBuffer;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class InitializeShareGroupStateResponse extends AbstractResponse {
@@ -43,9 +45,9 @@ public class InitializeShareGroupStateResponse extends AbstractResponse {
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> counts = new HashMap<>();
         data.results().forEach(
-                result -> result.partitions().forEach(
-                        partitionResult -> updateErrorCounts(counts, Errors.forCode(partitionResult.errorCode()))
-                )
+            result -> result.partitions().forEach(
+                partitionResult -> updateErrorCounts(counts, Errors.forCode(partitionResult.errorCode()))
+            )
         );
         return counts;
     }
@@ -62,7 +64,35 @@ public class InitializeShareGroupStateResponse extends AbstractResponse {
 
     public static InitializeShareGroupStateResponse parse(ByteBuffer buffer, short version) {
         return new InitializeShareGroupStateResponse(
-                new InitializeShareGroupStateResponseData(new ByteBufferAccessor(buffer), version)
+            new InitializeShareGroupStateResponseData(new ByteBufferAccessor(buffer), version)
         );
+    }
+
+    public static InitializeShareGroupStateResponseData.InitializeStateResult toResponseInitializeStateResult(Uuid topicId, List<InitializeShareGroupStateResponseData.PartitionResult> partitionResults) {
+        return new InitializeShareGroupStateResponseData.InitializeStateResult()
+            .setTopicId(topicId)
+            .setPartitions(partitionResults);
+    }
+
+    public static InitializeShareGroupStateResponseData toErrorResponseData(Uuid topicId, int partitionId, Errors error, String errorMessage) {
+        return new InitializeShareGroupStateResponseData().setResults(
+            List.of(new InitializeShareGroupStateResponseData.InitializeStateResult()
+                .setTopicId(topicId)
+                .setPartitions(List.of(new InitializeShareGroupStateResponseData.PartitionResult()
+                    .setPartition(partitionId)
+                    .setErrorCode(error.code())
+                    .setErrorMessage(errorMessage)))
+            ));
+    }
+
+    public static InitializeShareGroupStateResponseData toResponseData(Uuid topicId, int partitionId) {
+        return new InitializeShareGroupStateResponseData()
+            .setResults(List.of(
+                new InitializeShareGroupStateResponseData.InitializeStateResult()
+                    .setTopicId(topicId)
+                    .setPartitions(List.of(
+                        new InitializeShareGroupStateResponseData.PartitionResult()
+                            .setPartition(partitionId)))
+            ));
     }
 }

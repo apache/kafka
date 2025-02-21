@@ -34,7 +34,7 @@ public class InitializeShareGroupStateRequest extends AbstractRequest {
         private final InitializeShareGroupStateRequestData data;
 
         public Builder(InitializeShareGroupStateRequestData data) {
-            this(data, false);
+            this(data, true);
         }
 
         public Builder(InitializeShareGroupStateRequestData data, boolean enableUnstableLastVersion) {
