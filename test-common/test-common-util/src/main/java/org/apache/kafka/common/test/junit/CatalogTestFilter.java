@@ -39,16 +39,22 @@ import java.util.Set;
 
 /**
  * A filter that selectively includes tests that are not present in a given test catalog.
+ * <p>
+ * The format of the test catalog is a text file where each line has the format of:
+ * <pre>
+ *     FullyQualifiedClassName "#" MethodName "\n"
+ * </pre>
+ * If the catalog is missing, empty, or invalid, this filter will include all tests by default.
  */
-public class AutoQuarantinedTestFilter implements Filter<TestDescriptor> {
+public class CatalogTestFilter implements Filter<TestDescriptor> {
 
     private static final Filter<TestDescriptor> EXCLUDE_ALL_TESTS = testDescriptor -> FilterResult.excluded("missing catalog");
 
-    private static final Logger log = LoggerFactory.getLogger(AutoQuarantinedTestFilter.class);
+    private static final Logger log = LoggerFactory.getLogger(CatalogTestFilter.class);
 
     private final Set<TestAndMethod> testCatalog;
 
-    AutoQuarantinedTestFilter(Set<TestAndMethod> testCatalog) {
+    CatalogTestFilter(Set<TestAndMethod> testCatalog) {
         this.testCatalog = Collections.unmodifiableSet(testCatalog);
     }
 
@@ -70,21 +76,12 @@ public class AutoQuarantinedTestFilter implements Filter<TestDescriptor> {
         if (testCatalog.contains(testAndMethod)) {
             return FilterResult.excluded(null);
         } else {
-            return FilterResult.included("auto-quarantined");
+            return FilterResult.included("new test");
         }
     }
 
     /**
      * Create a filter that excludes tests that are missing from a given test catalog file.
-     * If no test catalog is given, the default behavior depends on {@code includeQuarantined}.
-     * If true, this filter will exclude all tests. If false, this filter will include all tests.
-     * <p>
-     * The format of the test catalog is a text file where each line has the format of:
-     *
-     * <pre>
-     *     FullyQualifiedClassName "#" MethodName "\n"
-     * </pre>
-     *
      * @param testCatalogFileName path to a test catalog file
      */
     public static Filter<TestDescriptor> create(String testCatalogFileName) {
@@ -118,7 +115,7 @@ public class AutoQuarantinedTestFilter implements Filter<TestDescriptor> {
             return EXCLUDE_ALL_TESTS;
         } else {
             log.debug("Loaded {} test methods from test catalog file {}.", allTests.size(), path);
-            return new AutoQuarantinedTestFilter(allTests);
+            return new CatalogTestFilter(allTests);
         }
     }
 

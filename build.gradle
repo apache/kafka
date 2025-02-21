@@ -105,7 +105,7 @@ ext {
     throw new GradleException("Unexpected value for keepAliveMode property. Expected one of $keepAliveValues, but received: $userKeepAliveModeString")
   }
 
-  // Used by :test and :quarantinedTest tasks
+  // Used by :test task
   isGithubActions = System.getenv('GITHUB_ACTIONS') != null
 
   // See README.md for details on this option and the reasoning for the default

@@ -26,18 +26,29 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * A JUnit test filter which can include or exclude discovered tests before
- * they are sent off to the test engine for execution. The behavior of this
- * filter is controlled by the system property "kafka.test.run.quarantined".
- * If the property is set to "true", then only auto-quarantined and explicitly
- * {@code @Flaky} tests will be included. If the property is set to "false", then
- * only non-quarantined tests will be run.
+ * A JUnit test filter that customizes which tests are run as part of different CI jobs.
+ * <p>
+ * Four system properties control the behavior of this filter:
+ * <ul>
+ *   <li>kafka.test.run.new: only run newly added tests</li>
+ *   <li>kafka.test.flaky.new: only run tests tagged with "flaky"</li>
+ *   <li>kafka.test.catalog.file: location of a test catalog file</li>
+ *   <li>kafka.test.verbose: enable additional log output</li>
+ * </ul>
+ * The test catalog is how we test for "new"-ness. During each CI build of "trunk", we
+ * produce a test catalog that includes every test run as part of the build. This is
+ * stored in the "test-catalog" branch of the repo. By loading the test catalog from a
+ * prior point in time, we can easily determine which tests were added within a certain
+ * time frame.
+ * <p>
+ * If no test catalog is given, or it is empty/invalid, "kafka.test.run.new" will not
+ * select any tests.
  * <p>
  * This filter is registered with JUnit using SPI. The test-common-runtime module
  * includes a META-INF/services/org.junit.platform.launcher.PostDiscoveryFilter
  * service file which registers this class.
  */
-public class QuarantinedPostDiscoveryFilter implements PostDiscoveryFilter {
+public class KafkaPostDiscoveryFilter implements PostDiscoveryFilter {
 
     private static final TestTag FLAKY_TEST_TAG = TestTag.create("flaky");
 
@@ -49,9 +60,9 @@ public class QuarantinedPostDiscoveryFilter implements PostDiscoveryFilter {
 
     public static final String VERBOSE_PROP = "kafka.test.verbose";
 
-    private static final Logger log = LoggerFactory.getLogger(QuarantinedPostDiscoveryFilter.class);
+    private static final Logger log = LoggerFactory.getLogger(KafkaPostDiscoveryFilter.class);
 
-    private final Filter<TestDescriptor> autoQuarantinedFilter;
+    private final Filter<TestDescriptor> catalogFilter;
 
     private final boolean runNew;
 
@@ -61,7 +72,7 @@ public class QuarantinedPostDiscoveryFilter implements PostDiscoveryFilter {
 
     // No-arg public constructor for SPI
     @SuppressWarnings("unused")
-    public QuarantinedPostDiscoveryFilter() {
+    public KafkaPostDiscoveryFilter() {
         runNew = System.getProperty(RUN_NEW_PROP, "false")
             .equalsIgnoreCase("true");
 
@@ -72,16 +83,16 @@ public class QuarantinedPostDiscoveryFilter implements PostDiscoveryFilter {
             .equalsIgnoreCase("true");
 
         String testCatalogFileName = System.getProperty(CATALOG_FILE_PROP);
-        autoQuarantinedFilter = AutoQuarantinedTestFilter.create(testCatalogFileName);
+        catalogFilter = CatalogTestFilter.create(testCatalogFileName);
     }
 
     // Visible for tests
-    QuarantinedPostDiscoveryFilter(
-        Filter<TestDescriptor> autoQuarantinedFilter,
+    KafkaPostDiscoveryFilter(
+        Filter<TestDescriptor> catalogFilter,
         boolean runNew,
         boolean runFlaky
     ) {
-        this.autoQuarantinedFilter = autoQuarantinedFilter;
+        this.catalogFilter = catalogFilter;
         this.runNew = runNew;
         this.runFlaky = runFlaky;
         this.verbose = false;
@@ -90,36 +101,36 @@ public class QuarantinedPostDiscoveryFilter implements PostDiscoveryFilter {
     @Override
     public FilterResult apply(TestDescriptor testDescriptor) {
         boolean hasFlakyTag = testDescriptor.getTags().contains(FLAKY_TEST_TAG);
-        FilterResult autoQuarantinedResult = autoQuarantinedFilter.apply(testDescriptor);
+        FilterResult catalogFilterResult = catalogFilter.apply(testDescriptor);
 
         final FilterResult result;
         if (runFlaky && runNew) {
-            //  If selecting flaky and quarantined tests, we first check for explicitly flaky tests.
-            //  If no flaky tag is set, defer to the auto-quarantined filter.
+            //  If selecting flaky and new tests, we first check for explicitly flaky tests.
+            //  If no flaky tag is set, defer to the catalog filter.
             if (hasFlakyTag) {
                 result = FilterResult.included("flaky");
             } else {
-                result = autoQuarantinedResult;
+                result = catalogFilterResult;
             }
         } else if (runFlaky) {
-            // If selecting only flaky, just check the tag. Don't use the auto-quarantined filter
+            // If selecting only flaky, just check the tag. Don't use the catalog filter
             if (hasFlakyTag) {
                 result = FilterResult.included("flaky");
             } else {
                 result = FilterResult.excluded("non-flaky");
             }
         } else if (runNew) {
-            // Running only auto-quarantined
-            if (autoQuarantinedResult.included() && hasFlakyTag) {
+            // Running only new tests (per the catalog filter)
+            if (catalogFilterResult.included() && hasFlakyTag) {
                 result = FilterResult.excluded("flaky");
             } else {
-                result = autoQuarantinedResult;
+                result = catalogFilterResult;
             }
         } else {
             // The main test suite
             if (hasFlakyTag) {
                 result = FilterResult.excluded("flaky");
-            } else if (autoQuarantinedResult.included()) {
+            } else if (catalogFilterResult.included()) {
                 result = FilterResult.excluded("new");
             } else {
                 result = FilterResult.included(null);
@@ -128,12 +139,12 @@ public class QuarantinedPostDiscoveryFilter implements PostDiscoveryFilter {
 
         if (verbose) {
             log.info(
-                "{} Test '{}' with reason '{}'. Flaky tag is {}, auto-quarantined filter has {} this test.",
+                "{} Test '{}' with reason '{}'. Flaky tag is {}, catalog filter has {} this test.",
                 result.included() ? "Including" : "Excluding",
                 testDescriptor.getDisplayName(),
                 result.getReason().orElse("null"),
                 hasFlakyTag ? "present" : "not present",
-                autoQuarantinedResult.included() ? "included" : "not included"
+                catalogFilterResult.included() ? "included" : "not included"
             );
         }
         return result;
