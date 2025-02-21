@@ -151,7 +151,7 @@ public class RaftEventSimulationTest {
         Random random = new Random(seed);
         Cluster cluster = new Cluster(numVoters, numObservers, random, true);
         MessageRouter router = new MessageRouter(cluster);
-        EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
+        EventScheduler scheduler = schedulerWithKip853Invariants(cluster);
 
         cluster.startAll();
         schedulePolling(scheduler, cluster, 3, 5);
@@ -177,7 +177,7 @@ public class RaftEventSimulationTest {
         Random random = new Random(seed);
         Cluster cluster = new Cluster(numVoters, numObservers, random, true);
         MessageRouter router = new MessageRouter(cluster);
-        EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
+        EventScheduler scheduler = schedulerWithKip853Invariants(cluster);
 
         cluster.startAll();
         schedulePolling(scheduler, cluster, 3, 5);
@@ -555,6 +555,12 @@ public class RaftEventSimulationTest {
         return scheduler;
     }
 
+    private EventScheduler schedulerWithKip853Invariants(Cluster cluster) {
+        EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
+        scheduler.addInvariant(new AtMostOneUncommittedVoterSet(cluster));
+        return scheduler;
+    }
+
     private void schedulePolling(EventScheduler scheduler,
                                  Cluster cluster,
                                  int pollIntervalMs,
@@ -660,7 +666,8 @@ public class RaftEventSimulationTest {
                     leader.messageQueue.add(addVoterRequest);
 
                     nodeToAdd.apiVersionsRequestMessageId.whenComplete((messageId, exception) -> {
-                        // Also add the API_VERSIONS_REPSONSE to the leader's message queue
+                        // Also add the API_VERSIONS_RESPONSE to the leader's message queue,
+                        // since KRaft doesn't handle that request type.
                         ApiMessage apiVersionsResponse = new ApiVersionsResponse.Builder().
                             setSupportedFeatures(
                                 Features.supportedFeatures(
@@ -835,7 +842,7 @@ public class RaftEventSimulationTest {
                 .collect(Collectors.toSet());
         }
 
-        Optional<VoterSet> voterSetFromIds() {
+        Optional<VoterSet> initialVoterSetFromIds() {
             if (withKip853) {
                 return Optional.of(VoterSet.fromMap(initialVoters
                     .values()
@@ -1111,7 +1118,7 @@ public class RaftEventSimulationTest {
             if (withKip853 && persistentState.log.endOffset().offset() == 0) {
                 RaftTestUtils.writeBootstrapSnapshot(
                     persistentState.log,
-                    voterSetFromIds(),
+                    initialVoterSetFromIds(),
                     KRaftVersion.KRAFT_VERSION_1,
                     serde
                 );
@@ -1325,6 +1332,17 @@ public class RaftEventSimulationTest {
         @Override
         public void verify() {
             if (cluster.withKip853) {
+                /*
+                * For clusters running in KIP-853 mode, we check that a majority of at least one of:
+                * 1. the leader's voter set at the HWM
+                * 2. the leader's lastVoterSet()
+                * has reached the HWM. We need to perform a more elaborate check here because in clusters where
+                * an Add/RemoveVoter request increases/decreases the majority of voters value by 1, the leader
+                * could have used either majority value to update its HWM value. This is because depending on
+                * whether the leader read the most recent VotersRecord prior to updating its HWM value, the number
+                * of nodes (the majority) used to calculate that HWM value is different. This matters for invariant
+                * checking because we perform this verification on every message delivery.
+                * */
                 cluster.leaderWithMaxEpoch().ifPresent(leaderNode -> {
                     leaderNode.client.highWatermark().ifPresent(highWatermark -> {
                         VoterSet voterSet = leaderNode.client.partitionState().lastVoterSet();
@@ -1360,6 +1378,29 @@ public class RaftEventSimulationTest {
                 .filter(entry -> voterIds.contains(entry.getKey()))
                 .filter(entry -> entry.getValue().log.endOffset().offset() >= highWatermark)
                 .count();
+        }
+    }
+
+    private static class AtMostOneUncommittedVoterSet implements Invariant {
+        final Cluster cluster;
+
+        private AtMostOneUncommittedVoterSet(Cluster cluster) {
+            this.cluster = cluster;
+        }
+
+        @Override
+        public void verify() {
+            cluster.leaderWithMaxEpoch().ifPresent(leaderNode -> {
+                VoterSet lastCommittedVoterSet = leaderNode.client.partitionState().voterSetAtOffset(leaderNode.highWatermark() - 1).orElseGet(() -> cluster.initialVoterSetFromIds().get());
+                Optional<VoterSet> uncommittedVoterSet = Optional.empty();
+                for (long offset = leaderNode.highWatermark(); offset < leaderNode.logEndOffset(); ++offset) {
+                    Optional<VoterSet> maybeUncommittedVoterSet = leaderNode.client.partitionState().voterSetAtOffset(offset);
+                    assertTrue(maybeUncommittedVoterSet.isEmpty() || uncommittedVoterSet.isEmpty() || !uncommittedVoterSet.get().equals(maybeUncommittedVoterSet));
+                    if (!maybeUncommittedVoterSet.equals(lastCommittedVoterSet)) {
+                        uncommittedVoterSet = maybeUncommittedVoterSet;
+                    }
+                }
+            });
         }
     }
 
@@ -1635,8 +1676,8 @@ public class RaftEventSimulationTest {
             if (!filters.get(senderId).acceptOutbound(outbound))
                 return;
 
-            // For the API_VERSIONS request sent when adding a voter, drop the request since KRaft client doesn't handle it
-            // Store the correlationId to deliver a response back to the leader to finish adding the voter
+            // For the API_VERSIONS request sent when adding a voter, drop the request since the receiving KRaft client
+            // doesn't handle it. Store the correlationId to deliver a response back to the leader to finish adding the voter
             if (outbound.data().apiKey() == ApiKeys.API_VERSIONS.id) {
                 int nodeToAddId = outbound.destination().id();
                 cluster.running.get(nodeToAddId).apiVersionsRequestMessageId.complete(outbound.correlationId());
