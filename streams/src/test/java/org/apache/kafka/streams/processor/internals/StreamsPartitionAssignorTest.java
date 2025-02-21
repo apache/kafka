@@ -586,7 +586,7 @@ public class StreamsPartitionAssignorTest {
 
     @ParameterizedTest
     @MethodSource("parameter")
-    public void testEagerSubscription(final Map<String, Object> parameterizedConfig) {
+    public void shouldThrowOnEagerSubscription(final Map<String, Object> parameterizedConfig) {
         setUp(parameterizedConfig, false);
         builder.addSource(null, "source1", null, null, null, "topic1");
         builder.addSource(null, "source2", null, null, null, "topic2");
@@ -600,17 +600,10 @@ public class StreamsPartitionAssignorTest {
         );
 
         createMockTaskManager(prevTasks, standbyTasks);
-        configurePartitionAssignorWith(Collections.singletonMap(StreamsConfig.UPGRADE_FROM_CONFIG, StreamsConfig.UPGRADE_FROM_23), parameterizedConfig);
-        assertThat(partitionAssignor.rebalanceProtocol(), equalTo(RebalanceProtocol.EAGER));
-
-        final Set<String> topics = Set.of("topic1", "topic2");
-        final Subscription subscription = new Subscription(new ArrayList<>(topics), partitionAssignor.subscriptionUserData(topics));
-
-        Collections.sort(subscription.topics());
-        assertEquals(asList("topic1", "topic2"), subscription.topics());
-
-        final SubscriptionInfo info = getInfo(PID_1, prevTasks, standbyTasks, uniqueField);
-        assertEquals(info, SubscriptionInfo.decode(subscription.userData()));
+        assertThrows(
+            IllegalStateException.class,
+            () -> configurePartitionAssignorWith(Collections.singletonMap(StreamsConfig.UPGRADE_FROM_CONFIG, StreamsConfig.UPGRADE_FROM_23), parameterizedConfig)
+        );
     }
 
     @ParameterizedTest

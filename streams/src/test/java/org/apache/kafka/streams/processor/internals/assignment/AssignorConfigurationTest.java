@@ -54,30 +54,25 @@ public class AssignorConfigurationTest {
     }
 
     @Test
-    public void rebalanceProtocolShouldSupportAllUpgradeFromVersions() {
+    public void shouldSupportAllUpgradeFromVersionsFromCooperativeRebalancingOn() {
+        boolean beforeCooperative = true;
         for (final UpgradeFromValues upgradeFrom : UpgradeFromValues.values()) {
-            config.put(StreamsConfig.UPGRADE_FROM_CONFIG, upgradeFrom.toString());
-            final AssignorConfiguration assignorConfiguration = new AssignorConfiguration(config);
+            if (upgradeFrom.toString().equals("2.4")) {
+                beforeCooperative = false;
+            }
 
-            try {
-                assignorConfiguration.rebalanceProtocol();
-            } catch (final Exception error) {
-                throw new AssertionError("Upgrade from " + upgradeFrom + " failed with " + error.getMessage() + "!");
+            config.put(StreamsConfig.UPGRADE_FROM_CONFIG, upgradeFrom.toString());
+
+            if (beforeCooperative) {
+                assertThrows(IllegalStateException.class, () -> new AssignorConfiguration(config));
+            } else {
+                try {
+                    final AssignorConfiguration assignorConfiguration = new AssignorConfiguration(config);
+                } catch (final Exception error) {
+                    throw new AssertionError("Upgrade from " + upgradeFrom + " failed with " + error.getMessage() + "!");
+                }
             }
         }
     }
 
-    @Test
-    public void configuredMetadataVersionShouldSupportAllUpgradeFromVersions() {
-        for (final UpgradeFromValues upgradeFrom : UpgradeFromValues.values()) {
-            config.put(StreamsConfig.UPGRADE_FROM_CONFIG, upgradeFrom.toString());
-            final AssignorConfiguration assignorConfiguration = new AssignorConfiguration(config);
-
-            try {
-                assignorConfiguration.configuredMetadataVersion(0);
-            } catch (final Exception error) {
-                throw new AssertionError("Upgrade from " + upgradeFrom + " failed with " + error.getMessage() + "!");
-            }
-        }
-    }
 }

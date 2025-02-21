@@ -794,13 +794,11 @@ public class StreamsConfig extends AbstractConfig {
     /** {@code upgrade.from} */
     @SuppressWarnings("WeakerAccess")
     public static final String UPGRADE_FROM_CONFIG = "upgrade.from";
-    private static final String UPGRADE_FROM_DOC = "Allows upgrading in a backward compatible way. " +
-        "This is needed when upgrading from [0.10.0, 1.1] to 2.0+, or when upgrading from [2.0, 2.3] to 2.4+. " +
-        "When upgrading from 3.3 to a newer version it is not required to specify this config. Default is `null`. " +
-        "Accepted values are \"" + UPGRADE_FROM_0100 + "\", \"" + UPGRADE_FROM_0101 + "\", \"" +
-        UPGRADE_FROM_0102 + "\", \"" + UPGRADE_FROM_0110 + "\", \"" + UPGRADE_FROM_10 + "\", \"" +
-        UPGRADE_FROM_11 + "\", \"" + UPGRADE_FROM_20 + "\", \"" + UPGRADE_FROM_21 + "\", \"" +
-        UPGRADE_FROM_22 + "\", \"" + UPGRADE_FROM_23 + "\", \"" + UPGRADE_FROM_24 + "\", \"" +
+    private static final String UPGRADE_FROM_DOC = "Allows live upgrading (and downgrading) in a backward compatible way. " +
+        "This is needed for all upgrades from [2.4, 3.4] to 3.5 or above. " +
+        "When upgrading from 3.5 to a newer version it is not required to specify this config. Default is `null`. " +
+        "Upgrading directly to 4.0 from 2.3 or below is no longer supported. " +
+        "Accepted values are \"" + UPGRADE_FROM_24 + "\", \"" +
         UPGRADE_FROM_25 + "\", \"" + UPGRADE_FROM_26 + "\", \"" + UPGRADE_FROM_27 + "\", \"" +
         UPGRADE_FROM_28 + "\", \"" + UPGRADE_FROM_30 + "\", \"" + UPGRADE_FROM_31 + "\", \"" +
         UPGRADE_FROM_32 + "\", \"" + UPGRADE_FROM_33 + "\", \"" + UPGRADE_FROM_34 + "\", \"" +

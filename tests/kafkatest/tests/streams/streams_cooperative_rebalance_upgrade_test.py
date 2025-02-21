@@ -19,7 +19,7 @@ from ducktape.mark.resource import cluster
 from ducktape.tests.test import Test
 from kafkatest.services.kafka import KafkaService, quorum
 from kafkatest.services.verifiable_producer import VerifiableProducer
-from kafkatest.version import LATEST_2_1, LATEST_2_2, LATEST_2_3
+from kafkatest.version import LATEST_2_1, LATEST_2_2, LATEST_2_3, LATEST_2_4, LATEST_2_5, LATEST_2_6, LATEST_2_7, LATEST_2_8, LATEST_3_0, LATEST_3_1, LATEST_3_2, LATEST_3_3, LATEST_3_4, LATEST_3_5, LATEST_3_6, LATEST_3_7, LATEST_3_8, LATEST_3_9
 from kafkatest.services.streams import CooperativeRebalanceUpgradeService
 from kafkatest.tests.streams.utils import verify_stopped, stop_processors, verify_running
 
@@ -43,7 +43,10 @@ class StreamsCooperativeRebalanceUpgradeTest(Test):
     second_bounce_phase = "second_bounce_phase-"
 
     # !!CAUTION!!: THIS LIST OF VERSIONS IS FIXED, NO VERSIONS MUST BE ADDED
-    streams_eager_rebalance_upgrade_versions = [str(LATEST_2_1), str(LATEST_2_2), str(LATEST_2_3)]
+    streams_eager_rebalance_upgrade_from_versions = [str(LATEST_2_1), str(LATEST_2_2), str(LATEST_2_3)]
+
+    # !!CAUTION!!: THIS LIST OF VERSIONS IS FIXED, NO VERSIONS MUST BE ADDED
+    streams_cooperative_rebalance_upgrade_to_versions = [str(LATEST_2_4), str(LATEST_2_5), str(LATEST_2_6), str(LATEST_2_7), str(LATEST_2_8), str(LATEST_3_0), str(LATEST_3_1), str(LATEST_3_2), str(LATEST_3_3), str(LATEST_3_4), str(LATEST_3_5), str(LATEST_3_6), str(LATEST_3_7), str(LATEST_3_8), str(LATEST_3_9)]
 
     def __init__(self, test_context):
         super(StreamsCooperativeRebalanceUpgradeTest, self).__init__(test_context)
@@ -64,7 +67,7 @@ class StreamsCooperativeRebalanceUpgradeTest(Test):
                                            acks=1)
 
     @cluster(num_nodes=8)
-    @matrix(upgrade_from_version=streams_eager_rebalance_upgrade_versions, metadata_quorum=[quorum.combined_kraft])
+    @matrix(upgrade_from_version=streams_eager_rebalance_upgrade_from_versions, metadata_quorum=[quorum.combined_kraft])
     def test_upgrade_to_cooperative_rebalance(self, upgrade_from_version, metadata_quorum):
         self.kafka.start()
 
