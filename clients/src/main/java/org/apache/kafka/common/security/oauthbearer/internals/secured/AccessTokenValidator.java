@@ -55,10 +55,10 @@ public interface AccessTokenValidator extends OAuthBearerConfigurable {
      *
      * @return {@link OAuthBearerToken}
      *
-     * @throws ValidateException Thrown on errors performing validation of given token
+     * @throws InvalidJwtException Thrown on errors performing validation of given token
      */
 
-    OAuthBearerToken validate(String accessToken) throws ValidateException;
+    OAuthBearerToken validate(String accessToken) throws InvalidJwtException;
 
     @Override
     default void close() {

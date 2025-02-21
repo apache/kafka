@@ -30,7 +30,7 @@ import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessToke
 import org.apache.kafka.common.security.oauthbearer.internals.secured.DefaultAccessTokenRetriever;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.DefaultAccessTokenValidator;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.JaasOptionsUtils;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.ValidateException;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.InvalidJwtException;
 import org.apache.kafka.common.utils.Utils;
 
 import org.slf4j.Logger;
@@ -244,7 +244,7 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
         try {
             OAuthBearerToken token = accessTokenValidator.validate(accessToken);
             callback.token(token);
-        } catch (ValidateException e) {
+        } catch (InvalidJwtException e) {
             log.warn(e.getMessage(), e);
             callback.error("invalid_token", e.getMessage(), null);
         }

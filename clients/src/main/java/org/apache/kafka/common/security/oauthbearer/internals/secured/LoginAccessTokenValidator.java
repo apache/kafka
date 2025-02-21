@@ -84,18 +84,18 @@ public class LoginAccessTokenValidator implements AccessTokenValidator {
      *
      * @param accessToken Non-<code>null</code> JWT access token
      * @return {@link OAuthBearerToken}
-     * @throws ValidateException Thrown on errors performing validation of given token
+     * @throws InvalidJwtException Thrown on errors performing validation of given token
      */
 
     @SuppressWarnings("unchecked")
-    public OAuthBearerToken validate(String accessToken) throws ValidateException {
+    public OAuthBearerToken validate(String accessToken) throws InvalidJwtException {
         SerializedJwt serializedJwt = new SerializedJwt(accessToken);
         Map<String, Object> payload;
 
         try {
             payload = OAuthBearerUnsecuredJws.toMap(serializedJwt.getPayload());
         } catch (OAuthBearerIllegalTokenException e) {
-            throw new ValidateException(String.format("Could not validate the access token: %s", e.getMessage()), e);
+            throw new InvalidJwtException(String.format("Could not validate the access token: %s", e.getMessage()), e);
         }
 
         Object scopeRaw = getClaim(payload, scopeClaimName);

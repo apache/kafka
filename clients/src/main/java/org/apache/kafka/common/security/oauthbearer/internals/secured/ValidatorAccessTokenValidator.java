@@ -26,7 +26,6 @@ import org.jose4j.jwt.JwtClaims;
 import org.jose4j.jwt.MalformedClaimException;
 import org.jose4j.jwt.NumericDate;
 import org.jose4j.jwt.ReservedClaimNames;
-import org.jose4j.jwt.consumer.InvalidJwtException;
 import org.jose4j.jwt.consumer.JwtConsumer;
 import org.jose4j.jwt.consumer.JwtConsumerBuilder;
 import org.jose4j.jwt.consumer.JwtContext;
@@ -176,18 +175,18 @@ public class ValidatorAccessTokenValidator implements AccessTokenValidator {
      *
      * @param accessToken Non-<code>null</code> JWT access token
      * @return {@link OAuthBearerToken}
-     * @throws ValidateException Thrown on errors performing validation of given token
+     * @throws InvalidJwtException Thrown on errors performing validation of given token
      */
     @SuppressWarnings("unchecked")
-    public OAuthBearerToken validate(String accessToken) throws ValidateException {
+    public OAuthBearerToken validate(String accessToken) throws InvalidJwtException {
         SerializedJwt serializedJwt = new SerializedJwt(accessToken);
 
         JwtContext jwt;
 
         try {
             jwt = jwtConsumer.process(serializedJwt.getToken());
-        } catch (InvalidJwtException e) {
-            throw new ValidateException(String.format("Could not validate the access token: %s", e.getMessage()), e);
+        } catch (org.jose4j.jwt.consumer.InvalidJwtException e) {
+            throw new InvalidJwtException(String.format("Could not validate the access token: %s", e.getMessage()), e);
         }
 
         JwtClaims claims = jwt.getJwtClaims();
@@ -220,13 +219,13 @@ public class ValidatorAccessTokenValidator implements AccessTokenValidator {
             issuedAt);
     }
 
-    private <T> T getClaim(ClaimSupplier<T> supplier, String claimName) throws ValidateException {
+    private <T> T getClaim(ClaimSupplier<T> supplier, String claimName) throws InvalidJwtException {
         try {
             T value = supplier.get();
             log.debug("getClaim - {}: {}", claimName, value);
             return value;
         } catch (MalformedClaimException e) {
-            throw new ValidateException(String.format("Could not extract the '%s' claim from the access token", claimName), e);
+            throw new InvalidJwtException(String.format("Could not extract the '%s' claim from the access token", claimName), e);
         }
     }
 

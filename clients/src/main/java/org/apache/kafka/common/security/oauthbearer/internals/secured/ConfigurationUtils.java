@@ -18,6 +18,7 @@ package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.network.ListenerName;
+import org.apache.kafka.common.utils.Utils;
 
 import java.io.File;
 import java.net.MalformedURLException;
@@ -46,7 +47,7 @@ public class ConfigurationUtils {
     public ConfigurationUtils(Map<String, ?> configs, String saslMechanism) {
         this.configs = configs;
 
-        if (saslMechanism != null && !saslMechanism.trim().isEmpty())
+        if (!Utils.isBlank(saslMechanism))
             this.prefix = ListenerName.saslMechanismPrefix(saslMechanism.trim());
         else
             this.prefix = null;
@@ -186,11 +187,11 @@ public class ConfigurationUtils {
         return url;
     }
 
-    public String validateString(String name) throws ValidateException {
+    public String validateString(String name) {
         return validateString(name, true);
     }
 
-    public String validateString(String name, boolean isRequired) throws ValidateException {
+    public String validateString(String name, boolean isRequired) {
         String value = get(name);
 
         if (value == null) {

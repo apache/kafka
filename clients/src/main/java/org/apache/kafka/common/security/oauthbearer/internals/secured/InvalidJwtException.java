@@ -28,17 +28,17 @@ import javax.security.auth.callback.Callback;
  *
  * @see AccessTokenValidator#validate(String)
  */
-public class ValidateException extends KafkaException {
+public class InvalidJwtException extends KafkaException {
 
-    public ValidateException(String message) {
+    public InvalidJwtException(String message) {
         super(message);
     }
 
-    public ValidateException(Throwable cause) {
+    public InvalidJwtException(Throwable cause) {
         super(cause);
     }
 
-    public ValidateException(String message, Throwable cause) {
+    public InvalidJwtException(String message, Throwable cause) {
         super(message, cause);
     }
 }

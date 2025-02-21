@@ -77,7 +77,7 @@ public class DefaultAccessTokenValidator implements AccessTokenValidator {
     }
 
     @Override
-    public OAuthBearerToken validate(String accessToken) throws ValidateException {
+    public OAuthBearerToken validate(String accessToken) throws InvalidJwtException {
         return Objects.requireNonNull(delegate).validate(accessToken);
     }
 

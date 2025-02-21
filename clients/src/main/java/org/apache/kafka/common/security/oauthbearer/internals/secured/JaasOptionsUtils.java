@@ -85,11 +85,11 @@ public class JaasOptionsUtils {
         return sslClientConfig.values();
     }
 
-    public String validateString(String name) throws ValidateException {
+    public String validateString(String name) {
         return validateString(name, true);
     }
 
-    public String validateString(String name, boolean isRequired) throws ValidateException {
+    public String validateString(String name, boolean isRequired) {
         String value = (String) options.get(name);
 
         if (value == null) {
