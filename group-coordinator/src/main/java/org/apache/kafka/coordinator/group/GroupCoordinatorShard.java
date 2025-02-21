@@ -18,6 +18,8 @@ package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ApiException;
+import org.apache.kafka.common.errors.GroupIdNotFoundException;
+import org.apache.kafka.common.errors.GroupNotEmptyException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
@@ -107,16 +109,20 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
+import org.apache.kafka.coordinator.group.modern.share.ShareGroup;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.share.persister.DeleteShareGroupStateParameters;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -488,6 +494,33 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             numDeletedOffsets
         );
         return new CoordinatorResult<>(records, resultCollection);
+    }
+
+    /**
+     * Method returns a Map keyed on groupId and value as pair of {@link DeleteShareGroupStateParameters}
+     * and any ERRORS while building the request corresponding
+     * to the valid share groups passed as the input.
+     * <p></p>
+     * The groupIds are first filtered by type to restrict the list to share groups.
+     * @param groupIds - A list of groupIds as string
+     * @return {@link CoordinatorResult} object always containing empty records and Map keyed on groupId and value pair (req, error)
+     */
+    public CoordinatorResult<Map<String, Map.Entry<DeleteShareGroupStateParameters, Errors>>, CoordinatorRecord> sharePartitionDeleteRequests(List<String> groupIds) {
+        Map<String, Map.Entry<DeleteShareGroupStateParameters, Errors>> responseMap = new HashMap<>();
+        for (String groupId : groupIds) {
+            try {
+                ShareGroup group = groupMetadataManager.shareGroup(groupId);
+                group.validateDeleteGroup();
+                groupMetadataManager.shareGroupBuildPartitionDeleteRequest(group)
+                    .ifPresent(req -> responseMap.put(groupId, Map.entry(req, Errors.NONE)));
+            } catch (GroupIdNotFoundException exception) {
+                log.debug("GroupId {} not found as a share group.", groupId);
+            } catch (GroupNotEmptyException exception) {
+                log.debug("Share group {} is not empty.", groupId);
+                responseMap.put(groupId, Map.entry(DeleteShareGroupStateParameters.EMPTY_PARAMS, Errors.forException(exception)));
+            }
+        }
+        return new CoordinatorResult<>(List.of(), responseMap);
     }
 
     /**
