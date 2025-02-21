@@ -21,7 +21,6 @@ import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.runtime.isolation.LoaderSwap;
-import org.apache.kafka.connect.runtime.isolation.PluginUtils;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.predicates.Predicate;
 
@@ -42,16 +41,9 @@ public class TransformationStage<R extends ConnectRecord<R>> implements AutoClos
     private final boolean negate;
     private final Function<ClassLoader, LoaderSwap> pluginLoaderSwapper;
 
-    TransformationStage(Plugin<Transformation<R>> transformationPlugin) {
-        this(null, false, transformationPlugin);
-    }
 
     TransformationStage(Plugin<Transformation<R>> transformationPlugin, Function<ClassLoader, LoaderSwap> pluginLoaderSwapper) {
         this(null, false, transformationPlugin, pluginLoaderSwapper);
-    }
-
-    TransformationStage(Plugin<Predicate<R>> predicatePlugin, boolean negate, Plugin<Transformation<R>> transformationPlugin) {
-        this(predicatePlugin, negate, transformationPlugin, PluginUtils.noOpLoaderSwap());
     }
 
     TransformationStage(Plugin<Predicate<R>> predicatePlugin, boolean negate, Plugin<Transformation<R>> transformationPlugin, Function<ClassLoader, LoaderSwap> pluginLoaderSwapper) {

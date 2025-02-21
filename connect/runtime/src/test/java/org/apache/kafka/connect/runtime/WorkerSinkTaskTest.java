@@ -48,7 +48,7 @@ import org.apache.kafka.connect.runtime.errors.ProcessingContext;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperatorTest;
 import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
-import org.apache.kafka.connect.runtime.isolation.PluginUtils;
+import org.apache.kafka.connect.runtime.isolation.TestPlugins;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.sink.SinkRecord;
@@ -229,7 +229,7 @@ public class WorkerSinkTaskTest {
                 taskId, task, statusListener, initialState, workerConfig, ClusterConfigState.EMPTY, connectMetrics,
                 keyConverterPlugin, valueConverterPlugin, errorMetrics, headerConverterPlugin,
                 transformationChain, consumer, loader, time,
-                retryWithToleranceOperator, null, statusBackingStore, errorReportersSupplier, PluginUtils.noOpLoaderSwap());
+                retryWithToleranceOperator, null, statusBackingStore, errorReportersSupplier, TestPlugins.noOpLoaderSwap());
     }
 
     @AfterEach

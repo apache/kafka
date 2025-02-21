@@ -320,7 +320,7 @@ public final class Worker {
             final ClassLoader connectorLoader;
 
             try {
-                connectorLoader = instantiateConnectorClassLoader(connProps);
+                connectorLoader = connectorClassLoader(connProps);
                 try (LoaderSwap loaderSwap = plugins.withClassLoader(connectorLoader)) {
                     log.info("Creating connector {} of type {}", connName, connClass);
                     final Connector connector = instantiateConnector(connProps);
@@ -667,7 +667,7 @@ public final class Worker {
 
             final ClassLoader connectorLoader;
             try {
-                connectorLoader = instantiateConnectorClassLoader(connProps);
+                connectorLoader = connectorClassLoader(connProps);
                 try (LoaderSwap loaderSwap = plugins.withClassLoader(connectorLoader)) {
                     final ConnectorConfig connConfig = new ConnectorConfig(plugins, connProps);
 
@@ -749,9 +749,8 @@ public final class Worker {
     public KafkaFuture<Void> fenceZombies(String connName, int numTasks, Map<String, String> connProps) {
         log.debug("Fencing out {} task producers for source connector {}", numTasks, connName);
         try (LoggingContext loggingContext = LoggingContext.forConnector(connName)) {
-            String connType = connProps.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
-            Connector connector = instantiateConnector(connProps);
-            ClassLoader classLoader = instantiateConnectorClassLoader(connProps);
+            Class<? extends Connector> connectorClass = connectorClass(connProps);
+            ClassLoader classLoader = connectorClassLoader(connProps);
             try (LoaderSwap loaderSwap = plugins.withClassLoader(classLoader)) {
                 final SourceConnectorConfig connConfig = new SourceConnectorConfig(plugins, connProps, config.topicCreationEnable());
 
@@ -760,7 +759,7 @@ public final class Worker {
                         "connector-worker-adminclient-" + connName,
                         config,
                         connConfig,
-                        connector.getClass(),
+                        connectorClass,
                         connectorClientConfigOverridePolicy,
                         kafkaClusterId,
                         ConnectorType.SOURCE);
@@ -1208,7 +1207,7 @@ public final class Worker {
      */
     public void connectorOffsets(String connName, Map<String, String> connectorConfig, Callback<ConnectorOffsets> cb) {
         Connector connector = instantiateConnector(connectorConfig);
-        ClassLoader connectorLoader = instantiateConnectorClassLoader(connectorConfig);
+        ClassLoader connectorLoader = connectorClassLoader(connectorConfig);
         try (LoaderSwap loaderSwap = plugins.withClassLoader(connectorLoader)) {
             if (ConnectUtils.isSinkConnector(connector)) {
                 log.debug("Fetching offsets for sink connector: {}", connName);
@@ -1233,7 +1232,7 @@ public final class Worker {
         }
     }
 
-    private ClassLoader instantiateConnectorClassLoader(Map<String, String> connProps) throws ConnectException {
+    private ClassLoader connectorClassLoader(Map<String, String> connProps) throws ConnectException {
         final String klass = connProps.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
         final String version = connProps.get(ConnectorConfig.CONNECTOR_VERSION);
 
@@ -1241,9 +1240,22 @@ public final class Worker {
             return plugins.pluginLoader(klass, PluginUtils.connectorVersionRequirement(version));
         } catch (InvalidVersionSpecificationException  | VersionedPluginLoadingException e) {
             throw new ConnectException(
-                    String.format("Failed to instantiate class loader for connector %s, class %s", klass, connProps.get(ConnectorConfig.NAME_CONFIG)), e);
+                    String.format("Failed to get class loader for connector %s, class %s", klass, connProps.get(ConnectorConfig.NAME_CONFIG)), e);
         }
     }
+
+    private Class<? extends Connector> connectorClass(Map<String, String> connProps) throws ConnectException {
+        final String klass = connProps.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
+        final String version = connProps.get(ConnectorConfig.CONNECTOR_VERSION);
+
+        try {
+            return plugins.connectorClass(klass, PluginUtils.connectorVersionRequirement(version));
+        } catch (InvalidVersionSpecificationException | VersionedPluginLoadingException e) {
+            throw new ConnectException(
+                String.format("Failed to get class for connector %s, class %s", klass, connProps.get(ConnectorConfig.NAME_CONFIG)), e);
+        }
+    }
+
     /**
      * Get the current consumer group offsets for a sink connector.
      * <p>
@@ -1344,7 +1356,7 @@ public final class Worker {
                                       Map<Map<String, ?>, Map<String, ?>> offsets, Callback<Message> cb) {
 
         final Connector connector = instantiateConnector(connectorConfig);
-        ClassLoader connectorLoader = instantiateConnectorClassLoader(connectorConfig);
+        ClassLoader connectorLoader = connectorClassLoader(connectorConfig);
         try (LoaderSwap loaderSwap = plugins.withClassLoader(connectorLoader)) {
             if (ConnectUtils.isSinkConnector(connector)) {
                 log.debug("Modifying offsets for sink connector: {}", connName);
