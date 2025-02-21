@@ -72,7 +72,7 @@ class GroupCoordinatorAdapterTest {
     val request = new ConsumerGroupHeartbeatRequestData()
       .setGroupId("group")
 
-    val future = adapter.consumerGroupHeartbeat(ctx, request, Optional.empty)
+    val future = adapter.consumerGroupHeartbeat(ctx, request)
 
     assertTrue(future.isDone)
     assertTrue(future.isCompletedExceptionally)
