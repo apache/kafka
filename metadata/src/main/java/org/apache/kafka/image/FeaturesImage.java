@@ -21,11 +21,10 @@ import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.image.node.FeaturesImageNode;
 import org.apache.kafka.image.writer.ImageWriter;
 import org.apache.kafka.image.writer.ImageWriterOptions;
+import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 
-import java.util.ArrayList;
 import java.util.Collections;
-import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
@@ -40,53 +39,51 @@ import java.util.Optional;
 public final class FeaturesImage {
     public static final FeaturesImage EMPTY = new FeaturesImage(
         Collections.emptyMap(),
-        MetadataVersion.MINIMUM_KRAFT_VERSION
+        Optional.empty()
     );
 
     private final Map<String, Short> finalizedVersions;
 
-    private final MetadataVersion metadataVersion;
+    private final Optional<MetadataVersion> metadataVersion;
 
     public FeaturesImage(
-        Map<String, Short> finalizedVersions,
-        MetadataVersion metadataVersion) {
+            Map<String, Short> finalizedVersions,
+            MetadataVersion metadataVersion) {
+        this(finalizedVersions, Optional.of(metadataVersion));
+    }
+
+    FeaturesImage(
+            Map<String, Short> finalizedVersions,
+            Optional<MetadataVersion> metadataVersion) {
         this.finalizedVersions = Collections.unmodifiableMap(finalizedVersions);
         this.metadataVersion = metadataVersion;
     }
 
     public boolean isEmpty() {
-        return finalizedVersions.isEmpty() &&
-            metadataVersion.equals(MetadataVersion.MINIMUM_KRAFT_VERSION);
+        return finalizedVersions.isEmpty() && metadataVersion.isEmpty();
     }
 
-    public MetadataVersion metadataVersion() {
+    public Optional<MetadataVersion> metadataVersion() {
         return metadataVersion;
+    }
+
+
+    public MetadataVersion metadataVersionOrThrow() {
+        return metadataVersion.orElseThrow(() ->
+                new IllegalStateException("Unknown metadata version for FeaturesImage: " + this));
     }
 
     public Map<String, Short> finalizedVersions() {
         return finalizedVersions;
     }
 
-    private Optional<Short> finalizedVersion(String feature) {
-        return Optional.ofNullable(finalizedVersions.get(feature));
+    public boolean isElrEnabled() {
+        return finalizedVersions.getOrDefault(EligibleLeaderReplicasVersion.FEATURE_NAME, EligibleLeaderReplicasVersion.ELRV_0.featureLevel())
+            >= EligibleLeaderReplicasVersion.ELRV_1.featureLevel();
     }
 
     public void write(ImageWriter writer, ImageWriterOptions options) {
-        if (options.metadataVersion().isLessThan(MetadataVersion.MINIMUM_BOOTSTRAP_VERSION)) {
-            handleFeatureLevelNotSupported(options);
-        } else {
-            writeFeatureLevels(writer, options);
-        }
-    }
-
-    private void handleFeatureLevelNotSupported(ImageWriterOptions options) {
-        // If the metadata version is older than 3.3-IV0, we can't represent any feature flags,
-        // because the FeatureLevel record is not supported.
-        if (!finalizedVersions.isEmpty()) {
-            List<String> features = new ArrayList<>(finalizedVersions.keySet());
-            features.sort(String::compareTo);
-            options.handleLoss("feature flag(s): " + String.join(", ", features));
-        }
+        writeFeatureLevels(writer, options);
     }
 
     private void writeFeatureLevels(ImageWriter writer, ImageWriterOptions options) {

@@ -55,7 +55,6 @@ public class FeatureControlManager {
         private SnapshotRegistry snapshotRegistry = null;
         private QuorumFeatures quorumFeatures = null;
         private MetadataVersion metadataVersion = MetadataVersion.latestProduction();
-        private MetadataVersion minimumBootstrapVersion = MetadataVersion.MINIMUM_BOOTSTRAP_VERSION;
         private ClusterFeatureSupportDescriber clusterSupportDescriber = new ClusterFeatureSupportDescriber() {
             @Override
             public Iterator<Entry<Integer, Map<String, VersionRange>>> brokerSupported() {
@@ -88,11 +87,6 @@ public class FeatureControlManager {
             return this;
         }
 
-        Builder setMinimumBootstrapVersion(MetadataVersion minimumBootstrapVersion) {
-            this.minimumBootstrapVersion = minimumBootstrapVersion;
-            return this;
-        }
-
         Builder setClusterFeatureSupportDescriber(ClusterFeatureSupportDescriber clusterSupportDescriber) {
             this.clusterSupportDescriber = clusterSupportDescriber;
             return this;
@@ -104,7 +98,7 @@ public class FeatureControlManager {
             if (quorumFeatures == null) {
                 Map<String, VersionRange> localSupportedFeatures = new HashMap<>();
                 localSupportedFeatures.put(MetadataVersion.FEATURE_NAME, VersionRange.of(
-                        MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel(),
+                        MetadataVersion.MINIMUM_VERSION.featureLevel(),
                         MetadataVersion.latestProduction().featureLevel()));
                 quorumFeatures = new QuorumFeatures(0, localSupportedFeatures, Collections.singletonList(0));
             }
@@ -113,7 +107,6 @@ public class FeatureControlManager {
                 quorumFeatures,
                 snapshotRegistry,
                 metadataVersion,
-                minimumBootstrapVersion,
                 clusterSupportDescriber
             );
         }
@@ -137,11 +130,6 @@ public class FeatureControlManager {
     private final TimelineObject<MetadataVersion> metadataVersion;
 
     /**
-     * The minimum bootstrap version that we can't downgrade before.
-     */
-    private final MetadataVersion minimumBootstrapVersion;
-
-    /**
      * Gives information about the supported versions in the cluster.
      */
     private final ClusterFeatureSupportDescriber clusterSupportDescriber;
@@ -151,14 +139,12 @@ public class FeatureControlManager {
         QuorumFeatures quorumFeatures,
         SnapshotRegistry snapshotRegistry,
         MetadataVersion metadataVersion,
-        MetadataVersion minimumBootstrapVersion,
         ClusterFeatureSupportDescriber clusterSupportDescriber
     ) {
         this.log = logContext.logger(FeatureControlManager.class);
         this.quorumFeatures = quorumFeatures;
         this.finalizedVersions = new TimelineHashMap<>(snapshotRegistry, 0);
         this.metadataVersion = new TimelineObject<>(snapshotRegistry, metadataVersion);
-        this.minimumBootstrapVersion = minimumBootstrapVersion;
         this.clusterSupportDescriber = clusterSupportDescriber;
     }
 
@@ -328,15 +314,10 @@ public class FeatureControlManager {
         try {
             newVersion = MetadataVersion.fromFeatureLevel(newVersionLevel);
         } catch (IllegalArgumentException e) {
-            return invalidMetadataVersion(newVersionLevel, "Unknown metadata.version.");
+            return invalidMetadataVersion(newVersionLevel, "Valid versions are from "
+                + MetadataVersion.MINIMUM_VERSION.featureLevel() + " to " + MetadataVersion.latestTesting().featureLevel() + ".");
         }
 
-        // We cannot set a version earlier than IBP_3_3_IV0, since that was the first version that contained
-        // FeatureLevelRecord itself.
-        if (newVersion.isLessThan(minimumBootstrapVersion)) {
-            return invalidMetadataVersion(newVersionLevel, "Unable to set a metadata.version less than " +
-                    minimumBootstrapVersion);
-        }
         if (newVersion.isLessThan(currentVersion)) {
             // This is a downgrade
             boolean metadataChanged = MetadataVersion.checkIfMetadataChanged(currentVersion, newVersion);

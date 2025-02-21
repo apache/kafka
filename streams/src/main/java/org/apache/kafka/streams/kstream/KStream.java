@@ -39,26 +39,24 @@ import org.apache.kafka.streams.state.VersionedBytesStoreSupplier;
 import java.time.Duration;
 
 /**
- * {@code KStream} is an abstraction of a <i>record stream</i> of {@link KeyValue} pairs, i.e., each record is an
- * independent entity/event in the real world.
+ * {@code KStream} is an abstraction of a <em>record stream</em> of {@link Record key-value} pairs, i.e., each record is
+ * an independent entity/event in the real world.
  * For example a user X might buy two items I1 and I2, and thus there might be two records {@code <K:I1>, <K:I2>}
  * in the stream.
- * <p>
- * A {@code KStream} is either {@link StreamsBuilder#stream(String) defined from one or multiple Kafka topics} that
+ *
+ * <p>A {@code KStream} is either {@link StreamsBuilder#stream(String) defined from one or multiple Kafka topics} that
  * are consumed message by message or the result of a {@code KStream} transformation.
- * A {@link KTable} can also be {@link KTable#toStream() converted} into a {@code KStream}.
- * <p>
- * A {@code KStream} can be transformed record by record, joined with another {@code KStream}, {@link KTable},
+ * A {@link KTable} can also be directly {@link KTable#toStream() converted} into a {@code KStream}.
+ *
+ * <p>A {@code KStream} can be transformed record by record, joined with another {@code KStream}, {@link KTable},
  * {@link GlobalKTable}, or can be aggregated into a {@link KTable}.
- * Kafka Streams DSL can be mixed-and-matched with Processor API (PAPI) (c.f. {@link Topology}) via
+ * A {@link KStream} can also be directly {@link KStream#toTable() converted} into a {@code KTable}.
+ * Kafka Streams DSL can be mixed-and-matched with the Processor API (PAPI) (cf. {@link Topology}) via
  * {@link #process(ProcessorSupplier, String...) process(...)} and {@link #processValues(FixedKeyProcessorSupplier,
  * String...) processValues(...)}.
  *
- * @param <K> Type of keys
- * @param <V> Type of values
- * @see KTable
- * @see KGroupedStream
- * @see StreamsBuilder#stream(String)
+ * @param <K> the key type of this stream
+ * @param <V> the value type of this stream
  */
 public interface KStream<K, V> {
 

@@ -235,6 +235,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
         properties.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE); // as defined in KIP-932
         properties.put(TopicConfig.COMPRESSION_TYPE_CONFIG, BrokerCompressionType.PRODUCER.name);
         properties.put(TopicConfig.SEGMENT_BYTES_CONFIG, config.shareCoordinatorStateTopicSegmentBytes());
+        properties.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, config.shareCoordinatorStateTopicMinIsr());
         return properties;
     }
 
@@ -270,7 +271,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
                 List<CompletableFuture<Void>> futures = new ArrayList<>();
                 runtime.activeTopicPartitions().forEach(tp -> futures.add(performRecordPruning(tp)));
 
-                CompletableFuture.allOf(futures.toArray(new CompletableFuture[]{}))
+                CompletableFuture.allOf(futures.toArray(new CompletableFuture<?>[]{}))
                     .whenComplete((res, exp) -> {
                         if (exp != null) {
                             log.error("Received error in share-group state topic prune.", exp);
