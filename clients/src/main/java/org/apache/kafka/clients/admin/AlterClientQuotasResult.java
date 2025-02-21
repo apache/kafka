@@ -54,6 +54,6 @@ public class AlterClientQuotasResult {
      * Returns a future which succeeds only if all quota alterations succeed.
      */
     public KafkaFuture<Void> all() {
-        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0]));
+        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture<?>[0]));
     }
 }

@@ -29,6 +29,7 @@ import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.requests.FetchRequest;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.purgatory.DelayedOperationKey;
 import org.apache.kafka.server.purgatory.DelayedOperationPurgatory;
 import org.apache.kafka.server.share.SharePartitionKey;
@@ -36,9 +37,11 @@ import org.apache.kafka.server.share.fetch.DelayedShareFetchGroupKey;
 import org.apache.kafka.server.share.fetch.PartitionMaxBytesStrategy;
 import org.apache.kafka.server.share.fetch.ShareAcquiredRecords;
 import org.apache.kafka.server.share.fetch.ShareFetch;
+import org.apache.kafka.server.share.metrics.ShareGroupMetrics;
 import org.apache.kafka.server.storage.log.FetchIsolation;
 import org.apache.kafka.server.storage.log.FetchParams;
 import org.apache.kafka.server.storage.log.FetchPartitionData;
+import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.server.util.timer.SystemTimer;
 import org.apache.kafka.server.util.timer.SystemTimerReaper;
 import org.apache.kafka.server.util.timer.Timer;
@@ -74,6 +77,7 @@ import static kafka.server.share.SharePartitionManagerTest.mockReplicaManagerDel
 import static org.apache.kafka.server.share.fetch.ShareFetchTestUtils.orderedMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
@@ -100,6 +104,7 @@ public class DelayedShareFetchTest {
 
     @BeforeEach
     public void setUp() {
+        kafka.utils.TestUtils.clearYammerMetrics();
         mockTimer = new SystemTimerReaper("DelayedShareFetchTestReaper",
             new SystemTimer("DelayedShareFetchTestTimer"));
     }
@@ -133,9 +138,12 @@ public class DelayedShareFetchTest {
 
         when(sp0.canAcquireRecords()).thenReturn(false);
         when(sp1.canAcquireRecords()).thenReturn(false);
+
+        ShareGroupMetrics shareGroupMetrics = new ShareGroupMetrics(new MockTime());
         DelayedShareFetch delayedShareFetch = spy(DelayedShareFetchBuilder.builder()
             .withShareFetchData(shareFetch)
             .withSharePartitions(sharePartitions)
+            .withShareGroupMetrics(shareGroupMetrics)
             .build());
 
         // Since there is no partition that can be acquired, tryComplete should return false.
@@ -143,6 +151,10 @@ public class DelayedShareFetchTest {
         assertFalse(delayedShareFetch.isCompleted());
         Mockito.verify(delayedShareFetch, times(0)).releasePartitionLocks(any());
         assertTrue(delayedShareFetch.lock().tryLock());
+        // Metrics shall not be recorded as no partition is acquired.
+        assertNull(shareGroupMetrics.topicPartitionsAcquireTimeMs(groupId));
+        assertNull(shareGroupMetrics.topicPartitionsFetchRatio(groupId));
+
         delayedShareFetch.lock().unlock();
     }
 
@@ -190,12 +202,17 @@ public class DelayedShareFetchTest {
 
         PartitionMaxBytesStrategy partitionMaxBytesStrategy = mockPartitionMaxBytes(Collections.singleton(tp0));
 
+        Time time = mock(Time.class);
+        when(time.hiResClockMs()).thenReturn(100L).thenReturn(110L);
+        ShareGroupMetrics shareGroupMetrics = new ShareGroupMetrics(time);
         DelayedShareFetch delayedShareFetch = spy(DelayedShareFetchBuilder.builder()
             .withShareFetchData(shareFetch)
             .withSharePartitions(sharePartitions)
             .withReplicaManager(replicaManager)
             .withExceptionHandler(exceptionHandler)
             .withPartitionMaxBytesStrategy(partitionMaxBytesStrategy)
+            .withShareGroupMetrics(shareGroupMetrics)
+            .withTime(time)
             .build());
         assertFalse(delayedShareFetch.isCompleted());
 
@@ -204,6 +221,12 @@ public class DelayedShareFetchTest {
         assertFalse(delayedShareFetch.isCompleted());
         Mockito.verify(delayedShareFetch, times(1)).releasePartitionLocks(any());
         assertTrue(delayedShareFetch.lock().tryLock());
+        // Though the request is not completed but sp0 was acquired and hence the metric should be recorded.
+        assertEquals(1, shareGroupMetrics.topicPartitionsAcquireTimeMs(groupId).count());
+        assertEquals(10, shareGroupMetrics.topicPartitionsAcquireTimeMs(groupId).sum());
+        // Since the request is not completed, the fetch ratio should be null.
+        assertNull(shareGroupMetrics.topicPartitionsFetchRatio(groupId));
+
         delayedShareFetch.lock().unlock();
         Mockito.verify(exceptionHandler, times(1)).accept(any(), any());
     }
@@ -297,11 +320,16 @@ public class DelayedShareFetchTest {
 
         PartitionMaxBytesStrategy partitionMaxBytesStrategy = mockPartitionMaxBytes(Collections.singleton(tp0));
 
+        Time time = mock(Time.class);
+        when(time.hiResClockMs()).thenReturn(120L).thenReturn(140L);
+        ShareGroupMetrics shareGroupMetrics = new ShareGroupMetrics(time);
         DelayedShareFetch delayedShareFetch = spy(DelayedShareFetchBuilder.builder()
             .withShareFetchData(shareFetch)
             .withSharePartitions(sharePartitions)
             .withReplicaManager(replicaManager)
             .withPartitionMaxBytesStrategy(partitionMaxBytesStrategy)
+            .withShareGroupMetrics(shareGroupMetrics)
+            .withTime(time)
             .build());
         assertFalse(delayedShareFetch.isCompleted());
 
@@ -310,6 +338,11 @@ public class DelayedShareFetchTest {
         assertTrue(delayedShareFetch.isCompleted());
         Mockito.verify(delayedShareFetch, times(1)).releasePartitionLocks(any());
         assertTrue(delayedShareFetch.lock().tryLock());
+        assertEquals(1, shareGroupMetrics.topicPartitionsAcquireTimeMs(groupId).count());
+        assertEquals(20, shareGroupMetrics.topicPartitionsAcquireTimeMs(groupId).sum());
+        assertEquals(1, shareGroupMetrics.topicPartitionsFetchRatio(groupId).count());
+        assertEquals(50, shareGroupMetrics.topicPartitionsFetchRatio(groupId).sum());
+
         delayedShareFetch.lock().unlock();
     }
 
@@ -338,10 +371,16 @@ public class DelayedShareFetchTest {
 
         when(sp0.canAcquireRecords()).thenReturn(false);
         when(sp1.canAcquireRecords()).thenReturn(false);
+
+        Time time = mock(Time.class);
+        when(time.hiResClockMs()).thenReturn(90L).thenReturn(140L);
+        ShareGroupMetrics shareGroupMetrics = new ShareGroupMetrics(time);
         DelayedShareFetch delayedShareFetch = spy(DelayedShareFetchBuilder.builder()
             .withShareFetchData(shareFetch)
             .withReplicaManager(replicaManager)
             .withSharePartitions(sharePartitions)
+            .withShareGroupMetrics(shareGroupMetrics)
+            .withTime(time)
             .build());
         assertFalse(delayedShareFetch.isCompleted());
         delayedShareFetch.forceComplete();
@@ -353,6 +392,12 @@ public class DelayedShareFetchTest {
         assertTrue(delayedShareFetch.isCompleted());
         Mockito.verify(delayedShareFetch, times(0)).releasePartitionLocks(any());
         assertTrue(delayedShareFetch.lock().tryLock());
+        // As the request is completed by onComplete then both metrics shall be recorded.
+        assertEquals(1, shareGroupMetrics.topicPartitionsAcquireTimeMs(groupId).count());
+        assertEquals(50, shareGroupMetrics.topicPartitionsAcquireTimeMs(groupId).sum());
+        assertEquals(1, shareGroupMetrics.topicPartitionsFetchRatio(groupId).count());
+        assertEquals(0, shareGroupMetrics.topicPartitionsFetchRatio(groupId).sum());
+
         delayedShareFetch.lock().unlock();
     }
 
@@ -387,11 +432,16 @@ public class DelayedShareFetchTest {
 
         PartitionMaxBytesStrategy partitionMaxBytesStrategy = mockPartitionMaxBytes(Collections.singleton(tp0));
 
+        Time time = mock(Time.class);
+        when(time.hiResClockMs()).thenReturn(10L).thenReturn(140L);
+        ShareGroupMetrics shareGroupMetrics = new ShareGroupMetrics(time);
         DelayedShareFetch delayedShareFetch = spy(DelayedShareFetchBuilder.builder()
             .withShareFetchData(shareFetch)
             .withReplicaManager(replicaManager)
             .withSharePartitions(sharePartitions)
             .withPartitionMaxBytesStrategy(partitionMaxBytesStrategy)
+            .withShareGroupMetrics(shareGroupMetrics)
+            .withTime(time)
             .build());
         assertFalse(delayedShareFetch.isCompleted());
         delayedShareFetch.forceComplete();
@@ -405,6 +455,11 @@ public class DelayedShareFetchTest {
         assertTrue(shareFetch.isCompleted());
         Mockito.verify(delayedShareFetch, times(1)).releasePartitionLocks(any());
         assertTrue(delayedShareFetch.lock().tryLock());
+        assertEquals(1, shareGroupMetrics.topicPartitionsAcquireTimeMs(groupId).count());
+        assertEquals(130, shareGroupMetrics.topicPartitionsAcquireTimeMs(groupId).sum());
+        assertEquals(1, shareGroupMetrics.topicPartitionsFetchRatio(groupId).count());
+        assertEquals(50, shareGroupMetrics.topicPartitionsFetchRatio(groupId).sum());
+
         delayedShareFetch.lock().unlock();
     }
 
@@ -428,10 +483,12 @@ public class DelayedShareFetchTest {
         when(sp0.maybeAcquireFetchLock()).thenReturn(true);
         when(sp0.canAcquireRecords()).thenReturn(false);
 
+        ShareGroupMetrics shareGroupMetrics = new ShareGroupMetrics(new MockTime());
         DelayedShareFetch delayedShareFetch = spy(DelayedShareFetchBuilder.builder()
             .withShareFetchData(shareFetch)
             .withReplicaManager(replicaManager)
             .withSharePartitions(sharePartitions)
+            .withShareGroupMetrics(shareGroupMetrics)
             .build());
         assertFalse(delayedShareFetch.isCompleted());
 
@@ -452,6 +509,10 @@ public class DelayedShareFetchTest {
         Mockito.verify(delayedShareFetch, times(1)).acquirablePartitions();
         Mockito.verify(delayedShareFetch, times(0)).releasePartitionLocks(any());
         assertTrue(delayedShareFetch.lock().tryLock());
+        // Assert both metrics shall be recorded only once.
+        assertEquals(1, shareGroupMetrics.topicPartitionsAcquireTimeMs(groupId).count());
+        assertEquals(1, shareGroupMetrics.topicPartitionsFetchRatio(groupId).count());
+
         delayedShareFetch.lock().unlock();
     }
 
@@ -639,12 +700,17 @@ public class DelayedShareFetchTest {
         PartitionMaxBytesStrategy partitionMaxBytesStrategy = mockPartitionMaxBytes(Collections.singleton(tp0));
 
         BiConsumer<SharePartitionKey, Throwable> exceptionHandler = mockExceptionHandler();
+        Time time = mock(Time.class);
+        when(time.hiResClockMs()).thenReturn(100L).thenReturn(110L).thenReturn(170L);
+        ShareGroupMetrics shareGroupMetrics = new ShareGroupMetrics(time);
         DelayedShareFetch delayedShareFetch = spy(DelayedShareFetchBuilder.builder()
             .withShareFetchData(shareFetch)
             .withSharePartitions(sharePartitions)
             .withReplicaManager(replicaManager)
             .withExceptionHandler(exceptionHandler)
             .withPartitionMaxBytesStrategy(partitionMaxBytesStrategy)
+            .withShareGroupMetrics(shareGroupMetrics)
+            .withTime(time)
             .build());
 
         // Try complete should return false as the share partition has errored out.
@@ -669,6 +735,13 @@ public class DelayedShareFetchTest {
             any(), any(), any(ReplicaQuota.class), anyBoolean());
         Mockito.verify(delayedShareFetch, times(1)).releasePartitionLocks(any());
         assertTrue(delayedShareFetch.lock().tryLock());
+        assertEquals(2, shareGroupMetrics.topicPartitionsAcquireTimeMs(groupId).count());
+        assertEquals(70, shareGroupMetrics.topicPartitionsAcquireTimeMs(groupId).sum());
+        assertEquals(10, shareGroupMetrics.topicPartitionsAcquireTimeMs(groupId).min());
+        assertEquals(60, shareGroupMetrics.topicPartitionsAcquireTimeMs(groupId).max());
+        assertEquals(1, shareGroupMetrics.topicPartitionsFetchRatio(groupId).count());
+        assertEquals(0, shareGroupMetrics.topicPartitionsFetchRatio(groupId).sum());
+
         delayedShareFetch.lock().unlock();
         Mockito.verify(exceptionHandler, times(1)).accept(any(), any());
     }
@@ -1078,11 +1151,13 @@ public class DelayedShareFetchTest {
     }
 
     static class DelayedShareFetchBuilder {
-        ShareFetch shareFetch = mock(ShareFetch.class);
+        private ShareFetch shareFetch = mock(ShareFetch.class);
         private ReplicaManager replicaManager = mock(ReplicaManager.class);
         private BiConsumer<SharePartitionKey, Throwable> exceptionHandler = mockExceptionHandler();
         private LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions = mock(LinkedHashMap.class);
         private PartitionMaxBytesStrategy partitionMaxBytesStrategy = mock(PartitionMaxBytesStrategy.class);
+        private Time time = new MockTime();
+        private ShareGroupMetrics shareGroupMetrics = mock(ShareGroupMetrics.class);
 
         DelayedShareFetchBuilder withShareFetchData(ShareFetch shareFetch) {
             this.shareFetch = shareFetch;
@@ -1109,6 +1184,16 @@ public class DelayedShareFetchTest {
             return this;
         }
 
+        private DelayedShareFetchBuilder withShareGroupMetrics(ShareGroupMetrics shareGroupMetrics) {
+            this.shareGroupMetrics = shareGroupMetrics;
+            return this;
+        }
+
+        private DelayedShareFetchBuilder withTime(Time time) {
+            this.time = time;
+            return this;
+        }
+
         public static DelayedShareFetchBuilder builder() {
             return new DelayedShareFetchBuilder();
         }
@@ -1119,7 +1204,9 @@ public class DelayedShareFetchTest {
                 replicaManager,
                 exceptionHandler,
                 sharePartitions,
-                partitionMaxBytesStrategy);
+                partitionMaxBytesStrategy,
+                shareGroupMetrics,
+                time);
         }
     }
 }

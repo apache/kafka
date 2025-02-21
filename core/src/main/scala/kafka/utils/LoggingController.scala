@@ -112,11 +112,11 @@ private class Log4jCoreController extends LoggingControllerDelegate {
     val level = Level.toLevel(logLevel.toUpperCase(Locale.ROOT))
 
     if (loggerName == ROOT_LOGGER) {
-      Configurator.setAllLevels(LogManager.ROOT_LOGGER_NAME, level)
+      Configurator.setLevel(LogManager.ROOT_LOGGER_NAME, level)
       true
     } else {
       if (loggerExists(loggerName) && level != null) {
-        Configurator.setAllLevels(loggerName, level)
+        Configurator.setLevel(loggerName, level)
         true
       }
       else false
@@ -124,12 +124,13 @@ private class Log4jCoreController extends LoggingControllerDelegate {
   }
 
   override def unsetLogLevel(loggerName: String): Boolean = {
+    val nullLevel: Level = null
     if (loggerName == ROOT_LOGGER) {
-      Configurator.setAllLevels(LogManager.ROOT_LOGGER_NAME, null)
+      Configurator.setLevel(LogManager.ROOT_LOGGER_NAME, nullLevel)
       true
     } else {
       if (loggerExists(loggerName)) {
-        Configurator.setAllLevels(loggerName, null)
+        Configurator.setLevel(loggerName, nullLevel)
         true
       }
       else false

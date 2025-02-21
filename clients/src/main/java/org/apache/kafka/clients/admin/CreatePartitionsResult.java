@@ -48,6 +48,6 @@ public class CreatePartitionsResult {
      * Return a future which succeeds if all the partition creations succeed.
      */
     public KafkaFuture<Void> all() {
-        return KafkaFuture.allOf(values.values().toArray(new KafkaFuture[0]));
+        return KafkaFuture.allOf(values.values().toArray(new KafkaFuture<?>[0]));
     }
 }

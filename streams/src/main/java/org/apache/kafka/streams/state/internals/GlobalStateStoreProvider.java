@@ -45,9 +45,9 @@ public class GlobalStateStoreProvider implements StateStoreProvider {
             throw new InvalidStateStoreException("the state store, " + storeName + ", is not open.");
         }
         if (store instanceof TimestampedKeyValueStore && queryableStoreType instanceof QueryableStoreTypes.KeyValueStoreType) {
-            return (List<T>) Collections.singletonList(new ReadOnlyKeyValueStoreFacade((TimestampedKeyValueStore<Object, Object>) store));
+            return (List<T>) Collections.singletonList(new ReadOnlyKeyValueStoreFacade<>((TimestampedKeyValueStore<Object, Object>) store));
         } else if (store instanceof TimestampedWindowStore && queryableStoreType instanceof QueryableStoreTypes.WindowStoreType) {
-            return (List<T>) Collections.singletonList(new ReadOnlyWindowStoreFacade((TimestampedWindowStore<Object, Object>) store));
+            return (List<T>) Collections.singletonList(new ReadOnlyWindowStoreFacade<>((TimestampedWindowStore<Object, Object>) store));
         }
         return (List<T>) Collections.singletonList(store);
     }

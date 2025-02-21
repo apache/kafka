@@ -64,8 +64,11 @@ import java.util.Properties;
 import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.regex.Matcher;
@@ -75,7 +78,6 @@ import java.util.stream.Collectors;
 import static java.util.Arrays.asList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -580,8 +582,8 @@ public class TestUtils {
     }
 
     /**
-     * Assert that a future raises an expected exception cause type. Return the exception cause
-     * if the assertion succeeds; otherwise raise AssertionError.
+     * Assert that a future raises an expected exception cause type.
+     * This method will wait for the future to complete or timeout(15000 milliseconds).
      *
      * @param <T> Exception cause type parameter
      * @param exceptionCauseClass Class of the expected exception cause
@@ -589,15 +591,25 @@ public class TestUtils {
      * @return The caught exception cause
      */
     public static <T extends Throwable> T assertFutureThrows(Class<T> exceptionCauseClass, Future<?> future) {
-        ExecutionException exception = assertThrows(ExecutionException.class, future::get);
-        Throwable cause = exception.getCause();
-        
-        // Enable strict type checking.
-        // This ensures we're testing for the exact exception type, not its subclasses.
-        assertEquals(exceptionCauseClass, cause.getClass(),
-            "Expected a " + exceptionCauseClass.getSimpleName() + " exception, but got " +
-                        cause.getClass().getSimpleName());
-        return exceptionCauseClass.cast(exception.getCause());
+        try {
+            future.get(DEFAULT_MAX_WAIT_MS, TimeUnit.MILLISECONDS);
+            fail("Should throw expected exception " + exceptionCauseClass.getSimpleName() + " but nothing was thrown.");
+        } catch (InterruptedException | ExecutionException | CancellationException e) {
+            Throwable cause = e instanceof ExecutionException ? e.getCause() : e;
+            // Enable strict type checking.
+            // This ensures we're testing for the exact exception type, not its subclasses.
+            assertEquals(
+                exceptionCauseClass, 
+                cause.getClass(), 
+                "Expected " + exceptionCauseClass.getSimpleName() + ", but got " + cause.getClass().getSimpleName()
+            );
+            return exceptionCauseClass.cast(cause);
+        } catch (TimeoutException e) {
+            fail("Future is not completed within " + DEFAULT_MAX_WAIT_MS + " milliseconds.");
+        } catch (Exception e) {
+            fail("Expected " + exceptionCauseClass.getSimpleName() + ", but got " + e.getClass().getSimpleName());
+        }
+        return null;
     }
 
     public static <T extends Throwable> void assertFutureThrows(

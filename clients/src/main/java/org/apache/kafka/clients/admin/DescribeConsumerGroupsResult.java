@@ -51,7 +51,7 @@ public class DescribeConsumerGroupsResult {
      * Return a future which yields all ConsumerGroupDescription objects, if all the describes succeed.
      */
     public KafkaFuture<Map<String, ConsumerGroupDescription>> all() {
-        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0])).thenApply(
+        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture<?>[0])).thenApply(
             nil -> {
                 Map<String, ConsumerGroupDescription> descriptions = new HashMap<>(futures.size());
                 futures.forEach((key, future) -> {
