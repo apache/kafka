@@ -22,7 +22,7 @@ USER root
 
 # Get kafka from https://archive.apache.org/dist/kafka and pass the url through build arguments
 ARG kafka_url
-ARG skip_signing=false
+ARG skip_signing_verification=false
 
 COPY jsa_launch /etc/kafka/docker/jsa_launch
 COPY server.properties /etc/kafka/docker/server.properties
@@ -34,7 +34,7 @@ RUN set -eux ; \
     mkdir opt/kafka; \
     wget -nv -O kafka.tgz "$kafka_url"; \
     tar xfz kafka.tgz -C /opt/kafka --strip-components 1; \
-    if [ "$skip_signing" != "true" ]; then \
+    if [ "$skip_signing_verification" != "true" ]; then \
         wget -nv -O kafka.tgz.asc "$kafka_url.asc"; \
         wget -nv -O KEYS https://downloads.apache.org/kafka/KEYS; \
         gpg --import KEYS; \
@@ -55,7 +55,7 @@ USER root
 # Get kafka from https://archive.apache.org/dist/kafka and pass the url through build arguments
 ARG kafka_url
 ARG build_date
-ARG skip_signing=false
+ARG skip_signing_verification=false
 
 LABEL org.label-schema.name="kafka" \
       org.label-schema.description="Apache Kafka" \
@@ -69,7 +69,7 @@ RUN set -eux ; \
     apk add --no-cache wget gcompat procps bash; \
     mkdir opt/kafka; \
     wget -nv -O kafka.tgz "$kafka_url"; \
-    if [ "$skip_signing" != "true" ]; then \
+    if [ "$skip_signing_verification" != "true" ]; then \
         apk add --no-cache gpg gpg-agent; \
         wget -nv -O kafka.tgz.asc "$kafka_url.asc"; \
         wget -nv -O KEYS https://downloads.apache.org/kafka/KEYS; \

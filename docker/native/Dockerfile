@@ -16,7 +16,7 @@
 FROM ghcr.io/graalvm/graalvm-community:21 AS build-native-image
 
 ARG kafka_url
-ARG skip_signing=false
+ARG skip_signing_verification=false
 
 WORKDIR /app
 
@@ -33,7 +33,7 @@ COPY native_command.sh native_command.sh
 RUN mkdir $KAFKA_DIR; \
     microdnf install wget; \
     wget -nv -O kafka.tgz "$KAFKA_URL"; \
-    if [ "$skip_signing" != "true" ]; then \
+    if [ "$skip_signing_verification" != "true" ]; then \
         wget -nv -O kafka.tgz.asc "$KAFKA_URL.asc"; \
         wget -nv -O KEYS https://downloads.apache.org/kafka/KEYS; \
         gpg --import KEYS; \
