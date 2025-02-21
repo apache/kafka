@@ -80,12 +80,11 @@ public class ProducerStateEntry {
     }
 
     /**
-     * Returns a new instance with the provided parameters (when present) and the values from the current instance
-     * otherwise.
+     * Returns a cloned instance except for an empty batch metadata deque is initialized for the new instance.
      */
-    public ProducerStateEntry withProducerIdAndBatchMetadata(long producerId, Optional<BatchMetadata> batchMetadata) {
-        return new ProducerStateEntry(producerId, this.producerEpoch(), this.coordinatorEpoch, this.lastTimestamp,
-            this.currentTxnFirstOffset, batchMetadata);
+    public ProducerStateEntry withEmptyBatchMetadata() {
+        return new ProducerStateEntry(this.producerId, this.producerEpoch, this.coordinatorEpoch, this.lastTimestamp,
+            this.currentTxnFirstOffset, Optional.empty());
     }
 
     public void addBatch(short producerEpoch, int lastSeq, long lastOffset, int offsetDelta, long timestamp) {
