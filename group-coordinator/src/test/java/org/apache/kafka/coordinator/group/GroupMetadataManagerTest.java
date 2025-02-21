@@ -106,8 +106,8 @@ import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
 import org.apache.kafka.server.authorizer.Action;
 import org.apache.kafka.server.authorizer.AuthorizationResult;
-import org.apache.kafka.server.authorizer.Authorizer;
 
+import org.apache.kafka.server.authorizer.Authorizer;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -16610,12 +16610,14 @@ public class GroupMetadataManagerTest {
         String barTopicName = "bar";
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+        Authorizer authorizer = mock(Authorizer.class);
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
             .withMetadataImage(new MetadataImageBuilder()
                 .addTopic(fooTopicId, fooTopicName, 6)
                 .addTopic(barTopicId, barTopicName, 3)
                 .build(12345L))
+            .withAuthorizer(authorizer)
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
                 .withMember(new ConsumerGroupMember.Builder(memberId1)
                     .setState(MemberState.STABLE)
@@ -16653,7 +16655,6 @@ public class GroupMetadataManagerTest {
         // sleep for more than REGEX_BATCH_REFRESH_INTERVAL_MS
         context.time.sleep(10001L);
 
-        Authorizer authorizer = mock(Authorizer.class);
         Map<String, AuthorizationResult> acls = Map.of(
             fooTopicName, AuthorizationResult.ALLOWED,
             barTopicName, AuthorizationResult.DENIED
@@ -16675,8 +16676,7 @@ public class GroupMetadataManagerTest {
                 .setSubscribedTopicRegex("bar*")
                 .setServerAssignor("range")
                 .setTopicPartitions(Collections.emptyList()),
-            ApiKeys.CONSUMER_GROUP_HEARTBEAT.latestVersion(),
-            Optional.of(authorizer)
+            ApiKeys.CONSUMER_GROUP_HEARTBEAT.latestVersion()
         );
 
         assertResponseEquals(

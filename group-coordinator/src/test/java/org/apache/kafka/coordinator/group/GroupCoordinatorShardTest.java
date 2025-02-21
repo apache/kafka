@@ -90,7 +90,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 
 import static org.apache.kafka.coordinator.common.runtime.TestUtil.requestContext;
@@ -142,11 +141,10 @@ public class GroupCoordinatorShardTest {
 
         when(groupMetadataManager.consumerGroupHeartbeat(
             context,
-            request,
-            Optional.empty()
+            request
         )).thenReturn(result);
 
-        assertEquals(result, coordinator.consumerGroupHeartbeat(context, request, Optional.empty()));
+        assertEquals(result, coordinator.consumerGroupHeartbeat(context, request));
     }
 
     @Test

@@ -259,6 +259,7 @@ public class GroupMetadataManager {
         private MetadataImage metadataImage = null;
         private ShareGroupPartitionAssignor shareGroupAssignor = null;
         private GroupCoordinatorMetricsShard metrics;
+        private Optional<Authorizer> authorizer = null;
 
         Builder withLogContext(LogContext logContext) {
             this.logContext = logContext;
@@ -310,11 +311,17 @@ public class GroupMetadataManager {
             return this;
         }
 
+        Builder withAuthorizer(Optional<Authorizer> authorizer) {
+            this.authorizer = authorizer;
+            return this;
+        }
+
         GroupMetadataManager build() {
             if (logContext == null) logContext = new LogContext();
             if (snapshotRegistry == null) snapshotRegistry = new SnapshotRegistry(logContext);
             if (metadataImage == null) metadataImage = MetadataImage.EMPTY;
             if (time == null) time = Time.SYSTEM;
+            if (authorizer == null) authorizer = Optional.empty();
 
             if (timer == null)
                 throw new IllegalArgumentException("Timer must be set.");
@@ -339,7 +346,8 @@ public class GroupMetadataManager {
                 metadataImage,
                 config,
                 groupConfigManager,
-                shareGroupAssignor
+                shareGroupAssignor,
+                authorizer
             );
         }
     }
@@ -445,6 +453,11 @@ public class GroupMetadataManager {
      */
     private final ShareGroupPartitionAssignor shareGroupAssignor;
 
+    /**
+     * The authorizer to validate the regex subscription topics.
+     */
+    private final Optional<Authorizer> authorizer;
+
     private GroupMetadataManager(
         SnapshotRegistry snapshotRegistry,
         LogContext logContext,
@@ -455,7 +468,8 @@ public class GroupMetadataManager {
         MetadataImage metadataImage,
         GroupCoordinatorConfig config,
         GroupConfigManager groupConfigManager,
-        ShareGroupPartitionAssignor shareGroupAssignor
+        ShareGroupPartitionAssignor shareGroupAssignor,
+        Optional<Authorizer> authorizer
     ) {
         this.logContext = logContext;
         this.log = logContext.logger(GroupMetadataManager.class);
@@ -476,6 +490,7 @@ public class GroupMetadataManager {
         this.groupConfigManager = groupConfigManager;
         this.shareGroupAssignor = shareGroupAssignor;
         this.streamsGroupSessionTimeoutMs = 45000;
+        this.authorizer = authorizer;
     }
 
     /**
@@ -1775,7 +1790,6 @@ public class GroupMetadataManager {
      *                              or null.
      * @param assignorName          The assignor name from the request or null.
      * @param ownedTopicPartitions  The list of owned partitions from the request or null.
-     * @param authorizer            The authorizer to validate the regex subscription.
      *
      * @return A Result containing the ConsumerGroupHeartbeat response and
      *         a list of records to update the state machine.
@@ -1793,8 +1807,7 @@ public class GroupMetadataManager {
         List<String> subscribedTopicNames,
         String subscribedTopicRegex,
         String assignorName,
-        List<ConsumerGroupHeartbeatRequestData.TopicPartitions> ownedTopicPartitions,
-        Optional<Authorizer> authorizer
+        List<ConsumerGroupHeartbeatRequestData.TopicPartitions> ownedTopicPartitions
     ) throws ApiException {
         final long currentTimeMs = time.milliseconds();
         final List<CoordinatorRecord> records = new ArrayList<>();
@@ -1862,8 +1875,7 @@ public class GroupMetadataManager {
             group,
             member,
             updatedMember,
-            records,
-            authorizer
+            records
         );
 
         int groupEpoch = group.groupEpoch();
@@ -2452,7 +2464,6 @@ public class GroupMetadataManager {
      * @param member        The old member.
      * @param updatedMember The new member.
      * @param records       The records accumulator.
-     * @param authorizer    The authorizer to validate the regex subscription.
      * @return Whether a rebalance must be triggered.
      */
     private boolean maybeUpdateRegularExpressions(
@@ -2460,8 +2471,7 @@ public class GroupMetadataManager {
         ConsumerGroup group,
         ConsumerGroupMember member,
         ConsumerGroupMember updatedMember,
-        List<CoordinatorRecord> records,
-        Optional<Authorizer> authorizer
+        List<CoordinatorRecord> records
     ) {
         String groupId = group.groupId();
         String memberId = updatedMember.memberId();
@@ -2544,14 +2554,7 @@ public class GroupMetadataManager {
             executor.schedule(
                 key,
                 () -> refreshRegularExpressions(groupId, log, time, metadataImage, regexes),
-                (result, exception) -> handleRegularExpressionsResult(
-                    context,
-                    groupId,
-                    memberId,
-                    authorizer,
-                    result,
-                    exception
-                )
+                (result, exception) -> handleRegularExpressionsResult(context, groupId, memberId, result, exception)
             );
         }
 
@@ -2627,7 +2630,6 @@ public class GroupMetadataManager {
      * @param context                       The request context.
      * @param groupId                       The group id.
      * @param memberId                      The member id.
-     * @param authorizer                    The authorizer to validate the regex subscription.
      * @param resolvedRegularExpressions    The resolved regular expressions.
      * @param exception                     The exception if the resolution failed.
      * @return A CoordinatorResult containing the records to mutate the group state.
@@ -2636,13 +2638,11 @@ public class GroupMetadataManager {
         RequestContext context,
         String groupId,
         String memberId,
-        Optional<Authorizer> authorizer,
         Map<String, ResolvedRegularExpression> resolvedRegularExpressions,
         Throwable exception
     ) {
         Set<String> deniedTopics = filterTopicDescribeAuthorizedTopics(
             context,
-            authorizer,
             resolvedRegularExpressions
         );
 
@@ -2739,13 +2739,11 @@ public class GroupMetadataManager {
      * that the member is authorized to describe.
      *
      * @param context                               The request context.
-     * @param authorizer                            The authorizer to validate the regex subscription.
      * @param resolvedRegularExpressions            The list of topic names to validate.
      * @return The set of topics that the member is not authorized to describe.
      */
     private Set<String> filterTopicDescribeAuthorizedTopics(
         RequestContext context,
-        Optional<Authorizer> authorizer,
         Map<String, ResolvedRegularExpression> resolvedRegularExpressions
     ) {
         if (authorizer.isPresent()) {
@@ -3841,15 +3839,13 @@ public class GroupMetadataManager {
      *
      * @param context       The request context.
      * @param request       The actual ConsumerGroupHeartbeat request.
-     * @param authorizer    The authorizer to validate the regex subscription.
      *
      * @return A Result containing the ConsumerGroupHeartbeat response and
      *         a list of records to update the state machine.
      */
     public CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> consumerGroupHeartbeat(
         RequestContext context,
-        ConsumerGroupHeartbeatRequestData request,
-        Optional<Authorizer> authorizer
+        ConsumerGroupHeartbeatRequestData request
     ) throws ApiException {
         throwIfConsumerGroupHeartbeatRequestIsInvalid(request, context.apiVersion());
 
@@ -3877,8 +3873,7 @@ public class GroupMetadataManager {
                 request.subscribedTopicNames(),
                 request.subscribedTopicRegex(),
                 request.serverAssignor(),
-                request.topicPartitions(),
-                authorizer
+                request.topicPartitions()
             );
         }
     }

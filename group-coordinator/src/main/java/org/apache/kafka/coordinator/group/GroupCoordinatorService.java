@@ -123,6 +123,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         private GroupCoordinatorMetrics groupCoordinatorMetrics;
         private GroupConfigManager groupConfigManager;
         private Persister persister;
+        private Optional<Authorizer> authorizer;
 
         public Builder(
             int nodeId,
@@ -172,6 +173,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
             return this;
         }
 
+        public Builder withAuthorizer(Optional<Authorizer> authorizer) {
+            this.authorizer = authorizer;
+            return this;
+        }
+
         public GroupCoordinatorService build() {
             requireNonNull(config, new IllegalArgumentException("Config must be set."));
             requireNonNull(writer, new IllegalArgumentException("Writer must be set."));
@@ -182,6 +188,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             requireNonNull(groupCoordinatorMetrics, new IllegalArgumentException("GroupCoordinatorMetrics must be set."));
             requireNonNull(groupConfigManager, new IllegalArgumentException("GroupConfigManager must be set."));
             requireNonNull(persister, new IllegalArgumentException("Persister must be set."));
+            requireNonNull(authorizer, new IllegalArgumentException("Authorizer must be set."));
 
             String logPrefix = String.format("GroupCoordinator id=%d", nodeId);
             LogContext logContext = new LogContext(String.format("[%s] ", logPrefix));
@@ -214,6 +221,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     .withCompression(Compression.of(config.offsetTopicCompressionType()).build())
                     .withAppendLingerMs(config.appendLingerMs())
                     .withExecutorService(Executors.newSingleThreadExecutor())
+                    .withAuthorizer(authorizer)
                     .build();
 
             return new GroupCoordinatorService(
@@ -337,13 +345,12 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * See {@link GroupCoordinator#consumerGroupHeartbeat(RequestContext, ConsumerGroupHeartbeatRequestData, Optional<Authorizer>)}.
+     * See {@link GroupCoordinator#consumerGroupHeartbeat(RequestContext, ConsumerGroupHeartbeatRequestData)}.
      */
     @Override
     public CompletableFuture<ConsumerGroupHeartbeatResponseData> consumerGroupHeartbeat(
         RequestContext context,
-        ConsumerGroupHeartbeatRequestData request,
-        Optional<Authorizer> authorizer
+        ConsumerGroupHeartbeatRequestData request
     ) {
         if (!isActive.get()) {
             return CompletableFuture.completedFuture(new ConsumerGroupHeartbeatResponseData()
@@ -355,7 +362,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             "consumer-group-heartbeat",
             topicPartitionFor(request.groupId()),
             Duration.ofMillis(config.offsetCommitTimeoutMs()),
-            coordinator -> coordinator.consumerGroupHeartbeat(context, request, authorizer)
+            coordinator -> coordinator.consumerGroupHeartbeat(context, request)
         ).exceptionally(exception -> handleOperationException(
             "consumer-group-heartbeat",
             request,

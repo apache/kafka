@@ -41,6 +41,7 @@ import org.apache.kafka.deferred.DeferredEvent;
 import org.apache.kafka.deferred.DeferredEventQueue;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
+import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.server.util.timer.Timer;
 import org.apache.kafka.server.util.timer.TimerTask;
 import org.apache.kafka.storage.internals.log.LogConfig;
@@ -49,6 +50,7 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 
 import org.slf4j.Logger;
 
+import javax.swing.text.html.Option;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -121,6 +123,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         private Compression compression;
         private int appendLingerMs;
         private ExecutorService executorService;
+        private Optional<Authorizer> authorizer;
 
         public Builder<S, U> withLogPrefix(String logPrefix) {
             this.logPrefix = logPrefix;
@@ -197,6 +200,11 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             return this;
         }
 
+        public Builder<S, U> withAuthorizer(Optional<Authorizer> authorizer) {
+            this.authorizer = authorizer;
+            return this;
+        }
+
         public CoordinatorRuntime<S, U> build() {
             if (logPrefix == null)
                 logPrefix = "";
@@ -226,6 +234,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 throw new IllegalArgumentException("AppendLinger must be >= 0");
             if (executorService == null)
                 throw new IllegalArgumentException("ExecutorService must be set.");
+            if (authorizer == null)
+                authorizer = Optional.empty();
 
             return new CoordinatorRuntime<>(
                 logPrefix,
@@ -242,7 +252,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 serializer,
                 compression,
                 appendLingerMs,
-                executorService
+                executorService,
+                authorizer
             );
         }
     }
@@ -659,6 +670,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                             .withExecutor(executor)
                             .withCoordinatorMetrics(coordinatorMetrics)
                             .withTopicPartition(tp)
+                            .withAuthorizer(authorizer)
                             .build(),
                         tp
                     );
@@ -1981,6 +1993,11 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     private final ExecutorService executorService;
 
     /**
+     * The authorizer to validate the regex subscription topics.
+     */
+    private final Optional<Authorizer> authorizer;
+
+    /**
      * Atomic boolean indicating whether the runtime is running.
      */
     private final AtomicBoolean isRunning = new AtomicBoolean(true);
@@ -2008,6 +2025,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
      * @param compression                       The compression codec.
      * @param appendLingerMs                    The append linger time in ms.
      * @param executorService                   The executor service.
+     * @param authorizer                        The authorizer.
      */
     @SuppressWarnings("checkstyle:ParameterNumber")
     private CoordinatorRuntime(
@@ -2025,7 +2043,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         Serializer<U> serializer,
         Compression compression,
         int appendLingerMs,
-        ExecutorService executorService
+        ExecutorService executorService,
+        Optional<Authorizer> authorizer
     ) {
         this.logPrefix = logPrefix;
         this.logContext = logContext;
@@ -2044,6 +2063,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         this.compression = compression;
         this.appendLingerMs = appendLingerMs;
         this.executorService = executorService;
+        this.authorizer = authorizer;
     }
 
     /**

@@ -467,6 +467,7 @@ public class GroupMetadataManagerTestContext {
         private ShareGroupPartitionAssignor shareGroupAssignor = new MockPartitionAssignor("share");
         private final List<ShareGroupBuilder> shareGroupBuilders = new ArrayList<>();
         private final Map<String, Object> config = new HashMap<>();
+        private Optional<Authorizer> authorizer = Optional.empty();
 
         public Builder withConfig(String key, Object value) {
             config.put(key, value);
@@ -495,6 +496,11 @@ public class GroupMetadataManagerTestContext {
 
         public Builder withShareGroupAssignor(ShareGroupPartitionAssignor shareGroupAssignor) {
             this.shareGroupAssignor = shareGroupAssignor;
+            return this;
+        }
+
+        public Builder withAuthorizer(Authorizer authorizer) {
+            this.authorizer = Optional.of(authorizer);
             return this;
         }
 
@@ -527,6 +533,7 @@ public class GroupMetadataManagerTestContext {
                     .withGroupCoordinatorMetricsShard(metrics)
                     .withShareGroupAssignor(shareGroupAssignor)
                     .withGroupConfigManager(groupConfigManager)
+                    .withAuthorizer(authorizer)
                     .build(),
                 groupConfigManager
             );
@@ -623,14 +630,6 @@ public class GroupMetadataManagerTestContext {
         ConsumerGroupHeartbeatRequestData request,
         short apiVersion
     ) {
-        return consumerGroupHeartbeat(request, apiVersion, Optional.empty());
-    }
-
-    public CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> consumerGroupHeartbeat(
-        ConsumerGroupHeartbeatRequestData request,
-        short apiVersion,
-        Optional<Authorizer> authorizer
-    ) {
         RequestContext context = new RequestContext(
             new RequestHeader(
                 ApiKeys.CONSUMER_GROUP_HEARTBEAT,
@@ -649,8 +648,7 @@ public class GroupMetadataManagerTestContext {
 
         CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> result = groupMetadataManager.consumerGroupHeartbeat(
             context,
-            request,
-            authorizer
+            request
         );
 
         if (result.replayRecords()) {

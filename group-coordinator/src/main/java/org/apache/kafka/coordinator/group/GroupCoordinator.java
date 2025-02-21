@@ -50,7 +50,6 @@ import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
-import org.apache.kafka.server.authorizer.Authorizer;
 
 import java.time.Duration;
 import java.util.List;
@@ -76,15 +75,13 @@ public interface GroupCoordinator {
      *
      * @param context           The request context.
      * @param request           The ConsumerGroupHeartbeatResponse data.
-     * @param authorizer        The authorizer to validate the regex subscription.
      *
      * @return  A future yielding the response.
      *          The error code(s) of the response are set to indicate the error(s) occurred during the execution.
      */
     CompletableFuture<ConsumerGroupHeartbeatResponseData> consumerGroupHeartbeat(
         RequestContext context,
-        ConsumerGroupHeartbeatRequestData request,
-        Optional<Authorizer> authorizer
+        ConsumerGroupHeartbeatRequestData request
     );
 
     /**

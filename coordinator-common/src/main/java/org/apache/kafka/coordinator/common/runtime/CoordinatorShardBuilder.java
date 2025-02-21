@@ -19,8 +19,10 @@ package org.apache.kafka.coordinator.common.runtime;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
+import java.util.Optional;
 
 /**
  * A builder to build a {@link CoordinatorShard} replicated state machine.
@@ -106,6 +108,17 @@ public interface CoordinatorShardBuilder<S extends CoordinatorShard<U>, U> {
      */
     CoordinatorShardBuilder<S, U> withTopicPartition(
         TopicPartition topicPartition
+    );
+
+    /**
+     * Sets the authorizer.
+     *
+     * @param authorizer The authorizer.
+     *
+     * @return The builder.
+     */
+    CoordinatorShardBuilder<S, U> withAuthorizer(
+        Optional<Authorizer> authorizer
     );
 
     /**

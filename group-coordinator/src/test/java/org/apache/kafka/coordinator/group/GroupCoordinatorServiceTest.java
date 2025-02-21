@@ -103,7 +103,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
@@ -182,8 +181,7 @@ public class GroupCoordinatorServiceTest {
 
         CompletableFuture<ConsumerGroupHeartbeatResponseData> future = service.consumerGroupHeartbeat(
             requestContext(ApiKeys.CONSUMER_GROUP_HEARTBEAT),
-            request,
-            Optional.empty()
+            request
         );
 
         assertEquals(
@@ -215,8 +213,7 @@ public class GroupCoordinatorServiceTest {
 
         CompletableFuture<ConsumerGroupHeartbeatResponseData> future = service.consumerGroupHeartbeat(
             requestContext(ApiKeys.CONSUMER_GROUP_HEARTBEAT),
-            request,
-            Optional.empty()
+            request
         );
 
         assertEquals(new ConsumerGroupHeartbeatResponseData(), future.get(5, TimeUnit.SECONDS));
@@ -247,8 +244,7 @@ public class GroupCoordinatorServiceTest {
 
         CompletableFuture<ConsumerGroupHeartbeatResponseData> future = service.consumerGroupHeartbeat(
             requestContext(ApiKeys.CONSUMER_GROUP_HEARTBEAT),
-            request,
-            Optional.empty()
+            request
         );
 
         assertEquals(

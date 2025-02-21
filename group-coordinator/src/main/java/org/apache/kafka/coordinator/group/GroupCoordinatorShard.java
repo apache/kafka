@@ -146,6 +146,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         private CoordinatorExecutor<CoordinatorRecord> executor;
         private CoordinatorMetrics coordinatorMetrics;
         private TopicPartition topicPartition;
+        private Optional<Authorizer> authorizer;
 
         public Builder(
             GroupCoordinatorConfig config,
@@ -209,6 +210,14 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             return this;
         }
 
+        @Override
+        public CoordinatorShardBuilder<GroupCoordinatorShard, CoordinatorRecord> withAuthorizer(
+            Optional<Authorizer> authorizer
+        ) {
+            this.authorizer = authorizer;
+            return this;
+        }
+
         @SuppressWarnings("NPathComplexity")
         @Override
         public GroupCoordinatorShard build() {
@@ -229,6 +238,8 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 throw new IllegalArgumentException("TopicPartition must be set.");
             if (groupConfigManager == null)
                 throw new IllegalArgumentException("GroupConfigManager must be set.");
+            if (authorizer == null)
+                throw new IllegalArgumentException("Authorizer must be set.");
 
             GroupCoordinatorMetricsShard metricsShard = ((GroupCoordinatorMetrics) coordinatorMetrics)
                 .newMetricsShard(snapshotRegistry, topicPartition);
@@ -242,6 +253,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 .withConfig(config)
                 .withGroupConfigManager(groupConfigManager)
                 .withGroupCoordinatorMetricsShard(metricsShard)
+                .withAuthorizer(authorizer)
                 .build();
 
             OffsetMetadataManager offsetMetadataManager = new OffsetMetadataManager.Builder()
@@ -359,17 +371,15 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      *
      * @param context       The request context.
      * @param request       The actual ConsumerGroupHeartbeat request.
-     * @param authorizer    The authorizer to validate the regex subscription.
      *
      * @return A Result containing the ConsumerGroupHeartbeat response and
      *         a list of records to update the state machine.
      */
     public CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> consumerGroupHeartbeat(
         RequestContext context,
-        ConsumerGroupHeartbeatRequestData request,
-        Optional<Authorizer> authorizer
+        ConsumerGroupHeartbeatRequestData request
     ) {
-        return groupMetadataManager.consumerGroupHeartbeat(context, request, authorizer);
+        return groupMetadataManager.consumerGroupHeartbeat(context, request);
     }
 
     /**
