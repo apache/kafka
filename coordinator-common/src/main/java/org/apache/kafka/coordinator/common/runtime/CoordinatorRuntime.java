@@ -50,7 +50,6 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 
 import org.slf4j.Logger;
 
-import javax.swing.text.html.Option;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.ArrayList;
