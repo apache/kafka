@@ -16,7 +16,6 @@
 FROM ghcr.io/graalvm/graalvm-community:21 AS build-native-image
 
 ARG kafka_url
-ARG skip_signing_verification=false
 
 WORKDIR /app
 
@@ -33,15 +32,12 @@ COPY native_command.sh native_command.sh
 RUN mkdir $KAFKA_DIR; \
     microdnf install wget; \
     wget -nv -O kafka.tgz "$KAFKA_URL"; \
-    if [ "$skip_signing_verification" != "true" ]; then \
-        wget -nv -O kafka.tgz.asc "$KAFKA_URL.asc"; \
-        wget -nv -O KEYS https://downloads.apache.org/kafka/KEYS; \
-        gpg --import KEYS; \
-        gpg --batch --verify kafka.tgz.asc kafka.tgz; \
-        rm kafka.tgz.asc KEYS; \
-    fi; \
+    wget -nv -O kafka.tgz.asc "$KAFKA_URL.asc"; \
     tar xfz kafka.tgz -C $KAFKA_DIR --strip-components 1; \
-    rm kafka.tgz; \
+    wget -nv -O KEYS https://downloads.apache.org/kafka/KEYS; \
+    gpg --import KEYS; \
+    gpg --batch --verify kafka.tgz.asc kafka.tgz; \
+    rm kafka.tgz ; \
 # Build the native-binary of the apache kafka using graalVM native-image.
     /app/native_command.sh $NATIVE_IMAGE_PATH $NATIVE_CONFIGS_DIR $KAFKA_LIBS_DIR $TARGET_PATH
 
