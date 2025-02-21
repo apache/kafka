@@ -42,6 +42,7 @@ import org.slf4j.Logger;
 
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -56,6 +57,7 @@ public class RegexResolutionBenchmark {
     private static final Logger LOG = new LogContext().logger(RegexResolutionBenchmark.class);
     private static final Time TIME = Time.SYSTEM;
     private static final String GROUP_ID = "my-group-id";
+    private static final String MEMBER_ID = "my-member-id";
 
     private static final List<String> WORDS = List.of(
         "data",
@@ -118,10 +120,13 @@ public class RegexResolutionBenchmark {
     @OutputTimeUnit(TimeUnit.MILLISECONDS)
     public void run() {
         GroupMetadataManager.refreshRegularExpressions(
+            null,
             GROUP_ID,
+            MEMBER_ID,
             LOG,
             TIME,
             image,
+            Optional.empty(),
             regexes
         );
     }
