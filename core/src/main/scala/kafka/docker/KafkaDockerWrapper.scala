@@ -57,7 +57,8 @@ object KafkaDockerWrapper extends Logging {
           StorageTool.main(formatCmd)
         } catch {
           case terseFailure: TerseFailure => if (terseFailure.getMessage.contains(QuorumConfig.QUORUM_VOTERS_CONFIG)) {
-            throw new TerseFailure("The Docker image does not support Dynamic Quorum yet.")
+            throw new TerseFailure("To maximize compatibility, the Docker image continues to use static voters, " +
+              "which are supported in 3.7 and later.", terseFailure)
           } else throw terseFailure
           case e: Throwable => throw e
         }
