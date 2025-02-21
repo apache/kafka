@@ -133,7 +133,7 @@ class KafkaDockerWrapperTest {
     val configsPath = Paths.get("/path/to/configs")
     val envVars = Map("CLUSTER_ID" -> "MYwKGPhXQZidgd0qMv8Mkw")
 
-    val expected = Array("format", "--cluster-id=MYwKGPhXQZidgd0qMv8Mkw", "-c", "/path/to/configs/server.properties", "--standalone")
+    val expected = Array("format", "--cluster-id=MYwKGPhXQZidgd0qMv8Mkw", "-c", "/path/to/configs/server.properties")
     val actual = KafkaDockerWrapper.formatStorageCmd(configsPath, envVars)
 
     assertArrayEquals(expected.toArray[Object], actual.toArray[Object])
