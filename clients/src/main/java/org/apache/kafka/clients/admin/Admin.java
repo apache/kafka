@@ -954,29 +954,12 @@ public interface Admin extends AutoCloseable {
     DeleteConsumerGroupsResult deleteConsumerGroups(Collection<String> groupIds, DeleteConsumerGroupsOptions options);
 
     /**
-     * Delete share groups from the cluster.
-     *
-     * @param options The options to use when deleting a share group.
-     * @return The DeleteShareGroupsResult.
-     */
-    DeleteShareGroupsResult deleteShareGroups(Collection<String> groupIds, DeleteShareGroupsOptions options);
-
-    /**
      * Delete consumer groups from the cluster with the default options.
      *
      * @return The DeleteConsumerGroupResult.
      */
     default DeleteConsumerGroupsResult deleteConsumerGroups(Collection<String> groupIds) {
         return deleteConsumerGroups(groupIds, new DeleteConsumerGroupsOptions());
-    }
-
-    /**
-     * Delete share groups from the cluster with the default options.
-     *
-     * @return The DeleteShareGroupsResult.
-     */
-    default DeleteShareGroupsResult deleteShareGroups(Collection<String> groupIds) {
-        return deleteShareGroups(groupIds, new DeleteShareGroupsOptions());
     }
 
     /**
@@ -1857,6 +1840,23 @@ public interface Admin extends AutoCloseable {
     default ListShareGroupOffsetsResult listShareGroupOffsets(Map<String, ListShareGroupOffsetsSpec> groupSpecs) {
         return listShareGroupOffsets(groupSpecs, new ListShareGroupOffsetsOptions());
     }
+
+    /**
+     * Delete share groups from the cluster with the default options.
+     *
+     * @return The DeleteShareGroupsResult.
+     */
+    default DeleteShareGroupsResult deleteShareGroups(Collection<String> groupIds) {
+        return deleteShareGroups(groupIds, new DeleteShareGroupsOptions());
+    }
+
+    /**
+     * Delete share groups from the cluster.
+     *
+     * @param options The options to use when deleting a share group.
+     * @return The DeleteShareGroupsResult.
+     */
+    DeleteShareGroupsResult deleteShareGroups(Collection<String> groupIds, DeleteShareGroupsOptions options);
 
     /**
      * Describe some classic groups in the cluster.

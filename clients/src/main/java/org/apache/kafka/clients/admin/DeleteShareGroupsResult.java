@@ -18,18 +18,14 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
-import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Collection;
 import java.util.Map;
 
 /**
  * The result of the {@link Admin#deleteShareGroups(Collection <String>, DeleteShareGroupsOptions)} call.
- * <p>
- * The API of this class is evolving, see {@link Admin} for details.
  */
-@InterfaceStability.Evolving
-public class DeleteShareGroupsResult extends DeleteConsumerGroupsResult {
+public class DeleteShareGroupsResult extends DeleteGroupsResult {
     DeleteShareGroupsResult(final Map<String, KafkaFuture<Void>> futures) {
         super(futures);
     }

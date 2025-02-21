@@ -19,7 +19,7 @@ package org.apache.kafka.clients.admin.internals;
 
 import org.apache.kafka.common.utils.LogContext;
 
-public class DeleteShareGroupsHandler extends DeleteConsumerGroupsHandler {
+public class DeleteShareGroupsHandler extends DeleteGroupsHandler {
     public DeleteShareGroupsHandler(
         LogContext logContext
     ) {
@@ -29,5 +29,10 @@ public class DeleteShareGroupsHandler extends DeleteConsumerGroupsHandler {
     @Override
     public String apiName() {
         return "deleteShareGroups";
+    }
+
+    @Override
+    public String displayName() {
+        return "DeleteShareGroups";
     }
 }

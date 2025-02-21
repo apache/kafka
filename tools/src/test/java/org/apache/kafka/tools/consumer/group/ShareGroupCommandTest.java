@@ -38,11 +38,13 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
+import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.tools.ToolsTestUtils;
 import org.apache.kafka.tools.consumer.group.ShareGroupCommand.ShareGroupService;
 
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatchers;
 
@@ -60,6 +62,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Stream;
 
 import joptsimple.OptionException;
@@ -67,6 +70,7 @@ import joptsimple.OptionException;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -82,6 +86,13 @@ public class ShareGroupCommandTest {
     private static final List<List<String>> DESCRIBE_TYPE_MEMBERS = List.of(List.of("--members"), List.of("--members", "--verbose"));
     private static final List<List<String>> DESCRIBE_TYPE_STATE = List.of(List.of("--state"), List.of("--state", "--verbose"));
     private static final List<List<String>> DESCRIBE_TYPES = Stream.of(DESCRIBE_TYPE_OFFSETS, DESCRIBE_TYPE_MEMBERS, DESCRIBE_TYPE_STATE).flatMap(Collection::stream).toList();
+
+    @BeforeEach
+    public void setup() {
+        // nothing by default
+        Exit.setExitProcedure(((statusCode, message) -> {
+        }));
+    }
 
     @Test
     public void testListShareGroups() throws Exception {
@@ -604,8 +615,16 @@ public class ShareGroupCommandTest {
 
         // no group spec args
         String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServer, "--delete"};
-        try (ShareGroupService service = getShareGroupService(cgcArgs, adminClient)) {
-            assertThrows(IllegalArgumentException.class, service::deleteShareGroups);
+        AtomicBoolean exited = new AtomicBoolean(false);
+        Exit.setExitProcedure(((statusCode, message) -> {
+            assertNotEquals(0, statusCode);
+            assertTrue(message.contains("Option [delete] takes the options [group] or [all-groups]"));
+            exited.set(true);
+        }));
+        try {
+            getShareGroupService(cgcArgs, adminClient);
+        } finally {
+            assertTrue(exited.get());
         }
     }
 
@@ -840,6 +859,7 @@ public class ShareGroupCommandTest {
 
     ShareGroupService getShareGroupService(String[] args, Admin adminClient) {
         ShareGroupCommandOptions opts = new ShareGroupCommandOptions(args);
+        opts.checkArgs();
         return new ShareGroupService(opts, adminClient);
     }
 

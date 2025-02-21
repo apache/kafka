@@ -228,10 +228,6 @@ public class ShareGroupCommand {
                 ? shareGroupIds.stream().map(GroupListing::groupId).toList()
                 : opts.options.valuesOf(opts.groupOpt);
 
-            if (groupIds.isEmpty()) {
-                throw new IllegalArgumentException("--groups or --all-groups argument is mandatory");
-            }
-
             for (String groupId : groupIds) {
                 Optional<GroupListing> listing = shareGroupIds.stream().filter(item -> item.groupId().equals(groupId)).findAny();
                 if (listing.isEmpty()) {
@@ -267,7 +263,7 @@ public class ShareGroupCommand {
                 System.out.println("Deletion of requested share groups (" + "'" + success.keySet().stream().map(Object::toString).collect(Collectors.joining(", ")) + "'" + ") was successful.");
             else {
                 printError("Deletion of some share groups failed:", Optional.empty());
-                failed.forEach((group, error) -> System.out.println("* Share Group '" + group + "' could not be deleted due to: " + error));
+                failed.forEach((group, error) -> System.out.println("* Share group '" + group + "' could not be deleted due to: " + error));
 
                 if (!success.isEmpty())
                     System.out.println("\nThese share groups were deleted successfully: " + "'" + success.keySet().stream().map(Object::toString).collect(Collectors.joining("'")) + "', '");
