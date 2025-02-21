@@ -202,7 +202,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
             LogContext logContext = new LogContext(String.format("[%s] ", logPrefix));
 
             CoordinatorShardBuilderSupplier<GroupCoordinatorShard, CoordinatorRecord> supplier = () ->
-                new GroupCoordinatorShard.Builder(config, groupConfigManager);
+                new GroupCoordinatorShard.Builder(config, groupConfigManager)
+                    .withAuthorizer(authorizer);
 
             CoordinatorEventProcessor processor = new MultiThreadedEventProcessor(
                 logContext,
@@ -229,7 +230,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     .withCompression(Compression.of(config.offsetTopicCompressionType()).build())
                     .withAppendLingerMs(config.appendLingerMs())
                     .withExecutorService(Executors.newSingleThreadExecutor())
-                    .withAuthorizer(authorizer)
                     .build();
 
             return new GroupCoordinatorService(
