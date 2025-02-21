@@ -53,7 +53,8 @@ public interface MetadataNode {
         for (String name : names) {
             printer.enterNode(name);
             MetadataNode child = child(name);
-            child.print(printer);
+            if (child != null)
+                child.print(printer);
             printer.leaveNode();
         }
     }

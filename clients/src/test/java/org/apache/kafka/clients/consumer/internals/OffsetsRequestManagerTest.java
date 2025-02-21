@@ -565,7 +565,7 @@ public class OffsetsRequestManagerTest {
         CompletableFuture<Void> nextReset = assertDoesNotThrow(() -> requestManager.resetPositionsIfNeeded());
         assertEquals(0, requestManager.requestsToSend());
         assertTrue(nextReset.isCompletedExceptionally());
-        assertFutureThrows(nextReset, TopicAuthorizationException.class);
+        assertFutureThrows(TopicAuthorizationException.class, nextReset);
     }
 
     @Test

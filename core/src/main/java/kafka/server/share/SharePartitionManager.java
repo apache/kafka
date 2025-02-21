@@ -305,7 +305,15 @@ public class SharePartitionManager implements AutoCloseable {
                         future.complete(throwable);
                         return;
                     }
-                    acknowledgePartitionBatches.forEach(batch -> batch.acknowledgeTypes().forEach(shareGroupMetrics::recordAcknowledgement));
+                    acknowledgePartitionBatches.forEach(batch -> {
+                        // Client can either send a single entry in acknowledgeTypes which represents
+                        // the state of the complete batch or can send individual offsets state.
+                        if (batch.acknowledgeTypes().size() == 1) {
+                            shareGroupMetrics.recordAcknowledgement(batch.acknowledgeTypes().get(0), batch.lastOffset() - batch.firstOffset() + 1);
+                        } else {
+                            batch.acknowledgeTypes().forEach(shareGroupMetrics::recordAcknowledgement);
+                        }
+                    });
                     future.complete(null);
                 });
 
@@ -395,7 +403,7 @@ public class SharePartitionManager implements AutoCloseable {
         Optional<Consumer<Set<String>>> failedMetricsHandler
     ) {
         CompletableFuture<Void> allFutures = CompletableFuture.allOf(
-            futuresMap.values().toArray(new CompletableFuture[0]));
+            futuresMap.values().toArray(new CompletableFuture<?>[0]));
         return allFutures.thenApply(v -> {
             Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData> result = new HashMap<>();
             // Keep the set as same topic might appear multiple times. Multiple partitions can fail for same topic.

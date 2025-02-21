@@ -55,7 +55,7 @@ import scala.jdk.CollectionConverters._
 class ProducerIntegrationTest {
 
   @ClusterTests(Array(
-    new ClusterTest(metadataVersion = MetadataVersion.IBP_3_3_IV0)
+    new ClusterTest(metadataVersion = MetadataVersion.IBP_3_3_IV3)
   ))
   def testUniqueProducerIds(clusterInstance: ClusterInstance): Unit = {
     verifyUniqueIds(clusterInstance)

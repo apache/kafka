@@ -53,7 +53,7 @@ public class DescribeLogDirsResult {
      * to a description of that log directory.
      */
     public KafkaFuture<Map<Integer, Map<String, LogDirDescription>>> allDescriptions() {
-        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0])).
+        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture<?>[0])).
             thenApply(v -> {
                 Map<Integer, Map<String, LogDirDescription>> descriptions = new HashMap<>(futures.size());
                 for (Map.Entry<Integer, KafkaFuture<Map<String, LogDirDescription>>> entry : futures.entrySet()) {

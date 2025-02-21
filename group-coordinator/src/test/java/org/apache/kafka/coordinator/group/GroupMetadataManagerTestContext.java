@@ -165,8 +165,8 @@ public class GroupMetadataManagerTestContext {
             return new GroupCoordinatorConfigContext(
                 new AbstractConfig(
                     Utils.mergeConfigs(List.of(
+                        GroupCoordinatorConfig.CLASSIC_GROUP_CONFIG_DEF,
                         GroupCoordinatorConfig.GROUP_COORDINATOR_CONFIG_DEF,
-                        GroupCoordinatorConfig.NEW_GROUP_CONFIG_DEF,
                         GroupCoordinatorConfig.OFFSET_MANAGEMENT_CONFIG_DEF,
                         GroupCoordinatorConfig.CONSUMER_GROUP_CONFIG_DEF,
                         GroupCoordinatorConfig.SHARE_GROUP_CONFIG_DEF

@@ -682,7 +682,7 @@ public class StreamsConfig extends AbstractConfig {
 
     /** {@code processor.wrapper.class} */
     public static final String PROCESSOR_WRAPPER_CLASS_CONFIG = "processor.wrapper.class";
-    public static final String PROCESSOR_WRAPPER_CLASS_DOC = "A processor wrapper class or class name that implements the <code>org.apache.kafka.streams.state.ProcessorWrapper</code> interface. "
+    static final String PROCESSOR_WRAPPER_CLASS_DOC = "A processor wrapper class or class name that implements the <code>org.apache.kafka.streams.state.ProcessorWrapper</code> interface. "
         + "Must be passed in to the StreamsBuilder or Topology constructor in order to take effect";
 
     /** {@code repartition.purge.interval.ms} */

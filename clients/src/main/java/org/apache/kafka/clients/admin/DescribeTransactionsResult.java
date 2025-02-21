@@ -62,7 +62,7 @@ public class DescribeTransactionsResult {
      *         if any of the descriptions cannot be obtained
      */
     public KafkaFuture<Map<String, TransactionDescription>> all() {
-        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0]))
+        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture<?>[0]))
             .thenApply(nil -> {
                 Map<String, TransactionDescription> results = new HashMap<>(futures.size());
                 for (Map.Entry<CoordinatorKey, KafkaFuture<TransactionDescription>> entry : futures.entrySet()) {

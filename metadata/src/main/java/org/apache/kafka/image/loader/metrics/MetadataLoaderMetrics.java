@@ -45,7 +45,7 @@ public final class MetadataLoaderMetrics implements AutoCloseable {
 
     private final Optional<MetricsRegistry> registry;
     private final AtomicReference<MetadataVersion> currentMetadataVersion =
-            new AtomicReference<>(MetadataVersion.MINIMUM_KRAFT_VERSION);
+            new AtomicReference<>(MetadataVersion.MINIMUM_VERSION);
     private final AtomicInteger currentControllerId = new AtomicInteger(-1);
     private final AtomicLong handleLoadSnapshotCount = new AtomicLong(0);
     private final Consumer<Long> batchProcessingTimeNsUpdater;
