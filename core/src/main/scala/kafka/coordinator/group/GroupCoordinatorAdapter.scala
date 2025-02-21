@@ -17,25 +17,24 @@
 package kafka.coordinator.group
 
 import kafka.server.{KafkaConfig, ReplicaManager}
-import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
-import org.apache.kafka.common.message.{ConsumerGroupDescribeResponseData, ConsumerGroupHeartbeatRequestData, ConsumerGroupHeartbeatResponseData, DeleteGroupsResponseData, DescribeGroupsResponseData, DescribeShareGroupOffsetsRequestData, DescribeShareGroupOffsetsResponseData, HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupRequestData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetDeleteRequestData, OffsetDeleteResponseData, OffsetFetchRequestData, OffsetFetchResponseData, ShareGroupDescribeResponseData, ShareGroupHeartbeatRequestData, ShareGroupHeartbeatResponseData, SyncGroupRequestData, SyncGroupResponseData, TxnOffsetCommitRequestData, TxnOffsetCommitResponseData}
+import org.apache.kafka.common.message._
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.{OffsetCommitRequest, RequestContext, TransactionResult}
 import org.apache.kafka.common.utils.{BufferSupplier, Time}
+import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.coordinator.group
 import org.apache.kafka.coordinator.group.OffsetAndMetadata
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
-import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.RequestLocal
 import org.apache.kafka.server.util.FutureUtils
 
 import java.time.Duration
 import java.util
-import java.util.{Optional, OptionalInt, OptionalLong, Properties}
 import java.util.concurrent.CompletableFuture
 import java.util.function.IntSupplier
+import java.util.{Optional, OptionalInt, OptionalLong, Properties}
 import scala.collection.{immutable, mutable}
 import scala.jdk.CollectionConverters._
 
@@ -71,8 +70,7 @@ private[group] class GroupCoordinatorAdapter(
 
   override def consumerGroupHeartbeat(
     context: RequestContext,
-    request: ConsumerGroupHeartbeatRequestData,
-    authorizer: Optional[Authorizer]
+    request: ConsumerGroupHeartbeatRequestData
   ): CompletableFuture[ConsumerGroupHeartbeatResponseData] = {
     FutureUtils.failedFuture(Errors.UNSUPPORTED_VERSION.exception(
       s"The old group coordinator does not support ${ApiKeys.CONSUMER_GROUP_HEARTBEAT.name} API."
