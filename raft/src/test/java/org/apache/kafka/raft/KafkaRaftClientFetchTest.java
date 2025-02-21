@@ -88,7 +88,7 @@ public final class KafkaRaftClientFetchTest {
     }
 
     @Test
-    void testReplicationOfInvalidPartitionLeaderEpoch() throws Exception {
+    void testReplicationOfHigherPartitionLeaderEpoch() throws Exception {
         int epoch = 2;
         int localId = KafkaRaftClientTest.randomReplicaId();
         ReplicaKey local = KafkaRaftClientTest.replicaKey(localId, true);
