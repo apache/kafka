@@ -19,6 +19,7 @@ package org.apache.kafka.common.security.oauthbearer.internals.secured;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.utils.Utils;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
@@ -34,17 +35,17 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_
  *
  * @see AccessTokenRetriever
  */
-public class FileTokenRetriever implements AccessTokenRetriever {
+public class FileAccessTokenRetriever implements AccessTokenRetriever {
 
     private String accessToken;
 
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
         ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
-        String accessTokenFileName = cu.validateFile(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL).toFile().getPath();
+        File accessTokenFileName = cu.validateFile(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL);
 
         try {
-            String fileContents = Utils.readFileAsString(accessTokenFileName);
+            String fileContents = Utils.readFileAsString(accessTokenFileName.getPath());
             // always non-null; to remove any newline chars or backend will report err
             accessToken = fileContents.trim();
         } catch (Exception e) {

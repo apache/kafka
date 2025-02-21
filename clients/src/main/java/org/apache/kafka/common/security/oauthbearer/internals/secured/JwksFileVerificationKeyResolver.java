@@ -29,6 +29,7 @@ import org.jose4j.lang.UnresolvableKeyException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
 import java.security.Key;
 import java.util.List;
 import java.util.Map;
@@ -91,12 +92,12 @@ public class JwksFileVerificationKeyResolver implements CloseableVerificationKey
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
         ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
-        String jwksFileName = cu.validateFile(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL).toFile().getPath();
-        log.debug("Starting creation of new VerificationKeyResolver from {}", jwksFileName);
+        File jwksFile = cu.validateFile(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL);
+        log.debug("Starting creation of new VerificationKeyResolver from {}", jwksFile.getPath());
         JsonWebKeySet jwks;
 
         try {
-            String json = Utils.readFileAsString(jwksFileName);
+            String json = Utils.readFileAsString(jwksFile.getPath());
             jwks = new JsonWebKeySet(json);
         } catch (Exception e) {
             throw new KafkaException(e);

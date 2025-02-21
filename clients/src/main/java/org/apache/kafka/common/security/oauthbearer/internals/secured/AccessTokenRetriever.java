@@ -32,7 +32,7 @@ import javax.security.auth.spi.LoginModule;
  *
  * @see ClientCredentialsAccessTokenRetriever
  * @see DefaultAccessTokenRetriever
- * @see FileTokenRetriever
+ * @see FileAccessTokenRetriever
  * @see HttpAccessTokenRetriever
  * @see JwtBearerAccessTokenRetriever
  */

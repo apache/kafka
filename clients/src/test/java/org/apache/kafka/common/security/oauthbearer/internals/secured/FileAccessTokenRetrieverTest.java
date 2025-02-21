@@ -40,7 +40,7 @@ import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModul
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
 
-public class FileTokenRetrieverTest extends OAuthBearerTest {
+public class FileAccessTokenRetrieverTest extends OAuthBearerTest {
 
     @Test
     public void testFileTokenRetrieverHandlesNewline() throws IOException {

@@ -66,7 +66,7 @@ public class ConfigurationUtils {
      * ignored. Any whitespace is trimmed off of the beginning and end.
      */
 
-    public Path validateFile(String name) {
+    public File validateFile(String name) {
         URL url = validateUrl(name);
         File file;
 
@@ -85,7 +85,7 @@ public class ConfigurationUtils {
         if (file.isDirectory())
             throw new ConfigException(String.format("The OAuth configuration option %s references a directory (%s), not a file", name, file));
 
-        return file.toPath();
+        return file;
     }
 
     /**
