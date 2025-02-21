@@ -235,11 +235,11 @@ public class ShareGroupCommand {
             for (String groupId : groupIds) {
                 Optional<GroupListing> listing = shareGroupIds.stream().filter(item -> item.groupId().equals(groupId)).findAny();
                 if (listing.isEmpty()) {
-                    throw new IllegalArgumentException("Share group '" + groupId + "' is not a share group.");
+                    throw new IllegalArgumentException("Group '" + groupId + "' is not a share group.");
                 } else {
                     Optional<GroupState> state = listing.get().groupState();
                     if (state.isPresent() && !state.get().equals(GroupState.EMPTY)) {
-                        throw new IllegalStateException("Share group '" + groupId + "' is not a EMPTY.");
+                        throw new IllegalStateException("Share group '" + groupId + "' is not EMPTY.");
                     }
                 }
             }
