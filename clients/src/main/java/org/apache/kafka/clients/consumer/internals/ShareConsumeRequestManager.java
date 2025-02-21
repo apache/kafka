@@ -776,10 +776,12 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             }
 
             // Handle any acknowledgements which were not received in the response for this node.
-            fetchAcknowledgementsInFlight.remove(fetchTarget.id()).forEach((partition, acknowledgements) -> {
-                acknowledgements.complete(new InvalidRecordStateException(INVALID_RESPONSE));
-                maybeSendShareAcknowledgeCommitCallbackEvent(Map.of(partition, acknowledgements));
-            });
+            if (fetchAcknowledgementsInFlight.get(fetchTarget.id()) != null) {
+                fetchAcknowledgementsInFlight.remove(fetchTarget.id()).forEach((partition, acknowledgements) -> {
+                    acknowledgements.complete(new InvalidRecordStateException(INVALID_RESPONSE));
+                    maybeSendShareAcknowledgeCommitCallbackEvent(Map.of(partition, acknowledgements));
+                });
+            }
 
             if (!partitionsWithUpdatedLeaderInfo.isEmpty()) {
                 List<Node> leaderNodes = response.data().nodeEndpoints().stream()
