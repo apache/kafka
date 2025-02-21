@@ -20,16 +20,20 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.AbstractConfig;
+import org.apache.kafka.common.feature.Features;
 import org.apache.kafka.common.feature.SupportedVersionRange;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.message.ApiMessageType;
+import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.network.ListenerName;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.common.protocol.Writable;
 import org.apache.kafka.common.protocol.types.Type;
+import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
@@ -67,6 +71,7 @@ import java.util.OptionalLong;
 import java.util.PriorityQueue;
 import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
@@ -135,6 +140,55 @@ public class RaftEventSimulationTest {
         scheduler.schedule(new SequentialAppendAction(cluster), 0, 2, 3);
         scheduler.runUntil(cluster::hasConsistentLeader);
         scheduler.runUntil(() -> cluster.allReachedHighWatermark(10));
+    }
+
+    @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
+    void canElectInitialLeaderAndAddVoter(
+        @ForAll int seed,
+        @ForAll @IntRange(min = 1, max = 5) int numVoters,
+        @ForAll @IntRange(min = 1, max = 5) int numObservers
+    ) {
+        Random random = new Random(seed);
+        Cluster cluster = new Cluster(numVoters, numObservers, random, true);
+        MessageRouter router = new MessageRouter(cluster);
+        EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
+
+        cluster.startAll();
+        schedulePolling(scheduler, cluster, 3, 5);
+        scheduler.schedule(router::deliverAll, 0, 2, 1);
+        // Have to increase the time between appends to the log, otherwise the add voter request will time out
+        // because the new voter may not be caught up to the LEO when the leader receives the API_VERSIONS_RESPONSE.
+        scheduler.schedule(new SequentialAppendAction(cluster), 0, 10, 3);
+        scheduler.runUntil(cluster::hasConsistentLeader);
+        scheduler.runUntil(() -> cluster.allReachedHighWatermark(10));
+        int firstObserverId = numVoters;
+        scheduler.scheduleOnce(new AddVoterAction(cluster, cluster.running.get(firstObserverId)), 0);
+        scheduler.runUntil(() -> cluster.leaderWithMaxEpoch().get().client.partitionState().lastVoterSet().size() == numVoters + 1);
+        VoterSet latestVoterSet = cluster.leaderWithMaxEpoch().get().client.partitionState().lastVoterSet();
+        scheduler.runUntil(() -> cluster.allHaveLatestVoterSet(latestVoterSet));
+    }
+
+    @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
+    void canElectInitialLeaderAndRemoveVoter(
+        @ForAll int seed,
+        @ForAll @IntRange(min = 2, max = 5) int numVoters,
+        @ForAll @IntRange(min = 0, max = 5) int numObservers
+    ) {
+        Random random = new Random(seed);
+        Cluster cluster = new Cluster(numVoters, numObservers, random, true);
+        MessageRouter router = new MessageRouter(cluster);
+        EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
+
+        cluster.startAll();
+        schedulePolling(scheduler, cluster, 3, 5);
+        scheduler.schedule(router::deliverAll, 0, 2, 1);
+        scheduler.schedule(new SequentialAppendAction(cluster), 0, 2, 3);
+        scheduler.runUntil(cluster::hasConsistentLeader);
+        scheduler.runUntil(() -> cluster.allReachedHighWatermark(10));
+        scheduler.scheduleOnce(new RemoveVoterAction(cluster, cluster.running.get(random.nextInt(numVoters))), 0);
+        scheduler.runUntil(() -> cluster.leaderWithMaxEpoch().get().client.partitionState().lastVoterSet().size() == numVoters - 1);
+        VoterSet latestVoterSet = cluster.leaderWithMaxEpoch().get().client.partitionState().lastVoterSet();
+        scheduler.runUntil(() -> cluster.allHaveLatestVoterSet(latestVoterSet));
     }
 
     @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
@@ -596,14 +650,35 @@ public class RaftEventSimulationTest {
                         ReplicaKey.of(nodeId, cluster.persistentStates.get(nodeId).nodeDirectoryId),
                         Cluster.endpointsFromId(nodeId, leader.channel.listenerName())
                     );
-                    RaftRequest.Inbound inboundRequest = new RaftRequest.Inbound(
+                    RaftRequest.Inbound addVoterRequest = new RaftRequest.Inbound(
                         nodeToAdd.channel.listenerName(),
                         nodeToAdd.channel.newCorrelationId(),
                         (short) 0,
                         RaftTestUtils.roundTripApiMessage(req, (short) 0),
                         cluster.time.milliseconds()
                     );
-                    leader.messageQueue.add(inboundRequest);
+                    leader.messageQueue.add(addVoterRequest);
+
+                    nodeToAdd.apiVersionsRequestMessageId.whenComplete((messageId, exception) -> {
+                        // Also add the API_VERSIONS_REPSONSE to the leader's message queue
+                        ApiMessage apiVersionsResponse = new ApiVersionsResponse.Builder().
+                            setSupportedFeatures(
+                                Features.supportedFeatures(
+                                    Collections.singletonMap(
+                                        KRaftVersion.FEATURE_NAME,
+                                        new SupportedVersionRange(KRaftVersion.KRAFT_VERSION_1.featureLevel(), KRaftVersion.LATEST_PRODUCTION.featureLevel())
+                                    )
+                                )).
+                            setApiVersions(new ApiVersionsResponseData.ApiVersionCollection()).
+                            setFinalizedFeatures(Collections.emptyMap()).
+                            build().data();
+                        RaftResponse.Inbound apiVersions = new RaftResponse.Inbound(
+                            messageId,
+                            apiVersionsResponse,
+                            nodeToAdd
+                        );
+                        leader.messageQueue.add(apiVersions);
+                    });
                 }
             });
         }
@@ -614,9 +689,9 @@ public class RaftEventSimulationTest {
         final Cluster cluster;
         final RaftNode nodeToRemove;
 
-        private RemoveVoterAction(Cluster cluster, RaftNode nodeToAdd) {
+        private RemoveVoterAction(Cluster cluster, RaftNode nodeToRemove) {
             this.cluster = cluster;
-            this.nodeToRemove = nodeToAdd;
+            this.nodeToRemove = nodeToRemove;
         }
 
         @Override
@@ -839,6 +914,11 @@ public class RaftEventSimulationTest {
                 .allMatch(node -> node.highWatermark() >= offset);
         }
 
+        boolean allHaveLatestVoterSet(VoterSet latestVoterSet) {
+            return running.values().stream()
+                .allMatch(node -> node.client.partitionState().lastVoterSet().equals(latestVoterSet));
+        }
+
         boolean hasLeader(int nodeId) {
             OptionalInt latestLeader = latestLeader();
             return latestLeader.isPresent() && latestLeader.getAsInt() == nodeId;
@@ -1050,6 +1130,8 @@ public class RaftEventSimulationTest {
         final MockQuorumStateStore store;
         final ReplicatedCounter counter;
         final RecordSerde<Integer> intSerde;
+        // This is used to store the message id of the API_VERSIONS request sent by the leader when trying to add a voter
+        final CompletableFuture<Integer> apiVersionsRequestMessageId = new CompletableFuture<>();
 
         private RaftNode(
             int nodeId,
@@ -1245,28 +1327,39 @@ public class RaftEventSimulationTest {
             if (cluster.withKip853) {
                 cluster.leaderWithMaxEpoch().ifPresent(leaderNode -> {
                     leaderNode.client.highWatermark().ifPresent(highWatermark -> {
-                        leaderNode.client.partitionState().voterSetAtOffset(highWatermark - 1).ifPresent(voterSet -> {
-                            long numReachedHighWatermark = cluster.persistentStates.entrySet().stream()
-                                .filter(entry -> voterSet.voterIds().contains(entry.getKey()))
-                                .filter(entry -> entry.getValue().log.endOffset().offset() >= highWatermark)
-                                .count();
-                            assertTrue(
-                                numReachedHighWatermark >= cluster.majoritySize(voterSet.size()),
-                                "Insufficient nodes have reached current high watermark");
-                        });
+                        VoterSet voterSet = leaderNode.client.partitionState().lastVoterSet();
+                        long numReachedHighWatermark = numReachedHighWatermark(highWatermark, voterSet.voterIds());
+                        if (numReachedHighWatermark < cluster.majoritySize(voterSet.size())) {
+                            leaderNode.client.partitionState().voterSetAtOffset(highWatermark - 1).ifPresent(otherVoterSet -> {
+                                long nodesReachedHighWatermark = numReachedHighWatermark(highWatermark, otherVoterSet.voterIds());
+                                assertTrue(
+                                    nodesReachedHighWatermark >= cluster.majoritySize(otherVoterSet.size()),
+                                    "Insufficient nodes have reached current high watermark. Expected at least " +
+                                        cluster.majoritySize(otherVoterSet.size()) + " but got " + nodesReachedHighWatermark);
+                            });
+                            return;
+                        }
+                        assertTrue(
+                            numReachedHighWatermark >= cluster.majoritySize(voterSet.size()),
+                            "Insufficient nodes have reached current high watermark. Expected at least " +
+                                cluster.majoritySize(voterSet.size()) + " but got " + numReachedHighWatermark);
                     });
                 });
             } else {
                 cluster.leaderHighWatermark().ifPresent(highWatermark -> {
-                    long numReachedHighWatermark = cluster.persistentStates.entrySet().stream()
-                        .filter(entry -> cluster.initialVoters.containsKey(entry.getKey()))
-                        .filter(entry -> entry.getValue().log.endOffset().offset() >= highWatermark)
-                        .count();
+                    long numReachedHighWatermark = numReachedHighWatermark(highWatermark, cluster.initialVoters.keySet());
                     assertTrue(
                         numReachedHighWatermark >= cluster.majoritySize(cluster.initialVoters.size()),
                         "Insufficient nodes have reached current high watermark");
                 });
             }
+        }
+
+        private long numReachedHighWatermark(long highWatermark, Set<Integer> voterIds) {
+            return cluster.persistentStates.entrySet().stream()
+                .filter(entry -> voterIds.contains(entry.getKey()))
+                .filter(entry -> entry.getValue().log.endOffset().offset() >= highWatermark)
+                .count();
         }
     }
 
@@ -1541,6 +1634,14 @@ public class RaftEventSimulationTest {
         void deliver(int senderId, RaftRequest.Outbound outbound) {
             if (!filters.get(senderId).acceptOutbound(outbound))
                 return;
+
+            // For the API_VERSIONS request sent when adding a voter, drop the request since KRaft client doesn't handle it
+            // Store the correlationId to deliver a response back to the leader to finish adding the voter
+            if (outbound.data().apiKey() == ApiKeys.API_VERSIONS.id) {
+                int nodeToAddId = outbound.destination().id();
+                cluster.running.get(nodeToAddId).apiVersionsRequestMessageId.complete(outbound.correlationId());
+                return;
+            }
 
             int correlationId = outbound.correlationId();
             Node destination = outbound.destination();
