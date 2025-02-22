@@ -32,6 +32,7 @@ import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.GroupNotEmptyException;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.CommandLineUtils;
 
@@ -42,6 +43,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -228,25 +230,34 @@ public class ShareGroupCommand {
                 ? shareGroupIds.stream().map(GroupListing::groupId).toList()
                 : opts.options.valuesOf(opts.groupOpt);
 
-            for (String groupId : groupIds) {
+            // Pre admin call checks
+            LinkedHashSet<String> groupIdSet = new LinkedHashSet<>(groupIds);
+            Map<String, Exception> errGroups = new HashMap<>();
+            for (String groupId : groupIdSet) {
                 Optional<GroupListing> listing = shareGroupIds.stream().filter(item -> item.groupId().equals(groupId)).findAny();
                 if (listing.isEmpty()) {
-                    throw new IllegalArgumentException("Group '" + groupId + "' is not a share group.");
+                    errGroups.put(groupId, new IllegalArgumentException("Group '" + groupId + "' is not a share group."));
                 } else {
-                    Optional<GroupState> state = listing.get().groupState();
-                    if (state.isPresent() && !state.get().equals(GroupState.EMPTY)) {
-                        throw new IllegalStateException("Share group '" + groupId + "' is not EMPTY.");
-                    }
+                    Optional<GroupState> groupState = listing.get().groupState();
+                    groupState.ifPresent(state -> {
+                        if (state == GroupState.DEAD) {
+                            errGroups.put(groupId, new IllegalStateException("Share group '" + groupId + "' group state is DEAD."));
+                        } else if (state != GroupState.EMPTY) {
+                            errGroups.put(groupId, new GroupNotEmptyException("Share group '" + groupId + "' is not EMPTY."));
+                        }
+                    });
                 }
             }
 
-            Map<String, KafkaFuture<Void>> groupsToDelete = adminClient.deleteShareGroups(
-                groupIds,
+            groupIdSet.removeAll(errGroups.keySet());
+
+            Map<String, KafkaFuture<Void>> groupsToDelete = groupIdSet.isEmpty() ? Map.of() : adminClient.deleteShareGroups(
+                groupIdSet.stream().toList(),
                 withTimeoutMs(new DeleteShareGroupsOptions())
             ).deletedGroups();
 
             Map<String, Throwable> success = new HashMap<>();
-            Map<String, Throwable> failed = new HashMap<>();
+            Map<String, Throwable> failed = new HashMap<>(errGroups);
 
             groupsToDelete.forEach((g, f) -> {
                 try {
@@ -260,13 +271,13 @@ public class ShareGroupCommand {
             });
 
             if (failed.isEmpty())
-                System.out.println("Deletion of requested share groups (" + "'" + success.keySet().stream().map(Object::toString).collect(Collectors.joining(", ")) + "'" + ") was successful.");
+                System.out.println("Deletion of requested share groups (" + success.keySet().stream().map(group -> "'" + group + "'").collect(Collectors.joining(", ")) + ") was successful.");
             else {
                 printError("Deletion of some share groups failed:", Optional.empty());
                 failed.forEach((group, error) -> System.out.println("* Share group '" + group + "' could not be deleted due to: " + error));
 
                 if (!success.isEmpty())
-                    System.out.println("\nThese share groups were deleted successfully: " + "'" + success.keySet().stream().map(Object::toString).collect(Collectors.joining("'")) + "', '");
+                    System.out.println("\nThese share groups were deleted successfully: " + success.keySet().stream().map(group -> "'" + group + "'").collect(Collectors.joining(",")));
             }
 
             failed.putAll(success);

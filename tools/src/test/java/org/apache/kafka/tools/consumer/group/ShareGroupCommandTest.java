@@ -43,6 +43,7 @@ import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.tools.ToolsTestUtils;
 import org.apache.kafka.tools.consumer.group.ShareGroupCommand.ShareGroupService;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -92,6 +93,11 @@ public class ShareGroupCommandTest {
         // nothing by default
         Exit.setExitProcedure(((statusCode, message) -> {
         }));
+    }
+
+    @AfterEach
+    public void teardown() {
+        Exit.resetExitProcedure();
     }
 
     @Test
@@ -780,7 +786,7 @@ public class ShareGroupCommandTest {
         when(adminClient.deleteShareGroups(anyList(), any())).thenReturn(result);
 
         try (ShareGroupService service = getShareGroupService(cgcArgs, adminClient)) {
-            assertThrows(IllegalArgumentException.class, service::deleteShareGroups);
+            service.deleteShareGroups();
             verify(result, times(0)).deletedGroups();
             verify(adminClient, times(0)).deleteShareGroups(anyList());
         }
@@ -804,7 +810,7 @@ public class ShareGroupCommandTest {
         when(adminClient.deleteShareGroups(anyList(), any())).thenReturn(result);
 
         try (ShareGroupService service = getShareGroupService(cgcArgs, adminClient)) {
-            assertThrows(IllegalStateException.class, service::deleteShareGroups);
+            service.deleteShareGroups();
             verify(result, times(0)).deletedGroups();
             verify(adminClient, times(0)).deleteShareGroups(anyList());
         }
