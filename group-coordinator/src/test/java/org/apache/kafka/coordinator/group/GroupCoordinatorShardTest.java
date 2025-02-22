@@ -17,6 +17,9 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.GroupIdNotFoundException;
+import org.apache.kafka.common.errors.GroupNotEmptyException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.DeleteGroupsResponseData;
@@ -77,19 +80,29 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignment
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMetadataValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
+import org.apache.kafka.coordinator.group.modern.share.ShareGroup;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.share.persister.DeleteShareGroupStateParameters;
+import org.apache.kafka.server.share.persister.GroupTopicPartitionData;
+import org.apache.kafka.server.share.persister.PartitionFactory;
+import org.apache.kafka.server.share.persister.PartitionIdData;
+import org.apache.kafka.server.share.persister.TopicData;
+import org.apache.kafka.timeline.SnapshotRegistry;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
+import org.mockito.Mockito;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 import static org.apache.kafka.coordinator.common.runtime.TestUtil.requestContext;
@@ -1743,5 +1756,107 @@ public class GroupCoordinatorShardTest {
         ));
 
         verify(groupMetadataManager, times(1)).replay(key, null);
+    }
+
+    @Test
+    public void testSharePartitionDeleteRequests() {
+        GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
+        OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
+        CoordinatorMetrics coordinatorMetrics = mock(CoordinatorMetrics.class);
+        CoordinatorMetricsShard metricsShard = mock(CoordinatorMetricsShard.class);
+        GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
+            new LogContext(),
+            groupMetadataManager,
+            offsetMetadataManager,
+            Time.SYSTEM,
+            new MockCoordinatorTimer<>(Time.SYSTEM),
+            mock(GroupCoordinatorConfig.class),
+            coordinatorMetrics,
+            metricsShard
+        );
+
+        ShareGroup shareGroup = new ShareGroup(new SnapshotRegistry(mock(LogContext.class)), "share-group");
+
+        when(groupMetadataManager.shareGroup(eq("share-group"))).thenReturn(shareGroup);
+        when(groupMetadataManager.shareGroup(eq("non-share-group"))).thenThrow(GroupIdNotFoundException.class);
+
+        TopicData<PartitionIdData> topicData = new TopicData<>(Uuid.randomUuid(),
+            List.of(
+                PartitionFactory.newPartitionIdData(0),
+                PartitionFactory.newPartitionIdData(1)
+            ));
+
+        DeleteShareGroupStateParameters params = new DeleteShareGroupStateParameters.Builder()
+            .setGroupTopicPartitionData(new GroupTopicPartitionData.Builder<PartitionIdData>()
+                .setGroupId("share-group")
+                .setTopicsData(List.of(topicData))
+                .build())
+            .build();
+
+        when(groupMetadataManager.shareGroupBuildPartitionDeleteRequest(eq(shareGroup))).thenReturn(Optional.of(params));
+
+        CoordinatorResult<Map<String, Map.Entry<DeleteShareGroupStateParameters, Errors>>, CoordinatorRecord> expectedResult =
+            new CoordinatorResult<>(List.of(), Map.of("share-group", Map.entry(params, Errors.NONE)));
+
+
+        assertEquals(expectedResult, coordinator.sharePartitionDeleteRequests(List.of("share-group", "non-share-group")));
+        verify(groupMetadataManager, times(1)).shareGroup(eq("share-group"));
+        verify(groupMetadataManager, times(1)).shareGroup(eq("non-share-group"));
+        verify(groupMetadataManager, times(1)).shareGroupBuildPartitionDeleteRequest(eq(shareGroup));
+
+        // empty list
+        Mockito.reset(groupMetadataManager);
+        expectedResult = new CoordinatorResult<>(List.of(), Map.of());
+        assertEquals(
+            expectedResult,
+            coordinator.sharePartitionDeleteRequests(List.of())
+        );
+
+        verify(groupMetadataManager, times(0)).group(eq("share-group"));
+        verify(groupMetadataManager, times(0)).group(eq("non-share-group"));
+        verify(groupMetadataManager, times(0)).shareGroupBuildPartitionDeleteRequest(eq(shareGroup));
+    }
+
+    @Test
+    public void testSharePartitionDeleteRequestsNonEmptyShareGroup() {
+        GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
+        OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
+        CoordinatorMetrics coordinatorMetrics = mock(CoordinatorMetrics.class);
+        CoordinatorMetricsShard metricsShard = mock(CoordinatorMetricsShard.class);
+        GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
+            new LogContext(),
+            groupMetadataManager,
+            offsetMetadataManager,
+            Time.SYSTEM,
+            new MockCoordinatorTimer<>(Time.SYSTEM),
+            mock(GroupCoordinatorConfig.class),
+            coordinatorMetrics,
+            metricsShard
+        );
+
+        ShareGroup shareGroup = mock(ShareGroup.class);
+        doThrow(new GroupNotEmptyException("bad stuff")).when(shareGroup).validateDeleteGroup();
+
+        when(groupMetadataManager.shareGroup(eq("share-group"))).thenReturn(shareGroup);
+
+        CoordinatorResult<Map<String, Map.Entry<DeleteShareGroupStateParameters, Errors>>, CoordinatorRecord> expectedResult =
+            new CoordinatorResult<>(List.of(), Map.of("share-group", Map.entry(DeleteShareGroupStateParameters.EMPTY_PARAMS,
+                Errors.forException(new GroupNotEmptyException("bad stuff")))
+            ));
+        assertEquals(expectedResult, coordinator.sharePartitionDeleteRequests(List.of("share-group")));
+        verify(groupMetadataManager, times(1)).shareGroup(eq("share-group"));
+        // Not called because of NON-EMPTY group.
+        verify(groupMetadataManager, times(0)).shareGroupBuildPartitionDeleteRequest(eq(shareGroup));
+
+        // empty list
+        Mockito.reset(groupMetadataManager);
+        expectedResult = new CoordinatorResult<>(List.of(), Map.of());
+        assertEquals(
+            expectedResult,
+            coordinator.sharePartitionDeleteRequests(List.of())
+        );
+
+        verify(groupMetadataManager, times(0)).group(eq("share-group"));
+        verify(groupMetadataManager, times(0)).shareGroupBuildPartitionDeleteRequest(eq(shareGroup));
     }
 }

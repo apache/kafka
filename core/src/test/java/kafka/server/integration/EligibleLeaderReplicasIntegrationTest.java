@@ -45,6 +45,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.storage.internals.checkpoint.CleanShutdownFileHandler;
 
 import org.junit.jupiter.api.AfterEach;
@@ -79,6 +80,12 @@ public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarnes
     private String bootstrapServer;
     private String testTopicName;
     private Admin adminClient;
+
+    @Override
+    public MetadataVersion metadataVersion() {
+        return MetadataVersion.IBP_4_0_IV1;
+    }
+
     @Override
     public Seq<KafkaConfig> generateConfigs() {
         List<Properties> brokerConfigs = new ArrayList<>();
