@@ -671,7 +671,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             exception -> {
                 exception = Errors.maybeUnwrapException(exception);
                 if (exception instanceof NotCoordinatorException) {
-                    return Collections.emptyList();
+                    return List.of();
                 } else {
                     throw new CompletionException(exception);
                 }
@@ -714,7 +714,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     .computeIfAbsent(topicPartitionFor(groupId), __ -> new ArrayList<>())
                     .add(groupId);
             } else {
-                futures.add(CompletableFuture.completedFuture(Collections.singletonList(
+                futures.add(CompletableFuture.completedFuture(List.of(
                     new ConsumerGroupDescribeResponseData.DescribedGroup()
                         .setGroupId(null)
                         .setErrorCode(Errors.INVALID_GROUP_ID.code())
@@ -817,7 +817,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     .computeIfAbsent(topicPartitionFor(groupId), __ -> new ArrayList<>())
                     .add(groupId);
             } else {
-                futures.add(CompletableFuture.completedFuture(Collections.singletonList(
+                futures.add(CompletableFuture.completedFuture(List.of(
                     new ShareGroupDescribeResponseData.DescribedGroup()
                         .setGroupId(null)
                         .setErrorCode(Errors.INVALID_GROUP_ID.code())
@@ -866,7 +866,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         groupIds.forEach(groupId -> {
             // For backwards compatibility, we support DescribeGroups for the empty group id.
             if (groupId == null) {
-                futures.add(CompletableFuture.completedFuture(Collections.singletonList(
+                futures.add(CompletableFuture.completedFuture(List.of(
                     new DescribeGroupsResponseData.DescribedGroup()
                         .setGroupId(null)
                         .setErrorCode(Errors.INVALID_GROUP_ID.code())
@@ -1149,7 +1149,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 topicPartitionFor(request.groupId()),
                 Duration.ofMillis(config.offsetCommitTimeoutMs()),
                 coordinator -> new CoordinatorResult<>(
-                    Collections.emptyList(),
+                    List.of(),
                     coordinator.fetchOffsets(request, Long.MAX_VALUE)
                 )
             ).exceptionally(exception -> handleOffsetFetchException(
@@ -1204,7 +1204,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 topicPartitionFor(request.groupId()),
                 Duration.ofMillis(config.offsetCommitTimeoutMs()),
                 coordinator -> new CoordinatorResult<>(
-                    Collections.emptyList(),
+                    List.of(),
                     coordinator.fetchAllOffsets(request, Long.MAX_VALUE)
                 )
             ).exceptionally(exception -> handleOffsetFetchException(

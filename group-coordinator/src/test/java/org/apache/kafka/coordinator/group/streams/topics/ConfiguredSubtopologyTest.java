@@ -20,7 +20,6 @@ import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -38,9 +37,9 @@ public class ConfiguredSubtopologyTest {
         assertThrows(NullPointerException.class,
             () -> new ConfiguredSubtopology(
                 null,
-                Collections.emptyMap(),
-                Collections.emptySet(),
-                Collections.emptyMap()
+                Map.of(),
+                Set.of(),
+                Map.of()
             )
         );
     }
@@ -49,10 +48,10 @@ public class ConfiguredSubtopologyTest {
     public void testConstructorWithNullRepartitionSourceTopics() {
         assertThrows(NullPointerException.class,
             () -> new ConfiguredSubtopology(
-                Collections.emptySet(),
+                Set.of(),
                 null,
-                Collections.emptySet(),
-                Collections.emptyMap()
+                Set.of(),
+                Map.of()
             )
         );
     }
@@ -61,10 +60,10 @@ public class ConfiguredSubtopologyTest {
     public void testConstructorWithNullRepartitionSinkTopics() {
         assertThrows(NullPointerException.class,
             () -> new ConfiguredSubtopology(
-                Collections.emptySet(),
-                Collections.emptyMap(),
+                Set.of(),
+                Map.of(),
                 null,
-                Collections.emptyMap()
+                Map.of()
             )
         );
     }
@@ -73,9 +72,9 @@ public class ConfiguredSubtopologyTest {
     public void testConstructorWithNullStateChangelogTopics() {
         assertThrows(NullPointerException.class,
             () -> new ConfiguredSubtopology(
-                Collections.emptySet(),
-                Collections.emptyMap(),
-                Collections.emptySet(),
+                Set.of(),
+                Map.of(),
+                Set.of(),
                 null
             )
         );

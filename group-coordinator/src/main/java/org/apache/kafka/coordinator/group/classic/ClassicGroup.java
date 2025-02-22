@@ -551,7 +551,7 @@ public class ClassicGroup implements Group {
 
         // Fence potential duplicate member immediately if someone awaits join/sync future.
         JoinGroupResponseData joinGroupResponse = new JoinGroupResponseData()
-            .setMembers(Collections.emptyList())
+            .setMembers(List.of())
             .setMemberId(oldMemberId)
             .setProtocolName(null)
             .setProtocolType(null)
