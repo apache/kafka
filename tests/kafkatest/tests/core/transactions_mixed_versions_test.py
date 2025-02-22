@@ -178,7 +178,7 @@ class TransactionsMixedVersionsTest(Test):
 
     @cluster(num_nodes=8)
     @matrix(
-        old_kafka_version=[str(LATEST_3_9), str(LATEST_3_8), str(LATEST_3_7), str(LATEST_3_6), str(LATEST_3_5), str(LATEST_3_4), str(LATEST_3_3), str(LATEST_3_2), str(LATEST_3_1)],
+        old_kafka_version=[str(LATEST_3_9), str(LATEST_3_8), str(LATEST_3_7), str(LATEST_3_6), str(LATEST_3_5), str(LATEST_3_4), str(LATEST_3_3)],
         metadata_quorum=[isolated_kraft],
         use_new_coordinator=[False],
         group_protocol=[None]
