@@ -16651,6 +16651,8 @@ public class GroupMetadataManagerTest {
                     .setAssignedPartitions(mkAssignment(
                         mkTopicAssignment(fooTopicId, 3, 4, 5)))
                     .build())
+                .withSubscriptionMetadata(Map.of(
+                    fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6)))
                 .withAssignment(memberId1, mkAssignment(
                     mkTopicAssignment(fooTopicId, 0, 1, 2)))
                 .withAssignment(memberId2, mkAssignment(
@@ -16681,7 +16683,7 @@ public class GroupMetadataManagerTest {
                 .setMemberId(memberId2)
                 .setMemberEpoch(10)
                 .setRebalanceTimeoutMs(5000)
-                .setSubscribedTopicRegex("bar*")
+                .setSubscribedTopicRegex("foo*|bar*")
                 .setServerAssignor("range")
                 .setTopicPartitions(Collections.emptyList()),
             ApiKeys.CONSUMER_GROUP_HEARTBEAT.latestVersion()
@@ -16707,7 +16709,7 @@ public class GroupMetadataManagerTest {
             .setClientId(DEFAULT_CLIENT_ID)
             .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
             .setRebalanceTimeoutMs(5000)
-            .setSubscribedTopicRegex("bar*")
+            .setSubscribedTopicRegex("foo*|bar*")
             .setServerAssignorName("range")
             .build();
 
@@ -16723,17 +16725,18 @@ public class GroupMetadataManagerTest {
             List.of(
                 new MockCoordinatorExecutor.ExecutorResult<>(
                     groupId + "-regex",
-                    new CoordinatorResult<>(Collections.singletonList(
+                    new CoordinatorResult<>(List.of(
                         // The resolution of the new regex is persisted.
                         GroupCoordinatorRecordHelpers.newConsumerGroupRegularExpressionRecord(
                             groupId,
-                            "bar*",
+                            "foo*|bar*",
                             new ResolvedRegularExpression(
-                                Collections.emptySet(), // No valid topic.
+                                Set.of("foo"),
                                 12345L,
                                 context.time.milliseconds()
                             )
-                        )
+                        ),
+                        GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, 11)
                     ))
                 )
             ),

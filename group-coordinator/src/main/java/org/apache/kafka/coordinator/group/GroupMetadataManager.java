@@ -2560,8 +2560,8 @@ public class GroupMetadataManager {
             Set<String> regexes = Collections.unmodifiableSet(subscribedRegularExpressions.keySet());
             executor.schedule(
                 key,
-                () -> refreshRegularExpressions(context, groupId, memberId, log, time, metadataImage, authorizer, regexes),
-                (result, exception) -> handleRegularExpressionsResult(groupId, result, exception)
+                () -> refreshRegularExpressions(context, groupId, log, time, metadataImage, authorizer, regexes),
+                (result, exception) -> handleRegularExpressionsResult(groupId, memberId, result, exception)
             );
         }
 
@@ -2575,7 +2575,6 @@ public class GroupMetadataManager {
      *
      * @param context       The request context.
      * @param groupId       The group id.
-     * @param memberId      The member id.
      * @param log           The log instance.
      * @param time          The time instance.
      * @param image         The metadata image to use for listing the topics.
@@ -2588,7 +2587,6 @@ public class GroupMetadataManager {
     public static Map<String, ResolvedRegularExpression> refreshRegularExpressions(
         RequestContext context,
         String groupId,
-        String memberId,
         Logger log,
         Time time,
         MetadataImage image,
@@ -2621,16 +2619,11 @@ public class GroupMetadataManager {
             }
         }
 
-        Set<String> deniedTopics = filterTopicDescribeAuthorizedTopics(
+        filterTopicDescribeAuthorizedTopics(
             context,
             authorizer,
             resolvedRegexes
         );
-
-        if (log.isDebugEnabled()) {
-            log.debug("[GroupId {}] Member {} is not authorized to describe topics: {}.",
-                groupId, memberId, deniedTopics);
-        }
 
         long version = image.provenance().lastContainedOffset();
         Map<String, ResolvedRegularExpression> result = new HashMap<>(resolvedRegexes.size());
@@ -2654,41 +2647,37 @@ public class GroupMetadataManager {
      *
      * @param context           The request context.
      * @param authorizer        The authorizer.
-     * @param resolvedRegexes   The map of the regex patter and its set of matched topics.
-     * @return The set of topics that the member is not authorized to describe.
+     * @param resolvedRegexes   The map of the regex pattern and its set of matched topics.
      */
-    private static Set<String> filterTopicDescribeAuthorizedTopics(
+    private static void filterTopicDescribeAuthorizedTopics(
         RequestContext context,
         Optional<Authorizer> authorizer,
         Map<String, Set<String>> resolvedRegexes
     ) {
-        if (authorizer.isPresent()) {
-            Map<String, Integer> topicNameCount = new HashMap<>();
-            resolvedRegexes.values().forEach(topicNames ->
-                topicNames.forEach(topicName ->
-                    topicNameCount.compute(topicName, Utils::incValue)
-                )
-            );
+        if (authorizer.isEmpty()) return;
 
-            List<Action> actions = topicNameCount.entrySet().stream().map(entry -> {
-                ResourcePattern resource = new ResourcePattern(TOPIC, entry.getKey(), LITERAL);
-                return new Action(DESCRIBE, resource, entry.getValue(), true, true);
-            }).collect(Collectors.toList());
+        Map<String, Integer> topicNameCount = new HashMap<>();
+        resolvedRegexes.values().forEach(topicNames ->
+            topicNames.forEach(topicName ->
+                topicNameCount.compute(topicName, Utils::incValue)
+            )
+        );
 
-            List<AuthorizationResult> authorizationResults = authorizer.get().authorize(context, actions);
-            Set<String> deniedTopics = new HashSet<>();
-            IntStream.range(0, actions.size()).forEach(i -> {
-                if (authorizationResults.get(i) == AuthorizationResult.DENIED) {
-                    String deniedTopic = actions.get(i).resourcePattern().name();
-                    deniedTopics.add(deniedTopic);
-                }
-            });
+        List<Action> actions = topicNameCount.entrySet().stream().map(entry -> {
+            ResourcePattern resource = new ResourcePattern(TOPIC, entry.getKey(), LITERAL);
+            return new Action(DESCRIBE, resource, entry.getValue(), true, true);
+        }).collect(Collectors.toList());
 
-            resolvedRegexes.forEach((__, topicNames) -> topicNames.removeIf(deniedTopics::contains));
+        List<AuthorizationResult> authorizationResults = authorizer.get().authorize(context, actions);
+        Set<String> deniedTopics = new HashSet<>();
+        IntStream.range(0, actions.size()).forEach(i -> {
+            if (authorizationResults.get(i) == AuthorizationResult.DENIED) {
+                String deniedTopic = actions.get(i).resourcePattern().name();
+                deniedTopics.add(deniedTopic);
+            }
+        });
 
-            return deniedTopics;
-        }
-        return Collections.emptySet();
+        resolvedRegexes.forEach((__, topicNames) -> topicNames.removeAll(deniedTopics));
     }
 
 
@@ -2696,12 +2685,14 @@ public class GroupMetadataManager {
      * Handle the result of the asynchronous tasks which resolves the regular expressions.
      *
      * @param groupId                       The group id.
+     * @param memberId                      The member id.
      * @param resolvedRegularExpressions    The resolved regular expressions.
      * @param exception                     The exception if the resolution failed.
      * @return A CoordinatorResult containing the records to mutate the group state.
      */
     private CoordinatorResult<Void, CoordinatorRecord> handleRegularExpressionsResult(
         String groupId,
+        String memberId,
         Map<String, ResolvedRegularExpression> resolvedRegularExpressions,
         Throwable exception
     ) {
@@ -2712,8 +2703,8 @@ public class GroupMetadataManager {
         }
 
         if (log.isDebugEnabled()) {
-            log.debug("[GroupId {}] Received updated regular expressions: {}.",
-                groupId, resolvedRegularExpressions);
+            log.debug("[GroupId {}] Received updated regular expressions triggered by member {}: {}.",
+                groupId, memberId, resolvedRegularExpressions);
         }
 
         List<CoordinatorRecord> records = new ArrayList<>();

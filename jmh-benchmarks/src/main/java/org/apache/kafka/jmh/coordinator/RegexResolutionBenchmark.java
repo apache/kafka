@@ -57,7 +57,6 @@ public class RegexResolutionBenchmark {
     private static final Logger LOG = new LogContext().logger(RegexResolutionBenchmark.class);
     private static final Time TIME = Time.SYSTEM;
     private static final String GROUP_ID = "my-group-id";
-    private static final String MEMBER_ID = "my-member-id";
 
     private static final List<String> WORDS = List.of(
         "data",
@@ -122,7 +121,6 @@ public class RegexResolutionBenchmark {
         GroupMetadataManager.refreshRegularExpressions(
             null,
             GROUP_ID,
-            MEMBER_ID,
             LOG,
             TIME,
             image,
