@@ -19,8 +19,8 @@ package org.apache.kafka.clients.admin.internals;
 
 import org.apache.kafka.common.utils.LogContext;
 
-public class DeleteConsumerGroupsHandlerTest extends DeleteGroupsHandlerTest {
+public class DeleteShareGroupsHandlerTest extends DeleteGroupsHandlerTest {
     protected DeleteGroupsHandler handler() {
-        return new DeleteConsumerGroupsHandler(new LogContext());
+        return new DeleteShareGroupsHandler(new LogContext());
     }
 }

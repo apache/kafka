@@ -17,7 +17,9 @@
 package org.apache.kafka.tools.consumer.group;
 
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.admin.AbstractOptions;
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.DeleteShareGroupsOptions;
 import org.apache.kafka.clients.admin.DescribeShareGroupsOptions;
 import org.apache.kafka.clients.admin.GroupListing;
 import org.apache.kafka.clients.admin.ListGroupsOptions;
@@ -30,6 +32,7 @@ import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.GroupNotEmptyException;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.CommandLineUtils;
 
@@ -40,6 +43,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -81,7 +85,7 @@ public class ShareGroupCommand {
             } else if (opts.options.has(opts.describeOpt)) {
                 shareGroupService.describeGroups();
             } else if (opts.options.has(opts.deleteOpt)) {
-                throw new UnsupportedOperationException("--delete option is not yet implemented");
+                shareGroupService.deleteShareGroups();
             } else if (opts.options.has(opts.resetOffsetsOpt)) {
                 throw new UnsupportedOperationException("--reset-offsets option is not yet implemented");
             } else if (opts.options.has(opts.deleteOffsetsOpt)) {
@@ -154,6 +158,18 @@ public class ShareGroupCommand {
             }
         }
 
+        List<GroupListing> listDetailedShareGroups() {
+            try {
+                ListGroupsResult result = adminClient.listGroups(new ListGroupsOptions()
+                    .timeoutMs(opts.options.valueOf(opts.timeoutMsOpt).intValue())
+                    .withTypes(Set.of(GroupType.SHARE)));
+                Collection<GroupListing> listings = result.all().get();
+                return listings.stream().toList();
+            } catch (InterruptedException | ExecutionException e) {
+                throw new RuntimeException(e);
+            }
+        }
+
         List<GroupListing> listShareGroupsInStates(Set<GroupState> states) throws ExecutionException, InterruptedException {
             ListGroupsResult result = adminClient.listGroups(new ListGroupsOptions()
                 .timeoutMs(opts.options.valueOf(opts.timeoutMsOpt).intValue())
@@ -206,6 +222,72 @@ public class ShareGroupCommand {
                     = collectGroupsOffsets(groupIds);
                 printOffsets(offsets, opts.options.has(opts.verboseOpt));
             }
+        }
+
+        Map<String, Throwable> deleteShareGroups() {
+            List<GroupListing> shareGroupIds = listDetailedShareGroups();
+            List<String> groupIds = opts.options.has(opts.allGroupsOpt)
+                ? shareGroupIds.stream().map(GroupListing::groupId).toList()
+                : opts.options.valuesOf(opts.groupOpt);
+
+            // Pre admin call checks
+            LinkedHashSet<String> groupIdSet = new LinkedHashSet<>(groupIds);
+            Map<String, Exception> errGroups = new HashMap<>();
+            for (String groupId : groupIdSet) {
+                Optional<GroupListing> listing = shareGroupIds.stream().filter(item -> item.groupId().equals(groupId)).findAny();
+                if (listing.isEmpty()) {
+                    errGroups.put(groupId, new IllegalArgumentException("Group '" + groupId + "' is not a share group."));
+                } else {
+                    Optional<GroupState> groupState = listing.get().groupState();
+                    groupState.ifPresent(state -> {
+                        if (state == GroupState.DEAD) {
+                            errGroups.put(groupId, new IllegalStateException("Share group '" + groupId + "' group state is DEAD."));
+                        } else if (state != GroupState.EMPTY) {
+                            errGroups.put(groupId, new GroupNotEmptyException("Share group '" + groupId + "' is not EMPTY."));
+                        }
+                    });
+                }
+            }
+
+            groupIdSet.removeAll(errGroups.keySet());
+
+            Map<String, KafkaFuture<Void>> groupsToDelete = groupIdSet.isEmpty() ? Map.of() : adminClient.deleteShareGroups(
+                groupIdSet.stream().toList(),
+                withTimeoutMs(new DeleteShareGroupsOptions())
+            ).deletedGroups();
+
+            Map<String, Throwable> success = new HashMap<>();
+            Map<String, Throwable> failed = new HashMap<>(errGroups);
+
+            groupsToDelete.forEach((g, f) -> {
+                try {
+                    f.get();
+                    success.put(g, null);
+                } catch (InterruptedException ie) {
+                    failed.put(g, ie);
+                } catch (ExecutionException e) {
+                    failed.put(g, e.getCause());
+                }
+            });
+
+            if (failed.isEmpty())
+                System.out.println("Deletion of requested share groups (" + success.keySet().stream().map(group -> "'" + group + "'").collect(Collectors.joining(", ")) + ") was successful.");
+            else {
+                printError("Deletion of some share groups failed:", Optional.empty());
+                failed.forEach((group, error) -> System.out.println("* Share group '" + group + "' could not be deleted due to: " + error));
+
+                if (!success.isEmpty())
+                    System.out.println("\nThese share groups were deleted successfully: " + success.keySet().stream().map(group -> "'" + group + "'").collect(Collectors.joining(",")));
+            }
+
+            failed.putAll(success);
+
+            return failed;
+        }
+
+        private <T extends AbstractOptions<T>> T withTimeoutMs(T options) {
+            int t = opts.options.valueOf(opts.timeoutMsOpt).intValue();
+            return options.timeoutMs(t);
         }
 
         Map<String, ShareGroupDescription> describeShareGroups(Collection<String> groupIds) throws ExecutionException, InterruptedException {
