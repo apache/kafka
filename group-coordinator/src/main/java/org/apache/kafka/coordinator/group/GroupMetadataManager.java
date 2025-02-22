@@ -2703,7 +2703,7 @@ public class GroupMetadataManager {
         }
 
         if (log.isDebugEnabled()) {
-            log.debug("[GroupId {}] Received updated regular expressions triggered by member {}: {}.",
+            log.debug("[GroupId {}] Received updated regular expressions based on the context of member {}: {}.",
                 groupId, memberId, resolvedRegularExpressions);
         }
 
