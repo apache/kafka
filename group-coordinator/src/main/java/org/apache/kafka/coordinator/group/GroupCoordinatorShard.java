@@ -216,7 +216,6 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             return this;
         }
 
-        @Override
         public CoordinatorShardBuilder<GroupCoordinatorShard, CoordinatorRecord> withAuthorizer(
             Optional<Authorizer> authorizer
         ) {

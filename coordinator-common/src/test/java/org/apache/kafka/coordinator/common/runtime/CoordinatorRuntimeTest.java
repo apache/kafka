@@ -41,7 +41,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
-import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.server.util.FutureUtils;
 import org.apache.kafka.server.util.timer.MockTimer;
 import org.apache.kafka.storage.internals.log.LogConfig;
@@ -67,7 +66,6 @@ import java.util.Deque;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -520,13 +518,6 @@ public class CoordinatorRuntimeTest {
         @Override
         public CoordinatorShardBuilder<MockCoordinatorShard, String> withTopicPartition(
             TopicPartition topicPartition
-        ) {
-            return this;
-        }
-
-        @Override
-        public CoordinatorShardBuilder<MockCoordinatorShard, String> withAuthorizer(
-            Optional<Authorizer> authorizer
         ) {
             return this;
         }

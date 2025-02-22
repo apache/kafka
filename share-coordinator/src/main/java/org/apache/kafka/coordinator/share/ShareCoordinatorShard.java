@@ -54,7 +54,6 @@ import org.apache.kafka.coordinator.share.metrics.ShareCoordinatorMetrics;
 import org.apache.kafka.coordinator.share.metrics.ShareCoordinatorMetricsShard;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
-import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.share.persister.PartitionFactory;
@@ -136,12 +135,6 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         @Override
         public CoordinatorShardBuilder<ShareCoordinatorShard, CoordinatorRecord> withTopicPartition(TopicPartition topicPartition) {
             this.topicPartition = topicPartition;
-            return this;
-        }
-
-        @Override
-        public CoordinatorShardBuilder<ShareCoordinatorShard, CoordinatorRecord> withAuthorizer(Optional<Authorizer> authorizer) {
-            // method is required due to interface
             return this;
         }
 
