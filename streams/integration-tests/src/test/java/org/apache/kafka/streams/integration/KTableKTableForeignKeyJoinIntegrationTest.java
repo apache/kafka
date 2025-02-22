@@ -99,10 +99,10 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
     // topology with versioned tables, since KTableKTableForeignKeyVersionedJoinIntegrationTest
     // extends this test class.
     private static Collection<Object[]> data() {
-        final List<Boolean> leftJoin = asList(true, false);
-        final List<String> optimization = asList(StreamsConfig.OPTIMIZE, StreamsConfig.NO_OPTIMIZATION);
-        final List<Boolean> materialized = asList(true, false);
-        final List<Boolean> rejoin = asList(false, false);
+        final List<Boolean> leftJoin = Arrays.asList(true, false);
+        final List<String> optimization = Arrays.asList(StreamsConfig.OPTIMIZE, StreamsConfig.NO_OPTIMIZATION);
+        final List<Boolean> materialized = Arrays.asList(true, false);
+        final List<Boolean> rejoin = Arrays.asList(true, false);
         final List<Boolean> leftVersioned = Collections.singletonList(false);
         final List<Boolean> rightVersioned = Collections.singletonList(false);
         return buildParameters(leftJoin, optimization, materialized, rejoin, leftVersioned, rightVersioned);
@@ -207,7 +207,7 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
             left.pipeInput("lhs2", "lhsValue2|rhs2", baseTimestamp + 4);
 
             {
-                final List<KeyValue<String, String>> expected = asList(
+                final List<KeyValue<String, String>> expected = Arrays.asList(
                     KeyValue.pair("lhs1", "(lhsValue1|rhs1,rhsValue1)"),
                     KeyValue.pair("lhs2", "(lhsValue2|rhs2,rhsValue2)")
                 );
