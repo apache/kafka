@@ -32,6 +32,7 @@ import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsem
 import org.apache.kafka.metadata.storage.{Formatter, FormatterException}
 import org.apache.kafka.raft.{DynamicVoters, QuorumConfig}
 import org.apache.kafka.server.ProcessRole
+import org.apache.kafka.server.config.KRaftConfigs
 
 import java.util
 import scala.collection.mutable
@@ -118,7 +119,7 @@ object StorageTool extends Logging {
   ): Unit = {
     if (config.processRoles.isEmpty) {
       throw new TerseFailure("The kafka configuration file appears to be for " +
-        "a legacy cluster. Formatting is only supported for clusters in KRaft mode.")
+        "a legacy cluster. Formatting is only supported for clusters in KRaft mode.", KRaftConfigs.PROCESS_ROLES_CONFIG)
     }
     val formatter = new Formatter().
       setPrintStream(printStream).
@@ -147,7 +148,7 @@ object StorageTool extends Logging {
         if (config.quorumConfig.voters().isEmpty && formatter.initialVoters().isEmpty) {
           throw new TerseFailure("Because " + QuorumConfig.QUORUM_VOTERS_CONFIG +
             " is not set on this controller, you must specify one of the following: " +
-            "--standalone, --initial-controllers, or --no-initial-controllers.");
+            "--standalone, --initial-controllers, or --no-initial-controllers.", QuorumConfig.QUORUM_VOTERS_CONFIG);
         }
       }
     }
@@ -182,9 +183,9 @@ object StorageTool extends Logging {
         printStream.print(f"${feature.featureName}%s=$featureLevel%d%n")
       }
     } catch {
-      case e: IllegalArgumentException =>
+      case _: IllegalArgumentException =>
         throw new TerseFailure(s"Unknown release version '$releaseVersion'. Supported versions are: " +
-          s"${MetadataVersion.MINIMUM_VERSION.version} to ${MetadataVersion.LATEST_PRODUCTION.version}")
+          s"${MetadataVersion.MINIMUM_VERSION.version} to ${MetadataVersion.LATEST_PRODUCTION.version}", "release_version")
     }
   }
 
@@ -203,7 +204,7 @@ object StorageTool extends Logging {
         versionStr.toShort
       } catch {
         case _: NumberFormatException =>
-          throw new TerseFailure(s"Invalid version format: $versionStr for feature $featureName")
+          throw new TerseFailure(s"Invalid version format: $versionStr for feature $featureName", "feature")
       }
 
       if (featureName == MetadataVersion.FEATURE_NAME) {
@@ -211,7 +212,7 @@ object StorageTool extends Logging {
           MetadataVersion.fromFeatureLevel(featureLevel)
         } catch {
           case _: IllegalArgumentException =>
-            throw new TerseFailure(s"Unknown metadata.version $featureLevel")
+            throw new TerseFailure(s"Unknown metadata.version $featureLevel", "feature")
         }
         printStream.printf("%s=%d (%s) has no dependencies.%n", featureName, featureLevel, metadataVersion.version())
       } else {
@@ -221,7 +222,7 @@ object StorageTool extends Logging {
               feature.fromFeatureLevel(featureLevel, true)
             } catch {
               case _: IllegalArgumentException =>
-                throw new TerseFailure(s"Feature level $featureLevel is not supported for feature $featureName")
+                throw new TerseFailure(s"Feature level $featureLevel is not supported for feature $featureName", "feature")
             }
             val dependencies = featureVersion.dependencies().asScala
 
@@ -240,7 +241,7 @@ object StorageTool extends Logging {
             }
 
           case None =>
-            throw new TerseFailure(s"Unknown feature: $featureName")
+            throw new TerseFailure(s"Unknown feature: $featureName", "feature")
         }
       }
     }
@@ -250,7 +251,7 @@ object StorageTool extends Logging {
     config: KafkaConfig
   ): DynamicVoters = {
     if (!config.processRoles.contains(ProcessRole.ControllerRole)) {
-      throw new TerseFailure("You can only use --standalone on a controller.")
+      throw new TerseFailure("You can only use --standalone on a controller.", KRaftConfigs.PROCESS_ROLES_CONFIG)
     }
     if (config.effectiveAdvertisedControllerListeners.isEmpty) {
       throw new RuntimeException("No controller listeners found.")

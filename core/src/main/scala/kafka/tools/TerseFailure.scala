@@ -27,6 +27,7 @@ import org.apache.kafka.common.KafkaException
  *                    be printed.
  * @param cause       The exception's cause
  */
-class TerseFailure(message: String, cause: Throwable) extends KafkaException(message, cause) {
-  def this(message: String) = this(message, null)
+class TerseFailure(message: String, failedProperty: String, cause: Throwable) extends KafkaException(message, cause) {
+  def this(message: String, failedProperty: String) = this(message, failedProperty, null)
+  def failedProperty(): String = failedProperty
 }
