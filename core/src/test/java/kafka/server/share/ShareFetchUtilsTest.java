@@ -37,6 +37,7 @@ import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.share.fetch.ShareAcquiredRecords;
 import org.apache.kafka.server.share.fetch.ShareFetch;
+import org.apache.kafka.server.share.fetch.ShareFetchPartitionData;
 import org.apache.kafka.server.storage.log.FetchIsolation;
 import org.apache.kafka.server.storage.log.FetchParams;
 import org.apache.kafka.server.storage.log.FetchPartitionData;
@@ -49,7 +50,6 @@ import org.mockito.Mockito;
 
 import java.io.IOException;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -103,10 +103,10 @@ public class ShareFetchUtilsTest {
         when(sp0.nextFetchOffset()).thenReturn((long) 3);
         when(sp1.nextFetchOffset()).thenReturn((long) 3);
 
-        when(sp0.acquire(anyString(), anyInt(), anyInt(), any(FetchPartitionData.class))).thenReturn(
+        when(sp0.acquire(anyString(), anyInt(), anyInt(), anyLong(), any(FetchPartitionData.class))).thenReturn(
             createShareAcquiredRecords(new ShareFetchResponseData.AcquiredRecords()
                 .setFirstOffset(0).setLastOffset(3).setDeliveryCount((short) 1)));
-        when(sp1.acquire(anyString(), anyInt(), anyInt(), any(FetchPartitionData.class))).thenReturn(
+        when(sp1.acquire(anyString(), anyInt(), anyInt(), anyLong(), any(FetchPartitionData.class))).thenReturn(
             createShareAcquiredRecords(new ShareFetchResponseData.AcquiredRecords()
                 .setFirstOffset(100).setLastOffset(103).setDeliveryCount((short) 1)));
 
@@ -129,13 +129,14 @@ public class ShareFetchUtilsTest {
             new SimpleRecord("2".getBytes(), "v".getBytes()),
             new SimpleRecord(null, "value".getBytes()));
 
-        Map<TopicIdPartition, FetchPartitionData> responseData = new HashMap<>();
-        responseData.put(tp0, new FetchPartitionData(Errors.NONE, 0L, 0L,
+        List<ShareFetchPartitionData> responseData = List.of(
+            new ShareFetchPartitionData(tp0, 0, new FetchPartitionData(Errors.NONE, 0L, 0L,
                 records, Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false));
-        responseData.put(tp1, new FetchPartitionData(Errors.NONE, 0L, 100L,
+                OptionalInt.empty(), false)),
+            new ShareFetchPartitionData(tp1, 0, new FetchPartitionData(Errors.NONE, 0L, 100L,
                 records1, Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false));
+                OptionalInt.empty(), false))
+        );
         Map<TopicIdPartition, ShareFetchResponseData.PartitionData> resultData =
                 ShareFetchUtils.processFetchResponse(shareFetch, responseData, sharePartitions, mock(ReplicaManager.class), EXCEPTION_HANDLER);
 
@@ -168,8 +169,8 @@ public class ShareFetchUtilsTest {
         when(sp0.nextFetchOffset()).thenReturn((long) 3);
         when(sp1.nextFetchOffset()).thenReturn((long) 3);
 
-        when(sp0.acquire(anyString(), anyInt(), anyInt(), any(FetchPartitionData.class))).thenReturn(ShareAcquiredRecords.empty());
-        when(sp1.acquire(anyString(), anyInt(), anyInt(), any(FetchPartitionData.class))).thenReturn(ShareAcquiredRecords.empty());
+        when(sp0.acquire(anyString(), anyInt(), anyInt(), anyLong(), any(FetchPartitionData.class))).thenReturn(ShareAcquiredRecords.empty());
+        when(sp1.acquire(anyString(), anyInt(), anyInt(), anyLong(), any(FetchPartitionData.class))).thenReturn(ShareAcquiredRecords.empty());
 
         LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions = new LinkedHashMap<>();
         sharePartitions.put(tp0, sp0);
@@ -178,13 +179,14 @@ public class ShareFetchUtilsTest {
         ShareFetch shareFetch = new ShareFetch(FETCH_PARAMS, groupId, memberId,
             new CompletableFuture<>(), partitionMaxBytes, BATCH_SIZE, 100, BROKER_TOPIC_STATS);
 
-        Map<TopicIdPartition, FetchPartitionData> responseData = new HashMap<>();
-        responseData.put(tp0, new FetchPartitionData(Errors.NONE, 0L, 0L,
-            MemoryRecords.EMPTY, Optional.empty(), OptionalLong.empty(), Optional.empty(),
-            OptionalInt.empty(), false));
-        responseData.put(tp1, new FetchPartitionData(Errors.NONE, 0L, 0L,
-            MemoryRecords.EMPTY, Optional.empty(), OptionalLong.empty(), Optional.empty(),
-            OptionalInt.empty(), false));
+        List<ShareFetchPartitionData> responseData = List.of(
+            new ShareFetchPartitionData(tp0, 0, new FetchPartitionData(Errors.NONE, 0L, 0L,
+                MemoryRecords.EMPTY, Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false)),
+            new ShareFetchPartitionData(tp1, 0, new FetchPartitionData(Errors.NONE, 0L, 0L,
+                MemoryRecords.EMPTY, Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false))
+        );
         Map<TopicIdPartition, ShareFetchResponseData.PartitionData> resultData =
             ShareFetchUtils.processFetchResponse(shareFetch, responseData, sharePartitions, mock(ReplicaManager.class), EXCEPTION_HANDLER);
 
@@ -227,11 +229,11 @@ public class ShareFetchUtilsTest {
         when(sp0.nextFetchOffset()).thenReturn((long) 0, (long) 5);
         when(sp1.nextFetchOffset()).thenReturn((long) 4, (long) 4);
 
-        when(sp0.acquire(anyString(), anyInt(), anyInt(), any(FetchPartitionData.class))).thenReturn(
+        when(sp0.acquire(anyString(), anyInt(), anyInt(), anyLong(), any(FetchPartitionData.class))).thenReturn(
             ShareAcquiredRecords.empty(),
             createShareAcquiredRecords(new ShareFetchResponseData.AcquiredRecords()
                 .setFirstOffset(0).setLastOffset(3).setDeliveryCount((short) 1)));
-        when(sp1.acquire(anyString(), anyInt(), anyInt(), any(FetchPartitionData.class))).thenReturn(
+        when(sp1.acquire(anyString(), anyInt(), anyInt(), anyLong(), any(FetchPartitionData.class))).thenReturn(
             createShareAcquiredRecords(new ShareFetchResponseData.AcquiredRecords()
                 .setFirstOffset(100).setLastOffset(103).setDeliveryCount((short) 1)),
             ShareAcquiredRecords.empty());
@@ -242,13 +244,14 @@ public class ShareFetchUtilsTest {
             new SimpleRecord("2".getBytes(), "v".getBytes()),
             new SimpleRecord(null, "value".getBytes()));
 
-        Map<TopicIdPartition, FetchPartitionData> responseData1 = new HashMap<>();
-        responseData1.put(tp0, new FetchPartitionData(Errors.OFFSET_OUT_OF_RANGE, 0L, 0L,
-            MemoryRecords.EMPTY, Optional.empty(), OptionalLong.empty(), Optional.empty(),
-            OptionalInt.empty(), false));
-        responseData1.put(tp1, new FetchPartitionData(Errors.NONE, 0L, 0L,
-            records1, Optional.empty(), OptionalLong.empty(), Optional.empty(),
-            OptionalInt.empty(), false));
+        List<ShareFetchPartitionData> responseData1 = List.of(
+            new ShareFetchPartitionData(tp0, 0, new FetchPartitionData(Errors.OFFSET_OUT_OF_RANGE, 0L, 0L,
+                MemoryRecords.EMPTY, Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false)),
+            new ShareFetchPartitionData(tp1, 0, new FetchPartitionData(Errors.NONE, 0L, 0L,
+                records1, Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false))
+        );
         Map<TopicIdPartition, ShareFetchResponseData.PartitionData> resultData1 =
             ShareFetchUtils.processFetchResponse(shareFetch, responseData1, sharePartitions, replicaManager, EXCEPTION_HANDLER);
 
@@ -271,13 +274,14 @@ public class ShareFetchUtilsTest {
             new SimpleRecord("2".getBytes(), "v".getBytes()),
             new SimpleRecord(null, "value".getBytes()));
 
-        Map<TopicIdPartition, FetchPartitionData> responseData2 = new HashMap<>();
-        responseData2.put(tp0, new FetchPartitionData(Errors.NONE, 0L, 0L,
-            records2, Optional.empty(), OptionalLong.empty(), Optional.empty(),
-            OptionalInt.empty(), false));
-        responseData2.put(tp1, new FetchPartitionData(Errors.NONE, 0L, 0L,
-            MemoryRecords.EMPTY, Optional.empty(), OptionalLong.empty(), Optional.empty(),
-            OptionalInt.empty(), false));
+        List<ShareFetchPartitionData> responseData2 = List.of(
+            new ShareFetchPartitionData(tp0, 0, new FetchPartitionData(Errors.NONE, 0L, 0L,
+                records2, Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false)),
+            new ShareFetchPartitionData(tp1, 0, new FetchPartitionData(Errors.NONE, 0L, 0L,
+                MemoryRecords.EMPTY, Optional.empty(), OptionalLong.empty(), Optional.empty(),
+                OptionalInt.empty(), false))
+        );
         Map<TopicIdPartition, ShareFetchResponseData.PartitionData> resultData2 =
             ShareFetchUtils.processFetchResponse(shareFetch, responseData2, sharePartitions, replicaManager, EXCEPTION_HANDLER);
 
@@ -314,7 +318,7 @@ public class ShareFetchUtilsTest {
         // Mock the replicaManager.fetchOffsetForTimestamp method to return a timestamp and offset for the topic partition.
         FileRecords.TimestampAndOffset timestampAndOffset = new FileRecords.TimestampAndOffset(100L, 1L, Optional.empty());
         doReturn(new OffsetResultHolder(Optional.of(timestampAndOffset), Optional.empty())).when(replicaManager).fetchOffsetForTimestamp(any(TopicPartition.class), anyLong(), any(), any(), anyBoolean());
-        when(sp0.acquire(anyString(), anyInt(), anyInt(), any(FetchPartitionData.class))).thenReturn(ShareAcquiredRecords.empty());
+        when(sp0.acquire(anyString(), anyInt(), anyInt(), anyLong(), any(FetchPartitionData.class))).thenReturn(ShareAcquiredRecords.empty());
 
         MemoryRecords records = MemoryRecords.withRecords(Compression.NONE,
             new SimpleRecord("0".getBytes(), "v".getBytes()),
@@ -323,10 +327,10 @@ public class ShareFetchUtilsTest {
             new SimpleRecord(null, "value".getBytes()));
 
         // When no records are acquired from share partition.
-        Map<TopicIdPartition, FetchPartitionData> responseData = Collections.singletonMap(
-            tp0, new FetchPartitionData(Errors.NONE, 0L, 0L,
+        List<ShareFetchPartitionData> responseData = List.of(
+            new ShareFetchPartitionData(tp0, 0, new FetchPartitionData(Errors.NONE, 0L, 0L,
                 records, Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false));
+                OptionalInt.empty(), false)));
 
         Map<TopicIdPartition, ShareFetchResponseData.PartitionData> resultData =
             ShareFetchUtils.processFetchResponse(shareFetch, responseData, sharePartitions, replicaManager, EXCEPTION_HANDLER);
@@ -339,10 +343,10 @@ public class ShareFetchUtilsTest {
         assertEquals(Errors.NONE.code(), resultData.get(tp0).errorCode());
 
         // When fetch partition data has OFFSET_OUT_OF_RANGE error.
-        responseData = Collections.singletonMap(
-            tp0, new FetchPartitionData(Errors.OFFSET_OUT_OF_RANGE, 0L, 0L,
+        responseData = List.of(
+            new ShareFetchPartitionData(tp0, 0, new FetchPartitionData(Errors.OFFSET_OUT_OF_RANGE, 0L, 0L,
                 records, Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false));
+                OptionalInt.empty(), false)));
 
         resultData = ShareFetchUtils.processFetchResponse(shareFetch, responseData, sharePartitions, replicaManager, EXCEPTION_HANDLER);
 
@@ -397,18 +401,19 @@ public class ShareFetchUtilsTest {
             records2, Optional.empty(), OptionalLong.empty(), Optional.empty(),
             OptionalInt.empty(), false);
 
-        when(sp0.acquire(memberId.toString(), BATCH_SIZE, 10, fetchPartitionData1)).thenReturn(
+        when(sp0.acquire(memberId.toString(), BATCH_SIZE, 10, 0, fetchPartitionData1)).thenReturn(
             createShareAcquiredRecords(new ShareFetchResponseData.AcquiredRecords()
                 .setFirstOffset(0).setLastOffset(1).setDeliveryCount((short) 1)));
-        when(sp1.acquire(memberId.toString(), BATCH_SIZE, 8, fetchPartitionData2)).thenReturn(
+        when(sp1.acquire(memberId.toString(), BATCH_SIZE, 8, 0, fetchPartitionData2)).thenReturn(
             createShareAcquiredRecords(new ShareFetchResponseData.AcquiredRecords()
                 .setFirstOffset(100).setLastOffset(103).setDeliveryCount((short) 1)));
 
         // Send the topic partitions in order so can validate if correct mock is called, accounting
         // the offset count for the acquired records from the previous share partition acquire.
-        Map<TopicIdPartition, FetchPartitionData> responseData = new LinkedHashMap<>();
-        responseData.put(tp0, fetchPartitionData1);
-        responseData.put(tp1, fetchPartitionData2);
+        List<ShareFetchPartitionData> responseData = List.of(
+            new ShareFetchPartitionData(tp0, 0, fetchPartitionData1),
+            new ShareFetchPartitionData(tp1, 0, fetchPartitionData2)
+        );
 
         Map<TopicIdPartition, ShareFetchResponseData.PartitionData> resultData =
             ShareFetchUtils.processFetchResponse(shareFetch, responseData, sharePartitions,
@@ -450,13 +455,13 @@ public class ShareFetchUtilsTest {
         // Mock the replicaManager.fetchOffsetForTimestamp method to throw exception.
         Throwable exception = new FencedLeaderEpochException("Fenced exception");
         doThrow(exception).when(replicaManager).fetchOffsetForTimestamp(any(TopicPartition.class), anyLong(), any(), any(), anyBoolean());
-        when(sp0.acquire(anyString(), anyInt(), anyInt(), any(FetchPartitionData.class))).thenReturn(ShareAcquiredRecords.empty());
+        when(sp0.acquire(anyString(), anyInt(), anyInt(), anyLong(), any(FetchPartitionData.class))).thenReturn(ShareAcquiredRecords.empty());
 
         // When no records are acquired from share partition.
-        Map<TopicIdPartition, FetchPartitionData> responseData = Collections.singletonMap(
-            tp0, new FetchPartitionData(Errors.OFFSET_OUT_OF_RANGE, 0L, 0L,
+        List<ShareFetchPartitionData> responseData = List.of(
+            new ShareFetchPartitionData(tp0, 0, new FetchPartitionData(Errors.OFFSET_OUT_OF_RANGE, 0L, 0L,
                 MemoryRecords.EMPTY, Optional.empty(), OptionalLong.empty(), Optional.empty(),
-                OptionalInt.empty(), false));
+                OptionalInt.empty(), false)));
 
         BiConsumer<SharePartitionKey, Throwable> exceptionHandler = mock(BiConsumer.class);
         Map<TopicIdPartition, ShareFetchResponseData.PartitionData> resultData =

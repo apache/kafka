@@ -20,6 +20,8 @@ package org.apache.kafka.coordinator.share;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.DeleteShareGroupStateRequestData;
 import org.apache.kafka.common.message.DeleteShareGroupStateResponseData;
+import org.apache.kafka.common.message.InitializeShareGroupStateRequestData;
+import org.apache.kafka.common.message.InitializeShareGroupStateResponseData;
 import org.apache.kafka.common.message.ReadShareGroupStateRequestData;
 import org.apache.kafka.common.message.ReadShareGroupStateResponseData;
 import org.apache.kafka.common.message.ReadShareGroupStateSummaryRequestData;
@@ -29,6 +31,7 @@ import org.apache.kafka.common.message.WriteShareGroupStateResponseData;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.DeleteShareGroupStateResponse;
+import org.apache.kafka.common.requests.InitializeShareGroupStateResponse;
 import org.apache.kafka.common.requests.ReadShareGroupStateResponse;
 import org.apache.kafka.common.requests.ReadShareGroupStateSummaryResponse;
 import org.apache.kafka.common.requests.WriteShareGroupStateResponse;
@@ -1164,6 +1167,184 @@ class ShareCoordinatorShardTest {
         CoordinatorResult<DeleteShareGroupStateResponseData, CoordinatorRecord> result = shard.deleteState(request);
 
         DeleteShareGroupStateResponseData expectedData = DeleteShareGroupStateResponse.toErrorResponseData(
+            TOPIC_ID, 0, Errors.UNKNOWN_TOPIC_OR_PARTITION, Errors.UNKNOWN_TOPIC_OR_PARTITION.message());
+        List<CoordinatorRecord> expectedRecords = List.of();
+
+        assertEquals(expectedData, result.response());
+        assertEquals(expectedRecords, result.records());
+        verify(topicsImage, times(1)).getTopic(eq(TOPIC_ID));
+        verify(topicsImage, times(1)).getPartition(eq(TOPIC_ID), eq(0));
+    }
+
+    @Test
+    public void testInitializeStateSuccess() {
+        ShareCoordinatorShard shard = new ShareCoordinatorShardBuilder().build();
+
+        SharePartitionKey shareCoordinatorKey = SharePartitionKey.getInstance(GROUP_ID, TOPIC_ID, PARTITION);
+
+        InitializeShareGroupStateRequestData request = new InitializeShareGroupStateRequestData()
+            .setGroupId(GROUP_ID)
+            .setTopics(List.of(new InitializeShareGroupStateRequestData.InitializeStateData()
+                .setTopicId(TOPIC_ID)
+                .setPartitions(List.of(new InitializeShareGroupStateRequestData.PartitionData()
+                    .setPartition(PARTITION)
+                    .setStartOffset(10)
+                    .setStateEpoch(5)))
+            ));
+
+        assertNull(shard.getShareStateMapValue(shareCoordinatorKey));
+        assertNull(shard.getStateEpochMapValue(shareCoordinatorKey));
+
+        CoordinatorResult<InitializeShareGroupStateResponseData, CoordinatorRecord> result = shard.initializeState(request);
+        result.records().forEach(record -> shard.replay(0L, 0L, (short) 0, record));
+
+        InitializeShareGroupStateResponseData expectedData = InitializeShareGroupStateResponse.toResponseData(TOPIC_ID, PARTITION);
+        List<CoordinatorRecord> expectedRecords = List.of(
+            ShareCoordinatorRecordHelpers.newShareSnapshotRecord(
+                GROUP_ID, TOPIC_ID, PARTITION, ShareGroupOffset.fromRequest(request.topics().get(0).partitions().get(0))
+            ));
+
+        assertEquals(expectedData, result.response());
+        assertEquals(expectedRecords, result.records());
+
+        assertNotNull(shard.getShareStateMapValue(shareCoordinatorKey));
+        assertNotNull(shard.getStateEpochMapValue(shareCoordinatorKey));
+    }
+
+    @Test
+    public void testInitializeStateInvalidRequestData() {
+        ShareCoordinatorShard shard = new ShareCoordinatorShardBuilder().build();
+
+        // invalid partition
+        int partition = -1;
+
+        InitializeShareGroupStateRequestData request = new InitializeShareGroupStateRequestData()
+            .setGroupId(GROUP_ID)
+            .setTopics(List.of(new InitializeShareGroupStateRequestData.InitializeStateData()
+                .setTopicId(TOPIC_ID)
+                .setPartitions(List.of(new InitializeShareGroupStateRequestData.PartitionData()
+                    .setPartition(partition)
+                ))
+            ));
+
+        CoordinatorResult<InitializeShareGroupStateResponseData, CoordinatorRecord> result = shard.initializeState(request);
+
+        InitializeShareGroupStateResponseData expectedData = InitializeShareGroupStateResponse.toErrorResponseData(
+            TOPIC_ID, partition, Errors.INVALID_REQUEST, ShareCoordinatorShard.NEGATIVE_PARTITION_ID.getMessage());
+        List<CoordinatorRecord> expectedRecords = List.of();
+
+        assertEquals(expectedData, result.response());
+        assertEquals(expectedRecords, result.records());
+
+        // invalid state epoch
+        int stateEpoch = 1;
+        partition = 0;
+        shard.replay(0L, 0L, (short) 0, ShareCoordinatorRecordHelpers.newShareSnapshotRecord(
+            GROUP_ID, TOPIC_ID, partition, new ShareGroupOffset.Builder()
+                .setStateEpoch(5)
+                .setSnapshotEpoch(0)
+                .setStateBatches(List.of())
+                .build()
+        ));
+
+        request = new InitializeShareGroupStateRequestData()
+            .setGroupId(GROUP_ID)
+            .setTopics(List.of(new InitializeShareGroupStateRequestData.InitializeStateData()
+                .setTopicId(TOPIC_ID)
+                .setPartitions(List.of(new InitializeShareGroupStateRequestData.PartitionData()
+                    .setPartition(partition)
+                ))
+            ));
+
+        result = shard.initializeState(request);
+
+        expectedData = InitializeShareGroupStateResponse.toErrorResponseData(
+            TOPIC_ID, partition, Errors.FENCED_STATE_EPOCH, Errors.FENCED_STATE_EPOCH.exception().getMessage());
+        expectedRecords = List.of();
+
+        assertEquals(expectedData, result.response());
+        assertEquals(expectedRecords, result.records());
+    }
+
+    @Test
+    public void testInitializeNullMetadataImage() {
+        ShareCoordinatorShard shard = new ShareCoordinatorShardBuilder().build();
+        shard.onNewMetadataImage(null, null);
+
+        InitializeShareGroupStateRequestData request = new InitializeShareGroupStateRequestData()
+            .setGroupId(GROUP_ID)
+            .setTopics(List.of(new InitializeShareGroupStateRequestData.InitializeStateData()
+                .setTopicId(TOPIC_ID)
+                .setPartitions(List.of(new InitializeShareGroupStateRequestData.PartitionData()
+                    .setPartition(0)
+                ))
+            ));
+
+        CoordinatorResult<InitializeShareGroupStateResponseData, CoordinatorRecord> result = shard.initializeState(request);
+
+        InitializeShareGroupStateResponseData expectedData = InitializeShareGroupStateResponse.toErrorResponseData(
+            TOPIC_ID, 0, Errors.UNKNOWN_TOPIC_OR_PARTITION, Errors.UNKNOWN_TOPIC_OR_PARTITION.message());
+        List<CoordinatorRecord> expectedRecords = List.of();
+
+        assertEquals(expectedData, result.response());
+        assertEquals(expectedRecords, result.records());
+    }
+
+    @Test
+    public void testInitializeTopicIdNonExistentInMetadataImage() {
+        ShareCoordinatorShard shard = new ShareCoordinatorShardBuilder().build();
+        MetadataImage image = mock(MetadataImage.class);
+        shard.onNewMetadataImage(image, null);
+
+        InitializeShareGroupStateRequestData request = new InitializeShareGroupStateRequestData()
+            .setGroupId(GROUP_ID)
+            .setTopics(List.of(new InitializeShareGroupStateRequestData.InitializeStateData()
+                .setTopicId(TOPIC_ID)
+                .setPartitions(List.of(new InitializeShareGroupStateRequestData.PartitionData()
+                    .setPartition(0)
+                ))
+            ));
+
+        // topic id not found in cache
+        TopicsImage topicsImage = mock(TopicsImage.class);
+        when(topicsImage.getTopic(eq(TOPIC_ID))).thenReturn(null);
+        when(image.topics()).thenReturn(topicsImage);
+        CoordinatorResult<InitializeShareGroupStateResponseData, CoordinatorRecord> result = shard.initializeState(request);
+
+        InitializeShareGroupStateResponseData expectedData = InitializeShareGroupStateResponse.toErrorResponseData(
+            TOPIC_ID, 0, Errors.UNKNOWN_TOPIC_OR_PARTITION, Errors.UNKNOWN_TOPIC_OR_PARTITION.message());
+        List<CoordinatorRecord> expectedRecords = List.of();
+
+        assertEquals(expectedData, result.response());
+        assertEquals(expectedRecords, result.records());
+        verify(topicsImage, times(1)).getTopic(eq(TOPIC_ID));
+    }
+
+    @Test
+    public void testInitializePartitionIdNonExistentInMetadataImage() {
+        ShareCoordinatorShard shard = new ShareCoordinatorShardBuilder().build();
+        MetadataImage image = mock(MetadataImage.class);
+        shard.onNewMetadataImage(image, null);
+
+        InitializeShareGroupStateRequestData request = new InitializeShareGroupStateRequestData()
+            .setGroupId(GROUP_ID)
+            .setTopics(List.of(new InitializeShareGroupStateRequestData.InitializeStateData()
+                .setTopicId(TOPIC_ID)
+                .setPartitions(List.of(new InitializeShareGroupStateRequestData.PartitionData()
+                    .setPartition(0)
+                ))
+            ));
+
+        // topic id found in cache
+        TopicsImage topicsImage = mock(TopicsImage.class);
+        when(topicsImage.getTopic(eq(TOPIC_ID))).thenReturn(mock(TopicImage.class));
+        when(image.topics()).thenReturn(topicsImage);
+
+        // partition id not found
+        when(topicsImage.getPartition(eq(TOPIC_ID), eq(0))).thenReturn(null);
+        CoordinatorResult<InitializeShareGroupStateResponseData, CoordinatorRecord> result = shard.initializeState(request);
+
+        InitializeShareGroupStateResponseData expectedData = InitializeShareGroupStateResponse.toErrorResponseData(
             TOPIC_ID, 0, Errors.UNKNOWN_TOPIC_OR_PARTITION, Errors.UNKNOWN_TOPIC_OR_PARTITION.message());
         List<CoordinatorRecord> expectedRecords = List.of();
 
