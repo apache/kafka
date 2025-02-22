@@ -30,16 +30,18 @@ import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.share.fetch.DelayedShareFetchGroupKey;
 import org.apache.kafka.server.share.fetch.PartitionMaxBytesStrategy;
 import org.apache.kafka.server.share.fetch.ShareFetch;
+import org.apache.kafka.server.share.fetch.ShareFetchPartitionData;
 import org.apache.kafka.server.share.metrics.ShareGroupMetrics;
 import org.apache.kafka.server.storage.log.FetchIsolation;
-import org.apache.kafka.server.storage.log.FetchPartitionData;
 import org.apache.kafka.storage.internals.log.LogOffsetMetadata;
 import org.apache.kafka.storage.internals.log.LogOffsetSnapshot;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -189,12 +191,22 @@ public class DelayedShareFetch extends DelayedOperation {
                 // updated in a different tryComplete thread.
                 responseData = combineLogReadResponse(topicPartitionData, partitionsAlreadyFetched);
 
-            LinkedHashMap<TopicIdPartition, FetchPartitionData> fetchPartitionsData = new LinkedHashMap<>();
-            for (Map.Entry<TopicIdPartition, LogReadResult> entry : responseData.entrySet())
-                fetchPartitionsData.put(entry.getKey(), entry.getValue().toFetchPartitionData(false));
+            List<ShareFetchPartitionData> shareFetchPartitionDataList = new ArrayList<>();
+            responseData.forEach((topicIdPartition, logReadResult) ->
+                shareFetchPartitionDataList.add(new ShareFetchPartitionData(
+                    topicIdPartition,
+                    topicPartitionData.get(topicIdPartition),
+                    logReadResult.toFetchPartitionData(false)
+                ))
+            );
 
-            shareFetch.maybeComplete(ShareFetchUtils.processFetchResponse(shareFetch, fetchPartitionsData,
-                sharePartitions, replicaManager, exceptionHandler));
+            shareFetch.maybeComplete(ShareFetchUtils.processFetchResponse(
+                shareFetch,
+                shareFetchPartitionDataList,
+                sharePartitions,
+                replicaManager,
+                exceptionHandler
+            ));
         } catch (Exception e) {
             log.error("Error processing delayed share fetch request", e);
             handleFetchException(shareFetch, topicPartitionData.keySet(), e);
