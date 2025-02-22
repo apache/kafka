@@ -63,7 +63,6 @@ import org.apache.kafka.timeline.TimelineHashMap;
 
 import org.slf4j.Logger;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -86,7 +85,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     public static final Exception NEGATIVE_PARTITION_ID = new Exception("The partition id cannot be a negative number.");
 
     public static class Builder implements CoordinatorShardBuilder<ShareCoordinatorShard, CoordinatorRecord> {
-        private ShareCoordinatorConfig config;
+        private final ShareCoordinatorConfig config;
         private LogContext logContext;
         private SnapshotRegistry snapshotRegistry;
         private CoordinatorMetrics coordinatorMetrics;
@@ -319,16 +318,16 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         // build successful response if record is correctly created
         WriteShareGroupStateResponseData responseData = new WriteShareGroupStateResponseData()
             .setResults(
-                Collections.singletonList(
+                List.of(
                     WriteShareGroupStateResponse.toResponseWriteStateResult(key.topicId(),
-                        Collections.singletonList(
+                        List.of(
                             WriteShareGroupStateResponse.toResponsePartitionResult(
                                 key.partition()
                             ))
                     ))
             );
 
-        return new CoordinatorResult<>(Collections.singletonList(record), responseData);
+        return new CoordinatorResult<>(List.of(record), responseData);
     }
 
     /**
@@ -346,7 +345,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         // Only one key will be there in the request by design.
         Optional<ReadShareGroupStateResponseData> error = maybeGetReadStateError(request);
         if (error.isPresent()) {
-            return new CoordinatorResult<>(Collections.emptyList(), error.get());
+            return new CoordinatorResult<>(List.of(), error.get());
         }
 
         ReadShareGroupStateRequestData.ReadStateData topicData = request.topics().get(0);
@@ -366,7 +365,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 partitionId,
                 PartitionFactory.UNINITIALIZED_START_OFFSET,
                 PartitionFactory.DEFAULT_STATE_EPOCH,
-                Collections.emptyList()
+                List.of()
             );
         } else {
             // Leader epoch update might be needed
@@ -379,7 +378,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                             .setLastOffset(stateBatch.lastOffset())
                             .setDeliveryState(stateBatch.deliveryState())
                             .setDeliveryCount(stateBatch.deliveryCount())
-                    ).collect(Collectors.toList()) : Collections.emptyList();
+                    ).collect(Collectors.toList()) : List.of();
 
             responseData = ReadShareGroupStateResponse.toResponseData(
                 topicId,
@@ -393,7 +392,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         // Optimization in case leaderEpoch update is not required.
         if (leaderEpoch == -1 ||
             (leaderEpochMap.get(key) != null && leaderEpochMap.get(key) == leaderEpoch)) {
-            return new CoordinatorResult<>(Collections.emptyList(), responseData);
+            return new CoordinatorResult<>(List.of(), responseData);
         }
 
         // It is OK to info log this since this reaching this codepoint should be quite infrequent.
@@ -406,12 +405,12 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         WriteShareGroupStateRequestData.PartitionData writePartitionData = new WriteShareGroupStateRequestData.PartitionData()
             .setPartition(partitionId)
             .setLeaderEpoch(leaderEpoch)
-            .setStateBatches(Collections.emptyList())
+            .setStateBatches(List.of())
             .setStartOffset(responseData.results().get(0).partitions().get(0).startOffset())
             .setStateEpoch(responseData.results().get(0).partitions().get(0).stateEpoch());
 
         CoordinatorRecord record = generateShareStateRecord(writePartitionData, key);
-        return new CoordinatorResult<>(Collections.singletonList(record), responseData);
+        return new CoordinatorResult<>(List.of(record), responseData);
     }
 
     /**
@@ -471,7 +470,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             }
         }
 
-        return new CoordinatorResult<>(Collections.emptyList(), responseData);
+        return new CoordinatorResult<>(List.of(), responseData);
     }
 
     /**
@@ -482,7 +481,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      */
     public CoordinatorResult<Optional<Long>, CoordinatorRecord> lastRedundantOffset() {
         return new CoordinatorResult<>(
-            Collections.emptyList(),
+            List.of(),
             this.offsetsManager.lastRedundantOffset()
         );
     }
@@ -527,7 +526,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 )
             );
 
-        return new CoordinatorResult<>(Collections.singletonList(record), responseData);
+        return new CoordinatorResult<>(List.of(record), responseData);
     }
 
     /**
@@ -555,7 +554,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                     .setStartOffset(partitionData.startOffset())
                     .setLeaderEpoch(partitionData.leaderEpoch())
                     .setStateEpoch(partitionData.stateEpoch())
-                    .setStateBatches(mergeBatches(Collections.emptyList(), partitionData))
+                    .setStateBatches(mergeBatches(List.of(), partitionData))
                     .build());
         } else if (snapshotUpdateCount.getOrDefault(key, 0) >= config.shareCoordinatorSnapshotUpdateRecordsPerSnapshot()) {
             ShareGroupOffset currentState = shareStateMap.get(key); // shareStateMap will have the entry as containsKey is true
@@ -587,7 +586,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                     .setSnapshotEpoch(currentState.snapshotEpoch()) // Use same snapshotEpoch as last share snapshot.
                     .setStartOffset(partitionData.startOffset())
                     .setLeaderEpoch(partitionData.leaderEpoch())
-                    .setStateBatches(mergeBatches(Collections.emptyList(), partitionData))
+                    .setStateBatches(mergeBatches(List.of(), partitionData))
                     .build());
         }
     }
@@ -772,7 +771,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     ) {
         String message = exception == null ? error.message() : exception.getMessage();
         WriteShareGroupStateResponseData responseData = WriteShareGroupStateResponse.toErrorResponseData(topicId, partitionId, error, message);
-        return new CoordinatorResult<>(Collections.emptyList(), responseData);
+        return new CoordinatorResult<>(List.of(), responseData);
     }
 
     private CoordinatorResult<DeleteShareGroupStateResponseData, CoordinatorRecord> getDeleteErrorResponse(
@@ -783,7 +782,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     ) {
         String message = exception == null ? error.message() : exception.getMessage();
         DeleteShareGroupStateResponseData responseData = DeleteShareGroupStateResponse.toErrorResponseData(topicId, partitionId, error, message);
-        return new CoordinatorResult<>(Collections.emptyList(), responseData);
+        return new CoordinatorResult<>(List.of(), responseData);
     }
 
     // Visible for testing
