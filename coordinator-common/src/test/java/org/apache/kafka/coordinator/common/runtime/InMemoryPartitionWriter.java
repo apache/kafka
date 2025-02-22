@@ -89,7 +89,7 @@ public class InMemoryPartitionWriter implements PartitionWriter {
 
     @Override
     public LogConfig config(TopicPartition tp) {
-        return new LogConfig(Collections.emptyMap());
+        return new LogConfig(Map.of());
     }
 
     @Override

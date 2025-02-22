@@ -19,7 +19,6 @@ package org.apache.kafka.server.share.fetch;
 
 import org.apache.kafka.common.message.ShareFetchResponseData.AcquiredRecords;
 
-import java.util.Collections;
 import java.util.List;
 
 /**
@@ -48,7 +47,7 @@ public class ShareAcquiredRecords {
     }
 
     private ShareAcquiredRecords() {
-        this.acquiredRecords = Collections.emptyList();
+        this.acquiredRecords = List.of();
         this.count = 0;
     }
 
