@@ -105,23 +105,22 @@ public class BatchAccumulator<T> implements Closeable {
     /**
      * Append to the accumulator.
      *
-     * @param epoch the leader epoch to append at
-     * @param records the records to append
+     * @param epoch      the leader epoch to append at
+     * @param records    the records to append
      * @param delayDrain whether the records could be drained
      * @return the offset of the last record
-     *
-     * @throws NotLeaderException indicates that an append operation cannot be completed because the
-     *         provided leader epoch was too old
+     * @throws NotLeaderException       indicates that an append operation cannot be completed because the
+     *                                  provided leader epoch was too old
      * @throws IllegalArgumentException indicates that an append operation cannot be completed
-     *         because the provided leader epoch was too new
-     * @throws IllegalStateException if the number of accumulated batches reaches the maximum
-     *         number of batches
+     *                                  because the provided leader epoch was too new
+     * @throws IllegalStateException    if the number of accumulated batches reaches the maximum
+     *                                  number of batches
      */
     public long append(int epoch, List<T> records, boolean delayDrain) {
         int numberOfCompletedBatches = completed.size();
         if (epoch < this.epoch) {
             throw new NotLeaderException("Append failed because the given epoch " + epoch + " is stale. " +
-                    "Current leader epoch = " + this.epoch());
+                "Current leader epoch = " + this.epoch());
         } else if (epoch > this.epoch) {
             throw new IllegalArgumentException("Attempt to append from epoch " + epoch +
                 " which is larger than the current epoch " + this.epoch);
@@ -222,12 +221,12 @@ public class BatchAccumulator<T> implements Closeable {
 
     /**
      * Append a control batch from a supplied memory record.
-     *
+     * <p>
      * See the {@code valueCreator} parameter description for requirements on this function.
      *
      * @param valueCreator a function that uses the passed buffer to create the control
-     *        batch that will be appended. The memory records returned must contain one
-     *        control batch and that control batch have at least one record.
+     *                     batch that will be appended. The memory records returned must contain one
+     *                     control batch and that control batch have at least one record.
      * @return the last of offset of the records created
      */
     public long appendControlMessages(MemoryRecordsCreator valueCreator) {
@@ -312,7 +311,7 @@ public class BatchAccumulator<T> implements Closeable {
     /**
      * Append a {@link VotersRecord} record to the batch
      *
-     * @param voters the record to append
+     * @param voters           the record to append
      * @param currentTimestamp the current time in milliseconds
      * @return the last of offset of the records created
      * @throws IllegalStateException on failure to allocate a buffer for the record
@@ -337,7 +336,7 @@ public class BatchAccumulator<T> implements Closeable {
      * Append a {@link LeaderChangeMessage} record to the batch
      *
      * @param leaderChangeMessage The message to append
-     * @param currentTimestamp The current time in milliseconds
+     * @param currentTimestamp    The current time in milliseconds
      * @throws IllegalStateException on failure to allocate a buffer for the record
      */
     public void appendLeaderChangeMessage(
@@ -359,21 +358,21 @@ public class BatchAccumulator<T> implements Closeable {
      * Append a {@link KRaftVersionRecord} record to the batch
      *
      * @param kraftVersionRecord The message to append
-     * @param currentTimestamp The current time in milliseconds
+     * @param currentTimestamp   The current time in milliseconds
      * @throws IllegalStateException on failure to allocate a buffer for the record
      */
     public void appendKRaftVersionRecord(
-            KRaftVersionRecord kraftVersionRecord,
-            long currentTimestamp
+        KRaftVersionRecord kraftVersionRecord,
+        long currentTimestamp
     ) {
         appendControlMessages((baseOffset, epoch, compression, buffer) ->
-                MemoryRecords.withKRaftVersionRecord(
-                        baseOffset,
-                        currentTimestamp,
-                        epoch,
-                        buffer,
-                        kraftVersionRecord
-                )
+            MemoryRecords.withKRaftVersionRecord(
+                baseOffset,
+                currentTimestamp,
+                epoch,
+                buffer,
+                kraftVersionRecord
+            )
         );
     }
 
@@ -381,7 +380,7 @@ public class BatchAccumulator<T> implements Closeable {
      * Append a {@link SnapshotHeaderRecord} record to the batch
      *
      * @param snapshotHeaderRecord The record to append
-     * @param currentTimestamp The current time in milliseconds
+     * @param currentTimestamp     The current time in milliseconds
      * @throws IllegalStateException on failure to allocate a buffer for the record
      */
     public void appendSnapshotHeaderRecord(
@@ -403,7 +402,7 @@ public class BatchAccumulator<T> implements Closeable {
      * Append a {@link SnapshotFooterRecord} record to the batch
      *
      * @param snapshotFooterRecord The record to append
-     * @param currentTimestamp The current time in milliseconds
+     * @param currentTimestamp     The current time in milliseconds
      * @throws IllegalStateException on failure to allocate a buffer for the record
      */
     public void appendSnapshotFooterRecord(
@@ -498,16 +497,16 @@ public class BatchAccumulator<T> implements Closeable {
     /**
      * Drain completed batches. The caller is expected to first check whether
      * {@link #needsDrain(long)} returns true in order to avoid unnecessary draining.
-     *
+     * <p>
      * Note on thread-safety: this method is safe in the presence of concurrent
      * appends, but it assumes a single thread is responsible for draining.
-     *
+     * <p>
      * This call will not block, but the drain may require multiple attempts before
      * it can be completed if the thread responsible for appending is holding the
      * append lock. In the worst case, the append will be completed on the next
      * call to {@link #append(int, List, boolean)} following the
      * initial call to this method.
-     *
+     * <p>
      * The caller should respect the time to the next flush as indicated by
      * {@link #timeUntilDrain(long)}.
      *
