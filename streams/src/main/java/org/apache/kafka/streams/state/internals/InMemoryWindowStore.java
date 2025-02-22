@@ -72,7 +72,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
     private final ConcurrentNavigableMap<Long, ConcurrentNavigableMap<Bytes, byte[]>> segmentMap = new ConcurrentSkipListMap<>();
     private final Set<InMemoryWindowStoreIteratorWrapper> openIterators = ConcurrentHashMap.newKeySet();
 
-    private InternalProcessorContext internalProcessorContext;
+    private InternalProcessorContext<?, ?> internalProcessorContext;
     private Sensor expiredRecordSensor;
     private int seqnum = 0;
     private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;

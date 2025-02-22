@@ -2259,7 +2259,7 @@ public class SharePartitionManagerTest {
         mockReplicaManagerDelayedShareFetch(mockReplicaManager, delayedShareFetchPurgatory);
 
         Time time = mock(Time.class);
-        when(time.hiResClockMs()).thenReturn(100L).thenReturn(200L);
+        when(time.hiResClockMs()).thenReturn(100L);
         ShareGroupMetrics shareGroupMetrics = new ShareGroupMetrics(time);
         sharePartitionManager = SharePartitionManagerBuilder.builder()
             .withPartitionCacheMap(partitionCacheMap)
@@ -2292,9 +2292,9 @@ public class SharePartitionManagerTest {
         pendingInitializationFuture2.complete(null);
         // Verify the partition load time metrics for both partitions.
         assertEquals(2, shareGroupMetrics.partitionLoadTimeMs().count());
-        assertEquals(90.0, shareGroupMetrics.partitionLoadTimeMs().min());
-        assertEquals(160.0, shareGroupMetrics.partitionLoadTimeMs().max());
-        assertEquals(250.0, shareGroupMetrics.partitionLoadTimeMs().sum());
+        assertEquals(60.0, shareGroupMetrics.partitionLoadTimeMs().min());
+        assertEquals(90.0, shareGroupMetrics.partitionLoadTimeMs().max());
+        assertEquals(150.0, shareGroupMetrics.partitionLoadTimeMs().sum());
         shareGroupMetrics.close();
     }
 

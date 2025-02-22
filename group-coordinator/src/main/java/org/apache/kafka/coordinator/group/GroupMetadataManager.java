@@ -140,6 +140,12 @@ import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsDelta;
+import org.apache.kafka.image.TopicsImage;
+import org.apache.kafka.server.share.persister.DeleteShareGroupStateParameters;
+import org.apache.kafka.server.share.persister.GroupTopicPartitionData;
+import org.apache.kafka.server.share.persister.PartitionFactory;
+import org.apache.kafka.server.share.persister.PartitionIdData;
+import org.apache.kafka.server.share.persister.TopicData;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
 import org.apache.kafka.timeline.TimelineHashSet;
@@ -4666,6 +4672,7 @@ public class GroupMetadataManager {
         Map<ClassicGroupState, Long> classicGroupSizeCounter = new HashMap<>();
         Map<ConsumerGroup.ConsumerGroupState, Long> consumerGroupSizeCounter = new HashMap<>();
         Map<StreamsGroup.StreamsGroupState, Long> streamsGroupSizeCounter = new HashMap<>();
+        Map<ShareGroup.ShareGroupState, Long> shareGroupSizeCounter = new HashMap<>();
         groups.forEach((__, group) -> {
             switch (group.type()) {
                 case CLASSIC:
@@ -4677,6 +4684,9 @@ public class GroupMetadataManager {
                 case STREAMS:
                     streamsGroupSizeCounter.compute(((StreamsGroup) group).state(), Utils::incValue);
                     break;
+                case SHARE:
+                    shareGroupSizeCounter.compute(((ShareGroup) group).state(), Utils::incValue);
+                    break;
                 default:
                     break;
             }
@@ -4684,6 +4694,7 @@ public class GroupMetadataManager {
         metrics.setClassicGroupGauges(classicGroupSizeCounter);
         metrics.setConsumerGroupGauges(consumerGroupSizeCounter);
         metrics.setStreamsGroupGauges(streamsGroupSizeCounter);
+        metrics.setShareGroupGauges(shareGroupSizeCounter);
     }
 
     /**
@@ -6848,6 +6859,45 @@ public class GroupMetadataManager {
         List<CoordinatorRecord> records
     ) {
         group.createGroupTombstoneRecords(records);
+    }
+
+    /**
+     * Returns an optional of delete share group request object to be used with the persister.
+     * Empty if no subscribed topics or if the share group is empty.
+     * @param shareGroup - A share group
+     * @return Optional of object representing the share group state delete request.
+     */
+    public Optional<DeleteShareGroupStateParameters> shareGroupBuildPartitionDeleteRequest(ShareGroup shareGroup) {
+        TopicsImage topicsImage = metadataImage.topics();
+        Set<String> subscribedTopics = shareGroup.subscribedTopicNames().keySet();
+        List<TopicData<PartitionIdData>> topicDataList = new ArrayList<>(subscribedTopics.size());
+
+        for (String topic : subscribedTopics) {
+            TopicImage topicImage = topicsImage.getTopic(topic);
+            topicDataList.add(
+                new TopicData<>(
+                    topicImage.id(),
+                    topicImage.partitions().keySet().stream()
+                        .map(PartitionFactory::newPartitionIdData)
+                        .toList()
+                )
+            );
+        }
+
+        if (topicDataList.isEmpty()) {
+            return Optional.empty();
+        }
+
+        return Optional.of(
+            new DeleteShareGroupStateParameters.Builder()
+                .setGroupTopicPartitionData(
+                    new GroupTopicPartitionData.Builder<PartitionIdData>()
+                        .setGroupId(shareGroup.groupId())
+                        .setTopicsData(topicDataList)
+                        .build()
+                )
+                .build()
+        );
     }
 
     /**

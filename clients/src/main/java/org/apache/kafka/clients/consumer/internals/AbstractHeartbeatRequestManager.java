@@ -384,6 +384,14 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
                 handleFatalFailure(error.exception(exception.getMessage()));
                 break;
 
+            case TOPIC_AUTHORIZATION_FAILED:
+                logger.error("{} failed for member {} with state {} due to {}: {}", heartbeatRequestName(),
+                        membershipManager().memberId, membershipManager().state, error, errorMessage);
+                // Propagate auth error received in HB so that it's returned on poll.
+                // Member should stay in its current state so it can recover if ever the missing ACLs are added.
+                backgroundEventHandler.add(new ErrorEvent(error.exception()));
+                break;
+
             case INVALID_REQUEST:
             case GROUP_MAX_SIZE_REACHED:
             case UNSUPPORTED_ASSIGNOR:

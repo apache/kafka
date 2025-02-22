@@ -28,6 +28,10 @@ import java.util.stream.Collectors;
 public class DeleteShareGroupStateResult implements PersisterResult {
     private final List<TopicData<PartitionErrorData>> topicsData;
 
+    public static final DeleteShareGroupStateResult EMPTY_RESULT = new Builder()
+        .setTopicsData(List.of())
+        .build();
+
     private DeleteShareGroupStateResult(List<TopicData<PartitionErrorData>> topicsData) {
         this.topicsData = topicsData;
     }
@@ -38,12 +42,12 @@ public class DeleteShareGroupStateResult implements PersisterResult {
 
     public static DeleteShareGroupStateResult from(DeleteShareGroupStateResponseData data) {
         return new Builder()
-                .setTopicsData(data.results().stream()
-                        .map(deleteStateResult -> new TopicData<>(deleteStateResult.topicId(), deleteStateResult.partitions().stream()
-                                .map(partitionResult -> PartitionFactory.newPartitionErrorData(partitionResult.partition(), partitionResult.errorCode(), partitionResult.errorMessage()))
-                                .collect(Collectors.toList())))
-                        .collect(Collectors.toList()))
-                .build();
+            .setTopicsData(data.results().stream()
+                .map(deleteStateResult -> new TopicData<>(deleteStateResult.topicId(), deleteStateResult.partitions().stream()
+                    .map(partitionResult -> PartitionFactory.newPartitionErrorData(partitionResult.partition(), partitionResult.errorCode(), partitionResult.errorMessage()))
+                    .collect(Collectors.toList())))
+                .collect(Collectors.toList()))
+            .build();
     }
 
     public static class Builder {
