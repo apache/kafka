@@ -2608,13 +2608,17 @@ class KafkaApis(val requestChannel: RequestChannel,
           }
 
           // Clients are not allowed to see topics that are not authorized for Describe.
-          val updatedGroups = response.groups.asScala.map { group => {
-            val topicsToCheck = group.members.asScala.flatMap(member =>
-              List(member.assignment, member.targetAssignment).flatMap(_.topicPartitions.asScala.map(_.topicName)))
-
-            val authorizedTopics = authHelper.filterByAuthorized(request.context, DESCRIBE, TOPIC,
-              topicsToCheck)(identity)
-
+          val topicsToCheck = new mutable.HashSet[String]
+          response.groups.forEach(_.members.forEach { member =>
+            List(member.assignment, member.targetAssignment).foreach { assignment =>
+              assignment.topicPartitions.asScala.foreach { tp =>
+                topicsToCheck += tp.topicName
+              }
+            }
+          })
+          val authorizedTopics = authHelper.filterByAuthorized(request.context, DESCRIBE, TOPIC,
+            topicsToCheck)(identity)
+          val updatedGroups = response.groups.asScala.map { group =>
             if (group.members.asScala.exists(member =>
               List(member.assignment, member.targetAssignment).exists(assignment =>
                 assignment.topicPartitions.asScala.exists(tp => !authorizedTopics.contains(tp.topicName))))) {
@@ -2626,7 +2630,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             } else {
               group
             }
-          }}.asJava
+          }.asJava
           response.setGroups(updatedGroups)
 
           requestHelper.sendMaybeThrottle(request, new ConsumerGroupDescribeResponse(response))
