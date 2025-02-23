@@ -18,11 +18,10 @@ package org.apache.kafka.coordinator.group.metrics;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup.ConsumerGroupState;
-import org.apache.kafka.coordinator.group.modern.share.ShareGroup;
+import org.apache.kafka.coordinator.group.modern.share.ShareGroup.ShareGroupState;
 import org.apache.kafka.coordinator.group.streams.StreamsGroup.StreamsGroupState;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineLong;
@@ -77,7 +76,7 @@ public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
     /**
      * Share group size gauge counters keyed by the metric name.
      */
-    private final Map<ShareGroup.ShareGroupState, TimelineGaugeCounter> shareGroupGauges;
+    private volatile Map<ShareGroupState, Long> shareGroupGauges;
 
     /**
      * Streams group size gauge counters keyed by the metric name.
@@ -116,15 +115,7 @@ public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
         this.classicGroupGauges = Collections.emptyMap();
         this.consumerGroupGauges = Collections.emptyMap();
         this.streamsGroupGauges = Collections.emptyMap();
-
-        this.shareGroupGauges = Utils.mkMap(
-            Utils.mkEntry(ShareGroup.ShareGroupState.EMPTY,
-                new TimelineGaugeCounter(new TimelineLong(snapshotRegistry), new AtomicLong(0))),
-            Utils.mkEntry(ShareGroup.ShareGroupState.STABLE,
-                new TimelineGaugeCounter(new TimelineLong(snapshotRegistry), new AtomicLong(0))),
-            Utils.mkEntry(ShareGroup.ShareGroupState.DEAD,
-                new TimelineGaugeCounter(new TimelineLong(snapshotRegistry), new AtomicLong(0)))
-        );
+        this.shareGroupGauges = Collections.emptyMap();
 
         this.globalSensors = Objects.requireNonNull(globalSensors);
         this.topicPartition = Objects.requireNonNull(topicPartition);
@@ -161,6 +152,18 @@ public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
      */
     public void setStreamsGroupGauges(Map<StreamsGroupState, Long> streamsGroupGauges) {
         this.streamsGroupGauges = streamsGroupGauges;
+    }
+
+    /**
+     * Set the number of share groups.
+     * This method should be the only way to update the map and is called by the scheduled task
+     * that updates the metrics in {@link org.apache.kafka.coordinator.group.GroupCoordinatorShard}.
+     * Breaking this will result in inconsistent behavior.
+     *
+     * @param shareGroupGauges The map counting the number of streams groups in each state.
+     */
+    public void setShareGroupGauges(Map<ShareGroupState, Long> shareGroupGauges) {
+        this.shareGroupGauges = shareGroupGauges;
     }
 
     /**
@@ -248,6 +251,29 @@ public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
             .mapToLong(Long::longValue).sum();
     }
 
+    /**
+     * Get the number of share groups in the specified state.
+     *
+     * @param state  the share group state.
+     *
+     * @return   The number of share groups in `state`.
+     */
+    public long numShareGroups(ShareGroupState state) {
+        Long counter = shareGroupGauges.get(state);
+        if (counter != null) {
+            return counter;
+        }
+        return 0L;
+    }
+
+    /**
+     * @return The total number of streams groups.
+     */
+    public long numShareGroups() {
+        return shareGroupGauges.values().stream()
+            .mapToLong(Long::longValue).sum();
+    }
+
     @Override
     public void record(String sensorName) {
         Sensor sensor = globalSensors.get(sensorName);
@@ -280,14 +306,6 @@ public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
             long value = numOffsetsTimelineGaugeCounter.timelineLong.get(offset);
             numOffsetsTimelineGaugeCounter.atomicLong.set(value);
         }
-
-        this.shareGroupGauges.forEach((__, gaugeCounter) -> {
-            long value;
-            synchronized (gaugeCounter.timelineLong) {
-                value = gaugeCounter.timelineLong.get(offset);
-            }
-            gaugeCounter.atomicLong.set(value);
-        });
     }
 
     /**
@@ -302,74 +320,5 @@ public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
         Map<ClassicGroupState, Long> classicGroupGauges
     ) {
         this.classicGroupGauges = classicGroupGauges;
-    }
-
-    public void incrementNumShareGroups(ShareGroup.ShareGroupState state) {
-        TimelineGaugeCounter gaugeCounter = shareGroupGauges.get(state);
-        if (gaugeCounter != null) {
-            synchronized (gaugeCounter.timelineLong) {
-                gaugeCounter.timelineLong.increment();
-            }
-        }
-    }
-
-    public void decrementNumShareGroups(ShareGroup.ShareGroupState state) {
-        TimelineGaugeCounter gaugeCounter = shareGroupGauges.get(state);
-        if (gaugeCounter != null) {
-            synchronized (gaugeCounter.timelineLong) {
-                gaugeCounter.timelineLong.decrement();
-            }
-        }
-    }
-
-    public long numShareGroups(ShareGroup.ShareGroupState state) {
-        TimelineGaugeCounter gaugeCounter = shareGroupGauges.get(state);
-        if (gaugeCounter != null) {
-            return gaugeCounter.atomicLong.get();
-        }
-        return 0L;
-    }
-
-    public long numShareGroups() {
-        return shareGroupGauges.values().stream()
-            .mapToLong(timelineGaugeCounter -> timelineGaugeCounter.atomicLong.get()).sum();
-    }
-
-    // could be called from ShareGroup to indicate state transition
-    public void onShareGroupStateTransition(
-            ShareGroup.ShareGroupState oldState,
-            ShareGroup.ShareGroupState newState
-    ) {
-        if (newState != null) {
-            switch (newState) {
-                case EMPTY:
-                    incrementNumShareGroups(ShareGroup.ShareGroupState.EMPTY);
-                    break;
-                case STABLE:
-                    incrementNumShareGroups(ShareGroup.ShareGroupState.STABLE);
-                    break;
-                case DEAD:
-                    incrementNumShareGroups(ShareGroup.ShareGroupState.DEAD);
-                    break;
-                default:
-                    log.warn("Unknown new share group state: {}", newState);
-            }
-        }
-
-        if (oldState != null) {
-            switch (oldState) {
-                case EMPTY:
-                    decrementNumShareGroups(ShareGroup.ShareGroupState.EMPTY);
-                    break;
-                case STABLE:
-                    decrementNumShareGroups(ShareGroup.ShareGroupState.STABLE);
-                    break;
-                case DEAD:
-                    decrementNumShareGroups(ShareGroup.ShareGroupState.DEAD);
-                    break;
-                default:
-                    log.warn("Unknown previous share group state: {}", oldState);
-            }
-        }
     }
 }

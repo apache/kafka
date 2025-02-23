@@ -34,7 +34,7 @@ public class InitializeShareGroupStateRequest extends AbstractRequest {
         private final InitializeShareGroupStateRequestData data;
 
         public Builder(InitializeShareGroupStateRequestData data) {
-            this(data, false);
+            this(data, true);
         }
 
         public Builder(InitializeShareGroupStateRequestData data, boolean enableUnstableLastVersion) {
@@ -64,15 +64,15 @@ public class InitializeShareGroupStateRequest extends AbstractRequest {
     public InitializeShareGroupStateResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         List<InitializeShareGroupStateResponseData.InitializeStateResult> results = new ArrayList<>();
         data.topics().forEach(
-                topicResult -> results.add(new InitializeShareGroupStateResponseData.InitializeStateResult()
-                        .setTopicId(topicResult.topicId())
-                        .setPartitions(topicResult.partitions().stream()
-                                .map(partitionData -> new InitializeShareGroupStateResponseData.PartitionResult()
-                                        .setPartition(partitionData.partition())
-                                        .setErrorCode(Errors.forException(e).code()))
-                                .collect(Collectors.toList()))));
+            topicResult -> results.add(new InitializeShareGroupStateResponseData.InitializeStateResult()
+                .setTopicId(topicResult.topicId())
+                .setPartitions(topicResult.partitions().stream()
+                    .map(partitionData -> new InitializeShareGroupStateResponseData.PartitionResult()
+                        .setPartition(partitionData.partition())
+                        .setErrorCode(Errors.forException(e).code()))
+                    .collect(Collectors.toList()))));
         return new InitializeShareGroupStateResponse(new InitializeShareGroupStateResponseData()
-                .setResults(results));
+            .setResults(results));
     }
 
     @Override
@@ -82,8 +82,8 @@ public class InitializeShareGroupStateRequest extends AbstractRequest {
 
     public static InitializeShareGroupStateRequest parse(ByteBuffer buffer, short version) {
         return new InitializeShareGroupStateRequest(
-                new InitializeShareGroupStateRequestData(new ByteBufferAccessor(buffer), version),
-                version
+            new InitializeShareGroupStateRequestData(new ByteBufferAccessor(buffer), version),
+            version
         );
     }
 }
