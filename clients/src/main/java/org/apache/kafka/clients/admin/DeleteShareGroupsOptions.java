@@ -15,12 +15,17 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.clients.admin.internals;
+package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.annotation.InterfaceStability;
 
-public class DeleteConsumerGroupsHandlerTest extends DeleteGroupsHandlerTest {
-    protected DeleteGroupsHandler handler() {
-        return new DeleteConsumerGroupsHandler(new LogContext());
-    }
+import java.util.Collection;
+
+/**
+ * Options for the {@link Admin#deleteShareGroups(Collection <String>, DeleteShareGroupsOptions)} call.
+ * <p>
+ * The API of this class is evolving, see {@link Admin} for details.
+ */
+@InterfaceStability.Evolving
+public class DeleteShareGroupsOptions extends AbstractOptions<DeleteShareGroupsOptions> {
 }
