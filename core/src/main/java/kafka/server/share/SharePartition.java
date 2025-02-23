@@ -661,7 +661,7 @@ public class SharePartition {
         String memberId,
         int batchSize,
         int maxFetchRecords,
-        long fetchOffset /* TODO: Use fetch offset to archive any stale batches due to compaction */,
+        long fetchOffset,
         FetchPartitionData fetchPartitionData
     ) {
         log.trace("Received acquire request for share partition: {}-{} memberId: {}", groupId, topicIdPartition, memberId);
