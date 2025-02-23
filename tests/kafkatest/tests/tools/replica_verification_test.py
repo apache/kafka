@@ -20,7 +20,6 @@ from ducktape.utils.util import wait_until
 from ducktape.tests.test import Test
 
 from kafkatest.services.verifiable_producer import VerifiableProducer
-from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService, quorum
 from kafkatest.services.replica_verification_tool import ReplicaVerificationTool
 
@@ -40,19 +39,14 @@ class ReplicaVerificationToolTest(Test):
             TOPIC: {'partitions': 1, 'replication-factor': 2}
         }
 
-        self.zk = ZookeeperService(test_context, self.num_zk) if quorum.for_test(test_context) == quorum.zk else None
         self.kafka = None
         self.producer = None
         self.replica_verifier = None
 
-    def setUp(self):
-        if self.zk:
-            self.zk.start()
-
     def start_kafka(self, security_protocol, interbroker_security_protocol):
         self.kafka = KafkaService(
             self.test_context, self.num_brokers,
-            self.zk, security_protocol=security_protocol,
+            None, security_protocol=security_protocol,
             interbroker_security_protocol=interbroker_security_protocol, topics=self.topics,
             controller_num_nodes_override=self.num_zk)
         self.kafka.start()
