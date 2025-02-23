@@ -96,7 +96,8 @@ public class TimeWindowedCogroupedKStreamImpl<K, V, W extends Window> extends Ab
                 : null,
             materializedInternal.valueSerde(),
             materializedInternal.queryableStoreName(),
-            windows);
+            windows,
+            emitStrategy);
     }
 
     @Override

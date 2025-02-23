@@ -91,7 +91,8 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
                                                   final Serde<KR> keySerde,
                                                   final Serde<VOut> valueSerde,
                                                   final String queryableName,
-                                                  final Windows<W> windows) {
+                                                  final Windows<W> windows,
+                                                  final EmitStrategy emitStrategy) {
         processRepartitions(groupPatterns, storeFactory.storeName());
 
         final Collection<GraphNode> processors = new ArrayList<>();
@@ -102,7 +103,7 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
                 (KStreamAggProcessorSupplier<K, ?, K, ?>) new KStreamWindowAggregate<K, K, VOut, W>(
                     windows,
                     storeFactory,
-                    EmitStrategy.onWindowUpdate(),
+                    emitStrategy,
                     initializer,
                     kGroupedStream.getValue());
             parentProcessors.add(parentProcessor);
