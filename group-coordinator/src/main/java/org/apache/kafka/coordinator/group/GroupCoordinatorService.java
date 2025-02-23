@@ -115,7 +115,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.IntSupplier;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.coordinator.common.runtime.CoordinatorOperationExceptionHelper.handleOperationException;
 
@@ -633,7 +632,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                              .setMemberId(member.memberId())
                              .setGroupInstanceId(member.groupInstanceId())
                              .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code()))
-                         .collect(Collectors.toList());
+                         .toList();
                     return new LeaveGroupResponseData()
                         .setMembers(memberResponses);
                 } else {

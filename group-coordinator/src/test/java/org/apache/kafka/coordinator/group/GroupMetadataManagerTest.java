@@ -125,7 +125,6 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -4068,7 +4067,7 @@ public class GroupMetadataManagerTest {
         List<GroupMetadataManagerTestContext.JoinResult> firstRoundJoinResults = IntStream.range(0, groupMaxSize + 1).mapToObj(i -> context.sendClassicGroupJoin(
             request,
             requiredKnownMemberId
-        )).collect(Collectors.toList());
+        )).toList();
 
         List<String> memberIds = verifyClassicGroupJoinResponses(firstRoundJoinResults, 0, Errors.MEMBER_ID_REQUIRED);
         assertEquals(groupMaxSize + 1, memberIds.size());
@@ -4081,7 +4080,7 @@ public class GroupMetadataManagerTest {
         List<GroupMetadataManagerTestContext.JoinResult> secondRoundJoinResults = memberIds.stream().map(memberId -> context.sendClassicGroupJoin(
             request.setMemberId(memberId),
             requiredKnownMemberId
-        )).collect(Collectors.toList());
+        )).toList();
 
         // Advance clock by group initial rebalance delay to complete first inital delayed join.
         // This will extend the initial rebalance as new members have joined.
@@ -4100,7 +4099,7 @@ public class GroupMetadataManagerTest {
         List<GroupMetadataManagerTestContext.JoinResult> thirdRoundJoinResults = memberIds.stream().map(memberId -> context.sendClassicGroupJoin(
             request.setMemberId(memberId),
             requiredKnownMemberId
-        )).collect(Collectors.toList());
+        )).toList();
 
         verifyClassicGroupJoinResponses(thirdRoundJoinResults, groupMaxSize, Errors.GROUP_MAX_SIZE_REACHED);
     }
@@ -4126,7 +4125,7 @@ public class GroupMetadataManagerTest {
         List<GroupMetadataManagerTestContext.JoinResult> firstRoundJoinResults = IntStream.range(0, groupMaxSize + 1).mapToObj(i -> context.sendClassicGroupJoin(
             request,
             requiredKnownMemberId
-        )).collect(Collectors.toList());
+        )).toList();
 
         assertEquals(groupMaxSize, group.numMembers());
         assertEquals(groupMaxSize, group.numAwaitingJoinResponse());
@@ -4146,7 +4145,7 @@ public class GroupMetadataManagerTest {
         List<GroupMetadataManagerTestContext.JoinResult> secondRoundJoinResults = memberIds.stream().map(memberId -> context.sendClassicGroupJoin(
             request.setMemberId(memberId),
             requiredKnownMemberId
-        )).collect(Collectors.toList());
+        )).toList();
 
         verifyClassicGroupJoinResponses(secondRoundJoinResults, 10, Errors.GROUP_MAX_SIZE_REACHED);
         assertEquals(groupMaxSize, group.numMembers());
@@ -4160,7 +4159,7 @@ public class GroupMetadataManagerTest {
 
         List<String> groupInstanceIds = IntStream.range(0, groupMaxSize + 1)
             .mapToObj(i -> "instance-id-" + i)
-            .collect(Collectors.toList());
+            .toList();
 
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withConfig(GroupCoordinatorConfig.GROUP_MAX_SIZE_CONFIG, groupMaxSize)
@@ -4178,7 +4177,7 @@ public class GroupMetadataManagerTest {
         // First round of join requests. This will trigger a rebalance.
         List<GroupMetadataManagerTestContext.JoinResult> firstRoundJoinResults = groupInstanceIds.stream()
                                                                                                  .map(instanceId -> context.sendClassicGroupJoin(request.setGroupInstanceId(instanceId)))
-                                                                                                 .collect(Collectors.toList());
+                                                                                                 .toList();
 
         assertEquals(groupMaxSize, group.numMembers());
         assertEquals(groupMaxSize, group.numAwaitingJoinResponse());
@@ -4200,7 +4199,7 @@ public class GroupMetadataManagerTest {
             request
                 .setMemberId(memberIds.get(i))
                 .setGroupInstanceId(groupInstanceIds.get(i))
-        )).collect(Collectors.toList());
+        )).toList();
 
         verifyClassicGroupJoinResponses(secondRoundJoinResults, groupMaxSize, Errors.GROUP_MAX_SIZE_REACHED);
         assertEquals(groupMaxSize, group.numMembers());
@@ -4228,7 +4227,7 @@ public class GroupMetadataManagerTest {
         // First round of join requests. Generate member ids.
         List<GroupMetadataManagerTestContext.JoinResult> firstRoundJoinResults =  IntStream.range(0, groupMaxSize + 1)
                                                                                            .mapToObj(__ -> context.sendClassicGroupJoin(request, requiredKnownMemberId))
-                                                                                           .collect(Collectors.toList());
+                                                                                           .toList();
 
         assertEquals(0, group.numMembers());
         assertEquals(groupMaxSize + 1, group.numPendingJoinMembers());
@@ -4255,7 +4254,7 @@ public class GroupMetadataManagerTest {
         List<GroupMetadataManagerTestContext.JoinResult> thirdRoundJoinResults = memberIds.stream().map(memberId -> context.sendClassicGroupJoin(
             request.setMemberId(memberId),
             requiredKnownMemberId
-        )).collect(Collectors.toList());
+        )).toList();
 
         // Advance clock by group initial rebalance delay to complete first inital delayed join.
         // This will extend the initial rebalance as new members have joined.
@@ -4285,7 +4284,7 @@ public class GroupMetadataManagerTest {
 
         List<String> memberIds = IntStream.range(0, groupMaxSize + 2)
             .mapToObj(i -> group.generateMemberId("client-id", Optional.empty()))
-            .collect(Collectors.toList());
+            .toList();
 
         memberIds.forEach(memberId -> group.add(
             new ClassicGroupMember(
@@ -4309,7 +4308,7 @@ public class GroupMetadataManagerTest {
                 .withDefaultProtocolTypeAndProtocols()
                 .withRebalanceTimeoutMs(10000)
                 .build()
-        )).collect(Collectors.toList());
+        )).toList();
 
         assertEquals(groupMaxSize, group.numMembers());
         assertEquals(groupMaxSize, group.numAwaitingJoinResponse());
@@ -8530,7 +8529,7 @@ public class GroupMetadataManagerTest {
                 assertTrue(syncResult.records.isEmpty());
                 assertFalse(syncResult.syncFuture.isDone());
                 return syncResult.syncFuture;
-            }).collect(Collectors.toList());
+            }).toList();
 
         // Advance clock by 1/2 rebalance timeout to expire the pending sync. Leader should be kicked out.
         List<ExpiredTimeout<Void, CoordinatorRecord>> timeouts = context.sleep(rebalanceTimeoutMs / 2);
@@ -8600,7 +8599,7 @@ public class GroupMetadataManagerTest {
             }
             assertTrue(syncResult.syncFuture.isDone());
             return syncResult.syncFuture;
-        }).collect(Collectors.toList());
+        }).toList();
 
         for (CompletableFuture<SyncGroupResponseData> syncFuture : syncFutures) {
             assertEquals(Errors.NONE.code(), syncFuture.get().errorCode());
@@ -8964,7 +8963,7 @@ public class GroupMetadataManagerTest {
         int epoch = 10;
         String memberId = "member-id";
         StreamsGroupMember.Builder memberBuilder = streamsGroupMemberBuilderWithDefaults(memberId)
-            .setClientTags(Collections.singletonMap("clientTag", "clientValue"))
+            .setClientTags(Map.of("clientTag", "clientValue"))
             .setProcessId("processId")
             .setMemberEpoch(epoch)
             .setPreviousMemberEpoch(epoch - 1);
@@ -8984,7 +8983,7 @@ public class GroupMetadataManagerTest {
             new StreamsGroupDescribeResponseData.DescribedGroup()
                 .setGroupEpoch(epoch)
                 .setGroupId(streamsGroupIds.get(1))
-                .setMembers(Collections.singletonList(
+                .setMembers(List.of(
                     memberBuilder.build().asStreamsGroupDescribeMember(
                         TasksTuple.EMPTY
                     )
@@ -9001,14 +9000,12 @@ public class GroupMetadataManagerTest {
         String groupId = "groupId";
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
 
-        List<StreamsGroupDescribeResponseData.DescribedGroup> actual = context.sendStreamsGroupDescribe(Collections.singletonList(groupId));
+        List<StreamsGroupDescribeResponseData.DescribedGroup> actual = context.sendStreamsGroupDescribe(List.of(groupId));
         StreamsGroupDescribeResponseData.DescribedGroup describedGroup = new StreamsGroupDescribeResponseData.DescribedGroup()
             .setGroupId(groupId)
             .setErrorCode(Errors.GROUP_ID_NOT_FOUND.code())
             .setErrorMessage("Group groupId not found.");
-        List<StreamsGroupDescribeResponseData.DescribedGroup> expected = Collections.singletonList(
-            describedGroup
-        );
+        List<StreamsGroupDescribeResponseData.DescribedGroup> expected = List.of(describedGroup);
 
         assertEquals(expected, actual);
     }
@@ -9040,7 +9037,7 @@ public class GroupMetadataManagerTest {
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(streamsGroupId, memberBuilder2.build()));
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupEpochRecord(streamsGroupId, epoch + 2));
 
-        List<StreamsGroupDescribeResponseData.DescribedGroup> actual = context.groupMetadataManager.streamsGroupDescribe(Collections.singletonList(streamsGroupId), context.lastCommittedOffset);
+        List<StreamsGroupDescribeResponseData.DescribedGroup> actual = context.groupMetadataManager.streamsGroupDescribe(List.of(streamsGroupId), context.lastCommittedOffset);
         StreamsGroupDescribeResponseData.DescribedGroup describedGroup = new StreamsGroupDescribeResponseData.DescribedGroup()
             .setGroupId(streamsGroupId)
             .setErrorCode(Errors.GROUP_ID_NOT_FOUND.code())
@@ -9051,7 +9048,7 @@ public class GroupMetadataManagerTest {
         // Commit the offset and test again
         context.commit();
 
-        actual = context.groupMetadataManager.streamsGroupDescribe(Collections.singletonList(streamsGroupId), context.lastCommittedOffset);
+        actual = context.groupMetadataManager.streamsGroupDescribe(List.of(streamsGroupId), context.lastCommittedOffset);
         describedGroup = new StreamsGroupDescribeResponseData.DescribedGroup()
             .setGroupId(streamsGroupId)
             .setMembers(Arrays.asList(
@@ -16793,7 +16790,7 @@ public class GroupMetadataManagerTest {
                 .setRebalanceTimeoutMs(5000)
                 .setSubscribedTopicRegex("foo*|bar*")
                 .setServerAssignor("range")
-                .setTopicPartitions(Collections.emptyList()),
+                .setTopicPartitions(List.of()),
             ApiKeys.CONSUMER_GROUP_HEARTBEAT.latestVersion()
         );
 
@@ -16803,7 +16800,7 @@ public class GroupMetadataManagerTest {
                 .setMemberEpoch(10)
                 .setHeartbeatIntervalMs(5000)
                 .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()
-                    .setTopicPartitions(Collections.singletonList(
+                    .setTopicPartitions(List.of(
                         new ConsumerGroupHeartbeatResponseData.TopicPartitions()
                             .setTopicId(fooTopicId)
                             .setPartitions(List.of(3, 4, 5))))),
@@ -16875,7 +16872,7 @@ public class GroupMetadataManagerTest {
                 .setRebalanceTimeoutMs(5000)
                 .setSubscribedTopicRegex("foo|bar*")
                 .setServerAssignor("range")
-                .setTopicPartitions(Collections.emptyList()),
+                .setTopicPartitions(List.of()),
             ApiKeys.CONSUMER_GROUP_HEARTBEAT.latestVersion()
         );
 

@@ -38,7 +38,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
@@ -318,7 +317,7 @@ public class ConsumerGroupMemberTest {
                             .setTopicId(item.getKey())
                             .setTopicName("topic4")
                             .setPartitions(new ArrayList<>(item.getValue()))
-                    ).collect(Collectors.toList()))
+                    ).toList())
             )
             .setMemberType(withClassicMemberMetadata ? (byte) 0 : (byte) 1);
 

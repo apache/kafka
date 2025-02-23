@@ -46,7 +46,6 @@ import org.slf4j.Logger;
 
 import java.nio.ByteBuffer;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -1150,7 +1149,7 @@ public class ClassicGroup implements Group {
             return Optional.empty();
         }
         if (members.isEmpty()) {
-            return Optional.of(Collections.emptySet());
+            return Optional.of(Set.of());
         }
 
         if (protocolName.isPresent()) {
@@ -1310,7 +1309,7 @@ public class ClassicGroup implements Group {
                 .setMemberId(member.memberId())
                 .setGroupInstanceId(member.groupInstanceId().orElse(null))
                 .setMetadata(member.metadata(protocolName.orElse(null))))
-            .collect(Collectors.toList());
+            .toList();
     }
 
     /**

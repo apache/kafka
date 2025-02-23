@@ -23,7 +23,6 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 /**
  * Captures the properties required for configuring the internal topics we create for changelogs and repartitioning etc.
@@ -62,7 +61,7 @@ public record ConfiguredInternalTopic(String name,
                         y -> new StreamsGroupDescribeResponseData.KeyValue()
                             .setKey(y.getKey())
                             .setValue(y.getValue())
-                    ).collect(Collectors.toList()) : null
+                    ).toList() : null
             );
     }
 
