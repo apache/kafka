@@ -41,6 +41,7 @@ public class TimeWindowedCogroupedKStreamImpl<K, V, W extends Window> extends Ab
     private final Windows<W> windows;
     private final CogroupedStreamAggregateBuilder<K, V> aggregateBuilder;
     private final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, V>> groupPatterns;
+    private EmitStrategy emitStrategy = EmitStrategy.onWindowUpdate();
 
     TimeWindowedCogroupedKStreamImpl(final Windows<W> windows,
                                      final InternalStreamsBuilder builder,
@@ -89,12 +90,18 @@ public class TimeWindowedCogroupedKStreamImpl<K, V, W extends Window> extends Ab
             groupPatterns,
             initializer,
             new NamedInternal(named),
-            new WindowStoreMaterializer<>(materializedInternal, windows, EmitStrategy.onWindowUpdate()),
+            new WindowStoreMaterializer<>(materializedInternal, windows, emitStrategy),
             materializedInternal.keySerde() != null ?
                 new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.size())
                 : null,
             materializedInternal.valueSerde(),
             materializedInternal.queryableStoreName(),
             windows);
+    }
+
+    @Override
+    public TimeWindowedCogroupedKStream<K, V> emitStrategy(EmitStrategy emitStrategy) {
+        this.emitStrategy = emitStrategy;
+        return this;
     }
 }

@@ -38,6 +38,7 @@ public class SlidingWindowedCogroupedKStreamImpl<K, V> extends AbstractStream<K,
     private final SlidingWindows windows;
     private final CogroupedStreamAggregateBuilder<K, V> aggregateBuilder;
     private final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, V>> groupPatterns;
+    private EmitStrategy emitStrategy = EmitStrategy.onWindowUpdate();
 
     SlidingWindowedCogroupedKStreamImpl(final SlidingWindows windows,
                                         final InternalStreamsBuilder builder,
@@ -85,13 +86,19 @@ public class SlidingWindowedCogroupedKStreamImpl<K, V> extends AbstractStream<K,
             groupPatterns,
             initializer,
             new NamedInternal(named),
-            new SlidingWindowStoreMaterializer<>(materializedInternal, windows, EmitStrategy.onWindowUpdate()),
+            new SlidingWindowStoreMaterializer<>(materializedInternal, windows, emitStrategy),
             materializedInternal.keySerde() != null ?
                 new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.timeDifferenceMs())
                 : null,
             materializedInternal.valueSerde(),
             materializedInternal.queryableStoreName(),
             windows);
+    }
+
+    @Override
+    public TimeWindowedCogroupedKStream<K, V> emitStrategy(EmitStrategy emitStrategy) {
+        this.emitStrategy = emitStrategy;
+        return this;
     }
 
 }
