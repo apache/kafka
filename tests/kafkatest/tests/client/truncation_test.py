@@ -80,7 +80,7 @@ class TruncationTest(VerifiableConsumerTest):
         isr = self.kafka.isr_idx_list(self.TOPIC, 0)
         node1 = self.kafka.get_node(isr[0])
         self.kafka.stop_node(node1)
-        self.logger.info("Reduced ISR to one node, consumer is at %s", consumer.current_position(tp))
+        self.logger.info("Reduced ISR to one node, stop node %s, consumer is at %s", node1, consumer.current_position(tp))
 
         # Ensure remaining ISR member has a little bit of data
         current_total = consumer.total_consumed()
@@ -91,7 +91,7 @@ class TruncationTest(VerifiableConsumerTest):
         # Kill last ISR member
         node2 = self.kafka.get_node(isr[1])
         self.kafka.stop_node(node2)
-        self.logger.info("No members in ISR, consumer is at %s", consumer.current_position(tp))
+        self.logger.info("No members in ISR, stop node %s, consumer is at %s", node2, consumer.current_position(tp))
 
         # Keep consuming until we've caught up to HW
         def none_consumed(this, consumer):
@@ -121,12 +121,12 @@ class TruncationTest(VerifiableConsumerTest):
                    timeout_sec=30,
                    err_msg="Timed out waiting for truncation")
 
+        producer.stop()
+        consumer.stop()
+
         # Make sure we didn't reset to beginning of log
         total_records_consumed = len(self.all_values_consumed)
         assert total_records_consumed == len(set(self.all_values_consumed)), "Received duplicate records"
-
-        consumer.stop()
-        producer.stop()
 
         # Re-consume all the records
         consumer2 = VerifiableConsumer(self.test_context, 1, self.kafka, self.TOPIC, group_id="group2",
@@ -145,6 +145,6 @@ class TruncationTest(VerifiableConsumerTest):
                err_msg="Timed out waiting for the consumer to fully consume data")
 
         second_total_consumed = consumer2.total_consumed()
-        assert second_total_consumed < total_records_consumed, "Expected fewer records with new consumer since we truncated"
+        assert second_total_consumed < total_records_consumed, ("Expected fewer records with new consumer since we truncated, total_records_consumed is %s, second_total_consumed is %s" % total_records_consumed, second_total_consumed)
         self.logger.info("Second consumer saw only %s, meaning %s were truncated",
                          second_total_consumed, total_records_consumed - second_total_consumed)
