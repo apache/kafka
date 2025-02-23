@@ -62,7 +62,6 @@ import org.slf4j.Logger;
 
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -413,9 +412,9 @@ public class ShareCoordinatorService implements ShareCoordinator {
                             Duration.ofMillis(config.shareCoordinatorWriteTimeoutMs()),
                             coordinator -> coordinator.writeState(new WriteShareGroupStateRequestData()
                                 .setGroupId(groupId)
-                                .setTopics(Collections.singletonList(new WriteShareGroupStateRequestData.WriteStateData()
+                                .setTopics(List.of(new WriteShareGroupStateRequestData.WriteStateData()
                                     .setTopicId(topicData.topicId())
-                                    .setPartitions(Collections.singletonList(new WriteShareGroupStateRequestData.PartitionData()
+                                    .setPartitions(List.of(new WriteShareGroupStateRequestData.PartitionData()
                                         .setPartition(partitionData.partition())
                                         .setStartOffset(partitionData.startOffset())
                                         .setLeaderEpoch(partitionData.leaderEpoch())
@@ -531,9 +530,9 @@ public class ShareCoordinatorService implements ShareCoordinator {
 
                 ReadShareGroupStateRequestData requestForCurrentPartition = new ReadShareGroupStateRequestData()
                     .setGroupId(groupId)
-                    .setTopics(Collections.singletonList(new ReadShareGroupStateRequestData.ReadStateData()
+                    .setTopics(List.of(new ReadShareGroupStateRequestData.ReadStateData()
                         .setTopicId(topicId)
-                        .setPartitions(Collections.singletonList(partitionData))));
+                        .setPartitions(List.of(partitionData))));
 
                 // We are issuing a scheduleWriteOperation even though the request is of read type since
                 // we might want to update the leader epoch, if it is the highest seen so far for the specific
