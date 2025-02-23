@@ -767,10 +767,6 @@ class AbstractFetcherThreadTest {
     // on the follower while OffsetsForLeaderEpoch request is in flight, but able to truncate and
     // fetch once the leader is on the newer epoch (same as follower)
 
-    testLeaderEpochChangeDuringFetchEpochsFromLeader(leaderEpochOnLeader)
-  }
-
-  private def testLeaderEpochChangeDuringFetchEpochsFromLeader(leaderEpochOnLeader: Int): Unit = {
     val partition = new TopicPartition("topic", 1)
     val initialLeaderEpochOnFollower = 0
     val nextLeaderEpochOnFollower = initialLeaderEpochOnFollower + 1
