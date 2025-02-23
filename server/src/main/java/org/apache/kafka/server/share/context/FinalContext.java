@@ -27,8 +27,8 @@ import org.apache.kafka.server.share.ErroneousAndValidPartitionData;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.List;
 import java.util.LinkedHashMap;
+import java.util.List;
 
 /**
  * The share fetch context for a final share fetch request.
