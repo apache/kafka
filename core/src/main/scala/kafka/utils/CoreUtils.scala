@@ -209,7 +209,7 @@ object CoreUtils {
 
     val endPoints = try {
       SocketServerConfigs.listenerListToEndPoints(listeners, securityProtocolMap.asJava).
-        asScala.map(EndPoint.fromPublic(_))
+        asScala.map(EndPoint.fromPublic)
     } catch {
       case e: Exception =>
         throw new IllegalArgumentException(s"Error creating broker listeners from '$listeners': ${e.getMessage}", e)
