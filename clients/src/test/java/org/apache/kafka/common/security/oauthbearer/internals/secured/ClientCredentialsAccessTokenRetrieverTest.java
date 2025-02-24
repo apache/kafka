@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
+import org.apache.kafka.common.utils.Utils;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -29,41 +31,42 @@ import static org.apache.kafka.common.config.SaslConfigs.DEFAULT_SASL_OAUTHBEARE
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_HEADER_URLENCODE;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule.OAUTHBEARER_MECHANISM;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class ClientCredentialsAccessTokenRetrieverTest extends OAuthBearerTest {
 
     @Test
     public void testFormatAuthorizationHeader() {
-        assertAuthorizationHeader("id", "secret", false, "Basic aWQ6c2VjcmV0");
+        HttpAccessTokenRetriever.RequestFormatter requestFormatter = new RequestFormatterBuilder()
+            .setClientId("id")
+            .setClientSecret("secret")
+            .build();
+        assertAuthorizationHeaderEquals(requestFormatter, "Basic aWQ6c2VjcmV0");
     }
 
     @Test
     public void testFormatAuthorizationHeaderEncoding() {
+        HttpAccessTokenRetriever.RequestFormatter requestFormatter = new RequestFormatterBuilder()
+            .setClientId("SOME_RANDOM_LONG_USER_01234")
+            .setClientSecret("9Q|0`8i~ute-n9ksjLWb\\50\"AX@UUED5E")
+            .build();
         // according to RFC-7617, we need to use the *non-URL safe* base64 encoder. See KAFKA-14496.
-        assertAuthorizationHeader("SOME_RANDOM_LONG_USER_01234", "9Q|0`8i~ute-n9ksjLWb\\50\"AX@UUED5E", false, "Basic U09NRV9SQU5ET01fTE9OR19VU0VSXzAxMjM0OjlRfDBgOGl+dXRlLW45a3NqTFdiXDUwIkFYQFVVRUQ1RQ==");
-        // according to RFC-6749 clientId & clientSecret must be urlencoded, see https://tools.ietf.org/html/rfc6749#section-2.3.1
-        assertAuthorizationHeader("user!@~'", "secret-(*)!", true, "Basic dXNlciUyMSU0MCU3RSUyNzpzZWNyZXQtJTI4KiUyOSUyMQ==");
-    }
+        assertAuthorizationHeaderEquals(requestFormatter, "Basic U09NRV9SQU5ET01fTE9OR19VU0VSXzAxMjM0OjlRfDBgOGl+dXRlLW45a3NqTFdiXDUwIkFYQFVVRUQ1RQ==");
 
-    @Test
-    public void testFormatAuthorizationHeaderMissingValues() {
-        assertThrows(IllegalArgumentException.class, () -> ClientCredentialsAccessTokenRetriever.formatAuthorizationHeader(null, "secret", false));
-        assertThrows(IllegalArgumentException.class, () -> ClientCredentialsAccessTokenRetriever.formatAuthorizationHeader("id", null, false));
-        assertThrows(IllegalArgumentException.class, () -> ClientCredentialsAccessTokenRetriever.formatAuthorizationHeader(null, null, false));
-        assertThrows(IllegalArgumentException.class, () -> ClientCredentialsAccessTokenRetriever.formatAuthorizationHeader("", "secret", false));
-        assertThrows(IllegalArgumentException.class, () -> ClientCredentialsAccessTokenRetriever.formatAuthorizationHeader("id", "", false));
-        assertThrows(IllegalArgumentException.class, () -> ClientCredentialsAccessTokenRetriever.formatAuthorizationHeader("", "", false));
-        assertThrows(IllegalArgumentException.class, () -> ClientCredentialsAccessTokenRetriever.formatAuthorizationHeader("  ", "secret", false));
-        assertThrows(IllegalArgumentException.class, () -> ClientCredentialsAccessTokenRetriever.formatAuthorizationHeader("id", "  ", false));
-        assertThrows(IllegalArgumentException.class, () -> ClientCredentialsAccessTokenRetriever.formatAuthorizationHeader("  ", "  ", false));
+        requestFormatter = new RequestFormatterBuilder()
+            .setClientId("user!@~'")
+            .setClientSecret("secret-(*)!")
+            .setUrlencode(true)
+            .build();
+        // according to RFC-6749 clientId & clientSecret must be urlencoded, see https://tools.ietf.org/html/rfc6749#section-2.3.1
+        assertAuthorizationHeaderEquals(requestFormatter, "Basic dXNlciUyMSU0MCU3RSUyNzpzZWNyZXQtJTI4KiUyOSUyMQ==");
     }
 
     @Test
     public void testFormatRequestBody() {
-        String expected = "grant_type=client_credentials&scope=scope";
-        String actual = ClientCredentialsAccessTokenRetriever.formatRequestBody("scope");
-        assertEquals(expected, actual);
+        HttpAccessTokenRetriever.RequestFormatter requestFormatter = new RequestFormatterBuilder()
+            .setScope("test")
+            .build();
+        assertBodyEquals(requestFormatter, "grant_type=client_credentials&scope=test");
     }
 
     @Test
@@ -71,26 +74,24 @@ public class ClientCredentialsAccessTokenRetrieverTest extends OAuthBearerTest {
         String questionMark = "%3F";
         String exclamationMark = "%21";
 
+        RequestFormatterBuilder builder = new RequestFormatterBuilder()
+            .setUrlencode(false);
+
         String expected = String.format("grant_type=client_credentials&scope=earth+is+great%s", exclamationMark);
-        String actual = ClientCredentialsAccessTokenRetriever.formatRequestBody("earth is great!");
-        assertEquals(expected, actual);
+        assertBodyEquals(builder.setScope("earth is great!").build(), expected);
 
         expected = String.format("grant_type=client_credentials&scope=what+on+earth%s%s%s%s%s", questionMark, exclamationMark, questionMark, exclamationMark, questionMark);
-        actual = ClientCredentialsAccessTokenRetriever.formatRequestBody("what on earth?!?!?");
-        assertEquals(expected, actual);
+        assertBodyEquals(builder.setScope("what on earth?!?!?").build(), expected);
     }
 
     @Test
     public void testFormatRequestBodyMissingValues() {
+        RequestFormatterBuilder builder = new RequestFormatterBuilder();
+
         String expected = "grant_type=client_credentials";
-        String actual = ClientCredentialsAccessTokenRetriever.formatRequestBody(null);
-        assertEquals(expected, actual);
-
-        actual = ClientCredentialsAccessTokenRetriever.formatRequestBody("");
-        assertEquals(expected, actual);
-
-        actual = ClientCredentialsAccessTokenRetriever.formatRequestBody("  ");
-        assertEquals(expected, actual);
+        assertBodyEquals(builder.setScope(null).build(), expected);
+        assertBodyEquals(builder.setScope("").build(), expected);
+        assertBodyEquals(builder.setScope("  ").build(), expected);
     }
 
     @ParameterizedTest
@@ -110,8 +111,54 @@ public class ClientCredentialsAccessTokenRetrieverTest extends OAuthBearerTest {
         );
     }
 
-    private void assertAuthorizationHeader(String clientId, String clientSecret, boolean urlencode, String expected) {
-        String actual = ClientCredentialsAccessTokenRetriever.formatAuthorizationHeader(clientId, clientSecret, urlencode);
-        assertEquals(expected, actual, String.format("Expected the HTTP Authorization header generated for client ID \"%s\" and client secret \"%s\" to match", clientId, clientSecret));
+    private void assertBodyEquals(HttpAccessTokenRetriever.RequestFormatter requestFormatter, String expected) {
+        assertEquals(expected, Utils.utf8(requestFormatter.formatBody()));
+    }
+
+    private void assertHeadersEqual(HttpAccessTokenRetriever.RequestFormatter requestFormatter,
+                                    Map<String, String> expected) {
+        assertEquals(expected, requestFormatter.formatHeaders());
+    }
+
+    private void assertAuthorizationHeaderEquals(HttpAccessTokenRetriever.RequestFormatter requestFormatter,
+                                                 String expected) {
+        assertHeadersEqual(requestFormatter, Collections.singletonMap("Authorization", expected));
+    }
+
+    private static class RequestFormatterBuilder {
+
+        private String clientId = "testClientId";
+        private String clientSecret = "testSecret";
+        private String scope = "testScope";
+        private boolean urlencode = false;
+
+        public RequestFormatterBuilder setClientId(String clientId) {
+            this.clientId = clientId;
+            return this;
+        }
+
+        public RequestFormatterBuilder setClientSecret(String clientSecret) {
+            this.clientSecret = clientSecret;
+            return this;
+        }
+
+        public RequestFormatterBuilder setScope(String scope) {
+            this.scope = scope;
+            return this;
+        }
+
+        public RequestFormatterBuilder setUrlencode(boolean urlencode) {
+            this.urlencode = urlencode;
+            return this;
+        }
+
+        private HttpAccessTokenRetriever.RequestFormatter build() {
+            return new ClientCredentialsAccessTokenRetriever.ClientCredentialsRequestFormatter(
+                clientId,
+                clientSecret,
+                scope,
+                urlencode
+            );
+        }
     }
 }

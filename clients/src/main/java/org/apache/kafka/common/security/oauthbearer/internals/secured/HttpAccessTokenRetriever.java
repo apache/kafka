@@ -28,7 +28,6 @@ import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -108,15 +107,7 @@ public abstract class HttpAccessTokenRetriever implements AccessTokenRetriever {
         client = new OAuthBearerHttpClient(tokenEndpointUrl, sslResource, connectTimeoutMs, readTimeoutMs);
     }
 
-    protected abstract byte[] formatRequestBody();
-
-    protected Map<String, String> formatRequestHeaders(int contentLength) {
-        Map<String, String> headers = new HashMap<>();
-        headers.put("Accept", "application/json");
-        headers.put("Cache-Control", "no-cache");
-        headers.put("Content-Length", String.valueOf(contentLength));
-        return headers;
-    }
+    protected abstract RequestFormatter requestFormatter();
 
     /**
      * Retrieves a JWT access token in its serialized three-part form. The implementation
@@ -135,8 +126,9 @@ public abstract class HttpAccessTokenRetriever implements AccessTokenRetriever {
 
     @Override
     public String retrieve() throws IOException {
-        byte[] requestBody = formatRequestBody();
-        Map<String, String> headers = formatRequestHeaders(requestBody.length);
+        RequestFormatter requestFormatter = requestFormatter();
+        byte[] requestBody = requestFormatter.formatBody();
+        Map<String, String> headers = requestFormatter.formatHeaders();
 
         Retry<String> retry = new Retry<>(retryBackoffMs, retryBackoffMaxMs);
         String responseBody;
@@ -146,7 +138,7 @@ public abstract class HttpAccessTokenRetriever implements AccessTokenRetriever {
                 HttpURLConnection con = null;
 
                 try {
-                    con = client.connect(tokenEndpointUrl, "POST", headers);
+                    con = client.connect(tokenEndpointUrl, headers, Optional.of(requestBody.length));
                     OAuthBearerHttpClient.HttpResponse httpResponse = client.post(headers, requestBody);
                     return handleOutput(tokenEndpointUrl, httpResponse);
                 } catch (IOException e) {
@@ -272,5 +264,12 @@ public abstract class HttpAccessTokenRetriever implements AccessTokenRetriever {
             throw new IllegalArgumentException(String.format("The value for %s must not contain only whitespace", name));
 
         return value;
+    }
+
+    public interface RequestFormatter {
+
+        byte[] formatBody();
+
+        Map<String, String> formatHeaders();
     }
 }

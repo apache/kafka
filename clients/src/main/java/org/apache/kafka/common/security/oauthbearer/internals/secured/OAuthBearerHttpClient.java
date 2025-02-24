@@ -29,7 +29,6 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 
@@ -71,8 +70,8 @@ public class OAuthBearerHttpClient implements Closeable {
     }
 
     public HttpURLConnection connect(String url,
-                                     String requestMethod,
-                                     Map<String, String> headers) throws IOException, UnretryableException {
+                                     Map<String, String> headers,
+                                     Optional<Integer> contentLength) throws IOException, UnretryableException {
         log.debug("connect - starting connect for {}", url);
 
         HttpURLConnection con = (HttpURLConnection) new URL(url).openConnection();
@@ -80,12 +79,21 @@ public class OAuthBearerHttpClient implements Closeable {
         if (sslResource.isPresent() && con instanceof HttpsURLConnection)
             ((HttpsURLConnection) con).setSSLSocketFactory(sslResource.get().sslSocketFactory());
 
-        con.setRequestMethod(requestMethod.toUpperCase(Locale.ROOT));
+        if (contentLength.isPresent()) {
+            con.setRequestMethod("POST");
+            con.setDoOutput(true);
+            headers.put("Content-Length", String.valueOf(contentLength.get()));
+        } else {
+            con.setRequestMethod("GET");
+            con.setDoOutput(false);
+        }
 
         for (Map.Entry<String, String> header : headers.entrySet())
             con.setRequestProperty(header.getKey(), header.getValue());
 
-        con.setDoOutput(requestMethod.equalsIgnoreCase("POST"));
+        headers.put("Accept", "application/json");
+        headers.put("Cache-Control", "no-cache");
+
         con.setUseCaches(false);
         connectTimeoutMs.ifPresent(con::setConnectTimeout);
         readTimeoutMs.ifPresent(con::setReadTimeout);
@@ -99,7 +107,7 @@ public class OAuthBearerHttpClient implements Closeable {
         HttpURLConnection con = null;
 
         try {
-            con = connect(url, "POST", requestHeaders);
+            con = connect(url, requestHeaders, Optional.of(requestBody.length));
             write(con, requestBody);
             return read(con);
         } finally {

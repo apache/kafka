@@ -33,7 +33,7 @@ import java.security.SignatureException;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.time.Duration;
 import java.util.Base64;
-import java.util.HashMap;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -71,7 +71,7 @@ public class JwtBearerAccessTokenRetriever extends HttpAccessTokenRetriever {
 
     private final Time time;
 
-    private String assertion;
+    private JwtBearerRequestFormatter requestFormatter;
 
     public JwtBearerAccessTokenRetriever() {
         this(Time.SYSTEM);
@@ -93,6 +93,7 @@ public class JwtBearerAccessTokenRetriever extends HttpAccessTokenRetriever {
         String tokenIssuer = jou.validateString(TOKEN_ISSUER);
         String tokenAudience = jou.validateString(TOKEN_AUDIENCE);
         String tokenTargetAudience = jou.validateString(TOKEN_TARGET_AUDIENCE, false);
+        String assertion;
 
         try {
             byte[] pkcs8EncodedBytes = Base64.getDecoder().decode(privateKeySecret);
@@ -115,21 +116,35 @@ public class JwtBearerAccessTokenRetriever extends HttpAccessTokenRetriever {
         } catch (Throwable t) {
             throw new KafkaException("Error generating assertion for jwt-bearer", t);
         }
+
+        requestFormatter = new JwtBearerRequestFormatter(assertion);
     }
 
     @Override
-    protected byte[] formatRequestBody() {
-        String encodedGrantType = URLEncoder.encode(GRANT_TYPE, StandardCharsets.UTF_8);
-        String encodedAssertion = URLEncoder.encode(assertion, StandardCharsets.UTF_8);
-        String body = String.format("grant_type=%s&assertion=%s", encodedGrantType, encodedAssertion);
-        return body.getBytes(StandardCharsets.UTF_8);
+    protected RequestFormatter requestFormatter() {
+        return requestFormatter;
     }
 
-    @Override
-    protected Map<String, String> formatRequestHeaders(int contentLength) {
-        Map<String, String> headers = new HashMap<>(super.formatRequestHeaders(contentLength));
-        headers.put("Content-Type", "application/x-www-form-urlencoded");
-        return headers;
+    static class JwtBearerRequestFormatter implements RequestFormatter {
+
+        private final String assertion;
+
+        public JwtBearerRequestFormatter(String assertion) {
+            this.assertion = assertion;
+        }
+
+        @Override
+        public byte[] formatBody() {
+            String encodedGrantType = URLEncoder.encode(GRANT_TYPE, StandardCharsets.UTF_8);
+            String encodedAssertion = URLEncoder.encode(assertion, StandardCharsets.UTF_8);
+            String body = String.format("grant_type=%s&assertion=%s", encodedGrantType, encodedAssertion);
+            return body.getBytes(StandardCharsets.UTF_8);
+        }
+
+        @Override
+        public Map<String, String> formatHeaders() {
+            return Collections.singletonMap("Content-Type", "application/x-www-form-urlencoded");
+        }
     }
 
     static class AssertionCreator {

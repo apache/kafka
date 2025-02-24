@@ -22,10 +22,11 @@ import org.apache.kafka.common.utils.Utils;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
-import java.util.HashMap;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 import javax.security.auth.login.AppConfigurationEntry;
 
@@ -51,13 +52,7 @@ public class ClientCredentialsAccessTokenRetriever extends HttpAccessTokenRetrie
     private static final String CLIENT_SECRET_CONFIG = "clientSecret";
     private static final String SCOPE_CONFIG = "scope";
 
-    private String clientId;
-
-    private String clientSecret;
-
-    private String scope;
-
-    private boolean urlencodeHeader;
+    private RequestFormatter requestFormatter;
 
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
@@ -65,67 +60,16 @@ public class ClientCredentialsAccessTokenRetriever extends HttpAccessTokenRetrie
 
         JaasOptionsUtils jou = new JaasOptionsUtils(saslMechanism, jaasConfigEntries);
         ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
-        clientId = jou.validateString(CLIENT_ID_CONFIG);
-        clientSecret = jou.validateString(CLIENT_SECRET_CONFIG);
-        scope = jou.validateString(SCOPE_CONFIG, false);
-        urlencodeHeader = validateUrlencodeHeader(cu);
+        String clientId = jou.validateString(CLIENT_ID_CONFIG);
+        String clientSecret = jou.validateString(CLIENT_SECRET_CONFIG);
+        String scope = jou.validateString(SCOPE_CONFIG, false);
+        boolean urlencodeHeader = validateUrlencodeHeader(cu);
+        requestFormatter = new ClientCredentialsRequestFormatter(clientId, clientSecret, scope, urlencodeHeader);
     }
 
     @Override
-    protected byte[] formatRequestBody() {
-        String body = formatRequestBody(scope);
-        return body.getBytes(StandardCharsets.UTF_8);
-    }
-
-    static String formatRequestBody(String scope) {
-        StringBuilder requestParameters = new StringBuilder();
-        requestParameters.append("grant_type=").append(GRANT_TYPE);
-
-        if (scope != null && !scope.trim().isEmpty()) {
-            scope = scope.trim();
-            String encodedScope = URLEncoder.encode(scope, StandardCharsets.UTF_8);
-            requestParameters.append("&scope=").append(encodedScope);
-        }
-
-        return requestParameters.toString();
-    }
-
-    @Override
-    protected Map<String, String> formatRequestHeaders(int contentLength) {
-        Map<String, String> headers = new HashMap<>(super.formatRequestHeaders(contentLength));
-        headers.put("Authorization", formatAuthorizationHeader(clientId, clientSecret, urlencodeHeader));
-        return headers;
-    }
-
-    static String formatAuthorizationHeader(String clientId, String clientSecret, boolean urlencodeHeader) {
-        clientId = sanitizeString("the token endpoint request client ID parameter", clientId);
-        clientSecret = sanitizeString("the token endpoint request client secret parameter", clientSecret);
-
-        // according to RFC-6749 clientId & clientSecret must be urlencoded, see https://tools.ietf.org/html/rfc6749#section-2.3.1
-        if (urlencodeHeader) {
-            clientId = URLEncoder.encode(clientId, StandardCharsets.UTF_8);
-            clientSecret = URLEncoder.encode(clientSecret, StandardCharsets.UTF_8);
-        }
-
-        String s = String.format("%s:%s", clientId, clientSecret);
-        // Per RFC-7617, we need to use the *non-URL safe* base64 encoder. See KAFKA-14496.
-        String encoded = Base64.getEncoder().encodeToString(Utils.utf8(s));
-        return String.format("Basic %s", encoded);
-    }
-
-    private static String sanitizeString(String name, String value) {
-        if (value == null)
-            throw new IllegalArgumentException(String.format("The value for %s must be non-null", name));
-
-        if (value.isEmpty())
-            throw new IllegalArgumentException(String.format("The value for %s must be non-empty", name));
-
-        value = value.trim();
-
-        if (value.isEmpty())
-            throw new IllegalArgumentException(String.format("The value for %s must not contain only whitespace", name));
-
-        return value;
+    protected RequestFormatter requestFormatter() {
+        return requestFormatter;
     }
 
     /**
@@ -141,5 +85,40 @@ public class ClientCredentialsAccessTokenRetriever extends HttpAccessTokenRetrie
     public static boolean validateUrlencodeHeader(ConfigurationUtils configurationUtils) {
         Boolean urlencodeHeader = configurationUtils.validateBoolean(SASL_OAUTHBEARER_HEADER_URLENCODE, false);
         return Objects.requireNonNullElse(urlencodeHeader, DEFAULT_SASL_OAUTHBEARER_HEADER_URLENCODE);
+    }
+
+    static class ClientCredentialsRequestFormatter implements RequestFormatter {
+
+        private final String clientId;
+        private final String clientSecret;
+        private final Optional<String> scope;
+
+        public ClientCredentialsRequestFormatter(String clientId,
+                                                 String clientSecret,
+                                                 String scope,
+                                                 boolean urlencodeHeader) {
+            // according to RFC-6749 clientId & clientSecret must be urlencoded, see https://tools.ietf.org/html/rfc6749#section-2.3.1
+            this.clientId = urlencodeHeader ? URLEncoder.encode(clientId, StandardCharsets.UTF_8) : clientId;
+            this.clientSecret = urlencodeHeader ? URLEncoder.encode(clientSecret, StandardCharsets.UTF_8) : clientSecret;
+            this.scope = Utils.isBlank(scope) ? Optional.empty() : Optional.of(URLEncoder.encode(scope, StandardCharsets.UTF_8));
+        }
+
+        @Override
+        public byte[] formatBody() {
+            StringBuilder requestParameters = new StringBuilder();
+            requestParameters.append("grant_type=").append(GRANT_TYPE);
+            scope.ifPresent(s -> requestParameters.append("&scope=").append(s));
+            return requestParameters.toString().getBytes(StandardCharsets.UTF_8);
+        }
+
+        @Override
+        public Map<String, String> formatHeaders() {
+            String s = String.format("%s:%s", clientId, clientSecret);
+            // Per RFC-7617, we need to use the *non-URL safe* base64 encoder. See KAFKA-14496.
+            String encoded = Base64.getEncoder().encodeToString(Utils.utf8(s));
+            String header = String.format("Basic %s", encoded);
+
+            return Collections.singletonMap("Authorization", header);
+        }
     }
 }
