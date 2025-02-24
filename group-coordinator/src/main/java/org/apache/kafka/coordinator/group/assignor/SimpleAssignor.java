@@ -144,6 +144,13 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
         // Step 3: We combine current assignment and new assignment.
         Map<String, Set<TopicIdPartition>> finalAssignment = new HashMap<>();
 
+        // As per the KIP, we should revoke the assignments from current assignment for partitions that were assigned by step 1
+        // in the new assignment and have members in current assignment by step 2. But we haven't implemented it to avoid the
+        // complexity in both the implementation and the run time complexity. This step was mentioned in the KIP to reduce
+        // the burden of certain members of the share groups. This can be achieved with the help of limiting the max
+        // no. of partitions assignment for every member(KAFKA-18788). Hence, the potential problem of burdening
+        // the share consumers will be addressed in a future PR.
+
         // When combining current assignment, we need to only consider the topics in current assignment that are also being
         // subscribed in the new assignment as well.
         currentAssignment.forEach((targetPartition, members) -> {
@@ -193,6 +200,12 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
 
         // Step 3: We combine current assignment and new assignment.
         Map<String, Set<TopicIdPartition>> finalAssignment = new HashMap<>();
+        // As per the KIP, we should revoke the assignments from current assignment for partitions that were assigned by step 1
+        // in the new assignment and have members in current assignment by step 2. But we haven't implemented it to avoid the
+        // complexity in both the implementation and the run time complexity. This step was mentioned in the KIP to reduce
+        // the burden of certain members of the share groups. This can be achieved with the help of limiting the max
+        // no. of partitions assignment for every member(KAFKA-18788). Hence, the potential problem of burdening
+        // the share consumers will be addressed in a future PR.
 
         // When combining current assignment, we need to only consider the member topic subscription in current assignment
         // which is being subscribed in the new assignment as well.

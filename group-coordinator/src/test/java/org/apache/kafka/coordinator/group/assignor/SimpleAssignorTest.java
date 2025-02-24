@@ -37,7 +37,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.TreeMap;
 
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
@@ -183,7 +182,7 @@ public class SimpleAssignorTest {
             2
         ));
 
-        Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
+        Map<String, MemberSubscriptionAndAssignmentImpl> members = new HashMap<>();
 
         Set<Uuid> topicsSubscription = new LinkedHashSet<>();
         topicsSubscription.add(TOPIC_1_UUID);
@@ -258,7 +257,7 @@ public class SimpleAssignorTest {
         memberATopicsSubscription.add(TOPIC_1_UUID);
         memberATopicsSubscription.add(TOPIC_2_UUID);
 
-        Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
+        Map<String, MemberSubscriptionAndAssignmentImpl> members = new HashMap<>();
         members.put(MEMBER_A, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             Optional.empty(),
@@ -334,7 +333,7 @@ public class SimpleAssignorTest {
         Set<Uuid> memberATopicsSubscription = new LinkedHashSet<>();
         memberATopicsSubscription.add(TOPIC_1_UUID);
         memberATopicsSubscription.add(TOPIC_2_UUID);
-        Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
+        Map<String, MemberSubscriptionAndAssignmentImpl> members = new HashMap<>();
         members.put(MEMBER_A, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             Optional.empty(),
@@ -441,7 +440,7 @@ public class SimpleAssignorTest {
             2
         ));
 
-        Map<String, MemberSubscriptionAndAssignmentImpl> members1 = new TreeMap<>();
+        Map<String, MemberSubscriptionAndAssignmentImpl> members1 = new HashMap<>();
 
         Set<Uuid> topicsSubscription1 = new LinkedHashSet<>();
         topicsSubscription1.add(TOPIC_1_UUID);
@@ -504,7 +503,7 @@ public class SimpleAssignorTest {
             3
         ));
 
-        Map<String, MemberSubscriptionAndAssignmentImpl> members2 = new TreeMap<>();
+        Map<String, MemberSubscriptionAndAssignmentImpl> members2 = new HashMap<>();
 
         Set<Uuid> topicsSubscription2 = new LinkedHashSet<>();
         topicsSubscription2.add(TOPIC_2_UUID);
@@ -595,7 +594,7 @@ public class SimpleAssignorTest {
         memberATopicsSubscription1.add(TOPIC_1_UUID);
         memberATopicsSubscription1.add(TOPIC_2_UUID);
 
-        Map<String, MemberSubscriptionAndAssignmentImpl> members1 = new TreeMap<>();
+        Map<String, MemberSubscriptionAndAssignmentImpl> members1 = new HashMap<>();
         members1.put(MEMBER_A, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             Optional.empty(),
@@ -676,7 +675,7 @@ public class SimpleAssignorTest {
             1
         ));
 
-        Map<String, MemberSubscriptionAndAssignmentImpl> members2 = new TreeMap<>();
+        Map<String, MemberSubscriptionAndAssignmentImpl> members2 = new HashMap<>();
 
         Set<Uuid> memberATopicsSubscription2 = new LinkedHashSet<>();
         memberATopicsSubscription2.add(TOPIC_1_UUID);
