@@ -305,7 +305,15 @@ public class SharePartitionManager implements AutoCloseable {
                         future.complete(throwable);
                         return;
                     }
-                    acknowledgePartitionBatches.forEach(batch -> batch.acknowledgeTypes().forEach(shareGroupMetrics::recordAcknowledgement));
+                    acknowledgePartitionBatches.forEach(batch -> {
+                        // Client can either send a single entry in acknowledgeTypes which represents
+                        // the state of the complete batch or can send individual offsets state.
+                        if (batch.acknowledgeTypes().size() == 1) {
+                            shareGroupMetrics.recordAcknowledgement(batch.acknowledgeTypes().get(0), batch.lastOffset() - batch.firstOffset() + 1);
+                        } else {
+                            batch.acknowledgeTypes().forEach(shareGroupMetrics::recordAcknowledgement);
+                        }
+                    });
                     future.complete(null);
                 });
 
@@ -395,7 +403,7 @@ public class SharePartitionManager implements AutoCloseable {
         Optional<Consumer<Set<String>>> failedMetricsHandler
     ) {
         CompletableFuture<Void> allFutures = CompletableFuture.allOf(
-            futuresMap.values().toArray(new CompletableFuture[0]));
+            futuresMap.values().toArray(new CompletableFuture<?>[0]));
         return allFutures.thenApply(v -> {
             Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData> result = new HashMap<>();
             // Keep the set as same topic might appear multiple times. Multiple partitions can fail for same topic.
@@ -651,7 +659,7 @@ public class SharePartitionManager implements AutoCloseable {
         // Add the share fetch to the delayed share fetch purgatory to process the fetch request.
         // The request will be added irrespective of whether the share partition is initialized or not.
         // Once the share partition is initialized, the delayed share fetch will be completed.
-        addDelayedShareFetch(new DelayedShareFetch(shareFetch, replicaManager, fencedSharePartitionHandler(), sharePartitions), delayedShareFetchWatchKeys);
+        addDelayedShareFetch(new DelayedShareFetch(shareFetch, replicaManager, fencedSharePartitionHandler(), sharePartitions, shareGroupMetrics, time), delayedShareFetchWatchKeys);
     }
 
     private SharePartition getOrCreateSharePartition(SharePartitionKey sharePartitionKey) {

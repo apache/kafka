@@ -265,7 +265,7 @@ public class StreamsGroup implements Group {
     }
 
     public void setTopology(StreamsTopology topology) {
-        this.topology.set(Optional.of(topology));
+        this.topology.set(Optional.ofNullable(topology));
         maybeUpdateConfiguredTopology();
         maybeUpdateGroupState();
     }
@@ -340,7 +340,7 @@ public class StreamsGroup implements Group {
     public StreamsGroupMember getOrMaybeCreateMember(
         String memberId,
         boolean createIfNotExists
-    ) {
+    ) throws UnknownMemberIdException {
         StreamsGroupMember member = members.get(memberId);
         if (member != null) {
             return member;
@@ -463,6 +463,15 @@ public class StreamsGroup implements Group {
      */
     public void updateTargetAssignment(String memberId, TasksTuple newTargetAssignment) {
         targetAssignment.put(memberId, newTargetAssignment);
+    }
+
+    /**
+     * Removes the target assignment of a member.
+     *
+     * @param memberId The member id.
+     */
+    public void removeTargetAssignment(String memberId) {
+        targetAssignment.remove(memberId);
     }
 
     /**
@@ -779,11 +788,10 @@ public class StreamsGroup implements Group {
      * Updates the current state of the group.
      */
     private void maybeUpdateGroupState() {
-        StreamsGroupState previousState = state.get();
         StreamsGroupState newState = STABLE;
         if (members.isEmpty()) {
             newState = EMPTY;
-        } else if (topology() == null || configuredTopology().isEmpty() || !configuredTopology().get().isReady()) {
+        } else if (topology().isEmpty() || configuredTopology().isEmpty() || !configuredTopology().get().isReady()) {
             newState = NOT_READY;
         } else if (groupEpoch.get() > targetAssignmentEpoch.get()) {
             newState = ASSIGNING;
@@ -797,7 +805,6 @@ public class StreamsGroup implements Group {
         }
 
         state.set(newState);
-        metrics.onStreamsGroupStateTransition(previousState, newState);
     }
 
     private void maybeUpdateConfiguredTopology() {
@@ -932,7 +939,7 @@ public class StreamsGroup implements Group {
     }
 
     /**
-     * Adds the partitions epoch based on the provided assignment.
+     * Adds the partition epoch based on the provided assignment.
      *
      * @param tasks     The assigned tasks.
      * @param processId The process ID.
@@ -942,7 +949,7 @@ public class StreamsGroup implements Group {
         TasksTuple tasks,
         String processId
     ) {
-        if (tasks != null) {
+        if (tasks != null && processId != null) {
             addTaskProcessId(tasks.activeTasks(), processId, currentActiveTaskToProcessId);
             addTaskProcessIdToSet(tasks.standbyTasks(), processId, currentStandbyTaskToProcessIds);
             addTaskProcessIdToSet(tasks.warmupTasks(), processId, currentWarmupTaskToProcessIds);

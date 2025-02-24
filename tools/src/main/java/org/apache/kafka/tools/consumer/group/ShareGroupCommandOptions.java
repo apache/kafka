@@ -173,9 +173,12 @@ public class ShareGroupCommandOptions extends CommandDefaultOptions {
         }
 
         if (options.has(deleteOpt)) {
-            if (!options.has(groupOpt))
+            if (!options.has(groupOpt) && !options.has(allGroupsOpt))
                 CommandLineUtils.printUsageAndExit(parser,
-                    "Option " + deleteOpt + " takes the option: " + groupOpt);
+                    String.format("Option %s takes the options %s or %s", deleteOpt, groupOpt, allGroupsOpt));
+            if (options.has(allGroupsOpt) && options.has(groupOpt))
+                CommandLineUtils.printUsageAndExit(parser,
+                    String.format("Option %s takes either %s or %s, not both.", deleteOpt, groupOpt, allGroupsOpt));
             if (options.has(topicOpt))
                 CommandLineUtils.printUsageAndExit(parser,
                     "Option " + deleteOpt + " does not take the option: " + topicOpt);

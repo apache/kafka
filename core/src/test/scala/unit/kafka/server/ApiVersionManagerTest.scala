@@ -18,9 +18,11 @@ package kafka.server
 
 import org.apache.kafka.clients.NodeApiVersions
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
+import org.apache.kafka.common.metadata.FeatureLevelRecord
 import org.apache.kafka.common.protocol.ApiKeys
+import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
 import org.apache.kafka.server.BrokerFeatures
-import org.apache.kafka.server.common.KRaftVersion
+import org.apache.kafka.server.common.{KRaftVersion, MetadataVersion}
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
@@ -31,7 +33,16 @@ import scala.jdk.CollectionConverters._
 
 class ApiVersionManagerTest {
   private val brokerFeatures = BrokerFeatures.createDefault(true)
-  private val metadataCache = MetadataCache.kRaftMetadataCache(1, () => KRaftVersion.LATEST_PRODUCTION)
+  private val metadataCache = {
+    val cache = MetadataCache.kRaftMetadataCache(1, () => KRaftVersion.LATEST_PRODUCTION)
+    val delta = new MetadataDelta(MetadataImage.EMPTY);
+    delta.replay(new FeatureLevelRecord()
+      .setName(MetadataVersion.FEATURE_NAME)
+      .setFeatureLevel(MetadataVersion.latestProduction().featureLevel())
+    )
+    cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+    cache
+  }
 
   @ParameterizedTest
   @EnumSource(classOf[ListenerType])

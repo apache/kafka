@@ -15,11 +15,12 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.test.api;
+package org.apache.kafka.clients.admin.internals;
 
-import java.util.function.Consumer;
+import org.apache.kafka.common.utils.LogContext;
 
-@FunctionalInterface
-public interface ClusterGenerator extends Consumer<ClusterConfig> {
-
+public class DeleteShareGroupsHandlerTest extends DeleteGroupsHandlerTest {
+    protected DeleteGroupsHandler handler() {
+        return new DeleteShareGroupsHandler(new LogContext());
+    }
 }
