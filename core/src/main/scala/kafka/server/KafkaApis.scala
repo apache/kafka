@@ -2538,7 +2538,6 @@ class KafkaApis(val requestChannel: RequestChannel,
         if (authorizedTopics.size < consumerGroupHeartbeatRequest.data.subscribedTopicNames.size) {
           val responseData = new ConsumerGroupHeartbeatResponseData()
             .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
-            .setErrorMessage("The client is not authorized to describe the provided subscribed topics.")
           requestHelper.sendMaybeThrottle(request, new ConsumerGroupHeartbeatResponse(responseData))
           return CompletableFuture.completedFuture[Unit](())
         }
@@ -2625,7 +2624,6 @@ class KafkaApis(val requestChannel: RequestChannel,
               new ConsumerGroupDescribeResponseData.DescribedGroup()
                 .setGroupId(group.groupId)
                 .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
-                .setErrorMessage("The group has described topic(s) that the client is not authorized to describe.")
                 .setMembers(List.empty.asJava)
             } else {
               group
