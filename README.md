@@ -42,7 +42,6 @@ Follow instructions in https://kafka.apache.org/quickstart
     ./gradlew test  # runs both unit and integration tests
     ./gradlew unitTest
     ./gradlew integrationTest
-    ./gradlew quarantinedTest  # runs the quarantined tests
 
     
 ### Force re-running tests without code change ###
@@ -76,10 +75,6 @@ Retries are disabled by default, but you can set maxTestRetryFailures and maxTes
 The following example declares -PmaxTestRetries=1 and -PmaxTestRetryFailures=3 to enable a failed test to be retried once, with a total retry limit of 3.
 
     ./gradlew test -PmaxTestRetries=1 -PmaxTestRetryFailures=3
-
-The quarantinedTest task also has no retries by default, but you can set maxQuarantineTestRetries and maxQuarantineTestRetryFailures to enable retries, similar to the test task.
-
-    ./gradlew quarantinedTest -PmaxQuarantineTestRetries=3 -PmaxQuarantineTestRetryFailures=20
 
 See [Test Retry Gradle Plugin](https://github.com/gradle/test-retry-gradle-plugin) for and [build.yml](.github/workflows/build.yml) more details.
 
