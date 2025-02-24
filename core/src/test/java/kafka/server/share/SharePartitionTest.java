@@ -22,6 +22,7 @@ import kafka.server.share.SharePartition.RecordState;
 import kafka.server.share.SharePartition.SharePartitionState;
 import kafka.server.share.SharePartitionManager.SharePartitionListener;
 
+import org.apache.kafka.clients.consumer.AcknowledgeType;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
@@ -110,6 +111,7 @@ public class SharePartitionTest {
     private static final int BATCH_SIZE = 500;
     private static final int DEFAULT_FETCH_OFFSET = 0;
     private static final int MAX_FETCH_RECORDS = Integer.MAX_VALUE;
+    private static final byte ACKNOWLEDGE_TYPE_GAP_ID = 0;
 
     @BeforeEach
     public void setUp() {
@@ -6223,10 +6225,10 @@ public class SharePartitionTest {
         fetchAcquiredRecords(sharePartition, records, 12);
         // Partially acknowledge the batch from 5-16.
         sharePartition.acknowledge(MEMBER_ID, Arrays.asList(
-            new ShareAcknowledgementBatch(5, 9, List.of((byte) 0 /* GAP */)),
-            new ShareAcknowledgementBatch(10, 11, List.of((byte) 1 /* ACCEPT */)),
-            new ShareAcknowledgementBatch(12, 14, List.of((byte) 3 /* GAP */)),
-            new ShareAcknowledgementBatch(15, 16, List.of((byte) 2 /* RELEASE */))));
+            new ShareAcknowledgementBatch(5, 9, List.of(ACKNOWLEDGE_TYPE_GAP_ID)),
+            new ShareAcknowledgementBatch(10, 11, List.of(AcknowledgeType.ACCEPT.id)),
+            new ShareAcknowledgementBatch(12, 14, List.of(AcknowledgeType.REJECT.id)),
+            new ShareAcknowledgementBatch(15, 16, List.of(AcknowledgeType.RELEASE.id))));
 
         assertEquals(15, sharePartition.nextFetchOffset());
         assertEquals(1, sharePartition.cachedState().size());
@@ -6325,6 +6327,21 @@ public class SharePartitionTest {
         // last offset should remain correct even after compaction), the test verifies its proper handling.
         fetchAcquiredRecords(sharePartition, records, 59);
         assertEquals(64, sharePartition.nextFetchOffset());
+        assertEquals(4, sharePartition.cachedState().size());
+        sharePartition.cachedState().forEach((offset, inFlightState) -> {
+            // All batches other than the last batch should have batch state maintained.
+            if (offset < 50) {
+                assertNotNull(inFlightState.batchState());
+                assertEquals(RecordState.ACQUIRED, inFlightState.batchState());
+            } else {
+                assertNotNull(inFlightState.offsetState());
+                inFlightState.offsetState().forEach((recordOffset, offsetState) -> {
+                    // All offsets other than the last offset should be acquired.
+                    RecordState recordState = recordOffset < 64 ? RecordState.ACQUIRED : RecordState.AVAILABLE;
+                    assertEquals(recordState, offsetState.state(), "Incorrect state for offset: " + recordOffset);
+                });
+            }
+        });
     }
 
     /**
@@ -6364,11 +6381,12 @@ public class SharePartitionTest {
         // fetchOffset as 0.
         fetchAcquiredRecords(sharePartition, records, 0, 0, 5);
         assertEquals(10, sharePartition.nextFetchOffset());
-        // Though the next fetch offset is moved but start offset should remain the same as we acquire
-        // just marks the offsets archived. The start offset shall move correctly once any records are acknowledged.
+        // The next fetch offset has been updated, but the start offset should remain unchanged since
+        // the acquire operation only marks offsets as archived. The start offset will be correctly
+        // updated once any records are acknowledged.
         assertEquals(0, sharePartition.startOffset());
 
-        // Even invoking the release API shall update the cache and move the start offset.
+        // Releasing acquired records updates the cache and moves the start offset.
         sharePartition.releaseAcquiredRecords(MEMBER_ID);
         assertEquals(5, sharePartition.startOffset());
         assertEquals(5, sharePartition.nextFetchOffset());
@@ -6399,7 +6417,7 @@ public class SharePartitionTest {
         // Acknowledge subset of the first batch offsets.
         sharePartition.acknowledge(MEMBER_ID, List.of(
             // Accept the 3 offsets of first batch.
-            new ShareAcknowledgementBatch(5, 7, List.of((byte) 1)))).join();
+            new ShareAcknowledgementBatch(5, 7, List.of(AcknowledgeType.ACCEPT.id)))).join();
         // Release the remaining batches/offsets in the cache.
         sharePartition.releaseAcquiredRecords(MEMBER_ID).join();
         // Validate cache has 2 entries.
@@ -6408,11 +6426,12 @@ public class SharePartitionTest {
         // Mark fetch offset within the first batch to 8, first available offset.
         fetchAcquiredRecords(sharePartition, memoryRecords(15, 10), 8, 0, 15);
         assertEquals(25, sharePartition.nextFetchOffset());
-        // Though the next fetch offset is moved but start offset should remain the same as we acquire
-        // just marks the offsets archived. The start offset shall move correctly once any records are acknowledged.
+        // The next fetch offset has been updated, but the start offset should remain unchanged since
+        // the acquire operation only marks offsets as archived. The start offset will be correctly
+        // updated once any records are acknowledged.
         assertEquals(8, sharePartition.startOffset());
 
-        // Even invoking the release API shall update the cache and move the start offset.
+        // Releasing acquired records updates the cache and moves the start offset.
         sharePartition.releaseAcquiredRecords(MEMBER_ID);
         assertEquals(10, sharePartition.startOffset());
         assertEquals(10, sharePartition.nextFetchOffset());
@@ -6463,20 +6482,21 @@ public class SharePartitionTest {
         // fetchOffset as 0.
         fetchAcquiredRecords(sharePartition, records, 0, 0, 5);
         assertEquals(10, sharePartition.nextFetchOffset());
-        // Though the next fetch offset is moved but start offset should remain the same as we acquire
-        // just marks the offsets archived. The start offset shall move correctly once any records are acknowledged.
+        // The next fetch offset has been updated, but the start offset should remain unchanged since
+        // the acquire operation only marks offsets as archived. The start offset will be correctly
+        // updated once any records are acknowledged.
         assertEquals(0, sharePartition.startOffset());
 
-        // Even invoking the release API shall update the cache and move the start offset.
+        // Releasing acquired records updates the cache and moves the start offset.
         sharePartition.releaseAcquiredRecords(MEMBER_ID);
         assertEquals(5, sharePartition.startOffset());
         assertEquals(5, sharePartition.nextFetchOffset());
         assertEquals(1, sharePartition.cachedState().size());
         sharePartition.cachedState().forEach((offset, inFlightState) -> {
             assertNotNull(inFlightState.offsetState());
-            inFlightState.offsetState().forEach((recordOffset, state) -> {
+            inFlightState.offsetState().forEach((recordOffset, offsetState) -> {
                 RecordState recordState = recordOffset < 5 ? RecordState.ARCHIVED : RecordState.AVAILABLE;
-                assertEquals(recordState, inFlightState.offsetState().get(recordOffset).state());
+                assertEquals(recordState, offsetState.state());
             });
         });
     }

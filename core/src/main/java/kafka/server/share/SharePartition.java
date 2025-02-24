@@ -682,12 +682,14 @@ public class SharePartition {
         lock.writeLock().lock();
         try {
             long baseOffset = firstBatch.baseOffset();
+
             // There might be cached batches which are stale due to topic compaction hence archive them.
             maybeArchiveStaleBatches(fetchOffset, baseOffset);
+
             // Find the floor batch record for the request batch. The request batch could be
             // for a subset of the in-flight batch i.e. cached batch of offset 10-14 and request batch
             // of 12-13. Hence, floor entry is fetched to find the sub-map.
-            Map.Entry<Long, InFlightBatch> floorOffset = cachedState.floorEntry(baseOffset);
+            Map.Entry<Long, InFlightBatch> floorEntry = cachedState.floorEntry(baseOffset);
             // We might find a batch with floor entry but not necessarily that batch has an overlap,
             // if the request batch base offset is ahead of last offset from floor entry i.e. cached
             // batch of 10-14 and request batch of 15-18, though floor entry is found but no overlap.
@@ -695,8 +697,8 @@ public class SharePartition {
             // if the floor entry is found and the request batch base offset is within the floor entry
             // then adjust the base offset to the floor entry so that acquire method can still work on
             // previously cached batch boundaries.
-            if (floorOffset != null && floorOffset.getValue().lastOffset() >= baseOffset) {
-                baseOffset = floorOffset.getKey();
+            if (floorEntry != null && floorEntry.getValue().lastOffset() >= baseOffset) {
+                baseOffset = floorEntry.getKey();
             }
             // Validate if the fetch records are already part of existing batches and if available.
             NavigableMap<Long, InFlightBatch> subMap = cachedState.subMap(baseOffset, true, lastBatch.lastOffset(), true);
@@ -1121,20 +1123,22 @@ public class SharePartition {
 
             // The fetch offset can exist in the middle of the batch. Hence, find the floor offset
             // for the fetch offset and then find the sub-map from the floor offset to the base offset.
-            long mapFetchOffset = fetchOffset;
-            Map.Entry<Long, InFlightBatch> floorOffset = cachedState.floorEntry(fetchOffset);
-            if (floorOffset != null && floorOffset.getValue().lastOffset() >= fetchOffset) {
-                mapFetchOffset = floorOffset.getKey();
+            long floorOffset = fetchOffset;
+            Map.Entry<Long, InFlightBatch> floorEntry = cachedState.floorEntry(fetchOffset);
+            if (floorEntry != null && floorEntry.getValue().lastOffset() >= fetchOffset) {
+                floorOffset = floorEntry.getKey();
             }
 
-            NavigableMap<Long, InFlightBatch> subMap = cachedState.subMap(mapFetchOffset, true, baseOffset, false);
+            NavigableMap<Long, InFlightBatch> subMap = cachedState.subMap(floorOffset, true, baseOffset, false);
             if (subMap.isEmpty()) {
                 // No stale batches to archive.
                 return;
             }
+
             // Though such batches can be removed from the cache, but it is better to archive them so
             // that they are never acquired again.
             boolean anyRecordArchived = archiveAvailableRecords(fetchOffset, baseOffset, subMap);
+
             // If we have transitioned the state of any batch/offset from AVAILABLE to ARCHIVED,
             // then there is a chance that the next fetch offset can change.
             if (anyRecordArchived) {
