@@ -31,6 +31,7 @@ import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.share.fetch.ShareAcquiredRecords;
 import org.apache.kafka.server.share.fetch.ShareFetch;
+import org.apache.kafka.server.share.fetch.ShareFetchPartitionData;
 import org.apache.kafka.server.storage.log.FetchPartitionData;
 
 import org.slf4j.Logger;
@@ -39,6 +40,7 @@ import org.slf4j.LoggerFactory;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.BiConsumer;
@@ -58,17 +60,18 @@ public class ShareFetchUtils {
      */
     static Map<TopicIdPartition, ShareFetchResponseData.PartitionData> processFetchResponse(
             ShareFetch shareFetch,
-            Map<TopicIdPartition, FetchPartitionData> responseData,
+            List<ShareFetchPartitionData> shareFetchPartitionDataList,
             LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions,
             ReplicaManager replicaManager,
-            BiConsumer<SharePartitionKey, Throwable> exceptionHandler) {
+            BiConsumer<SharePartitionKey, Throwable> exceptionHandler
+    ) {
         Map<TopicIdPartition, ShareFetchResponseData.PartitionData> response = new HashMap<>();
 
         // Acquired records count for the share fetch request.
         int acquiredRecordsCount = 0;
-        for (Map.Entry<TopicIdPartition, FetchPartitionData> entry : responseData.entrySet()) {
-            TopicIdPartition topicIdPartition = entry.getKey();
-            FetchPartitionData fetchPartitionData = entry.getValue();
+        for (ShareFetchPartitionData shareFetchPartitionData : shareFetchPartitionDataList) {
+            TopicIdPartition topicIdPartition = shareFetchPartitionData.topicIdPartition();
+            FetchPartitionData fetchPartitionData = shareFetchPartitionData.fetchPartitionData();
 
             SharePartition sharePartition = sharePartitions.get(topicIdPartition);
             ShareFetchResponseData.PartitionData partitionData = new ShareFetchResponseData.PartitionData()
@@ -102,7 +105,13 @@ public class ShareFetchUtils {
                     partitionData.setErrorMessage(Errors.NONE.message());
                 }
             } else {
-                ShareAcquiredRecords shareAcquiredRecords = sharePartition.acquire(shareFetch.memberId(), shareFetch.batchSize(), shareFetch.maxFetchRecords() - acquiredRecordsCount, fetchPartitionData);
+                ShareAcquiredRecords shareAcquiredRecords = sharePartition.acquire(
+                    shareFetch.memberId(),
+                    shareFetch.batchSize(),
+                    shareFetch.maxFetchRecords() - acquiredRecordsCount,
+                    shareFetchPartitionData.fetchOffset(),
+                    fetchPartitionData
+                );
                 log.trace("Acquired records: {} for topicIdPartition: {}", shareAcquiredRecords, topicIdPartition);
                 // Maybe, in the future, check if no records are acquired, and we want to retry
                 // replica manager fetch. Depends on the share partition manager implementation,
