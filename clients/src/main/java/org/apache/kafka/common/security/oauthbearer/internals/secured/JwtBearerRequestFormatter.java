@@ -20,12 +20,12 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.security.GeneralSecurityException;
 import java.security.InvalidKeyException;
 import java.security.KeyFactory;
 import java.security.NoSuchAlgorithmException;
@@ -37,6 +37,7 @@ import java.security.spec.PKCS8EncodedKeySpec;
 import java.time.Duration;
 import java.util.Base64;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 
 public class JwtBearerRequestFormatter implements HttpRequestFormatter {
@@ -75,7 +76,14 @@ public class JwtBearerRequestFormatter implements HttpRequestFormatter {
 
     @Override
     public String formatBody() {
-        String assertion = createAssertion();
+        String assertion;
+
+        try {
+            assertion = createAssertion();
+        } catch (Exception e) {
+            throw new KafkaException("Error signing assertion with private key", e);
+        }
+
         String encodedGrantType = URLEncoder.encode(GRANT_TYPE, StandardCharsets.UTF_8);
         String encodedAssertion = URLEncoder.encode(assertion, StandardCharsets.UTF_8);
         return String.format("grant_type=%s&assertion=%s", encodedGrantType, encodedAssertion);
@@ -86,21 +94,15 @@ public class JwtBearerRequestFormatter implements HttpRequestFormatter {
         return Collections.singletonMap("Content-Type", "application/x-www-form-urlencoded");
     }
 
-    String createAssertion() {
-        try {
-            JwtTokenHeader tokenHeader = getJwtTokenHeader();
-            JwtTokenPayload tokenPayload = getJwtTokenPayload();
-            TokenSections tokenSections = TokenSections
-                .fromObjects(tokenHeader, tokenPayload)
-                .base64Encode();
-
-            String contentToSign = tokenSections.header() + "." + tokenSections.payload();
-            PrivateKey privateKey = getPrivateKey();
-            String signedContent = sign(privateKey, contentToSign);
-            return contentToSign + "." + signedContent;
-        } catch (Throwable t) {
-            throw new KafkaException("Error signing assertion with private key", t);
-        }
+    String createAssertion() throws IOException, GeneralSecurityException {
+        ObjectMapper mapper = new ObjectMapper();
+        Base64.Encoder encoder = Base64.getUrlEncoder().withoutPadding();
+        String header = encodeHeader(mapper, encoder);
+        String payload = encodePayload(mapper, encoder);
+        String content = header + "." + payload;
+        PrivateKey privateKey = getPrivateKey();
+        String signedContent = sign(privateKey, content);
+        return content + "." + signedContent;
     }
 
     PrivateKey getPrivateKey() throws NoSuchAlgorithmException, InvalidKeySpecException {
@@ -110,21 +112,30 @@ public class JwtBearerRequestFormatter implements HttpRequestFormatter {
         return keyFactory.generatePrivate(keySpec);
     }
 
-    JwtTokenHeader getJwtTokenHeader() {
-        return new JwtTokenHeader(tokenSigningAlgo, "JWT", privateKeyId);
+    String encodeHeader(ObjectMapper mapper, Base64.Encoder encoder) throws IOException {
+        Map<String, Object> values = new HashMap<>();
+        values.put("alg", tokenSigningAlgo);
+        values.put("typ", "JWT");
+        values.put("kid", privateKeyId);
+
+        String json = mapper.writeValueAsString(values);
+        return encoder.encodeToString(Utils.utf8(json));
     }
 
-    JwtTokenPayload getJwtTokenPayload() {
+    String encodePayload(ObjectMapper mapper, Base64.Encoder encoder) throws IOException {
         long currentTimeSecs = time.milliseconds() / 1000L;
         long expirationSecs = currentTimeSecs + Duration.ofMinutes(60).toSeconds();
-        return new JwtTokenPayload(
-            tokenIssuer,
-            tokenSubject,
-            tokenAudience,
-            currentTimeSecs,
-            expirationSecs,
-            tokenTargetAudience
-        );
+
+        Map<String, Object> values = new HashMap<>();
+        values.put("iss", tokenIssuer);
+        values.put("sub", tokenSubject);
+        values.put("aud", tokenAudience);
+        values.put("iat", currentTimeSecs);
+        values.put("exp", expirationSecs);
+        values.put("target_audience", tokenTargetAudience);
+
+        String json = mapper.writeValueAsString(values);
+        return encoder.encodeToString(Utils.utf8(json));
     }
 
     Signature getSignature() throws NoSuchAlgorithmException {
@@ -143,85 +154,5 @@ public class JwtBearerRequestFormatter implements HttpRequestFormatter {
         signature.update(contentToSign.getBytes(StandardCharsets.UTF_8));
         byte[] signedContent = signature.sign();
         return Base64.getUrlEncoder().withoutPadding().encodeToString(signedContent);
-    }
-
-    public static class TokenSections {
-
-        private final String header;
-        private final String payload;
-
-        public TokenSections(String header, String payload) {
-            this.header = header;
-            this.payload = payload;
-        }
-
-        public String header() {
-            return header;
-        }
-
-        public String payload() {
-            return payload;
-        }
-
-        public static TokenSections fromObjects(JwtTokenHeader header, JwtTokenPayload payload) throws IOException {
-            ObjectMapper mapper = new ObjectMapper();
-            String h = mapper.writeValueAsString(header);
-            String p = mapper.writeValueAsString(payload);
-            return new TokenSections(h, p);
-        }
-
-        public TokenSections base64Encode() {
-            Base64.Encoder e = Base64.getUrlEncoder().withoutPadding();
-            return new TokenSections(
-                e.encodeToString(Utils.utf8(header)),
-                e.encodeToString(Utils.utf8(payload))
-            );
-        }
-    }
-
-    public static class JwtTokenHeader {
-
-        @JsonProperty
-        final String alg;
-        @JsonProperty
-        final String typ;
-        @JsonProperty
-        final String kid;
-
-        public JwtTokenHeader(String alg, String typ, String kid) {
-            this.alg = alg;
-            this.typ = typ;
-            this.kid = kid;
-        }
-    }
-
-    public static class JwtTokenPayload {
-
-        @JsonProperty
-        String iss;
-
-        @JsonProperty
-        String sub;
-
-        @JsonProperty
-        String aud;
-
-        @JsonProperty
-        long iat;
-
-        @JsonProperty
-        long exp;
-
-        @JsonProperty("target_audience")
-        String targetAudience;
-
-        public JwtTokenPayload(String iss, String sub, String aud, long iat, long exp, String targetAudience) {
-            this.iss = iss;
-            this.sub = sub;
-            this.aud = aud;
-            this.iat = iat;
-            this.exp = exp;
-            this.targetAudience = targetAudience;
-        }
     }
 }

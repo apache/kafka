@@ -21,6 +21,7 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 
 import org.jose4j.jwt.JwtClaims;
+import org.jose4j.jwt.consumer.InvalidJwtException;
 import org.jose4j.jwt.consumer.JwtConsumer;
 import org.jose4j.jwt.consumer.JwtConsumerBuilder;
 import org.jose4j.jwt.consumer.JwtContext;
@@ -42,7 +43,6 @@ import java.util.List;
 
 import static org.apache.kafka.common.security.oauthbearer.internals.secured.JwtBearerRequestFormatter.GRANT_TYPE;
 import static org.apache.kafka.common.security.oauthbearer.internals.secured.JwtBearerRequestFormatter.TOKEN_SIGNING_ALGORITHM_RS256;
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -50,7 +50,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 public class JwtBearerRequestFormatterTest extends RequestFormatterTest {
 
     @Test
-    public void testRequestBodyParameters() {
+    public void testRequestBodyParameters() throws Exception {
         Builder builder = new Builder()
             .setPrivateKeySecret(generatePrivateKeySecret());
         JwtBearerRequestFormatter requestFormatter = builder.build();
@@ -64,7 +64,7 @@ public class JwtBearerRequestFormatterTest extends RequestFormatterTest {
     }
 
     @Test
-    public void testPrivateKeyId() {
+    public void testPrivateKeyId() throws Exception {
         KeyPair keyPair = generateKeyPair();
         Builder builder = new Builder()
             .setPrivateKeySecret(generatePrivateKeySecret(keyPair.getPrivate()))
@@ -80,7 +80,7 @@ public class JwtBearerRequestFormatterTest extends RequestFormatterTest {
     }
 
     @Test
-    public void testPrivateKeySecret() {
+    public void testPrivateKeySecret() throws Exception {
         KeyPair keyPair = generateKeyPair();
         Builder builder = new Builder()
             .setPrivateKeySecret(generatePrivateKeySecret(keyPair.getPrivate()));
@@ -101,8 +101,8 @@ public class JwtBearerRequestFormatterTest extends RequestFormatterTest {
     }
 
     @ParameterizedTest
-    @CsvSource("RS256, ES256")
-    public void testTokenSigningAlgo(String tokenSigningAlgo) {
+    @CsvSource("RS256,ES256")
+    public void testTokenSigningAlgo(String tokenSigningAlgo) throws Exception {
         KeyPair keyPair = generateKeyPair();
         Builder builder = new Builder()
             .setPrivateKeySecret(generatePrivateKeySecret(keyPair.getPrivate()))
@@ -138,14 +138,14 @@ public class JwtBearerRequestFormatterTest extends RequestFormatterTest {
         assertHeadersEqual(requestFormatter, Collections.singletonMap("Content-Type", "application/x-www-form-urlencoded"));
     }
 
-    private JwtClaims assertClaims(Builder builder, PublicKey publicKey, String assertion) {
+    private JwtClaims assertClaims(Builder builder, PublicKey publicKey, String assertion) throws InvalidJwtException {
         JwtConsumer jwtConsumer = jwtConsumer(builder, publicKey);
-        return assertDoesNotThrow(() -> jwtConsumer.processToClaims(assertion));
+        return jwtConsumer.processToClaims(assertion);
     }
 
-    private JwtContext assertContext(Builder builder, PublicKey publicKey, String assertion) {
+    private JwtContext assertContext(Builder builder, PublicKey publicKey, String assertion) throws InvalidJwtException {
         JwtConsumer jwtConsumer = jwtConsumer(builder, publicKey);
-        return assertDoesNotThrow(() -> jwtConsumer.process(assertion));
+        return jwtConsumer.process(assertion);
     }
 
     private JwtConsumer jwtConsumer(Builder builder, PublicKey publicKey) {
