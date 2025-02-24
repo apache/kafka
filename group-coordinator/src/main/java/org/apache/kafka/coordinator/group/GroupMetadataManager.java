@@ -1789,8 +1789,6 @@ public class GroupMetadataManager {
      * @param instanceId            The instance id from the request or null.
      * @param rackId                The rack id from the request or null.
      * @param rebalanceTimeoutMs    The rebalance timeout from the request or -1.
-     * @param clientId              The client id.
-     * @param clientHost            The client host.
      * @param subscribedTopicNames  The list of subscribed topic names from the request
      *                              or null.
      * @param subscribedTopicRegex  The regular expression based subscription from the request
@@ -1809,8 +1807,6 @@ public class GroupMetadataManager {
         String instanceId,
         String rackId,
         int rebalanceTimeoutMs,
-        String clientId,
-        String clientHost,
         List<String> subscribedTopicNames,
         String subscribedTopicRegex,
         String assignorName,
@@ -1861,8 +1857,8 @@ public class GroupMetadataManager {
             .maybeUpdateServerAssignorName(Optional.ofNullable(assignorName))
             .maybeUpdateSubscribedTopicNames(Optional.ofNullable(subscribedTopicNames))
             .maybeUpdateSubscribedTopicRegex(Optional.ofNullable(subscribedTopicRegex))
-            .setClientId(clientId)
-            .setClientHost(clientHost)
+            .setClientId(context.clientId())
+            .setClientHost(context.clientAddress.toString())
             .setClassicMemberMetadata(null)
             .build();
 
@@ -2665,7 +2661,7 @@ public class GroupMetadataManager {
 
         List<Action> actions = topicNameCount.entrySet().stream().map(entry -> {
             ResourcePattern resource = new ResourcePattern(TOPIC, entry.getKey(), LITERAL);
-            return new Action(DESCRIBE, resource, entry.getValue(), true, true);
+            return new Action(DESCRIBE, resource, entry.getValue(), true, false);
         }).collect(Collectors.toList());
 
         List<AuthorizationResult> authorizationResults = authorizer.get().authorize(context, actions);
@@ -3859,8 +3855,6 @@ public class GroupMetadataManager {
                 request.instanceId(),
                 request.rackId(),
                 request.rebalanceTimeoutMs(),
-                context.clientId(),
-                context.clientAddress.toString(),
                 request.subscribedTopicNames(),
                 request.subscribedTopicRegex(),
                 request.serverAssignor(),
