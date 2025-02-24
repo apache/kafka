@@ -71,7 +71,7 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
     public static final String GROUP_COUNT_PROTOCOL_TAG = "protocol";
     public static final String SHARE_GROUP_PROTOCOL_TAG = GROUP_COUNT_PROTOCOL_TAG;
     public static final String CONSUMER_GROUP_COUNT_METRIC_NAME = "consumer-group-count";
-    public static final String SHARE_GROUP_COUNT_METRIC_NAME = "group-count";
+    public static final String SHARE_GROUP_COUNT_METRIC_NAME = "share-group-count";
     public static final String CONSUMER_GROUP_COUNT_STATE_TAG = "state";
     public static final String SHARE_GROUP_COUNT_STATE_TAG = CONSUMER_GROUP_COUNT_STATE_TAG;
     public static final String STREAMS_GROUP_COUNT_METRIC_NAME = "streams-group-count";
@@ -172,34 +172,31 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
         );
 
         shareGroupCountMetricName = metrics.metricName(
-            SHARE_GROUP_COUNT_METRIC_NAME,
+            GROUP_COUNT_METRIC_NAME,
             METRICS_GROUP,
             "The total number of share groups.",
-            Collections.singletonMap(SHARE_GROUP_PROTOCOL_TAG, Group.GroupType.SHARE.toString())
+            Map.of(SHARE_GROUP_PROTOCOL_TAG, Group.GroupType.SHARE.toString())
         );
 
         shareGroupCountEmptyMetricName = metrics.metricName(
             SHARE_GROUP_COUNT_METRIC_NAME,
             METRICS_GROUP,
             "The number of share groups in empty state.",
-            SHARE_GROUP_PROTOCOL_TAG, Group.GroupType.SHARE.toString(),
-            SHARE_GROUP_COUNT_STATE_TAG, ShareGroup.ShareGroupState.EMPTY.toString()
+            Map.of(SHARE_GROUP_COUNT_STATE_TAG, ShareGroup.ShareGroupState.EMPTY.toString())
         );
 
         shareGroupCountStableMetricName = metrics.metricName(
             SHARE_GROUP_COUNT_METRIC_NAME,
             METRICS_GROUP,
             "The number of share groups in stable state.",
-            SHARE_GROUP_PROTOCOL_TAG, Group.GroupType.SHARE.toString(),
-            SHARE_GROUP_COUNT_STATE_TAG, ShareGroup.ShareGroupState.STABLE.toString()
+            Map.of(SHARE_GROUP_COUNT_STATE_TAG, ShareGroup.ShareGroupState.STABLE.toString())
         );
 
         shareGroupCountDeadMetricName = metrics.metricName(
             SHARE_GROUP_COUNT_METRIC_NAME,
             METRICS_GROUP,
             "The number of share groups in dead state.",
-            SHARE_GROUP_PROTOCOL_TAG, Group.GroupType.SHARE.toString(),
-            SHARE_GROUP_COUNT_STATE_TAG, ShareGroup.ShareGroupState.DEAD.toString()
+            Map.of(SHARE_GROUP_COUNT_STATE_TAG, ShareGroup.ShareGroupState.DEAD.toString())
         );
 
         streamsGroupCountMetricName = metrics.metricName(

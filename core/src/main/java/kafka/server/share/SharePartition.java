@@ -621,6 +621,7 @@ public class SharePartition {
      * @param maxFetchRecords    The maximum number of records that should be acquired, this is a soft
      *                           limit and the method might acquire more records than the maxFetchRecords,
      *                           if the records are already part of the same fetch batch.
+*    * @param fetchOffset        The fetch offset for which the records are fetched.
      * @param fetchPartitionData The fetched records for the share partition.
      * @return The acquired records for the share partition.
      */
@@ -629,6 +630,7 @@ public class SharePartition {
         String memberId,
         int batchSize,
         int maxFetchRecords,
+        long fetchOffset /* TODO: Use fetch offset to archive any stale batches due to compaction */,
         FetchPartitionData fetchPartitionData
     ) {
         log.trace("Received acquire request for share partition: {}-{} memberId: {}", groupId, topicIdPartition, memberId);

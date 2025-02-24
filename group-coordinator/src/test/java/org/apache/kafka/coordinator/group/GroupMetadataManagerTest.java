@@ -85,6 +85,7 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.modern.Assignment;
 import org.apache.kafka.coordinator.group.modern.MemberAssignmentImpl;
 import org.apache.kafka.coordinator.group.modern.MemberState;
+import org.apache.kafka.coordinator.group.modern.SubscriptionCount;
 import org.apache.kafka.coordinator.group.modern.TopicMetadata;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupBuilder;
@@ -104,6 +105,11 @@ import org.apache.kafka.coordinator.group.streams.TasksTuple;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
+import org.apache.kafka.server.share.persister.DeleteShareGroupStateParameters;
+import org.apache.kafka.server.share.persister.GroupTopicPartitionData;
+import org.apache.kafka.server.share.persister.PartitionFactory;
+import org.apache.kafka.server.share.persister.PartitionIdData;
+import org.apache.kafka.server.share.persister.TopicData;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -115,6 +121,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -170,6 +177,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -16857,6 +16865,50 @@ public class GroupMetadataManagerTest {
             ),
             result.records()
         );
+    }
+
+    @Test
+    public void testSharePartitionDeleteRequest() {
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+        assignor.prepareGroupAssignment(new GroupAssignment(Collections.emptyMap()));
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
+            .build();
+
+        Uuid t1Uuid = Uuid.randomUuid();
+        Uuid t2Uuid = Uuid.randomUuid();
+        MetadataImage image = spy(new MetadataImageBuilder()
+            .addTopic(t1Uuid, "t1", 2)
+            .addTopic(t2Uuid, "t2", 2)
+            .build());
+
+        context.groupMetadataManager.onNewMetadataImage(image, mock(MetadataDelta.class));
+
+        ShareGroup shareGroup = mock(ShareGroup.class);
+        Map<String, SubscriptionCount> topicMap = new LinkedHashMap<>();
+        topicMap.put("t1", mock(SubscriptionCount.class));
+        topicMap.put("t2", mock(SubscriptionCount.class));
+        when(shareGroup.subscribedTopicNames()).thenReturn(topicMap);
+        when(shareGroup.groupId()).thenReturn("share-group");
+        when(shareGroup.isEmpty()).thenReturn(false);
+
+        DeleteShareGroupStateParameters expectedParameters = new DeleteShareGroupStateParameters.Builder()
+            .setGroupTopicPartitionData(new GroupTopicPartitionData.Builder<PartitionIdData>()
+                .setGroupId("share-group")
+                .setTopicsData(List.of(
+                    new TopicData<>(t1Uuid, List.of(PartitionFactory.newPartitionIdData(0), PartitionFactory.newPartitionIdData(1))),
+                    new TopicData<>(t2Uuid, List.of(PartitionFactory.newPartitionIdData(0), PartitionFactory.newPartitionIdData(1)))
+                ))
+                .build()
+            )
+            .build();
+        Optional<DeleteShareGroupStateParameters> params = context.groupMetadataManager.shareGroupBuildPartitionDeleteRequest(shareGroup);
+        assertTrue(params.isPresent());
+        assertEquals(expectedParameters.groupTopicPartitionData(), params.get().groupTopicPartitionData());
+
+        verify(image, times(1)).topics();
+        verify(shareGroup, times(1)).subscribedTopicNames();
+        verify(shareGroup, times(1)).groupId();
     }
 
     private static void checkJoinGroupResponse(
