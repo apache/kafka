@@ -18,33 +18,32 @@
 package kafka.api
 
 import com.yammer.metrics.core.Gauge
-
-import java.util.{Collections, Properties}
-import java.util.concurrent.ExecutionException
-import org.apache.kafka.metadata.authorizer.StandardAuthorizer
 import kafka.utils._
 import org.apache.kafka.clients.admin.Admin
-import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, ConsumerRecords}
-import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
-import org.apache.kafka.common.acl._
+import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, GroupProtocol}
+import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.acl.AclOperation._
 import org.apache.kafka.common.acl.AclPermissionType._
+import org.apache.kafka.common.acl._
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
-import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors.{GroupAuthorizationException, TopicAuthorizationException}
-import org.apache.kafka.common.resource._
-import org.apache.kafka.common.resource.ResourceType._
 import org.apache.kafka.common.resource.PatternType.{LITERAL, PREFIXED}
+import org.apache.kafka.common.resource.ResourceType._
+import org.apache.kafka.common.resource._
 import org.apache.kafka.common.security.auth._
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
+import org.apache.kafka.metadata.authorizer.StandardAuthorizer
 import org.apache.kafka.security.authorizer.AclEntry.WILDCARD_HOST
 import org.apache.kafka.server.config.{ReplicationConfigs, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{CsvSource, MethodSource}
+import org.junit.jupiter.params.provider.MethodSource
 
+import java.util.Properties
+import java.util.concurrent.ExecutionException
 import scala.jdk.CollectionConverters._
 
 /**
@@ -430,7 +429,14 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
 
     // Verify that records are consumed if all topics are authorized
     consumer.subscribe(List(topic).asJava)
-    consumeRecordsIgnoreOneAuthorizationException(consumer)
+    if (groupProtocol.equals(GroupProtocol.CLASSIC)) {
+      consumeRecordsIgnoreOneAuthorizationException(consumer)
+    } else {
+      TestUtils.waitUntilTrue(() => {
+        consumeRecordsIgnoreAuthorizationException(consumer)
+        true
+      }, "Consumer didn't manage to consume the records within timeout.")
+    }
   }
 
   private def noConsumeWithoutDescribeAclSetup(): Unit = {
@@ -559,6 +565,18 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
       consumeRecords(consumer, numRecords, startingOffset, topic)
     } catch {
       case _: TopicAuthorizationException => consumeRecords(consumer, numRecords, startingOffset, topic)
+    }
+  }
+
+  // Consume records, ignoring TopicAuthorization exception from previously sent request.
+  private def consumeRecordsIgnoreAuthorizationException(consumer: Consumer[Array[Byte], Array[Byte]],
+    numRecords: Int = 1,
+    startingOffset: Int = 0,
+    topic: String = topic): Unit = {
+    try {
+      consumeRecords(consumer, numRecords, startingOffset, topic)
+    } catch {
+      case _: TopicAuthorizationException => consumeRecordsIgnoreAuthorizationException(consumer, numRecords, startingOffset, topic)
     }
   }
 }
