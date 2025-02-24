@@ -2004,7 +2004,7 @@ class UnifiedLogTest {
       assertThrows(
         expectedException.get(),
         () => log.appendAsFollower(records, Int.MaxValue)
-      );
+      )
     } else {
         log.appendAsFollower(records, Int.MaxValue)
     }

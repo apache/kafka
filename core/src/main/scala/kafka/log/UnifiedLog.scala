@@ -1109,7 +1109,11 @@ class UnifiedLog(@volatile var logStartOffset: Long,
        */
       skipRemainingBatches = skipRemainingBatches || hasHigherPartitionLeaderEpoch(batch, origin, leaderEpoch);
       if (skipRemainingBatches) {
-        info(s"Skipping batch $batch because origin is $origin and leader epoch is $leaderEpoch")
+        info(
+          s"Skipping batch $batch because of higher partition leader epoch " +
+          s"${batch.partitionLeaderEpoch} for an origin of $origin and a leader epoch of " +
+          s"$leaderEpoch"
+        )
       } else {
         // update the first offset if on the first message. For magic versions older than 2, we use the last offset
         // to avoid the need to decompress the data (the last offset can be obtained directly from the wrapper message).

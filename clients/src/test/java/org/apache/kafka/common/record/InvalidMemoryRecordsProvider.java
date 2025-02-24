@@ -42,7 +42,7 @@ public final class InvalidMemoryRecordsProvider implements ArgumentsProvider {
     @Override
     public Stream<? extends Arguments> provideArguments(ExtensionContext context) {
         return Stream.of(
-            Arguments.of(MemoryRecords.readableRecords(notEnoughtBytes()), Optional.empty()),
+            Arguments.of(MemoryRecords.readableRecords(notEnoughBytes()), Optional.empty()),
             Arguments.of(MemoryRecords.readableRecords(recordsSizeTooSmall()), Optional.of(CorruptRecordException.class)),
             Arguments.of(MemoryRecords.readableRecords(notEnoughBytesToMagic()), Optional.empty()),
             Arguments.of(MemoryRecords.readableRecords(negativeMagic()), Optional.of(CorruptRecordException.class)),
@@ -51,7 +51,7 @@ public final class InvalidMemoryRecordsProvider implements ArgumentsProvider {
         );
     }
 
-    private static ByteBuffer notEnoughtBytes() {
+    private static ByteBuffer notEnoughBytes() {
         var buffer = ByteBuffer.allocate(Records.LOG_OVERHEAD - 1);
         buffer.limit(buffer.capacity());
 
