@@ -1359,22 +1359,6 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.logger.info("Running alter message format command...\n%s" % cmd)
         node.account.ssh(cmd)
 
-    def set_unclean_leader_election(self, topic, value=True, node=None):
-        if node is None:
-            node = self.nodes[0]
-        if value is True:
-            self.logger.info("Enabling unclean leader election for topic %s", topic)
-        else:
-            self.logger.info("Disabling unclean leader election for topic %s", topic)
-
-        force_use_zk_connection = not self.all_nodes_configs_command_uses_bootstrap_server()
-
-        cmd = fix_opts_for_new_jvm(node)
-        cmd += "%s --entity-name %s --entity-type topics --alter --add-config unclean.leader.election.enable=%s" % \
-              (self.kafka_configs_cmd_with_optional_security_settings(node, force_use_zk_connection), topic, str(value).lower())
-        self.logger.info("Running alter unclean leader command...\n%s" % cmd)
-        node.account.ssh(cmd)
-
     def kafka_acls_cmd_with_optional_security_settings(self, node, force_use_zk_connection, kafka_security_protocol = None, override_command_config = None):
         if self.quorum_info.using_kraft and not self.quorum_info.has_brokers:
             raise Exception("Must invoke kafka-acls against a broker, not a KRaft controller")
