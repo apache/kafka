@@ -122,6 +122,14 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
         return assignment;
     }
 
+    /**
+     * This function computes the new assignment for a homogeneous group.
+     * @param groupSpec - The group metadata specifications.
+     * @param subscribedTopicIds - The set of all the subscribed topic ids for the group.
+     * @param targetPartitions - The list of all topic partitions that need assignment.
+     * @param currentAssignment - The current assignment for subscribed topic partitions to memberIds.
+     * @return the new partition assignment for the members of the group.
+     */
     private GroupAssignment newAssignmentHomogeneous(
         GroupSpec groupSpec,
         Set<Uuid> subscribedTopicIds,
@@ -166,6 +174,13 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
         return groupAssignment(finalAssignment, groupSpec.memberIds());
     }
 
+    /**
+     * This function computes the new assignment for a heterogeneous group.
+     * @param groupSpec - The group metadata specifications.
+     * @param memberToPartitionsSubscription - The member to subscribed topic partitions map.
+     * @param currentAssignment - The current assignment for subscribed topic partitions to memberIds.
+     * @return the new partition assignment for the members of the group.
+     */
     private GroupAssignment newAssignmentHeterogeneous(
         GroupSpec groupSpec,
         Map<String, List<TopicIdPartition>> memberToPartitionsSubscription,
@@ -240,7 +255,7 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
     /**
      * This function updates assignment by hashing the member IDs of the members and maps the partitions assigned to the
      * members based on the hash. This gives approximately even balance.
-     * @param unassignedPartitions - the subscribed topic partitions.
+     * @param unassignedPartitions - the subscribed topic partitions which needs assignment.
      * @param memberIds - the member ids to which the topic partitions need to be assigned.
      * @param assignment - the existing assignment by topic partition. We need to pass it as a parameter because this
      *                   function would be called multiple times for heterogeneous assignment.
