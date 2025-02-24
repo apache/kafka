@@ -1107,11 +1107,11 @@ class UnifiedLog(@volatile var logStartOffset: Long,
        * response and the replica truncating and appending to the log. The replicating replica resolves this issue by only
        * persisting up to the current leader epoch used in the fetch request. See KAFKA-18723 for more details.
        */
-      skipRemainingBatches = skipRemainingBatches || hasHigherPartitionLeaderEpoch(batch, origin, leaderEpoch);
+      skipRemainingBatches = skipRemainingBatches || hasHigherPartitionLeaderEpoch(batch, origin, leaderEpoch)
       if (skipRemainingBatches) {
         info(
-          s"Skipping batch $batch because of higher partition leader epoch " +
-          s"${batch.partitionLeaderEpoch} for an origin of $origin and a leader epoch of " +
+          s"Skipping batch $batch from an origin of $origin because its partition leader epoch " +
+          s"${batch.partitionLeaderEpoch} is higher than the replica's current leader epoch " +
           s"$leaderEpoch"
         )
       } else {
