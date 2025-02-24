@@ -77,8 +77,6 @@ class AutoTopicCreationManagerTest {
     config = KafkaConfig.fromProps(props)
     val aliveBrokers = Seq(new Node(0, "host0", 0), new Node(1, "host1", 1))
 
-    Mockito.reset(metadataCache, brokerToController, groupCoordinator, transactionCoordinator, shareCoordinator)
-
     Mockito.when(metadataCache.getAliveBrokerNodes(any(classOf[ListenerName]))).thenReturn(aliveBrokers)
   }
 
@@ -223,7 +221,7 @@ class AutoTopicCreationManagerTest {
       "stream-topic-1" -> new CreatableTopic().setName("stream-topic-1").setNumPartitions(3).setReplicationFactor(2).setConfigs(topicConfig),
       "stream-topic-2" -> new CreatableTopic().setName("stream-topic-2").setNumPartitions(1).setReplicationFactor(1)
     )
-    val requestContext = initializeRequestContextWithUserPrinciple()
+    val requestContext = initializeRequestContextWithUserPrincipal()
 
     autoTopicCreationManager = new DefaultAutoTopicCreationManager(
       config,
@@ -258,7 +256,7 @@ class AutoTopicCreationManagerTest {
   @Test
   def testCreateStreamsInternalTopicsWithEmptyTopics(): Unit = {
     val topics = Map.empty[String, CreatableTopic]
-    val requestContext = initializeRequestContextWithUserPrinciple()
+    val requestContext = initializeRequestContextWithUserPrincipal()
 
     autoTopicCreationManager = new DefaultAutoTopicCreationManager(
       config,
@@ -279,7 +277,7 @@ class AutoTopicCreationManagerTest {
     val topics = Map(
       "stream-topic-1" -> new CreatableTopic().setName("stream-topic-1").setNumPartitions(-1).setReplicationFactor(-1)
     )
-    val requestContext = initializeRequestContextWithUserPrinciple()
+    val requestContext = initializeRequestContextWithUserPrincipal()
 
     autoTopicCreationManager = new DefaultAutoTopicCreationManager(
       config,
@@ -311,11 +309,11 @@ class AutoTopicCreationManagerTest {
   }
 
   @Test
-  def testCreateStreamsInternalTopicsPassesPrinciple(): Unit = {
+  def testCreateStreamsInternalTopicsPassesPrincipal(): Unit = {
     val topics = Map(
       "stream-topic-1" -> new CreatableTopic().setName("stream-topic-1").setNumPartitions(-1).setReplicationFactor(-1)
     )
-    val requestContext = initializeRequestContextWithUserPrinciple()
+    val requestContext = initializeRequestContextWithUserPrincipal()
 
     autoTopicCreationManager = new DefaultAutoTopicCreationManager(
       config,
@@ -334,7 +332,7 @@ class AutoTopicCreationManagerTest {
     assertEquals(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user"), SecurityUtils.parseKafkaPrincipal(Utils.utf8(capturedRequest.requestPrincipal)))
   }
 
-  private def initializeRequestContextWithUserPrinciple(): RequestContext = {
+  private def initializeRequestContextWithUserPrincipal(): RequestContext = {
     val userPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user")
     val principalSerde = new KafkaPrincipalSerde {
       override def serialize(principal: KafkaPrincipal): Array[Byte] = {

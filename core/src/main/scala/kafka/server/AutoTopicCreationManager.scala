@@ -105,9 +105,7 @@ class DefaultAutoTopicCreationManager(
       }
     }
 
-    if (topics.isEmpty) {
-      Seq.empty
-    } else {
+    if (topics.nonEmpty) {
       sendCreateTopicRequest(topics, Some(requestContext))
     }
   }
