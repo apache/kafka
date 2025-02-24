@@ -395,6 +395,22 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     /**
+     * Handles a ShareGroupHeartbeat request.
+     *
+     * @param context The request context.
+     * @param request The actual ShareGroupHeartbeat request.
+     *
+     * @return A Result containing a pair of ShareGroupHeartbeat response maybe InitializeShareGroupStateParameters
+     *         and a list of records to update the state machine.
+     */
+    public CoordinatorResult<Void, CoordinatorRecord> initializeShareGroupState(
+        RequestContext context,
+        ShareGroupHeartbeatRequestData request
+    ) {
+        return groupMetadataManager.initializeShareGroupState(context, request);
+    }
+
+    /**
      * Handles a JoinGroup request.
      *
      * @param context The request context.

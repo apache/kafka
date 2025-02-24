@@ -2301,9 +2301,6 @@ public class GroupMetadataManager {
             List<TopicImage> images = new ArrayList<>(subscribedTopicNames.size());
             subscribedTopicNames.forEach(topicName -> images.add(metadataImage.topics().getTopic(topicName)));
 
-            // Add new share partition metadata records.
-            records.add(newShareGroupPartitionMetadataRecord(groupId, images, List.of()));
-
             initializeRequest = new InitializeShareGroupStateParameters.Builder().setGroupTopicPartitionData(
                 new GroupTopicPartitionData<>(groupId, images.stream()
                     .map(image -> new TopicData<>(image.id(), image.partitions().keySet().stream()
@@ -3901,6 +3898,26 @@ public class GroupMetadataManager {
             context.clientId(),
             context.clientAddress.toString(),
             request.subscribedTopicNames());
+    }
+
+    public CoordinatorResult<Void, CoordinatorRecord> initializeShareGroupState(
+        RequestContext context,
+        ShareGroupHeartbeatRequestData request
+    ) {
+        // Should be present
+        ShareGroup group = ((ShareGroup) groups.get(request.groupId()));
+        List<String> subscribedTopicNames = request.subscribedTopicNames();
+
+        if (subscribedTopicNames != null) {
+            List<TopicImage> images = new ArrayList<>(subscribedTopicNames.size());
+            subscribedTopicNames.forEach(topicName -> images.add(metadataImage.topics().getTopic(topicName)));
+            return new CoordinatorResult<>(
+                List.of(newShareGroupPartitionMetadataRecord(group.groupId(), images, List.of())),
+                null
+            );
+        }
+
+        return new CoordinatorResult<>(List.of(), null);
     }
 
     /**

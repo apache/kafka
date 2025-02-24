@@ -400,7 +400,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             // before we start the persister initialize phase.
             result -> {
                 if (result.getValue().isPresent()) {
-                    return persisterInitialize(result.getValue().get(), result.getKey());
+                    return persisterInitialize(context, request, result.getValue().get(), result.getKey());
                 }
                 return CompletableFuture.completedFuture(result.getKey());
             }
@@ -416,23 +416,43 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     private CompletableFuture<ShareGroupHeartbeatResponseData> persisterInitialize(
+        RequestContext context,
+        ShareGroupHeartbeatRequestData heartbeatRequestData,
         InitializeShareGroupStateParameters request,
         ShareGroupHeartbeatResponseData defaultResponse
     ) {
         return persister.initializeState(request)
-            .thenCompose(response -> {
+            .thenApply(response -> {
                 for (TopicData<PartitionErrorData> topicData : response.topicsData()) {
                     Optional<PartitionErrorData> errData = topicData.partitions().stream().filter(partition -> partition.errorCode() != Errors.NONE.code()).findAny();
                     if (errData.isPresent()) {
-                        return CompletableFuture.completedFuture(new ShareGroupHeartbeatResponseData()
-                            .setErrorCode(errData.get().errorCode())
-                            .setErrorMessage(errData.get().errorMessage())
-                        );
+                        return errData.get().errorCode();
                     }
                 }
-                return CompletableFuture.completedFuture(defaultResponse);
-            })
-            .exceptionally(exception -> {
+                return Errors.NONE.code();
+            }).thenCompose(errorCode -> {
+                // Let us update the share group state partition metadata
+                if (errorCode == Errors.NONE.code()) {
+                    return runtime.scheduleWriteOperation(
+                        "initialze-share-group-state",
+                        topicPartitionFor(request.groupTopicPartitionData().groupId()),
+                        Duration.ofMillis(config.offsetCommitTimeoutMs()),
+                        coordinator -> coordinator.initializeShareGroupState(context, heartbeatRequestData)
+                    ).thenApply(
+                        __ -> defaultResponse
+                    ).exceptionally(exception -> {
+                        log.error("Unable to  write share group state partition metadata for {}", request.groupTopicPartitionData().groupId(), exception);
+                        return new ShareGroupHeartbeatResponseData()
+                            .setErrorCode(Errors.forException(exception).code());
+                    });
+                } else {
+                    log.error("Received error while calling initialize state on persister {} {}", request, errorCode);
+                    return CompletableFuture.completedFuture(
+                        new ShareGroupHeartbeatResponseData()
+                            .setErrorCode(errorCode)
+                    );
+                }
+            }).exceptionally(exception -> {
                 GroupTopicPartitionData<PartitionStateData> gtp = request.groupTopicPartitionData();
                 log.error("Unable to initialize share group state {}, {}", gtp.groupId(), gtp.topicsData(), exception);
                 return new ShareGroupHeartbeatResponseData()
