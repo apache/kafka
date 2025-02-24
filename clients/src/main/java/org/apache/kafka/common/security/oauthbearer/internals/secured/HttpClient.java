@@ -35,12 +35,12 @@ import java.util.Optional;
 import javax.net.ssl.HttpsURLConnection;
 
 /**
- * <code>OAuthBearerHttpClient</code> is a lightweight client that can be used by callback handlers to
+ * <code>HttpClient</code> is a lightweight client that can be used by callback handlers to
  * communicate with an OAuth/OIDC provider directly via HTTP.
  */
-public class OAuthBearerHttpClient implements Closeable {
+public class HttpClient implements Closeable {
 
-    private static final Logger log = LoggerFactory.getLogger(OAuthBearerHttpClient.class);
+    private static final Logger log = LoggerFactory.getLogger(HttpClient.class);
 
     private final String url;
 
@@ -50,14 +50,14 @@ public class OAuthBearerHttpClient implements Closeable {
 
     private final Optional<Integer> readTimeoutMs;
 
-    public OAuthBearerHttpClient(String url) {
+    public HttpClient(String url) {
         this(url, Optional.empty(), Optional.empty(), Optional.empty());
     }
 
-    public OAuthBearerHttpClient(String url,
-                                 Optional<SslResource> sslResource,
-                                 Optional<Integer> connectTimeoutMs,
-                                 Optional<Integer> readTimeoutMs) {
+    public HttpClient(String url,
+                      Optional<SslResource> sslResource,
+                      Optional<Integer> connectTimeoutMs,
+                      Optional<Integer> readTimeoutMs) {
         this.url = url;
         this.sslResource = sslResource;
         this.connectTimeoutMs = connectTimeoutMs;

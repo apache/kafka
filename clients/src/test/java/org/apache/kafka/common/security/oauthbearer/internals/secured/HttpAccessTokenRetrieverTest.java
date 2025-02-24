@@ -116,7 +116,7 @@ public class HttpAccessTokenRetrieverTest extends OAuthBearerTest {
                                                          int responseCode,
                                                          String errorResponse,
                                                          String substringMatch) {
-        OAuthBearerHttpClient.HttpResponse response = new OAuthBearerHttpClient.HttpResponse(
+        HttpClient.HttpResponse response = new HttpClient.HttpResponse(
             responseCode,
             Optional.empty(),
             Optional.of(errorResponse.getBytes(StandardCharsets.UTF_8))

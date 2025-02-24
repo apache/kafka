@@ -37,7 +37,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-public class OAuthBearerHttpClientTest extends OAuthBearerTest {
+public class HttpClientTest extends OAuthBearerTest {
 
     @Test
     public void testPost() throws IOException {
@@ -70,7 +70,7 @@ public class OAuthBearerHttpClientTest extends OAuthBearerTest {
         r.nextBytes(expected);
         InputStream in = new ByteArrayInputStream(expected);
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        OAuthBearerHttpClient.copy(in, out);
+        HttpClient.copy(in, out);
         assertArrayEquals(expected, out.toByteArray());
     }
 
@@ -79,14 +79,14 @@ public class OAuthBearerHttpClientTest extends OAuthBearerTest {
         try (InputStream mockedIn = mock(InputStream.class)) {
             OutputStream out = new ByteArrayOutputStream();
             when(mockedIn.read(any(byte[].class))).thenThrow(new IOException());
-            assertThrows(IOException.class, () -> OAuthBearerHttpClient.copy(mockedIn, out));
+            assertThrows(IOException.class, () -> HttpClient.copy(mockedIn, out));
         }
     }
 
     private Optional<String> post(HttpURLConnection con) throws IOException {
-        OAuthBearerHttpClient client = new OAuthBearerHttpClient("URL");
+        HttpClient client = new HttpClient("URL");
         client.write(con, new byte[0]);
-        OAuthBearerHttpClient.HttpResponse response = client.read(con);
+        HttpClient.HttpResponse response = client.read(con);
         return response.responseBody.map(bytes -> new String(bytes, StandardCharsets.UTF_8));
     }
 }

@@ -29,6 +29,7 @@ import javax.security.auth.login.AppConfigurationEntry;
 
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_GRANT_TYPE;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.JwtBearerRequestFormatter.GRANT_TYPE;
 
 public class DefaultAccessTokenRetriever implements AccessTokenRetriever {
 
@@ -44,7 +45,7 @@ public class DefaultAccessTokenRetriever implements AccessTokenRetriever {
         } else {
             String grantType = cu.validateString(SASL_OAUTHBEARER_TOKEN_ENDPOINT_GRANT_TYPE, false);
 
-            if (grantType != null && grantType.equalsIgnoreCase(JwtBearerAccessTokenRetriever.GRANT_TYPE)) {
+            if (grantType != null && grantType.equalsIgnoreCase(GRANT_TYPE)) {
                 delegate = new JwtBearerAccessTokenRetriever();
             } else {
                 delegate = new ClientCredentialsAccessTokenRetriever();

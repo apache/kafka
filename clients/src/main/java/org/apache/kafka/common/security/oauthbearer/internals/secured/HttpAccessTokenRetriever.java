@@ -17,6 +17,7 @@
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.utils.Utils;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -63,7 +64,7 @@ public abstract class HttpAccessTokenRetriever implements AccessTokenRetriever {
 
     private long retryBackoffMaxMs;
 
-    private OAuthBearerHttpClient client;
+    private HttpClient client;
 
     static {
         // This does not have to be an exhaustive list. There are other HTTP codes that
@@ -104,10 +105,10 @@ public abstract class HttpAccessTokenRetriever implements AccessTokenRetriever {
         Optional<Integer> connectTimeoutMs = Optional.ofNullable(cu.validateInteger(SASL_LOGIN_CONNECT_TIMEOUT_MS, false));
         Optional<Integer> readTimeoutMs = Optional.ofNullable(cu.validateInteger(SASL_LOGIN_READ_TIMEOUT_MS, false));
 
-        client = new OAuthBearerHttpClient(tokenEndpointUrl, sslResource, connectTimeoutMs, readTimeoutMs);
+        client = new HttpClient(tokenEndpointUrl, sslResource, connectTimeoutMs, readTimeoutMs);
     }
 
-    protected abstract RequestFormatter requestFormatter();
+    protected abstract HttpRequestFormatter requestFormatter();
 
     /**
      * Retrieves a JWT access token in its serialized three-part form. The implementation
@@ -126,8 +127,8 @@ public abstract class HttpAccessTokenRetriever implements AccessTokenRetriever {
 
     @Override
     public String retrieve() throws IOException {
-        RequestFormatter requestFormatter = requestFormatter();
-        byte[] requestBody = requestFormatter.formatBody();
+        HttpRequestFormatter requestFormatter = requestFormatter();
+        byte[] requestBody = Utils.utf8(requestFormatter.formatBody());
         Map<String, String> headers = requestFormatter.formatHeaders();
 
         Retry<String> retry = new Retry<>(retryBackoffMs, retryBackoffMaxMs);
@@ -139,7 +140,7 @@ public abstract class HttpAccessTokenRetriever implements AccessTokenRetriever {
 
                 try {
                     con = client.connect(tokenEndpointUrl, headers, Optional.of(requestBody.length));
-                    OAuthBearerHttpClient.HttpResponse httpResponse = client.post(headers, requestBody);
+                    HttpClient.HttpResponse httpResponse = client.post(headers, requestBody);
                     return handleOutput(tokenEndpointUrl, httpResponse);
                 } catch (IOException e) {
                     throw new ExecutionException(e);
@@ -159,7 +160,7 @@ public abstract class HttpAccessTokenRetriever implements AccessTokenRetriever {
         return parseAccessToken(responseBody);
     }
 
-    static String handleOutput(String url, OAuthBearerHttpClient.HttpResponse httpResponse) throws IOException {
+    static String handleOutput(String url, HttpClient.HttpResponse httpResponse) throws IOException {
         int responseCode = httpResponse.responseCode;
         Optional<String> responseBodyOpt = httpResponse.responseBody.map(b -> new String(b, StandardCharsets.UTF_8));
         String errorMessage = formatErrorMessage(
@@ -264,12 +265,5 @@ public abstract class HttpAccessTokenRetriever implements AccessTokenRetriever {
             throw new IllegalArgumentException(String.format("The value for %s must not contain only whitespace", name));
 
         return value;
-    }
-
-    public interface RequestFormatter {
-
-        byte[] formatBody();
-
-        Map<String, String> formatHeaders();
     }
 }
