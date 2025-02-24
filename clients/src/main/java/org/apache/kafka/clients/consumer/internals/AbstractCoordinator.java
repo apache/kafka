@@ -134,7 +134,7 @@ public abstract class AbstractCoordinator implements Closeable {
     private final GroupCoordinatorMetrics sensors;
     private final GroupRebalanceConfig rebalanceConfig;
     private final Optional<ClientTelemetryReporter> clientTelemetryReporter;
-    private final Supplier<AbstractHeartbeatThread> heartbeatThreadSupplier;
+    private final Supplier<BaseHeartbeatThread> heartbeatThreadSupplier;
 
     protected final Time time;
     protected final ConsumerNetworkClient client;
@@ -144,7 +144,7 @@ public abstract class AbstractCoordinator implements Closeable {
     private String rejoinReason = "";
     private boolean rejoinNeeded = true;
     private boolean needsJoinPrepare = true;
-    private AbstractHeartbeatThread heartbeatThread = null;
+    private BaseHeartbeatThread heartbeatThread = null;
     private RequestFuture<ByteBuffer> joinFuture = null;
     private RequestFuture<Void> findCoordinatorFuture = null;
     private volatile RuntimeException fatalFindCoordinatorException = null;
@@ -176,7 +176,7 @@ public abstract class AbstractCoordinator implements Closeable {
                                String metricGrpPrefix,
                                Time time,
                                Optional<ClientTelemetryReporter> clientTelemetryReporter,
-                               Optional<Supplier<AbstractHeartbeatThread>> heartbeatThreadSupplier) {
+                               Optional<Supplier<BaseHeartbeatThread>> heartbeatThreadSupplier) {
         Objects.requireNonNull(rebalanceConfig.groupId,
                                "Expected a non-null group id for coordinator construction");
         this.rebalanceConfig = rebalanceConfig;
@@ -364,7 +364,7 @@ public abstract class AbstractCoordinator implements Closeable {
      */
     protected synchronized void pollHeartbeat(long now) {
         if (heartbeatThread != null) {
-            if (heartbeatThread.hasFailed()) {
+            if (heartbeatThread.isFailed()) {
                 // set the heartbeat thread to null and raise an exception. If the user catches it,
                 // the next call to ensureActiveGroup() will spawn a new heartbeat thread.
                 RuntimeException cause = heartbeatThread.failureCause();
@@ -384,7 +384,7 @@ public abstract class AbstractCoordinator implements Closeable {
         // we don't need to send heartbeats
         if (state.hasNotJoinedGroup())
             return Long.MAX_VALUE;
-        if (heartbeatThread != null && heartbeatThread.hasFailed()) {
+        if (heartbeatThread != null && heartbeatThread.isFailed()) {
             // if an exception occurs in the heartbeat thread, raise it.
             throw heartbeatThread.failureCause();
         }
@@ -426,7 +426,7 @@ public abstract class AbstractCoordinator implements Closeable {
     }
 
     private void closeHeartbeatThread() {
-        AbstractHeartbeatThread thread;
+        BaseHeartbeatThread thread;
         synchronized (this) {
             if (heartbeatThread == null)
                 return;
@@ -1336,8 +1336,8 @@ public abstract class AbstractCoordinator implements Closeable {
     /**
      * Visible for testing.
      */
-    protected boolean isHeartbeatThreadEnabled() {
-        return heartbeatThread != null && heartbeatThread.isEnabled();
+    protected BaseHeartbeatThread heartbeatThread() {
+        return heartbeatThread;
     }
 
     private class GroupCoordinatorMetrics {
@@ -1446,7 +1446,7 @@ public abstract class AbstractCoordinator implements Closeable {
         }
     }
 
-    private class HeartbeatThread extends AbstractHeartbeatThread {
+    private class HeartbeatThread extends BaseHeartbeatThread {
 
         private HeartbeatThread() {
             super(HEARTBEAT_THREAD_PREFIX + (rebalanceConfig.groupId.isEmpty() ? "" : " | " + rebalanceConfig.groupId), true);
@@ -1487,7 +1487,7 @@ public abstract class AbstractCoordinator implements Closeable {
                         // we do not need to heartbeat we are not part of a group yet;
                         // also if we already have fatal error, the client will be
                         // crashed soon, hence we do not need to continue heartbeating either
-                        if (state.hasNotJoinedGroup() || hasFailed()) {
+                        if (state.hasNotJoinedGroup() || isFailed()) {
                             disable();
                             continue;
                         }
@@ -1541,7 +1541,7 @@ public abstract class AbstractCoordinator implements Closeable {
                                             heartbeat.receiveHeartbeat();
                                         } else if (e instanceof FencedInstanceIdException) {
                                             log.error("Caught fenced group.instance.id {} error in heartbeat thread", rebalanceConfig.groupInstanceId);
-                                            setFailed(e);
+                                            setFailureCause(e);
                                         } else {
                                             heartbeat.failHeartbeat();
                                             // wake up the thread if it's sleeping to reschedule the heartbeat
@@ -1555,23 +1555,25 @@ public abstract class AbstractCoordinator implements Closeable {
                 }
             } catch (AuthenticationException e) {
                 log.error("An authentication error occurred in the heartbeat thread", e);
-                setFailed(e);
+                setFailureCause(e);
             } catch (GroupAuthorizationException e) {
                 log.error("A group authorization error occurred in the heartbeat thread", e);
-                setFailed(e);
+                setFailureCause(e);
             } catch (InterruptedException | InterruptException e) {
                 Thread.interrupted();
                 log.error("Unexpected interrupt received in heartbeat thread", e);
-                setFailed(new RuntimeException(e));
+                setFailureCause(new RuntimeException(e));
             } catch (Throwable e) {
                 log.error("Heartbeat thread failed due to unexpected error", e);
                 if (e instanceof RuntimeException)
-                    setFailed((RuntimeException) e);
+                    setFailureCause((RuntimeException) e);
                 else
-                    setFailed(new RuntimeException(e));
+                    setFailureCause(new RuntimeException(e));
             } finally {
                 log.debug("Heartbeat thread has closed");
-                close();
+                synchronized (AbstractCoordinator.this) {
+                    super.close();
+                }
             }
         }
     }

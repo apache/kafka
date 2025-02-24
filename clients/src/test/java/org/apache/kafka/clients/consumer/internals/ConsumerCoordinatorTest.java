@@ -3694,7 +3694,6 @@ public abstract class ConsumerCoordinatorTest {
             null,
             true,
             null,
-            Optional.empty(),
             Optional.empty());
 
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
@@ -3859,7 +3858,6 @@ public abstract class ConsumerCoordinatorTest {
                 null,
                 false,
                 null,
-                Optional.empty(),
                 Optional.empty());
     }
 
@@ -4086,7 +4084,7 @@ public abstract class ConsumerCoordinatorTest {
 
         coordinator = new ConsumerCoordinator(rebalanceConfig, new LogContext(), consumerClient,
                 Collections.singletonList(assignor), metadata, subscriptions,
-                metrics, consumerId + groupId, time, false, autoCommitIntervalMs, null, false, rackId, Optional.empty(), Optional.empty());
+                metrics, consumerId + groupId, time, false, autoCommitIntervalMs, null, false, rackId, Optional.empty());
     }
 
     private static MetadataResponse rackAwareMetadata(int numNodes,
@@ -4167,6 +4165,6 @@ public abstract class ConsumerCoordinatorTest {
             false,
             null,
             Optional.empty(),
-            Optional.of(MockHeartbeatThread::new));
+            Optional.of(() -> Mockito.mock(BaseHeartbeatThread.class)));
     }
 }

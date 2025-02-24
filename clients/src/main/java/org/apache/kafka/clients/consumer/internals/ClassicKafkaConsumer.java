@@ -230,8 +230,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                         this.interceptors,
                         config.getBoolean(THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED),
                         config.getString(ConsumerConfig.CLIENT_RACK_CONFIG),
-                        clientTelemetryReporter,
-                        Optional.empty());
+                        clientTelemetryReporter);
             }
             this.fetcher = new Fetcher<>(
                     logContext,
@@ -346,8 +345,8 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 interceptors,
                 throwOnStableOffsetNotSupported,
                 rackId,
-                clientTelemetryReporter,
-                Optional.empty());
+                clientTelemetryReporter
+            );
         } else {
             this.coordinator = null;
         }

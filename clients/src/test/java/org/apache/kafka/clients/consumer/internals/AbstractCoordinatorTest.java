@@ -86,6 +86,8 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
 public class AbstractCoordinatorTest {
     private static final ByteBuffer EMPTY_DATA = ByteBuffer.wrap(new byte[0]);
@@ -128,7 +130,7 @@ public class AbstractCoordinatorTest {
             Optional.empty(), Optional.empty());
     }
 
-    private void setupCoordinator(int retryBackoffMs, int retryBackoffMaxMs, int rebalanceTimeoutMs, Optional<String> groupInstanceId, Optional<Supplier<AbstractHeartbeatThread>> heartbeatThreadSupplier) {
+    private void setupCoordinator(int retryBackoffMs, int retryBackoffMaxMs, int rebalanceTimeoutMs, Optional<String> groupInstanceId, Optional<Supplier<BaseHeartbeatThread>> heartbeatThreadSupplier) {
         LogContext logContext = new LogContext();
         this.mockTime = new MockTime();
         ConsumerMetadata metadata = new ConsumerMetadata(retryBackoffMs, retryBackoffMaxMs, 60 * 60 * 1000L,
@@ -1438,7 +1440,7 @@ public class AbstractCoordinatorTest {
     @Test
     public void testWakeupAfterSyncGroupSentExternalCompletion() throws Exception {
         setupCoordinator(RETRY_BACKOFF_MS, RETRY_BACKOFF_MAX_MS, REBALANCE_TIMEOUT_MS,
-            Optional.empty(), Optional.of(MockHeartbeatThread::new));
+            Optional.empty(), Optional.of(() -> mock(BaseHeartbeatThread.class)));
 
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         mockClient.prepareResponse(joinGroupFollowerResponse(1, memberId, leaderId, Errors.NONE));
@@ -1459,7 +1461,8 @@ public class AbstractCoordinatorTest {
 
         assertEquals(1, coordinator.onJoinPrepareInvokes);
         assertEquals(0, coordinator.onJoinCompleteInvokes);
-        assertTrue(coordinator.isHeartbeatThreadEnabled());
+        assertNotNull(coordinator.heartbeatThread());
+        verify(coordinator.heartbeatThread()).enable();
 
         // the join group completes in this poll()
         consumerClient.poll(mockTime.timer(0));
@@ -1472,7 +1475,7 @@ public class AbstractCoordinatorTest {
     @Test
     public void testWakeupAfterSyncGroupReceived() throws Exception {
         setupCoordinator(RETRY_BACKOFF_MS, RETRY_BACKOFF_MAX_MS, REBALANCE_TIMEOUT_MS,
-            Optional.empty(), Optional.of(MockHeartbeatThread::new));
+            Optional.empty(), Optional.of(() -> mock(BaseHeartbeatThread.class)));
 
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         mockClient.prepareResponse(joinGroupFollowerResponse(1, memberId, leaderId, Errors.NONE));
@@ -1492,7 +1495,8 @@ public class AbstractCoordinatorTest {
 
         assertEquals(1, coordinator.onJoinPrepareInvokes);
         assertEquals(0, coordinator.onJoinCompleteInvokes);
-        assertTrue(coordinator.isHeartbeatThreadEnabled());
+        assertNotNull(coordinator.heartbeatThread());
+        verify(coordinator.heartbeatThread()).enable();
 
         coordinator.ensureActiveGroup();
 
@@ -1503,7 +1507,7 @@ public class AbstractCoordinatorTest {
     @Test
     public void testWakeupAfterSyncGroupReceivedExternalCompletion() throws Exception {
         setupCoordinator(RETRY_BACKOFF_MS, RETRY_BACKOFF_MAX_MS, REBALANCE_TIMEOUT_MS,
-            Optional.empty(), Optional.of(MockHeartbeatThread::new));
+            Optional.empty(), Optional.of(() -> mock(BaseHeartbeatThread.class)));
 
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         mockClient.prepareResponse(joinGroupFollowerResponse(1, memberId, leaderId, Errors.NONE));
@@ -1519,7 +1523,8 @@ public class AbstractCoordinatorTest {
 
         assertEquals(1, coordinator.onJoinPrepareInvokes);
         assertEquals(0, coordinator.onJoinCompleteInvokes);
-        assertTrue(coordinator.isHeartbeatThreadEnabled());
+        assertNotNull(coordinator.heartbeatThread());
+        verify(coordinator.heartbeatThread()).enable();
 
         coordinator.ensureActiveGroup();
 
@@ -1699,7 +1704,7 @@ public class AbstractCoordinatorTest {
                          ConsumerNetworkClient client,
                          Metrics metrics,
                          Time time,
-                         Optional<Supplier<AbstractHeartbeatThread>> heartbeatThreadSupplier) {
+                         Optional<Supplier<BaseHeartbeatThread>> heartbeatThreadSupplier) {
             super(rebalanceConfig, new LogContext(), client, metrics, METRIC_GROUP_PREFIX, time, Optional.empty(), heartbeatThreadSupplier);
         }
 

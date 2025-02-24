@@ -21,12 +21,17 @@ import org.apache.kafka.common.utils.KafkaThread;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
-public abstract class AbstractHeartbeatThread extends KafkaThread implements AutoCloseable {
+/**
+ * Base class for heartbeat threads. This class provides a mechanism to enable/disable the heartbeat thread.
+ * The heartbeat thread should check whether it's enabled by calling {@link BaseHeartbeatThread#isEnabled()}
+ * before sending heartbeat requests.
+ */
+public class BaseHeartbeatThread extends KafkaThread implements AutoCloseable {
     private final AtomicBoolean enabled = new AtomicBoolean(false);
     private final AtomicBoolean closed = new AtomicBoolean(false);
-    private final AtomicReference<RuntimeException> failed = new AtomicReference<>(null);
+    private final AtomicReference<RuntimeException> failureCause = new AtomicReference<>(null);
 
-    public AbstractHeartbeatThread(String name, boolean daemon) {
+    public BaseHeartbeatThread(String name, boolean daemon) {
         super(name, daemon);
     }
 
@@ -42,16 +47,16 @@ public abstract class AbstractHeartbeatThread extends KafkaThread implements Aut
         return enabled.get();
     }
 
-    public void setFailed(RuntimeException e) {
-        failed.set(e);
+    public void setFailureCause(RuntimeException e) {
+        failureCause.set(e);
     }
 
-    public boolean hasFailed() {
-        return failed.get() != null;
+    public boolean isFailed() {
+        return failureCause.get() != null;
     }
 
     public RuntimeException failureCause() {
-        return failed.get();
+        return failureCause.get();
     }
 
     public void close() {
