@@ -42,7 +42,6 @@ import org.junit.jupiter.params.provider.ValueSource
 import scala.collection.mutable.ListBuffer
 import scala.collection.{Map, Seq}
 import scala.jdk.CollectionConverters._
-import scala.jdk.javaapi.OptionConverters
 import scala.util.Using
 
 class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
@@ -246,7 +245,7 @@ class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
 
   private def waitForEpochChangeTo(topic: String, partition: Int, epoch: Int): Unit = {
     TestUtils.waitUntilTrue(() => {
-      OptionConverters.toScala(brokers(0).metadataCache.getLeaderAndIsr(topic, partition)).exists(_.leaderEpoch == epoch)
+      brokers(0).metadataCache.getLeaderAndIsr(topic, partition).filter(_.leaderEpoch == epoch).isPresent()
     }, "Epoch didn't change")
   }
 

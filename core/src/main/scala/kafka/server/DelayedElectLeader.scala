@@ -24,7 +24,6 @@ import org.apache.kafka.common.requests.ApiError
 import org.apache.kafka.server.purgatory.DelayedOperation
 
 import scala.collection.{Map, mutable}
-import scala.jdk.javaapi.OptionConverters
 
 /** A delayed elect leader operation that can be created by the replica manager and watched
   * in the elect leader purgatory
@@ -75,7 +74,7 @@ class DelayedElectLeader(
   private def updateWaiting(): Unit = {
     val metadataCache = replicaManager.metadataCache
     val completedPartitions = waitingPartitions.collect {
-      case (tp, leader) if OptionConverters.toScala(metadataCache.getLeaderAndIsr(tp.topic, tp.partition)).exists(_.leader == leader) => tp
+      case (tp, leader) if metadataCache.getLeaderAndIsr(tp.topic, tp.partition).filter(_.leader == leader).isPresent() => tp
     }
     completedPartitions.foreach  { tp =>
       waitingPartitions -= tp

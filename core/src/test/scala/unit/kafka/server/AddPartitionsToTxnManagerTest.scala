@@ -220,7 +220,7 @@ class AddPartitionsToTxnManagerTest {
 
     // The transaction state topic does not exist.
     when(metadataCache.getLeaderAndIsr(Topic.TRANSACTION_STATE_TOPIC_NAME, 0))
-      .thenReturn(util.Optional.empty)
+      .thenReturn(util.Optional.empty())
     checkError()
 
     // The partition has no leader.

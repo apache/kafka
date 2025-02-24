@@ -821,9 +821,9 @@ object TestUtils extends Logging {
     waitUntilTrue(
       () => brokers.forall { broker =>
         if (expectedNumPartitions == 0) {
-          broker.metadataCache.numPartitions(topic).isEmpty
+          broker.metadataCache.numPartitions(topic).isEmpty()
         } else {
-          broker.metadataCache.numPartitions(topic).isPresent && broker.metadataCache.numPartitions(topic).get == expectedNumPartitions
+          broker.metadataCache.numPartitions(topic).orElse(null) == expectedNumPartitions
         }
       },
       s"Topic [$topic] metadata not propagated after 60000 ms", waitTimeMs = 60000L)

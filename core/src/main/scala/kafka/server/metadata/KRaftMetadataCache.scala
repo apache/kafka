@@ -35,7 +35,7 @@ import org.apache.kafka.server.common.{FinalizedFeatures, KRaftVersion, Metadata
 
 import java.util
 import java.util.concurrent.ThreadLocalRandom
-import java.util.function.Supplier
+import java.util.function.{Predicate, Supplier}
 import java.util.stream.Collectors
 import java.util.{Collections, Properties}
 import scala.collection.mutable.ListBuffer
@@ -244,16 +244,18 @@ class KRaftMetadataCache(
                                 errorUnavailableEndpoints: Boolean = false,
                                 errorUnavailableListeners: Boolean = false): util.List[MetadataResponseTopic] = {
     val image = _currentImage
-    topics.asScala.toSeq.flatMap { topic =>
-      getPartitionMetadata(image, topic, listenerName, errorUnavailableEndpoints, errorUnavailableListeners).map { partitionMetadata =>
-        new MetadataResponseTopic()
-          .setErrorCode(Errors.NONE.code)
-          .setName(topic)
-          .setTopicId(Option(image.topics().getTopic(topic).id()).getOrElse(Uuid.ZERO_UUID))
-          .setIsInternal(Topic.isInternal(topic))
-          .setPartitions(partitionMetadata.toBuffer.asJava)
+    topics.stream().flatMap(topic =>
+      getPartitionMetadata(image, topic, listenerName, errorUnavailableEndpoints, errorUnavailableListeners) match {
+        case Some(partitionMetadata) =>
+          util.stream.Stream.of(new MetadataResponseTopic()
+            .setErrorCode(Errors.NONE.code)
+            .setName(topic)
+            .setTopicId(Option(image.topics().getTopic(topic).id()).getOrElse(Uuid.ZERO_UUID))
+            .setIsInternal(Topic.isInternal(topic))
+            .setPartitions(partitionMetadata.toBuffer.asJava))
+        case None =>  util.stream.Stream.empty()
       }
-    }.asJava
+    ).collect(Collectors.toList())
   }
 
   override def describeTopicResponse(
@@ -325,15 +327,15 @@ class KRaftMetadataCache(
   override def getTopicPartitions(topicName: String): util.Set[TopicPartition] = {
     val topic = _currentImage.topics().getTopic(topicName)
     if (topic == null) {
-      return util.Set.of;
+      return util.Set.of()
     }
-    topic.partitions.keySet.stream
+    topic.partitions.keySet.stream()
       .map(partitionId => new TopicPartition(topicName, partitionId))
-      .collect(Collectors.toSet());
+      .collect(Collectors.toSet())
   }
 
   override def getTopicId(topicName: String): Uuid = util.Optional.ofNullable(_currentImage.topics.topicsByName.get(topicName))
-    .map(topic => topic.id)
+    .map(_.id)
     .orElse(Uuid.ZERO_UUID)
 
   override def getTopicName(topicId: Uuid): util.Optional[String] = util.Optional.ofNullable(_currentImage.topics().topicsById().get(topicId)).map(t => t.name)
@@ -353,21 +355,21 @@ class KRaftMetadataCache(
   override def getAliveBrokers(): util.List[BrokerMetadata] = getAliveBrokers(_currentImage)
 
   private def getAliveBrokers(image: MetadataImage): util.List[BrokerMetadata] = {
-    _currentImage.cluster.brokers.values.stream
-      .filter(broker => !broker.fenced)
+    _currentImage.cluster().brokers().values().stream()
+      .filter(Predicate.not(_.fenced))
       .map(broker => new BrokerMetadata(broker.id, broker.rack))
       .collect(Collectors.toList())
   }
 
   override def getAliveBrokerNode(brokerId: Int, listenerName: ListenerName): util.Optional[Node] = {
-    util.Optional.ofNullable(_currentImage.cluster.broker(brokerId))
-      .filter(broker => !broker.fenced)
+    util.Optional.ofNullable(_currentImage.cluster().broker(brokerId))
+      .filter(Predicate.not(_.fenced))
       .flatMap(broker => broker.node(listenerName.value))
   }
 
   override def getAliveBrokerNodes(listenerName: ListenerName): util.List[Node] = {
     _currentImage.cluster.brokers.values.stream
-      .filter(broker => !broker.fenced)
+      .filter(Predicate.not(_.fenced))
       .flatMap(broker => broker.node(listenerName.value).stream)
       .collect(Collectors.toList())
   }
@@ -442,7 +444,7 @@ class KRaftMetadataCache(
   private def getRandomAliveBroker(image: MetadataImage): util.Optional[Integer] = {
     val aliveBrokers = getAliveBrokers(image)
     if (aliveBrokers.isEmpty) {
-      util.Optional.empty
+      util.Optional.empty()
     } else {
       util.Optional.of(aliveBrokers.get(ThreadLocalRandom.current().nextInt(aliveBrokers.size)).id)
     }
@@ -450,7 +452,7 @@ class KRaftMetadataCache(
 
   override def getAliveBrokerEpoch(brokerId: Int): util.Optional[java.lang.Long] = {
     util.Optional.ofNullable(_currentImage.cluster().broker(brokerId))
-      .filter(broker => !broker.fenced())
+      .filter(Predicate.not(_.fenced))
       .map(brokerRegistration => brokerRegistration.epoch())
   }
 

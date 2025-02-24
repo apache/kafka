@@ -661,7 +661,7 @@ class MetadataCacheTest {
     val aliveBrokers = metadataCache.getAliveBrokers().asScala.map(_.id).toSet
     metadataImage.cluster().brokers().forEach { (brokerId, registration) =>
       assertEquals(!registration.fenced(), aliveBrokers.contains(brokerId))
-      assertEquals(aliveBrokers.contains(brokerId), metadataCache.getAliveBrokerNode(brokerId, new ListenerName(listenerName)).isPresent)
+      assertEquals(aliveBrokers.contains(brokerId), metadataCache.getAliveBrokerNode(brokerId, new ListenerName(listenerName)).isPresent())
     }
   }
 
