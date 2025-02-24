@@ -2624,6 +2624,7 @@ class KafkaApis(val requestChannel: RequestChannel,
               new ConsumerGroupDescribeResponseData.DescribedGroup()
                 .setGroupId(group.groupId)
                 .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
+                .setErrorMessage("The group has described topic(s) that the client is not authorized to describe.")
                 .setMembers(List.empty.asJava)
             } else {
               group
