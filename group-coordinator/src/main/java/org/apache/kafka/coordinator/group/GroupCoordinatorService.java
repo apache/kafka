@@ -82,8 +82,11 @@ import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.record.BrokerCompressionType;
 import org.apache.kafka.server.share.persister.DeleteShareGroupStateParameters;
 import org.apache.kafka.server.share.persister.DeleteShareGroupStateResult;
+import org.apache.kafka.server.share.persister.GroupTopicPartitionData;
+import org.apache.kafka.server.share.persister.InitializeShareGroupStateParameters;
 import org.apache.kafka.server.share.persister.PartitionErrorData;
 import org.apache.kafka.server.share.persister.PartitionFactory;
+import org.apache.kafka.server.share.persister.PartitionStateData;
 import org.apache.kafka.server.share.persister.Persister;
 import org.apache.kafka.server.share.persister.ReadShareGroupStateSummaryParameters;
 import org.apache.kafka.server.share.persister.TopicData;
@@ -392,6 +395,15 @@ public class GroupCoordinatorService implements GroupCoordinator {
             topicPartitionFor(request.groupId()),
             Duration.ofMillis(config.offsetCommitTimeoutMs()),
             coordinator -> coordinator.shareGroupHeartbeat(context, request)
+        ).thenCompose(
+            // This ensures that the previous group write has completed successfully
+            // before we start the persister initialize phase.
+            result -> {
+                if (result.getValue().isPresent()) {
+                    return persisterInitialize(result.getValue().get(), result.getKey());
+                }
+                return CompletableFuture.completedFuture(result.getKey());
+            }
         ).exceptionally(exception -> handleOperationException(
             "share-group-heartbeat",
             request,
@@ -401,6 +413,32 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 .setErrorMessage(message),
             log
         ));
+    }
+
+    private CompletableFuture<ShareGroupHeartbeatResponseData> persisterInitialize(
+        InitializeShareGroupStateParameters request,
+        ShareGroupHeartbeatResponseData defaultResponse
+    ) {
+        return persister.initializeState(request)
+            .thenCompose(response -> {
+                for (TopicData<PartitionErrorData> topicData : response.topicsData()) {
+                    Optional<PartitionErrorData> errData = topicData.partitions().stream().filter(partition -> partition.errorCode() != Errors.NONE.code()).findAny();
+                    if (errData.isPresent()) {
+                        return CompletableFuture.completedFuture(new ShareGroupHeartbeatResponseData()
+                            .setErrorCode(errData.get().errorCode())
+                            .setErrorMessage(errData.get().errorMessage())
+                        );
+                    }
+                }
+                return CompletableFuture.completedFuture(defaultResponse);
+            })
+            .exceptionally(exception -> {
+                GroupTopicPartitionData<PartitionStateData> gtp = request.groupTopicPartitionData();
+                log.error("Unable to initialize share group state {}, {}", gtp.groupId(), gtp.topicsData(), exception);
+                return new ShareGroupHeartbeatResponseData()
+                    .setErrorCode(Errors.forException(exception).code())
+                    .setErrorMessage(Errors.forException(exception).message());
+            });
     }
 
     /**

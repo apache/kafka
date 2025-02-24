@@ -19,6 +19,7 @@ package org.apache.kafka.server.share.persister;
 
 import org.apache.kafka.common.message.InitializeShareGroupStateRequestData;
 
+import java.util.List;
 import java.util.stream.Collectors;
 
 /**
@@ -26,6 +27,12 @@ import java.util.stream.Collectors;
  */
 public class InitializeShareGroupStateParameters implements PersisterParameters {
     private final GroupTopicPartitionData<PartitionStateData> groupTopicPartitionData;
+
+    public static final InitializeShareGroupStateParameters EMPTY_PARAMS = new InitializeShareGroupStateParameters(new GroupTopicPartitionData.Builder<PartitionStateData>()
+        .setGroupId("")
+        .setTopicsData(List.of())
+        .build()
+    );
 
     private InitializeShareGroupStateParameters(GroupTopicPartitionData<PartitionStateData> groupTopicPartitionData) {
         this.groupTopicPartitionData = groupTopicPartitionData;

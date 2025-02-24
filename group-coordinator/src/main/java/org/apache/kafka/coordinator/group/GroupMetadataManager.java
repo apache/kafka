@@ -100,6 +100,8 @@ import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupPartitionMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupPartitionMetadataValue;
+import org.apache.kafka.coordinator.group.generated.ShareGroupStatePartitionMetadataKey;
+import org.apache.kafka.coordinator.group.generated.ShareGroupStatePartitionMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMemberKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMemberValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMetadataKey;
@@ -143,8 +145,10 @@ import org.apache.kafka.image.TopicsDelta;
 import org.apache.kafka.image.TopicsImage;
 import org.apache.kafka.server.share.persister.DeleteShareGroupStateParameters;
 import org.apache.kafka.server.share.persister.GroupTopicPartitionData;
+import org.apache.kafka.server.share.persister.InitializeShareGroupStateParameters;
 import org.apache.kafka.server.share.persister.PartitionFactory;
 import org.apache.kafka.server.share.persister.PartitionIdData;
+import org.apache.kafka.server.share.persister.PartitionStateData;
 import org.apache.kafka.server.share.persister.TopicData;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
@@ -160,11 +164,13 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiFunction;
@@ -198,6 +204,7 @@ import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.n
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupEpochRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupMemberSubscriptionRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupMemberSubscriptionTombstoneRecord;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupPartitionMetadataRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupSubscriptionMetadataRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentTombstoneRecord;
 import static org.apache.kafka.coordinator.group.Utils.assignmentToString;
@@ -410,6 +417,11 @@ public class GroupMetadataManager {
     private final TimelineHashMap<String, TimelineHashSet<String>> groupsByTopics;
 
     /**
+     * The share group partition metadata info keyed by group id.
+     */
+    private final TimelineHashMap<String, ShareGroupStatePartitionMetadataInfo> shareGroupPartitionMetadata;
+
+    /**
      * The group manager.
      */
     private final GroupConfigManager groupConfigManager;
@@ -444,6 +456,13 @@ public class GroupMetadataManager {
      */
     private final ShareGroupPartitionAssignor shareGroupAssignor;
 
+    private record ShareGroupStatePartitionMetadataInfo(
+        LinkedHashSet<Uuid> initializedTopics,
+        LinkedHashSet<Uuid> deletingTopics
+    ) {
+
+    }
+
     private GroupMetadataManager(
         SnapshotRegistry snapshotRegistry,
         LogContext logContext,
@@ -472,6 +491,7 @@ public class GroupMetadataManager {
         this.defaultConsumerGroupAssignor = config.consumerGroupAssignors().get(0);
         this.groups = new TimelineHashMap<>(snapshotRegistry, 0);
         this.groupsByTopics = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.shareGroupPartitionMetadata = new TimelineHashMap<>(snapshotRegistry, 0);
         this.groupConfigManager = groupConfigManager;
         this.shareGroupAssignor = shareGroupAssignor;
         this.streamsGroupSessionTimeoutMs = 45000;
@@ -2139,7 +2159,7 @@ public class GroupMetadataManager {
      * @return A Result containing the ShareGroupHeartbeat response and
      *         a list of records to update the state machine.
      */
-    private CoordinatorResult<ShareGroupHeartbeatResponseData, CoordinatorRecord> shareGroupHeartbeat(
+    private CoordinatorResult<Map.Entry<ShareGroupHeartbeatResponseData, Optional<InitializeShareGroupStateParameters>>, CoordinatorRecord> shareGroupHeartbeat(
         String groupId,
         String memberId,
         int memberEpoch,
@@ -2272,7 +2292,28 @@ public class GroupMetadataManager {
             response.setAssignment(createShareGroupResponseAssignment(updatedMember));
         }
 
-        return new CoordinatorResult<>(records, response);
+        InitializeShareGroupStateParameters initializeRequest = null;
+
+        if (groups.get(groupId) == null && subscribedTopicNames != null) {
+            // Block should execute only for newly created group.
+            // copiedGroupEpoch will serve as the state epoch per KIP-932
+            final int copiedGroupEpoch = groupEpoch;
+            List<TopicImage> images = new ArrayList<>(subscribedTopicNames.size());
+            subscribedTopicNames.forEach(topicName -> images.add(metadataImage.topics().getTopic(topicName)));
+
+            // Add new share partition metadata records.
+            records.add(newShareGroupPartitionMetadataRecord(groupId, images, List.of()));
+
+            initializeRequest = new InitializeShareGroupStateParameters.Builder().setGroupTopicPartitionData(
+                new GroupTopicPartitionData<>(groupId, images.stream()
+                    .map(image -> new TopicData<>(image.id(), image.partitions().keySet().stream()
+                        .map(partitionId -> PartitionFactory.newPartitionStateData(partitionId, copiedGroupEpoch, -1))
+                        .toList()))
+                    .toList()
+                )).build();
+        }
+
+        return new CoordinatorResult<>(records, Map.entry(response, Optional.ofNullable(initializeRequest)));
     }
 
     /**
@@ -3830,10 +3871,10 @@ public class GroupMetadataManager {
      * @param context The request context.
      * @param request The actual ShareGroupHeartbeat request.
      *
-     * @return A Result containing the ShareGroupHeartbeat response and
-     *         a list of records to update the state machine.
+     * @return A Result containing a pair of ShareGroupHeartbeat response and maybe InitializeShareGroupStateParameters
+     *         and a list of records to update the state machine.
      */
-    public CoordinatorResult<ShareGroupHeartbeatResponseData, CoordinatorRecord> shareGroupHeartbeat(
+    public CoordinatorResult<Map.Entry<ShareGroupHeartbeatResponseData, Optional<InitializeShareGroupStateParameters>>, CoordinatorRecord> shareGroupHeartbeat(
         RequestContext context,
         ShareGroupHeartbeatRequestData request
     ) throws ApiException {
@@ -3841,10 +3882,15 @@ public class GroupMetadataManager {
 
         if (request.memberEpoch() == ShareGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH) {
             // -1 means that the member wants to leave the group.
-            return shareGroupLeave(
+            CoordinatorResult<ShareGroupHeartbeatResponseData, CoordinatorRecord> result = shareGroupLeave(
                 request.groupId(),
                 request.memberId(),
-                request.memberEpoch());
+                request.memberEpoch()
+            );
+            return new CoordinatorResult<>(
+                result.records(),
+                Map.entry(result.response(), Optional.empty())
+            );
         }
         // Otherwise, it is a regular heartbeat.
         return shareGroupHeartbeat(
@@ -4614,6 +4660,38 @@ public class GroupMetadataManager {
                     .setAssignedPartitions(Collections.emptyMap())
                     .build();
             group.updateMember(newMember);
+        }
+    }
+
+    /**
+     * Replays ShareGroupCurrentMemberAssignmentKey/Value to update the hard state of
+     * the share group. It updates the assignment of a member or deletes it.
+     *
+     * @param key   A ShareGroupCurrentMemberAssignmentKey key.
+     * @param value A ShareGroupCurrentMemberAssignmentValue record.
+     */
+    public void replay(
+        ShareGroupStatePartitionMetadataKey key,
+        ShareGroupStatePartitionMetadataValue value
+    ) {
+        String groupId = key.groupId();
+
+        getOrMaybeCreatePersistedShareGroup(groupId, false);
+
+        // Update timeline structures with info about initialized/deleted topics.
+        if (value == null) {
+            shareGroupPartitionMetadata.remove(groupId);
+        } else {
+            List<Uuid> initialized = value.initializedTopics().stream().map(ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo::topicId).toList();
+            List<Uuid> deleting = value.deletingTopics().stream().map(ShareGroupStatePartitionMetadataValue.TopicInfo::topicId).toList();
+
+            ShareGroupStatePartitionMetadataInfo record = shareGroupPartitionMetadata.computeIfAbsent(
+                groupId, k -> new ShareGroupStatePartitionMetadataInfo(new LinkedHashSet<>(), new LinkedHashSet<>())
+            );
+
+            record.initializedTopics.removeAll(deleting);
+            record.initializedTopics.addAll(initialized);
+            record.deletingTopics.addAll(deleting);
         }
     }
 
