@@ -28,6 +28,7 @@ import org.apache.kafka.common.test.ClusterInstance
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals, assertNotNull, assertNull, assertTrue}
 import org.junit.jupiter.api.{Tag, Timeout}
 
+import java.util
 import scala.jdk.CollectionConverters._
 
 @Timeout(120)
@@ -262,15 +263,15 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       // Verify the response.
       assertEquals(3, shareGroupHeartbeatResponse.data.memberEpoch)
 
-      var partitionsAssigned: Set[Integer] = Set()
-      for (topicPartition <- topicPartitionsAssignedToMember1.asScala) {
-        partitionsAssigned = partitionsAssigned ++ topicPartition.partitions().asScala
-      }
-      for (topicPartition <- topicPartitionsAssignedToMember2.asScala) {
-        partitionsAssigned = partitionsAssigned ++ topicPartition.partitions().asScala
-      }
+      val partitionsAssigned: util.Set[Integer] = new util.HashSet[Integer]()
+      topicPartitionsAssignedToMember1.forEach(topicPartition => {
+        partitionsAssigned.addAll(topicPartition.partitions())
+      })
+      topicPartitionsAssignedToMember2.forEach(topicPartition => {
+        partitionsAssigned.addAll(topicPartition.partitions())
+      })
       // Verify all the 3 topic partitions for "foo" have been assigned to at least 1 member.
-      assertEquals(Set(0, 1, 2), partitionsAssigned)
+      assertEquals(util.Set.of(0, 1, 2), partitionsAssigned)
 
       // Verify the assignments are not changed for member 1.
       // Prepare another heartbeat for member 1 with latest received epoch 3 for member 1.
