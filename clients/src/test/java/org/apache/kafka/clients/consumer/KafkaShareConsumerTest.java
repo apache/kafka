@@ -142,7 +142,7 @@ public class KafkaShareConsumerTest {
 
     @Flaky("KAFKA-18488")
     @Test
-    public void testVerifyFetchAndCommitSyncImplicit() throws InterruptedException {
+    public void testVerifyFetchAndCommitSyncImplicit() {
         ConsumerMetadata metadata = new ConsumerMetadata(0, 0, Long.MAX_VALUE, false, false,
             subscription, new LogContext(), new ClusterResourceListeners());
         MockClient client = new MockClient(time, metadata);
@@ -215,8 +215,9 @@ public class KafkaShareConsumerTest {
         }
     }
 
+    @Flaky("KAFKA-18794")
     @Test
-    public void testVerifyFetchAndCloseImplicit() throws InterruptedException {
+    public void testVerifyFetchAndCloseImplicit() {
         ConsumerMetadata metadata = new ConsumerMetadata(0, 0, Long.MAX_VALUE, false, false,
             subscription, new LogContext(), new ClusterResourceListeners());
         MockClient client = new MockClient(time, metadata);
@@ -278,7 +279,7 @@ public class KafkaShareConsumerTest {
         LogContext logContext = new LogContext();
         Deserializer<String> keyDeserializer = new StringDeserializer();
         Deserializer<String> valueDeserializer = new StringDeserializer();
-        ConsumerConfig config = newConsumerConfig(clientId);
+        ShareConsumerConfig config = newConsumerConfig(clientId);
 
         return new KafkaShareConsumer<>(
             logContext,
@@ -294,14 +295,14 @@ public class KafkaShareConsumerTest {
         );
     }
 
-    private ConsumerConfig newConsumerConfig(String clientId) {
+    private ShareConsumerConfig newConsumerConfig(String clientId) {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ConsumerConfig.CLIENT_ID_CONFIG, clientId);
         configs.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
         configs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         configs.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, batchSize);
-        return new ConsumerConfig(configs);
+        return new ShareConsumerConfig(configs);
     }
 
     private void initMetadata(MockClient client, Map<String, Integer> partitions) {

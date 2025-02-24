@@ -276,6 +276,11 @@ public class SharePartition {
     private final SharePartitionListener listener;
 
     /**
+     * The load start time is used to track the time taken to load the share partition.
+     */
+    private final long loadStartTimeMs;
+
+    /**
      * The share partition start offset specifies the partition start offset from which the records
      * are cached in the cachedState of the sharePartition.
      */
@@ -359,6 +364,7 @@ public class SharePartition {
         this.defaultRecordLockDurationMs = defaultRecordLockDurationMs;
         this.timer = timer;
         this.time = time;
+        this.loadStartTimeMs = time.hiResClockMs();
         this.persister = persister;
         this.partitionState = sharePartitionState;
         this.replicaManager = replicaManager;
@@ -615,6 +621,7 @@ public class SharePartition {
      * @param maxFetchRecords    The maximum number of records that should be acquired, this is a soft
      *                           limit and the method might acquire more records than the maxFetchRecords,
      *                           if the records are already part of the same fetch batch.
+*    * @param fetchOffset        The fetch offset for which the records are fetched.
      * @param fetchPartitionData The fetched records for the share partition.
      * @return The acquired records for the share partition.
      */
@@ -623,6 +630,7 @@ public class SharePartition {
         String memberId,
         int batchSize,
         int maxFetchRecords,
+        long fetchOffset /* TODO: Use fetch offset to archive any stale batches due to compaction */,
         FetchPartitionData fetchPartitionData
     ) {
         log.trace("Received acquire request for share partition: {}-{} memberId: {}", groupId, topicIdPartition, memberId);
@@ -909,6 +917,10 @@ public class SharePartition {
             lock.writeLock().unlock();
         }
         return future;
+    }
+
+    long loadStartTimeMs() {
+        return loadStartTimeMs;
     }
 
     private Optional<Throwable> releaseAcquiredRecordsForPerOffsetBatch(String memberId,

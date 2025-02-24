@@ -25,8 +25,28 @@
   "name":"java.lang.OutOfMemoryError"
 },
 {
+  "name":"java.lang.String",
+  "methods":[{"name":"lastIndexOf","parameterTypes":["int"] }, {"name":"substring","parameterTypes":["int"] }]
+},
+{
+  "name":"java.lang.System",
+  "methods":[{"name":"getProperty","parameterTypes":["java.lang.String"] }, {"name":"setProperty","parameterTypes":["java.lang.String","java.lang.String"] }]
+},
+{
+  "name":"java.lang.VersionProps",
+  "methods":[{"name":"print","parameterTypes":["boolean"] }]
+},
+{
   "name":"java.util.Arrays",
   "methods":[{"name":"asList","parameterTypes":["java.lang.Object[]"] }]
+},
+{
+  "name":"kafka.Kafka",
+  "methods":[{"name":"main","parameterTypes":["java.lang.String[]"] }]
+},
+{
+  "name":"kafka.tools.StorageTool",
+  "methods":[{"name":"main","parameterTypes":["java.lang.String[]"] }]
 },
 {
   "name":"sun.management.VMManagementImpl",

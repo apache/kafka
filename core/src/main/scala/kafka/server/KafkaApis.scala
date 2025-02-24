@@ -23,7 +23,6 @@ import kafka.server.QuotaFactory.{QuotaManagers, UNBOUNDED_QUOTA}
 import kafka.server.handlers.DescribeTopicPartitionsRequestHandler
 import kafka.server.share.SharePartitionManager
 import kafka.utils.Logging
-import org.apache.kafka.admin.AdminUtils
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.EndpointType
 import org.apache.kafka.common.acl.AclOperation
@@ -235,6 +234,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.DELETE_SHARE_GROUP_STATE => handleDeleteShareGroupStateRequest(request)
         case ApiKeys.READ_SHARE_GROUP_STATE_SUMMARY => handleReadShareGroupStateSummaryRequest(request)
         case ApiKeys.DESCRIBE_SHARE_GROUP_OFFSETS => handleDescribeShareGroupOffsetsRequest(request)
+        case ApiKeys.ALTER_SHARE_GROUP_OFFSETS => handleAlterShareGroupOffsetsRequest(request)
+        case ApiKeys.DELETE_SHARE_GROUP_OFFSETS => handleDeleteShareGroupOffsetsRequest(request)
         case _ => throw new IllegalStateException(s"No handler for request api key ${request.header.apiKey}")
       }
     } catch {
@@ -500,7 +501,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     if (authorizedRequestInfo.isEmpty)
       sendResponseCallback(Map.empty)
     else {
-      val internalTopicsAllowed = request.header.clientId == AdminUtils.ADMIN_CLIENT_ID
+      val internalTopicsAllowed = request.header.clientId == "__admin_client"
       val transactionSupportedOperation = AddPartitionsToTxnManager.produceRequestVersionToTransactionSupportedOperation(request.header.apiVersion())
       // call the replica manager to append messages to the replicas
       replicaManager.handleProduceAppend(
@@ -3099,11 +3100,33 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
   }
 
-  def handleInitializeShareGroupStateRequest(request: RequestChannel.Request): Unit = {
+  def handleInitializeShareGroupStateRequest(request: RequestChannel.Request): CompletableFuture[Unit] = {
     val initializeShareGroupStateRequest = request.body[InitializeShareGroupStateRequest]
-    // TODO: Implement the InitializeShareGroupStateRequest handling
-    requestHelper.sendMaybeThrottle(request, initializeShareGroupStateRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
-    CompletableFuture.completedFuture[Unit](())
+
+    if (!authorizeClusterOperation(request, CLUSTER_ACTION)) {
+      requestHelper.sendMaybeThrottle(request, new InitializeShareGroupStateResponse(
+        InitializeShareGroupStateResponse.toGlobalErrorResponse(
+          initializeShareGroupStateRequest.data(),
+          Errors.CLUSTER_AUTHORIZATION_FAILED
+        )))
+      return CompletableFuture.completedFuture[Unit](())
+    }
+
+    shareCoordinator match {
+      case None => requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+        initializeShareGroupStateRequest.getErrorResponse(requestThrottleMs,
+          new ApiException("Share coordinator is not enabled.")))
+        CompletableFuture.completedFuture[Unit](())
+
+      case Some(coordinator) => coordinator.initializeState(request.context, initializeShareGroupStateRequest.data)
+        .handle[Unit] { (response, exception) =>
+          if (exception != null) {
+            requestHelper.sendMaybeThrottle(request, initializeShareGroupStateRequest.getErrorResponse(exception))
+          } else {
+            requestHelper.sendMaybeThrottle(request, new InitializeShareGroupStateResponse(response))
+          }
+        }
+    }
   }
 
   def handleReadShareGroupStateRequest(request: RequestChannel.Request): CompletableFuture[Unit] = {
@@ -3221,28 +3244,64 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def handleDescribeShareGroupOffsetsRequest(request: RequestChannel.Request): Unit = {
     val describeShareGroupOffsetsRequest = request.body[DescribeShareGroupOffsetsRequest]
+    val groups = describeShareGroupOffsetsRequest.groups()
 
-    if (!isShareGroupProtocolEnabled) {
-      requestHelper.sendMaybeThrottle(request, describeShareGroupOffsetsRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
-      CompletableFuture.completedFuture[Unit](())
-    } else if (!authHelper.authorize(request.context, READ, GROUP, describeShareGroupOffsetsRequest.data.groupId)) {
-      requestHelper.sendMaybeThrottle(request, describeShareGroupOffsetsRequest.getErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED.exception))
-      CompletableFuture.completedFuture[Unit](())
-    } else {
-      groupCoordinator.describeShareGroupOffsets(
-        request.context,
-        describeShareGroupOffsetsRequest.data,
-      ).handle[Unit] { (response, exception) =>
-        if (exception != null) {
-          requestHelper.sendMaybeThrottle(request, describeShareGroupOffsetsRequest.getErrorResponse(exception))
-        } else {
-          requestHelper.sendMaybeThrottle(
-            request,
-            new DescribeShareGroupOffsetsResponse(response)
-          )
-        }
+    val futures = new mutable.ArrayBuffer[CompletableFuture[DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup]](groups.size)
+    groups.forEach { groupDescribeOffsets =>
+      if (!isShareGroupProtocolEnabled) {
+        futures += CompletableFuture.completedFuture(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup()
+          .setGroupId(groupDescribeOffsets.groupId)
+          .setErrorCode(Errors.UNSUPPORTED_VERSION.code))
+      } else if (!authHelper.authorize(request.context, DESCRIBE, GROUP, groupDescribeOffsets.groupId)) {
+        futures += CompletableFuture.completedFuture(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup()
+          .setGroupId(groupDescribeOffsets.groupId)
+          .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code))
+      } else if (groupDescribeOffsets.topics.isEmpty) {
+        futures += CompletableFuture.completedFuture(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup()
+          .setGroupId(groupDescribeOffsets.groupId))
+      } else {
+        futures += describeShareGroupOffsetsForGroup(
+          request.context,
+          groupDescribeOffsets
+        )
       }
     }
+
+    CompletableFuture.allOf(futures.toArray: _*).handle[Unit] { (_, _) =>
+      val groupResponses = new ArrayBuffer[DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup](futures.size)
+      val responseData = new DescribeShareGroupOffsetsResponseData().setGroups(groupResponses.asJava)
+      futures.foreach(future => groupResponses += future.join)
+      requestHelper.sendMaybeThrottle(request, new DescribeShareGroupOffsetsResponse(responseData))
+    }
+  }
+
+  private def describeShareGroupOffsetsForGroup(requestContext: RequestContext,
+    groupDescribeOffsetsRequest: DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup
+  ): CompletableFuture[DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup] = {
+    groupCoordinator.describeShareGroupOffsets(
+      requestContext,
+      groupDescribeOffsetsRequest
+    ).handle[DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup] { (groupDescribeOffsetsResponse, exception) =>
+      if (exception != null) {
+        new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup()
+          .setGroupId(groupDescribeOffsetsRequest.groupId)
+          .setErrorCode(Errors.forException(exception).code)
+      } else {
+        groupDescribeOffsetsResponse
+      }
+    }
+  }
+
+  def handleAlterShareGroupOffsetsRequest(request: RequestChannel.Request): Unit = {
+    val alterShareGroupOffsetsRequest = request.body[AlterShareGroupOffsetsRequest]
+    requestHelper.sendMaybeThrottle(request, alterShareGroupOffsetsRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+    CompletableFuture.completedFuture[Unit](())
+  }
+
+  def handleDeleteShareGroupOffsetsRequest(request: RequestChannel.Request): Unit = {
+    val deleteShareGroupOffsetsRequest = request.body[DeleteShareGroupOffsetsRequest]
+    requestHelper.sendMaybeThrottle(request, deleteShareGroupOffsetsRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+    CompletableFuture.completedFuture[Unit](())
   }
 
   // Visible for Testing

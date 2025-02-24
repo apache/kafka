@@ -74,7 +74,7 @@ public class DeleteTopicsResult {
      * @return a future which succeeds only if all the topic deletions succeed.
      */
     public KafkaFuture<Void> all() {
-        return (topicIdFutures == null) ? KafkaFuture.allOf(nameFutures.values().toArray(new KafkaFuture[0])) :
-            KafkaFuture.allOf(topicIdFutures.values().toArray(new KafkaFuture[0]));
+        return (topicIdFutures == null) ? KafkaFuture.allOf(nameFutures.values().toArray(new KafkaFuture<?>[0])) :
+            KafkaFuture.allOf(topicIdFutures.values().toArray(new KafkaFuture<?>[0]));
     }
 }

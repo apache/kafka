@@ -22,15 +22,15 @@ import org.junit.jupiter.api.Test;
 import java.util.Collections;
 
 import static org.apache.kafka.server.common.MetadataVersion.FEATURE_NAME;
-import static org.apache.kafka.server.common.MetadataVersion.MINIMUM_KRAFT_VERSION;
+import static org.apache.kafka.server.common.MetadataVersion.MINIMUM_VERSION;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class FinalizedFeaturesTest {
     @Test
     public void testKRaftModeFeatures() {
-        FinalizedFeatures finalizedFeatures = new FinalizedFeatures(MINIMUM_KRAFT_VERSION,
+        FinalizedFeatures finalizedFeatures = new FinalizedFeatures(MINIMUM_VERSION,
                 Collections.singletonMap("foo", (short) 2), 123);
-        assertEquals(MINIMUM_KRAFT_VERSION.featureLevel(),
+        assertEquals(MINIMUM_VERSION.featureLevel(),
                 finalizedFeatures.finalizedFeatures().get(FEATURE_NAME));
         assertEquals((short) 2,
                 finalizedFeatures.finalizedFeatures().get("foo"));

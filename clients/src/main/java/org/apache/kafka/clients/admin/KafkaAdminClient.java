@@ -45,10 +45,12 @@ import org.apache.kafka.clients.admin.internals.AdminFetchMetricsManager;
 import org.apache.kafka.clients.admin.internals.AdminMetadataManager;
 import org.apache.kafka.clients.admin.internals.AllBrokersStrategy;
 import org.apache.kafka.clients.admin.internals.AlterConsumerGroupOffsetsHandler;
+import org.apache.kafka.clients.admin.internals.AlterShareGroupOffsetsHandler;
 import org.apache.kafka.clients.admin.internals.CoordinatorKey;
 import org.apache.kafka.clients.admin.internals.DeleteConsumerGroupOffsetsHandler;
 import org.apache.kafka.clients.admin.internals.DeleteConsumerGroupsHandler;
 import org.apache.kafka.clients.admin.internals.DeleteRecordsHandler;
+import org.apache.kafka.clients.admin.internals.DeleteShareGroupsHandler;
 import org.apache.kafka.clients.admin.internals.DescribeClassicGroupsHandler;
 import org.apache.kafka.clients.admin.internals.DescribeConsumerGroupsHandler;
 import org.apache.kafka.clients.admin.internals.DescribeProducersHandler;
@@ -2503,7 +2505,7 @@ public class KafkaAdminClient extends AdminClient {
             private boolean useMetadataRequest = false;
 
             @Override
-            AbstractRequest.Builder createRequest(int timeoutMs) {
+            AbstractRequest.Builder<?> createRequest(int timeoutMs) {
                 if (!useMetadataRequest) {
                     if (metadataManager.usingBootstrapControllers() && options.includeFencedBrokers()) {
                         throw new IllegalArgumentException("Cannot request fenced brokers from controller endpoint");
@@ -3801,6 +3803,14 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     @Override
+    public AlterShareGroupOffsetsResult alterShareGroupOffsets(String groupId, Map<TopicPartition, Long> offsets, AlterShareGroupOffsetsOptions options) {
+        SimpleAdminApiFuture<CoordinatorKey, Map<TopicPartition, Errors>> future = AlterShareGroupOffsetsHandler.newFuture(groupId);
+        AlterShareGroupOffsetsHandler handler = new AlterShareGroupOffsetsHandler(groupId, offsets, logContext);
+        invokeDriver(handler, future, options.timeoutMs);
+        return new AlterShareGroupOffsetsResult(future.get(CoordinatorKey.byGroupId(groupId)));
+    }
+
+    @Override
     public ListShareGroupOffsetsResult listShareGroupOffsets(final Map<String, ListShareGroupOffsetsSpec> groupSpecs,
                                                              final ListShareGroupOffsetsOptions options) {
         SimpleAdminApiFuture<CoordinatorKey, Map<TopicPartition, Long>> future = ListShareGroupOffsetsHandler.newFuture(groupSpecs.keySet());
@@ -3817,6 +3827,16 @@ public class KafkaAdminClient extends AdminClient {
         DescribeClassicGroupsHandler handler = new DescribeClassicGroupsHandler(options.includeAuthorizedOperations(), logContext);
         invokeDriver(handler, future, options.timeoutMs);
         return new DescribeClassicGroupsResult(future.all().entrySet().stream()
+            .collect(Collectors.toMap(entry -> entry.getKey().idValue, Map.Entry::getValue)));
+    }
+
+    @Override
+    public DeleteShareGroupsResult deleteShareGroups(Collection<String> groupIds, DeleteShareGroupsOptions options) {
+        SimpleAdminApiFuture<CoordinatorKey, Void> future =
+            DeleteShareGroupsHandler.newFuture(groupIds);
+        DeleteShareGroupsHandler handler = new DeleteShareGroupsHandler(logContext);
+        invokeDriver(handler, future, options.timeoutMs);
+        return new DeleteShareGroupsResult(future.all().entrySet().stream()
             .collect(Collectors.toMap(entry -> entry.getKey().idValue, Map.Entry::getValue)));
     }
 

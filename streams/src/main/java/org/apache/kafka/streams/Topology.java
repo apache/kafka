@@ -668,7 +668,7 @@ public class Topology {
      * State stores are sharded and the number of shards is determined at runtime by the number of input topic
      * partitions and the structure of the topology.
      * Each connected {@link Processor} instance in the topology has access to a single shard of the state store.
-     * Additionally, the state store can be accessed from "outside" using "Interactive Queries" (cf.,
+     * Additionally, the state store can be accessed from "outside" using the Interactive Queries (IQ) API (cf.
      * {@link KafkaStreams#store(StoreQueryParameters)} and {@link KafkaStreams#query(StateQueryRequest)}).
      * If you need access to all data in a state store inside a {@link Processor}, you can use a (read-only)
      * {@link #addGlobalStore(StoreBuilder, String, Deserializer, Deserializer, String, String, ProcessorSupplier)
@@ -681,8 +681,8 @@ public class Topology {
      * <p>Note, if a state store is never connected to any
      * {@link #addProcessor(String, ProcessorSupplier, String...) processor}, the state store is "dangling" and would
      * not be added to the created {@code ProcessorTopology}, when {@link KafkaStreams} is started.
-     * For this case, the state store is not available for "Interactive Queries".
-     * If you want to add a state store only for "Interactive Queries", you can use a
+     * For this case, the state store is not available for Interactive Queries.
+     * If you want to add a state store only for Interactive Queries, you can use a
      * {@link #addReadOnlyStateStore(StoreBuilder, String, Deserializer, Deserializer, String, String, ProcessorSupplier) read-only state store}.
      *
      * <p>For failure and recovery, a state store {@link StoreBuilder#loggingEnabled() may be backed} by an internal
@@ -721,7 +721,7 @@ public class Topology {
      * The state store will be populated with data from the named source topic.
      * State stores are sharded and the number of shards is determined at runtime by the number of input topic
      * partitions for the source topic <em>and</em> the connected processors (if any).
-     * Read-only state stores can be accessed from "outside" using "Interactive Queries" (cf.,
+     * Read-only state stores can be accessed from "outside" using the Interactive Queries (IQ) API (cf.
      * {@link KafkaStreams#store(StoreQueryParameters)} and {@link KafkaStreams#query(StateQueryRequest)}).
      *
      * <p>The {@code auto.offset.reset} property will be set to {@code "earliest"} for the source topic.
@@ -843,8 +843,8 @@ public class Topology {
      * {@link #addReadOnlyStateStore(StoreBuilder, String, Deserializer, Deserializer, String, String, ProcessorSupplier) read-only state stores}
      * global state stores are "bootstrapped" on startup, and are maintained by a separate thread.
      * Thus, updates to a global store are not "stream-time synchronized" what may lead to non-deterministic results.
-     * Like all other stores, global state stores can be accessed from "outside" using "Interactive Queries" (cf.,
-     * {@link KafkaStreams#store(StoreQueryParameters)} and {@link KafkaStreams#query(StateQueryRequest)}).
+     * Like all other stores, global state stores can be accessed from "outside" using the Interactive Queries (IQ) API)
+     * (cf. {@link KafkaStreams#store(StoreQueryParameters)} and {@link KafkaStreams#query(StateQueryRequest)}).
      *
      * <p>The {@code auto.offset.reset} property will be set to {@code "earliest"} for the source topic.
      * If you want to specify a source specific {@link TimestampExtractor} you can use
