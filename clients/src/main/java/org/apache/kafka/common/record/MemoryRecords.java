@@ -30,7 +30,6 @@ import org.apache.kafka.common.utils.AbstractIterator;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.CloseableIterator;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 
 import org.slf4j.Logger;
@@ -109,11 +108,6 @@ public class MemoryRecords extends AbstractRecords {
 
         this.validBytes = bytes;
         return bytes;
-    }
-
-    @Override
-    public ConvertedRecords<MemoryRecords> downConvert(byte toMagic, long firstOffset, Time time) {
-        return RecordsUtil.downConvert(batches(), toMagic, firstOffset, time);
     }
 
     @Override
