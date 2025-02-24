@@ -30,7 +30,6 @@ import org.apache.kafka.server.common.TopicIdPartition;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -385,20 +384,20 @@ public class SimpleAssignorTest {
         String member4 = "member4";
         // hashcode for "AaAaAaAa" is -540425984 to test with negative hashcode.
         String member5 = "AaAaAaAa";
-        List<String> members = Arrays.asList(member1, member2, member3, member4, member5);
+        List<String> members = List.of(member1, member2, member3, member4, member5);
 
         TopicIdPartition partition1 = new TopicIdPartition(TOPIC_1_UUID, 0);
         TopicIdPartition partition2 = new TopicIdPartition(TOPIC_2_UUID, 0);
         TopicIdPartition partition3 = new TopicIdPartition(TOPIC_3_UUID, 0);
-        List<TopicIdPartition> partitions = Arrays.asList(partition1, partition2, partition3);
+        List<TopicIdPartition> partitions = List.of(partition1, partition2, partition3);
 
         Map<TopicIdPartition, List<String>> computedAssignment = new HashMap<>();
         assignor.memberHashAssignment(partitions, members, computedAssignment);
 
         Map<TopicIdPartition, List<String>> expectedAssignment = new HashMap<>();
         expectedAssignment.put(partition1, List.of(member3));
-        expectedAssignment.put(partition2, Arrays.asList(member1, member4));
-        expectedAssignment.put(partition3, Arrays.asList(member2, member5));
+        expectedAssignment.put(partition2, List.of(member1, member4));
+        expectedAssignment.put(partition3, List.of(member2, member5));
         assertAssignment(expectedAssignment, computedAssignment);
     }
 
@@ -406,22 +405,23 @@ public class SimpleAssignorTest {
     public void testRoundRobinAssignment() {
         String member1 = "member1";
         String member2 = "member2";
-        List<String> members = Arrays.asList(member1, member2);
+        List<String> members = List.of(member1, member2);
         TopicIdPartition partition1 = new TopicIdPartition(TOPIC_1_UUID, 0);
         TopicIdPartition partition2 = new TopicIdPartition(TOPIC_2_UUID, 0);
         TopicIdPartition partition3 = new TopicIdPartition(TOPIC_3_UUID, 0);
         TopicIdPartition partition4 = new TopicIdPartition(TOPIC_4_UUID, 0);
-        List<TopicIdPartition> unassignedPartitions = Arrays.asList(partition2, partition3, partition4);
+        List<TopicIdPartition> unassignedPartitions = List.of(partition2, partition3, partition4);
 
         Map<TopicIdPartition, List<String>> assignment = new HashMap<>();
         assignment.put(partition1, List.of(member1));
 
         assignor.roundRobinAssignment(members, unassignedPartitions, assignment);
-        Map<TopicIdPartition, List<String>> expectedAssignment = new HashMap<>();
-        expectedAssignment.put(partition1, List.of(member1));
-        expectedAssignment.put(partition2, List.of(member1));
-        expectedAssignment.put(partition3, List.of(member2));
-        expectedAssignment.put(partition4, List.of(member1));
+        Map<TopicIdPartition, List<String>> expectedAssignment = Map.of(
+            partition1, List.of(member1),
+            partition2, List.of(member1),
+            partition3, List.of(member2),
+            partition4, List.of(member1)
+        );
 
         assertAssignment(expectedAssignment, assignment);
     }

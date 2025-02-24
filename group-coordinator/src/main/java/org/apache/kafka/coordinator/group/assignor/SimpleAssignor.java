@@ -128,16 +128,14 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
         List<TopicIdPartition> targetPartitions,
         Map<TopicIdPartition, List<String>> currentAssignment
     ) {
-
         Map<TopicIdPartition, List<String>> newAssignment = new HashMap<>();
 
-        // Step 1: Hash member IDs to partitions.
+        // Step 1: Hash member IDs to topic partitions.
         memberHashAssignment(targetPartitions, groupSpec.memberIds(), newAssignment);
 
         // Step 2: Round-robin assignment for unassigned partitions which do not have members already assigned in the current assignment.
-        Set<TopicIdPartition> assignedPartitions = newAssignment.keySet();
         List<TopicIdPartition> unassignedPartitions = targetPartitions.stream()
-            .filter(targetPartition -> !assignedPartitions.contains(targetPartition))
+            .filter(targetPartition -> !newAssignment.containsKey(targetPartition))
             .filter(targetPartition -> !currentAssignment.containsKey(targetPartition))
             .toList();
 
@@ -198,9 +196,9 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
 
         // When combining current assignment, we need to only consider the member topic subscription in current assignment
         // which is being subscribed in the new assignment as well.
-        currentAssignment.forEach((targetPartition, members) -> members.forEach(member -> {
-            if (topicToMemberSubscription.getOrDefault(targetPartition.topicId(), Collections.emptySet()).contains(member))
-                finalAssignment.computeIfAbsent(member, k -> new HashSet<>()).add(targetPartition);
+        currentAssignment.forEach((topicIdPartition, members) -> members.forEach(member -> {
+            if (topicToMemberSubscription.getOrDefault(topicIdPartition.topicId(), Collections.emptySet()).contains(member))
+                finalAssignment.computeIfAbsent(member, k -> new HashSet<>()).add(topicIdPartition);
         }));
         newAssignment.forEach((targetPartition, members) -> members.forEach(member ->
             finalAssignment.computeIfAbsent(member, k -> new HashSet<>()).add(targetPartition)));
@@ -227,45 +225,48 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
     }
 
     /**
-     * This function updates assignment by hashing the member IDs of the members and maps the partitions assigned to the members based on the hash. This gives approximately even balance.
-     * @param targetPartitions - the subscribed topic partitions.
+     * This function updates assignment by hashing the member IDs of the members and maps the partitions assigned to the
+     * members based on the hash. This gives approximately even balance.
+     * @param unassignedPartitions - the subscribed topic partitions.
      * @param memberIds - the member ids to which the topic partitions need to be assigned.
      * @param assignment - the existing assignment by topic partition. We need to pass it as a parameter because this
      *                   function would be called multiple times for heterogeneous assignment.
      */
+    // Visible for testing
     void memberHashAssignment(
-        List<TopicIdPartition> targetPartitions,
+        List<TopicIdPartition> unassignedPartitions,
         Collection<String> memberIds,
         Map<TopicIdPartition, List<String>> assignment
     ) {
-        if (!targetPartitions.isEmpty())
+        if (!unassignedPartitions.isEmpty())
             for (String memberId : memberIds) {
-                int topicPartitionIndex = Math.abs(memberId.hashCode() % targetPartitions.size());
-                TopicIdPartition topicPartition = targetPartitions.get(topicPartitionIndex);
+                int topicPartitionIndex = Math.abs(memberId.hashCode() % unassignedPartitions.size());
+                TopicIdPartition topicPartition = unassignedPartitions.get(topicPartitionIndex);
                 assignment.computeIfAbsent(topicPartition, k -> new ArrayList<>()).add(memberId);
             }
     }
 
     /**
      * This functions assigns topic partitions to members by round-robin approach and updates the existing assignment.
-     * @param memberIds - the member ids to which the topic partitions need to be assigned.
-     * @param targetPartitions - the subscribed topic partitions.
+     * @param memberIds - the member ids to which the topic partitions need to be assigned, should be non-empty.
+     * @param unassignedPartitions - the subscribed topic partitions which needs assignment.
      * @param assignment - the existing assignment by topic partition.
      */
+    // Visible for testing
     void roundRobinAssignment(
         Collection<String> memberIds,
-        List<TopicIdPartition> targetPartitions,
+        List<TopicIdPartition> unassignedPartitions,
         Map<TopicIdPartition, List<String>> assignment
     ) {
         // We iterate through the target partitions and assign a memberId to them. In case we run out of members (members < targetPartitions),
         // we again start from the starting index of memberIds.
         Iterator<String> memberIdIterator = memberIds.iterator();
-        for (TopicIdPartition targetPartition : targetPartitions) {
+        for (TopicIdPartition targetPartition : unassignedPartitions) {
             if (!memberIdIterator.hasNext()) {
                 memberIdIterator = memberIds.iterator();
             }
-            String member = memberIdIterator.next();
-            assignment.computeIfAbsent(targetPartition, k -> new ArrayList<>()).add(member);
+            String memberId = memberIdIterator.next();
+            assignment.computeIfAbsent(targetPartition, k -> new ArrayList<>()).add(memberId);
         }
     }
 
