@@ -38,7 +38,7 @@ public abstract class ApiMessageFormatter implements MessageFormatter {
     private static final String DATA = "data";
     private static final String KEY = "key";
     private static final String VALUE = "value";
-    static final String UNKNOWN = "unknown";
+    public static final String UNKNOWN = "unknown";
 
     @Override
     public void writeTo(ConsumerRecord<byte[], byte[]> consumerRecord, PrintStream output) {

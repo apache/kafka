@@ -395,16 +395,14 @@ public class GroupCoordinatorService implements GroupCoordinator {
             topicPartitionFor(request.groupId()),
             Duration.ofMillis(config.offsetCommitTimeoutMs()),
             coordinator -> coordinator.shareGroupHeartbeat(context, request)
-        ).thenCompose(
+        ).thenCompose(result -> {
             // This ensures that the previous group write has completed successfully
             // before we start the persister initialize phase.
-            result -> {
-                if (result.getValue().isPresent()) {
-                    return persisterInitialize(context, request, result.getValue().get(), result.getKey());
-                }
-                return CompletableFuture.completedFuture(result.getKey());
+            if (result.getValue().isPresent()) {
+                return persisterInitialize(context, request, result.getValue().get(), result.getKey());
             }
-        ).exceptionally(exception -> handleOperationException(
+            return CompletableFuture.completedFuture(result.getKey());
+        }).exceptionally(exception -> handleOperationException(
             "share-group-heartbeat",
             request,
             exception,
@@ -436,8 +434,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 GroupTopicPartitionData<PartitionStateData> gtp = request.groupTopicPartitionData();
                 log.error("Unable to initialize share group state {}, {}", gtp.groupId(), gtp.topicsData(), exception);
                 return new ShareGroupHeartbeatResponseData()
-                    .setErrorCode(Errors.forException(exception).code())
-                    .setErrorMessage(Errors.forException(exception).message());
+                    .setErrorCode(Errors.forException(exception).code());
             });
     }
 
