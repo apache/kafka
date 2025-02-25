@@ -18,8 +18,12 @@
 package org.apache.kafka.tools.consumer.group;
 
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.test.api.ClusterConfig;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.common.Feature;
@@ -30,6 +34,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -44,6 +49,7 @@ import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.CONSUMER
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 
 /**
  * The old test framework {@link kafka.api.BaseConsumerTest#getTestQuorumAndGroupProtocolParametersAll} test for the following cases:
@@ -73,7 +79,11 @@ class ConsumerGroupCommandTestUtils {
     }
 
     static List<ClusterConfig> generator() {
-        Map<String, String> serverProperties = new HashMap<>();
+        return generator(Collections.emptyMap());
+    }
+
+    static List<ClusterConfig> generator(Map<String, String> defaultServerConfig) {
+        Map<String, String> serverProperties = new HashMap<>(defaultServerConfig);
         serverProperties.put(OFFSETS_TOPIC_PARTITIONS_CONFIG, "1");
         serverProperties.put(OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, "1");
         serverProperties.put(GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, "1000");
@@ -150,5 +160,21 @@ class ConsumerGroupCommandTestUtils {
         } catch (WakeupException e) {
             // OK
         }
+    }
+
+    static void produceRecord(String topic, String bootstrapServers) {
+        try (KafkaProducer<byte[], byte[]> producer = createProducer(bootstrapServers)) {
+            assertDoesNotThrow(() -> producer.send(new ProducerRecord<>(topic, 0, null, null)).get());
+        }
+    }
+
+    private static KafkaProducer<byte[], byte[]> createProducer(String bootstrapServers) {
+        Properties config = new Properties();
+        config.putIfAbsent(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        config.putIfAbsent(ProducerConfig.ACKS_CONFIG, "-1");
+        config.putIfAbsent(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
+        config.putIfAbsent(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
+
+        return new KafkaProducer<>(config);
     }
 }
