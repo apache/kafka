@@ -37,19 +37,25 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
-public class AutoQuarantinedTestFilter implements Filter<TestDescriptor> {
+/**
+ * A filter that selectively includes tests that are not present in a given test catalog.
+ * <p>
+ * The format of the test catalog is a text file where each line has the format of:
+ * <pre>
+ *     FullyQualifiedClassName "#" MethodName "\n"
+ * </pre>
+ * If the catalog is missing, empty, or invalid, this filter will include all tests by default.
+ */
+public class CatalogTestFilter implements Filter<TestDescriptor> {
 
-    private static final Filter<TestDescriptor> INCLUDE_ALL_TESTS = testDescriptor -> FilterResult.included(null);
-    private static final Filter<TestDescriptor> EXCLUDE_ALL_TESTS = testDescriptor -> FilterResult.excluded(null);
+    private static final Filter<TestDescriptor> EXCLUDE_ALL_TESTS = testDescriptor -> FilterResult.excluded("missing catalog");
 
-    private static final Logger log = LoggerFactory.getLogger(AutoQuarantinedTestFilter.class);
+    private static final Logger log = LoggerFactory.getLogger(CatalogTestFilter.class);
 
     private final Set<TestAndMethod> testCatalog;
-    private final boolean includeQuarantined;
 
-    AutoQuarantinedTestFilter(Set<TestAndMethod> testCatalog, boolean includeQuarantined) {
+    CatalogTestFilter(Set<TestAndMethod> testCatalog) {
         this.testCatalog = Collections.unmodifiableSet(testCatalog);
-        this.includeQuarantined = includeQuarantined;
     }
 
     @Override
@@ -67,54 +73,28 @@ public class AutoQuarantinedTestFilter implements Filter<TestDescriptor> {
         MethodSource methodSource = (MethodSource) source;
 
         TestAndMethod testAndMethod = new TestAndMethod(methodSource.getClassName(), methodSource.getMethodName());
-        if (includeQuarantined) {
-            if (testCatalog.contains(testAndMethod)) {
-                return FilterResult.excluded("exclude non-quarantined");
-            } else {
-                return FilterResult.included("auto-quarantined");
-            }
+        if (testCatalog.contains(testAndMethod)) {
+            return FilterResult.excluded(null);
         } else {
-            if (testCatalog.contains(testAndMethod)) {
-                return FilterResult.included(null);
-            } else {
-                return FilterResult.excluded("auto-quarantined");
-            }
-        }
-    }
-
-    private static Filter<TestDescriptor> defaultFilter(boolean includeQuarantined) {
-        if (includeQuarantined) {
-            return EXCLUDE_ALL_TESTS;
-        } else {
-            return INCLUDE_ALL_TESTS;
+            return FilterResult.included("new test");
         }
     }
 
     /**
      * Create a filter that excludes tests that are missing from a given test catalog file.
-     * If no test catalog is given, the default behavior depends on {@code includeQuarantined}.
-     * If true, this filter will exclude all tests. If false, this filter will include all tests.
-     * <p>
-     * The format of the test catalog is a text file where each line has the format of:
-     *
-     * <pre>
-     *     FullyQualifiedClassName "#" MethodName "\n"
-     * </pre>
-     *
      * @param testCatalogFileName path to a test catalog file
-     * @param includeQuarantined true if this filter should include only the auto-quarantined tests
      */
-    public static Filter<TestDescriptor> create(String testCatalogFileName, boolean includeQuarantined) {
+    public static Filter<TestDescriptor> create(String testCatalogFileName) {
         if (testCatalogFileName == null || testCatalogFileName.isEmpty()) {
-            log.debug("No test catalog specified, will not quarantine any recently added tests.");
-            return defaultFilter(includeQuarantined);
+            log.debug("No test catalog specified, will not select any tests with this filter.");
+            return EXCLUDE_ALL_TESTS;
         }
         Path path = Paths.get(testCatalogFileName);
         log.debug("Loading test catalog file {}.", path);
 
         if (!Files.exists(path)) {
-            log.error("Test catalog file {} does not exist, will not quarantine any recently added tests.", path);
-            return defaultFilter(includeQuarantined);
+            log.error("Test catalog file {} does not exist, will not select any tests with this filter.", path);
+            return EXCLUDE_ALL_TESTS;
         }
 
         Set<TestAndMethod> allTests = new HashSet<>();
@@ -126,16 +106,16 @@ public class AutoQuarantinedTestFilter implements Filter<TestDescriptor> {
                 line = reader.readLine();
             }
         } catch (IOException e) {
-            log.error("Error while reading test catalog file, will not quarantine any recently added tests.", e);
-            return defaultFilter(includeQuarantined);
+            log.error("Error while reading test catalog file, will not select any tests with this filter.", e);
+            return EXCLUDE_ALL_TESTS;
         }
 
         if (allTests.isEmpty()) {
-            log.error("Loaded an empty test catalog, will not quarantine any recently added tests.");
-            return defaultFilter(includeQuarantined);
+            log.error("Loaded an empty test catalog, will not select any tests with this filter.");
+            return EXCLUDE_ALL_TESTS;
         } else {
             log.debug("Loaded {} test methods from test catalog file {}.", allTests.size(), path);
-            return new AutoQuarantinedTestFilter(allTests, includeQuarantined);
+            return new CatalogTestFilter(allTests);
         }
     }
 

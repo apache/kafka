@@ -38,6 +38,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
+import org.apache.kafka.common.errors.InvalidRecordStateException;
 import org.apache.kafka.common.errors.ShareSessionNotFoundException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.UnknownServerException;
@@ -567,16 +568,16 @@ public class ShareConsumeRequestManagerTest {
         ShareConsumeRequestManager.ResultHandler resultHandler = shareConsumeRequestManager.buildResultHandler(null, Optional.empty());
 
         // Passing null acknowledgements should mean we do not send the background event at all.
-        resultHandler.complete(tip0, null, true);
+        resultHandler.complete(tip0, null, ShareConsumeRequestManager.AcknowledgeRequestType.COMMIT_ASYNC);
         assertEquals(0, completedAcknowledgements.size());
 
         // Setting isCommitAsync to false should still not send any background event
         // as we have initialized remainingResults to null.
-        resultHandler.complete(tip0, acknowledgements, false);
+        resultHandler.complete(tip0, acknowledgements, ShareConsumeRequestManager.AcknowledgeRequestType.COMMIT_SYNC);
         assertEquals(0, completedAcknowledgements.size());
 
         // Sending non-null acknowledgements means we do send the background event
-        resultHandler.complete(tip0, acknowledgements, true);
+        resultHandler.complete(tip0, acknowledgements, ShareConsumeRequestManager.AcknowledgeRequestType.COMMIT_ASYNC);
         assertEquals(3, completedAcknowledgements.get(0).get(tip0).size());
     }
 
@@ -599,16 +600,16 @@ public class ShareConsumeRequestManagerTest {
         ShareConsumeRequestManager.ResultHandler resultHandler = shareConsumeRequestManager.buildResultHandler(resultCount, Optional.of(future));
 
         // We only send the background event after all results have been completed.
-        resultHandler.complete(tip0, acknowledgements, false);
+        resultHandler.complete(tip0, acknowledgements, ShareConsumeRequestManager.AcknowledgeRequestType.COMMIT_SYNC);
         assertEquals(0, completedAcknowledgements.size());
         assertFalse(future.isDone());
 
-        resultHandler.complete(t2ip0, null, false);
+        resultHandler.complete(t2ip0, null, ShareConsumeRequestManager.AcknowledgeRequestType.COMMIT_SYNC);
         assertEquals(0, completedAcknowledgements.size());
         assertFalse(future.isDone());
 
         // After third response is received, we send the background event.
-        resultHandler.complete(tip1, acknowledgements, false);
+        resultHandler.complete(tip1, acknowledgements, ShareConsumeRequestManager.AcknowledgeRequestType.COMMIT_SYNC);
         assertEquals(1, completedAcknowledgements.size());
         assertEquals(2, completedAcknowledgements.get(0).size());
         assertEquals(3, completedAcknowledgements.get(0).get(tip0).size());
@@ -1313,6 +1314,87 @@ public class ShareConsumeRequestManagerTest {
         assertEquals(3, shareFetch.records().get(tp0).size());
         // As the second topic failed authorization, we do not get the records in the ShareFetch.
         assertThrows(NullPointerException.class, (Executable) shareFetch.records().get(t2p0));
+    }
+
+    @Test
+    public void testShareFetchInvalidResponse() {
+        buildRequestManager();
+        shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
+
+        subscriptions.subscribeToShareGroup(Collections.singleton(topicName));
+        subscriptions.assignFromSubscribed(Collections.singleton(tp0));
+
+        client.updateMetadata(
+                RequestTestUtils.metadataUpdateWithIds(1, Map.of(topicName, 1),
+                        tp -> validLeaderEpoch, topicIds, false));
+
+        assertEquals(1, sendFetches());
+        assertFalse(shareConsumeRequestManager.hasCompletedFetches());
+
+        client.prepareResponse(fullFetchResponse(t2ip0, records, acquiredRecords, Errors.NONE));
+        networkClientDelegate.poll(time.timer(0));
+        assertFalse(shareConsumeRequestManager.hasCompletedFetches());
+    }
+
+    @Test
+    public void testShareAcknowledgeInvalidResponse() throws InterruptedException {
+        buildRequestManager();
+        shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
+
+        subscriptions.subscribeToShareGroup(Collections.singleton(topicName));
+        subscriptions.assignFromSubscribed(Collections.singleton(tp0));
+
+        client.updateMetadata(
+                RequestTestUtils.metadataUpdateWithIds(1, Map.of(topicName, 1),
+                        tp -> validLeaderEpoch, topicIds, false));
+
+        assertEquals(1, sendFetches());
+        assertFalse(shareConsumeRequestManager.hasCompletedFetches());
+
+        client.prepareResponse(fullFetchResponse(tip0, records, acquiredRecords, Errors.NONE));
+        networkClientDelegate.poll(time.timer(0));
+        assertTrue(shareConsumeRequestManager.hasCompletedFetches());
+
+        fetchRecords();
+
+        Acknowledgements acknowledgements = Acknowledgements.empty();
+        acknowledgements.add(1L, AcknowledgeType.ACCEPT);
+
+        shareConsumeRequestManager.commitAsync(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)));
+
+        assertEquals(1, shareConsumeRequestManager.sendAcknowledgements());
+
+        // If a top-level error is received, we still retry the acknowledgements independent of the topic-partitions received in the response.
+        client.prepareResponse(acknowledgeResponseWithTopLevelError(t2ip0, Errors.LEADER_NOT_AVAILABLE));
+        networkClientDelegate.poll(time.timer(0));
+
+        assertEquals(1, shareConsumeRequestManager.requestStates(0).getAsyncRequest().getIncompleteAcknowledgementsCount(tip0));
+
+        TestUtils.retryOnExceptionWithTimeout(() -> assertEquals(1, shareConsumeRequestManager.sendAcknowledgements()));
+
+        client.prepareResponse(fullAcknowledgeResponse(t2ip0, Errors.NONE));
+        networkClientDelegate.poll(time.timer(0));
+
+        // If we do not get the expected partitions in the response, we fail these acknowledgements with InvalidRecordStateException.
+        assertEquals(InvalidRecordStateException.class, completedAcknowledgements.get(0).get(tip0).getAcknowledgeException().getClass());
+        completedAcknowledgements.clear();
+
+        // Send remaining acknowledgements through piggybacking on the next fetch.
+        Acknowledgements acknowledgements1 = Acknowledgements.empty();
+        acknowledgements1.add(2L, AcknowledgeType.ACCEPT);
+        acknowledgements1.add(3L, AcknowledgeType.REJECT);
+
+        shareConsumeRequestManager.fetch(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements1)));
+
+        assertEquals(1, sendFetches());
+        assertFalse(shareConsumeRequestManager.hasCompletedFetches());
+
+        client.prepareResponse(fullFetchResponse(t2ip0, records, acquiredRecords, Errors.NONE));
+        networkClientDelegate.poll(time.timer(0));
+        assertFalse(shareConsumeRequestManager.hasCompletedFetches());
+
+        // If we do not get the expected partitions in the response, we fail these acknowledgements with InvalidRecordStateException.
+        assertEquals(InvalidRecordStateException.class, completedAcknowledgements.get(0).get(tip0).getAcknowledgeException().getClass());
     }
 
     @Test
@@ -2376,6 +2458,12 @@ public class ShareConsumeRequestManagerTest {
     private ShareAcknowledgeResponse emptyAcknowledgeResponse() {
         Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData> partitions = Collections.emptyMap();
         return ShareAcknowledgeResponse.of(Errors.NONE, 0, new LinkedHashMap<>(partitions), Collections.emptyList());
+    }
+
+    private ShareAcknowledgeResponse acknowledgeResponseWithTopLevelError(TopicIdPartition tp, Errors error) {
+        Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData> partitions = Map.of(tp,
+                partitionDataForAcknowledge(tp, Errors.NONE));
+        return ShareAcknowledgeResponse.of(error, 0, new LinkedHashMap<>(partitions), Collections.emptyList());
     }
 
     private ShareAcknowledgeResponse fullAcknowledgeResponse(TopicIdPartition tp, Errors error) {

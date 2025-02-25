@@ -13,4 +13,30 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-org.apache.kafka.common.test.junit.KafkaPostDiscoveryFilter
+name: Pull Request Reviewed
+
+on:
+  pull_request_review:
+    types: [submitted, edited, dismissed]
+    branches:
+      - trunk
+  pull_request:
+    types: [edited]
+    branches:
+      - trunk
+
+jobs:
+  save-pr-number:
+    name: Save PR Number
+    runs-on: ubuntu-latest
+    steps:
+      - name: Env
+        run: printenv
+        env:
+          GITHUB_CONTEXT: ${{ toJson(github) }}
+      - name: Save PR Number
+        run: echo ${{ github.event.pull_request.number }} > PR_NUMBER.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PR_NUMBER.txt
+          path: PR_NUMBER.txt

@@ -31,7 +31,7 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class QuarantinedPostDiscoveryFilterTest {
+public class KafkaPostDiscoveryFilterTest {
 
     static class MockTestDescriptor implements TestDescriptor {
 
@@ -105,71 +105,102 @@ public class QuarantinedPostDiscoveryFilterTest {
         }
     }
 
-    QuarantinedPostDiscoveryFilter setupFilter(boolean runQuarantined) {
-        Set<AutoQuarantinedTestFilter.TestAndMethod> testCatalog = new HashSet<>();
-        testCatalog.add(new AutoQuarantinedTestFilter.TestAndMethod("o.a.k.Foo", "testBar1"));
-        testCatalog.add(new AutoQuarantinedTestFilter.TestAndMethod("o.a.k.Foo", "testBar2"));
-        testCatalog.add(new AutoQuarantinedTestFilter.TestAndMethod("o.a.k.Spam", "testEggs"));
+    KafkaPostDiscoveryFilter setupFilter(boolean runNew, boolean runFlaky) {
+        Set<CatalogTestFilter.TestAndMethod> testCatalog = new HashSet<>();
+        testCatalog.add(new CatalogTestFilter.TestAndMethod("o.a.k.Foo", "testBar1"));
+        testCatalog.add(new CatalogTestFilter.TestAndMethod("o.a.k.Foo", "testBar2"));
+        testCatalog.add(new CatalogTestFilter.TestAndMethod("o.a.k.Spam", "testEggs"));
 
-        AutoQuarantinedTestFilter autoQuarantinedTestFilter = new AutoQuarantinedTestFilter(testCatalog, runQuarantined);
-        return new QuarantinedPostDiscoveryFilter(autoQuarantinedTestFilter, runQuarantined);
+        CatalogTestFilter catalogTestFilter = new CatalogTestFilter(testCatalog);
+        return new KafkaPostDiscoveryFilter(catalogTestFilter, runNew, runFlaky);
     }
 
     @Test
-    public void testQuarantinedExistingTestNonFlaky() {
-        QuarantinedPostDiscoveryFilter filter = setupFilter(true);
+    public void testExcludeExistingNonFlaky() {
+        KafkaPostDiscoveryFilter filter = setupFilter(false, true);
         assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Foo", "testBar1")).excluded());
         assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Foo", "testBar2")).excluded());
         assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Spam", "testEggs")).excluded());
     }
 
     @Test
-    public void testQuarantinedExistingTestFlaky() {
-        QuarantinedPostDiscoveryFilter filter = setupFilter(true);
+    public void testIncludeExistingFlaky() {
+        KafkaPostDiscoveryFilter filter = setupFilter(false, true);
         assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Foo", "testBar1", "flaky")).included());
         assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Foo", "testBar2", "flaky")).included());
         assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Spam", "testEggs", "flaky", "integration")).included());
     }
 
     @Test
-    public void testQuarantinedNewTest() {
-        QuarantinedPostDiscoveryFilter filter = setupFilter(true);
+    public void testIncludeAutoQuarantinedAndFlaky() {
+        KafkaPostDiscoveryFilter filter = setupFilter(true, true);
         assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Foo", "testBar3")).included());
         assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Spam", "testEggz", "flaky")).included());
     }
 
     @Test
-    public void testExistingTestNonFlaky() {
-        QuarantinedPostDiscoveryFilter filter = setupFilter(false);
-        assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Foo", "testBar1")).included());
-        assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Foo", "testBar2")).included());
-        assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Spam", "testEggs")).included());
+    public void testIncludeAutoQuarantinedNoFlaky() {
+        KafkaPostDiscoveryFilter filter = setupFilter(true, false);
+        assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Foo", "testBar3")).included());
+        assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Spam", "testEggz", "flaky")).excluded());
     }
 
+    @Test
+    public void testExcludeFlakyAndNew() {
+        KafkaPostDiscoveryFilter filter = setupFilter(false, false);
+        assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Foo", "testBar3")).excluded());
+        assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Spam", "testEggz", "flaky")).excluded());
+    }
 
     @Test
-    public void testExistingTestFlaky() {
-        QuarantinedPostDiscoveryFilter filter = setupFilter(false);
+    public void testExcludeFlaky() {
+        KafkaPostDiscoveryFilter filter = setupFilter(false, false);
         assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Foo", "testBar1", "flaky")).excluded());
         assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Foo", "testBar2", "flaky")).excluded());
         assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Spam", "testEggs", "flaky", "integration")).excluded());
     }
 
     @Test
-    public void testNewTest() {
-        QuarantinedPostDiscoveryFilter filter = setupFilter(false);
-        assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Foo", "testBar3")).excluded());
-        assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Spam", "testEggz", "flaky")).excluded());
+    public void testExistingTestNonFlaky() {
+        KafkaPostDiscoveryFilter filter = setupFilter(false, false);
+        assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Foo", "testBar1")).included());
+        assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Foo", "testBar2")).included());
+        assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Spam", "testEggs")).included());
     }
 
     @Test
-    public void testNoCatalogQuarantinedTest() {
-        QuarantinedPostDiscoveryFilter filter = new QuarantinedPostDiscoveryFilter(
-            AutoQuarantinedTestFilter.create(null, true),
-            true
+    public void testNoCatalogRunFlakyTests() {
+        KafkaPostDiscoveryFilter filter = new KafkaPostDiscoveryFilter(
+            CatalogTestFilter.create(null),
+            false, true
         );
         assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Foo", "testBar1", "flaky")).included());
         assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Foo", "testBar2", "flaky")).included());
         assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Spam", "testEggs")).excluded());
+    }
+
+    @Test
+    public void testNoCatalogRunNewTest() {
+        KafkaPostDiscoveryFilter filter = new KafkaPostDiscoveryFilter(
+                CatalogTestFilter.create(null),
+                true, false
+        );
+        assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Foo", "testBar1", "flaky")).excluded());
+        assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Foo", "testBar2", "flaky")).excluded());
+        assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Spam", "testEggs")).excluded());
+        assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Spam", "testNew")).excluded(),
+            "Should not select a new test because there is no catalog loaded");
+    }
+
+    @Test
+    public void testNoCatalogRunMainTests() {
+        KafkaPostDiscoveryFilter filter = new KafkaPostDiscoveryFilter(
+                CatalogTestFilter.create(null),
+                false, false
+        );
+        assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Foo", "testBar1", "flaky")).excluded());
+        assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Foo", "testBar2", "flaky")).excluded());
+        assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Spam", "testEggs")).included());
+        assertTrue(filter.apply(new MockTestDescriptor("o.a.k.Spam", "testNew")).included());
     }
 }
