@@ -1842,6 +1842,23 @@ public interface Admin extends AutoCloseable {
     }
 
     /**
+     * Delete share groups from the cluster with the default options.
+     *
+     * @return The DeleteShareGroupsResult.
+     */
+    default DeleteShareGroupsResult deleteShareGroups(Collection<String> groupIds) {
+        return deleteShareGroups(groupIds, new DeleteShareGroupsOptions());
+    }
+
+    /**
+     * Delete share groups from the cluster.
+     *
+     * @param options The options to use when deleting a share group.
+     * @return The DeleteShareGroupsResult.
+     */
+    DeleteShareGroupsResult deleteShareGroups(Collection<String> groupIds, DeleteShareGroupsOptions options);
+
+    /**
      * Describe some classic groups in the cluster.
      *
      * @param groupIds The IDs of the groups to describe.

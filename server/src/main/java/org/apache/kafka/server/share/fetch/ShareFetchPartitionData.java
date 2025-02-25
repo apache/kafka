@@ -14,13 +14,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.server.share.fetch;
 
-package org.apache.kafka.clients.admin.internals;
+import org.apache.kafka.common.TopicIdPartition;
+import org.apache.kafka.server.storage.log.FetchPartitionData;
 
-import org.apache.kafka.common.utils.LogContext;
+/**
+ * The ShareFetchPartitionData class holds the data and metadata for a partition that is being fetched.
+ */
+public record ShareFetchPartitionData(
+    TopicIdPartition topicIdPartition,
+    long fetchOffset,
+    FetchPartitionData fetchPartitionData
+) {
 
-public class DeleteConsumerGroupsHandlerTest extends DeleteGroupsHandlerTest {
-    protected DeleteGroupsHandler handler() {
-        return new DeleteConsumerGroupsHandler(new LogContext());
-    }
 }
