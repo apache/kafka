@@ -19,11 +19,13 @@
 <!--#include virtual="../includes/_top.htm" -->
 <div class="content">
 <div class="p-zk2kraft">
-    <h1>Differences Between KRaft mode and Zookeeper mode</h1>
-    <h2 class="anchor-heading">Removed Zookeeper Features</h2>
+    <h1>Differences Between KRaft mode and ZooKeeper mode</h1>
+    <h2 class="anchor-heading">Removed ZooKeeper Features</h2>
     <p>
-        This section documents the removed ZooKeeper features and identifies which KRaft features can replace them.<br>
-        Note that some ZooKeeper features don't need replacements as they were only needed in ZooKeeper.
+        This section documents differences in behavior between KRaft mode and ZooKeeper mode.
+        Specifically, several configurations, metrics and features have changed or are no longer required in KRaft mode.
+        To migrate an existing cluster from ZooKeeper mode to KRaft mode, please refer to the
+        <a href="/39/documentation.html#kraft_zk_migration">ZooKeeper to KRaft Migration</a> section.
     </p>
     <h3 class="anchor-heading">Configurations</h3>
     <ul>
@@ -126,7 +128,7 @@
         </li>
         <li>
             <p>
-                Removed Zookeeper related configurations.
+                Removed ZooKeeper related configurations.
             </p>
             <ul>
                 <li><code>zookeeper.connect</code></li>
