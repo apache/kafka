@@ -130,6 +130,10 @@ python docker_build_test.py kafka/test --image-tag=3.6.0 --image-type=jvm --kafk
 ```
 python docker_build_test.py kafka/test --image-tag=3.8.0 --image-type=native --kafka-url=https://archive.apache.org/dist/kafka/3.8.0/kafka_2.13-3.8.0.tgz
 ```
+- Example(local build archive with jvm or native image type) :- To build and test an image named test with local build archive
+```
+python docker_build_test.py kafka/test --image-tag=local-build --image-type=<jvm/native> --kafka-archive=</absolute/path/to/core/build/distributions/kafka_2.13-4.1.0-SNAPSHOT.tgz>
+```
 
 Creating a Release Candidate
 ----------------------------
