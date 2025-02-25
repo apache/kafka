@@ -1874,7 +1874,7 @@ public class WorkerTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "rawtypes"})
     public void testZombieFencing(boolean enableTopicCreation) {
         setup(enableTopicCreation);
         Admin admin = mock(Admin.class);
@@ -1892,7 +1892,7 @@ public class WorkerTest {
 
         mockKafkaClusterId();
         mockGenericIsolation();
-        when(plugins.newConnector(anyString(), any())).thenReturn(sourceConnector);
+        when(plugins.connectorClass(anyString(), any())).thenReturn((Class) sourceConnector.getClass());
         when(plugins.pluginLoader(SampleSourceConnector.class.getName(), null)).thenReturn(pluginLoader);
 
         worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, executorService,
@@ -3066,10 +3066,11 @@ public class WorkerTest {
         when(task.version()).thenReturn("1.0");
     }
 
+    @SuppressWarnings({"unchecked", "rawtypes"})
     private void mockVersionedTaskIsolation(Class<? extends Connector> connectorClass, Class<? extends Task> taskClass, VersionRange range, Connector connector, Task task) {
         mockGenericIsolation();
         when(plugins.pluginLoader(connectorClass.getName(), range)).thenReturn(pluginLoader);
-        when(plugins.newConnector(connectorClass.getName(), range)).thenReturn(connector);
+        when(plugins.connectorClass(connectorClass.getName(), range)).thenReturn((Class) connectorClass);
         when(plugins.newTask(taskClass)).thenReturn(task);
         when(task.version()).thenReturn(range == null ? "unknown" : range.toString());
     }
@@ -3084,7 +3085,7 @@ public class WorkerTest {
     private void verifyVersionedTaskIsolation(Class<? extends Connector> connectorClass, Class<? extends Task> taskClass, VersionRange range, Task task) {
         verifyGenericIsolation();
         verify(plugins).pluginLoader(connectorClass.getName(), range);
-        verify(plugins).newConnector(connectorClass.getName(), range);
+        verify(plugins).connectorClass(connectorClass.getName(), range);
         verify(plugins).newTask(taskClass);
         verify(task).version();
     }

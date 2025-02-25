@@ -1832,8 +1832,7 @@ public final class Worker {
             Objects.requireNonNull(classLoader, "Classloader used by task cannot be null");
 
             ErrorHandlingMetrics errorHandlingMetrics = errorHandlingMetrics(id);
-
-            final Connector connector = instantiateConnector(connectorConfig.originalsStrings());
+            final Class<? extends Connector> connectorClass = connectorClass(connectorConfig.originalsStrings());
 
             RetryWithToleranceOperator<T> retryWithToleranceOperator = new RetryWithToleranceOperator<>(connectorConfig.errorRetryTimeout(),
                     connectorConfig.errorMaxDelayInMillis(), connectorConfig.errorToleranceType(), Time.SYSTEM, errorHandlingMetrics);
@@ -1844,7 +1843,7 @@ public final class Worker {
             return doBuild(task, id, configState, statusListener, initialState,
                     connectorConfig, keyConverterPlugin, valueConverterPlugin, headerConverterPlugin, classLoader,
                     retryWithToleranceOperator, transformationChain,
-                    errorHandlingMetrics, connector.getClass());
+                    errorHandlingMetrics, connectorClass);
         }
 
         abstract WorkerTask<T, R> doBuild(
