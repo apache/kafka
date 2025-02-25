@@ -275,8 +275,8 @@ if (repo != null) {
     excludes.addAll([
         '**/.git/**',
         '**/build/**',
+        '.github/pull_request_template.md',
         'CONTRIBUTING.md',
-        'PULL_REQUEST_TEMPLATE.md',
         'gradlew',
         'gradlew.bat',
         'gradle/wrapper/gradle-wrapper.properties',
