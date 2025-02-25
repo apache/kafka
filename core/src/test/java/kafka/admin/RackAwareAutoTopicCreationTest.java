@@ -45,16 +45,15 @@ import scala.collection.Iterator;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @ClusterTestDefaults(types = {Type.KRAFT},
-        brokers = 4,
-        serverProperties = {
-            @ClusterConfigProperty(key = ServerLogConfigs.NUM_PARTITIONS_CONFIG, value = "8"),
-            @ClusterConfigProperty(key = ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG, value = "2"),
-            @ClusterConfigProperty(key = ServerConfigs.CONTROLLED_SHUTDOWN_ENABLE_CONFIG, value = "false"),
-            @ClusterConfigProperty(id = 0, key = ServerConfigs.BROKER_RACK_CONFIG, value = "0"),
-            @ClusterConfigProperty(id = 1, key = ServerConfigs.BROKER_RACK_CONFIG, value = "0"),
-            @ClusterConfigProperty(id = 2, key = ServerConfigs.BROKER_RACK_CONFIG, value = "1"),
-            @ClusterConfigProperty(id = 3, key = ServerConfigs.BROKER_RACK_CONFIG, value = "1"),
-        })
+    brokers = 4,
+    serverProperties = {
+        @ClusterConfigProperty(key = ServerLogConfigs.NUM_PARTITIONS_CONFIG, value = "8"),
+        @ClusterConfigProperty(key = ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG, value = "2"),
+        @ClusterConfigProperty(id = 0, key = ServerConfigs.BROKER_RACK_CONFIG, value = "0"),
+        @ClusterConfigProperty(id = 1, key = ServerConfigs.BROKER_RACK_CONFIG, value = "0"),
+        @ClusterConfigProperty(id = 2, key = ServerConfigs.BROKER_RACK_CONFIG, value = "1"),
+        @ClusterConfigProperty(id = 3, key = ServerConfigs.BROKER_RACK_CONFIG, value = "1"),
+    })
 public class RackAwareAutoTopicCreationTest {
 
     private static final String TOPIC = "topic";
@@ -107,7 +106,7 @@ public class RackAwareAutoTopicCreationTest {
         }
     }
 
-    private Map<Integer, List<Integer>> getTopicAssignment(Admin admin) throws Exception {
+    private static Map<Integer, List<Integer>> getTopicAssignment(Admin admin) throws Exception {
         TopicDescription topicDescription = admin.describeTopics(List.of(TOPIC)).allTopicNames().get().get(TOPIC);
         return topicDescription.partitions().stream()
                 .collect(Collectors.toMap(
@@ -115,7 +114,7 @@ public class RackAwareAutoTopicCreationTest {
                         p -> p.replicas().stream().map(Node::id).collect(Collectors.toList())));
     }
 
-    private Map<Integer, String> getBrokerToRackMap(ClusterInstance cluster) {
+    private static Map<Integer, String> getBrokerToRackMap(ClusterInstance cluster) {
         Map<Integer, String> actualBrokerToRackMap = new HashMap<>();
         Iterator<BrokerMetadata> iterator = cluster.brokers().get(0).metadataCache().getAliveBrokers().iterator();
         while (iterator.hasNext()) {
@@ -126,8 +125,8 @@ public class RackAwareAutoTopicCreationTest {
     }
 
 
-    public static ReplicaDistributions getReplicaDistribution(Map<Integer, List<Integer>> assignment,
-                                                              Map<Integer, String> brokerRackMapping) {
+    private static ReplicaDistributions getReplicaDistribution(Map<Integer, List<Integer>> assignment,
+                                                               Map<Integer, String> brokerRackMapping) {
         Map<Integer, List<String>> partitionToRackMap = new HashMap<>();
         Map<Integer, Integer> partitionToCountMap = new HashMap<>();
 
@@ -147,14 +146,7 @@ public class RackAwareAutoTopicCreationTest {
         return new ReplicaDistributions(partitionToRackMap, partitionToCountMap);
     }
 
-    private static class ReplicaDistributions {
-        private final Map<Integer, List<String>> partitionToRackMap;
-        private final Map<Integer, Integer> partitionToCountMap;
-
-        public ReplicaDistributions(Map<Integer, List<String>> partitionToRackMap,
-                                    Map<Integer, Integer> partitionToCountMap) {
-            this.partitionToRackMap = partitionToRackMap;
-            this.partitionToCountMap = partitionToCountMap;
-        }
+    private record ReplicaDistributions(Map<Integer, List<String>> partitionToRackMap,
+                                        Map<Integer, Integer> partitionToCountMap) {
     }
 }
