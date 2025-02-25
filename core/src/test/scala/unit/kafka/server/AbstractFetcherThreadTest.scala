@@ -725,7 +725,7 @@ class AbstractFetcherThreadTest {
   def testReplicateBatchesUpToLeaderEpoch(): Unit = {
     val leaderEpoch = 4
     val partition = new TopicPartition("topic", 0)
-    val mockLeaderEndpoint = new MockLeaderEndPoint(truncateOnFetch = truncateOnFetch, version = version)
+    val mockLeaderEndpoint = new MockLeaderEndPoint(version = version)
     val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint)
     val fetcher = new MockFetcherThread(mockLeaderEndpoint, mockTierStateMachine, failedPartitions = failedPartitions)
 
@@ -747,8 +747,7 @@ class AbstractFetcherThreadTest {
     fetcher.mockLeader.setLeaderState(partition, leaderState)
     fetcher.mockLeader.setReplicaPartitionStateCallback(fetcher.replicaPartitionState)
 
-    val expectedFetchState = if (truncateOnFetch) Fetching else Truncating
-    assertEquals(Option(expectedFetchState), fetcher.fetchState(partition).map(_.state))
+    assertEquals(Option(Fetching), fetcher.fetchState(partition).map(_.state))
     assertEquals(0, replicaState.logStartOffset)
     assertEquals(List(), replicaState.log.toList)
 
