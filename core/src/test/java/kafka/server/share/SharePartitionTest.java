@@ -25,7 +25,6 @@ import kafka.server.share.SharePartitionManager.SharePartitionListener;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
 import org.apache.kafka.common.errors.FencedStateEpochException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
@@ -40,7 +39,6 @@ import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.Records;
-import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
@@ -85,6 +83,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 import static kafka.server.share.SharePartition.EMPTY_MEMBER_ID;
+import static org.apache.kafka.server.share.fetch.ShareFetchTestUtils.memoryRecordsBuilder;
 import static org.apache.kafka.test.TestUtils.assertFutureThrows;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -6231,19 +6230,6 @@ public class SharePartitionTest {
 
     private MemoryRecords memoryRecords(int numOfRecords, long startOffset) {
         return memoryRecordsBuilder(numOfRecords, startOffset).build();
-    }
-
-    private MemoryRecordsBuilder memoryRecordsBuilder(int numOfRecords, long startOffset) {
-        return memoryRecordsBuilder(ByteBuffer.allocate(1024), numOfRecords, startOffset);
-    }
-
-    private MemoryRecordsBuilder memoryRecordsBuilder(ByteBuffer buffer, int numOfRecords, long startOffset) {
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, Compression.NONE,
-            TimestampType.CREATE_TIME, startOffset, 2);
-        for (int i = 0; i < numOfRecords; i++) {
-            builder.appendWithOffset(startOffset + i, 0L, TestUtils.randomString(10).getBytes(), TestUtils.randomString(10).getBytes());
-        }
-        return builder;
     }
 
     private List<AcquiredRecords> expectedAcquiredRecord(long baseOffset, long lastOffset, int deliveryCount) {

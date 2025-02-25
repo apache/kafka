@@ -82,6 +82,13 @@
             written as part of the next transaction. Downgrading the protocol is safe. For more information check <a href="/{{version}}/documentation.html#transaction_protocol">here</a>
         </li>
         <li>
+            Eligible Leader Replicas (<a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-966%3A+Eligible+Leader+Replicas">KIP-966 Part 1</a>)
+            enhances the replication protocol for the Apache Kafka 4.0. Now the KRaft controller keeps track of the data partition replicas that are
+            not included in ISR but are safe to be elected as leader without data loss. Such replicas are stored in the partition metadata as
+            the <code>Eligible Leader Replicas</code>(ELR).
+            For more information check <a href="/{{version}}/documentation.html#eligible_leader_replicas">here</a>
+        </li>
+        <li>
             Since Apache Kafka 4.0.0, we have added a system property ("org.apache.kafka.sasl.oauthbearer.allowed.urls") to
             set the allowed URLs as SASL OAUTHBEARER token or jwks endpoints. By default, the value is an empty list.
             Users should explicitly set the allowed list if necessary.
