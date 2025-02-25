@@ -82,9 +82,6 @@ ext {
   userMaxTestRetries = project.hasProperty('maxTestRetries') ? maxTestRetries.toInteger() : 0
   userMaxTestRetryFailures = project.hasProperty('maxTestRetryFailures') ? maxTestRetryFailures.toInteger() : 0
 
-  userMaxQuarantineTestRetries = project.hasProperty('maxQuarantineTestRetries') ? maxQuarantineTestRetries.toInteger() : 0
-  userMaxQuarantineTestRetryFailures = project.hasProperty('maxQuarantineTestRetryFailures') ? maxQuarantineTestRetryFailures.toInteger() : 0
-
   skipSigning = project.hasProperty('skipSigning') && skipSigning.toBoolean()
   shouldSign = !skipSigning && !version.endsWith("SNAPSHOT")
 
@@ -105,7 +102,7 @@ ext {
     throw new GradleException("Unexpected value for keepAliveMode property. Expected one of $keepAliveValues, but received: $userKeepAliveModeString")
   }
 
-  // Used by :test and :quarantinedTest tasks
+  // Used by :test task
   isGithubActions = System.getenv('GITHUB_ACTIONS') != null
 
   // See README.md for details on this option and the reasoning for the default
@@ -496,7 +493,7 @@ subprojects {
   def testsToExclude = ['**/*Suite.class']
 
 
-  // These two tasks will copy JUnit XML files out of the sub-project's build directory and into
+  // This task will copy JUnit XML files out of the sub-project's build directory and into
   // a top-level build/junit-xml directory. This is necessary to avoid reporting on tests which
   // were not run, but instead were restored via FROM-CACHE. See KAFKA-17479 for more details.
   def copyTestXml = tasks.register('copyTestXml') {
@@ -504,37 +501,20 @@ subprojects {
     onlyIf("Project '${project.name}:test' has sources") { ! test.state.noSource }
     onlyIf("Task '${project.name}:test' did work") { test.state.didWork }
 
+    ext {
+      output = project.findProperty("kafka.test.xml.output.dir")
+    }
+
     // Never cache this task
     outputs.cacheIf { false }
     outputs.upToDateWhen { false }
 
     doLast {
       def moduleDirPath = projectToJUnitXmlPath(project)
-      def dest = rootProject.layout.buildDirectory.dir("junit-xml/${moduleDirPath}/test").get().asFile
+      def dest = rootProject.layout.buildDirectory.dir("junit-xml/${moduleDirPath}/${output}").get().asFile
       println "Copy JUnit XML for ${project.name} to $dest"
       ant.copy(todir: "$dest") {
 	ant.fileset(dir: "${test.reports.junitXml.entryPoint}") {
-	  ant.include(name: "**/*.xml")
-	}
-      }
-    }
-  }
-
-  def copyQuarantinedTestXml = tasks.register('copyQuarantinedTestXml') {
-    onlyIf("Environment GITHUB_ACTIONS is set") { isGithubActions }
-    onlyIf("Project '${project.name}:quarantinedTest' has sources") { ! quarantinedTest.state.noSource }
-    onlyIf("Task '${project.name}:quarantinedTest' did work") { quarantinedTest.state.didWork }
-
-    // Never cache this task
-    outputs.cacheIf { false }
-    outputs.upToDateWhen { false }
-
-    doLast {
-      def moduleDirPath = projectToJUnitXmlPath(project)
-      def dest = rootProject.layout.buildDirectory.dir("junit-xml/${moduleDirPath}/quarantinedTest").get().asFile
-      println "Copy JUnit XML for ${project.name} to $dest"
-      ant.copy(todir: "$dest") {
-	ant.fileset(dir: "${quarantinedTest.reports.junitXml.entryPoint}") {
 	  ant.include(name: "**/*.xml")
 	}
       }
@@ -551,7 +531,9 @@ subprojects {
     // KAFKA-17433 Used by deflake.yml github action to repeat individual tests
     systemProperty("kafka.cluster.test.repeat", project.findProperty("kafka.cluster.test.repeat"))
     systemProperty("kafka.test.catalog.file", project.findProperty("kafka.test.catalog.file"))
-    systemProperty("kafka.test.run.quarantined", "false")
+    systemProperty("kafka.test.run.new", project.findProperty("kafka.test.run.new"))
+    systemProperty("kafka.test.run.flaky", project.findProperty("kafka.test.run.flaky"))
+    systemProperty("kafka.test.verbose", project.findProperty("kafka.test.verbose"))
 
     testLogging {
       events = userTestLoggingEvents ?: testLoggingEvents
@@ -565,7 +547,6 @@ subprojects {
 
     useJUnitPlatform {
       includeEngines 'junit-jupiter'
-      excludeTags 'flaky'
     }
 
     develocity {
@@ -576,45 +557,6 @@ subprojects {
     }
     
     finalizedBy("copyTestXml")
-  }
-
-  task quarantinedTest(type: Test, dependsOn: compileJava) {
-    // Disable caching and up-to-date for this task. We always want quarantined tests
-    // to run and never want to cache their results.
-    outputs.upToDateWhen { false }
-    outputs.cacheIf { false }
-
-    maxParallelForks = maxTestForks
-    ignoreFailures = userIgnoreFailures
-
-    maxHeapSize = defaultMaxHeapSize
-    jvmArgs = defaultJvmArgs
-
-    // KAFKA-17433 Used by deflake.yml github action to repeat individual tests
-    systemProperty("kafka.cluster.test.repeat", project.findProperty("kafka.cluster.test.repeat"))
-    systemProperty("kafka.test.catalog.file", project.findProperty("kafka.test.catalog.file"))
-    systemProperty("kafka.test.run.quarantined", "true")
-
-    testLogging {
-      events = userTestLoggingEvents ?: testLoggingEvents
-      showStandardStreams = userShowStandardStreams ?: testShowStandardStreams
-      exceptionFormat = testExceptionFormat
-      displayGranularity = 0
-    }
-    logTestStdout.rehydrate(delegate, owner, this)()
-
-    useJUnitPlatform {
-      includeEngines 'junit-jupiter'
-    }
-
-    develocity {
-      testRetry {
-        maxRetries = userMaxQuarantineTestRetries
-        maxFailures = userMaxQuarantineTestRetryFailures
-      }
-    }
-
-    finalizedBy("copyQuarantinedTestXml")
   }
 
   task integrationTest(type: Test, dependsOn: compileJava) {
