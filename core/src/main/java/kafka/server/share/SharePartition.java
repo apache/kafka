@@ -624,7 +624,7 @@ public class SharePartition {
      * end offsets (e.g., after a leader change and partial acknowledgements), the cache stores the
      * batch based on the offset range provided by the persister. This method handles these special
      * batches by maintaining this range up to the last offset returned by the persister.  No special
-     * handling is required after wards; the cache will eventually return to managing full batches.
+     * handling is required afterward; the cache will eventually return to managing full batches.
      * <p>
      * For compacted topics, batches may be non-contiguous, and records within cached batches may contain gaps.
      * Because this method operates at the batch level, it acquires entire batches and relies on the
