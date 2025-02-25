@@ -2153,8 +2153,8 @@ public class GroupMetadataManager {
      * @param clientHost            The client host.
      * @param subscribedTopicNames  The list of subscribed topic names from the request or null.
      *
-     * @return A Result containing the ShareGroupHeartbeat response and
-     *         a list of records to update the state machine.
+     * @return A Result containing a pair of ShareGroupHeartbeat response and maybe InitializeShareGroupStateParameters
+     *         and a list of records to update the state machine.
      */
     private CoordinatorResult<Map.Entry<ShareGroupHeartbeatResponseData, Optional<InitializeShareGroupStateParameters>>, CoordinatorRecord> shareGroupHeartbeat(
         String groupId,
@@ -3918,6 +3918,13 @@ public class GroupMetadataManager {
             request.subscribedTopicNames());
     }
 
+    /**
+     * Handles an initialize share group state request. This is usually part of
+     * shareGroupHeartbeat code flow.
+     * @param context The request context.
+     * @param request The actual ShareGroupHeartbeat request.
+     * @return A Result containing ShareGroupStatePartitionMetadata records and Void response.
+     */
     public CoordinatorResult<Void, CoordinatorRecord> initializeShareGroupState(
         RequestContext context,
         ShareGroupHeartbeatRequestData request
@@ -4699,11 +4706,11 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Replays ShareGroupCurrentMemberAssignmentKey/Value to update the hard state of
-     * the share group. It updates the assignment of a member or deletes it.
+     * Replays ShareGroupStatePartitionMetadataKey/Value to update the hard state of
+     * the share group.
      *
-     * @param key   A ShareGroupCurrentMemberAssignmentKey key.
-     * @param value A ShareGroupCurrentMemberAssignmentValue record.
+     * @param key   A ShareGroupStatePartitionMetadataKey key.
+     * @param value A ShareGroupStatePartitionMetadataValue record.
      */
     public void replay(
         ShareGroupStatePartitionMetadataKey key,
@@ -4715,6 +4722,7 @@ public class GroupMetadataManager {
 
         // Update timeline structures with info about initialized/deleted topics.
         if (value == null) {
+            // Tombstone!
             shareGroupPartitionMetadata.remove(groupId);
         } else {
             // Init java record.
