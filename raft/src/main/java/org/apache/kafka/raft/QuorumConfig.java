@@ -70,24 +70,23 @@ public class QuorumConfig {
 
     public static final String QUORUM_ELECTION_TIMEOUT_MS_CONFIG = QUORUM_PREFIX + "election.timeout.ms";
     public static final String QUORUM_ELECTION_TIMEOUT_MS_DOC = "Maximum time in milliseconds to wait " +
-        "without being able to fetch from the leader before triggering a new election, this value should large 0.";
+        "without being able to fetch from the leader before triggering a new election";
     public static final int DEFAULT_QUORUM_ELECTION_TIMEOUT_MS = 1_000;
 
     public static final String QUORUM_FETCH_TIMEOUT_MS_CONFIG = QUORUM_PREFIX + "fetch.timeout.ms";
     public static final String QUORUM_FETCH_TIMEOUT_MS_DOC = "Maximum time without a successful fetch from " +
         "the current leader before becoming a candidate and triggering an election for voters; Maximum time " +
-        "a leader can go without receiving valid fetch or fetchSnapshot request from a majority of the quorum before resigning, " +
-        "this value should large 0.";
+        "a leader can go without receiving valid fetch or fetchSnapshot request from a majority of the quorum before resigning.";
     public static final int DEFAULT_QUORUM_FETCH_TIMEOUT_MS = 2_000;
 
     public static final String QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG = QUORUM_PREFIX + "election.backoff.max.ms";
     public static final String QUORUM_ELECTION_BACKOFF_MAX_MS_DOC = "Maximum time in milliseconds before starting new elections. " +
-        "This is used in the binary exponential backoff mechanism that helps prevent gridlocked elections, this value should large 0.";
+        "This is used in the binary exponential backoff mechanism that helps prevent gridlocked elections";
     public static final int DEFAULT_QUORUM_ELECTION_BACKOFF_MAX_MS = 1_000;
 
     public static final String QUORUM_LINGER_MS_CONFIG = QUORUM_PREFIX + "append.linger.ms";
     public static final String QUORUM_LINGER_MS_DOC = "The duration in milliseconds that the leader will " +
-        "wait for writes to accumulate before flushing them to disk, this value should large 0.";
+        "wait for writes to accumulate before flushing them to disk.";
 
     public static final int DEFAULT_QUORUM_LINGER_MS = 25;
 
