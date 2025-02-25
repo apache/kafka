@@ -60,9 +60,7 @@ public class MonitorableSinkConnector extends TestableSinkConnector {
         @Override
         public void put(Collection<SinkRecord> records) {
             super.put(records);
-            for (@SuppressWarnings("UnusedLocalVariable") SinkRecord ignore : records) {
-                count++;
-            }
+            count += records.size();
         }
 
     }
