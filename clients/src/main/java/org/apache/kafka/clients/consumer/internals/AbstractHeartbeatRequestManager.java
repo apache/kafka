@@ -161,6 +161,7 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
     public NetworkClientDelegate.PollResult poll(long currentTimeMs) {
         if (coordinatorRequestManager.coordinator().isEmpty() || membershipManager().shouldSkipHeartbeat()) {
             membershipManager().onHeartbeatRequestSkipped();
+            maybePropagateCoordinatorFatalErrorEvent();
             return NetworkClientDelegate.PollResult.EMPTY;
         }
         pollTimer.update(currentTimeMs);
@@ -261,6 +262,11 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
             membershipManager().maybeRejoinStaleMember();
         }
         pollTimer.reset(maxPollIntervalMs);
+    }
+
+    private void maybePropagateCoordinatorFatalErrorEvent() {
+        coordinatorRequestManager.getAndClearFatalError()
+                .ifPresent(fatalError -> backgroundEventHandler.add(new ErrorEvent(fatalError)));
     }
 
     private NetworkClientDelegate.UnsentRequest makeHeartbeatRequest(final long currentTimeMs, final boolean ignoreResponse) {
@@ -376,6 +382,14 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
                 logger.error("{} failed due to group authorization failure: {}",
                         heartbeatRequestName(), exception.getMessage());
                 handleFatalFailure(error.exception(exception.getMessage()));
+                break;
+
+            case TOPIC_AUTHORIZATION_FAILED:
+                logger.error("{} failed for member {} with state {} due to {}: {}", heartbeatRequestName(),
+                        membershipManager().memberId, membershipManager().state, error, errorMessage);
+                // Propagate auth error received in HB so that it's returned on poll.
+                // Member should stay in its current state so it can recover if ever the missing ACLs are added.
+                backgroundEventHandler.add(new ErrorEvent(error.exception()));
                 break;
 
             case INVALID_REQUEST:

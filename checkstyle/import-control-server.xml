@@ -83,6 +83,7 @@
   <subpackage name="server">
     <allow pkg="org.apache.kafka.server" />
     <allow pkg="org.apache.kafka.image" />
+    <allow pkg="org.apache.kafka.storage.internals.log" />
     <subpackage name="metrics">
       <allow class="org.apache.kafka.server.authorizer.AuthorizableRequestContext" />
       <allow pkg="org.apache.kafka.server.telemetry" />

@@ -69,7 +69,7 @@ abstract class AbstractApiVersionsRequestTest(cluster: ClusterInstance) {
       assertEquals(MetadataVersion.latestTesting().featureLevel(), apiVersionsResponse.data().finalizedFeatures().find(MetadataVersion.FEATURE_NAME).maxVersionLevel())
 
       assertEquals(5, apiVersionsResponse.data().supportedFeatures().size())
-      assertEquals(MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel(), apiVersionsResponse.data().supportedFeatures().find(MetadataVersion.FEATURE_NAME).minVersion())
+      assertEquals(MetadataVersion.MINIMUM_VERSION.featureLevel(), apiVersionsResponse.data().supportedFeatures().find(MetadataVersion.FEATURE_NAME).minVersion())
       if (apiVersion < 4) {
         assertEquals(1, apiVersionsResponse.data().supportedFeatures().find("kraft.version").minVersion())
       } else {
@@ -88,6 +88,7 @@ abstract class AbstractApiVersionsRequestTest(cluster: ClusterInstance) {
     }
     val expectedApis = if (cluster.controllerListenerName().toScala.contains(listenerName)) {
       ApiVersionsResponse.collectApis(
+        ApiMessageType.ListenerType.CONTROLLER,
         ApiKeys.apisForListener(ApiMessageType.ListenerType.CONTROLLER),
         enableUnstableLastVersion
       )
@@ -116,5 +117,8 @@ abstract class AbstractApiVersionsRequestTest(cluster: ClusterInstance) {
       assertEquals(expectedApiVersion.minVersion, actualApiVersion.minVersion, s"Received unexpected min version for API key ${actualApiVersion.apiKey}.")
       assertEquals(expectedApiVersion.maxVersion, actualApiVersion.maxVersion, s"Received unexpected max version for API key ${actualApiVersion.apiKey}.")
     }
+
+    if (listenerName.equals(cluster.clientListener))
+      assertEquals(ApiKeys.PRODUCE_API_VERSIONS_RESPONSE_MIN_VERSION, apiVersionsResponse.apiVersion(ApiKeys.PRODUCE.id).minVersion)
   }
 }

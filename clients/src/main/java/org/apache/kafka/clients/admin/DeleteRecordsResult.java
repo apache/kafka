@@ -49,6 +49,6 @@ public class DeleteRecordsResult {
      * Return a future which succeeds only if all the records deletions succeed.
      */
     public KafkaFuture<Void> all() {
-        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0]));
+        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture<?>[0]));
     }
 }

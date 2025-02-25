@@ -592,6 +592,12 @@ public class StreamsConfig extends AbstractConfig {
     public static final String ENABLE_METRICS_PUSH_DOC = "Whether to enable pushing of internal client metrics for (main, restore, and global) consumers, producers, and admin clients." +
         " The cluster must have a client metrics subscription which corresponds to a client.";
 
+    /** {@code ensure.explicit.internal.resource.naming} */
+    public static final String ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_CONFIG = "ensure.explicit.internal.resource.naming";
+    static final String ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_DOC = "Whether to enforce explicit naming for all internal resources of the topology, including internal" +
+        " topics (e.g., changelog and repartition topics) and their associated state stores." +
+        " When enabled, the application will refuse to start if any internal resource has an auto-generated name.";
+
     /** {@code log.summary.interval.ms} */
     public static final String LOG_SUMMARY_INTERVAL_MS_CONFIG = "log.summary.interval.ms";
     private static final String LOG_SUMMARY_INTERVAL_MS_DOC = "The output interval in milliseconds for logging summary information.\n" +
@@ -682,7 +688,7 @@ public class StreamsConfig extends AbstractConfig {
 
     /** {@code processor.wrapper.class} */
     public static final String PROCESSOR_WRAPPER_CLASS_CONFIG = "processor.wrapper.class";
-    public static final String PROCESSOR_WRAPPER_CLASS_DOC = "A processor wrapper class or class name that implements the <code>org.apache.kafka.streams.state.ProcessorWrapper</code> interface. "
+    static final String PROCESSOR_WRAPPER_CLASS_DOC = "A processor wrapper class or class name that implements the <code>org.apache.kafka.streams.state.ProcessorWrapper</code> interface. "
         + "Must be passed in to the StreamsBuilder or Topology constructor in order to take effect";
 
     /** {@code repartition.purge.interval.ms} */
@@ -869,6 +875,11 @@ public class StreamsConfig extends AbstractConfig {
                     Importance.HIGH,
                     STATE_DIR_DOC,
                     "${java.io.tmpdir}")
+            .define(ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_CONFIG,
+                    Type.BOOLEAN,
+                    false,
+                    Importance.HIGH,
+                    ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_DOC)
 
             // MEDIUM
 
@@ -1293,6 +1304,11 @@ public class StreamsConfig extends AbstractConfig {
         public static final String PROCESSING_THREADS_ENABLED = "__processing.threads.enabled__";
 
         public static boolean processingThreadsEnabled(final Map<String, Object> configs) {
+            // note: we did disable testing "processing threads"` in SmokeTestDriverIntegrationTest due to
+            // high failure rate, and the feature being incomplete with no active work
+            //
+            // we should re-enable testing this feature in SmokeTestDriverIntegrationTest
+            // once it is complete (or maybe even earlier when we resumg working on it
             return InternalConfig.getBoolean(configs, InternalConfig.PROCESSING_THREADS_ENABLED, false);
         }
 

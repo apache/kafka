@@ -49,8 +49,6 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
-import scala.Option;
-
 import static org.apache.kafka.common.record.FileRecords.TimestampAndOffset;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -82,7 +80,7 @@ class RemoteLogOffsetReaderTest {
     @Test
     public void testReadRemoteLog() throws Exception {
         AsyncOffsetReadFutureHolder<OffsetResultHolder.FileRecordsOrError> asyncOffsetReadFutureHolder =
-                rlm.asyncOffsetRead(topicPartition, time.milliseconds(), 0L, cache, Option::empty);
+                rlm.asyncOffsetRead(topicPartition, time.milliseconds(), 0L, cache, Optional::empty);
         asyncOffsetReadFutureHolder.taskFuture().get(1, TimeUnit.SECONDS);
         assertTrue(asyncOffsetReadFutureHolder.taskFuture().isDone());
 
@@ -100,13 +98,13 @@ class RemoteLogOffsetReaderTest {
         List<AsyncOffsetReadFutureHolder<OffsetResultHolder.FileRecordsOrError>> holderList = new ArrayList<>();
         // Task queue size is 1 and number of threads is 2, so it can accept at-most 3 items
         for (int i = 0; i < 3; i++) {
-            holderList.add(rlm.asyncOffsetRead(topicPartition, time.milliseconds(), 0L, cache, Option::empty));
+            holderList.add(rlm.asyncOffsetRead(topicPartition, time.milliseconds(), 0L, cache, Optional::empty));
         }
         assertThrows(TimeoutException.class, () -> holderList.get(0).taskFuture().get(10, TimeUnit.MILLISECONDS));
         assertEquals(0, holderList.stream().filter(h -> h.taskFuture().isDone()).count());
 
         assertThrows(RejectedExecutionException.class, () ->
-                holderList.add(rlm.asyncOffsetRead(topicPartition, time.milliseconds(), 0L, cache, Option::empty)));
+                holderList.add(rlm.asyncOffsetRead(topicPartition, time.milliseconds(), 0L, cache, Optional::empty)));
 
         holderList.get(2).jobFuture().cancel(false);
 
@@ -134,7 +132,7 @@ class RemoteLogOffsetReaderTest {
             }
         }) {
             AsyncOffsetReadFutureHolder<OffsetResultHolder.FileRecordsOrError> futureHolder
-                    = rlm.asyncOffsetRead(topicPartition, time.milliseconds(), 0L, cache, Option::empty);
+                    = rlm.asyncOffsetRead(topicPartition, time.milliseconds(), 0L, cache, Optional::empty);
             futureHolder.taskFuture().get(1, TimeUnit.SECONDS);
 
             assertTrue(futureHolder.taskFuture().isDone());

@@ -30,6 +30,7 @@ import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
 import org.apache.kafka.streams.kstream.internals.graph.StreamStreamJoinNode;
 import org.apache.kafka.streams.kstream.internals.graph.WindowedStreamProcessorNode;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.InternalResourcesNaming;
 import org.apache.kafka.streams.processor.internals.StoreBuilderWrapper;
 import org.apache.kafka.streams.processor.internals.StoreFactory;
 import org.apache.kafka.streams.state.Stores;
@@ -168,6 +169,14 @@ class KStreamImplJoin {
             );
         }
 
+        if (userProvidedBaseStoreName == null) {
+            addInternalResourceName(thisWindowStore);
+            addInternalResourceName(otherWindowStore);
+            if (outerJoinWindowStore.isPresent()) {
+                addInternalResourceName(outerJoinWindowStore.get());
+            }
+        }
+
         // Time-shared between joins to keep track of the maximum stream time
         final TimeTrackerSupplier sharedTimeTrackerSupplier = new TimeTrackerSupplier();
 
@@ -260,5 +269,13 @@ class KStreamImplJoin {
             keySerde,
             valueSerde
         ));
+    }
+
+    private void addInternalResourceName(final StoreFactory windowStore) {
+        final InternalResourcesNaming.Builder thisInternalResourcesNaming = InternalResourcesNaming.builder().withStateStore(windowStore.storeName());
+        if (windowStore.loggingEnabled()) {
+            thisInternalResourcesNaming.withChangelogTopic(windowStore.storeName() + "-changelog");
+        }
+        builder.internalTopologyBuilder().addImplicitInternalNames(thisInternalResourcesNaming.build());
     }
 }

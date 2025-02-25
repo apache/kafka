@@ -40,6 +40,7 @@ import java.util.stream.Collectors;
 import static org.apache.kafka.common.requests.ProduceResponse.INVALID_OFFSET;
 
 public class ProduceRequest extends AbstractRequest {
+
     public static final short LAST_STABLE_VERSION_BEFORE_TRANSACTION_V2 = 11;
 
     public static Builder builder(ProduceRequestData data, boolean useTransactionV1Version) {
@@ -66,21 +67,10 @@ public class ProduceRequest extends AbstractRequest {
 
         @Override
         public ProduceRequest build(short version) {
-            return build(version, true);
-        }
-
-        // Visible for testing only
-        public ProduceRequest buildUnsafe(short version) {
-            return build(version, false);
-        }
-
-        private ProduceRequest build(short version, boolean validate) {
-            if (validate) {
-                // Validate the given records first
-                data.topicData().forEach(tpd ->
-                        tpd.partitionData().forEach(partitionProduceData ->
-                                ProduceRequest.validateRecords(version, partitionProduceData.records())));
-            }
+            // Validate the given records first
+            data.topicData().forEach(tpd ->
+                tpd.partitionData().forEach(partitionProduceData ->
+                    ProduceRequest.validateRecords(version, partitionProduceData.records())));
             return new ProduceRequest(data, version);
         }
 
@@ -244,4 +234,5 @@ public class ProduceRequest extends AbstractRequest {
     public static boolean isTransactionV2Requested(short version) {
         return version > LAST_STABLE_VERSION_BEFORE_TRANSACTION_V2;
     }
+
 }
