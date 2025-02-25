@@ -25,7 +25,7 @@ public enum EligibleLeaderReplicasVersion implements FeatureVersion {
     ELRV_0(0, MetadataVersion.MINIMUM_VERSION, Collections.emptyMap()),
 
     // Version 1 enables the ELR (KIP-966).
-    ELRV_1(1, MetadataVersion.IBP_4_0_IV1, Collections.emptyMap());
+    ELRV_1(1, MetadataVersion.IBP_4_1_IV0, Map.of(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_4_0_IV1.featureLevel()));
 
     public static final String FEATURE_NAME = "eligible.leader.replicas.version";
 

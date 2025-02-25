@@ -19,6 +19,9 @@ plugins {
 }
 
 def isGithubActions = System.getenv('GITHUB_ACTIONS') != null
+
+def runNew = ext.find("kafka.test.run.new") == "true"
+def runFlaky = ext.find("kafka.test.run.flaky") == "true"
 def currentJvm = JavaVersion.current()
 
 develocity {
@@ -38,6 +41,13 @@ develocity {
             tag "local"
         }
         tag "JDK$currentJvm"
+        if (runFlaky) {
+            tag "flaky"
+        }
+        if (runNew) {
+            tag "new"
+        }
+
     }
 }
 
