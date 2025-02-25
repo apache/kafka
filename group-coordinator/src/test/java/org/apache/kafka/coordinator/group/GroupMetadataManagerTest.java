@@ -107,6 +107,7 @@ import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
 import org.apache.kafka.server.share.persister.DeleteShareGroupStateParameters;
 import org.apache.kafka.server.share.persister.GroupTopicPartitionData;
+import org.apache.kafka.server.share.persister.InitializeShareGroupStateParameters;
 import org.apache.kafka.server.share.persister.PartitionFactory;
 import org.apache.kafka.server.share.persister.PartitionIdData;
 import org.apache.kafka.server.share.persister.TopicData;
@@ -14554,7 +14555,7 @@ public class GroupMetadataManagerTest {
         context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupIds.get(0), 100));
         context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupIds.get(1), 15));
 
-        CoordinatorResult<ShareGroupHeartbeatResponseData, CoordinatorRecord> result = context.shareGroupHeartbeat(
+        CoordinatorResult<Map.Entry<ShareGroupHeartbeatResponseData, Optional<InitializeShareGroupStateParameters>>, CoordinatorRecord> result = context.shareGroupHeartbeat(
             new ShareGroupHeartbeatRequestData()
                 .setGroupId(groupIds.get(1))
                 .setMemberId(Uuid.randomUuid().toString())
@@ -14562,7 +14563,7 @@ public class GroupMetadataManagerTest {
                 .setSubscribedTopicNames(List.of("foo")));
 
         // Verify that a member id was generated for the new member.
-        String memberId = result.response().memberId();
+        String memberId = result.response().getKey().memberId();
         assertNotNull(memberId);
         context.commit();
 
@@ -14608,7 +14609,7 @@ public class GroupMetadataManagerTest {
         ));
 
         String memberId = Uuid.randomUuid().toString();
-        CoordinatorResult<ShareGroupHeartbeatResponseData, CoordinatorRecord> result = context.shareGroupHeartbeat(
+        CoordinatorResult<Map.Entry<ShareGroupHeartbeatResponseData, Optional<InitializeShareGroupStateParameters>>, CoordinatorRecord> result = context.shareGroupHeartbeat(
             new ShareGroupHeartbeatRequestData()
                 .setGroupId("group-foo")
                 .setMemberId(memberId)
@@ -14617,7 +14618,7 @@ public class GroupMetadataManagerTest {
 
         assertEquals(
             memberId,
-            result.response().memberId(),
+            result.response().getKey().memberId(),
             "MemberId should remain unchanged, as the server does not generate a new one since the consumer generates its own."
         );
 
@@ -14630,7 +14631,7 @@ public class GroupMetadataManagerTest {
                 .setMemberEpoch(1)
                 .setHeartbeatIntervalMs(5000)
                 .setAssignment(new ShareGroupHeartbeatResponseData.Assignment()),
-            result.response()
+            result.response().getKey()
         );
     }
 
@@ -14711,7 +14712,7 @@ public class GroupMetadataManagerTest {
         assertThrows(GroupIdNotFoundException.class, () ->
             context.groupMetadataManager.shareGroup(groupId));
 
-        CoordinatorResult<ShareGroupHeartbeatResponseData, CoordinatorRecord> result = context.shareGroupHeartbeat(
+        CoordinatorResult<Map.Entry<ShareGroupHeartbeatResponseData, Optional<InitializeShareGroupStateParameters>>, CoordinatorRecord> result = context.shareGroupHeartbeat(
             new ShareGroupHeartbeatRequestData()
                 .setGroupId(groupId)
                 .setMemberId(memberId)
@@ -14732,7 +14733,7 @@ public class GroupMetadataManagerTest {
                             .setTopicId(barTopicId)
                             .setPartitions(List.of(0, 1, 2))
                     ))),
-            result.response()
+            result.response().getKey()
         );
 
         ShareGroupMember expectedMember = new ShareGroupMember.Builder(memberId)
@@ -14822,7 +14823,7 @@ public class GroupMetadataManagerTest {
             .build();
 
         // Member 2 leaves the consumer group.
-        CoordinatorResult<ShareGroupHeartbeatResponseData, CoordinatorRecord> result = context.shareGroupHeartbeat(
+        CoordinatorResult<Map.Entry<ShareGroupHeartbeatResponseData, Optional<InitializeShareGroupStateParameters>>, CoordinatorRecord> result = context.shareGroupHeartbeat(
             new ShareGroupHeartbeatRequestData()
                 .setGroupId(groupId)
                 .setMemberId(memberId2)
@@ -14833,7 +14834,7 @@ public class GroupMetadataManagerTest {
             new ShareGroupHeartbeatResponseData()
                 .setMemberId(memberId2)
                 .setMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH),
-            result.response()
+            result.response().getKey()
         );
 
         List<CoordinatorRecord> expectedRecords = List.of(
@@ -14873,13 +14874,13 @@ public class GroupMetadataManagerTest {
         context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 100));
 
         // Member 1 joins the group.
-        CoordinatorResult<ShareGroupHeartbeatResponseData, CoordinatorRecord> result = context.shareGroupHeartbeat(
+        CoordinatorResult<Map.Entry<ShareGroupHeartbeatResponseData, Optional<InitializeShareGroupStateParameters>>, CoordinatorRecord> result = context.shareGroupHeartbeat(
             new ShareGroupHeartbeatRequestData()
                 .setGroupId(groupId)
                 .setMemberId(memberId1)
                 .setMemberEpoch(0)
                 .setSubscribedTopicNames(List.of("foo", "bar")));
-        assertEquals(101, result.response().memberEpoch());
+        assertEquals(101, result.response().getKey().memberEpoch());
 
         // Member 2 joins the group.
         assertThrows(GroupMaxSizeReachedException.class, () -> context.shareGroupHeartbeat(
@@ -15069,17 +15070,17 @@ public class GroupMetadataManagerTest {
         ));
 
         // Session timer is scheduled on first heartbeat.
-        CoordinatorResult<ShareGroupHeartbeatResponseData, CoordinatorRecord> result =
+        CoordinatorResult<Map.Entry<ShareGroupHeartbeatResponseData, Optional<InitializeShareGroupStateParameters>>, CoordinatorRecord> result =
             context.shareGroupHeartbeat(
                 new ShareGroupHeartbeatRequestData()
                     .setGroupId(groupId)
                     .setMemberId(memberId)
                     .setMemberEpoch(0)
                     .setSubscribedTopicNames(List.of("foo")));
-        assertEquals(1, result.response().memberEpoch());
+        assertEquals(1, result.response().getKey().memberEpoch());
 
         // Verify heartbeat interval
-        assertEquals(5000, result.response().heartbeatIntervalMs());
+        assertEquals(5000, result.response().getKey().heartbeatIntervalMs());
 
         // Verify that there is a session time.
         context.assertSessionTimeout(groupId, memberId, 45000);
@@ -15087,7 +15088,7 @@ public class GroupMetadataManagerTest {
         // Advance time.
         assertEquals(
             Collections.emptyList(),
-            context.sleep(result.response().heartbeatIntervalMs())
+            context.sleep(result.response().getKey().heartbeatIntervalMs())
         );
 
         // Dynamic update group config
@@ -15101,11 +15102,11 @@ public class GroupMetadataManagerTest {
             new ShareGroupHeartbeatRequestData()
                 .setGroupId(groupId)
                 .setMemberId(memberId)
-                .setMemberEpoch(result.response().memberEpoch()));
-        assertEquals(1, result.response().memberEpoch());
+                .setMemberEpoch(result.response().getKey().memberEpoch()));
+        assertEquals(1, result.response().getKey().memberEpoch());
 
         // Verify heartbeat interval
-        assertEquals(10000, result.response().heartbeatIntervalMs());
+        assertEquals(10000, result.response().getKey().heartbeatIntervalMs());
 
         // Verify that there is a session time.
         context.assertSessionTimeout(groupId, memberId, 50000);
@@ -15113,7 +15114,7 @@ public class GroupMetadataManagerTest {
         // Advance time.
         assertEquals(
             Collections.emptyList(),
-            context.sleep(result.response().heartbeatIntervalMs())
+            context.sleep(result.response().getKey().heartbeatIntervalMs())
         );
 
         // Session timer is cancelled on leave.
@@ -15122,7 +15123,7 @@ public class GroupMetadataManagerTest {
                 .setGroupId(groupId)
                 .setMemberId(memberId)
                 .setMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH));
-        assertEquals(LEAVE_GROUP_MEMBER_EPOCH, result.response().memberEpoch());
+        assertEquals(LEAVE_GROUP_MEMBER_EPOCH, result.response().getKey().memberEpoch());
 
         // Verify that there are no timers.
         context.assertNoSessionTimeout(groupId, memberId);

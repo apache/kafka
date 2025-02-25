@@ -432,21 +432,22 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 return Errors.NONE.code();
             }).thenCompose(errorCode -> {
                 // Let us update the share group state partition metadata
+                String groupId = request.groupTopicPartitionData().groupId();
                 if (errorCode == Errors.NONE.code()) {
                     return runtime.scheduleWriteOperation(
                         "initialze-share-group-state",
-                        topicPartitionFor(request.groupTopicPartitionData().groupId()),
+                        topicPartitionFor(groupId),
                         Duration.ofMillis(config.offsetCommitTimeoutMs()),
                         coordinator -> coordinator.initializeShareGroupState(context, heartbeatRequestData)
                     ).thenApply(
                         __ -> defaultResponse
                     ).exceptionally(exception -> {
-                        log.error("Unable to  write share group state partition metadata for {}", request.groupTopicPartitionData().groupId(), exception);
+                        log.error("Unable to initialize share group state partition metadata for {} with request {}", groupId, heartbeatRequestData, exception);
                         return new ShareGroupHeartbeatResponseData()
                             .setErrorCode(Errors.forException(exception).code());
                     });
                 } else {
-                    log.error("Received error while calling initialize state on persister {} {}", request, errorCode);
+                    log.error("Received error while calling initialize state for {} on persister with request {} {}", groupId, request, errorCode);
                     return CompletableFuture.completedFuture(
                         new ShareGroupHeartbeatResponseData()
                             .setErrorCode(errorCode)

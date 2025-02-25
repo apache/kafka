@@ -85,6 +85,7 @@ import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.share.persister.DeleteShareGroupStateParameters;
 import org.apache.kafka.server.share.persister.GroupTopicPartitionData;
+import org.apache.kafka.server.share.persister.InitializeShareGroupStateParameters;
 import org.apache.kafka.server.share.persister.PartitionFactory;
 import org.apache.kafka.server.share.persister.PartitionIdData;
 import org.apache.kafka.server.share.persister.TopicData;
@@ -1575,9 +1576,12 @@ public class GroupCoordinatorShardTest {
 
         RequestContext context = requestContext(ApiKeys.SHARE_GROUP_HEARTBEAT);
         ShareGroupHeartbeatRequestData request = new ShareGroupHeartbeatRequestData();
-        CoordinatorResult<ShareGroupHeartbeatResponseData, CoordinatorRecord> result = new CoordinatorResult<>(
-            Collections.emptyList(),
-            new ShareGroupHeartbeatResponseData()
+        CoordinatorResult<Map.Entry<ShareGroupHeartbeatResponseData, Optional<InitializeShareGroupStateParameters>>, CoordinatorRecord> result = new CoordinatorResult<>(
+            List.of(),
+            Map.entry(
+                new ShareGroupHeartbeatResponseData(),
+                Optional.ofNullable(null)
+            )
         );
 
         when(groupMetadataManager.shareGroupHeartbeat(

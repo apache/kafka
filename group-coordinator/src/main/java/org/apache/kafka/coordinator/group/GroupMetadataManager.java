@@ -148,7 +148,6 @@ import org.apache.kafka.server.share.persister.GroupTopicPartitionData;
 import org.apache.kafka.server.share.persister.InitializeShareGroupStateParameters;
 import org.apache.kafka.server.share.persister.PartitionFactory;
 import org.apache.kafka.server.share.persister.PartitionIdData;
-import org.apache.kafka.server.share.persister.PartitionStateData;
 import org.apache.kafka.server.share.persister.TopicData;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
@@ -164,13 +163,13 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiFunction;
@@ -457,11 +456,9 @@ public class GroupMetadataManager {
     private final ShareGroupPartitionAssignor shareGroupAssignor;
 
     private record ShareGroupStatePartitionMetadataInfo(
-        LinkedHashSet<Uuid> initializedTopics,
+        LinkedHashMap<Uuid, HashSet<Integer>> initializedTopics,
         LinkedHashSet<Uuid> deletingTopics
-    ) {
-
-    }
+    ) { }
 
     private GroupMetadataManager(
         SnapshotRegistry snapshotRegistry,
@@ -2292,25 +2289,46 @@ public class GroupMetadataManager {
             response.setAssignment(createShareGroupResponseAssignment(updatedMember));
         }
 
-        InitializeShareGroupStateParameters initializeRequest = null;
+        return new CoordinatorResult<>(
+            records,
+            Map.entry(
+                response,
+                maybeCreateInitializeShareGroupStateRequest(group, subscribedTopicNames)
+            )
+        );
+    }
 
-        if (groups.get(groupId) == null && subscribedTopicNames != null) {
-            // Block should execute only for newly created group.
-            // copiedGroupEpoch will serve as the state epoch per KIP-932
-            final int copiedGroupEpoch = groupEpoch;
-            List<TopicImage> images = new ArrayList<>(subscribedTopicNames.size());
-            subscribedTopicNames.forEach(topicName -> images.add(metadataImage.topics().getTopic(topicName)));
-
-            initializeRequest = new InitializeShareGroupStateParameters.Builder().setGroupTopicPartitionData(
-                new GroupTopicPartitionData<>(groupId, images.stream()
-                    .map(image -> new TopicData<>(image.id(), image.partitions().keySet().stream()
-                        .map(partitionId -> PartitionFactory.newPartitionStateData(partitionId, copiedGroupEpoch, -1))
-                        .toList()))
-                    .toList()
-                )).build();
+    private Optional<InitializeShareGroupStateParameters> maybeCreateInitializeShareGroupStateRequest(
+        ShareGroup group,
+        List<String> subscribedTopicNames
+    ) {
+        if (subscribedTopicNames == null || subscribedTopicNames.isEmpty() || metadataImage.isEmpty()) {
+            return Optional.empty();
         }
 
-        return new CoordinatorResult<>(records, Map.entry(response, Optional.ofNullable(initializeRequest)));
+        final int copiedGroupEpoch = group.groupEpoch();
+        Set<TopicImage> images = new HashSet<>(subscribedTopicNames.size());
+        subscribedTopicNames.forEach(topicName -> images.add(metadataImage.topics().getTopic(topicName)));
+
+        // Check topics which are already initialized
+        if (shareGroupPartitionMetadata.containsKey(group.groupId())) {
+            Set<Uuid> alreadyInitialized = shareGroupPartitionMetadata.get(group.groupId()).initializedTopics().keySet();
+            images.removeIf(img -> alreadyInitialized.contains(img.id()));
+        }
+
+        // Nothing to initialize.
+        if (images.isEmpty()) {
+            return Optional.empty();
+        }
+
+        return Optional.of(new InitializeShareGroupStateParameters.Builder().setGroupTopicPartitionData(
+            new GroupTopicPartitionData<>(group.groupId(), images.stream()
+                .map(image -> new TopicData<>(image.id(), image.partitions().keySet().stream()
+                    .map(partitionId -> PartitionFactory.newPartitionStateData(partitionId, copiedGroupEpoch, -1))
+                    .toList()))
+                .toList()
+            )).build()
+        );
     }
 
     /**
@@ -4699,15 +4717,23 @@ public class GroupMetadataManager {
         if (value == null) {
             shareGroupPartitionMetadata.remove(groupId);
         } else {
-            List<Uuid> initialized = value.initializedTopics().stream().map(ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo::topicId).toList();
-            List<Uuid> deleting = value.deletingTopics().stream().map(ShareGroupStatePartitionMetadataValue.TopicInfo::topicId).toList();
-
+            // Init java record.
             ShareGroupStatePartitionMetadataInfo record = shareGroupPartitionMetadata.computeIfAbsent(
-                groupId, k -> new ShareGroupStatePartitionMetadataInfo(new LinkedHashSet<>(), new LinkedHashSet<>())
+                groupId, k -> new ShareGroupStatePartitionMetadataInfo(new LinkedHashMap<>(), new LinkedHashSet<>())
             );
 
-            record.initializedTopics.removeAll(deleting);
-            record.initializedTopics.addAll(initialized);
+            // Remove all topicIds in deleting state from java record.
+            List<Uuid> deleting = value.deletingTopics().stream().map(ShareGroupStatePartitionMetadataValue.TopicInfo::topicId).toList();
+            deleting.forEach(record.initializedTopics::remove);
+
+            // Add all initialized topic info from the replayed record to
+            // the java record.
+            for (ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo info : value.initializedTopics()) {
+                record.initializedTopics.computeIfAbsent(info.topicId(), k -> new LinkedHashSet<>())
+                    .addAll(info.partitions());
+            }
+
+            // Update the deleting state topics in the java record.
             record.deletingTopics.addAll(deleting);
         }
     }
