@@ -550,14 +550,14 @@ public class SimpleAssignorTest {
         // Hashcode of MEMBER_A is 65. Hashcode of MEMBER_B is 66. Hashcode of MEMBER_C is 67.
         // Step 1 -> T2:0 -> MEMBER_A, T2:1 -> MEMBER_B, T3:0 -> MEMBER_C by hash assignment
         // Step 2 -> T3:1 -> MEMBER_A, T3:2 -> MEMBER_B by round-robin assignment
-        // Step 3 -> T2:1 -> MEMBER_A, T2:0 -> MEMBER_B by current assignment.
+        // Step 3 -> no new addition by current assignment since T2:0 and T2:1 were already a part of new assignment.
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment2 = new HashMap<>();
         expectedAssignment2.put(MEMBER_A, mkAssignment(
-            mkTopicAssignment(TOPIC_2_UUID, 0, 1),
+            mkTopicAssignment(TOPIC_2_UUID, 0),
             mkTopicAssignment(TOPIC_3_UUID, 1)
         ));
         expectedAssignment2.put(MEMBER_B, mkAssignment(
-            mkTopicAssignment(TOPIC_2_UUID, 0, 1),
+            mkTopicAssignment(TOPIC_2_UUID, 1),
             mkTopicAssignment(TOPIC_3_UUID, 2)
         ));
         expectedAssignment2.put(MEMBER_C, mkAssignment(

@@ -159,17 +159,17 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
         // no. of partitions assignment for every member(KAFKA-18788). Hence, the potential problem of burdening
         // the share consumers will be addressed in a future PR.
 
+        newAssignment.forEach((targetPartition, members) -> members.forEach(member ->
+            finalAssignment.computeIfAbsent(member, k -> new HashSet<>()).add(targetPartition)));
         // When combining current assignment, we need to only consider the topics in current assignment that are also being
         // subscribed in the new assignment as well.
         currentAssignment.forEach((targetPartition, members) -> {
             if (subscribedTopicIds.contains(targetPartition.topicId()))
                 members.forEach(member -> {
-                    if (groupSpec.memberIds().contains(member))
+                    if (groupSpec.memberIds().contains(member) && !newAssignment.containsKey(targetPartition))
                         finalAssignment.computeIfAbsent(member, k -> new HashSet<>()).add(targetPartition);
                 });
         });
-        newAssignment.forEach((targetPartition, members) -> members.forEach(member ->
-            finalAssignment.computeIfAbsent(member, k -> new HashSet<>()).add(targetPartition)));
 
         return groupAssignment(finalAssignment, groupSpec.memberIds());
     }
@@ -222,14 +222,15 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
         // no. of partitions assignment for every member(KAFKA-18788). Hence, the potential problem of burdening
         // the share consumers will be addressed in a future PR.
 
+        newAssignment.forEach((targetPartition, members) -> members.forEach(member ->
+            finalAssignment.computeIfAbsent(member, k -> new HashSet<>()).add(targetPartition)));
         // When combining current assignment, we need to only consider the member topic subscription in current assignment
         // which is being subscribed in the new assignment as well.
         currentAssignment.forEach((topicIdPartition, members) -> members.forEach(member -> {
-            if (topicToMemberSubscription.getOrDefault(topicIdPartition.topicId(), Collections.emptySet()).contains(member))
+            if (topicToMemberSubscription.getOrDefault(topicIdPartition.topicId(), Collections.emptySet()).contains(member)
+                && !newAssignment.containsKey(topicIdPartition))
                 finalAssignment.computeIfAbsent(member, k -> new HashSet<>()).add(topicIdPartition);
         }));
-        newAssignment.forEach((targetPartition, members) -> members.forEach(member ->
-            finalAssignment.computeIfAbsent(member, k -> new HashSet<>()).add(targetPartition)));
 
         return groupAssignment(finalAssignment, groupSpec.memberIds());
     }
