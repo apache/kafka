@@ -49,7 +49,7 @@ jobs:
           github.event_name == 'pull_request' && 
           github.event.pull_request.draft
         run: echo "is-draft=true" >> "$GITHUB_OUTPUT"
-      - name: Set Outputs
+      - name: Configure Outputs
         id: configure-outputs
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
@@ -57,14 +57,6 @@ jobs:
             echo "sha=${{ github.event.pull_request.head.sha }}" >> "$GITHUB_OUTPUT"
           else
             echo "days=7" >> "$GITHUB_OUTPUT"
-            echo "sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
-          fi
-      - name: Commit to build
-        id: commit-to-build
-        run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            echo "sha=${{ github.event.pull_request.head.sha }}" >> "$GITHUB_OUTPUT"
-          else
             echo "sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
           fi
 
