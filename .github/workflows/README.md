@@ -106,6 +106,19 @@ if the PR has the `ci-approved` label
 
 _The pr-labeled.yml workflow includes pull_request_target!_
 
+### PR Linter
+
+To help ensure good commit messages, we have added a "Pull Request Linter" job
+that checks the title and body of the PR. 
+
+There are two files related to this workflow:
+
+* [pr-reviewed.yml](pr-reviewed.yml) runs when a PR is reviewed or has its title
+or body edited. This workflow simply captures the PR number into a text file
+* [pr-linter.yml](pr-linter.yml) runs after pr-reviewed.yml and loads the PR
+using the saved text file. This workflow runs the linter script that checks the
+structure of the PR
+
 ### Stale PRs
 
 This one is straightforward. Using the "actions/stale" GitHub Action, we automatically
