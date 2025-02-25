@@ -17,10 +17,23 @@
 package org.apache.kafka.server.share.fetch;
 
 import org.apache.kafka.common.TopicIdPartition;
+import org.apache.kafka.common.compress.Compression;
+import org.apache.kafka.common.message.ShareFetchResponseData.AcquiredRecords;
+import org.apache.kafka.common.record.FileRecords;
+import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.MemoryRecordsBuilder;
+import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.test.TestUtils;
 
+import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 
+import static org.apache.kafka.test.TestUtils.tempFile;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -73,5 +86,63 @@ public class ShareFetchTestUtils {
         for (TopicIdPartition key : originalKeys) {
             assertEquals(original.get(key), result.get(key));
         }
+    }
+
+    /**
+     * Create a file records with the given offset values, the number of records from each given start
+     * offset.
+     *
+     * @param recordsPerOffset The offset values and the number of records to create from given offset.
+     * @return The file records.
+     * @throws IOException If the file records cannot be created.
+     */
+    public static FileRecords createFileRecords(Map<Long, Integer> recordsPerOffset) throws IOException {
+        FileRecords fileRecords = FileRecords.open(tempFile());
+        for (Entry<Long, Integer> entry : recordsPerOffset.entrySet()) {
+            try (MemoryRecordsBuilder records = memoryRecordsBuilder(entry.getValue(), entry.getKey())) {
+                fileRecords.append(records.build());
+            }
+        }
+        return fileRecords;
+    }
+
+    /**
+     * Create a memory records builder with the given number of records and start offset.
+     *
+     * @param numOfRecords The number of records to create.
+     * @param startOffset The start offset of the records.
+     * @return The memory records builder.
+     */
+    public static MemoryRecordsBuilder memoryRecordsBuilder(int numOfRecords, long startOffset) {
+        return memoryRecordsBuilder(ByteBuffer.allocate(1024), numOfRecords, startOffset);
+    }
+
+    /**
+     * Create a memory records builder with the number of records and start offset, in the given buffer.
+     *
+     * @param buffer The buffer to write the records to.
+     * @param numOfRecords The number of records to create.
+     * @param startOffset The start offset of the records.
+     * @return The memory records builder.
+     */
+    public static MemoryRecordsBuilder memoryRecordsBuilder(ByteBuffer buffer, int numOfRecords, long startOffset) {
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, Compression.NONE,
+            TimestampType.CREATE_TIME, startOffset, 2);
+        for (int i = 0; i < numOfRecords; i++) {
+            builder.appendWithOffset(startOffset + i, 0L, TestUtils.randomString(10).getBytes(), TestUtils.randomString(10).getBytes());
+        }
+        return builder;
+    }
+
+    /**
+     * Create a share acquired records from the given acquired records.
+     *
+     * @param acquiredRecords The acquired records to create the share acquired records from.
+     * @return The share acquired records.
+     */
+    public static ShareAcquiredRecords createShareAcquiredRecords(AcquiredRecords acquiredRecords) {
+        return new ShareAcquiredRecords(
+            List.of(acquiredRecords), (int) (acquiredRecords.lastOffset() - acquiredRecords.firstOffset() + 1)
+        );
     }
 }

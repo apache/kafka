@@ -58,6 +58,7 @@ import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.processor.api.FixedKeyProcessorSupplier;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
+import org.apache.kafka.streams.processor.internals.InternalResourcesNaming;
 import org.apache.kafka.streams.processor.internals.InternalTopicProperties;
 import org.apache.kafka.streams.processor.internals.StaticTopicNameExtractor;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -525,7 +526,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             valueSerde,
             name,
             repartitionedInternal.streamPartitioner(),
-            unoptimizableRepartitionNodeBuilder.withInternalTopicProperties(internalTopicProperties)
+            unoptimizableRepartitionNodeBuilder.withInternalTopicProperties(internalTopicProperties),
+            repartitionedInternal.name() != null
         );
 
         final UnoptimizableRepartitionNode<K, V> unoptimizableRepartitionNode = unoptimizableRepartitionNodeBuilder.build();
@@ -633,7 +635,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
                 valueSerdeOverride,
                 name,
                 null,
-                repartitionNodeBuilder
+                repartitionNodeBuilder,
+                namedInternal.name() != null
             );
 
             tableParentNode = repartitionNodeBuilder.build();
@@ -895,21 +898,23 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         if (joinThis.repartitionRequired) {
             final String joinThisName = joinThis.name;
             final String leftJoinRepartitionTopicName = name.suffixWithOrElseGet("-left", joinThisName);
+
             joinThis = joinThis.repartitionForJoin(
                 leftJoinRepartitionTopicName,
                 streamJoinedInternal.keySerde(),
-                streamJoinedInternal.valueSerde()
-            );
+                streamJoinedInternal.valueSerde(),
+                name.name() != null);
         }
 
         if (joinOther.repartitionRequired) {
             final String joinOtherName = joinOther.name;
             final String rightJoinRepartitionTopicName = name.suffixWithOrElseGet("-right", joinOtherName);
+
             joinOther = joinOther.repartitionForJoin(
                 rightJoinRepartitionTopicName,
                 streamJoinedInternal.keySerde(),
-                streamJoinedInternal.otherValueSerde()
-            );
+                streamJoinedInternal.otherValueSerde(),
+                name.name() != null);
         }
 
         joinThis.ensureCopartitionWith(Collections.singleton(joinOther));
@@ -928,7 +933,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
      */
     private KStreamImpl<K, V> repartitionForJoin(final String repartitionName,
                                                  final Serde<K> keySerdeOverride,
-                                                 final Serde<V> valueSerdeOverride) {
+                                                 final Serde<V> valueSerdeOverride,
+                                                 final boolean isRepartitionTopicNameProvidedByUser) {
         final Serde<K> repartitionKeySerde = keySerdeOverride != null ? keySerdeOverride : keySerde;
         final Serde<V> repartitionValueSerde = valueSerdeOverride != null ? valueSerdeOverride : valueSerde;
         final OptimizableRepartitionNodeBuilder<K, V> optimizableRepartitionNodeBuilder =
@@ -942,7 +948,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             repartitionValueSerde,
             repartitionName,
             null,
-            optimizableRepartitionNodeBuilder);
+            optimizableRepartitionNodeBuilder,
+            isRepartitionTopicNameProvidedByUser);
 
         if (repartitionNode == null || !name.equals(repartitionName)) {
             repartitionNode = optimizableRepartitionNodeBuilder.build();
@@ -965,11 +972,15 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         final Serde<Value> valueSerde,
         final String repartitionTopicNamePrefix,
         final StreamPartitioner<Key, Value> streamPartitioner,
-        final BaseRepartitionNodeBuilder<Key, Value, RepartitionNode> baseRepartitionNodeBuilder
-    ) {
+        final BaseRepartitionNodeBuilder<Key, Value, RepartitionNode> baseRepartitionNodeBuilder,
+        final boolean isRepartitionTopicNameProvidedByUser) {
+
         final String repartitionTopicName = repartitionTopicNamePrefix.endsWith(REPARTITION_TOPIC_SUFFIX) ?
             repartitionTopicNamePrefix :
             repartitionTopicNamePrefix + REPARTITION_TOPIC_SUFFIX;
+        if (!isRepartitionTopicNameProvidedByUser) {
+            builder.internalTopologyBuilder().addImplicitInternalNames(InternalResourcesNaming.builder().withRepartitionTopic(repartitionTopicName).build());
+        }
 
         // Always need to generate the names to burn index counter for compatibility
         final String genSinkName = builder.newProcessorName(SINK_NAME);
@@ -1051,7 +1062,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             final KStreamImpl<K, V> thisStreamRepartitioned = repartitionForJoin(
                     name != null ? name : this.name,
                     joinedInternal.keySerde(),
-                    joinedInternal.leftValueSerde()
+                    joinedInternal.leftValueSerde(),
+                    name != null
             );
             return thisStreamRepartitioned.doStreamTableJoin(table, joiner, joinedInternal, false);
         } else {
@@ -1091,7 +1103,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             final KStreamImpl<K, V> thisStreamRepartitioned = repartitionForJoin(
                     name != null ? name : this.name,
                     joinedInternal.keySerde(),
-                    joinedInternal.leftValueSerde()
+                    joinedInternal.leftValueSerde(),
+                    name != null
             );
             return thisStreamRepartitioned.doStreamTableJoin(table, joiner, joinedInternal, true);
         } else {
@@ -1124,6 +1137,11 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
                 joinedInternal.gracePeriod(),
                 name)
             );
+
+            if (joinedInternal.name() == null) {
+                final InternalResourcesNaming internalResourcesNaming = InternalResourcesNaming.builder().withStateStore(bufferName).withChangelogTopic(bufferName + "-changelog").build();
+                internalTopologyBuilder().addImplicitInternalNames(internalResourcesNaming);
+            }
         }
 
         final ProcessorSupplier<K, V, K, VOut> processorSupplier = new KStreamKTableJoin<>(

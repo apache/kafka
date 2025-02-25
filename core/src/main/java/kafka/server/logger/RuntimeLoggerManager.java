@@ -106,7 +106,7 @@ public class RuntimeLoggerManager {
         }
         if (requestId != nodeId) {
             throw new InvalidRequestException("Unexpected node id. Expected " + nodeId +
-                ", but received " + nodeId);
+                ", but received " + requestId);
         }
     }
 

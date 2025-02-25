@@ -30,7 +30,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
-import java.util.Collections;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -221,7 +221,7 @@ public class ShareCoordinatorRecordSerdeTest {
                     .setLeaderEpoch(2)
                     .setStateEpoch(1)
                     .setSnapshotEpoch(1)
-                    .setStateBatches(Collections.singletonList(new ShareSnapshotValue.StateBatch()
+                    .setStateBatches(List.of(new ShareSnapshotValue.StateBatch()
                         .setFirstOffset(1)
                         .setLastOffset(10)
                         .setDeliveryState((byte) 0)
