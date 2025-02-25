@@ -2004,14 +2004,17 @@ public final class QuorumController implements Controller {
         ControllerRequestContext context,
         BrokerRegistrationRequestData request
     ) {
-        // populate finalized features map with latest known kraft version for validation
-        Map<String, Short> controllerFeatures = new HashMap<>(featureControl.finalizedFeatures(Long.MAX_VALUE).featureMap());
-        controllerFeatures.put(KRaftVersion.FEATURE_NAME, raftClient.kraftVersion().featureLevel());
         return appendWriteEvent("registerBroker", context.deadlineNs(),
-            () -> clusterControl.
-                registerBroker(request, offsetControl.nextWriteOffset(),
-                    new FinalizedControllerFeatures(controllerFeatures, Long.MAX_VALUE),
-                    context.requestHeader().requestApiVersion() >= 3),
+            () -> {
+                // Populate finalized features map with latest known kraft version for validation.
+                // Get the finalized features map in controller operation to avoid outdated features.
+                Map<String, Short> controllerFeatures = new HashMap<>(featureControl.finalizedFeatures(Long.MAX_VALUE).featureMap());
+                controllerFeatures.put(KRaftVersion.FEATURE_NAME, raftClient.kraftVersion().featureLevel());
+                return clusterControl.
+                    registerBroker(request, offsetControl.nextWriteOffset(),
+                        new FinalizedControllerFeatures(controllerFeatures, Long.MAX_VALUE),
+                        context.requestHeader().requestApiVersion() >= 3);
+            },
             EnumSet.noneOf(ControllerOperationFlag.class));
     }
 
