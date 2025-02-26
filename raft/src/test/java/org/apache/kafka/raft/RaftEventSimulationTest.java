@@ -667,7 +667,8 @@ public class RaftEventSimulationTest {
 
                     nodeToAdd.apiVersionsRequestMessageId.whenComplete((messageId, exception) -> {
                         // Also add the API_VERSIONS_RESPONSE to the leader's message queue,
-                        // since KRaft doesn't handle that request type.
+                        // since the KRaft client doesn't support handling the API_VERSIONS_REQUEST
+                        // sent by the leader to the voter-to-be-added and will crash the test.
                         ApiMessage apiVersionsResponse = new ApiVersionsResponse.Builder().
                             setSupportedFeatures(
                                 Features.supportedFeatures(
@@ -851,7 +852,7 @@ public class RaftEventSimulationTest {
                         ReplicaKey.of(node.id(), persistentStates.get(node.id()).nodeDirectoryId),
                         endpointsFromId(node.id(), MockNetworkChannel.LISTENER_NAME),
                         new SupportedVersionRange((short) 1)
-                    )).collect(Collectors.toMap(VoterSet.VoterNode::voterId, Function.identity()))));
+                    )).collect(Collectors.toMap(voterNode -> voterNode.voterKey().id(), Function.identity()))));
             } else {
                 return Optional.empty();
             }
@@ -1333,15 +1334,21 @@ public class RaftEventSimulationTest {
         public void verify() {
             if (cluster.withKip853) {
                 /*
-                * For clusters running in KIP-853 mode, we check that a majority of at least one of:
-                * 1. the leader's voter set at the HWM
-                * 2. the leader's lastVoterSet()
-                * has reached the HWM. We need to perform a more elaborate check here because in clusters where
-                * an Add/RemoveVoter request increases/decreases the majority of voters value by 1, the leader
-                * could have used either majority value to update its HWM value. This is because depending on
-                * whether the leader read the most recent VotersRecord prior to updating its HWM value, the number
-                * of nodes (the majority) used to calculate that HWM value is different. This matters for invariant
-                * checking because we perform this verification on every message delivery.
+                * For clusters running in KIP-853 mode, we check that a majority of at least one of the following
+                * voter sets has reached the high watermark:
+                * 1. the leader's voter set at the HWM (i.e. the last committed voter set)
+                * 2. the leader's lastVoterSet() (which may or may not be committed)
+                * Note that 1 and 2 can be the same set, but when they are not, lastVoterSet() is uncommitted,
+                * which follows from the AtMostOneUncommittedVoterSet invariant.
+                *
+                * We need to perform a more elaborate check here because in clusters where a pending Add/RemoveVoter
+                * request would increase/decrease the majority of voters value by 1, the leader could have used the
+                * old majority value to update the high watermark value being checked here. So long as the leader has
+                * not added that new voter set to its log, its partitionState has not been updated with that
+                * uncommitted voter set yet. However, on the verify call after the leader's partitionState is updated
+                * with the uncommitted voter set, checking with only the uncommitted lastVoterSet() could incorrectly
+                * fail for a high watermark value that was calculated using the old voter set's majority and has not
+                * yet been updated with a new value calculated using the new voter set's majority.
                 * */
                 cluster.leaderWithMaxEpoch().ifPresent(leaderNode -> {
                     leaderNode.client.highWatermark().ifPresent(highWatermark -> {
@@ -1394,10 +1401,12 @@ public class RaftEventSimulationTest {
                 VoterSet lastCommittedVoterSet = leaderNode.client.partitionState().voterSetAtOffset(leaderNode.highWatermark() - 1).orElseGet(() -> cluster.initialVoterSetFromIds().get());
                 Optional<VoterSet> uncommittedVoterSet = Optional.empty();
                 for (long offset = leaderNode.highWatermark(); offset < leaderNode.logEndOffset(); ++offset) {
-                    Optional<VoterSet> maybeUncommittedVoterSet = leaderNode.client.partitionState().voterSetAtOffset(offset);
-                    assertTrue(maybeUncommittedVoterSet.isEmpty() || uncommittedVoterSet.isEmpty() || !uncommittedVoterSet.get().equals(maybeUncommittedVoterSet));
-                    if (!maybeUncommittedVoterSet.equals(lastCommittedVoterSet)) {
-                        uncommittedVoterSet = maybeUncommittedVoterSet;
+                    Optional<VoterSet> maybeNewUncommittedVoterSet = leaderNode.client.partitionState().voterSetAtOffset(offset);
+                    assertTrue(uncommittedVoterSet.isEmpty() || uncommittedVoterSet.get().equals(maybeNewUncommittedVoterSet.get()));
+                    if (maybeNewUncommittedVoterSet.isPresent() && uncommittedVoterSet.isEmpty()
+                        && !maybeNewUncommittedVoterSet.get().equals(lastCommittedVoterSet)
+                    ) {
+                        uncommittedVoterSet = maybeNewUncommittedVoterSet;
                     }
                 }
             });
@@ -1676,7 +1685,7 @@ public class RaftEventSimulationTest {
             if (!filters.get(senderId).acceptOutbound(outbound))
                 return;
 
-            // For the API_VERSIONS request sent when adding a voter, drop the request since the receiving KRaft client
+            // For the API_VERSIONS request sentby the leader when adding a voter, drop the request since the receiving KRaft client
             // doesn't handle it. Store the correlationId to deliver a response back to the leader to finish adding the voter
             if (outbound.data().apiKey() == ApiKeys.API_VERSIONS.id) {
                 int nodeToAddId = outbound.destination().id();
