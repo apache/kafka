@@ -2608,16 +2608,16 @@ class KafkaApis(val requestChannel: RequestChannel,
           }
 
           // Clients are not allowed to see topics that are not authorized for Describe.
-          val topicsToCheck = if (authorizer.isEmpty) {
-            Set.empty[String]
-          } else {
-            response.groups.stream()
-              .flatMap(group => group.members.stream)
-              .flatMap(member => util.stream.Stream.of(member.assignment, member.targetAssignment))
-              .flatMap(assignment => assignment.topicPartitions.stream)
-              .map(topicPartition => topicPartition.topicName)
-              .collect(Collectors.toSet[String])
-              .asScala
+          val topicsToCheck = authorizer match {
+            case Some(_) =>
+              response.groups.stream()
+                .flatMap(group => group.members.stream)
+                .flatMap(member => util.stream.Stream.of(member.assignment, member.targetAssignment))
+                .flatMap(assignment => assignment.topicPartitions.stream)
+                .map(topicPartition => topicPartition.topicName)
+                .collect(Collectors.toSet[String])
+                .asScala
+            case None => Set.empty[String]
           }
           val authorizedTopics = authHelper.filterByAuthorized(request.context, DESCRIBE, TOPIC,
             topicsToCheck)(identity)
