@@ -109,6 +109,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
@@ -2390,7 +2391,10 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(
-            new ShareGroupHeartbeatResponseData()
+            Map.entry(
+                new ShareGroupHeartbeatResponseData(),
+                Optional.empty()
+            )
         ));
 
         CompletableFuture<ShareGroupHeartbeatResponseData> future = service.shareGroupHeartbeat(
