@@ -148,7 +148,6 @@ import org.apache.kafka.server.share.persister.GroupTopicPartitionData;
 import org.apache.kafka.server.share.persister.InitializeShareGroupStateParameters;
 import org.apache.kafka.server.share.persister.PartitionFactory;
 import org.apache.kafka.server.share.persister.PartitionIdData;
-import org.apache.kafka.server.share.persister.PartitionStateData;
 import org.apache.kafka.server.share.persister.TopicData;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
@@ -164,8 +163,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -177,6 +174,7 @@ import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.common.protocol.Errors.COORDINATOR_NOT_AVAILABLE;
@@ -457,7 +455,7 @@ public class GroupMetadataManager {
     private final ShareGroupPartitionAssignor shareGroupAssignor;
 
     private record ShareGroupStatePartitionMetadataInfo(
-        HashMap<Uuid, Set<Integer>> initializedTopics,
+        HashMap<Uuid, Set<Integer>> initializedTopics,   // topicId -> numPartitions
         HashSet<Uuid> deletingTopics
     ) { }
 
@@ -2306,25 +2304,35 @@ public class GroupMetadataManager {
         Map<Uuid, Map.Entry<TopicImage, List<Integer>>> topicPartitionChangeMap = new HashMap<>();
         Set<TopicImage> newImages = new HashSet<>();
 
-        subscribedTopicNames.forEach(topicName -> newImages.add(metadataImage.topics().getTopic(topicName)));
+        TopicsImage topicsImage = metadataImage.topics();
+        if (topicsImage == null || topicsImage.isEmpty()) {
+            return Map.of();
+        }
+
+        for (String topicName : subscribedTopicNames) {
+            if (topicsImage.getTopic(topicName) == null) {
+                // error?
+                continue;
+            }
+            newImages.add(topicsImage.getTopic(topicName));
+        }
 
         if (shareGroupPartitionMetadata.containsKey(group.groupId())) {
             Map<Uuid, Set<Integer>> alreadyInitialized = shareGroupPartitionMetadata.get(group.groupId()).initializedTopics();
             for (TopicImage newImage : newImages) {
+                int newImageNumPartitions = newImage.partitions().size();
+
                 if (alreadyInitialized.containsKey(newImage.id())) {
                     // Check partition change
-                    Set<Integer> existingPartitions = alreadyInitialized.get(newImage.id());
-                    Set<Integer> newImagePartitions = newImage.partitions().keySet();
-
-                    newImagePartitions.removeAll(existingPartitions);
+                    int existingNumPartitions = alreadyInitialized.get(newImage.id()).size();
 
                     // Partitions have increased (will only increase as kafka does not allow reduction).
-                    if (!newImagePartitions.isEmpty()) {
+                    if (newImageNumPartitions != existingNumPartitions) {
                         topicPartitionChangeMap.put(
                             newImage.id(),
                             Map.entry(
                                 newImage,
-                                newImagePartitions.stream().toList()
+                                IntStream.range(existingNumPartitions, newImageNumPartitions).boxed().toList()
                             )
                         );
                     }
@@ -2333,7 +2341,7 @@ public class GroupMetadataManager {
                         newImage.id(),
                         Map.entry(
                             newImage,
-                            newImage.partitions().keySet().stream().toList()
+                            IntStream.range(0, newImageNumPartitions).boxed().toList()
                         )
                     );
                 }
@@ -2344,7 +2352,7 @@ public class GroupMetadataManager {
                     newImage.id(),
                     Map.entry(
                         newImage,
-                        newImage.partitions().keySet().stream().toList()
+                        IntStream.range(0, newImage.partitions().size()).boxed().toList()
                     )
                 );
             }
@@ -3985,7 +3993,7 @@ public class GroupMetadataManager {
         }
 
         Map<Uuid, Map.Entry<TopicImage, List<Integer>>> topicPartitionchangeMap = subscribedTopicsChangeMap(group, subscribedTopicNames);
-        if(topicPartitionchangeMap.isEmpty()) {
+        if (topicPartitionchangeMap.isEmpty()) {
             return new CoordinatorResult<>(List.of(), null);
         }
 
@@ -4787,7 +4795,7 @@ public class GroupMetadataManager {
             // Add all initialized topic info from the replayed record to
             // the java record.
             for (ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo info : value.initializedTopics()) {
-                record.initializedTopics.computeIfAbsent(info.topicId(), k -> new LinkedHashSet<>())
+                record.initializedTopics.computeIfAbsent(info.topicId(), k -> new HashSet<>())
                     .addAll(info.partitions());
             }
 
