@@ -78,7 +78,6 @@ public final class ServerTopicConfigSynonyms {
         sameNameWithLogPrefix(TopicConfig.CLEANUP_POLICY_CONFIG),
         sameName(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG),
         sameName(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG),
-        sameName(TopicConfig.MIN_IN_SYNC_REPLICAS_DOC),
         sameName(TopicConfig.COMPRESSION_TYPE_CONFIG),
         sameName(TopicConfig.COMPRESSION_GZIP_LEVEL_CONFIG),
         sameName(TopicConfig.COMPRESSION_LZ4_LEVEL_CONFIG),
