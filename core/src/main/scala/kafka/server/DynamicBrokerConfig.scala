@@ -30,7 +30,7 @@ import kafka.utils.{CoreUtils, Logging}
 import org.apache.kafka.common.Reconfigurable
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, SaslConfigs, SslConfigs}
-import org.apache.kafka.common.metadata.ConfigRecord
+import org.apache.kafka.common.metadata.{ConfigRecord, MetadataRecordType}
 import org.apache.kafka.common.metrics.{Metrics, MetricsReporter}
 import org.apache.kafka.common.network.{ListenerName, ListenerReconfigurable}
 import org.apache.kafka.common.security.authenticator.LoginManager
@@ -216,7 +216,7 @@ object DynamicBrokerConfig {
         while (reader.hasNext) {
           val batch = reader.next()
           batch.forEach(record => {
-            if (record.message().apiKey() == 4) {
+            if (record.message().apiKey() == MetadataRecordType.CONFIG_RECORD.id) {
               val configRecord = record.message().asInstanceOf[ConfigRecord]
               if (DynamicBrokerConfig.AllDynamicConfigs.contains(configRecord.name())) {
                 dynamicBrokerConfigs.put(configRecord.name(), configRecord.value())
