@@ -19,6 +19,7 @@ package org.apache.kafka.common.config;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
+import org.apache.kafka.common.config.provider.EnvVarConfigProvider;
 import org.apache.kafka.common.config.provider.FileConfigProvider;
 import org.apache.kafka.common.config.provider.MockFileConfigProvider;
 import org.apache.kafka.common.config.provider.MockVaultConfigProvider;
@@ -468,8 +469,7 @@ public class AbstractConfigTest {
         MockFileConfigProvider.assertClosed(id);
 
         System.setProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY,
-                MockFileConfigProvider.class.getName() + "," +
-                        "org.apache.kafka.common.config.provider.EnvVarConfigProvider");
+                MockFileConfigProvider.class.getName() + "," + EnvVarConfigProvider.class.getName());
         String id2 = UUID.randomUUID().toString();
         props.put("config.providers.file.param.testId", id2);
         TestIndirectConfigResolution config2 = new TestIndirectConfigResolution(props, Collections.emptyMap());
