@@ -20,6 +20,7 @@ sleep $(($SLEEP_MINUTES*60));
 
 echo "Timed out after $SLEEP_MINUTES minutes. Dumping threads now..."
 mkdir thread-dumps
+mkdir heap-dumps
 touch thread-dumps/pids.txt
 sleep 5;
 

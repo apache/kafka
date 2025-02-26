@@ -211,7 +211,7 @@ jobs:
         uses: ./.github/actions/run-gradle
         with:
           test-task: test
-          timeout-minutes: 180  # 3 hours
+          timeout-minutes: 30  # 3 hours
           test-catalog-path: ${{ steps.load-test-catalog.outputs.download-path }}/combined-test-catalog.txt
           build-scan-artifact-name: build-scan-${{ env.job-variation }}
           run-new-tests: ${{ matrix.run-new }}
@@ -248,6 +248,17 @@ jobs:
           name: junit-thread-dumps-${{ env.job-variation }}
           path: |
             thread-dumps/*
+          compression-level: 9
+          if-no-files-found: ignore
+
+      - name: Archive Heap Dumps
+        id: archive-heap-dump
+        if: steps.junit-test.outputs.gradle-exitcode == '124'
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-heap-dumps-${{ env.job-variation }}
+          path: |
+            heap-dumps/*
           compression-level: 9
           if-no-files-found: ignore
 
