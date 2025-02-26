@@ -1195,9 +1195,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           val coordinatorEndpoint = topicMetadata.head.partitions.stream()
             .filter(_.partitionIndex() == partition)
             .filter(_.leaderId != MetadataResponse.NO_LEADER_ID)
-            .map(metadata => metadataCache.getAliveBrokerNode(metadata.leaderId, request.context.listenerName))
-            .filter(_.isPresent)
-            .map(_.get)
+            .flatMap(metadata => metadataCache.getAliveBrokerNode(metadata.leaderId, request.context.listenerName).stream())
             .findFirst()
 
           if (coordinatorEndpoint.isPresent) {
