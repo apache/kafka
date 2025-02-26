@@ -646,7 +646,7 @@ class ControllerApis(
           new UnregisterBrokerResponse(new UnregisterBrokerResponseData().
             setThrottleTimeMs(requestThrottleMs).
             setErrorCode(errors.code).
-            setErrorMessage(s"${errors.message()}, ${e.getMessage}"))
+            setErrorMessage(e.getMessage))
         } else {
           new UnregisterBrokerResponse(new UnregisterBrokerResponseData().
             setThrottleTimeMs(requestThrottleMs))

@@ -58,7 +58,7 @@ public class UnregisterBrokerRequest extends AbstractRequest {
         return new UnregisterBrokerResponse(new UnregisterBrokerResponseData()
                 .setThrottleTimeMs(throttleTimeMs)
                 .setErrorCode(error.code())
-                .setErrorMessage(error.message() + ", " + e.getMessage()));
+                .setErrorMessage(e.getMessage()));
     }
 
     public static UnregisterBrokerRequest parse(ByteBuffer buffer, short version) {
