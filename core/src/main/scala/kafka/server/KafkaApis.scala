@@ -2609,36 +2609,34 @@ class KafkaApis(val requestChannel: RequestChannel,
           }
 
           // Clients are not allowed to see topics that are not authorized for Describe.
-          val topicsToCheck = authorizer match {
-            case Some(_) =>
-              response.groups.stream()
-                .flatMap(group => group.members.stream)
-                .flatMap(member => util.stream.Stream.of(member.assignment, member.targetAssignment))
-                .flatMap(assignment => assignment.topicPartitions.stream)
-                .map(topicPartition => topicPartition.topicName)
-                .collect(Collectors.toSet[String])
-                .asScala
-            case None => Set.empty[String]
-          }
-          val authorizedTopics = authHelper.filterByAuthorized(request.context, DESCRIBE, TOPIC,
-            topicsToCheck)(identity)
-          val updatedGroups = response.groups.stream().map { group =>
-            val hasUnauthorizedTopic = group.members.stream()
+          if (!authorizer.isEmpty) {
+            val topicsToCheck = response.groups.stream()
+              .flatMap(group => group.members.stream)
               .flatMap(member => util.stream.Stream.of(member.assignment, member.targetAssignment))
-              .flatMap(assignment => assignment.topicPartitions.stream())
-              .anyMatch(tp => !authorizedTopics.contains(tp.topicName))
+              .flatMap(assignment => assignment.topicPartitions.stream)
+              .map(topicPartition => topicPartition.topicName)
+              .collect(Collectors.toSet[String])
+              .asScala
+            val authorizedTopics = authHelper.filterByAuthorized(request.context, DESCRIBE, TOPIC,
+              topicsToCheck)(identity)
+            val updatedGroups = response.groups.stream().map { group =>
+              val hasUnauthorizedTopic = group.members.stream()
+                .flatMap(member => util.stream.Stream.of(member.assignment, member.targetAssignment))
+                .flatMap(assignment => assignment.topicPartitions.stream())
+                .anyMatch(tp => !authorizedTopics.contains(tp.topicName))
 
-            if (hasUnauthorizedTopic) {
-              new ConsumerGroupDescribeResponseData.DescribedGroup()
-                .setGroupId(group.groupId)
-                .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
-                .setErrorMessage("The group has described topic(s) that the client is not authorized to describe.")
-                .setMembers(List.empty.asJava)
-            } else {
-              group
-            }
-          }.collect(Collectors.toList[ConsumerGroupDescribeResponseData.DescribedGroup])
-          response.setGroups(updatedGroups)
+              if (hasUnauthorizedTopic) {
+                new ConsumerGroupDescribeResponseData.DescribedGroup()
+                  .setGroupId(group.groupId)
+                  .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
+                  .setErrorMessage("The group has described topic(s) that the client is not authorized to describe.")
+                  .setMembers(List.empty.asJava)
+              } else {
+                group
+              }
+            }.collect(Collectors.toList[ConsumerGroupDescribeResponseData.DescribedGroup])
+            response.setGroups(updatedGroups)
+          }
 
           requestHelper.sendMaybeThrottle(request, new ConsumerGroupDescribeResponse(response))
         }
