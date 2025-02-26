@@ -37,6 +37,8 @@ import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.ShareGroupDescribeResponseData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
+import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.network.ClientInformation;
@@ -108,6 +110,7 @@ import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupBuilder;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroup;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupBuilder;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupBuilder;
+import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.timeline.SnapshotRegistry;
@@ -673,6 +676,36 @@ public class GroupMetadataManagerTestContext {
         );
 
         result.records().forEach(this::replay);
+        return result;
+    }
+
+    public CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> streamsGroupHeartbeat(
+        StreamsGroupHeartbeatRequestData request
+    ) {
+        RequestContext context = new RequestContext(
+            new RequestHeader(
+                ApiKeys.STREAMS_GROUP_HEARTBEAT,
+                ApiKeys.STREAMS_GROUP_HEARTBEAT.latestVersion(),
+                "client",
+                0
+            ),
+            "1",
+            InetAddress.getLoopbackAddress(),
+            KafkaPrincipal.ANONYMOUS,
+            ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
+            SecurityProtocol.PLAINTEXT,
+            ClientInformation.EMPTY,
+            false
+        );
+
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result = groupMetadataManager.streamsGroupHeartbeat(
+            context,
+            request
+        );
+
+        if (result.replayRecords()) {
+            result.records().forEach(this::replay);
+        }
         return result;
     }
 
@@ -1284,6 +1317,10 @@ public class GroupMetadataManagerTestContext {
 
     public List<ConsumerGroupDescribeResponseData.DescribedGroup> sendConsumerGroupDescribe(List<String> groupIds) {
         return groupMetadataManager.consumerGroupDescribe(groupIds, lastCommittedOffset);
+    }
+
+    public List<StreamsGroupDescribeResponseData.DescribedGroup> sendStreamsGroupDescribe(List<String> groupIds) {
+        return groupMetadataManager.streamsGroupDescribe(groupIds, lastCommittedOffset);
     }
 
     public List<DescribeGroupsResponseData.DescribedGroup> describeGroups(List<String> groupIds) {

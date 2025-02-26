@@ -54,6 +54,8 @@ import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.ShareGroupDescribeResponseData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
+import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.protocol.Errors;
@@ -133,6 +135,7 @@ import org.apache.kafka.coordinator.group.modern.share.ShareGroup;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupAssignmentBuilder;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupMember;
 import org.apache.kafka.coordinator.group.streams.StreamsGroup;
+import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
 import org.apache.kafka.coordinator.group.streams.StreamsTopology;
 import org.apache.kafka.coordinator.group.streams.TasksTuple;
@@ -605,6 +608,35 @@ public class GroupMetadataManager {
                 ));
             } catch (GroupIdNotFoundException exception) {
                 describedGroups.add(new ShareGroupDescribeResponseData.DescribedGroup()
+                    .setGroupId(groupId)
+                    .setErrorCode(Errors.GROUP_ID_NOT_FOUND.code())
+                    .setErrorMessage(exception.getMessage())
+                );
+            }
+        });
+
+        return describedGroups;
+    }
+
+    /**
+     * Handles a StreamsGroupDescribe request.
+     *
+     * @param groupIds          The IDs of the groups to describe.
+     * @param committedOffset   A specified committed offset corresponding to this shard.
+     *
+     * @return A list containing the StreamsGroupDescribeResponseData.DescribedGroup.
+     *         If a group is not found, the DescribedGroup will contain the error code and message.
+     */
+    public List<StreamsGroupDescribeResponseData.DescribedGroup> streamsGroupDescribe(
+        List<String> groupIds,
+        long committedOffset
+    ) {
+        final List<StreamsGroupDescribeResponseData.DescribedGroup> describedGroups = new ArrayList<>();
+        groupIds.forEach(groupId -> {
+            try {
+                describedGroups.add(streamsGroup(groupId, committedOffset).asDescribedGroup(committedOffset));
+            } catch (GroupIdNotFoundException exception) {
+                describedGroups.add(new StreamsGroupDescribeResponseData.DescribedGroup()
                     .setGroupId(groupId)
                     .setErrorCode(Errors.GROUP_ID_NOT_FOUND.code())
                     .setErrorMessage(exception.getMessage())
@@ -3785,6 +3817,22 @@ public class GroupMetadataManager {
                 request.topicPartitions()
             );
         }
+    }
+
+    /**
+     * Handles a StreamsGroupHeartbeat request.
+     *
+     * @param context The request context.
+     * @param request The actual StreamsGroupHeartbeat request.
+     *
+     * @return A Result containing the StreamsGroupHeartbeat response, a list of internal topics to create and
+     *         a list of records to update the state machine.
+     */
+    public CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> streamsGroupHeartbeat(
+        RequestContext context,
+        StreamsGroupHeartbeatRequestData request
+    ) throws ApiException {
+        throw new UnsupportedOperationException("StreamsGroupHeartbeat is not implemented yet.");
     }
 
     /**

@@ -56,6 +56,7 @@ import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.ShareGroupDescribeResponseData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupRequestData.SyncGroupRequestAssignment;
 import org.apache.kafka.common.message.SyncGroupResponseData;
@@ -96,6 +97,7 @@ import org.apache.kafka.coordinator.group.modern.share.ShareGroupBuilder;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupMember;
 import org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers;
 import org.apache.kafka.coordinator.group.streams.StreamsGroup;
+import org.apache.kafka.coordinator.group.streams.StreamsGroup.StreamsGroupState;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupBuilder;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
 import org.apache.kafka.coordinator.group.streams.StreamsTopology;
@@ -119,6 +121,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -8950,6 +8953,112 @@ public class GroupMetadataManagerTest {
             describedGroup
         );
         assertEquals(expected, actual);
+    }
+
+    @Test
+    public void testStreamsGroupDescribeNoErrors() {
+        List<String> streamsGroupIds = Arrays.asList("group-id-1", "group-id-2");
+        int epoch = 10;
+        String memberId = "member-id";
+        StreamsGroupMember.Builder memberBuilder = streamsGroupMemberBuilderWithDefaults(memberId)
+            .setClientTags(Collections.singletonMap("clientTag", "clientValue"))
+            .setProcessId("processId")
+            .setMemberEpoch(epoch)
+            .setPreviousMemberEpoch(epoch - 1);
+
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroup(new StreamsGroupBuilder(streamsGroupIds.get(0), epoch))
+            .withStreamsGroup(new StreamsGroupBuilder(streamsGroupIds.get(1), epoch)
+                .withMember(memberBuilder.build()))
+            .build();
+
+        List<StreamsGroupDescribeResponseData.DescribedGroup> expected = Arrays.asList(
+            new StreamsGroupDescribeResponseData.DescribedGroup()
+                .setGroupEpoch(epoch)
+                .setGroupId(streamsGroupIds.get(0))
+                .setGroupState(StreamsGroupState.EMPTY.toString())
+                .setAssignmentEpoch(0),
+            new StreamsGroupDescribeResponseData.DescribedGroup()
+                .setGroupEpoch(epoch)
+                .setGroupId(streamsGroupIds.get(1))
+                .setMembers(Collections.singletonList(
+                    memberBuilder.build().asStreamsGroupDescribeMember(
+                        TasksTuple.EMPTY
+                    )
+                ))
+                .setGroupState(StreamsGroupState.NOT_READY.toString())
+        );
+        List<StreamsGroupDescribeResponseData.DescribedGroup> actual = context.sendStreamsGroupDescribe(streamsGroupIds);
+
+        assertEquals(expected, actual);
+    }
+
+    @Test
+    public void testStreamsGroupDescribeWithErrors() {
+        String groupId = "groupId";
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
+
+        List<StreamsGroupDescribeResponseData.DescribedGroup> actual = context.sendStreamsGroupDescribe(Collections.singletonList(groupId));
+        StreamsGroupDescribeResponseData.DescribedGroup describedGroup = new StreamsGroupDescribeResponseData.DescribedGroup()
+            .setGroupId(groupId)
+            .setErrorCode(Errors.GROUP_ID_NOT_FOUND.code())
+            .setErrorMessage("Group groupId not found.");
+        List<StreamsGroupDescribeResponseData.DescribedGroup> expected = Collections.singletonList(
+            describedGroup
+        );
+
+        assertEquals(expected, actual);
+    }
+
+    @Test
+    public void testStreamsGroupDescribeBeforeAndAfterCommittingOffset() {
+        String streamsGroupId = "streamsGroupId";
+        int epoch = 10;
+        String memberId1 = "memberId1";
+        String memberId2 = "memberId2";
+        String subtopologyId = "subtopology1";
+
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
+
+        StreamsGroupMember.Builder memberBuilder1 = streamsGroupMemberBuilderWithDefaults(memberId1);
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMemberRecord(streamsGroupId, memberBuilder1.build()));
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(streamsGroupId, memberBuilder1.build()));
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupEpochRecord(streamsGroupId, epoch + 1));
+
+        TasksTuple assignment = new TasksTuple(
+            Map.of(subtopologyId, Set.of(0, 1)),
+            Map.of(subtopologyId, Set.of(0, 1)),
+            Map.of(subtopologyId, Set.of(0, 1))
+        );
+
+        StreamsGroupMember.Builder memberBuilder2 = streamsGroupMemberBuilderWithDefaults(memberId2);
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupMemberRecord(streamsGroupId, memberBuilder2.build()));
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(streamsGroupId, memberId2, assignment));
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupCurrentAssignmentRecord(streamsGroupId, memberBuilder2.build()));
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupEpochRecord(streamsGroupId, epoch + 2));
+
+        List<StreamsGroupDescribeResponseData.DescribedGroup> actual = context.groupMetadataManager.streamsGroupDescribe(Collections.singletonList(streamsGroupId), context.lastCommittedOffset);
+        StreamsGroupDescribeResponseData.DescribedGroup describedGroup = new StreamsGroupDescribeResponseData.DescribedGroup()
+            .setGroupId(streamsGroupId)
+            .setErrorCode(Errors.GROUP_ID_NOT_FOUND.code())
+            .setErrorMessage("Group streamsGroupId not found.");
+        assertEquals(1, actual.size());
+        assertEquals(describedGroup, actual.get(0));
+
+        // Commit the offset and test again
+        context.commit();
+
+        actual = context.groupMetadataManager.streamsGroupDescribe(Collections.singletonList(streamsGroupId), context.lastCommittedOffset);
+        describedGroup = new StreamsGroupDescribeResponseData.DescribedGroup()
+            .setGroupId(streamsGroupId)
+            .setMembers(Arrays.asList(
+                memberBuilder1.build().asStreamsGroupDescribeMember(TasksTuple.EMPTY),
+                memberBuilder2.build().asStreamsGroupDescribeMember(assignment)
+            ))
+            .setGroupState(StreamsGroup.StreamsGroupState.NOT_READY.toString())
+            .setGroupEpoch(epoch + 2);
+        assertEquals(1, actual.size());
+        assertEquals(describedGroup, actual.get(0));
     }
 
     @Test
