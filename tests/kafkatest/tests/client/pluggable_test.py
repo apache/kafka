@@ -34,7 +34,7 @@ class PluggableConsumerTest(VerifiableConsumerTest):
 
     @cluster(num_nodes=4)
     @matrix(metadata_quorum=quorum.all_non_upgrade)
-    def test_start_stop(self, metadata_quorum=quorum.zk):
+    def test_start_stop(self, metadata_quorum=quorum.isolated_kraft):
         """
         Test that a pluggable VerifiableConsumer module load works
         """

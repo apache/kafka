@@ -57,7 +57,7 @@ class CompressionTest(ProduceConsumeValidateTest):
 
     @cluster(num_nodes=8)
     @matrix(compression_types=[COMPRESSION_TYPES], metadata_quorum=quorum.all_non_upgrade)
-    def test_compressed_topic(self, compression_types, metadata_quorum=quorum.zk):
+    def test_compressed_topic(self, compression_types, metadata_quorum=quorum.isolated_kraft):
         """Test produce => consume => validate for compressed topics
         Setup: 1 zk, 1 kafka node, 1 topic with partitions=10, replication-factor=1
 

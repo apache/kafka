@@ -40,7 +40,7 @@ class ConsoleConsumerTest(Test):
     @cluster(num_nodes=4)
     @matrix(security_protocol=['SASL_SSL'], sasl_mechanism=['PLAIN', 'SCRAM-SHA-256', 'SCRAM-SHA-512'], metadata_quorum=quorum.all_kraft)
     @matrix(security_protocol=['SASL_PLAINTEXT', 'SASL_SSL'], metadata_quorum=quorum.all_kraft)
-    def test_lifecycle(self, security_protocol, sasl_mechanism='GSSAPI', metadata_quorum=quorum.zk):
+    def test_lifecycle(self, security_protocol, sasl_mechanism='GSSAPI', metadata_quorum=quorum.isolated_kraft):
         """Check that console consumer starts/stops properly, and that we are capturing log output."""
 
         self.kafka.security_protocol = security_protocol

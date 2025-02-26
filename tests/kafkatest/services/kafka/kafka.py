@@ -1197,12 +1197,6 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                 return False
         return True
 
-    def all_nodes_acl_command_supports_bootstrap_server(self):
-        for node in self.nodes:
-            if not node.version.acl_command_supports_bootstrap_server():
-                return False
-        return True
-
     def all_nodes_reassign_partitions_command_supports_bootstrap_server(self):
         for node in self.nodes:
             if not node.version.reassign_partitions_command_supports_bootstrap_server():
@@ -1362,7 +1356,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     def kafka_acls_cmd_with_optional_security_settings(self, node, force_use_zk_connection, kafka_security_protocol = None, override_command_config = None):
         if self.quorum_info.using_kraft and not self.quorum_info.has_brokers:
             raise Exception("Must invoke kafka-acls against a broker, not a KRaft controller")
-        force_use_zk_connection = force_use_zk_connection or not self.all_nodes_acl_command_supports_bootstrap_server
+        force_use_zk_connection = force_use_zk_connection
         if force_use_zk_connection:
             bootstrap_server_or_authorizer_zk_props = "--authorizer-properties zookeeper.connect=%s" % (self.zk_connect_setting())
             skip_optional_security_settings = True

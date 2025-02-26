@@ -84,7 +84,7 @@ class ClientCompatibilityProduceConsumeTest(ProduceConsumeValidateTest):
     @parametrize(broker_version=str(LATEST_3_7), metadata_quorum=quorum.isolated_kraft)
     @parametrize(broker_version=str(LATEST_3_8), metadata_quorum=quorum.isolated_kraft)
     @parametrize(broker_version=str(LATEST_3_9), metadata_quorum=quorum.isolated_kraft)
-    def test_produce_consume(self, broker_version, metadata_quorum=quorum.zk):
+    def test_produce_consume(self, broker_version, metadata_quorum=quorum.isolated_kraft):
         print("running producer_consumer_compat with broker_version = %s" % broker_version, flush=True)
         self.kafka.set_version(KafkaVersion(broker_version))
         if metadata_quorum == quorum.isolated_kraft:

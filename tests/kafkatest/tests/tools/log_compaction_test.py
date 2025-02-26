@@ -55,7 +55,7 @@ class LogCompactionTest(Test):
 
     @cluster(num_nodes=4)
     @matrix(metadata_quorum=quorum.all_non_upgrade)
-    def test_log_compaction(self, security_protocol='PLAINTEXT', metadata_quorum=quorum.zk):
+    def test_log_compaction(self, security_protocol='PLAINTEXT', metadata_quorum=quorum.isolated_kraft):
 
         self.start_kafka(security_protocol, security_protocol)
         self.start_test_log_compaction_tool(security_protocol)

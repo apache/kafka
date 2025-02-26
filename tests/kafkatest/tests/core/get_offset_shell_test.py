@@ -98,7 +98,7 @@ class GetOffsetShellTest(Test):
 
     @cluster(num_nodes=3)
     @matrix(metadata_quorum=quorum.all_non_upgrade)
-    def test_get_offset_shell_topic_name(self, security_protocol='PLAINTEXT', metadata_quorum=quorum.zk):
+    def test_get_offset_shell_topic_name(self, security_protocol='PLAINTEXT', metadata_quorum=quorum.isolated_kraft):
         """
         Tests if GetOffsetShell handles --topic argument with a simple name correctly
         :return: None
@@ -112,7 +112,7 @@ class GetOffsetShellTest(Test):
 
     @cluster(num_nodes=4)
     @matrix(metadata_quorum=quorum.all_non_upgrade)
-    def test_get_offset_shell_topic_pattern(self, security_protocol='PLAINTEXT', metadata_quorum=quorum.zk):
+    def test_get_offset_shell_topic_pattern(self, security_protocol='PLAINTEXT', metadata_quorum=quorum.isolated_kraft):
         """
         Tests if GetOffsetShell handles --topic argument with a pattern correctly
         :return: None
@@ -127,7 +127,7 @@ class GetOffsetShellTest(Test):
 
     @cluster(num_nodes=3)
     @matrix(metadata_quorum=quorum.all_non_upgrade)
-    def test_get_offset_shell_partitions(self, security_protocol='PLAINTEXT', metadata_quorum=quorum.zk):
+    def test_get_offset_shell_partitions(self, security_protocol='PLAINTEXT', metadata_quorum=quorum.isolated_kraft):
         """
         Tests if GetOffsetShell handles --partitions argument correctly
         :return: None
@@ -149,7 +149,7 @@ class GetOffsetShellTest(Test):
 
     @cluster(num_nodes=4)
     @matrix(metadata_quorum=quorum.all_non_upgrade)
-    def test_get_offset_shell_topic_partitions(self, security_protocol='PLAINTEXT', metadata_quorum=quorum.zk):
+    def test_get_offset_shell_topic_partitions(self, security_protocol='PLAINTEXT', metadata_quorum=quorum.isolated_kraft):
         """
         Tests if GetOffsetShell handles --topic-partitions argument correctly
         :return: None
@@ -201,7 +201,7 @@ class GetOffsetShellTest(Test):
 
     @cluster(num_nodes=4)
     @matrix(metadata_quorum=quorum.all_non_upgrade)
-    def test_get_offset_shell_internal_filter(self, security_protocol='PLAINTEXT', metadata_quorum=quorum.zk):
+    def test_get_offset_shell_internal_filter(self, security_protocol='PLAINTEXT', metadata_quorum=quorum.isolated_kraft):
         """
         Tests if GetOffsetShell handles --exclude-internal-topics flag correctly
         :return: None

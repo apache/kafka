@@ -124,7 +124,7 @@ class ClientCompatibilityFeaturesTest(Test):
     @parametrize(broker_version=str(LATEST_3_7), metadata_quorum=quorum.isolated_kraft)
     @parametrize(broker_version=str(LATEST_3_8), metadata_quorum=quorum.isolated_kraft)
     @parametrize(broker_version=str(LATEST_3_9), metadata_quorum=quorum.isolated_kraft)
-    def run_compatibility_test(self, broker_version, metadata_quorum=quorum.zk):
+    def run_compatibility_test(self, broker_version, metadata_quorum=quorum.isolated_kraft):
         if self.zk:
             self.zk.start()
         self.kafka.set_version(KafkaVersion(broker_version))

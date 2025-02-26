@@ -32,7 +32,7 @@ class PerformanceServiceTest(Test):
 
     @cluster(num_nodes=5)
     @matrix(version=[str(LATEST_2_1), str(DEV_BRANCH)], metadata_quorum=quorum.all_kraft)
-    def test_version(self, version=str(LATEST_2_1), metadata_quorum=quorum.zk):
+    def test_version(self, version=str(LATEST_2_1), metadata_quorum=quorum.isolated_kraft):
         """
         Sanity check out producer performance service - verify that we can run the service with a small
         number of messages. The actual stats here are pretty meaningless since the number of messages is quite small.
@@ -47,7 +47,7 @@ class PerformanceServiceTest(Test):
         self.producer_perf = ProducerPerformanceService(
             self.test_context, 1, self.kafka, topic=self.topic,
             num_records=self.num_records, record_size=self.record_size,
-            throughput=1000000000,  # Set impossibly for no throttling for equivalent behavior between 0.8.X and 0.9.X
+            throughput=1000000000,  # Effectively no throttling
             version=version,
             settings={
                 'acks': 1,

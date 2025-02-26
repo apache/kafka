@@ -143,7 +143,7 @@ class ReplicationTest(EndToEndTest):
     def test_replication_with_broker_failure(self, failure_mode, security_protocol, broker_type,
                                              client_sasl_mechanism="GSSAPI", interbroker_sasl_mechanism="GSSAPI",
                                              compression_type=None, enable_idempotence=False, tls_version=None,
-                                             metadata_quorum=quorum.zk, num_controllers=1):
+                                             metadata_quorum=quorum.isolated_kraft, num_controllers=1):
         """Replication tests.
         These tests verify that replication provides simple durability guarantees by checking that data acked by
         brokers is still available for consumption in the face of various failure scenarios.

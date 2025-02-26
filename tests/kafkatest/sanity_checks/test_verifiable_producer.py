@@ -46,9 +46,9 @@ class TestVerifiableProducer(Test):
     @matrix(producer_version=[str(DEV_BRANCH)], security_protocol=['SASL_SSL'], sasl_mechanism=['PLAIN', 'GSSAPI'],
             metadata_quorum=quorum.all_kraft)
     def test_simple_run(self, producer_version, acks=None, enable_idempotence=False, security_protocol = 'PLAINTEXT',
-                        sasl_mechanism='PLAIN', metadata_quorum=quorum.zk):
+                        sasl_mechanism='PLAIN', metadata_quorum=quorum.isolated_kraft):
         """
-        Test that we can start VerifiableProducer on the current branch snapshot version or against the 0.8.2 jar, and
+        Test that we can start VerifiableProducer on the current branch snapshot version, and
         verify that we can produce a small number of messages.
         """
         self.kafka.security_protocol = security_protocol

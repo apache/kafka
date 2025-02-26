@@ -25,9 +25,9 @@ class KafkaVersion(LooseVersion):
 
     Example:
 
-        v10 = KafkaVersion("0.10.0")
-        v9 = KafkaVersion("0.9.0.1")
-        assert v10 > v9  # assertion passes!
+        v4 = KafkaVersion("4.0.0")
+        v3 = KafkaVersion("3.0.0")
+        assert v4 > v3  # assertion passes!
     """
     def __init__(self, version_string):
         self.is_dev = (version_string.lower() == "dev")
@@ -61,9 +61,6 @@ class KafkaVersion(LooseVersion):
             return 1
 
         return LooseVersion._cmp(self, other)
-
-    def acl_command_supports_bootstrap_server(self):
-        return self >= V_2_1_0
 
     def topic_command_supports_bootstrap_server(self):
         return self >= V_2_3_0
