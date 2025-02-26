@@ -32,6 +32,7 @@ import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
 import org.apache.kafka.connect.runtime.errors.ErrorReporter;
 import org.apache.kafka.connect.runtime.errors.ProcessingContext;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
+import org.apache.kafka.connect.runtime.isolation.LoaderSwap;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.source.SourceTask.TransactionBoundary;
@@ -57,6 +58,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 
@@ -101,11 +103,12 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
                                        Executor closeExecutor,
                                        Runnable preProducerCheck,
                                        Runnable postProducerCheck,
-                                       Supplier<List<ErrorReporter<SourceRecord>>> errorReportersSupplier) {
+                                       Supplier<List<ErrorReporter<SourceRecord>>> errorReportersSupplier,
+                                       Function<ClassLoader, LoaderSwap> pluginLoaderSwapper) {
         super(id, task, statusListener, initialState, configState, keyConverterPlugin, valueConverterPlugin, headerConverterPlugin, transformationChain,
                 buildTransactionContext(sourceConfig),
                 producer, admin, topicGroups, offsetReader, offsetWriter, offsetStore, workerConfig, connectMetrics, errorMetrics,
-                loader, time, retryWithToleranceOperator, statusBackingStore, closeExecutor, errorReportersSupplier);
+                loader, time, retryWithToleranceOperator, statusBackingStore, closeExecutor, errorReportersSupplier, pluginLoaderSwapper);
 
         this.transactionOpen = false;
         this.committableRecords = new LinkedHashMap<>();
