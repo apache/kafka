@@ -175,7 +175,7 @@ public class TopicConfig {
         "a write for the write to be considered successful. If this minimum cannot be met, " +
         "then the producer will raise an exception (either <code>NotEnoughReplicas</code> or <code>NotEnoughReplicasAfterAppend</code>).<br> " +
         "Regardless of the <code>acks</code> setting, the messages will not be visible to the consumers until " +
-        "they are replicated to all in-sync replicas and <code>min.insync.replicas</code> condition is met.<br> " +
+        "they are replicated to all in-sync replicas and the <code>min.insync.replicas</code> condition is met.<br> " +
         "When used together, <code>min.insync.replicas</code> and <code>acks</code> allow you to enforce greater durability guarantees. " +
         "A typical scenario would be to create a topic with a replication factor of 3, " +
         "set <code>min.insync.replicas</code> to 2, and produce with <code>acks</code> of \"all\". " +
