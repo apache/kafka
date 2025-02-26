@@ -42,6 +42,7 @@ import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch;
 import org.apache.kafka.server.share.fetch.DelayedShareFetchGroupKey;
 import org.apache.kafka.server.share.fetch.DelayedShareFetchKey;
 import org.apache.kafka.server.share.fetch.ShareAcquiredRecords;
+import org.apache.kafka.server.share.metrics.SharePartitionMetrics;
 import org.apache.kafka.server.share.persister.GroupTopicPartitionData;
 import org.apache.kafka.server.share.persister.PartitionAllData;
 import org.apache.kafka.server.share.persister.PartitionErrorData;
@@ -84,6 +85,7 @@ import static kafka.server.share.ShareFetchUtils.offsetForTimestamp;
  * consumers. The class maintains the state of the records that have been fetched from the leader
  * and are in-flight.
  */
+@SuppressWarnings("ClassDataAbstractionCoupling")
 public class SharePartition {
 
     private static final Logger log = LoggerFactory.getLogger(SharePartition.class);
@@ -281,6 +283,11 @@ public class SharePartition {
     private final long loadStartTimeMs;
 
     /**
+     * The share partition metrics is used to track the broker-side metrics for the share partition.
+     */
+    private final SharePartitionMetrics sharePartitionMetrics;
+
+    /**
      * The share partition start offset specifies the partition start offset from which the records
      * are cached in the cachedState of the sharePartition.
      */
@@ -314,6 +321,16 @@ public class SharePartition {
     private SharePartitionState partitionState;
 
     /**
+     * The fetch lock acquired time is used to track the time when the lock for share partition is acquired.
+     */
+    private long fetchLockAcquiredTimeMs;
+
+    /**
+     * The time since last lock acquisition is used to track the time since the last lock acquisition.
+     */
+    private long timeSinceLastLockAcquisitionMs;
+
+    /**
      * The replica manager is used to check to see if any delayed share fetch request can be completed because of data
      * availability due to acquisition lock timeout.
      */
@@ -334,9 +351,12 @@ public class SharePartition {
         SharePartitionListener listener
     ) {
         this(groupId, topicIdPartition, leaderEpoch, maxInFlightMessages, maxDeliveryCount, defaultRecordLockDurationMs,
-            timer, time, persister, replicaManager, groupConfigManager, SharePartitionState.EMPTY, listener);
+            timer, time, persister, replicaManager, groupConfigManager, SharePartitionState.EMPTY, listener,
+            new SharePartitionMetrics(groupId, topicIdPartition.topic(), topicIdPartition.partition()));
     }
 
+    // Visible for testing
+    @SuppressWarnings("ParameterNumber")
     SharePartition(
         String groupId,
         TopicIdPartition topicIdPartition,
@@ -350,7 +370,8 @@ public class SharePartition {
         ReplicaManager replicaManager,
         GroupConfigManager groupConfigManager,
         SharePartitionState sharePartitionState,
-        SharePartitionListener listener
+        SharePartitionListener listener,
+        SharePartitionMetrics sharePartitionMetrics
     ) {
         this.groupId = groupId;
         this.topicIdPartition = topicIdPartition;
@@ -371,6 +392,8 @@ public class SharePartition {
         this.groupConfigManager = groupConfigManager;
         this.fetchOffsetMetadata = new OffsetMetadata();
         this.listener = listener;
+        this.sharePartitionMetrics = sharePartitionMetrics;
+        this.registerGaugeMetrics();
     }
 
     /**
@@ -476,6 +499,7 @@ public class SharePartition {
                     InFlightBatch inFlightBatch = new InFlightBatch(EMPTY_MEMBER_ID, stateBatch.firstOffset(),
                         stateBatch.lastOffset(), RecordState.forId(stateBatch.deliveryState()), stateBatch.deliveryCount(), null);
                     cachedState.put(stateBatch.firstOffset(), inFlightBatch);
+                    sharePartitionMetrics.recordInFlightBatchMessageCount(stateBatch.lastOffset() - stateBatch.firstOffset() + 1);
                 }
                 // Update the endOffset of the partition.
                 if (!cachedState.isEmpty()) {
@@ -1265,19 +1289,7 @@ public class SharePartition {
         if (nextFetchOffset() != endOffset() + 1) {
             return true;
         }
-
-        lock.readLock().lock();
-        long numRecords;
-        try {
-            if (cachedState.isEmpty()) {
-                numRecords = 0;
-            } else {
-                numRecords = this.endOffset - this.startOffset + 1;
-            }
-        } finally {
-            lock.readLock().unlock();
-        }
-        return numRecords < maxInFlightMessages;
+        return numInflightRecords() < maxInFlightMessages;
     }
 
     /**
@@ -1291,13 +1303,30 @@ public class SharePartition {
         if (stateNotActive()) {
             return false;
         }
-        return fetchLock.compareAndSet(false, true);
+        boolean acquired = fetchLock.compareAndSet(false, true);
+        if (acquired) {
+            long currentTime = time.hiResClockMs();
+            fetchLockAcquiredTimeMs = currentTime;
+            timeSinceLastLockAcquisitionMs = timeSinceLastLockAcquisitionMs != 0 ? currentTime - timeSinceLastLockAcquisitionMs : 0;
+        }
+        return acquired;
     }
 
     /**
      * Release the fetch lock once the records are fetched from the leader.
      */
     void releaseFetchLock() {
+        // Register the metric for the duration the fetch lock was held. Do not register the metric
+        // if the fetch lock was not acquired.
+        if (fetchLock.get()) {
+            long currentTime = time.hiResClockMs();
+            long acquiredTime = currentTime - fetchLockAcquiredTimeMs;
+            // Update the metric for the fetch lock time.
+            sharePartitionMetrics.recordFetchLockTimeMs(acquiredTime);
+            // Update fetch lock ratio metric.
+            recordFetchLockRatioMetric(acquiredTime);
+            timeSinceLastLockAcquisitionMs = currentTime;
+        }
         fetchLock.set(false);
     }
 
@@ -1324,6 +1353,42 @@ public class SharePartition {
 
     int leaderEpoch() {
         return leaderEpoch;
+    }
+
+    // Visible for testing
+    void recordFetchLockRatioMetric(long acquiredTime) {
+        // Update the total fetch lock acquired time.
+        double fetchLockToTotalTime;
+        if (acquiredTime + timeSinceLastLockAcquisitionMs == 0) {
+            // If the total time is 0 then the ratio is 1 i.e. the fetch lock was acquired for the complete time.
+            fetchLockToTotalTime = 1;
+        } else if (acquiredTime == 0) {
+            // If the acquired time is 0 then the ratio is the time spent since the last lock acquisition.
+            fetchLockToTotalTime = 1.0 / timeSinceLastLockAcquisitionMs;
+        } else {
+            fetchLockToTotalTime = acquiredTime * (1.0 / (acquiredTime + timeSinceLastLockAcquisitionMs));
+        }
+        sharePartitionMetrics.recordFetchLockRatio((int) (fetchLockToTotalTime * 100));
+    }
+
+    private void registerGaugeMetrics() {
+        sharePartitionMetrics.registerInflightMessageCount(this::numInflightRecords);
+        sharePartitionMetrics.registerInflightBatchCount(this.cachedState::size);
+    }
+
+    private long numInflightRecords() {
+        lock.readLock().lock();
+        long numRecords;
+        try {
+            if (cachedState.isEmpty()) {
+                numRecords = 0;
+            } else {
+                numRecords = this.endOffset - this.startOffset + 1;
+            }
+        } finally {
+            lock.readLock().unlock();
+        }
+        return numRecords;
     }
 
     private boolean stateNotActive() {
@@ -1478,6 +1543,8 @@ public class SharePartition {
                     RecordState.ACQUIRED,
                     1,
                     timerTask));
+                // Update the in-flight batch message count metrics for the share partition.
+                sharePartitionMetrics.recordInFlightBatchMessageCount(acquiredRecords.lastOffset() - acquiredRecords.firstOffset() + 1);
             });
             return result;
         } finally {
@@ -2501,6 +2568,7 @@ public class SharePartition {
          */
         @Override
         public void run() {
+            sharePartitionMetrics.recordAcquisitionLockTimeoutPerSec(lastOffset - firstOffset + 1);
             releaseAcquisitionLockOnTimeout(memberId, firstOffset, lastOffset);
         }
     }
