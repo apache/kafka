@@ -71,7 +71,6 @@ import java.util.OptionalLong;
 import java.util.PriorityQueue;
 import java.util.Random;
 import java.util.Set;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
@@ -164,6 +163,35 @@ public class RaftEventSimulationTest {
         int firstObserverId = numVoters;
         scheduler.scheduleOnce(new AddVoterAction(cluster, cluster.running.get(firstObserverId)), 0);
         scheduler.runUntil(() -> cluster.leaderWithMaxEpoch().get().client.partitionState().lastVoterSet().size() == numVoters + 1);
+        VoterSet latestVoterSet = cluster.leaderWithMaxEpoch().get().client.partitionState().lastVoterSet();
+        scheduler.runUntil(() -> cluster.allHaveLatestVoterSet(latestVoterSet));
+    }
+
+    @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
+    void canAddAllObserversAsVoters(
+        @ForAll int seed,
+        @ForAll @IntRange(min = 1, max = 5) int numVoters,
+        @ForAll @IntRange(min = 1, max = 10) int numObservers
+    ) {
+        Random random = new Random(seed);
+        Cluster cluster = new Cluster(numVoters, numObservers, random, true);
+        MessageRouter router = new MessageRouter(cluster);
+        EventScheduler scheduler = schedulerWithKip853Invariants(cluster);
+
+        cluster.startAll();
+        schedulePolling(scheduler, cluster, 3, 5);
+        scheduler.schedule(router::deliverAll, 0, 2, 1);
+        // Have to increase the time between appends to the log, otherwise the add voter request will time out
+        // because the new voter may not be caught up to the LEO when the leader receives the API_VERSIONS_RESPONSE.
+        scheduler.schedule(new SequentialAppendAction(cluster), 0, 10, 3);
+        scheduler.runUntil(cluster::hasConsistentLeader);
+        scheduler.runUntil(() -> cluster.allReachedHighWatermark(10));
+
+        // Schedule all the observers to be added as voters
+        for (int voterIdsToAdd = numVoters; voterIdsToAdd < numVoters + numObservers; voterIdsToAdd++) {
+            scheduler.schedule(new AddVoterAction(cluster, cluster.running.get(voterIdsToAdd)), 0, 5, 3);
+        }
+        scheduler.runUntil(() -> cluster.leaderWithMaxEpoch().get().client.partitionState().lastVoterSet().size() == numVoters + numObservers);
         VoterSet latestVoterSet = cluster.leaderWithMaxEpoch().get().client.partitionState().lastVoterSet();
         scheduler.runUntil(() -> cluster.allHaveLatestVoterSet(latestVoterSet));
     }
@@ -664,29 +692,6 @@ public class RaftEventSimulationTest {
                         cluster.time.milliseconds()
                     );
                     leader.messageQueue.add(addVoterRequest);
-
-                    nodeToAdd.apiVersionsRequestMessageId.whenComplete((messageId, exception) -> {
-                        // Also add the API_VERSIONS_RESPONSE to the leader's message queue,
-                        // since the KRaft client doesn't support handling the API_VERSIONS_REQUEST
-                        // sent by the leader to the voter-to-be-added and will crash the test.
-                        ApiMessage apiVersionsResponse = new ApiVersionsResponse.Builder().
-                            setSupportedFeatures(
-                                Features.supportedFeatures(
-                                    Collections.singletonMap(
-                                        KRaftVersion.FEATURE_NAME,
-                                        new SupportedVersionRange(KRaftVersion.KRAFT_VERSION_1.featureLevel(), KRaftVersion.LATEST_PRODUCTION.featureLevel())
-                                    )
-                                )).
-                            setApiVersions(new ApiVersionsResponseData.ApiVersionCollection()).
-                            setFinalizedFeatures(Collections.emptyMap()).
-                            build().data();
-                        RaftResponse.Inbound apiVersions = new RaftResponse.Inbound(
-                            messageId,
-                            apiVersionsResponse,
-                            nodeToAdd
-                        );
-                        leader.messageQueue.add(apiVersions);
-                    });
                 }
             });
         }
@@ -1138,8 +1143,6 @@ public class RaftEventSimulationTest {
         final MockQuorumStateStore store;
         final ReplicatedCounter counter;
         final RecordSerde<Integer> intSerde;
-        // This is used to store the message id of the API_VERSIONS request sent by the leader when trying to add a voter
-        final CompletableFuture<Integer> apiVersionsRequestMessageId = new CompletableFuture<>();
 
         private RaftNode(
             int nodeId,
@@ -1181,6 +1184,33 @@ public class RaftEventSimulationTest {
                 } while (client.isRunning() && !messageQueue.isEmpty());
             } catch (Exception e) {
                 throw new RuntimeException("Uncaught exception during poll of node " + nodeId, e);
+            }
+        }
+
+        /** Use this method to handle RPCs that KafkaRaftClient does not support but is necessary for testing,
+         * like API_VERSIONS when adding a voter
+         * @param request - the inbound request the RaftNode is handling
+         */
+        void handle(RaftRequest.Inbound request) {
+            ApiKeys apiKey = ApiKeys.forId(request.data().apiKey());
+            switch (apiKey) {
+                case API_VERSIONS:
+                    ApiMessage apiVersionsResponse = new ApiVersionsResponse.Builder().
+                        setSupportedFeatures(
+                            Features.supportedFeatures(
+                                Collections.singletonMap(
+                                    KRaftVersion.FEATURE_NAME,
+                                    new SupportedVersionRange(KRaftVersion.KRAFT_VERSION_1.featureLevel(), KRaftVersion.LATEST_PRODUCTION.featureLevel())
+                                )
+                            )).
+                        setApiVersions(new ApiVersionsResponseData.ApiVersionCollection()).
+                        setFinalizedFeatures(Collections.emptyMap()).
+                        build().data();
+                    RaftResponse.Outbound apiVersions = new RaftResponse.Outbound(request.correlationId(), apiVersionsResponse);
+                    request.completion.complete(apiVersions);
+                    break;
+                default:
+                    client.handle(request);
             }
         }
 
@@ -1685,14 +1715,6 @@ public class RaftEventSimulationTest {
             if (!filters.get(senderId).acceptOutbound(outbound))
                 return;
 
-            // For the API_VERSIONS request sentby the leader when adding a voter, drop the request since the receiving KRaft client
-            // doesn't handle it. Store the correlationId to deliver a response back to the leader to finish adding the voter
-            if (outbound.data().apiKey() == ApiKeys.API_VERSIONS.id) {
-                int nodeToAddId = outbound.destination().id();
-                cluster.running.get(nodeToAddId).apiVersionsRequestMessageId.complete(outbound.correlationId());
-                return;
-            }
-
             int correlationId = outbound.correlationId();
             Node destination = outbound.destination();
             RaftRequest.Inbound inbound = cluster
@@ -1722,7 +1744,7 @@ public class RaftEventSimulationTest {
                     }
                 });
 
-                node.client.handle(inbound);
+                node.handle(inbound);
             });
         }
 
