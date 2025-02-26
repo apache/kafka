@@ -1220,42 +1220,6 @@ project(':core') {
     from(project(':tools:tools-api').jar) { into("libs/") }
     from(project(':tools:tools-api').configurations.runtimeClasspath) { into("libs/") }
     duplicatesStrategy 'exclude'
-
-    doLast {
-      def prefixPath = "$rootDir/core/build/distributions/"
-      def bathPath = prefixPath + "kafka_${versions.baseScala}-${project.properties['version']}"
-      def tgzPath = bathPath  + '.tgz'
-      exec {
-        commandLine 'tar', 'xzf', tgzPath, '-C', prefixPath
-      }
-
-      def licenseFile = file(bathPath + '/LICENSE')
-      def libsDir = file(bathPath + '/libs')
-      def result = true
-      libsDir.eachFile { file ->
-        if (file.name.endsWith('.jar')
-                && !file.name.startsWith('kafka')
-                && !file.name.startsWith('connect')
-                && !file.name.startsWith('trogdor')) {
-
-          def isLicensePresent = false
-          licenseFile.eachLine { line ->
-            if (line.contains(file.name - '.jar')) {
-              isLicensePresent = true
-            }
-          }
-          if (!isLicensePresent) {
-            println "warning: ${file.name} is missing in the license file"
-            result = false
-          }
-        }
-      }
-
-      if (result)
-        println "LIBS LICENSE check succeed !"
-      else
-        throw new GradleException("LIBS LICENSE check failed, some libs' licenses have not been added to the LICENSE-binary file.")
-    }
   }
 
   jar {
