@@ -112,7 +112,7 @@ class KafkaRaftManager[T](
   clusterId: String,
   config: KafkaConfig,
   metadataLogDirUuid: Uuid,
-  recordSerde: RecordSerde[T],
+  serde: RecordSerde[T],
   topicPartition: TopicPartition,
   topicId: Uuid,
   time: Time,
@@ -300,4 +300,6 @@ class KafkaRaftManager[T](
   override def voterNode(id: Int, listener: ListenerName): Option[Node] = {
     client.voterNode(id, listener).toScala
   }
+
+  override def recordSerde: RecordSerde[T] = serde
 }
