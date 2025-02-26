@@ -66,6 +66,7 @@ import org.apache.kafka.streams.kstream.internals.suppress.NamedSuppressed;
 import org.apache.kafka.streams.kstream.internals.suppress.SuppressedInternal;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
+import org.apache.kafka.streams.processor.internals.InternalResourcesNaming;
 import org.apache.kafka.streams.processor.internals.InternalTopicProperties;
 import org.apache.kafka.streams.processor.internals.StaticTopicNameExtractor;
 import org.apache.kafka.streams.processor.internals.StoreDelegatingProcessorSupplier;
@@ -549,8 +550,15 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
         final SuppressedInternal<K> suppressedInternal = buildSuppress(suppressed, name);
 
-        final String storeName =
-            suppressedInternal.name() != null ? suppressedInternal.name() + "-store" : builder.newStoreName(SUPPRESS_NAME);
+        final String storeName;
+        if (suppressedInternal.name() != null) {
+            storeName = suppressedInternal.name() + "-store";
+        } else {
+            storeName = builder.newStoreName(SUPPRESS_NAME);
+            if (suppressedInternal.bufferConfig().isLoggingEnabled()) {
+                internalTopologyBuilder().addImplicitInternalNames(InternalResourcesNaming.builder().withChangelogTopic(storeName + "-changelog").build());
+            }
+        }
 
         final StoreBuilder<InMemoryTimeOrderedKeyValueChangeBuffer<K, V, Change<V>>> storeBuilder;
 

@@ -25,8 +25,11 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.errors.OffsetNotAvailableException;
 import org.apache.kafka.common.message.ShareFetchResponseData;
+import org.apache.kafka.common.message.ShareFetchResponseData.AcquiredRecords;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.record.FileLogInputStream.FileChannelRecordBatch;
 import org.apache.kafka.common.record.FileRecords;
+import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.share.fetch.ShareAcquiredRecords;
@@ -39,6 +42,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -122,13 +126,7 @@ public class ShareFetchUtils {
                         .setAcquiredRecords(Collections.emptyList());
                 } else {
                     partitionData
-                        // We set the records to the fetchPartitionData records. We do not alter the records
-                        // fetched from the replica manager as they follow zero copy buffer. The acquired records
-                        // might be a subset of the records fetched from the replica manager, depending
-                        // on the max fetch records or available records in the share partition. The client
-                        // sends the max bytes in request which should limit the bytes sent to the client
-                        // in the response.
-                        .setRecords(fetchPartitionData.records)
+                        .setRecords(maybeSliceFetchRecords(fetchPartitionData.records, shareAcquiredRecords))
                         .setAcquiredRecords(shareAcquiredRecords.acquiredRecords());
                     acquiredRecordsCount += shareAcquiredRecords.count();
                 }
@@ -195,5 +193,69 @@ public class ShareFetchUtils {
             throw new NotLeaderOrFollowerException();
         }
         return partition;
+    }
+
+    /**
+     * Slice the fetch records based on the acquired records. The slicing is done based on the first
+     * and last offset of the acquired records from the list. The slicing doesn't consider individual
+     * acquired batches rather the boundaries of the acquired list. The method expects the acquired
+     * records list to be within the fetch records bounds.
+     *
+     * @param records The records to be sliced.
+     * @param shareAcquiredRecords The share acquired records containing the non-empty acquired records.
+     * @return The sliced records, if the records are of type FileRecords and the acquired records are a subset
+     *        of the fetched records. Otherwise, the original records are returned.
+     */
+    static Records maybeSliceFetchRecords(Records records, ShareAcquiredRecords shareAcquiredRecords) {
+        if (!(records instanceof FileRecords fileRecords)) {
+            return records;
+        }
+        // The acquired records should be non-empty, do not check as the method is called only when the
+        // acquired records are non-empty.
+        List<AcquiredRecords> acquiredRecords = shareAcquiredRecords.acquiredRecords();
+        try {
+            final Iterator<FileChannelRecordBatch> iterator = fileRecords.batchIterator();
+            // Track the first overlapping batch with the first acquired offset.
+            FileChannelRecordBatch firstOverlapBatch = iterator.next();
+            // If there exists single fetch batch, then return the original records.
+            if (!iterator.hasNext()) {
+                return records;
+            }
+            // Find the first and last acquired offset to slice the records.
+            final long firstAcquiredOffset = acquiredRecords.get(0).firstOffset();
+            final long lastAcquiredOffset = acquiredRecords.get(acquiredRecords.size() - 1).lastOffset();
+            int startPosition = 0;
+            int size = 0;
+            // Start iterating from the second batch.
+            while (iterator.hasNext()) {
+                FileChannelRecordBatch batch = iterator.next();
+                // Iterate until finds the first overlap batch with the first acquired offset. All the
+                // batches before this first overlap batch should be sliced hence increment the start
+                // position.
+                if (batch.baseOffset() <= firstAcquiredOffset) {
+                    startPosition += firstOverlapBatch.sizeInBytes();
+                    firstOverlapBatch = batch;
+                    continue;
+                }
+                // Break if traversed all the batches till the last acquired offset.
+                if (batch.baseOffset() > lastAcquiredOffset) {
+                    break;
+                }
+                size += batch.sizeInBytes();
+            }
+            // Include the first overlap batch as it's the last batch traversed which overlapped the first
+            // acquired offset.
+            size += firstOverlapBatch.sizeInBytes();
+            // Check if we do not need slicing i.e. neither start position nor size changed.
+            if (startPosition == 0 && size == fileRecords.sizeInBytes()) {
+                return records;
+            }
+            return fileRecords.slice(startPosition, size);
+        } catch (Exception e) {
+            log.error("Error while checking batches for acquired records: {}, skipping slicing.", acquiredRecords, e);
+            // If there is an exception while slicing, return the original records so that the fetch
+            // can continue with the original records.
+            return records;
+        }
     }
 }

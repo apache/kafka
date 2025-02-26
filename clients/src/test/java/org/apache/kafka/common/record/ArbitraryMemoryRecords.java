@@ -14,27 +14,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.common.record;
 
-package org.apache.kafka.common.test.api;
+import net.jqwik.api.Arbitraries;
+import net.jqwik.api.Arbitrary;
+import net.jqwik.api.ArbitrarySupplier;
 
-import org.junit.jupiter.api.Tag;
+import java.nio.ByteBuffer;
+import java.util.Random;
 
-import java.lang.annotation.ElementType;
-import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
-import java.lang.annotation.Target;
+public final class ArbitraryMemoryRecords implements ArbitrarySupplier<MemoryRecords> {
+    @Override
+    public Arbitrary<MemoryRecords> get() {
+        return Arbitraries.randomValue(ArbitraryMemoryRecords::buildRandomRecords);
+    }
 
-@Target({ElementType.TYPE, ElementType.METHOD})
-@Retention(RetentionPolicy.RUNTIME)
-@Tag("flaky")
-public @interface Flaky {
-    /**
-     * Required reference to a KAFKA Jira ticket.
-     */
-    String value();
+    private static MemoryRecords buildRandomRecords(Random random) {
+        int size = random.nextInt(128) + 1;
+        byte[] bytes = new byte[size];
+        random.nextBytes(bytes);
 
-    /**
-     * Optional comment describing the reason.
-     */
-    String comment() default "";
+        return MemoryRecords.readableRecords(ByteBuffer.wrap(bytes));
+    }
 }
