@@ -207,7 +207,7 @@ object DynamicBrokerConfig {
       raftManager.replicatedLog.readSnapshot(latestSnapshotId).ifPresent(rawSnapshotReader => {
         val reader = RecordsSnapshotReader.of(
           rawSnapshotReader,
-          raftManager.getRecordSerde,
+          raftManager.recordSerde,
           BufferSupplier.create(),
           KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
           true
