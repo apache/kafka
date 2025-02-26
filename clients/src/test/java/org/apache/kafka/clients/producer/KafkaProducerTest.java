@@ -471,7 +471,8 @@ public class KafkaProducerTest {
         assertThrows(
             ConfigException.class,
             () -> new ProducerConfig(invalidProps4),
-            "Must set retries to non-zero when using the idempotent producer.");
+            "Must set max.in.flight.requests.per.connection to at most 5 when using the \n" +
+                    "transactional producer.");
     }
 
     @Test
