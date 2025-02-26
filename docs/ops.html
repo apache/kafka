@@ -127,6 +127,8 @@ topic1          0          854144          855809          1665            consu
 topic2          0          460537          803290          342753          consumer1-3fc8d6f1-581a-4472-bdf3-3515b4aee8c1 /127.0.0.1      consumer1
 topic3          2          243655          398812          155157          consumer4-117fe4d3-c6c1-4178-8ee9-eb4a3954bee0 /127.0.0.1      consumer4</code></pre>
 
+  Note that if the consumer group uses the consumer protocol, the admin client needs DESCRIBE access to all the topics used in the group (topics the members are subscribed to). In contrast, the classic protocol does not require all topics DESCRIBE authorization.
+
   There are a number of additional "describe" options that can be used to provide more detailed information about a consumer group:
   <ul>
     <li>--members: This option provides the list of all active members in the consumer group.

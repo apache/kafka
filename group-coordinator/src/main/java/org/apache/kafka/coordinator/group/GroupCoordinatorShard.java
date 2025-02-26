@@ -90,6 +90,7 @@ import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
+import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
@@ -98,6 +99,7 @@ import org.slf4j.Logger;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -125,6 +127,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         private CoordinatorExecutor<CoordinatorRecord> executor;
         private CoordinatorMetrics coordinatorMetrics;
         private TopicPartition topicPartition;
+        private Optional<Authorizer> authorizer;
 
         public Builder(
             GroupCoordinatorConfig config,
@@ -188,6 +191,13 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             return this;
         }
 
+        public CoordinatorShardBuilder<GroupCoordinatorShard, CoordinatorRecord> withAuthorizer(
+            Optional<Authorizer> authorizer
+        ) {
+            this.authorizer = authorizer;
+            return this;
+        }
+
         @SuppressWarnings("NPathComplexity")
         @Override
         public GroupCoordinatorShard build() {
@@ -208,6 +218,8 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 throw new IllegalArgumentException("TopicPartition must be set.");
             if (groupConfigManager == null)
                 throw new IllegalArgumentException("GroupConfigManager must be set.");
+            if (authorizer == null)
+                throw new IllegalArgumentException("Authorizer must be set.");
 
             GroupCoordinatorMetricsShard metricsShard = ((GroupCoordinatorMetrics) coordinatorMetrics)
                 .newMetricsShard(snapshotRegistry, topicPartition);
@@ -221,6 +233,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 .withConfig(config)
                 .withGroupConfigManager(groupConfigManager)
                 .withGroupCoordinatorMetricsShard(metricsShard)
+                .withAuthorizer(authorizer)
                 .build();
 
             OffsetMetadataManager offsetMetadataManager = new OffsetMetadataManager.Builder()

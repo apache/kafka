@@ -73,6 +73,7 @@ import java.time.Duration
 import java.util
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.{CompletableFuture, ConcurrentHashMap}
+import java.util.stream.Collectors
 import java.util.{Collections, Optional}
 import scala.annotation.nowarn
 import scala.collection.mutable.ArrayBuffer
@@ -2549,9 +2550,24 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestHelper.sendMaybeThrottle(request, consumerGroupHeartbeatRequest.getErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED.exception))
       CompletableFuture.completedFuture[Unit](())
     } else {
+      if (consumerGroupHeartbeatRequest.data.subscribedTopicNames != null &&
+        !consumerGroupHeartbeatRequest.data.subscribedTopicNames.isEmpty) {
+        // Check the authorization if the subscribed topic names are provided.
+        // Clients are not allowed to see topics that are not authorized for Describe.
+        val subscribedTopicSet = consumerGroupHeartbeatRequest.data.subscribedTopicNames.asScala.toSet
+        val authorizedTopics = authHelper.filterByAuthorized(request.context, DESCRIBE, TOPIC,
+          subscribedTopicSet)(identity)
+        if (authorizedTopics.size < subscribedTopicSet.size) {
+          val responseData = new ConsumerGroupHeartbeatResponseData()
+            .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
+          requestHelper.sendMaybeThrottle(request, new ConsumerGroupHeartbeatResponse(responseData))
+          return CompletableFuture.completedFuture[Unit](())
+        }
+      }
+
       groupCoordinator.consumerGroupHeartbeat(
         request.context,
-        consumerGroupHeartbeatRequest.data,
+        consumerGroupHeartbeatRequest.data
       ).handle[Unit] { (response, exception) =>
         if (exception != null) {
           requestHelper.sendMaybeThrottle(request, consumerGroupHeartbeatRequest.getErrorResponse(exception))
@@ -2610,6 +2626,36 @@ class KafkaApis(val requestChannel: RequestChannel,
           } else {
             // Otherwise, we have to copy the results into the existing ones.
             response.groups.addAll(results)
+          }
+
+          // Clients are not allowed to see topics that are not authorized for Describe.
+          if (!authorizer.isEmpty) {
+            val topicsToCheck = response.groups.stream()
+              .flatMap(group => group.members.stream)
+              .flatMap(member => util.stream.Stream.of(member.assignment, member.targetAssignment))
+              .flatMap(assignment => assignment.topicPartitions.stream)
+              .map(topicPartition => topicPartition.topicName)
+              .collect(Collectors.toSet[String])
+              .asScala
+            val authorizedTopics = authHelper.filterByAuthorized(request.context, DESCRIBE, TOPIC,
+              topicsToCheck)(identity)
+            val updatedGroups = response.groups.stream().map { group =>
+              val hasUnauthorizedTopic = group.members.stream()
+                .flatMap(member => util.stream.Stream.of(member.assignment, member.targetAssignment))
+                .flatMap(assignment => assignment.topicPartitions.stream())
+                .anyMatch(tp => !authorizedTopics.contains(tp.topicName))
+
+              if (hasUnauthorizedTopic) {
+                new ConsumerGroupDescribeResponseData.DescribedGroup()
+                  .setGroupId(group.groupId)
+                  .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
+                  .setErrorMessage("The group has described topic(s) that the client is not authorized to describe.")
+                  .setMembers(List.empty.asJava)
+              } else {
+                group
+              }
+            }.collect(Collectors.toList[ConsumerGroupDescribeResponseData.DescribedGroup])
+            response.setGroups(updatedGroups)
           }
 
           requestHelper.sendMaybeThrottle(request, new ConsumerGroupDescribeResponse(response))

@@ -61,6 +61,7 @@ import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.ShareGroupHeartbeatRequest;
+import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorExecutor;
@@ -122,6 +123,9 @@ import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsDelta;
+import org.apache.kafka.server.authorizer.Action;
+import org.apache.kafka.server.authorizer.AuthorizationResult;
+import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
 import org.apache.kafka.timeline.TimelineHashSet;
@@ -147,8 +151,10 @@ import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
+import static org.apache.kafka.common.acl.AclOperation.DESCRIBE;
 import static org.apache.kafka.common.protocol.Errors.COORDINATOR_NOT_AVAILABLE;
 import static org.apache.kafka.common.protocol.Errors.ILLEGAL_GENERATION;
 import static org.apache.kafka.common.protocol.Errors.NOT_COORDINATOR;
@@ -157,6 +163,8 @@ import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.CON
 import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
 import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH;
 import static org.apache.kafka.common.requests.JoinGroupRequest.UNKNOWN_MEMBER_ID;
+import static org.apache.kafka.common.resource.PatternType.LITERAL;
+import static org.apache.kafka.common.resource.ResourceType.TOPIC;
 import static org.apache.kafka.coordinator.group.Group.GroupType.CLASSIC;
 import static org.apache.kafka.coordinator.group.Group.GroupType.CONSUMER;
 import static org.apache.kafka.coordinator.group.Group.GroupType.SHARE;
@@ -228,6 +236,7 @@ public class GroupMetadataManager {
         private MetadataImage metadataImage = null;
         private ShareGroupPartitionAssignor shareGroupAssignor = null;
         private GroupCoordinatorMetricsShard metrics;
+        private Optional<Authorizer> authorizer = null;
 
         Builder withLogContext(LogContext logContext) {
             this.logContext = logContext;
@@ -279,11 +288,17 @@ public class GroupMetadataManager {
             return this;
         }
 
+        Builder withAuthorizer(Optional<Authorizer> authorizer) {
+            this.authorizer = authorizer;
+            return this;
+        }
+
         GroupMetadataManager build() {
             if (logContext == null) logContext = new LogContext();
             if (snapshotRegistry == null) snapshotRegistry = new SnapshotRegistry(logContext);
             if (metadataImage == null) metadataImage = MetadataImage.EMPTY;
             if (time == null) time = Time.SYSTEM;
+            if (authorizer == null) authorizer = Optional.empty();
 
             if (timer == null)
                 throw new IllegalArgumentException("Timer must be set.");
@@ -308,7 +323,8 @@ public class GroupMetadataManager {
                 metadataImage,
                 config,
                 groupConfigManager,
-                shareGroupAssignor
+                shareGroupAssignor,
+                authorizer
             );
         }
     }
@@ -409,6 +425,11 @@ public class GroupMetadataManager {
      */
     private final ShareGroupPartitionAssignor shareGroupAssignor;
 
+    /**
+     * The authorizer to validate the regex subscription topics.
+     */
+    private final Optional<Authorizer> authorizer;
+
     private GroupMetadataManager(
         SnapshotRegistry snapshotRegistry,
         LogContext logContext,
@@ -419,7 +440,8 @@ public class GroupMetadataManager {
         MetadataImage metadataImage,
         GroupCoordinatorConfig config,
         GroupConfigManager groupConfigManager,
-        ShareGroupPartitionAssignor shareGroupAssignor
+        ShareGroupPartitionAssignor shareGroupAssignor,
+        Optional<Authorizer> authorizer
     ) {
         this.logContext = logContext;
         this.log = logContext.logger(GroupMetadataManager.class);
@@ -439,6 +461,7 @@ public class GroupMetadataManager {
         this.groupsByTopics = new TimelineHashMap<>(snapshotRegistry, 0);
         this.groupConfigManager = groupConfigManager;
         this.shareGroupAssignor = shareGroupAssignor;
+        this.authorizer = authorizer;
     }
 
     /**
@@ -1618,14 +1641,13 @@ public class GroupMetadataManager {
      *    is larger than the current target assignment epoch.
      * 3) The member's assignment is reconciled with the target assignment.
      *
+     * @param context               The request context.
      * @param groupId               The group id from the request.
      * @param memberId              The member id from the request.
      * @param memberEpoch           The member epoch from the request.
      * @param instanceId            The instance id from the request or null.
      * @param rackId                The rack id from the request or null.
      * @param rebalanceTimeoutMs    The rebalance timeout from the request or -1.
-     * @param clientId              The client id.
-     * @param clientHost            The client host.
      * @param subscribedTopicNames  The list of subscribed topic names from the request
      *                              or null.
      * @param subscribedTopicRegex  The regular expression based subscription from the request
@@ -1637,14 +1659,13 @@ public class GroupMetadataManager {
      *         a list of records to update the state machine.
      */
     private CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> consumerGroupHeartbeat(
+        RequestContext context,
         String groupId,
         String memberId,
         int memberEpoch,
         String instanceId,
         String rackId,
         int rebalanceTimeoutMs,
-        String clientId,
-        String clientHost,
         List<String> subscribedTopicNames,
         String subscribedTopicRegex,
         String assignorName,
@@ -1695,8 +1716,8 @@ public class GroupMetadataManager {
             .maybeUpdateServerAssignorName(Optional.ofNullable(assignorName))
             .maybeUpdateSubscribedTopicNames(Optional.ofNullable(subscribedTopicNames))
             .maybeUpdateSubscribedTopicRegex(Optional.ofNullable(subscribedTopicRegex))
-            .setClientId(clientId)
-            .setClientHost(clientHost)
+            .setClientId(context.clientId())
+            .setClientHost(context.clientAddress.toString())
             .setClassicMemberMetadata(null)
             .build();
 
@@ -1712,6 +1733,7 @@ public class GroupMetadataManager {
         );
 
         bumpGroupEpoch |= maybeUpdateRegularExpressions(
+            context,
             group,
             member,
             updatedMember,
@@ -2297,6 +2319,7 @@ public class GroupMetadataManager {
      * group. We align the refreshment of the regular expression in order to have
      * them trigger only one rebalance per update.
      *
+     * @param context       The request context.
      * @param group         The consumer group.
      * @param member        The old member.
      * @param updatedMember The new member.
@@ -2304,6 +2327,7 @@ public class GroupMetadataManager {
      * @return Whether a rebalance must be triggered.
      */
     private boolean maybeUpdateRegularExpressions(
+        RequestContext context,
         ConsumerGroup group,
         ConsumerGroupMember member,
         ConsumerGroupMember updatedMember,
@@ -2389,8 +2413,8 @@ public class GroupMetadataManager {
             Set<String> regexes = Collections.unmodifiableSet(subscribedRegularExpressions.keySet());
             executor.schedule(
                 key,
-                () -> refreshRegularExpressions(groupId, log, time, metadataImage, regexes),
-                (result, exception) -> handleRegularExpressionsResult(groupId, result, exception)
+                () -> refreshRegularExpressions(context, groupId, log, time, metadataImage, authorizer, regexes),
+                (result, exception) -> handleRegularExpressionsResult(groupId, memberId, result, exception)
             );
         }
 
@@ -2402,20 +2426,24 @@ public class GroupMetadataManager {
      * as an asynchronous task in the executor. Hence, it should not access any state from
      * the manager.
      *
-     * @param groupId   The group id.
-     * @param log       The log instance.
-     * @param time      The time instance.
-     * @param image     The metadata image to use for listing the topics.
-     * @param regexes   The list of regular expressions that must be resolved.
+     * @param context       The request context.
+     * @param groupId       The group id.
+     * @param log           The log instance.
+     * @param time          The time instance.
+     * @param image         The metadata image to use for listing the topics.
+     * @param authorizer    The authorizer.
+     * @param regexes       The list of regular expressions that must be resolved.
      * @return The list of resolved regular expressions.
      *
      * public for benchmarks.
      */
     public static Map<String, ResolvedRegularExpression> refreshRegularExpressions(
+        RequestContext context,
         String groupId,
         Logger log,
         Time time,
         MetadataImage image,
+        Optional<Authorizer> authorizer,
         Set<String> regexes
     ) {
         long startTimeMs = time.milliseconds();
@@ -2444,6 +2472,12 @@ public class GroupMetadataManager {
             }
         }
 
+        filterTopicDescribeAuthorizedTopics(
+            context,
+            authorizer,
+            resolvedRegexes
+        );
+
         long version = image.provenance().lastContainedOffset();
         Map<String, ResolvedRegularExpression> result = new HashMap<>(resolvedRegexes.size());
         for (Map.Entry<String, Set<String>> resolvedRegex : resolvedRegexes.entrySet()) {
@@ -2461,14 +2495,57 @@ public class GroupMetadataManager {
     }
 
     /**
+     * This method filters the topics in the resolved regexes
+     * that the member is authorized to describe.
+     *
+     * @param context           The request context.
+     * @param authorizer        The authorizer.
+     * @param resolvedRegexes   The map of the regex pattern and its set of matched topics.
+     */
+    private static void filterTopicDescribeAuthorizedTopics(
+        RequestContext context,
+        Optional<Authorizer> authorizer,
+        Map<String, Set<String>> resolvedRegexes
+    ) {
+        if (authorizer.isEmpty()) return;
+
+        Map<String, Integer> topicNameCount = new HashMap<>();
+        resolvedRegexes.values().forEach(topicNames ->
+            topicNames.forEach(topicName ->
+                topicNameCount.compute(topicName, Utils::incValue)
+            )
+        );
+
+        List<Action> actions = topicNameCount.entrySet().stream().map(entry -> {
+            ResourcePattern resource = new ResourcePattern(TOPIC, entry.getKey(), LITERAL);
+            return new Action(DESCRIBE, resource, entry.getValue(), true, false);
+        }).collect(Collectors.toList());
+
+        List<AuthorizationResult> authorizationResults = authorizer.get().authorize(context, actions);
+        Set<String> deniedTopics = new HashSet<>();
+        IntStream.range(0, actions.size()).forEach(i -> {
+            if (authorizationResults.get(i) == AuthorizationResult.DENIED) {
+                String deniedTopic = actions.get(i).resourcePattern().name();
+                deniedTopics.add(deniedTopic);
+            }
+        });
+
+        resolvedRegexes.forEach((__, topicNames) -> topicNames.removeAll(deniedTopics));
+    }
+
+
+    /**
      * Handle the result of the asynchronous tasks which resolves the regular expressions.
      *
+     * @param groupId                       The group id.
+     * @param memberId                      The member id.
      * @param resolvedRegularExpressions    The resolved regular expressions.
      * @param exception                     The exception if the resolution failed.
      * @return A CoordinatorResult containing the records to mutate the group state.
      */
     private CoordinatorResult<Void, CoordinatorRecord> handleRegularExpressionsResult(
         String groupId,
+        String memberId,
         Map<String, ResolvedRegularExpression> resolvedRegularExpressions,
         Throwable exception
     ) {
@@ -2479,8 +2556,8 @@ public class GroupMetadataManager {
         }
 
         if (log.isDebugEnabled()) {
-            log.debug("[GroupId {}] Received updated regular expressions: {}.",
-                groupId, resolvedRegularExpressions);
+            log.debug("[GroupId {}] Received updated regular expressions based on the context of member {}: {}.",
+                groupId, memberId, resolvedRegularExpressions);
         }
 
         List<CoordinatorRecord> records = new ArrayList<>();
@@ -3492,14 +3569,13 @@ public class GroupMetadataManager {
         } else {
             // Otherwise, it is a regular heartbeat.
             return consumerGroupHeartbeat(
+                context,
                 request.groupId(),
                 request.memberId(),
                 request.memberEpoch(),
                 request.instanceId(),
                 request.rackId(),
                 request.rebalanceTimeoutMs(),
-                context.clientId(),
-                context.clientAddress.toString(),
                 request.subscribedTopicNames(),
                 request.subscribedTopicRegex(),
                 request.serverAssignor(),

@@ -74,6 +74,7 @@ import org.apache.kafka.coordinator.common.runtime.PartitionWriter;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
+import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.server.record.BrokerCompressionType;
 import org.apache.kafka.server.util.FutureUtils;
 import org.apache.kafka.server.util.timer.Timer;
@@ -114,6 +115,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         private CoordinatorRuntimeMetrics coordinatorRuntimeMetrics;
         private GroupCoordinatorMetrics groupCoordinatorMetrics;
         private GroupConfigManager groupConfigManager;
+        private Optional<Authorizer> authorizer;
 
         public Builder(
             int nodeId,
@@ -158,29 +160,28 @@ public class GroupCoordinatorService implements GroupCoordinator {
             return this;
         }
 
+        public Builder withAuthorizer(Optional<Authorizer> authorizer) {
+            this.authorizer = authorizer;
+            return this;
+        }
+
         public GroupCoordinatorService build() {
-            if (config == null)
-                throw new IllegalArgumentException("Config must be set.");
-            if (writer == null)
-                throw new IllegalArgumentException("Writer must be set.");
-            if (loader == null)
-                throw new IllegalArgumentException("Loader must be set.");
-            if (time == null)
-                throw new IllegalArgumentException("Time must be set.");
-            if (timer == null)
-                throw new IllegalArgumentException("Timer must be set.");
-            if (coordinatorRuntimeMetrics == null)
-                throw new IllegalArgumentException("CoordinatorRuntimeMetrics must be set.");
-            if (groupCoordinatorMetrics == null)
-                throw new IllegalArgumentException("GroupCoordinatorMetrics must be set.");
-            if (groupConfigManager == null)
-                throw new IllegalArgumentException("GroupConfigManager must be set.");
+            requireNonNull(config, new IllegalArgumentException("Config must be set."));
+            requireNonNull(writer, new IllegalArgumentException("Writer must be set."));
+            requireNonNull(loader, new IllegalArgumentException("Loader must be set."));
+            requireNonNull(time, new IllegalArgumentException("Time must be set."));
+            requireNonNull(timer, new IllegalArgumentException("Timer must be set."));
+            requireNonNull(coordinatorRuntimeMetrics, new IllegalArgumentException("CoordinatorRuntimeMetrics must be set."));
+            requireNonNull(groupCoordinatorMetrics, new IllegalArgumentException("GroupCoordinatorMetrics must be set."));
+            requireNonNull(groupConfigManager, new IllegalArgumentException("GroupConfigManager must be set."));
+            requireNonNull(authorizer, new IllegalArgumentException("Authorizer must be set."));
 
             String logPrefix = String.format("GroupCoordinator id=%d", nodeId);
             LogContext logContext = new LogContext(String.format("[%s] ", logPrefix));
 
             CoordinatorShardBuilderSupplier<GroupCoordinatorShard, CoordinatorRecord> supplier = () ->
-                new GroupCoordinatorShard.Builder(config, groupConfigManager);
+                new GroupCoordinatorShard.Builder(config, groupConfigManager)
+                    .withAuthorizer(authorizer);
 
             CoordinatorEventProcessor processor = new MultiThreadedEventProcessor(
                 logContext,
@@ -1275,6 +1276,12 @@ public class GroupCoordinatorService implements GroupCoordinator {
                         .setErrorCode(error.code()),
                     log
                 );
+        }
+    }
+
+    private static void requireNonNull(Object obj, RuntimeException throwable) {
+        if (obj == null) {
+            throw throwable;
         }
     }
 }
