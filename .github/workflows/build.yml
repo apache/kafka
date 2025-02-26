@@ -195,7 +195,7 @@ jobs:
         uses: ./.github/actions/setup-gradle
         with:
           java-version: ${{ matrix.java }}
-          gradle-cache-read-only: true
+          gradle-cache-read-only: false
           gradle-cache-write-only: false
           develocity-access-key: ${{ secrets.DEVELOCITY_ACCESS_KEY }}
 
