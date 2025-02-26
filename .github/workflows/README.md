@@ -119,6 +119,15 @@ or body edited. This workflow simply captures the PR number into a text file
 using the saved text file. This workflow runs the linter script that checks the
 structure of the PR
 
+The following checks are performed on our PRs:
+* Title is not too short or too long
+* Title starts with "KAFKA-", "MINOR-", or "HOTFIX-"
+* Body is not empty
+* Body includes "Reviewers:" if the PR is approved
+
+With the merge queue, our PR title and body will become the commit subject and message.
+This linting step will help to ensure that we have nice looking commits.
+
 ### Stale PRs
 
 This one is straightforward. Using the "actions/stale" GitHub Action, we automatically
