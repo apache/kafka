@@ -25,9 +25,11 @@ Usage:
 
     Example command:-
         docker_build_test.py <image_name> --image-tag <image_tag> --image-type <image_type> --kafka-url <kafka_url>
+        docker_build_test.py <image_name> --image-tag <image_tag> --image-type <image_type> --kafka-archive <kafka_archive>
 
         This command will build an image with <image_name> as image name, <image_tag> as image_tag (it will be latest by default),
         <image_type> as image type (jvm by default), <kafka_url> for the kafka inside the image and run tests on the image.
+        <kafka_archive> can be passed as an alternative to <kafka_url> to use a local kafka archive. The path of kafka_archive should be absolute.
         -b can be passed as additional argument if you just want to build the image.
         -t can be passed if you just want to run tests on the image.
 """
