@@ -2006,9 +2006,9 @@ public final class QuorumController implements Controller {
     ) {
         return appendWriteEvent("registerBroker", context.deadlineNs(),
             () -> {
-                // Populate finalized features map with latest known kraft version for validation.
-                // Get the finalized features map in controller operation to avoid outdated features.
+                // Read and write data in the controller event handling thread to avoid stale information.
                 Map<String, Short> controllerFeatures = new HashMap<>(featureControl.finalizedFeatures(Long.MAX_VALUE).featureMap());
+                // Populate finalized features map with latest known kraft version for validation.
                 controllerFeatures.put(KRaftVersion.FEATURE_NAME, raftClient.kraftVersion().featureLevel());
                 return clusterControl.
                     registerBroker(request, offsetControl.nextWriteOffset(),
