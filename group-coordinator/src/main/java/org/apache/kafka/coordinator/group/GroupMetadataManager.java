@@ -455,8 +455,8 @@ public class GroupMetadataManager {
     private final ShareGroupPartitionAssignor shareGroupAssignor;
 
     private record ShareGroupStatePartitionMetadataInfo(
-        HashMap<Uuid, Set<Integer>> initializedTopics,   // topicId -> numPartitions
-        HashSet<Uuid> deletingTopics
+        Map<Uuid, Set<Integer>> initializedTopics,   // topicId -> numPartitions
+        Map<Uuid, String> deletingTopics    // topicId -> topicName
     ) { }
 
     private GroupMetadataManager(
@@ -2300,8 +2300,8 @@ public class GroupMetadataManager {
         );
     }
 
-    private Map<Uuid, Map.Entry<TopicImage, List<Integer>>> subscribedTopicsChangeMap(ShareGroup group, List<String> subscribedTopicNames) {
-        Map<Uuid, Map.Entry<TopicImage, List<Integer>>> topicPartitionChangeMap = new HashMap<>();
+    private Map<Uuid, Map.Entry<String, List<Integer>>> subscribedTopicsChangeMap(ShareGroup group, List<String> subscribedTopicNames) {
+        Map<Uuid, Map.Entry<String, List<Integer>>> topicPartitionChangeMap = new HashMap<>();
         Set<TopicImage> newImages = new HashSet<>();
 
         TopicsImage topicsImage = metadataImage.topics();
@@ -2331,7 +2331,7 @@ public class GroupMetadataManager {
                         topicPartitionChangeMap.put(
                             newImage.id(),
                             Map.entry(
-                                newImage,
+                                newImage.name(),
                                 IntStream.range(existingNumPartitions, newImageNumPartitions).boxed().toList()
                             )
                         );
@@ -2340,7 +2340,7 @@ public class GroupMetadataManager {
                     topicPartitionChangeMap.put(
                         newImage.id(),
                         Map.entry(
-                            newImage,
+                            newImage.name(),
                             IntStream.range(0, newImageNumPartitions).boxed().toList()
                         )
                     );
@@ -2351,7 +2351,7 @@ public class GroupMetadataManager {
                 topicPartitionChangeMap.put(
                     newImage.id(),
                     Map.entry(
-                        newImage,
+                        newImage.name(),
                         IntStream.range(0, newImage.partitions().size()).boxed().toList()
                     )
                 );
@@ -2368,7 +2368,7 @@ public class GroupMetadataManager {
             return Optional.empty();
         }
 
-        Map<Uuid, Map.Entry<TopicImage, List<Integer>>> topicPartitionChangeMap = subscribedTopicsChangeMap(group, subscribedTopicNames);
+        Map<Uuid, Map.Entry<String, List<Integer>>> topicPartitionChangeMap = subscribedTopicsChangeMap(group, subscribedTopicNames);
 
         // Nothing to initialize.
         if (topicPartitionChangeMap.isEmpty()) {
@@ -3977,28 +3977,23 @@ public class GroupMetadataManager {
     /**
      * Handles an initialize share group state request. This is usually part of
      * shareGroupHeartbeat code flow.
-     * @param groupId The groupId of the share group whose share partitions are being initialized.
-     * @param topicNames List of candidate topic names to initialize.
+     * @param groupId The group id corresponding to the share group whose share partitions have been initialized.
+     * @param topicPartitionMap Map representing topic partition data to be added to the share state partition metadata.
      *
      * @return A Result containing ShareGroupStatePartitionMetadata records and Void response.
      */
     public CoordinatorResult<Void, CoordinatorRecord> initializeShareGroupState(
         String groupId,
-        List<String> topicNames
+        Map<Uuid, Map.Entry<String, List<Integer>>> topicPartitionMap
     ) {
         // Should be present
         ShareGroup group = (ShareGroup) groups.get(groupId);
-        if (topicNames == null || topicNames.isEmpty() || metadataImage.equals(MetadataImage.EMPTY)) {
-            return new CoordinatorResult<>(List.of(), null);
-        }
-
-        Map<Uuid, Map.Entry<TopicImage, List<Integer>>> topicPartitionchangeMap = subscribedTopicsChangeMap(group, topicNames);
-        if (topicPartitionchangeMap.isEmpty()) {
+        if (topicPartitionMap == null || topicPartitionMap.isEmpty()) {
             return new CoordinatorResult<>(List.of(), null);
         }
 
         return new CoordinatorResult<>(
-            List.of(newShareGroupPartitionMetadataRecord(group.groupId(), topicPartitionchangeMap, List.of())),
+            List.of(newShareGroupPartitionMetadataRecord(group.groupId(), topicPartitionMap, Map.of())),
             null
         );
     }
@@ -4785,12 +4780,15 @@ public class GroupMetadataManager {
         } else {
             // Init java record.
             ShareGroupStatePartitionMetadataInfo record = shareGroupPartitionMetadata.computeIfAbsent(
-                groupId, k -> new ShareGroupStatePartitionMetadataInfo(new HashMap<>(), new HashSet<>())
+                groupId, k -> new ShareGroupStatePartitionMetadataInfo(new HashMap<>(), new HashMap<>())
             );
 
             // Remove all topicIds in deleting state from java record.
-            List<Uuid> deleting = value.deletingTopics().stream().map(ShareGroupStatePartitionMetadataValue.TopicInfo::topicId).toList();
-            deleting.forEach(record.initializedTopics::remove);
+            Map<Uuid, String> deleting = new HashMap<>();
+            for (ShareGroupStatePartitionMetadataValue.TopicInfo deletingTopic : value.deletingTopics()) {
+                deleting.put(deletingTopic.topicId(), deletingTopic.topicName());
+            }
+            deleting.forEach((tId, tName) -> record.initializedTopics.remove(tId));
 
             // Add all initialized topic info from the replayed record to
             // the java record.
@@ -4800,7 +4798,7 @@ public class GroupMetadataManager {
             }
 
             // Update the deleting state topics in the java record.
-            record.deletingTopics.addAll(deleting);
+            record.deletingTopics.putAll(deleting);
         }
     }
 

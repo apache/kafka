@@ -86,6 +86,7 @@ import org.apache.kafka.server.share.persister.GroupTopicPartitionData;
 import org.apache.kafka.server.share.persister.InitializeShareGroupStateParameters;
 import org.apache.kafka.server.share.persister.PartitionErrorData;
 import org.apache.kafka.server.share.persister.PartitionFactory;
+import org.apache.kafka.server.share.persister.PartitionIdData;
 import org.apache.kafka.server.share.persister.PartitionStateData;
 import org.apache.kafka.server.share.persister.Persister;
 import org.apache.kafka.server.share.persister.ReadShareGroupStateSummaryParameters;
@@ -444,14 +445,21 @@ public class GroupCoordinatorService implements GroupCoordinator {
     ) {
         String groupId = initializeRequest.groupTopicPartitionData().groupId();
         if (persisterInitializeErrorCode == Errors.NONE.code()) {
-            List<String> topicNames = initializeRequest.groupTopicPartitionData().topicsData().stream()
-                .map(topicData -> metadataImage.topics().getTopic(topicData.topicId()).name())
-                .toList();
+            Map<Uuid, Map.Entry<String, List<Integer>>> topicPartitionMap = new HashMap<>();
+            for (TopicData<PartitionStateData> topicData : initializeRequest.groupTopicPartitionData().topicsData()) {
+                topicPartitionMap.computeIfAbsent(topicData.topicId(), k -> Map.entry(
+                        metadataImage.topics().getTopic(topicData.topicId()).name(),
+                        topicData.partitions().stream()
+                            .map(PartitionIdData::partition)
+                            .toList()
+                    )
+                );
+            }
             return runtime.scheduleWriteOperation(
                 "initialze-share-group-state",
                 topicPartitionFor(groupId),
                 Duration.ofMillis(config.offsetCommitTimeoutMs()),
-                coordinator -> coordinator.initializeShareGroupState(groupId, topicNames)
+                coordinator -> coordinator.initializeShareGroupState(groupId, topicPartitionMap)
             ).thenApply(
                 __ -> defaultResponse
             ).exceptionally(exception -> {

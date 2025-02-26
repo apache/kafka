@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.GroupNotEmptyException;
@@ -398,16 +399,16 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      * Handles record creation, if needed, related to ShareGroupStatePartitionMetadata
      * corresponding to a share group heartbeat request.
      *
-     * @param groupId The groupId of the share group whose share partitions are being initialized.
-     * @param topicNames List of candidate topic names to initialize.
+     * @param groupId The group id corresponding to the share group whose share partitions have been initialized.
+     * @param topicPartitionMap Map representing topic partition data to be added to the share state partition metadata.
      *
      * @return A Result containing coordinator records and Void response.
      */
     public CoordinatorResult<Void, CoordinatorRecord> initializeShareGroupState(
         String groupId,
-        List<String> topicNames
+        Map<Uuid, Map.Entry<String, List<Integer>>> topicPartitionMap
     ) {
-        return groupMetadataManager.initializeShareGroupState(groupId, topicNames);
+        return groupMetadataManager.initializeShareGroupState(groupId, topicPartitionMap);
     }
 
     /**
