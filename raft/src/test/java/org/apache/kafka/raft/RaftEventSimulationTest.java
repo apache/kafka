@@ -402,6 +402,74 @@ public class RaftEventSimulationTest {
     }
 
     @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
+    void canAddVotersIfMajorityIsReachable(
+        @ForAll int seed,
+        @ForAll @IntRange(min = 1, max = 3) int numObservers
+    ) {
+        int numVoters = 5;
+        Random random = new Random(seed);
+        Cluster cluster = new Cluster(numVoters, numObservers, random, true);
+        MessageRouter router = new MessageRouter(cluster);
+        EventScheduler scheduler = schedulerWithKip853Invariants(cluster);
+
+        // Seed the cluster with some data
+        cluster.startAll();
+        schedulePolling(scheduler, cluster, 3, 5);
+        scheduler.schedule(router::deliverAll, 0, 2, 2);
+        scheduler.schedule(new SequentialAppendAction(cluster), 0, 10, 3);
+        scheduler.runUntil(cluster::hasConsistentLeader);
+        scheduler.runUntil(() -> cluster.anyReachedHighWatermark(10));
+
+        // Partition the nodes into two sets. Nodes are reachable within each set,
+        // but the two sets cannot communicate with each other. We should be able
+        // to make progress even if an election is needed in the larger set.
+        int firstObserverId = numVoters;
+        router.filter(
+            0,
+            new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(2, 3, 4, firstObserverId)))
+        );
+        router.filter(
+            1,
+            new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(2, 3, 4, firstObserverId)))
+        );
+        router.filter(2, new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(0, 1))));
+        router.filter(3, new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(0, 1))));
+        router.filter(4, new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(0, 1))));
+        router.filter(firstObserverId, new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(0, 1))));
+
+        long partitionLogEndOffset = cluster.maxLogEndOffset();
+        scheduler.runUntil(() -> cluster.anyReachedHighWatermark(2 * partitionLogEndOffset));
+
+        long minorityHighWatermark = cluster.maxHighWatermarkReached(Set.of(0, 1));
+        long majorityHighWatermark = cluster.maxHighWatermarkReached(Set.of(2, 3, 4));
+
+        assertTrue(
+            majorityHighWatermark > minorityHighWatermark,
+            String.format(
+                "majorityHighWatermark = %s, minorityHighWatermark = %s",
+                majorityHighWatermark,
+                minorityHighWatermark
+            )
+        );
+
+        // Verify we can add a voter, since a majority is still reachable
+        scheduler.schedule(new AddVoterAction(cluster, cluster.running.get(firstObserverId)), 0, 10, 3);
+        scheduler.runUntil(() -> cluster.leaderWithMaxEpoch().get().client.partitionState().lastVoterSet().size() == numVoters + 1);
+
+        // Now restore the partition and verify everyone catches up
+        router.filter(0, new PermitAllTraffic());
+        router.filter(1, new PermitAllTraffic());
+        router.filter(2, new PermitAllTraffic());
+        router.filter(3, new PermitAllTraffic());
+        router.filter(4, new PermitAllTraffic());
+        router.filter(firstObserverId, new PermitAllTraffic());
+
+        long restoredLogEndOffset = cluster.maxLogEndOffset();
+        scheduler.runUntil(() -> cluster.allReachedHighWatermark(2 * restoredLogEndOffset));
+        scheduler.runUntil(() -> cluster.allHaveLatestVoterSet(cluster.leaderWithMaxEpoch().get().client.partitionState().lastVoterSet()));
+    }
+
+    @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
     void leadershipAssignedOnlyOnceWithNetworkPartitionIfThereExistsMajority(
         @ForAll int seed,
         @ForAll @IntRange(min = 0, max = 3) int numObservers,
@@ -1446,12 +1514,6 @@ public class RaftEventSimulationTest {
                 Optional<VoterSet> uncommittedVoterSet = Optional.empty();
                 for (long offset = leaderNode.highWatermark(); offset < leaderNode.logEndOffset(); ++offset) {
                     Optional<VoterSet> maybeNewUncommittedVoterSet = leaderNode.client.partitionState().voterSetAtOffset(offset);
-                    if (!(uncommittedVoterSet.isEmpty() || uncommittedVoterSet.get().equals(maybeNewUncommittedVoterSet.get()))) {
-                        System.out.println("lastCommittedVoterSet = " + lastCommittedVoterSet.voterIds());
-                        System.out.println("uncommittedVoterSet = " + uncommittedVoterSet.get().voterIds());
-                        System.out.println("maybeNewUncommittedVoterSet = " + maybeNewUncommittedVoterSet.get().voterIds());
-                        System.out.println("offset = " + offset);
-                    }
                     assertTrue(uncommittedVoterSet.isEmpty() || uncommittedVoterSet.get().equals(maybeNewUncommittedVoterSet.get()));
                     if (maybeNewUncommittedVoterSet.isPresent() && uncommittedVoterSet.isEmpty()
                         && !maybeNewUncommittedVoterSet.get().equals(lastCommittedVoterSet)
