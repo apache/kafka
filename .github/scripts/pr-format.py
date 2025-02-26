@@ -46,15 +46,12 @@ def get_env(key: str, fn = str) -> Optional:
 
 
 def has_approval(reviews) -> bool:
-    logger.debug(f"::group::PR reviews")
     approved = False
     for review in reviews:
-        logger.debug(f"Review: {review}")
         if review.get("authorAssociation") not in ("MEMBER", "OWNER"):
             continue
         if review.get("state") == "APPROVED":
             approved = True
-    logger.debug("::endgroup::")
     return approved
 
 
