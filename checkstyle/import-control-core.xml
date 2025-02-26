@@ -157,6 +157,7 @@
     <allow pkg="org.apache.kafka.common.test"/>
     <allow pkg="org.apache.kafka.common.test.api"/>
     <allow pkg="org.apache.kafka.common.test.api"/>
+    <allow pkg="org.apache.kafka.admin"/>
   </subpackage>
 
   <subpackage name="security">

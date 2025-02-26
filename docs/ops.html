@@ -4281,6 +4281,32 @@ $ bin/kafka-topics.sh --create --topic tieredTopic --bootstrap-server localhost:
   <li><code>add.partitions.to.txn.retry.backoff.max.ms</code></li>
 </ul>
 
+  <h3 class="anchor-heading"><a id="eligible_leader_replicas" class="anchor-link"></a><a href="#eligible_leader_replicas">6.12 Eligible Leader Replicas</a></h3>
+
+  <h4 class="anchor-heading"><a id="eligible_leader_replicas_overview" class="anchor-link"></a><a href="#eligible_leader_replicas_overview">Overview</a></h4>
+
+  <p>Starting from Apache Kafka 4.0, Eligible Leader Replicas (<a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-966%3A+Eligible+Leader+Replicas">KIP-966 Part 1</a>)
+    is available for the users to an improvement to Kafka replication. As the "strict min ISR" rule has been generally applied, which means the high watermark for the data partition can't advance
+    if the size of the ISR is smaller than the min ISR(<code>min.insync.replicas</code>), it makes some replicas that are not in the ISR safe to become the leader. The KRaft controller
+    stores such replicas in the PartitionRecord field called <code>Eligible Leader Replicas</code>. During the leader election, the controller will select the leaders
+    with the following order:</p>
+  <ul>
+    <li>If ISR is not empty, select one of them.</li>
+    <li>If ELR is not empty, select one that is not fenced.</li>
+    <li>Select the last known leader if it is unfenced. This is a similar behavior prior to the 4.0 when all the replicas are offline.</li>
+  </ul>
+
+  <h4 class="anchor-heading"><a id="eligible_leader_replicas_upgrade" class="anchor-link"></a><a href="#eligible_leader_replicas_upgrade">Upgrade & Downgrade</a></h4>
+
+  <p>The ELR is not enabled by default for 4.0. To enable the new protocol on the server, set <code>eligible.leader.replicas.version=1</code>. After that the upgrade, the KRaft
+    controller will start tracking the ELR. </p>
+  <p>Downgrades are safe to perform by setting <code>eligible.leader.replicas.version=0</code>.</p>
+
+  <h4 class="anchor-heading"><a id="eligible_leader_replicas_tool" class="anchor-link"></a><a href="#eligible_leader_replicas_tool">Tool</a></h4>
+  <p>The ELR fields can be checked through the API DescribeTopicPartitions. The admin client can fetch the ELR info by describing the topics.
+    Also note that, if <code>min.insync.replicas</code> is updated for a topic, the ELR field will be cleaned. If cluster default min ISR is updated,
+    all the ELR fields will be cleaned.</p>
+
 </script>
 
 <div class="p-ops"></div>

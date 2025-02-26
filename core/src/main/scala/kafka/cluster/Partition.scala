@@ -1302,27 +1302,35 @@ class Partition(val topicPartition: TopicPartition,
     }
   }
 
-  private def doAppendRecordsToFollowerOrFutureReplica(records: MemoryRecords, isFuture: Boolean): Option[LogAppendInfo] = {
+  private def doAppendRecordsToFollowerOrFutureReplica(
+    records: MemoryRecords,
+    isFuture: Boolean,
+    partitionLeaderEpoch: Int
+  ): Option[LogAppendInfo] = {
     if (isFuture) {
       // The read lock is needed to handle race condition if request handler thread tries to
       // remove future replica after receiving AlterReplicaLogDirsRequest.
       inReadLock(leaderIsrUpdateLock) {
         // Note the replica may be undefined if it is removed by a non-ReplicaAlterLogDirsThread before
         // this method is called
-        futureLog.map { _.appendAsFollower(records) }
+        futureLog.map { _.appendAsFollower(records, partitionLeaderEpoch) }
       }
     } else {
       // The lock is needed to prevent the follower replica from being updated while ReplicaAlterDirThread
       // is executing maybeReplaceCurrentWithFutureReplica() to replace follower replica with the future replica.
       futureLogLock.synchronized {
-        Some(localLogOrException.appendAsFollower(records))
+        Some(localLogOrException.appendAsFollower(records, partitionLeaderEpoch))
       }
     }
   }
 
-  def appendRecordsToFollowerOrFutureReplica(records: MemoryRecords, isFuture: Boolean): Option[LogAppendInfo] = {
+  def appendRecordsToFollowerOrFutureReplica(
+    records: MemoryRecords,
+    isFuture: Boolean,
+    partitionLeaderEpoch: Int
+  ): Option[LogAppendInfo] = {
     try {
-      doAppendRecordsToFollowerOrFutureReplica(records, isFuture)
+      doAppendRecordsToFollowerOrFutureReplica(records, isFuture, partitionLeaderEpoch)
     } catch {
       case e: UnexpectedAppendOffsetException =>
         val log = if (isFuture) futureLocalLogOrException else localLogOrException
@@ -1340,7 +1348,7 @@ class Partition(val topicPartition: TopicPartition,
           info(s"Unexpected offset in append to $topicPartition. First offset ${e.firstOffset} is less than log start offset ${log.logStartOffset}." +
                s" Since this is the first record to be appended to the $replicaName's log, will start the log from offset ${e.firstOffset}.")
           truncateFullyAndStartAt(e.firstOffset, isFuture)
-          doAppendRecordsToFollowerOrFutureReplica(records, isFuture)
+          doAppendRecordsToFollowerOrFutureReplica(records, isFuture, partitionLeaderEpoch)
         } else
           throw e
     }

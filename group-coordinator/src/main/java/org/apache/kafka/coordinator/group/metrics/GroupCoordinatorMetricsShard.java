@@ -160,7 +160,7 @@ public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
      * that updates the metrics in {@link org.apache.kafka.coordinator.group.GroupCoordinatorShard}.
      * Breaking this will result in inconsistent behavior.
      *
-     * @param shareGroupGauges The map counting the number of streams groups in each state.
+     * @param shareGroupGauges The map counting the number of share groups in each state.
      */
     public void setShareGroupGauges(Map<ShareGroupState, Long> shareGroupGauges) {
         this.shareGroupGauges = shareGroupGauges;
@@ -267,7 +267,7 @@ public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
     }
 
     /**
-     * @return The total number of streams groups.
+     * @return The total number of share groups.
      */
     public long numShareGroups() {
         return shareGroupGauges.values().stream()
