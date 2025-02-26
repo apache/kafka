@@ -843,6 +843,17 @@ public class RequestResponseTest {
         }
     }
 
+    @Test
+    public void UnregisterBrokerResponseWithNotUnsupportedError() {
+        UnregisterBrokerRequest request = new UnregisterBrokerRequest.Builder(new UnregisterBrokerRequestData())
+                .build((short) 0);
+        UnregisterBrokerResponse response = request.getErrorResponse(0, Errors.INVALID_REQUEST.exception());
+
+        assertEquals((short) 0, response.throttleTimeMs());
+        assertEquals(Errors.INVALID_REQUEST.code(), response.data().errorCode());
+        assertEquals(Errors.INVALID_REQUEST.message(), response.data().errorMessage());
+    }
+
     private ApiVersionsResponse defaultApiVersionsResponse() {
         return TestUtils.defaultApiVersionsResponse(ApiMessageType.ListenerType.BROKER);
     }
