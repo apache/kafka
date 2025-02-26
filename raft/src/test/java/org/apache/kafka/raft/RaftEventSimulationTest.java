@@ -168,7 +168,7 @@ public class RaftEventSimulationTest {
     }
 
     @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
-    void canAddAllObserversAsVoters(
+    void canAddAndRemoveVoters(
         @ForAll int seed,
         @ForAll @IntRange(min = 1, max = 5) int numVoters,
         @ForAll @IntRange(min = 1, max = 10) int numObservers
@@ -191,9 +191,22 @@ public class RaftEventSimulationTest {
         for (int voterIdsToAdd = numVoters; voterIdsToAdd < numVoters + numObservers; voterIdsToAdd++) {
             scheduler.schedule(new AddVoterAction(cluster, cluster.running.get(voterIdsToAdd)), 0, 5, 3);
         }
-        scheduler.runUntil(() -> cluster.leaderWithMaxEpoch().get().client.partitionState().lastVoterSet().size() == numVoters + numObservers);
-        VoterSet latestVoterSet = cluster.leaderWithMaxEpoch().get().client.partitionState().lastVoterSet();
-        scheduler.runUntil(() -> cluster.allHaveLatestVoterSet(latestVoterSet));
+        int voterSetSize = numVoters + numObservers;
+        scheduler.runUntil(() -> cluster.leaderWithMaxEpoch().get().client.partitionState().lastVoterSet().size() == voterSetSize);
+        scheduler.runUntil(() -> cluster.allHaveLatestVoterSet(cluster.leaderWithMaxEpoch().get().client.partitionState().lastVoterSet()));
+
+        // Schedule all voters besides the first to be removed
+        for (int voterIdsToRemove = numVoters + numObservers - 1; voterIdsToRemove > 0; voterIdsToRemove--) {
+            int nextVoterSetSize = voterSetSize - 1;
+            if (voterIdsToRemove == cluster.leaderWithMaxEpoch().get().id()) {
+                scheduler.scheduleOnce(new RemoveVoterAction(cluster, cluster.running.get(voterIdsToRemove)), 0);
+                scheduler.runUntil(cluster::hasConsistentLeader);
+            } else {
+                scheduler.scheduleOnce(new RemoveVoterAction(cluster, cluster.running.get(voterIdsToRemove)), 0);
+            }
+            scheduler.runUntil(() -> cluster.leaderWithMaxEpoch().get().client.partitionState().lastVoterSet().size() == nextVoterSetSize);
+            scheduler.runUntil(() -> cluster.allHaveLatestVoterSet(cluster.leaderWithMaxEpoch().get().client.partitionState().lastVoterSet()));
+        }
     }
 
     @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
@@ -1187,7 +1200,8 @@ public class RaftEventSimulationTest {
             }
         }
 
-        /** Use this method to handle RPCs that KafkaRaftClient does not support but is necessary for testing,
+        /**
+         * Use this method to handle RPCs that KafkaRaftClient does not support but are necessary for testing,
          * like API_VERSIONS when adding a voter
          * @param request - the inbound request the RaftNode is handling
          */
@@ -1432,6 +1446,12 @@ public class RaftEventSimulationTest {
                 Optional<VoterSet> uncommittedVoterSet = Optional.empty();
                 for (long offset = leaderNode.highWatermark(); offset < leaderNode.logEndOffset(); ++offset) {
                     Optional<VoterSet> maybeNewUncommittedVoterSet = leaderNode.client.partitionState().voterSetAtOffset(offset);
+                    if (!(uncommittedVoterSet.isEmpty() || uncommittedVoterSet.get().equals(maybeNewUncommittedVoterSet.get()))) {
+                        System.out.println("lastCommittedVoterSet = " + lastCommittedVoterSet.voterIds());
+                        System.out.println("uncommittedVoterSet = " + uncommittedVoterSet.get().voterIds());
+                        System.out.println("maybeNewUncommittedVoterSet = " + maybeNewUncommittedVoterSet.get().voterIds());
+                        System.out.println("offset = " + offset);
+                    }
                     assertTrue(uncommittedVoterSet.isEmpty() || uncommittedVoterSet.get().equals(maybeNewUncommittedVoterSet.get()));
                     if (maybeNewUncommittedVoterSet.isPresent() && uncommittedVoterSet.isEmpty()
                         && !maybeNewUncommittedVoterSet.get().equals(lastCommittedVoterSet)
