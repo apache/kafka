@@ -885,7 +885,8 @@ public class DefaultStateUpdater implements StateUpdater {
                 restoredActiveTasksLock.lock();
                 try {
                     while (restoredActiveTasks.isEmpty() && now <= deadline) {
-                        restoredActiveTasksCondition.await(deadline - now, TimeUnit.MILLISECONDS);
+                        @SuppressWarnings("UnusedLocalVariable")
+                        final boolean ignored = restoredActiveTasksCondition.await(deadline - now, TimeUnit.MILLISECONDS);
                         now = time.milliseconds();
                     }
                     result.addAll(restoredActiveTasks);

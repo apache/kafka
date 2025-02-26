@@ -20,8 +20,10 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaShareConsumer;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
@@ -38,6 +40,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
@@ -76,7 +79,8 @@ public class ShareConsumerPerformance {
                 shareConsumers.forEach(shareConsumer -> shareConsumersMetrics.add(shareConsumer.metrics()));
             }
             shareConsumers.forEach(shareConsumer -> {
-                shareConsumer.commitSync();
+                @SuppressWarnings("UnusedLocalVariable")
+                Map<TopicIdPartition, Optional<KafkaException>> ignored = shareConsumer.commitSync();
                 shareConsumer.close(Duration.ofMillis(500));
             });
 
@@ -113,6 +117,7 @@ public class ShareConsumerPerformance {
         AtomicLong messagesRead = new AtomicLong(0);
         AtomicLong bytesRead = new AtomicLong(0);
         List<ShareConsumerConsumption> shareConsumersConsumptionDetails = new ArrayList<>();
+
 
         ExecutorService executorService = Executors.newFixedThreadPool(shareConsumers.size());
         for (int i = 0; i < shareConsumers.size(); i++) {
