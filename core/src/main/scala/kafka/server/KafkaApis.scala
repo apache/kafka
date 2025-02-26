@@ -2534,9 +2534,10 @@ class KafkaApis(val requestChannel: RequestChannel,
         !consumerGroupHeartbeatRequest.data.subscribedTopicNames.isEmpty) {
         // Check the authorization if the subscribed topic names are provided.
         // Clients are not allowed to see topics that are not authorized for Describe.
+        val subscribedTopicSet = consumerGroupHeartbeatRequest.data.subscribedTopicNames.asScala.toSet
         val authorizedTopics = authHelper.filterByAuthorized(request.context, DESCRIBE, TOPIC,
-          consumerGroupHeartbeatRequest.data.subscribedTopicNames.asScala)(identity)
-        if (authorizedTopics.size < consumerGroupHeartbeatRequest.data.subscribedTopicNames.size) {
+          subscribedTopicSet)(identity)
+        if (authorizedTopics.size < subscribedTopicSet.size) {
           val responseData = new ConsumerGroupHeartbeatResponseData()
             .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
           requestHelper.sendMaybeThrottle(request, new ConsumerGroupHeartbeatResponse(responseData))
