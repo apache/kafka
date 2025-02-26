@@ -451,6 +451,33 @@ public class AbstractConfigTest {
     }
 
     @Test
+    public void testAutomaticConfigProvidersWithFullClassName() {
+        Properties props = new Properties();
+        props.put("config.providers", "file");
+        props.put("config.providers.file.class", MockFileConfigProvider.class.getName());
+        String id = UUID.randomUUID().toString();
+        props.put("config.providers.file.param.testId", id);
+        props.put("test.key", "${file:/path:key}");
+
+        System.setProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY, "file");
+        assertThrows(ConfigException.class, () -> new TestIndirectConfigResolution(props, Collections.emptyMap()));
+
+        System.setProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY, MockFileConfigProvider.class.getName());
+        TestIndirectConfigResolution config = new TestIndirectConfigResolution(props, Collections.emptyMap());
+        assertEquals("testKey", config.originals().get("test.key"));
+        MockFileConfigProvider.assertClosed(id);
+
+        System.setProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY,
+                MockFileConfigProvider.class.getName() + "," +
+                        "org.apache.kafka.common.config.provider.EnvVarConfigProvider");
+        String id2 = UUID.randomUUID().toString();
+        props.put("config.providers.file.param.testId", id2);
+        TestIndirectConfigResolution config2 = new TestIndirectConfigResolution(props, Collections.emptyMap());
+        assertEquals("testKey", config2.originals().get("test.key"));
+        MockFileConfigProvider.assertClosed(id2);
+    }
+
+    @Test
     public void testImmutableOriginalsWithConfigProvidersProps() {
         // Test Case: Valid Test Case for ConfigProviders as a separate variable
         Properties providers = new Properties();
