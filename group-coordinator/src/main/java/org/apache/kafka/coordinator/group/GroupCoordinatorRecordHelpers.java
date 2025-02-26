@@ -59,6 +59,7 @@ import org.apache.kafka.coordinator.group.modern.consumer.ResolvedRegularExpress
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupMember;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.share.persister.PartitionStateData;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -825,15 +826,14 @@ public class GroupCoordinatorRecordHelpers {
      */
     public static CoordinatorRecord newShareGroupPartitionMetadataRecord(
         String groupId,
-        List<TopicImage> initializedTopics,
+        Map<Uuid, Map.Entry<TopicImage, List<Integer>>> initializedTopics,
         List<TopicImage> deletingTopics
     ) {
-
-        List<ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo> initializedTopicPartitionInfo = initializedTopics.stream()
-            .map(image -> new ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo()
-                .setTopicId(image.id())
-                .setTopicName(image.name())
-                .setPartitions(image.partitions().keySet().stream().toList()))
+        List<ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo> initializedTopicPartitionInfo = initializedTopics.entrySet().stream()
+            .map(entry -> new ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo()
+                .setTopicId(entry.getKey())
+                .setTopicName(entry.getValue().getKey().name())
+                .setPartitions(entry.getValue().getValue()))
             .toList();
 
         List<ShareGroupStatePartitionMetadataValue.TopicInfo> deletingTopicsInfo = deletingTopics.stream()

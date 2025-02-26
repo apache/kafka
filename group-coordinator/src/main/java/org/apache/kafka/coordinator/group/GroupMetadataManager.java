@@ -148,6 +148,7 @@ import org.apache.kafka.server.share.persister.GroupTopicPartitionData;
 import org.apache.kafka.server.share.persister.InitializeShareGroupStateParameters;
 import org.apache.kafka.server.share.persister.PartitionFactory;
 import org.apache.kafka.server.share.persister.PartitionIdData;
+import org.apache.kafka.server.share.persister.PartitionStateData;
 import org.apache.kafka.server.share.persister.TopicData;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
@@ -456,8 +457,8 @@ public class GroupMetadataManager {
     private final ShareGroupPartitionAssignor shareGroupAssignor;
 
     private record ShareGroupStatePartitionMetadataInfo(
-        LinkedHashMap<Uuid, HashSet<Integer>> initializedTopics,
-        LinkedHashSet<Uuid> deletingTopics
+        HashMap<Uuid, Set<Integer>> initializedTopics,
+        HashSet<Uuid> deletingTopics
     ) { }
 
     private GroupMetadataManager(
@@ -2285,17 +2286,70 @@ public class GroupMetadataManager {
         //    (subscribedTopicNames) to detect a full request as those must be set in a full request.
         // 2. The member's assignment has been updated.
         boolean isFullRequest = subscribedTopicNames != null;
+        List<String> initializeCandidateTopics = List.of();
         if (memberEpoch == 0 || isFullRequest || hasAssignedPartitionsChanged(member, updatedMember)) {
             response.setAssignment(createShareGroupResponseAssignment(updatedMember));
+            initializeCandidateTopics = (subscribedTopicNames == null || subscribedTopicNames.isEmpty()) ?
+                group.subscribedTopicNames().keySet().stream().toList() : subscribedTopicNames;
         }
 
         return new CoordinatorResult<>(
             records,
             Map.entry(
                 response,
-                maybeCreateInitializeShareGroupStateRequest(group, subscribedTopicNames)
+                maybeCreateInitializeShareGroupStateRequest(group, initializeCandidateTopics)
             )
         );
+    }
+
+    private Map<Uuid, Map.Entry<TopicImage, List<Integer>>> subscribedTopicsChangeMap(ShareGroup group, List<String> subscribedTopicNames) {
+        Map<Uuid, Map.Entry<TopicImage, List<Integer>>> topicPartitionChangeMap = new HashMap<>();
+        Set<TopicImage> newImages = new HashSet<>();
+
+        subscribedTopicNames.forEach(topicName -> newImages.add(metadataImage.topics().getTopic(topicName)));
+
+        if (shareGroupPartitionMetadata.containsKey(group.groupId())) {
+            Map<Uuid, Set<Integer>> alreadyInitialized = shareGroupPartitionMetadata.get(group.groupId()).initializedTopics();
+            for (TopicImage newImage : newImages) {
+                if (alreadyInitialized.containsKey(newImage.id())) {
+                    // Check partition change
+                    Set<Integer> existingPartitions = alreadyInitialized.get(newImage.id());
+                    Set<Integer> newImagePartitions = newImage.partitions().keySet();
+
+                    newImagePartitions.removeAll(existingPartitions);
+
+                    // Partitions have increased (will only increase as kafka does not allow reduction).
+                    if (!newImagePartitions.isEmpty()) {
+                        topicPartitionChangeMap.put(
+                            newImage.id(),
+                            Map.entry(
+                                newImage,
+                                newImagePartitions.stream().toList()
+                            )
+                        );
+                    }
+                } else {
+                    topicPartitionChangeMap.put(
+                        newImage.id(),
+                        Map.entry(
+                            newImage,
+                            newImage.partitions().keySet().stream().toList()
+                        )
+                    );
+                }
+            }
+        } else {
+            for (TopicImage newImage : newImages) {
+                topicPartitionChangeMap.put(
+                    newImage.id(),
+                    Map.entry(
+                        newImage,
+                        newImage.partitions().keySet().stream().toList()
+                    )
+                );
+            }
+        }
+        return topicPartitionChangeMap;
     }
 
     private Optional<InitializeShareGroupStateParameters> maybeCreateInitializeShareGroupStateRequest(
@@ -2306,27 +2360,21 @@ public class GroupMetadataManager {
             return Optional.empty();
         }
 
-        final int copiedGroupEpoch = group.groupEpoch();
-        Set<TopicImage> images = new HashSet<>(subscribedTopicNames.size());
-        subscribedTopicNames.forEach(topicName -> images.add(metadataImage.topics().getTopic(topicName)));
-
-        // Check topics which are already initialized
-        if (shareGroupPartitionMetadata.containsKey(group.groupId())) {
-            Set<Uuid> alreadyInitialized = shareGroupPartitionMetadata.get(group.groupId()).initializedTopics().keySet();
-            images.removeIf(img -> alreadyInitialized.contains(img.id()));
-        }
+        Map<Uuid, Map.Entry<TopicImage, List<Integer>>> topicPartitionChangeMap = subscribedTopicsChangeMap(group, subscribedTopicNames);
 
         // Nothing to initialize.
-        if (images.isEmpty()) {
+        if (topicPartitionChangeMap.isEmpty()) {
             return Optional.empty();
         }
 
         return Optional.of(new InitializeShareGroupStateParameters.Builder().setGroupTopicPartitionData(
-            new GroupTopicPartitionData<>(group.groupId(), images.stream()
-                .map(image -> new TopicData<>(image.id(), image.partitions().keySet().stream()
-                    .map(partitionId -> PartitionFactory.newPartitionStateData(partitionId, copiedGroupEpoch, -1))
-                    .toList()))
-                .toList()
+            new GroupTopicPartitionData<>(group.groupId(), topicPartitionChangeMap.entrySet().stream()
+                .map(entry -> new TopicData<>(
+                    entry.getKey(),
+                    entry.getValue().getValue().stream()
+                        .map(partitionId -> PartitionFactory.newPartitionStateData(partitionId, group.groupEpoch(), -1))
+                        .toList())
+                ).toList()
             )).build()
         );
     }
@@ -3932,17 +3980,19 @@ public class GroupMetadataManager {
         // Should be present
         ShareGroup group = ((ShareGroup) groups.get(request.groupId()));
         List<String> subscribedTopicNames = request.subscribedTopicNames();
-
-        if (subscribedTopicNames != null) {
-            List<TopicImage> images = new ArrayList<>(subscribedTopicNames.size());
-            subscribedTopicNames.forEach(topicName -> images.add(metadataImage.topics().getTopic(topicName)));
-            return new CoordinatorResult<>(
-                List.of(newShareGroupPartitionMetadataRecord(group.groupId(), images, List.of())),
-                null
-            );
+        if (subscribedTopicNames == null || subscribedTopicNames.isEmpty() || metadataImage.equals(MetadataImage.EMPTY)) {
+            return new CoordinatorResult<>(List.of(), null);
         }
 
-        return new CoordinatorResult<>(List.of(), null);
+        Map<Uuid, Map.Entry<TopicImage, List<Integer>>> topicPartitionchangeMap = subscribedTopicsChangeMap(group, subscribedTopicNames);
+        if(topicPartitionchangeMap.isEmpty()) {
+            return new CoordinatorResult<>(List.of(), null);
+        }
+
+        return new CoordinatorResult<>(
+            List.of(newShareGroupPartitionMetadataRecord(group.groupId(), topicPartitionchangeMap, List.of())),
+            null
+        );
     }
 
     /**
@@ -4727,7 +4777,7 @@ public class GroupMetadataManager {
         } else {
             // Init java record.
             ShareGroupStatePartitionMetadataInfo record = shareGroupPartitionMetadata.computeIfAbsent(
-                groupId, k -> new ShareGroupStatePartitionMetadataInfo(new LinkedHashMap<>(), new LinkedHashSet<>())
+                groupId, k -> new ShareGroupStatePartitionMetadataInfo(new HashMap<>(), new HashSet<>())
             );
 
             // Remove all topicIds in deleting state from java record.
