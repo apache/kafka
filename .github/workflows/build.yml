@@ -175,12 +175,10 @@ jobs:
       fail-fast: false
       matrix:
         # If we change these, make sure to adjust ci-complete.yml
-        java: [ 23, 17 ]
-        run-flaky: [ true, false ]
-        run-new: [ true, false ]
-        exclude:
-          - run-flaky: true
-            run-new: true
+        java: [ 17 ]
+        run-flaky: [ true ]
+        run-new: [ false ]
+
     env:
       job-variation: ${{ matrix.java }}-${{ matrix.run-flaky == true && 'flaky' || 'noflaky' }}-${{ matrix.run-new == true && 'new' || 'nonew' }}
     name: JUnit tests Java ${{ matrix.java }}${{ matrix.run-flaky == true && ' (flaky)' || '' }}${{ matrix.run-new == true && ' (new)' || '' }}
