@@ -398,16 +398,16 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      * Handles record creation, if needed, related to ShareGroupStatePartitionMetadata
      * corresponding to a share group heartbeat request.
      *
-     * @param context The request context.
-     * @param request The actual ShareGroupHeartbeat request.
+     * @param groupId The groupId of the share group whose share partitions are being initialized.
+     * @param topicNames List of candidate topic names to initialize.
      *
      * @return A Result containing coordinator records and Void response.
      */
     public CoordinatorResult<Void, CoordinatorRecord> initializeShareGroupState(
-        RequestContext context,
-        ShareGroupHeartbeatRequestData request
+        String groupId,
+        List<String> topicNames
     ) {
-        return groupMetadataManager.initializeShareGroupState(context, request);
+        return groupMetadataManager.initializeShareGroupState(groupId, topicNames);
     }
 
     /**

@@ -3977,22 +3977,22 @@ public class GroupMetadataManager {
     /**
      * Handles an initialize share group state request. This is usually part of
      * shareGroupHeartbeat code flow.
-     * @param context The request context.
-     * @param request The actual ShareGroupHeartbeat request.
+     * @param groupId The groupId of the share group whose share partitions are being initialized.
+     * @param topicNames List of candidate topic names to initialize.
+     *
      * @return A Result containing ShareGroupStatePartitionMetadata records and Void response.
      */
     public CoordinatorResult<Void, CoordinatorRecord> initializeShareGroupState(
-        RequestContext context,
-        ShareGroupHeartbeatRequestData request
+        String groupId,
+        List<String> topicNames
     ) {
         // Should be present
-        ShareGroup group = ((ShareGroup) groups.get(request.groupId()));
-        List<String> subscribedTopicNames = request.subscribedTopicNames();
-        if (subscribedTopicNames == null || subscribedTopicNames.isEmpty() || metadataImage.equals(MetadataImage.EMPTY)) {
+        ShareGroup group = (ShareGroup) groups.get(groupId);
+        if (topicNames == null || topicNames.isEmpty() || metadataImage.equals(MetadataImage.EMPTY)) {
             return new CoordinatorResult<>(List.of(), null);
         }
 
-        Map<Uuid, Map.Entry<TopicImage, List<Integer>>> topicPartitionchangeMap = subscribedTopicsChangeMap(group, subscribedTopicNames);
+        Map<Uuid, Map.Entry<TopicImage, List<Integer>>> topicPartitionchangeMap = subscribedTopicsChangeMap(group, topicNames);
         if (topicPartitionchangeMap.isEmpty()) {
             return new CoordinatorResult<>(List.of(), null);
         }

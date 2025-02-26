@@ -399,7 +399,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             // This ensures that the previous group write has completed successfully
             // before we start the persister initialize phase.
             if (result.getValue().isPresent()) {
-                return persisterInitialize(context, request, result.getValue().get(), result.getKey());
+                return persisterInitialize(context, result.getValue().get(), result.getKey());
             }
             return CompletableFuture.completedFuture(result.getKey());
         }).exceptionally(exception -> handleOperationException(
@@ -415,7 +415,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
 
     private CompletableFuture<ShareGroupHeartbeatResponseData> persisterInitialize(
         RequestContext context,
-        ShareGroupHeartbeatRequestData heartbeatRequestData,
         InitializeShareGroupStateParameters request,
         ShareGroupHeartbeatResponseData defaultResponse
     ) {
@@ -429,7 +428,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 }
                 return Errors.NONE.code();
             }).thenCompose(
-                errorCode -> handleShareGroupInitializeResult(context, heartbeatRequestData, errorCode, defaultResponse)
+                errorCode -> handleShareGroupInitializeResult(request, errorCode, defaultResponse)
             ).exceptionally(exception -> {
                 GroupTopicPartitionData<PartitionStateData> gtp = request.groupTopicPartitionData();
                 log.error("Unable to initialize share group state {}, {}", gtp.groupId(), gtp.topicsData(), exception);
@@ -439,30 +438,32 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     private CompletableFuture<ShareGroupHeartbeatResponseData> handleShareGroupInitializeResult(
-        RequestContext context,
-        ShareGroupHeartbeatRequestData heartbeatRequestData,
-        short errorCode,
+        InitializeShareGroupStateParameters initializeRequest,
+        short persisterInitializeErrorCode,
         ShareGroupHeartbeatResponseData defaultResponse
     ) {
-        String groupId = heartbeatRequestData.groupId();
-        if (errorCode == Errors.NONE.code()) {
+        String groupId = initializeRequest.groupTopicPartitionData().groupId();
+        if (persisterInitializeErrorCode == Errors.NONE.code()) {
+            List<String> topicNames = initializeRequest.groupTopicPartitionData().topicsData().stream()
+                .map(topicData -> metadataImage.topics().getTopic(topicData.topicId()).name())
+                .toList();
             return runtime.scheduleWriteOperation(
                 "initialze-share-group-state",
                 topicPartitionFor(groupId),
                 Duration.ofMillis(config.offsetCommitTimeoutMs()),
-                coordinator -> coordinator.initializeShareGroupState(context, heartbeatRequestData)
+                coordinator -> coordinator.initializeShareGroupState(groupId, topicNames)
             ).thenApply(
                 __ -> defaultResponse
             ).exceptionally(exception -> {
-                log.error("Unable to initialize share group state partition metadata for {} with request {}", groupId, heartbeatRequestData, exception);
+                log.error("Unable to initialize share group state partition metadata for {} with request {}", groupId, initializeRequest, exception);
                 return new ShareGroupHeartbeatResponseData()
                     .setErrorCode(Errors.forException(exception).code());
             });
         } else {
-            log.error("Received error while calling initialize state for {} on persister {}", groupId, errorCode);
+            log.error("Received error while calling initialize state for {} on persister {}", groupId, persisterInitializeErrorCode);
             return CompletableFuture.completedFuture(
                 new ShareGroupHeartbeatResponseData()
-                    .setErrorCode(errorCode)
+                    .setErrorCode(persisterInitializeErrorCode)
             );
         }
     }
