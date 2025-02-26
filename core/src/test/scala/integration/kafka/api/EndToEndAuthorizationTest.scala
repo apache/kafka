@@ -434,8 +434,12 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
       consumeRecordsIgnoreOneAuthorizationException(consumer)
     } else {
       TestUtils.waitUntilTrue(() => {
-        consumeRecordsIgnoreAuthorizationException(consumer)
-        true
+        try {
+          consumeRecords(consumer, numRecords, 0, topic)
+          true
+        } catch {
+          case _: TopicAuthorizationException => false
+        }
       }, "Consumer didn't manage to consume the records within timeout.")
     }
   }
@@ -566,18 +570,6 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
       consumeRecords(consumer, numRecords, startingOffset, topic)
     } catch {
       case _: TopicAuthorizationException => consumeRecords(consumer, numRecords, startingOffset, topic)
-    }
-  }
-
-  // Consume records, ignoring TopicAuthorization exception from previously sent request.
-  private def consumeRecordsIgnoreAuthorizationException(consumer: Consumer[Array[Byte], Array[Byte]],
-    numRecords: Int = 1,
-    startingOffset: Int = 0,
-    topic: String = topic): Unit = {
-    try {
-      consumeRecords(consumer, numRecords, startingOffset, topic)
-    } catch {
-      case _: TopicAuthorizationException => consumeRecordsIgnoreAuthorizationException(consumer, numRecords, startingOffset, topic)
     }
   }
 }
