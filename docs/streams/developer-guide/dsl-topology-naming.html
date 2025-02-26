@@ -300,6 +300,19 @@ stream.filter((k, v) -> v != null && v.length() >= 6)
 		          <td>Stream/Table non-stateful operations</td><td>Named</td>
 		      </tr>
 		  </table>
+
+		  To further enforce best practices, Kafka Streams provides a configuration option,
+		  <code class="docutils literal"><span class="pre">ensure.explicit.internal.resource.naming</span></code>:
+		  <pre class="line-numbers"><code class="language-java">/
+            Properties props = new Properties();
+            props.put(StreamsConfig.ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_CONFIG, true);
+		  </code></pre>
+		  This parameter ensures that all internal topics, state stores, and changelog topics have explicitly defined names. When this configuration
+		  is enabled, a Kafka Streams application will not start if any of these components rely on auto-generated names. This guarantees
+		  stability across topology updates, as manually defined names remain unchanged even when new processors or transformations are added.
+		  Enforcing explicit naming is particularly important in production environments, where consistency and backward compatibility are essential
+		  for maintaining reliable stream processing applications.
+
 	</p>
 </div>
 

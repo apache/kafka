@@ -24,10 +24,14 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.FencedLeaderEpochException;
 import org.apache.kafka.common.message.ShareFetchResponseData;
+import org.apache.kafka.common.message.ShareFetchResponseData.AcquiredRecords;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.MemoryRecordsBuilder;
+import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.server.share.SharePartitionKey;
@@ -39,10 +43,12 @@ import org.apache.kafka.server.storage.log.FetchParams;
 import org.apache.kafka.server.storage.log.FetchPartitionData;
 import org.apache.kafka.storage.internals.log.OffsetResultHolder;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
+import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
+import java.io.IOException;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -54,6 +60,9 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.BiConsumer;
 
 import static kafka.server.share.SharePartitionManagerTest.PARTITION_MAX_BYTES;
+import static org.apache.kafka.server.share.fetch.ShareFetchTestUtils.createFileRecords;
+import static org.apache.kafka.server.share.fetch.ShareFetchTestUtils.createShareAcquiredRecords;
+import static org.apache.kafka.server.share.fetch.ShareFetchTestUtils.memoryRecordsBuilder;
 import static org.apache.kafka.server.share.fetch.ShareFetchTestUtils.orderedMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -95,10 +104,10 @@ public class ShareFetchUtilsTest {
         when(sp1.nextFetchOffset()).thenReturn((long) 3);
 
         when(sp0.acquire(anyString(), anyInt(), anyInt(), anyLong(), any(FetchPartitionData.class))).thenReturn(
-            ShareAcquiredRecords.fromAcquiredRecords(new ShareFetchResponseData.AcquiredRecords()
+            createShareAcquiredRecords(new ShareFetchResponseData.AcquiredRecords()
                 .setFirstOffset(0).setLastOffset(3).setDeliveryCount((short) 1)));
         when(sp1.acquire(anyString(), anyInt(), anyInt(), anyLong(), any(FetchPartitionData.class))).thenReturn(
-            ShareAcquiredRecords.fromAcquiredRecords(new ShareFetchResponseData.AcquiredRecords()
+            createShareAcquiredRecords(new ShareFetchResponseData.AcquiredRecords()
                 .setFirstOffset(100).setLastOffset(103).setDeliveryCount((short) 1)));
 
         LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions = new LinkedHashMap<>();
@@ -222,10 +231,10 @@ public class ShareFetchUtilsTest {
 
         when(sp0.acquire(anyString(), anyInt(), anyInt(), anyLong(), any(FetchPartitionData.class))).thenReturn(
             ShareAcquiredRecords.empty(),
-            ShareAcquiredRecords.fromAcquiredRecords(new ShareFetchResponseData.AcquiredRecords()
+            createShareAcquiredRecords(new ShareFetchResponseData.AcquiredRecords()
                 .setFirstOffset(0).setLastOffset(3).setDeliveryCount((short) 1)));
         when(sp1.acquire(anyString(), anyInt(), anyInt(), anyLong(), any(FetchPartitionData.class))).thenReturn(
-            ShareAcquiredRecords.fromAcquiredRecords(new ShareFetchResponseData.AcquiredRecords()
+            createShareAcquiredRecords(new ShareFetchResponseData.AcquiredRecords()
                 .setFirstOffset(100).setLastOffset(103).setDeliveryCount((short) 1)),
             ShareAcquiredRecords.empty());
 
@@ -352,7 +361,7 @@ public class ShareFetchUtilsTest {
     }
 
     @Test
-    public void testProcessFetchResponseWithMaxFetchRecords() {
+    public void testProcessFetchResponseWithMaxFetchRecords() throws IOException {
         String groupId = "grp";
         TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
         TopicIdPartition tp1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 1));
@@ -374,24 +383,29 @@ public class ShareFetchUtilsTest {
         ShareFetch shareFetch = new ShareFetch(FETCH_PARAMS, groupId, memberId.toString(),
             new CompletableFuture<>(), partitionMaxBytes, BATCH_SIZE, 10, BROKER_TOPIC_STATS);
 
-        MemoryRecords records1 = MemoryRecords.withRecords(Compression.NONE,
-            new SimpleRecord("0".getBytes(), "v".getBytes()),
-            new SimpleRecord("1".getBytes(), "v".getBytes()),
-            new SimpleRecord("2".getBytes(), "v".getBytes()),
-            new SimpleRecord(null, "value".getBytes()));
+        LinkedHashMap<Long, Integer> recordsPerOffset = new LinkedHashMap<>();
+        recordsPerOffset.put(0L, 1);
+        recordsPerOffset.put(1L, 1);
+        recordsPerOffset.put(2L, 1);
+        recordsPerOffset.put(3L, 1);
+        Records records1 = createFileRecords(recordsPerOffset);
+
+        recordsPerOffset.clear();
+        recordsPerOffset.put(100L, 4);
+        Records records2 = createFileRecords(recordsPerOffset);
 
         FetchPartitionData fetchPartitionData1 = new FetchPartitionData(Errors.NONE, 0L, 0L,
             records1, Optional.empty(), OptionalLong.empty(), Optional.empty(),
             OptionalInt.empty(), false);
         FetchPartitionData fetchPartitionData2 = new FetchPartitionData(Errors.NONE, 0L, 0L,
-            records1, Optional.empty(), OptionalLong.empty(), Optional.empty(),
+            records2, Optional.empty(), OptionalLong.empty(), Optional.empty(),
             OptionalInt.empty(), false);
 
         when(sp0.acquire(memberId.toString(), BATCH_SIZE, 10, 0, fetchPartitionData1)).thenReturn(
-            ShareAcquiredRecords.fromAcquiredRecords(new ShareFetchResponseData.AcquiredRecords()
+            createShareAcquiredRecords(new ShareFetchResponseData.AcquiredRecords()
                 .setFirstOffset(0).setLastOffset(1).setDeliveryCount((short) 1)));
         when(sp1.acquire(memberId.toString(), BATCH_SIZE, 8, 0, fetchPartitionData2)).thenReturn(
-            ShareAcquiredRecords.fromAcquiredRecords(new ShareFetchResponseData.AcquiredRecords()
+            createShareAcquiredRecords(new ShareFetchResponseData.AcquiredRecords()
                 .setFirstOffset(100).setLastOffset(103).setDeliveryCount((short) 1)));
 
         // Send the topic partitions in order so can validate if correct mock is called, accounting
@@ -401,23 +415,27 @@ public class ShareFetchUtilsTest {
             new ShareFetchPartitionData(tp1, 0, fetchPartitionData2)
         );
 
-        Map<TopicIdPartition, ShareFetchResponseData.PartitionData> resultData1 =
+        Map<TopicIdPartition, ShareFetchResponseData.PartitionData> resultData =
             ShareFetchUtils.processFetchResponse(shareFetch, responseData, sharePartitions,
                 mock(ReplicaManager.class), EXCEPTION_HANDLER);
 
-        assertEquals(2, resultData1.size());
-        assertTrue(resultData1.containsKey(tp0));
-        assertTrue(resultData1.containsKey(tp1));
-        assertEquals(0, resultData1.get(tp0).partitionIndex());
-        assertEquals(1, resultData1.get(tp1).partitionIndex());
-        assertEquals(Errors.NONE.code(), resultData1.get(tp0).errorCode());
-        assertEquals(Errors.NONE.code(), resultData1.get(tp1).errorCode());
-        assertEquals(1, resultData1.get(tp0).acquiredRecords().size());
-        assertEquals(0, resultData1.get(tp0).acquiredRecords().get(0).firstOffset());
-        assertEquals(1, resultData1.get(tp0).acquiredRecords().get(0).lastOffset());
-        assertEquals(1, resultData1.get(tp1).acquiredRecords().size());
-        assertEquals(100, resultData1.get(tp1).acquiredRecords().get(0).firstOffset());
-        assertEquals(103, resultData1.get(tp1).acquiredRecords().get(0).lastOffset());
+        assertEquals(2, resultData.size());
+        assertTrue(resultData.containsKey(tp0));
+        assertTrue(resultData.containsKey(tp1));
+        assertEquals(0, resultData.get(tp0).partitionIndex());
+        assertEquals(1, resultData.get(tp1).partitionIndex());
+        assertEquals(Errors.NONE.code(), resultData.get(tp0).errorCode());
+        assertEquals(Errors.NONE.code(), resultData.get(tp1).errorCode());
+        assertEquals(1, resultData.get(tp0).acquiredRecords().size());
+        assertEquals(0, resultData.get(tp0).acquiredRecords().get(0).firstOffset());
+        assertEquals(1, resultData.get(tp0).acquiredRecords().get(0).lastOffset());
+        assertEquals(1, resultData.get(tp1).acquiredRecords().size());
+        assertEquals(100, resultData.get(tp1).acquiredRecords().get(0).firstOffset());
+        assertEquals(103, resultData.get(tp1).acquiredRecords().get(0).lastOffset());
+
+        // Validate the slicing for fetched data happened for tp0 records, not for tp1 records.
+        assertTrue(records1.sizeInBytes() > resultData.get(tp0).records().sizeInBytes());
+        assertEquals(records2.sizeInBytes(), resultData.get(tp1).records().sizeInBytes());
     }
 
     @Test
@@ -454,5 +472,182 @@ public class ShareFetchUtilsTest {
         Mockito.verify(shareFetch, times(1)).addErroneous(tp0, exception);
         Mockito.verify(exceptionHandler, times(1)).accept(new SharePartitionKey("grp", tp0), exception);
         Mockito.verify(sp0, times(0)).updateCacheAndOffsets(any(Long.class));
+    }
+
+    @Test
+    public void testMaybeSliceFetchRecordsSingleBatch() throws IOException {
+        // Create 1 batch of records with 10 records.
+        FileRecords records = createFileRecords(Map.of(5L, 10));
+
+        // Acquire all offsets, should return same records.
+        List<AcquiredRecords> acquiredRecords = List.of(new AcquiredRecords().setFirstOffset(5).setLastOffset(14).setDeliveryCount((short) 1));
+        Records slicedRecords = ShareFetchUtils.maybeSliceFetchRecords(records, new ShareAcquiredRecords(acquiredRecords, 10));
+        assertEquals(records, slicedRecords);
+
+        // Acquire offsets out of first offset bound should return the records for the matching batch.
+        acquiredRecords = List.of(new AcquiredRecords().setFirstOffset(2).setLastOffset(14).setDeliveryCount((short) 1));
+        slicedRecords = ShareFetchUtils.maybeSliceFetchRecords(records, new ShareAcquiredRecords(acquiredRecords, 10));
+        assertEquals(records, slicedRecords);
+
+        // Acquire offsets out of last offset bound should return the records for the matching batch.
+        acquiredRecords = List.of(new AcquiredRecords().setFirstOffset(5).setLastOffset(20).setDeliveryCount((short) 1));
+        slicedRecords = ShareFetchUtils.maybeSliceFetchRecords(records, new ShareAcquiredRecords(acquiredRecords, 5));
+        assertEquals(records, slicedRecords);
+
+        // Acquire only subset of batch offsets, starting from the first offset.
+        acquiredRecords = List.of(new AcquiredRecords().setFirstOffset(5).setLastOffset(8).setDeliveryCount((short) 1));
+        slicedRecords = ShareFetchUtils.maybeSliceFetchRecords(records, new ShareAcquiredRecords(acquiredRecords, 1));
+        assertEquals(records, slicedRecords);
+
+        // Acquire only subset of batch offsets, ending at the last offset.
+        acquiredRecords = List.of(new AcquiredRecords().setFirstOffset(8).setLastOffset(14).setDeliveryCount((short) 1));
+        slicedRecords = ShareFetchUtils.maybeSliceFetchRecords(records, new ShareAcquiredRecords(acquiredRecords, 1));
+        assertEquals(records, slicedRecords);
+
+        // Acquire only subset of batch offsets, within the batch.
+        acquiredRecords = List.of(new AcquiredRecords().setFirstOffset(8).setLastOffset(10).setDeliveryCount((short) 1));
+        slicedRecords = ShareFetchUtils.maybeSliceFetchRecords(records, new ShareAcquiredRecords(acquiredRecords, 1));
+        assertEquals(records, slicedRecords);
+    }
+
+    @Test
+    public void testMaybeSliceFetchRecordsMultipleBatches() throws IOException {
+        // Create 3 batches of records with 3, 2 and 4 records respectively.
+        LinkedHashMap<Long, Integer> recordsPerOffset = new LinkedHashMap<>();
+        recordsPerOffset.put(0L, 3);
+        recordsPerOffset.put(3L, 2);
+        recordsPerOffset.put(7L, 4); // Gap of 2 offsets between batches.
+        FileRecords records = createFileRecords(recordsPerOffset);
+
+        // Acquire all offsets, should return same records.
+        List<AcquiredRecords> acquiredRecords = List.of(new AcquiredRecords().setFirstOffset(0).setLastOffset(10).setDeliveryCount((short) 1));
+        Records slicedRecords = ShareFetchUtils.maybeSliceFetchRecords(records, new ShareAcquiredRecords(acquiredRecords, 11));
+        assertEquals(records, slicedRecords);
+
+        // Acquire offsets from all batches, but only first record from last batch. Should return
+        // all batches.
+        acquiredRecords = List.of(new AcquiredRecords().setFirstOffset(0).setLastOffset(7).setDeliveryCount((short) 1));
+        slicedRecords = ShareFetchUtils.maybeSliceFetchRecords(records, new ShareAcquiredRecords(acquiredRecords, 5));
+        assertEquals(records, slicedRecords);
+
+        // Acquire only first batch offsets, should return only first batch.
+        acquiredRecords = List.of(new AcquiredRecords().setFirstOffset(0).setLastOffset(2).setDeliveryCount((short) 1));
+        slicedRecords = ShareFetchUtils.maybeSliceFetchRecords(records, new ShareAcquiredRecords(acquiredRecords, 5));
+        assertTrue(records.sizeInBytes() > slicedRecords.sizeInBytes());
+        List<RecordBatch> recordBatches = TestUtils.toList(slicedRecords.batches());
+        assertEquals(1, recordBatches.size());
+        assertEquals(0, recordBatches.get(0).baseOffset());
+        assertEquals(2, recordBatches.get(0).lastOffset());
+
+        // Acquire only second batch offsets, should return only second batch.
+        acquiredRecords = List.of(new AcquiredRecords().setFirstOffset(3).setLastOffset(4).setDeliveryCount((short) 1));
+        slicedRecords = ShareFetchUtils.maybeSliceFetchRecords(records, new ShareAcquiredRecords(acquiredRecords, 5));
+        assertTrue(records.sizeInBytes() > slicedRecords.sizeInBytes());
+        recordBatches = TestUtils.toList(slicedRecords.batches());
+        assertEquals(1, recordBatches.size());
+        assertEquals(3, recordBatches.get(0).baseOffset());
+        assertEquals(4, recordBatches.get(0).lastOffset());
+
+        // Acquire only last batch offsets, should return only last batch.
+        acquiredRecords = List.of(new AcquiredRecords().setFirstOffset(7).setLastOffset(10).setDeliveryCount((short) 1));
+        slicedRecords = ShareFetchUtils.maybeSliceFetchRecords(records, new ShareAcquiredRecords(acquiredRecords, 1));
+        assertTrue(records.sizeInBytes() > slicedRecords.sizeInBytes());
+        recordBatches = TestUtils.toList(slicedRecords.batches());
+        assertEquals(1, recordBatches.size());
+        assertEquals(7, recordBatches.get(0).baseOffset());
+        assertEquals(10, recordBatches.get(0).lastOffset());
+
+        // Acquire only subset of first batch offsets, should return only first batch.
+        acquiredRecords = List.of(new AcquiredRecords().setFirstOffset(1).setLastOffset(1).setDeliveryCount((short) 1));
+        slicedRecords = ShareFetchUtils.maybeSliceFetchRecords(records, new ShareAcquiredRecords(acquiredRecords, 1));
+        assertTrue(records.sizeInBytes() > slicedRecords.sizeInBytes());
+        recordBatches = TestUtils.toList(slicedRecords.batches());
+        assertEquals(1, recordBatches.size());
+        assertEquals(0, recordBatches.get(0).baseOffset());
+        assertEquals(2, recordBatches.get(0).lastOffset());
+
+        // Acquire only subset of second batch offsets, should return only second batch.
+        acquiredRecords = List.of(new AcquiredRecords().setFirstOffset(4).setLastOffset(4).setDeliveryCount((short) 1));
+        slicedRecords = ShareFetchUtils.maybeSliceFetchRecords(records, new ShareAcquiredRecords(acquiredRecords, 1));
+        assertTrue(records.sizeInBytes() > slicedRecords.sizeInBytes());
+        recordBatches = TestUtils.toList(slicedRecords.batches());
+        assertEquals(1, recordBatches.size());
+        assertEquals(3, recordBatches.get(0).baseOffset());
+        assertEquals(4, recordBatches.get(0).lastOffset());
+
+        // Acquire only subset of last batch offsets, should return only last batch.
+        acquiredRecords = List.of(new AcquiredRecords().setFirstOffset(8).setLastOffset(8).setDeliveryCount((short) 1));
+        slicedRecords = ShareFetchUtils.maybeSliceFetchRecords(records, new ShareAcquiredRecords(acquiredRecords, 1));
+        assertTrue(records.sizeInBytes() > slicedRecords.sizeInBytes());
+        recordBatches = TestUtils.toList(slicedRecords.batches());
+        assertEquals(1, recordBatches.size());
+        assertEquals(7, recordBatches.get(0).baseOffset());
+        assertEquals(10, recordBatches.get(0).lastOffset());
+
+        // Acquire including gaps between batches, should return 2 batches.
+        acquiredRecords = List.of(new AcquiredRecords().setFirstOffset(4).setLastOffset(8).setDeliveryCount((short) 1));
+        slicedRecords = ShareFetchUtils.maybeSliceFetchRecords(records, new ShareAcquiredRecords(acquiredRecords, 1));
+        assertTrue(records.sizeInBytes() > slicedRecords.sizeInBytes());
+        recordBatches = TestUtils.toList(slicedRecords.batches());
+        assertEquals(2, recordBatches.size());
+        assertEquals(3, recordBatches.get(0).baseOffset());
+        assertEquals(4, recordBatches.get(0).lastOffset());
+        assertEquals(7, recordBatches.get(1).baseOffset());
+        assertEquals(10, recordBatches.get(1).lastOffset());
+
+        // Acquire with multiple acquired records, should return matching batches.
+        acquiredRecords = List.of(
+            new AcquiredRecords().setFirstOffset(0).setLastOffset(2).setDeliveryCount((short) 1),
+            new AcquiredRecords().setFirstOffset(3).setLastOffset(4).setDeliveryCount((short) 1));
+        slicedRecords = ShareFetchUtils.maybeSliceFetchRecords(records, new ShareAcquiredRecords(acquiredRecords, 1));
+        assertTrue(records.sizeInBytes() > slicedRecords.sizeInBytes());
+        recordBatches = TestUtils.toList(slicedRecords.batches());
+        assertEquals(2, recordBatches.size());
+        assertEquals(0, recordBatches.get(0).baseOffset());
+        assertEquals(2, recordBatches.get(0).lastOffset());
+        assertEquals(3, recordBatches.get(1).baseOffset());
+        assertEquals(4, recordBatches.get(1).lastOffset());
+
+        // Acquire with multiple acquired records of individual offsets from single batch, should return
+        // matching batch.
+        acquiredRecords = List.of(
+            new AcquiredRecords().setFirstOffset(8).setLastOffset(8).setDeliveryCount((short) 1),
+            new AcquiredRecords().setFirstOffset(9).setLastOffset(9).setDeliveryCount((short) 1));
+        slicedRecords = ShareFetchUtils.maybeSliceFetchRecords(records, new ShareAcquiredRecords(acquiredRecords, 1));
+        assertTrue(records.sizeInBytes() > slicedRecords.sizeInBytes());
+        recordBatches = TestUtils.toList(slicedRecords.batches());
+        assertEquals(1, recordBatches.size());
+        assertEquals(7, recordBatches.get(0).baseOffset());
+        assertEquals(10, recordBatches.get(0).lastOffset());
+
+        // Acquire with multiple acquired records of individual offsets from multiple batch, should return
+        // multiple matching batches.
+        acquiredRecords = List.of(
+            new AcquiredRecords().setFirstOffset(1).setLastOffset(1).setDeliveryCount((short) 1),
+            new AcquiredRecords().setFirstOffset(9).setLastOffset(9).setDeliveryCount((short) 1));
+        slicedRecords = ShareFetchUtils.maybeSliceFetchRecords(records, new ShareAcquiredRecords(acquiredRecords, 1));
+        assertEquals(records.sizeInBytes(), slicedRecords.sizeInBytes());
+    }
+
+    @Test
+    public void testMaybeSliceFetchRecordsException() throws IOException {
+        // Create 1 batch of records with 3 records.
+        FileRecords records = createFileRecords(Map.of(0L, 3));
+        // Send empty acquired records which should trigger an exception and same file records should
+        // be returned. The method doesn't expect empty acquired records.
+        Records slicedRecords = ShareFetchUtils.maybeSliceFetchRecords(
+            records, new ShareAcquiredRecords(List.of(), 3));
+        assertEquals(records, slicedRecords);
+    }
+
+    @Test
+    public void testMaybeSliceFetchRecordsNonFileRecords() {
+        // Send memory records which should be returned as is.
+        try (MemoryRecordsBuilder records = memoryRecordsBuilder(2, 0)) {
+            List<AcquiredRecords> acquiredRecords = List.of(new AcquiredRecords().setFirstOffset(0).setLastOffset(1).setDeliveryCount((short) 1));
+            Records slicedRecords = ShareFetchUtils.maybeSliceFetchRecords(
+                records.build(), new ShareAcquiredRecords(acquiredRecords, 2));
+            assertEquals(records.build(), slicedRecords);
+        }
     }
 }

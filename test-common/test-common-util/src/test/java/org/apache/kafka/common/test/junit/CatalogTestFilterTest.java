@@ -31,10 +31,10 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class AutoQuarantinedTestFilterTest {
+public class CatalogTestFilterTest {
 
     private TestDescriptor descriptor(String className, String methodName) {
-        return new QuarantinedPostDiscoveryFilterTest.MockTestDescriptor(className, methodName);
+        return new KafkaPostDiscoveryFilterTest.MockTestDescriptor(className, methodName);
     }
 
     @Test
@@ -46,13 +46,7 @@ public class AutoQuarantinedTestFilterTest {
         lines.add("o.a.k.Spam#testEggs");
         Files.write(catalog, lines);
 
-        Filter<TestDescriptor> filter = AutoQuarantinedTestFilter.create(catalog.toString(), false);
-        assertTrue(filter.apply(descriptor("o.a.k.Foo", "testBar1")).included());
-        assertTrue(filter.apply(descriptor("o.a.k.Foo", "testBar2")).included());
-        assertTrue(filter.apply(descriptor("o.a.k.Spam", "testEggs")).included());
-        assertTrue(filter.apply(descriptor("o.a.k.Spam", "testNew")).excluded());
-
-        filter = AutoQuarantinedTestFilter.create(catalog.toString(), true);
+        Filter<TestDescriptor> filter = CatalogTestFilter.create(catalog.toString());
         assertTrue(filter.apply(descriptor("o.a.k.Foo", "testBar1")).excluded());
         assertTrue(filter.apply(descriptor("o.a.k.Foo", "testBar2")).excluded());
         assertTrue(filter.apply(descriptor("o.a.k.Spam", "testEggs")).excluded());
@@ -64,19 +58,19 @@ public class AutoQuarantinedTestFilterTest {
         Path catalog = tempDir.resolve("catalog.txt");
         Files.write(catalog, Collections.emptyList());
 
-        Filter<TestDescriptor> filter = AutoQuarantinedTestFilter.create(catalog.toString(), false);
-        assertTrue(filter.apply(descriptor("o.a.k.Foo", "testBar1")).included());
-        assertTrue(filter.apply(descriptor("o.a.k.Foo", "testBar2")).included());
-        assertTrue(filter.apply(descriptor("o.a.k.Spam", "testEggs")).included());
-        assertTrue(filter.apply(descriptor("o.a.k.Spam", "testNew")).included());
+        Filter<TestDescriptor> filter = CatalogTestFilter.create(catalog.toString());
+        assertTrue(filter.apply(descriptor("o.a.k.Foo", "testBar1")).excluded());
+        assertTrue(filter.apply(descriptor("o.a.k.Foo", "testBar2")).excluded());
+        assertTrue(filter.apply(descriptor("o.a.k.Spam", "testEggs")).excluded());
+        assertTrue(filter.apply(descriptor("o.a.k.Spam", "testNew")).excluded());
     }
 
     @Test
     public void testMissingCatalog() {
-        Filter<TestDescriptor> filter = AutoQuarantinedTestFilter.create("does-not-exist.txt", false);
-        assertTrue(filter.apply(descriptor("o.a.k.Foo", "testBar1")).included());
-        assertTrue(filter.apply(descriptor("o.a.k.Foo", "testBar2")).included());
-        assertTrue(filter.apply(descriptor("o.a.k.Spam", "testEggs")).included());
-        assertTrue(filter.apply(descriptor("o.a.k.Spam", "testNew")).included());
+        Filter<TestDescriptor> filter = CatalogTestFilter.create("does-not-exist.txt");
+        assertTrue(filter.apply(descriptor("o.a.k.Foo", "testBar1")).excluded());
+        assertTrue(filter.apply(descriptor("o.a.k.Foo", "testBar2")).excluded());
+        assertTrue(filter.apply(descriptor("o.a.k.Spam", "testEggs")).excluded());
+        assertTrue(filter.apply(descriptor("o.a.k.Spam", "testNew")).excluded());
     }
 }
