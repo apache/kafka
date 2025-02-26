@@ -80,6 +80,8 @@ import org.apache.kafka.coordinator.group.classic.ClassicGroupMember;
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
+import org.apache.kafka.coordinator.group.generated.ShareGroupStatePartitionMetadataKey;
+import org.apache.kafka.coordinator.group.generated.ShareGroupStatePartitionMetadataValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataValue.Endpoint;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.modern.Assignment;
@@ -110,6 +112,7 @@ import org.apache.kafka.server.share.persister.GroupTopicPartitionData;
 import org.apache.kafka.server.share.persister.InitializeShareGroupStateParameters;
 import org.apache.kafka.server.share.persister.PartitionFactory;
 import org.apache.kafka.server.share.persister.PartitionIdData;
+import org.apache.kafka.server.share.persister.PartitionStateData;
 import org.apache.kafka.server.share.persister.TopicData;
 
 import org.junit.jupiter.api.Test;
@@ -122,6 +125,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -14555,17 +14559,40 @@ public class GroupMetadataManagerTest {
         context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupIds.get(0), 100));
         context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupIds.get(1), 15));
 
+        Uuid topicId = Uuid.randomUuid();
+        String topicName = "foo";
+        MetadataImage image = new MetadataImageBuilder()
+            .addTopic(topicId, topicName, 1)
+            .build();
+
+        MetadataDelta delta = new MetadataDelta.Builder()
+            .setImage(image)
+            .build();
+
+        context.groupMetadataManager.onNewMetadataImage(image, delta);
+
         CoordinatorResult<Map.Entry<ShareGroupHeartbeatResponseData, Optional<InitializeShareGroupStateParameters>>, CoordinatorRecord> result = context.shareGroupHeartbeat(
             new ShareGroupHeartbeatRequestData()
                 .setGroupId(groupIds.get(1))
                 .setMemberId(Uuid.randomUuid().toString())
                 .setMemberEpoch(0)
-                .setSubscribedTopicNames(List.of("foo")));
+                .setSubscribedTopicNames(List.of(topicName)));
 
         // Verify that a member id was generated for the new member.
         String memberId = result.response().getKey().memberId();
         assertNotNull(memberId);
         context.commit();
+
+        verifyShareGroupHeartbeatInitializeRequest(
+            result.response().getValue(),
+            Map.of(
+                topicId,
+                Set.of(0)
+            ),
+            groupIds.get(1),
+            15,
+            true
+        );
 
         List<ShareGroupDescribeResponseData.DescribedGroup> expected = List.of(
             new ShareGroupDescribeResponseData.DescribedGroup()
@@ -14582,7 +14609,7 @@ public class GroupMetadataManagerTest {
                         .setMemberEpoch(16)
                         .setClientId("client")
                         .setClientHost("localhost/127.0.0.1")
-                        .setSubscribedTopicNames(List.of("foo"))
+                        .setSubscribedTopicNames(List.of(topicName))
                         .build()
                         .asShareGroupDescribeMember(
                             new MetadataImageBuilder().build().topics()
@@ -14609,12 +14636,42 @@ public class GroupMetadataManagerTest {
         ));
 
         String memberId = Uuid.randomUuid().toString();
+        Uuid topicId1 = Uuid.randomUuid();
+        String topicName1 = "foo";
+        Uuid topicId2 = Uuid.randomUuid();
+        String topicName2 = "bar";
+        String groupId = "group-foo";
+
+        MetadataImage image = new MetadataImageBuilder()
+            .addTopic(topicId1, topicName1, 1)
+            .addTopic(topicId2, topicName2, 1)
+            .build();
+
+        MetadataDelta delta = new MetadataDelta.Builder()
+            .setImage(image)
+            .build();
+
+        context.groupMetadataManager.onNewMetadataImage(image, delta);
+
         CoordinatorResult<Map.Entry<ShareGroupHeartbeatResponseData, Optional<InitializeShareGroupStateParameters>>, CoordinatorRecord> result = context.shareGroupHeartbeat(
             new ShareGroupHeartbeatRequestData()
-                .setGroupId("group-foo")
+                .setGroupId(groupId)
                 .setMemberId(memberId)
                 .setMemberEpoch(0)
-                .setSubscribedTopicNames(List.of("foo", "bar")));
+                .setSubscribedTopicNames(List.of(topicName1, topicName2)));
+
+        verifyShareGroupHeartbeatInitializeRequest(
+            result.response().getValue(),
+            Map.of(
+                topicId1,
+                Set.of(0),
+                topicId2,
+                Set.of(0)
+            ),
+            groupId,
+            0,
+            true
+        );
 
         assertEquals(
             memberId,
@@ -14663,13 +14720,42 @@ public class GroupMetadataManagerTest {
             .withShareGroupAssignor(new NoOpPartitionAssignor())
             .build();
 
+        Uuid topicId1 = Uuid.randomUuid();
+        String topicName1 = "foo";
+        Uuid topicId2 = Uuid.randomUuid();
+        String topicName2 = "bar";
+
+        MetadataImage image = new MetadataImageBuilder()
+            .addTopic(topicId1, topicName1, 1)
+            .addTopic(topicId2, topicName2, 1)
+            .build();
+
+        MetadataDelta delta = new MetadataDelta.Builder()
+            .setImage(image)
+            .build();
+
+        context.groupMetadataManager.onNewMetadataImage(image, delta);
+
         // A first member joins to create the group.
-        context.shareGroupHeartbeat(
+        CoordinatorResult<Map.Entry<ShareGroupHeartbeatResponseData, Optional<InitializeShareGroupStateParameters>>, CoordinatorRecord> result = context.shareGroupHeartbeat(
             new ShareGroupHeartbeatRequestData()
                 .setGroupId(groupId)
                 .setMemberId(memberId)
                 .setMemberEpoch(0)
-                .setSubscribedTopicNames(List.of("foo", "bar")));
+                .setSubscribedTopicNames(List.of(topicName1, topicName2)));
+
+        verifyShareGroupHeartbeatInitializeRequest(
+            result.response().getValue(),
+            Map.of(
+                topicId1,
+                Set.of(0),
+                topicId2,
+                Set.of(0)
+            ),
+            groupId,
+            0,
+            true
+        );
 
         // The second member is rejected because the member id is unknown and
         // the member epoch is not zero.
@@ -14712,12 +14798,36 @@ public class GroupMetadataManagerTest {
         assertThrows(GroupIdNotFoundException.class, () ->
             context.groupMetadataManager.shareGroup(groupId));
 
+        MetadataImage image = new MetadataImageBuilder()
+            .addTopic(fooTopicId, fooTopicName, 6)
+            .addTopic(barTopicId, barTopicName, 3)
+            .build();
+
+        MetadataDelta delta = new MetadataDelta.Builder()
+            .setImage(image)
+            .build();
+
+        context.groupMetadataManager.onNewMetadataImage(image, delta);
+
         CoordinatorResult<Map.Entry<ShareGroupHeartbeatResponseData, Optional<InitializeShareGroupStateParameters>>, CoordinatorRecord> result = context.shareGroupHeartbeat(
             new ShareGroupHeartbeatRequestData()
                 .setGroupId(groupId)
                 .setMemberId(memberId)
                 .setMemberEpoch(0)
                 .setSubscribedTopicNames(List.of("foo", "bar")));
+
+        verifyShareGroupHeartbeatInitializeRequest(
+            result.response().getValue(),
+            Map.of(
+                fooTopicId,
+                Set.of(0, 1, 2, 3, 4, 5),
+                barTopicId,
+                Set.of(0, 1, 2)
+            ),
+            groupId,
+            0,
+            true
+        );
 
         assertResponseEquals(
             new ShareGroupHeartbeatResponseData()
@@ -14828,7 +14938,15 @@ public class GroupMetadataManagerTest {
                 .setGroupId(groupId)
                 .setMemberId(memberId2)
                 .setMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH)
-                .setSubscribedTopicNames(List.of("foo", "bar")));
+                .setSubscribedTopicNames(List.of(fooTopicName, barTopicName)));
+
+        verifyShareGroupHeartbeatInitializeRequest(
+            result.response().getValue(),
+            Map.of(),
+            "",
+            -1,
+            false
+        );
 
         assertResponseEquals(
             new ShareGroupHeartbeatResponseData()
@@ -14873,14 +14991,43 @@ public class GroupMetadataManagerTest {
 
         context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 100));
 
+        Uuid fooTopicId = Uuid.randomUuid();
+        String fooTopicName = "foo";
+        Uuid barTopicId = Uuid.randomUuid();
+        String barTopicName = "bar";
+
+        MetadataImage image = new MetadataImageBuilder()
+            .addTopic(fooTopicId, fooTopicName, 1)
+            .addTopic(barTopicId, barTopicName, 1)
+            .build();
+
+        MetadataDelta delta = new MetadataDelta.Builder()
+            .setImage(image)
+            .build();
+
+        context.groupMetadataManager.onNewMetadataImage(image, delta);
+
         // Member 1 joins the group.
         CoordinatorResult<Map.Entry<ShareGroupHeartbeatResponseData, Optional<InitializeShareGroupStateParameters>>, CoordinatorRecord> result = context.shareGroupHeartbeat(
             new ShareGroupHeartbeatRequestData()
                 .setGroupId(groupId)
                 .setMemberId(memberId1)
                 .setMemberEpoch(0)
-                .setSubscribedTopicNames(List.of("foo", "bar")));
+                .setSubscribedTopicNames(List.of(fooTopicName, barTopicName)));
         assertEquals(101, result.response().getKey().memberEpoch());
+
+        verifyShareGroupHeartbeatInitializeRequest(
+            result.response().getValue(),
+            Map.of(
+                fooTopicId,
+                Set.of(0),
+                barTopicId,
+                Set.of(0)
+            ),
+            groupId,
+            100,
+            true
+        );
 
         // Member 2 joins the group.
         assertThrows(GroupMaxSizeReachedException.class, () -> context.shareGroupHeartbeat(
@@ -15069,6 +15216,16 @@ public class GroupMetadataManagerTest {
             )))
         ));
 
+        MetadataImage image = new MetadataImageBuilder()
+            .addTopic(fooTopicId, fooTopicName, 6)
+            .build();
+
+        MetadataDelta delta = new MetadataDelta.Builder()
+            .setImage(image)
+            .build();
+
+        context.groupMetadataManager.onNewMetadataImage(image, delta);
+
         // Session timer is scheduled on first heartbeat.
         CoordinatorResult<Map.Entry<ShareGroupHeartbeatResponseData, Optional<InitializeShareGroupStateParameters>>, CoordinatorRecord> result =
             context.shareGroupHeartbeat(
@@ -15078,6 +15235,17 @@ public class GroupMetadataManagerTest {
                     .setMemberEpoch(0)
                     .setSubscribedTopicNames(List.of("foo")));
         assertEquals(1, result.response().getKey().memberEpoch());
+
+        verifyShareGroupHeartbeatInitializeRequest(
+            result.response().getValue(),
+            Map.of(
+                fooTopicId,
+                Set.of(0, 1, 2, 3, 4, 5)
+            ),
+            groupId,
+            0,
+            true
+        );
 
         // Verify heartbeat interval
         assertEquals(5000, result.response().getKey().heartbeatIntervalMs());
@@ -15105,6 +15273,14 @@ public class GroupMetadataManagerTest {
                 .setMemberEpoch(result.response().getKey().memberEpoch()));
         assertEquals(1, result.response().getKey().memberEpoch());
 
+        verifyShareGroupHeartbeatInitializeRequest(
+            result.response().getValue(),
+            Map.of(),
+            "",
+            0,
+            false
+        );
+
         // Verify heartbeat interval
         assertEquals(10000, result.response().getKey().heartbeatIntervalMs());
 
@@ -15124,6 +15300,14 @@ public class GroupMetadataManagerTest {
                 .setMemberId(memberId)
                 .setMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH));
         assertEquals(LEAVE_GROUP_MEMBER_EPOCH, result.response().getKey().memberEpoch());
+
+        verifyShareGroupHeartbeatInitializeRequest(
+            result.response().getValue(),
+            Map.of(),
+            "",
+            0,
+            false
+        );
 
         // Verify that there are no timers.
         context.assertNoSessionTimeout(groupId, memberId);
@@ -16912,6 +17096,106 @@ public class GroupMetadataManagerTest {
         verify(shareGroup, times(1)).groupId();
     }
 
+    @Test
+    public void testShareGroupHeartbeatInitializeOnPartitionUpdate() {
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+        assignor.prepareGroupAssignment(new GroupAssignment(Collections.emptyMap()));
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withShareGroupAssignor(assignor)
+            .build();
+
+        Uuid t1Uuid = Uuid.randomUuid();
+        String t1Name = "t1";
+        Uuid t2Uuid = Uuid.randomUuid();
+        String t2Name = "t2";
+        MetadataImage image = new MetadataImageBuilder()
+            .addTopic(t1Uuid, "t1", 2)
+            .addTopic(t2Uuid, "t2", 2)
+            .build();
+
+        String groupId = "share-group";
+
+        context.groupMetadataManager.onNewMetadataImage(image, mock(MetadataDelta.class));
+
+        Uuid memberId = Uuid.randomUuid();
+        CoordinatorResult<Map.Entry<ShareGroupHeartbeatResponseData, Optional<InitializeShareGroupStateParameters>>, CoordinatorRecord> result = context.shareGroupHeartbeat(
+            new ShareGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId.toString())
+                .setMemberEpoch(0)
+                .setSubscribedTopicNames(List.of(t1Name, t2Name)));
+
+        verifyShareGroupHeartbeatInitializeRequest(
+            result.response().getValue(),
+            Map.of(
+                t1Uuid,
+                Set.of(0, 1),
+                t2Uuid,
+                Set.of(0, 1)
+            ),
+            groupId,
+            0,
+            true
+        );
+
+        context.groupMetadataManager.replay(
+            new ShareGroupStatePartitionMetadataKey()
+                .setGroupId(groupId),
+            new ShareGroupStatePartitionMetadataValue()
+                .setInitializedTopics(List.of(
+                    new ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo()
+                        .setTopicId(t1Uuid)
+                        .setTopicName("t1")
+                        .setPartitions(List.of(0, 1)),
+                    new ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo()
+                        .setTopicId(t2Uuid)
+                        .setTopicName("t2")
+                        .setPartitions(List.of(0, 1))
+                ))
+                .setDeletingTopics(List.of())
+        );
+
+        // Partition increase
+        image = new MetadataImageBuilder()
+            .addTopic(t1Uuid, "t1", 4)
+            .addTopic(t2Uuid, "t2", 2)
+            .build();
+
+        context.groupMetadataManager.onNewMetadataImage(image, mock(MetadataDelta.class));
+
+        assignor.prepareGroupAssignment(new GroupAssignment(
+            Map.of(
+                memberId.toString(),
+                new MemberAssignmentImpl(
+                    Map.of(
+                        t1Uuid,
+                        Set.of(0, 1, 2, 3),
+                        t2Uuid,
+                        Set.of(0, 1)
+                    )
+                )
+            )
+        ));
+
+        result = context.shareGroupHeartbeat(
+            new ShareGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId.toString())
+                .setMemberEpoch(1)
+                .setSubscribedTopicNames(null));
+
+        verifyShareGroupHeartbeatInitializeRequest(
+            result.response().getValue(),
+            Map.of(
+                t1Uuid,
+                Set.of(2, 3)
+            ),
+            groupId,
+            1,
+            true
+        );
+    }
+
     private static void checkJoinGroupResponse(
         JoinGroupResponseData expectedResponse,
         JoinGroupResponseData actualResponse,
@@ -16969,5 +17253,31 @@ public class GroupMetadataManagerTest {
 
         assertEquals(expectedSuccessCount, successCount);
         return memberIds;
+    }
+
+    private void verifyShareGroupHeartbeatInitializeRequest(
+        Optional<InitializeShareGroupStateParameters> initRequest,
+        Map<Uuid, Set<Integer>> expectedTopicPartitionsMap,
+        String groupId,
+        int stateEpoch,
+        boolean shouldExist
+    ) {
+        if (shouldExist) {
+            assertTrue(initRequest.isPresent());
+            InitializeShareGroupStateParameters request = initRequest.get();
+            assertEquals(groupId, request.groupTopicPartitionData().groupId());
+            Map<Uuid, Set<Integer>> actualTopicPartitionsMap = new HashMap<>();
+            for (TopicData<PartitionStateData> topicData : request.groupTopicPartitionData().topicsData()) {
+                actualTopicPartitionsMap.computeIfAbsent(topicData.topicId(), k -> new HashSet<>())
+                    .addAll(topicData.partitions().stream().map(partitionData -> {
+                        assertEquals(stateEpoch, partitionData.stateEpoch());
+                        assertEquals(-1, partitionData.startOffset());
+                        return partitionData.partition();
+                    }).toList());
+            }
+            assertEquals(expectedTopicPartitionsMap, actualTopicPartitionsMap);
+        } else {
+            assertTrue(initRequest.isEmpty());
+        }
     }
 }
