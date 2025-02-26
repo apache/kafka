@@ -19,20 +19,12 @@ package org.apache.kafka.server.share.persister;
 
 import org.apache.kafka.common.message.InitializeShareGroupStateRequestData;
 
-import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * This class contains the parameters for {@link Persister#initializeState(InitializeShareGroupStateParameters)}.
  */
 public class InitializeShareGroupStateParameters implements PersisterParameters {
     private final GroupTopicPartitionData<PartitionStateData> groupTopicPartitionData;
-
-    public static final InitializeShareGroupStateParameters EMPTY_PARAMS = new InitializeShareGroupStateParameters(new GroupTopicPartitionData.Builder<PartitionStateData>()
-        .setGroupId("")
-        .setTopicsData(List.of())
-        .build()
-    );
 
     private InitializeShareGroupStateParameters(GroupTopicPartitionData<PartitionStateData> groupTopicPartitionData) {
         this.groupTopicPartitionData = groupTopicPartitionData;
@@ -43,14 +35,12 @@ public class InitializeShareGroupStateParameters implements PersisterParameters 
     }
 
     public static InitializeShareGroupStateParameters from(InitializeShareGroupStateRequestData data) {
-        return new Builder()
-                .setGroupTopicPartitionData(new GroupTopicPartitionData<>(data.groupId(), data.topics().stream()
-                        .map(readStateData -> new TopicData<>(readStateData.topicId(),
-                                readStateData.partitions().stream()
-                                        .map(partitionData -> PartitionFactory.newPartitionStateData(partitionData.partition(), partitionData.stateEpoch(), partitionData.startOffset()))
-                                        .collect(Collectors.toList())))
-                        .collect(Collectors.toList())))
-                .build();
+        return new Builder().setGroupTopicPartitionData(new GroupTopicPartitionData<>(data.groupId(), data.topics().stream()
+            .map(readStateData -> new TopicData<>(readStateData.topicId(),
+                readStateData.partitions().stream()
+                    .map(partitionData -> PartitionFactory.newPartitionStateData(partitionData.partition(), partitionData.stateEpoch(), partitionData.startOffset())).toList()
+            )).toList()
+        )).build();
     }
 
     public static class Builder {

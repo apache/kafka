@@ -84,6 +84,7 @@ import org.apache.kafka.server.share.persister.DeleteShareGroupStateParameters;
 import org.apache.kafka.server.share.persister.DeleteShareGroupStateResult;
 import org.apache.kafka.server.share.persister.GroupTopicPartitionData;
 import org.apache.kafka.server.share.persister.InitializeShareGroupStateParameters;
+import org.apache.kafka.server.share.persister.InitializeShareGroupStateResult;
 import org.apache.kafka.server.share.persister.PartitionErrorData;
 import org.apache.kafka.server.share.persister.PartitionFactory;
 import org.apache.kafka.server.share.persister.PartitionIdData;
@@ -400,7 +401,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             // This ensures that the previous group write has completed successfully
             // before we start the persister initialize phase.
             if (result.getValue().isPresent()) {
-                return persisterInitialize(context, result.getValue().get(), result.getKey());
+                return persisterInitialize(result.getValue().get(), result.getKey());
             }
             return CompletableFuture.completedFuture(result.getKey());
         }).exceptionally(exception -> handleOperationException(
@@ -414,22 +415,14 @@ public class GroupCoordinatorService implements GroupCoordinator {
         ));
     }
 
-    private CompletableFuture<ShareGroupHeartbeatResponseData> persisterInitialize(
-        RequestContext context,
+    // Visibility for testing
+    CompletableFuture<ShareGroupHeartbeatResponseData> persisterInitialize(
         InitializeShareGroupStateParameters request,
         ShareGroupHeartbeatResponseData defaultResponse
     ) {
         return persister.initializeState(request)
-            .thenApply(response -> {
-                for (TopicData<PartitionErrorData> topicData : response.topicsData()) {
-                    Optional<PartitionErrorData> errData = topicData.partitions().stream().filter(partition -> partition.errorCode() != Errors.NONE.code()).findAny();
-                    if (errData.isPresent()) {
-                        return errData.get().errorCode();
-                    }
-                }
-                return Errors.NONE.code();
-            }).thenCompose(
-                errorCode -> handleShareGroupInitializeResult(request, errorCode, defaultResponse)
+            .thenCompose(
+                response -> handlePersisterInitializeResponse(request.groupTopicPartitionData().groupId(), response, defaultResponse)
             ).exceptionally(exception -> {
                 GroupTopicPartitionData<PartitionStateData> gtp = request.groupTopicPartitionData();
                 log.error("Unable to initialize share group state {}, {}", gtp.groupId(), gtp.topicsData(), exception);
@@ -438,42 +431,61 @@ public class GroupCoordinatorService implements GroupCoordinator {
             });
     }
 
-    private CompletableFuture<ShareGroupHeartbeatResponseData> handleShareGroupInitializeResult(
-        InitializeShareGroupStateParameters initializeRequest,
-        short persisterInitializeErrorCode,
+    private CompletableFuture<ShareGroupHeartbeatResponseData> handlePersisterInitializeResponse(
+        String groupId,
+        InitializeShareGroupStateResult persisterInitializeResult,
         ShareGroupHeartbeatResponseData defaultResponse
     ) {
-        String groupId = initializeRequest.groupTopicPartitionData().groupId();
-        if (persisterInitializeErrorCode == Errors.NONE.code()) {
-            Map<Uuid, Map.Entry<String, List<Integer>>> topicPartitionMap = new HashMap<>();
-            for (TopicData<PartitionStateData> topicData : initializeRequest.groupTopicPartitionData().topicsData()) {
-                topicPartitionMap.computeIfAbsent(topicData.topicId(), k -> Map.entry(
-                        metadataImage.topics().getTopic(topicData.topicId()).name(),
-                        topicData.partitions().stream()
-                            .map(PartitionIdData::partition)
-                            .toList()
-                    )
-                );
+
+        short persisterErrorCode = Errors.NONE.code();
+        for (TopicData<PartitionErrorData> topicData : persisterInitializeResult.topicsData()) {
+            Optional<PartitionErrorData> errData = topicData.partitions().stream().filter(partition -> partition.errorCode() != Errors.NONE.code()).findAny();
+            if (errData.isPresent()) {
+                persisterErrorCode = errData.get().errorCode();
+                break;
             }
-            return runtime.scheduleWriteOperation(
-                "initialze-share-group-state",
-                topicPartitionFor(groupId),
-                Duration.ofMillis(config.offsetCommitTimeoutMs()),
-                coordinator -> coordinator.initializeShareGroupState(groupId, topicPartitionMap)
-            ).thenApply(
-                __ -> defaultResponse
-            ).exceptionally(exception -> {
-                log.error("Unable to initialize share group state partition metadata for {} with request {}", groupId, initializeRequest, exception);
-                return new ShareGroupHeartbeatResponseData()
-                    .setErrorCode(Errors.forException(exception).code());
-            });
+        }
+
+        if (persisterErrorCode == Errors.NONE.code()) {
+            Map<Uuid, Map.Entry<String, List<Integer>>> topicPartitionMap = new HashMap<>();
+            for (TopicData<PartitionErrorData> topicData : persisterInitializeResult.topicsData()) {
+                topicPartitionMap.computeIfAbsent(topicData.topicId(), k -> Map.entry(
+                    metadataImage.topics().getTopic(topicData.topicId()).name(),
+                    topicData.partitions().stream()
+                        .map(PartitionIdData::partition)
+                        .toList()
+                ));
+            }
+            if (topicPartitionMap.isEmpty()) {
+                return CompletableFuture.completedFuture(defaultResponse);
+            }
+            return performShareGroupStateMetadataInitialize(groupId, topicPartitionMap, defaultResponse);
         } else {
-            log.error("Received error while calling initialize state for {} on persister {}", groupId, persisterInitializeErrorCode);
+            log.error("Received error while calling initialize state for {} on persister {}.", groupId, persisterErrorCode);
             return CompletableFuture.completedFuture(
                 new ShareGroupHeartbeatResponseData()
-                    .setErrorCode(persisterInitializeErrorCode)
+                    .setErrorCode(persisterErrorCode)
             );
         }
+    }
+
+    private CompletableFuture<ShareGroupHeartbeatResponseData> performShareGroupStateMetadataInitialize(
+        String groupId,
+        Map<Uuid, Map.Entry<String, List<Integer>>> topicPartitionMap,
+        ShareGroupHeartbeatResponseData defaultResponse
+    ) {
+        return runtime.scheduleWriteOperation(
+            "initialize-share-group-state",
+            topicPartitionFor(groupId),
+            Duration.ofMillis(config.offsetCommitTimeoutMs()),
+            coordinator -> coordinator.initializeShareGroupState(groupId, topicPartitionMap)
+        ).thenApply(
+            __ -> defaultResponse
+        ).exceptionally(exception -> {
+            log.error("Unable to initialize share group state partition metadata for {}.", groupId, exception);
+            return new ShareGroupHeartbeatResponseData()
+                .setErrorCode(Errors.forException(exception).code());
+        });
     }
 
     /**
