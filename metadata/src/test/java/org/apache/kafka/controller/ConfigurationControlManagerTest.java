@@ -25,6 +25,7 @@ import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.PolicyViolationException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.metadata.ConfigRecord;
+import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.metadata.KafkaConfigSchema;
@@ -160,6 +161,7 @@ public class ConfigurationControlManagerTest {
     @Test
     public void testIncrementalAlterConfigs() {
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
+            setFeatureControl(createFeatureControlManager()).
             setKafkaConfigSchema(SCHEMA).
             build();
 
@@ -191,6 +193,7 @@ public class ConfigurationControlManagerTest {
     @Test
     public void testIncrementalAlterConfig() {
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
+            setFeatureControl(createFeatureControlManager()).
             setKafkaConfigSchema(SCHEMA).
             build();
         Map<String, Entry<AlterConfigOp.OpType, String>> keyToOps = toMap(entry("abc", entry(APPEND, "123")));
@@ -215,6 +218,7 @@ public class ConfigurationControlManagerTest {
     @Test
     public void testIncrementalAlterMultipleConfigValues() {
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
+            setFeatureControl(createFeatureControlManager()).
             setKafkaConfigSchema(SCHEMA).
             build();
 
@@ -261,6 +265,7 @@ public class ConfigurationControlManagerTest {
     @Test
     public void testIncrementalAlterConfigsWithoutExistence() {
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
+            setFeatureControl(createFeatureControlManager()).
             setKafkaConfigSchema(SCHEMA).
             setExistenceChecker(TestExistenceChecker.INSTANCE).
             build();
@@ -322,6 +327,7 @@ public class ConfigurationControlManagerTest {
                 entry("quux", "456"),
                 entry("broker.config.to.remove", null)))));
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
+            setFeatureControl(createFeatureControlManager()).
             setKafkaConfigSchema(SCHEMA).
             setAlterConfigPolicy(Optional.of(policy)).
             build();
@@ -380,6 +386,7 @@ public class ConfigurationControlManagerTest {
     @Test
     public void testLegacyAlterConfigs() {
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
+            setFeatureControl(createFeatureControlManager()).
             setKafkaConfigSchema(SCHEMA).
             setAlterConfigPolicy(Optional.of(new CheckForNullValuesPolicy())).
             build();
@@ -415,6 +422,7 @@ public class ConfigurationControlManagerTest {
     @ValueSource(booleans = {false, true})
     public void testMaybeGenerateElrSafetyRecords(boolean setStaticConfig) {
         ConfigurationControlManager.Builder builder = new ConfigurationControlManager.Builder().
+            setFeatureControl(createFeatureControlManager()).
             setKafkaConfigSchema(SCHEMA);
         if (setStaticConfig) {
             builder.setStaticConfig(Map.of(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2"));
@@ -464,6 +472,9 @@ public class ConfigurationControlManagerTest {
                 QuorumFeatures.defaultSupportedFeatureMap(true),
                 Collections.emptyList())).
             build();
+        featureManager.replay(new FeatureLevelRecord().
+            setName(MetadataVersion.FEATURE_NAME).
+            setFeatureLevel(MetadataVersion.LATEST_PRODUCTION.featureLevel()));
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
             setStaticConfig(Map.of(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2")).
             setFeatureControl(featureManager).
@@ -510,8 +521,10 @@ public class ConfigurationControlManagerTest {
             setQuorumFeatures(new QuorumFeatures(0,
                 QuorumFeatures.defaultSupportedFeatureMap(true),
                 Collections.emptyList())).
-            setMetadataVersion(isMetadataVersionElrEnabled ? MetadataVersion.IBP_4_0_IV1 : MetadataVersion.IBP_4_0_IV0).
             build();
+        featureManager.replay(new FeatureLevelRecord().
+            setName(MetadataVersion.FEATURE_NAME).
+            setFeatureLevel(isMetadataVersionElrEnabled ? MetadataVersion.IBP_4_0_IV1.featureLevel() : MetadataVersion.IBP_4_0_IV0.featureLevel()));
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
             setStaticConfig(Map.of(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2")).
             setFeatureControl(featureManager).
@@ -533,5 +546,13 @@ public class ConfigurationControlManagerTest {
         } else {
             assertEquals(Errors.INVALID_UPDATE_VERSION, result.response().error());
         }
+    }
+
+    private FeatureControlManager createFeatureControlManager() {
+        FeatureControlManager featureControlManager = new FeatureControlManager.Builder().build();
+        featureControlManager.replay(new FeatureLevelRecord().
+            setName(MetadataVersion.FEATURE_NAME).
+            setFeatureLevel(MetadataVersion.LATEST_PRODUCTION.featureLevel()));
+        return featureControlManager;
     }
 }
