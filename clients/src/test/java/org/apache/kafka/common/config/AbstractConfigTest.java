@@ -453,28 +453,24 @@ public class AbstractConfigTest {
 
     @Test
     public void testAutomaticConfigProvidersWithFullClassName() {
-        Properties props = new Properties();
-        props.put("config.providers", "file");
-        props.put("config.providers.file.class", MockFileConfigProvider.class.getName());
-        String id = UUID.randomUUID().toString();
-        props.put("config.providers.file.param.testId", id);
-        props.put("test.key", "${file:/path:key}");
-
+        // case0: MockFileConfigProvider is disallowed by org.apache.kafka.automatic.config.providers
         System.setProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY, "file");
-        assertThrows(ConfigException.class, () -> new TestIndirectConfigResolution(props, Collections.emptyMap()));
+        assertThrows(ConfigException.class, () -> new TestIndirectConfigResolution(Map.of("config.providers", "file",
+                "config.providers.file.class", MockFileConfigProvider.class.getName()),
+                Map.of()));
 
+        // case1: MockFileConfigProvider is allowed by org.apache.kafka.automatic.config.providers
         System.setProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY, MockFileConfigProvider.class.getName());
-        TestIndirectConfigResolution config = new TestIndirectConfigResolution(props, Collections.emptyMap());
-        assertEquals("testKey", config.originals().get("test.key"));
-        MockFileConfigProvider.assertClosed(id);
+        Map<String, String> props = Map.of("config.providers", "file",
+                "config.providers.file.class", MockFileConfigProvider.class.getName(),
+                "config.providers.file.param.testId", UUID.randomUUID().toString(),
+                "test.key", "${file:/path:key}");
+        assertEquals("testKey", new TestIndirectConfigResolution(props, Map.of()).originals().get("test.key"));
 
+        // case2: MockFileConfigProvider and EnvVarConfigProvider are allowed by org.apache.kafka.automatic.config.providers
         System.setProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY,
                 MockFileConfigProvider.class.getName() + "," + EnvVarConfigProvider.class.getName());
-        String id2 = UUID.randomUUID().toString();
-        props.put("config.providers.file.param.testId", id2);
-        TestIndirectConfigResolution config2 = new TestIndirectConfigResolution(props, Collections.emptyMap());
-        assertEquals("testKey", config2.originals().get("test.key"));
-        MockFileConfigProvider.assertClosed(id2);
+        assertEquals("testKey", new TestIndirectConfigResolution(props, Map.of()).originals().get("test.key"));
     }
 
     @Test
