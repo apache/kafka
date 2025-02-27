@@ -285,10 +285,10 @@
       <p>This system property controls the automatic loading of ConfigProvider implementations in Apache Kafka. ConfigProviders are used to dynamically supply configuration values from sources such as files, directories, or environment variables. This property accepts a comma-separated list of ConfigProvider names. By default, all built-in ConfigProviders are enabled, including <b>FileConfigProvider</b>, <b>DirectoryConfigProvider</b>, and <b>EnvVarConfigProvider</b>.</p>
       <p>If users want to disable all automatic ConfigProviders, they need to explicitly set the system property as shown below. Disabling automatic ConfigProviders is recommended in environments where configuration data comes from untrusted sources or where increased security is required. For more details, see <a href="https://kafka.apache.org/cve-list#CVE-2024-31141">CVE-2024-31141</a>.</p>
       <pre><code class="language-bash">-Dorg.apache.kafka.automatic.config.providers=none</code></pre>
-      <p>To allow specific ConfigProviders, update the system property with a comma-separated list of ConfigProvider names. For example, to enable only the <b>EnvVarConfigProvider</b>, set the property as follows:</p>
-      <pre><code class="language-bash">-Dorg.apache.kafka.automatic.config.providers=env</code></pre>
+      <p>To allow specific ConfigProviders, update the system property with a comma-separated list of fully qualified ConfigProvider class names. For example, to enable only the <b>EnvVarConfigProvider</b>, set the property as follows:</p>
+      <pre><code class="language-bash">-Dorg.apache.kafka.automatic.config.providers=org.apache.kafka.common.config.provider.EnvVarConfigProvider</code></pre>
       <p>To use multiple ConfigProviders, include their names in a comma-separated list as shown below:</p>
-      <pre><code class="language-bash">-Dorg.apache.kafka.automatic.config.providers=file,env</code></pre>
+      <pre><code class="language-bash">-Dorg.apache.kafka.automatic.config.providers=org.apache.kafka.common.config.provider.FileConfigProvider,org.apache.kafka.common.config.provider.EnvVarConfigProvider</code></pre>
       <table>
         <tbody>
         <tr><th>Since:</th><td>3.8.0</td></tr>
