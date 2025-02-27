@@ -642,11 +642,7 @@ class ControllerApis(
       def createResponseCallback(requestThrottleMs: Int,
                                  e: Throwable): UnregisterBrokerResponse = {
         if (e != null) {
-          val errors = Errors.forException(e)
-          new UnregisterBrokerResponse(new UnregisterBrokerResponseData().
-            setThrottleTimeMs(requestThrottleMs).
-            setErrorCode(errors.code).
-            setErrorMessage(e.getMessage))
+          decommissionRequest.getErrorResponse(requestThrottleMs, e)
         } else {
           new UnregisterBrokerResponse(new UnregisterBrokerResponseData().
             setThrottleTimeMs(requestThrottleMs))
