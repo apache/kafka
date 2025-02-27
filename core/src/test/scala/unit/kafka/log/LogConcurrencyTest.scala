@@ -126,9 +126,14 @@ class LogConcurrencyTest {
               log.appendAsLeader(TestUtils.records(records), leaderEpoch)
               log.maybeIncrementHighWatermark(logEndOffsetMetadata)
             } else {
-              log.appendAsFollower(TestUtils.records(records,
-                baseOffset = logEndOffset,
-                partitionLeaderEpoch = leaderEpoch))
+              log.appendAsFollower(
+                TestUtils.records(
+                  records,
+                  baseOffset = logEndOffset,
+                  partitionLeaderEpoch = leaderEpoch
+                ),
+                Int.MaxValue
+              )
               log.updateHighWatermark(logEndOffset)
             }
 
