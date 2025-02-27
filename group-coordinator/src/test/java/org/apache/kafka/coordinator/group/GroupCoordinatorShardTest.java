@@ -182,8 +182,8 @@ public class GroupCoordinatorShardTest {
         RequestContext context = requestContext(ApiKeys.STREAMS_GROUP_HEARTBEAT);
         StreamsGroupHeartbeatRequestData request = new StreamsGroupHeartbeatRequestData();
         CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result = new CoordinatorResult<>(
-            Collections.emptyList(),
-            new StreamsGroupHeartbeatResult(new StreamsGroupHeartbeatResponseData(), Collections.emptyMap())
+            List.of(),
+            new StreamsGroupHeartbeatResult(new StreamsGroupHeartbeatResponseData(), Map.of())
         );
 
         when(groupMetadataManager.streamsGroupHeartbeat(

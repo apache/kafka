@@ -288,7 +288,7 @@ public class GroupCoordinatorServiceTest {
         assertEquals(
             new StreamsGroupHeartbeatResult(
                 new StreamsGroupHeartbeatResponseData().setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code()),
-                Collections.emptyMap()
+                Map.of()
             ),
             future.get()
         );
@@ -313,7 +313,7 @@ public class GroupCoordinatorServiceTest {
         )).thenReturn(CompletableFuture.completedFuture(
             new StreamsGroupHeartbeatResult(
                 new StreamsGroupHeartbeatResponseData(),
-                Collections.emptyMap()
+                Map.of()
             )
         ));
 
@@ -322,7 +322,7 @@ public class GroupCoordinatorServiceTest {
             request
         );
 
-        assertEquals(new StreamsGroupHeartbeatResult(new StreamsGroupHeartbeatResponseData(), Collections.emptyMap()), future.get(5, TimeUnit.SECONDS));
+        assertEquals(new StreamsGroupHeartbeatResult(new StreamsGroupHeartbeatResponseData(), Map.of()), future.get(5, TimeUnit.SECONDS));
     }
 
     private static Stream<Arguments> testStreamsGroupHeartbeatWithExceptionSource() {
@@ -375,7 +375,7 @@ public class GroupCoordinatorServiceTest {
                 new StreamsGroupHeartbeatResponseData()
                     .setErrorCode(expectedErrorCode)
                     .setErrorMessage(expectedErrorMessage),
-                Collections.emptyMap()
+                Map.of()
             ),
             future.get(5, TimeUnit.SECONDS)
         );
@@ -1550,7 +1550,7 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.eq("streams-group-describe"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
             ArgumentMatchers.any()
-        )).thenReturn(CompletableFuture.completedFuture(Collections.singletonList(describedGroup1)));
+        )).thenReturn(CompletableFuture.completedFuture(List.of(describedGroup1)));
 
         CompletableFuture<Object> describedGroupFuture = new CompletableFuture<>();
         when(runtime.scheduleReadOperation(
@@ -1563,7 +1563,7 @@ public class GroupCoordinatorServiceTest {
             service.streamsGroupDescribe(requestContext(ApiKeys.STREAMS_GROUP_DESCRIBE), Arrays.asList("group-id-1", "group-id-2"));
 
         assertFalse(future.isDone());
-        describedGroupFuture.complete(Collections.singletonList(describedGroup2));
+        describedGroupFuture.complete(List.of(describedGroup2));
         assertEquals(expectedDescribedGroups, future.get());
     }
 
@@ -1591,7 +1591,7 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.eq("streams-group-describe"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
             ArgumentMatchers.any()
-        )).thenReturn(CompletableFuture.completedFuture(Collections.singletonList(describedGroup)));
+        )).thenReturn(CompletableFuture.completedFuture(List.of(describedGroup)));
 
         CompletableFuture<List<StreamsGroupDescribeResponseData.DescribedGroup>> future =
             service.streamsGroupDescribe(requestContext(ApiKeys.STREAMS_GROUP_DESCRIBE), Arrays.asList("", null));
@@ -1618,10 +1618,10 @@ public class GroupCoordinatorServiceTest {
         ));
 
         CompletableFuture<List<StreamsGroupDescribeResponseData.DescribedGroup>> future =
-            service.streamsGroupDescribe(requestContext(ApiKeys.STREAMS_GROUP_DESCRIBE), Collections.singletonList("group-id"));
+            service.streamsGroupDescribe(requestContext(ApiKeys.STREAMS_GROUP_DESCRIBE), List.of("group-id"));
 
         assertEquals(
-            Collections.singletonList(new StreamsGroupDescribeResponseData.DescribedGroup()
+            List.of(new StreamsGroupDescribeResponseData.DescribedGroup()
                 .setGroupId("group-id")
                 .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code())
             ),
@@ -1645,10 +1645,10 @@ public class GroupCoordinatorServiceTest {
         ));
 
         CompletableFuture<List<StreamsGroupDescribeResponseData.DescribedGroup>> future =
-            service.streamsGroupDescribe(requestContext(ApiKeys.STREAMS_GROUP_DESCRIBE), Collections.singletonList("group-id"));
+            service.streamsGroupDescribe(requestContext(ApiKeys.STREAMS_GROUP_DESCRIBE), List.of("group-id"));
 
         assertEquals(
-            Collections.singletonList(new StreamsGroupDescribeResponseData.DescribedGroup()
+            List.of(new StreamsGroupDescribeResponseData.DescribedGroup()
                 .setGroupId("group-id")
                 .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
             ),
