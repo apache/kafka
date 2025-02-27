@@ -183,11 +183,11 @@ public class QuorumControllerTest {
     @Test
     public void testOOM() {
         List<byte[]> bunchOfByteArrays = new ArrayList<>();
-        while (true) {
-            byte[] b = new byte[1024*1025];
+        for (int i = 0; i < 1000000; i++) {
+            byte[] b = new byte[1024 * 1025];
             bunchOfByteArrays.add(b);
-            assertTrue(!bunchOfByteArrays.isEmpty());
         }
+        assertTrue(!bunchOfByteArrays.isEmpty());
     }
 
     /**
