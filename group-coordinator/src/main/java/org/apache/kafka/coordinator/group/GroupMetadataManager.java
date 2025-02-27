@@ -212,7 +212,7 @@ import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.n
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupEpochRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupMemberSubscriptionRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupMemberSubscriptionTombstoneRecord;
-import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupPartitionMetadataRecord;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupSubscriptionMetadataRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentTombstoneRecord;
 import static org.apache.kafka.coordinator.group.Utils.assignmentToString;
@@ -4115,7 +4115,7 @@ public class GroupMetadataManager {
      */
     public CoordinatorResult<Void, CoordinatorRecord> initializeShareGroupState(
         String groupId,
-        Map<Uuid, Map.Entry<String, List<Integer>>> topicPartitionMap
+        Map<Uuid, Set<Integer>> topicPartitionMap
     ) {
         // Should be present
         ShareGroup group = (ShareGroup) groups.get(groupId);
@@ -4125,10 +4125,13 @@ public class GroupMetadataManager {
 
         // We must combine the existing information in the record with the
         // topicPartitionMap argument.
+        Map<Uuid, Map.Entry<String, Set<Integer>>> finalMap = new HashMap<>();
+
         ShareGroupStatePartitionMetadataInfo currentMap = shareGroupPartitionMetadata.get(groupId);
         if (currentMap == null) {
+            topicPartitionMap.forEach((k, v) -> finalMap.put(k, Map.entry(metadataImage.topics().getTopic(k).name(), v)));
             return new CoordinatorResult<>(
-                List.of(newShareGroupPartitionMetadataRecord(group.groupId(), topicPartitionMap, Map.of())),
+                List.of(newShareGroupStatePartitionMetadataRecord(group.groupId(), finalMap, Map.of())),
                 null
             );
         }
@@ -4136,19 +4139,17 @@ public class GroupMetadataManager {
         Set<Uuid> combinedTopicIdSet = new HashSet<>(topicPartitionMap.keySet());
         combinedTopicIdSet.addAll(currentMap.initializedTopics.keySet());
 
-        Map<Uuid, Map.Entry<String, List<Integer>>> combinedMap = new HashMap<>();
-
         for (Uuid topicId : combinedTopicIdSet) {
             String topicName = metadataImage.topics().getTopic(topicId).name();
             Set<Integer> partitions = new HashSet<>(currentMap.initializedTopics.getOrDefault(topicId, new HashSet<>()));
             if (topicPartitionMap.containsKey(topicId)) {
-                partitions.addAll(topicPartitionMap.get(topicId).getValue());
+                partitions.addAll(topicPartitionMap.get(topicId));
             }
-            combinedMap.computeIfAbsent(topicId, k -> Map.entry(topicName, partitions.stream().toList()));
+            finalMap.computeIfAbsent(topicId, k -> Map.entry(topicName, partitions));
         }
 
         return new CoordinatorResult<>(
-            List.of(newShareGroupPartitionMetadataRecord(group.groupId(), combinedMap, Map.of())),
+            List.of(newShareGroupStatePartitionMetadataRecord(group.groupId(), finalMap, Map.of())),
             null
         );
     }

@@ -822,16 +822,16 @@ public class GroupCoordinatorRecordHelpers {
      * @param deletingTopics  Topics which are being deleted.
      * @return The record.
      */
-    public static CoordinatorRecord newShareGroupPartitionMetadataRecord(
+    public static CoordinatorRecord newShareGroupStatePartitionMetadataRecord(
         String groupId,
-        Map<Uuid, Map.Entry<String, List<Integer>>> initializedTopics,
+        Map<Uuid, Map.Entry<String, Set<Integer>>> initializedTopics,
         Map<Uuid, String> deletingTopics
     ) {
         List<ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo> initializedTopicPartitionInfo = initializedTopics.entrySet().stream()
             .map(entry -> new ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo()
                 .setTopicId(entry.getKey())
                 .setTopicName(entry.getValue().getKey())
-                .setPartitions(entry.getValue().getValue()))
+                .setPartitions(entry.getValue().getValue().stream().toList()))
             .toList();
 
         List<ShareGroupStatePartitionMetadataValue.TopicInfo> deletingTopicsInfo = deletingTopics.entrySet().stream()

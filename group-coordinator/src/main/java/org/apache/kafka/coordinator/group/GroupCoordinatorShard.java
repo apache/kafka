@@ -437,7 +437,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      */
     public CoordinatorResult<Void, CoordinatorRecord> initializeShareGroupState(
         String groupId,
-        Map<Uuid, Map.Entry<String, List<Integer>>> topicPartitionMap
+        Map<Uuid, Set<Integer>> topicPartitionMap
     ) {
         return groupMetadataManager.initializeShareGroupState(groupId, topicPartitionMap);
     }

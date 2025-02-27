@@ -93,7 +93,6 @@ import org.apache.kafka.server.share.persister.InitializeShareGroupStateParamete
 import org.apache.kafka.server.share.persister.InitializeShareGroupStateResult;
 import org.apache.kafka.server.share.persister.PartitionErrorData;
 import org.apache.kafka.server.share.persister.PartitionFactory;
-import org.apache.kafka.server.share.persister.PartitionIdData;
 import org.apache.kafka.server.share.persister.PartitionStateData;
 import org.apache.kafka.server.share.persister.Persister;
 import org.apache.kafka.server.share.persister.ReadShareGroupStateSummaryParameters;
@@ -499,14 +498,12 @@ public class GroupCoordinatorService implements GroupCoordinator {
         }
 
         if (persisterErrorCode == Errors.NONE.code()) {
-            Map<Uuid, Map.Entry<String, List<Integer>>> topicPartitionMap = new HashMap<>();
+            Map<Uuid, Set<Integer>> topicPartitionMap = new HashMap<>();
             for (TopicData<PartitionErrorData> topicData : persisterInitializeResult.topicsData()) {
-                topicPartitionMap.computeIfAbsent(topicData.topicId(), k -> Map.entry(
-                    metadataImage.topics().getTopic(topicData.topicId()).name(),
-                    topicData.partitions().stream()
-                        .map(PartitionIdData::partition)
-                        .toList()
-                ));
+                topicPartitionMap.put(
+                    topicData.topicId(),
+                    topicData.partitions().stream().map(PartitionErrorData::partition).collect(Collectors.toSet())
+                );
             }
             if (topicPartitionMap.isEmpty()) {
                 return CompletableFuture.completedFuture(defaultResponse);
@@ -523,7 +520,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
 
     private CompletableFuture<ShareGroupHeartbeatResponseData> performShareGroupStateMetadataInitialize(
         String groupId,
-        Map<Uuid, Map.Entry<String, List<Integer>>> topicPartitionMap,
+        Map<Uuid, Set<Integer>> topicPartitionMap,
         ShareGroupHeartbeatResponseData defaultResponse
     ) {
         return runtime.scheduleWriteOperation(

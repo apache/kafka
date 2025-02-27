@@ -161,7 +161,7 @@ import static org.apache.kafka.coordinator.group.GroupConfig.CONSUMER_HEARTBEAT_
 import static org.apache.kafka.coordinator.group.GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupConfig.SHARE_HEARTBEAT_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupConfig.SHARE_SESSION_TIMEOUT_MS_CONFIG;
-import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupPartitionMetadataRecord;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.EMPTY_RESULT;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.appendGroupMetadataErrorToResponseError;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.classicGroupHeartbeatKey;
@@ -17539,13 +17539,20 @@ public class GroupMetadataManagerTest {
 
     @Test
     public void testShareGroupInitializeSuccess() {
+        String groupId = "groupId";
+        Uuid topicId = Uuid.randomUuid();
+        String topicName = "t1";
+
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         assignor.prepareGroupAssignment(new GroupAssignment(Collections.emptyMap()));
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withShareGroupAssignor(assignor)
+            .withMetadataImage(new MetadataImageBuilder()
+                .addTopic(topicId, topicName, 2)
+                .build()
+            )
             .build();
 
-        String groupId = "groupId";
         context.groupMetadataManager.replay(
             new ShareGroupMetadataKey()
                 .setGroupId(groupId),
@@ -17553,19 +17560,22 @@ public class GroupMetadataManagerTest {
                 .setEpoch(0)
         );
 
-        Uuid topicId = Uuid.randomUuid();
-        String topicName = "t1";
-        Map<Uuid, Map.Entry<String, List<Integer>>> snapshotMetadataInitializeMap = Map.of(
+        Map<Uuid, Set<Integer>> snapshotMetadataInitializeMap = Map.of(
+            topicId,
+            Set.of(0, 1)
+        );
+
+        Map<Uuid, Map.Entry<String, Set<Integer>>> snapshotMetadataInitializeRecordMap = Map.of(
             topicId,
             Map.entry(
                 topicName,
-                List.of(0, 1)
+                Set.of(0, 1)
             )
         );
 
         CoordinatorResult<Void, CoordinatorRecord> result = context.groupMetadataManager.initializeShareGroupState(groupId, snapshotMetadataInitializeMap);
 
-        CoordinatorRecord record = newShareGroupPartitionMetadataRecord(groupId, snapshotMetadataInitializeMap, Map.of());
+        CoordinatorRecord record = newShareGroupStatePartitionMetadataRecord(groupId, snapshotMetadataInitializeRecordMap, Map.of());
 
         assertNull(result.response());
         assertEquals(List.of(record), result.records());
