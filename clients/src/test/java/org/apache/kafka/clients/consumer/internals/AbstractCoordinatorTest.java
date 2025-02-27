@@ -62,6 +62,9 @@ import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -76,6 +79,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Stream;
 
 import static java.util.Collections.emptyMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -1098,14 +1102,21 @@ public class AbstractCoordinatorTest {
         checkLeaveGroupRequestSent(Optional.of("groupInstanceId"));
     }
 
-    @Test
-    public void testLeaveGroupSentWithGroupInstanceIdUnSetAndDifferentGroupMembershipOperation() {
-        checkLeaveGroupRequestSent(Optional.empty(), CloseOptions.GroupMembershipOperation.DEFAULT, true);
-        checkLeaveGroupRequestSent(Optional.empty(), CloseOptions.GroupMembershipOperation.LEAVE_GROUP, true);
-        checkLeaveGroupRequestSent(Optional.empty(), CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP, true);
-        checkLeaveGroupRequestSent(Optional.of("groupInstanceId"), CloseOptions.GroupMembershipOperation.DEFAULT, true);
-        checkLeaveGroupRequestSent(Optional.of("groupInstanceId"), CloseOptions.GroupMembershipOperation.LEAVE_GROUP, true);
-        checkLeaveGroupRequestSent(Optional.of("groupInstanceId"), CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP, true);
+    @ParameterizedTest
+    @MethodSource("groupInstanceIdAndMembershipOperationMatrix")
+    public void testLeaveGroupSentWithGroupInstanceIdUnSetAndDifferentGroupMembershipOperation(Optional<String> groupInstanceId, CloseOptions.GroupMembershipOperation operation) {
+        checkLeaveGroupRequestSent(groupInstanceId, operation, true);
+    }
+
+    private static Stream<Arguments> groupInstanceIdAndMembershipOperationMatrix() {
+        return Stream.of(
+            Arguments.of(Optional.empty(), CloseOptions.GroupMembershipOperation.DEFAULT),
+            Arguments.of(Optional.empty(), CloseOptions.GroupMembershipOperation.LEAVE_GROUP),
+            Arguments.of(Optional.empty(), CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP),
+            Arguments.of(Optional.of("groupInstanceId"), CloseOptions.GroupMembershipOperation.DEFAULT),
+            Arguments.of(Optional.of("groupInstanceId"), CloseOptions.GroupMembershipOperation.LEAVE_GROUP),
+            Arguments.of(Optional.of("groupInstanceId"), CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP)
+        );
     }
 
     private void checkLeaveGroupRequestSent(Optional<String> groupInstanceId)  {
