@@ -30,7 +30,6 @@ import org.apache.kafka.common.test.api.ClusterTemplate;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -83,7 +82,7 @@ public class ProducerRebootstrapTest {
     public void testRebootstrap(ClusterInstance clusterInstance) throws ExecutionException, InterruptedException {
         String topic = "topic";
         try (Admin admin = clusterInstance.admin()) {
-            admin.createTopics(Collections.singletonList(new NewTopic(topic, BROKER_COUNT, (short) 2))).all().get();
+            admin.createTopics(List.of(new NewTopic(topic, BROKER_COUNT, (short) 2))).all().get();
         }
 
         int part = 0;
