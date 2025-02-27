@@ -48,7 +48,7 @@ public class AclPublisher implements MetadataPublisher {
     }
 
     @Override
-    public String name() {
+    public final String name() {
         return "AclPublisher " + nodeType + " id=" + nodeId;
     }
 
