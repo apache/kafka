@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.record;
 
+import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.message.EndTxnMarker;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
@@ -50,6 +51,14 @@ public class EndTransactionMarkerTest {
     public void testCannotDeserializeUnknownControlType() {
         assertThrows(IllegalArgumentException.class,
             () -> EndTransactionMarker.deserializeValue(ControlRecordType.UNKNOWN, ByteBuffer.wrap(new byte[0])));
+    }
+
+    @Test
+    public void testIllegalVersion() {
+        ByteBuffer buffer = ByteBuffer.allocate(2);
+        buffer.putShort((short) -1);
+        buffer.flip();
+        assertThrows(InvalidRecordException.class, () -> EndTransactionMarker.deserializeValue(ControlRecordType.ABORT, buffer));
     }
 
     @Test

@@ -16,9 +16,12 @@
  */
 package org.apache.kafka.common.record;
 
+import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.message.EndTxnMarker;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.MessageUtil;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 
@@ -28,6 +31,7 @@ import java.nio.ByteBuffer;
  * value embeds information useful for write validation (for now, just the coordinator epoch).
  */
 public class EndTransactionMarker {
+    private static final Logger log = LoggerFactory.getLogger(EndTransactionMarker.class);
 
     private final ControlRecordType type;
     private final int coordinatorEpoch;
@@ -84,6 +88,13 @@ public class EndTransactionMarker {
         ensureTransactionMarkerControlType(type);
 
         short version = value.getShort();
+        if (version < EndTxnMarker.LOWEST_SUPPORTED_VERSION)
+            throw new InvalidRecordException("Invalid version found for end transaction marker: " + version +
+                    ". May indicate data corruption");
+
+        if (version > EndTxnMarker.HIGHEST_SUPPORTED_VERSION)
+            log.debug("Received end transaction marker value version {}. Parsing as version {}", version,
+                    EndTxnMarker.HIGHEST_SUPPORTED_VERSION);
         EndTxnMarker marker = new EndTxnMarker(new ByteBufferAccessor(value), version);
         return new EndTransactionMarker(type, marker.coordinatorEpoch());
     }
