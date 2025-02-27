@@ -17,12 +17,9 @@
 
 package kafka.test.api;
 
-import kafka.server.KafkaBroker;
-import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfig;
@@ -80,14 +77,14 @@ public class ProducerRebootstrapTest {
 
     @ClusterTemplate(value = "generator")
     public void testRebootstrap(ClusterInstance clusterInstance) throws ExecutionException, InterruptedException {
-        String topic = "topic";
-        try (Admin admin = clusterInstance.admin()) {
+        var topic = "topic";
+        try (var admin = clusterInstance.admin()) {
             admin.createTopics(List.of(new NewTopic(topic, BROKER_COUNT, (short) 2))).all().get();
         }
 
-        int part = 0;
-        KafkaBroker server0 = clusterInstance.brokers().get(0);
-        KafkaBroker server1 = clusterInstance.brokers().get(1);
+        var part = 0;
+        var server0 = clusterInstance.brokers().get(0);
+        var server1 = clusterInstance.brokers().get(1);
 
         // It's ok to shut the leader down, cause the reelection is small enough to the producer timeout.
         server1.shutdown();
@@ -95,7 +92,7 @@ public class ProducerRebootstrapTest {
 
         try (var producer = clusterInstance.producer()) {
             // Only the server 0 is available for the producer during the bootstrap.
-            RecordMetadata recordMetadata0 = producer.send(new ProducerRecord<>(topic, part, "key 1".getBytes(), "value 1".getBytes())).get();
+            var recordMetadata0 = producer.send(new ProducerRecord<>(topic, part, "key 1".getBytes(), "value 1".getBytes())).get();
             assertEquals(0, recordMetadata0.offset());
 
             server0.shutdown();
@@ -105,7 +102,7 @@ public class ProducerRebootstrapTest {
             // Current server 0 is offline.
             // However, the server 1 from the bootstrap list is online.
             // Should be able to produce records.
-            RecordMetadata recordMetadata1 = producer.send(new ProducerRecord<>(topic, part, "key 1".getBytes(), "value 1".getBytes())).get();
+            var recordMetadata1 = producer.send(new ProducerRecord<>(topic, part, "key 1".getBytes(), "value 1".getBytes())).get();
             assertEquals(0, recordMetadata1.offset());
 
             server1.shutdown();
@@ -113,7 +110,7 @@ public class ProducerRebootstrapTest {
             server0.startup();
 
             // The same situation, but the server 1 has gone and server 0 is back.
-            RecordMetadata recordMetadata2 = producer.send(new ProducerRecord<>(topic, part, "key 1".getBytes(), "value 1".getBytes())).get();
+            var recordMetadata2 = producer.send(new ProducerRecord<>(topic, part, "key 1".getBytes(), "value 1".getBytes())).get();
             assertEquals(1, recordMetadata2.offset());
         }
     }
