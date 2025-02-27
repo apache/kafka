@@ -156,7 +156,7 @@ userCountByRegion.to(&quot;RegionCountsTopic&quot;, Produced.valueSerde(Serdes.L
       </div>
       <div class="section" id="json">
         <h3>JSON<a class="headerlink" href="#json" title="Permalink to this headline"></a></h3>
-        <p>You can use <code>JsonSerializer</code> and <code>JsonDeerializer</code> from Kafka Connect to construct JSON compatible serializers and deserializers
+        <p>You can use <code>JsonSerializer</code> and <code>JsonDeserializer</code> from Kafka Connect to construct JSON compatible serializers and deserializers
             using <code class="docutils literal"><span class="pre">Serdes.serdeFrom(&lt;serializerInstance&gt;, &lt;deserializerInstance&gt;)</span></code>.
             Note, that Kafka Connect's Json (de)serializer requires Java 17.
         </p>
