@@ -23,7 +23,7 @@ import org.apache.kafka.image.MetadataProvenance;
 
 import com.yammer.metrics.core.Histogram;
 
-import java.util.Collections;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
@@ -36,7 +36,7 @@ public final class BrokerServerMetrics implements AutoCloseable {
 
     private final KafkaMetricsGroup metricsGroup = new KafkaMetricsGroup("kafka.server", "BrokerMetadataListener");
     private final com.yammer.metrics.core.MetricName batchProcessingTimeHistName =
-            metricsGroup.metricName("MetadataBatchProcessingTimeUs", Collections.emptyMap());
+            metricsGroup.metricName("MetadataBatchProcessingTimeUs", Map.of());
 
     /**
      * A histogram tracking the time in microseconds it took to process batches of events.
@@ -45,7 +45,7 @@ public final class BrokerServerMetrics implements AutoCloseable {
             .newHistogram(batchProcessingTimeHistName, true);
 
     private final com.yammer.metrics.core.MetricName batchSizeHistName =
-            metricsGroup.metricName("MetadataBatchSizes", Collections.emptyMap());
+            metricsGroup.metricName("MetadataBatchSizes", Map.of());
 
     /**
      * A histogram tracking the sizes of batches that we have processed.
