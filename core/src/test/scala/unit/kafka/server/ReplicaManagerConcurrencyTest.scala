@@ -24,8 +24,7 @@ import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.metadata.KRaftMetadataCache
 import kafka.utils.TestUtils.waitUntilTrue
 import kafka.utils.{CoreUtils, Logging, TestUtils}
-import org.apache.kafka.common.metadata.RegisterBrokerRecord
-import org.apache.kafka.common.metadata.{PartitionChangeRecord, PartitionRecord, TopicRecord}
+import org.apache.kafka.common.metadata.{FeatureLevelRecord, PartitionChangeRecord, PartitionRecord, RegisterBrokerRecord, TopicRecord}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.SimpleRecord
@@ -33,13 +32,13 @@ import org.apache.kafka.common.replica.ClientMetadata.DefaultClientMetadata
 import org.apache.kafka.common.requests.{FetchRequest, ProduceResponse}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{Time, Utils}
-import org.apache.kafka.common.{DirectoryId, IsolationLevel, TopicIdPartition, TopicPartition, Uuid}
+import org.apache.kafka.common.{DirectoryId, IsolationLevel, TopicPartition, Uuid}
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.metadata.{LeaderAndIsr, LeaderRecoveryState, MockConfigRepository}
 import org.apache.kafka.metadata.PartitionRegistration
 import org.apache.kafka.metadata.storage.Formatter
 import org.apache.kafka.raft.QuorumConfig
-import org.apache.kafka.server.common.KRaftVersion
+import org.apache.kafka.server.common.{KRaftVersion, MetadataVersion, TopicIdPartition}
 import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerLogConfigs}
 import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams, FetchPartitionData}
 import org.apache.kafka.server.util.{MockTime, ShutdownableThread}
@@ -97,7 +96,7 @@ class ReplicaManagerConcurrencyTest extends Logging {
 
     val topicModel = new TopicModel(Uuid.randomUuid(), "foo", Map(0 -> initialPartitionRegistration))
     val topicPartition = new TopicPartition(topicModel.name, 0)
-    val topicIdPartition = new TopicIdPartition(topicModel.topicId, topicPartition)
+    val topicIdPartition = new TopicIdPartition(topicModel.topicId, topicPartition.partition)
     val controller = new ControllerModel(Seq(localId, remoteId), topicModel, channel, replicaManager, metadataCache)
 
     submit(new Clock(time))
@@ -129,6 +128,7 @@ class ReplicaManagerConcurrencyTest extends Logging {
       clientId = s"replica-$remoteId",
       replicaId = remoteId,
       topicIdPartition,
+      topicPartition.topic,
       replicaManager
     )
 
@@ -211,6 +211,7 @@ class ReplicaManagerConcurrencyTest extends Logging {
     clientId: String,
     replicaId: Int,
     topicIdPartition: TopicIdPartition,
+    topicName: String,
     replicaManager: ReplicaManager
   ) extends ShutdownableThread(clientId, false) {
     private val random = new Random()
@@ -236,11 +237,14 @@ class ReplicaManagerConcurrencyTest extends Logging {
       )
 
       val future = new CompletableFuture[FetchPartitionData]()
-      def fetchCallback(results: collection.Seq[(TopicIdPartition, FetchPartitionData)]): Unit = {
+      def fetchCallback(results: collection.Seq[(org.apache.kafka.common.TopicIdPartition, FetchPartitionData)]): Unit = {
         try {
           assertEquals(1, results.size)
           val (topicIdPartition, result) = results.head
-          assertEquals(this.topicIdPartition, topicIdPartition)
+          assertEquals(this.topicIdPartition.topicId, topicIdPartition.topicId)
+          assertEquals(this.topicIdPartition.partitionId, topicIdPartition.partition)
+          assertEquals(this.topicIdPartition.topicId, topicIdPartition.topicId)
+          assertEquals(topicName, topicIdPartition.topic)
           assertEquals(Errors.NONE, result.error)
           future.complete(result)
         } catch {
@@ -261,7 +265,7 @@ class ReplicaManagerConcurrencyTest extends Logging {
 
       replicaManager.fetchMessages(
         params = fetchParams,
-        fetchInfos = Seq(topicIdPartition -> partitionData),
+        fetchInfos = Seq(new org.apache.kafka.common.TopicIdPartition(topicIdPartition.topicId, topicIdPartition.partitionId, topicName) -> partitionData),
         quota = QuotaFactory.UNBOUNDED_QUOTA,
         responseCallback = fetchCallback,
       )
@@ -373,6 +377,10 @@ class ReplicaManagerConcurrencyTest extends Logging {
         case InitializeEvent =>
           val delta = new MetadataDelta.Builder().setImage(latestImage).build()
           brokerIds.foreach { brokerId =>
+            delta.replay(new FeatureLevelRecord()
+              .setName(MetadataVersion.FEATURE_NAME)
+              .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+            )
             delta.replay(new RegisterBrokerRecord()
               .setBrokerId(brokerId)
               .setFenced(false)
@@ -419,7 +427,7 @@ class ReplicaManagerConcurrencyTest extends Logging {
       leaderAndIsr: LeaderAndIsr,
       delta: MetadataDelta
     ): LeaderAndIsr = {
-      val partitionModel = partitions.getOrElse(topicPartition.partition,
+      val partitionModel = partitions.getOrElse(topicPartition.partitionId,
         throw new IllegalStateException(s"Unexpected partition $topicPartition")
       )
       partitionModel.alterIsr(leaderAndIsr, delta)

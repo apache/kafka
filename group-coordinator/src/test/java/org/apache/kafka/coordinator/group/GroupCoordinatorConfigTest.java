@@ -46,8 +46,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class GroupCoordinatorConfigTest {
     private static final List<ConfigDef> GROUP_COORDINATOR_CONFIG_DEFS = List.of(
+        GroupCoordinatorConfig.CLASSIC_GROUP_CONFIG_DEF,
         GroupCoordinatorConfig.GROUP_COORDINATOR_CONFIG_DEF,
-        GroupCoordinatorConfig.NEW_GROUP_CONFIG_DEF,
         GroupCoordinatorConfig.OFFSET_MANAGEMENT_CONFIG_DEF,
         GroupCoordinatorConfig.CONSUMER_GROUP_CONFIG_DEF,
         GroupCoordinatorConfig.SHARE_GROUP_CONFIG_DEF

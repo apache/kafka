@@ -127,6 +127,8 @@ topic1          0          854144          855809          1665            consu
 topic2          0          460537          803290          342753          consumer1-3fc8d6f1-581a-4472-bdf3-3515b4aee8c1 /127.0.0.1      consumer1
 topic3          2          243655          398812          155157          consumer4-117fe4d3-c6c1-4178-8ee9-eb4a3954bee0 /127.0.0.1      consumer4</code></pre>
 
+  Note that if the consumer group uses the consumer protocol, the admin client needs DESCRIBE access to all the topics used in the group (topics the members are subscribed to). In contrast, the classic protocol does not require all topics DESCRIBE authorization.
+
   There are a number of additional "describe" options that can be used to provide more detailed information about a consumer group:
   <ul>
     <li>--members: This option provides the list of all active members in the consumer group.
@@ -3878,18 +3880,18 @@ In the replica description 0@controller-0:1234:3Db5QLSqSZieL3rJBUUegA, 0 is the 
   quorum:<p/>
 <pre><code class="language-bash">
 Feature: kraft.version  SupportedMinVersion: 0  SupportedMaxVersion: 1  FinalizedVersionLevel: 0 Epoch: 5
-Feature: metadata.version       SupportedMinVersion: 3.0-IV1    SupportedMaxVersion: 3.9-IV0 FinalizedVersionLevel: 3.9-IV0  Epoch: 5
+Feature: metadata.version       SupportedMinVersion: 3.3-IV3    SupportedMaxVersion: 3.9-IV0 FinalizedVersionLevel: 3.9-IV0  Epoch: 5
 </code></pre><p/>
 
   Here is another example of a static quorum:<p/>
 <pre><code class="language-bash">
-Feature: metadata.version       SupportedMinVersion: 3.0-IV1    SupportedMaxVersion: 3.8-IV0 FinalizedVersionLevel: 3.8-IV0  Epoch: 5
+Feature: metadata.version       SupportedMinVersion: 3.3-IV3    SupportedMaxVersion: 3.8-IV0 FinalizedVersionLevel: 3.8-IV0  Epoch: 5
 </code></pre><p/>
 
   Here is an example of a dynamic quorum:<p/>
 <pre><code class="language-bash">
 Feature: kraft.version  SupportedMinVersion: 0  SupportedMaxVersion: 1  FinalizedVersionLevel: 1 Epoch: 5
-Feature: metadata.version       SupportedMinVersion: 3.0-IV1    SupportedMaxVersion: 3.9-IV0 FinalizedVersionLevel: 3.9-IV0  Epoch: 5
+Feature: metadata.version       SupportedMinVersion: 3.3-IV3    SupportedMaxVersion: 3.9-IV0 FinalizedVersionLevel: 3.9-IV0  Epoch: 5
 </code></pre><p/>
 
   The static versus dynamic nature of the quorum is determined at the time of formatting.
@@ -4280,6 +4282,32 @@ $ bin/kafka-topics.sh --create --topic tieredTopic --bootstrap-server localhost:
   <li><code>add.partitions.to.txn.retry.backoff.ms</code></li>
   <li><code>add.partitions.to.txn.retry.backoff.max.ms</code></li>
 </ul>
+
+  <h3 class="anchor-heading"><a id="eligible_leader_replicas" class="anchor-link"></a><a href="#eligible_leader_replicas">6.12 Eligible Leader Replicas</a></h3>
+
+  <h4 class="anchor-heading"><a id="eligible_leader_replicas_overview" class="anchor-link"></a><a href="#eligible_leader_replicas_overview">Overview</a></h4>
+
+  <p>Starting from Apache Kafka 4.0, Eligible Leader Replicas (<a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-966%3A+Eligible+Leader+Replicas">KIP-966 Part 1</a>)
+    is available for the users to an improvement to Kafka replication. As the "strict min ISR" rule has been generally applied, which means the high watermark for the data partition can't advance
+    if the size of the ISR is smaller than the min ISR(<code>min.insync.replicas</code>), it makes some replicas that are not in the ISR safe to become the leader. The KRaft controller
+    stores such replicas in the PartitionRecord field called <code>Eligible Leader Replicas</code>. During the leader election, the controller will select the leaders
+    with the following order:</p>
+  <ul>
+    <li>If ISR is not empty, select one of them.</li>
+    <li>If ELR is not empty, select one that is not fenced.</li>
+    <li>Select the last known leader if it is unfenced. This is a similar behavior prior to the 4.0 when all the replicas are offline.</li>
+  </ul>
+
+  <h4 class="anchor-heading"><a id="eligible_leader_replicas_upgrade" class="anchor-link"></a><a href="#eligible_leader_replicas_upgrade">Upgrade & Downgrade</a></h4>
+
+  <p>The ELR is not enabled by default for 4.0. To enable the new protocol on the server, set <code>eligible.leader.replicas.version=1</code>. After that the upgrade, the KRaft
+    controller will start tracking the ELR. </p>
+  <p>Downgrades are safe to perform by setting <code>eligible.leader.replicas.version=0</code>.</p>
+
+  <h4 class="anchor-heading"><a id="eligible_leader_replicas_tool" class="anchor-link"></a><a href="#eligible_leader_replicas_tool">Tool</a></h4>
+  <p>The ELR fields can be checked through the API DescribeTopicPartitions. The admin client can fetch the ELR info by describing the topics.
+    Also note that, if <code>min.insync.replicas</code> is updated for a topic, the ELR field will be cleaned. If cluster default min ISR is updated,
+    all the ELR fields will be cleaned.</p>
 
 </script>
 

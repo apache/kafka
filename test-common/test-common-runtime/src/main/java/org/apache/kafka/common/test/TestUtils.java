@@ -21,8 +21,10 @@ import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.network.EndPoint;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -99,6 +101,18 @@ public class TestUtils {
         });
 
         return file;
+    }
+
+    /**
+     * Convert EndPoint to String
+     */
+    public static String endpointToString(EndPoint endPoint) {
+        String host = endPoint.host();
+        int port = endPoint.port();
+        ListenerName listenerName = endPoint.listenerName();
+
+        String hostport = (host == null) ? (":" + port) : Utils.formatAddress(host, port);
+        return listenerName.value() + "://" + hostport;
     }
 
     /**

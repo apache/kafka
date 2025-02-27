@@ -20,7 +20,7 @@ import java.util.Collections;
 import java.util.Map;
 
 public enum TestFeatureVersion implements FeatureVersion {
-    TEST_0(0, MetadataVersion.MINIMUM_KRAFT_VERSION, Collections.emptyMap()),
+    TEST_0(0, MetadataVersion.MINIMUM_VERSION, Collections.emptyMap()),
     // TEST_1 released right before MV 3.7-IVO was released, and it has no dependencies
     TEST_1(1, MetadataVersion.IBP_3_7_IV0, Collections.emptyMap()),
     // TEST_2 is not yet set to be the default version and maps to the latest testing version, and it depends on this metadata version
