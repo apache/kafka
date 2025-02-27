@@ -100,7 +100,6 @@ import org.slf4j.Logger;
 
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -399,7 +398,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             return CompletableFuture.completedFuture(
                 new StreamsGroupHeartbeatResult(
                     new StreamsGroupHeartbeatResponseData().setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code()),
-                    Collections.emptyMap()
+                    Map.of()
                 )
             );
         }
@@ -418,7 +417,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     new StreamsGroupHeartbeatResponseData()
                         .setErrorCode(error.code())
                         .setErrorMessage(message),
-                    Collections.emptyMap()
+                    Map.of()
                 ),
             log
         ));
@@ -765,7 +764,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     .computeIfAbsent(topicPartitionFor(groupId), __ -> new ArrayList<>())
                     .add(groupId);
             } else {
-                futures.add(CompletableFuture.completedFuture(Collections.singletonList(
+                futures.add(CompletableFuture.completedFuture(List.of(
                     new StreamsGroupDescribeResponseData.DescribedGroup()
                         .setGroupId(null)
                         .setErrorCode(Errors.INVALID_GROUP_ID.code())
@@ -922,7 +921,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             // For backwards compatibility, we support DeleteGroups for the empty group id.
             if (groupId == null) {
                 futures.add(CompletableFuture.completedFuture(DeleteGroupsRequest.getErrorResultCollection(
-                    Collections.singletonList(null),
+                    List.of(null),
                     Errors.INVALID_GROUP_ID
                 )));
             } else {
