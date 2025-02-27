@@ -253,7 +253,6 @@ jobs:
 
       - name: Archive Heap Dumps
         id: archive-heap-dump
-        if: steps.junit-test.outputs.gradle-exitcode == '124'
         uses: actions/upload-artifact@v4
         with:
           name: junit-heap-dumps-${{ env.job-variation }}
