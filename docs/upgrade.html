@@ -61,8 +61,7 @@
             Apache Kafka 4.0 only supports KRaft mode - ZooKeeper mode has been removed. As such, broker upgrades to 4.0.x (and higher) require KRaft mode and
             the software and metadata versions must be at least 3.3.x (the first version when KRaft mode was deemed production ready). For clusters in KRaft mode
             with versions older than 3.3.x, we recommend upgrading to 3.9.x before upgrading to 4.0.x. Clusters in ZooKeeper mode
-            have to be migrated to KRaft mode before they can be upgraded to 4.0.x as described below.
-            <!--#include virtual="zk2kraft.html" -->
+            have to be <a href="/39/documentation.html#kraft_zk_migration">migrated to KRaft mode</a> before they can be upgraded to 4.0.x.
         </li>
         <li>
             Apache Kafka 4.0 ships with a brand-new group coordinator implementation (See <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=217387038#KIP848:TheNextGenerationoftheConsumerRebalanceProtocol-GroupCoordinator">here</a>.
