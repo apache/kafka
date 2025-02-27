@@ -149,7 +149,7 @@ public class RaftEventSimulationTest {
 
         initializeClusterAndStartAppending(cluster, router, scheduler, 10);
         int firstObserverId = numVoters;
-        scheduler.scheduleOnce(new AddVoterAction(cluster, cluster.running.get(firstObserverId)), 0);
+        scheduler.schedule(new AddVoterAction(cluster, cluster.running.get(firstObserverId)), 0, 5, 3);
         scheduler.runUntil(() -> cluster.leaderWithMaxEpoch().get().client.partitionState().lastVoterSet().size() == numVoters + 1);
         VoterSet latestVoterSet = cluster.leaderWithMaxEpoch().get().client.partitionState().lastVoterSet();
         scheduler.runUntil(() -> cluster.allHaveLatestVoterSet(latestVoterSet));
@@ -200,7 +200,7 @@ public class RaftEventSimulationTest {
 
         initializeClusterAndStartAppending(cluster, router, scheduler, 2);
 
-        scheduler.scheduleOnce(new RemoveVoterAction(cluster, cluster.running.get(random.nextInt(numVoters))), 0);
+        scheduler.schedule(new RemoveVoterAction(cluster, cluster.running.get(random.nextInt(numVoters))), 0, 5, 3);
         scheduler.runUntil(() -> cluster.leaderWithMaxEpoch().get().client.partitionState().lastVoterSet().size() == numVoters - 1);
         VoterSet latestVoterSet = cluster.leaderWithMaxEpoch().get().client.partitionState().lastVoterSet();
         scheduler.runUntil(() -> cluster.allHaveLatestVoterSet(latestVoterSet));
@@ -791,13 +791,6 @@ public class RaftEventSimulationTest {
             long initialDeadlineMs = time.milliseconds() + delayMs;
             int eventId = eventIdGenerator.incrementAndGet();
             PeriodicEvent event = new PeriodicEvent(action, eventId, random, initialDeadlineMs, periodMs, jitterMs);
-            queue.offer(event);
-        }
-
-        void scheduleOnce(Runnable action, int delayMs) {
-            long initialDeadlineMs = time.milliseconds() + delayMs;
-            int eventId = eventIdGenerator.incrementAndGet();
-            Event event = new Event(action, eventId, initialDeadlineMs);
             queue.offer(event);
         }
 
