@@ -27,6 +27,8 @@ import org.apache.kafka.common.config.{ConfigDef, ConfigException, ConfigResourc
 import org.apache.kafka.common.config.ConfigDef.ConfigKey
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.config.types.Password
+import org.apache.kafka.common.internals.Plugin
+import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.security.auth.KafkaPrincipalSerde
@@ -270,12 +272,12 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   }
 
   /************* Authorizer Configuration ***********/
-  def createNewAuthorizer(): Option[Authorizer] = {
+  def createNewAuthorizer(metrics: Metrics, role: String): Option[Plugin[Authorizer]] = {
     val className = getString(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG)
     if (className == null || className.isEmpty)
       None
     else {
-      Some(AuthorizerUtils.createAuthorizer(className))
+      Some(AuthorizerUtils.createAuthorizer(className, originals, metrics, ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, role))
     }
   }
 

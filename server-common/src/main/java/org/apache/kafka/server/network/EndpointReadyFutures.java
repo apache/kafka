@@ -18,6 +18,7 @@
 package org.apache.kafka.server.network;
 
 import org.apache.kafka.common.Endpoint;
+import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.server.authorizer.AuthorizerServerInfo;
@@ -79,17 +80,17 @@ public class EndpointReadyFutures {
         /**
          * Build the EndpointReadyFutures object.
          *
-         * @param authorizer    The authorizer to use, if any. Will be started.
-         * @param info          Server information to be passed to the authorizer.
+         * @param authorizerPlugin    The authorizer to use, if any. Will be started.
+         * @param info                Server information to be passed to the authorizer.
          *
          * @return              The new futures object.
          */
         public EndpointReadyFutures build(
-            Optional<Authorizer> authorizer,
+            Optional<Plugin<Authorizer>> authorizerPlugin,
             AuthorizerServerInfo info
         ) {
-            if (authorizer.isPresent()) {
-                return build(authorizer.get().start(info), info);
+            if (authorizerPlugin.isPresent()) {
+                return build(authorizerPlugin.get().get().start(info), info);
             } else {
                 return build(Map.of(), info);
             }

@@ -94,8 +94,8 @@ import scala.Option;
 
 @State(Scope.Benchmark)
 @Fork(value = 1)
-@Warmup(iterations = 5)
-@Measurement(iterations = 15)
+@Warmup(iterations = 1)
+@Measurement(iterations = 3)
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
 
@@ -195,7 +195,7 @@ public class KRaftMetadataRequestBenchmark {
                 setConfigRepository(new MockConfigRepository()).
                 setMetadataCache(metadataCache).
                 setMetrics(metrics).
-                setAuthorizer(Optional.empty()).
+                setAuthorizerPlugin(Optional.empty()).
                 setQuotas(quotaManagers).
                 setFetchManager(fetchManager).
                 setSharePartitionManager(sharePartitionManager).

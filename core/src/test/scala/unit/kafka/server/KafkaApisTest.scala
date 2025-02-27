@@ -32,7 +32,7 @@ import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, BROKER_LOGGER}
 import org.apache.kafka.common.errors.{ClusterAuthorizationException, UnsupportedVersionException}
-import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.internals.{Plugin, Topic}
 import org.apache.kafka.common.internals.Topic.SHARE_GROUP_STATE_TOPIC_NAME
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.{AddPartitionsToTxnTopic, AddPartitionsToTxnTopicCollection, AddPartitionsToTxnTransaction, AddPartitionsToTxnTransactionCollection}
@@ -199,7 +199,7 @@ class KafkaApisTest extends Logging {
       configRepository = configRepository,
       metadataCache = metadataCache,
       metrics = metrics,
-      authorizer = authorizer,
+      authorizerPlugin = authorizer.map(Plugin.wrapInstance(_, null, "authorizer.class.name")),
       quotas = quotas,
       fetchManager = fetchManager,
       sharePartitionManager = sharePartitionManager,

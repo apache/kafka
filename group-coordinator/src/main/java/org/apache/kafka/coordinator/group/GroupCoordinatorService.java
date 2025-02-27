@@ -21,6 +21,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.NotCoordinatorException;
+import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
@@ -144,7 +145,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         private GroupCoordinatorMetrics groupCoordinatorMetrics;
         private GroupConfigManager groupConfigManager;
         private Persister persister;
-        private Optional<Authorizer> authorizer;
+        private Optional<Plugin<Authorizer>> authorizerPlugin;
 
         public Builder(
             int nodeId,
@@ -194,8 +195,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
             return this;
         }
 
-        public Builder withAuthorizer(Optional<Authorizer> authorizer) {
-            this.authorizer = authorizer;
+        public Builder withAuthorizerPlugin(Optional<Plugin<Authorizer>> authorizerPlugin) {
+            this.authorizerPlugin = authorizerPlugin;
             return this;
         }
 
@@ -209,14 +210,14 @@ public class GroupCoordinatorService implements GroupCoordinator {
             requireNonNull(groupCoordinatorMetrics, new IllegalArgumentException("GroupCoordinatorMetrics must be set."));
             requireNonNull(groupConfigManager, new IllegalArgumentException("GroupConfigManager must be set."));
             requireNonNull(persister, new IllegalArgumentException("Persister must be set."));
-            requireNonNull(authorizer, new IllegalArgumentException("Authorizer must be set."));
+            requireNonNull(authorizerPlugin, new IllegalArgumentException("Authorizer must be set."));
 
             String logPrefix = String.format("GroupCoordinator id=%d", nodeId);
             LogContext logContext = new LogContext(String.format("[%s] ", logPrefix));
 
             CoordinatorShardBuilderSupplier<GroupCoordinatorShard, CoordinatorRecord> supplier = () ->
                 new GroupCoordinatorShard.Builder(config, groupConfigManager)
-                    .withAuthorizer(authorizer);
+                    .withAuthorizerPlugin(authorizerPlugin);
 
             CoordinatorEventProcessor processor = new MultiThreadedEventProcessor(
                 logContext,
