@@ -17,44 +17,26 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.protocol.Errors;
 
-import java.util.Collection;
-import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 /**
- * The parent class of result of the {@link Admin#deleteConsumerGroups(Collection)},
- * {@link Admin#deleteShareGroups(Collection)} calls.
- * <p>
+ * The result of the {@link Admin#deleteConsumerGroupOffsets(String, Set)} call.
+ *
  * The API of this class is evolving, see {@link Admin} for details.
  */
 @InterfaceStability.Evolving
-public abstract class DeleteGroupsResult {
-    private final Map<String, KafkaFuture<Void>> futures;
+public class DeleteStreamsGroupOffsetsResult extends DeleteConsumerGroupOffsetsResult {
 
-    DeleteGroupsResult(final Map<String, KafkaFuture<Void>> futures) {
-        this.futures = futures;
+    DeleteStreamsGroupOffsetsResult(KafkaFuture<Map<TopicPartition, Errors>> future, Set<TopicPartition> partitions) {
+        super(future, partitions);
     }
 
-    Map<String, KafkaFuture<Void>> futures() {
-        return futures;
-    }
-
-    /**
-     * Return a map from group id to futures which can be used to check the status of
-     * individual deletions.
-     */
-    public Map<String, KafkaFuture<Void>> deletedGroups() {
-        Map<String, KafkaFuture<Void>> deletedGroups = new HashMap<>(futures.size());
-        deletedGroups.putAll(futures);
-        return deletedGroups;
-    }
-
-    /**
-     * Return a future which succeeds only if all the group deletions succeed.
-     */
-    public KafkaFuture<Void> all() {
-        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture<?>[0]));
+    DeleteStreamsGroupOffsetsResult(DeleteConsumerGroupOffsetsResult parent) {
+        super(parent.future(), parent.partitions());
     }
 }

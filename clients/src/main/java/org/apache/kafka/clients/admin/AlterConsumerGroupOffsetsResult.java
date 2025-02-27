@@ -40,6 +40,10 @@ public class AlterConsumerGroupOffsetsResult {
         this.future = future;
     }
 
+    KafkaFuture<Map<TopicPartition, Errors>> future() {
+        return future;
+    }
+
     /**
      * Return a future which can be used to check the result for a given partition.
      */
@@ -78,7 +82,7 @@ public class AlterConsumerGroupOffsetsResult {
             for (Errors error : topicPartitionErrorsMap.values()) {
                 if (error != Errors.NONE) {
                     throw error.exception(
-                        "Failed altering consumer group offsets for the following partitions: " + partitionsFailed);
+                        "Failed altering group offsets for the following partitions: " + partitionsFailed);
                 }
             }
             return null;

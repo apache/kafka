@@ -14,47 +14,31 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.clients.admin.internals.CoordinatorKey;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
-import java.util.Collection;
-import java.util.HashMap;
 import java.util.Map;
 
 /**
- * The parent class of result of the {@link Admin#deleteConsumerGroups(Collection)},
- * {@link Admin#deleteShareGroups(Collection)} calls.
+ * The result of the {@link Admin#listStreamsGroupOffsets(Map)} and
+ * {@link Admin#listStreamsGroupOffsets(Map)} call.
  * <p>
  * The API of this class is evolving, see {@link Admin} for details.
  */
 @InterfaceStability.Evolving
-public abstract class DeleteGroupsResult {
-    private final Map<String, KafkaFuture<Void>> futures;
+public class ListStreamsGroupOffsetsResult extends ListConsumerGroupOffsetsResult {
 
-    DeleteGroupsResult(final Map<String, KafkaFuture<Void>> futures) {
-        this.futures = futures;
+    ListStreamsGroupOffsetsResult(final Map<CoordinatorKey, KafkaFuture<Map<TopicPartition, OffsetAndMetadata>>> futures) {
+        super(futures);
     }
 
-    Map<String, KafkaFuture<Void>> futures() {
-        return futures;
-    }
-
-    /**
-     * Return a map from group id to futures which can be used to check the status of
-     * individual deletions.
-     */
-    public Map<String, KafkaFuture<Void>> deletedGroups() {
-        Map<String, KafkaFuture<Void>> deletedGroups = new HashMap<>(futures.size());
-        deletedGroups.putAll(futures);
-        return deletedGroups;
-    }
-
-    /**
-     * Return a future which succeeds only if all the group deletions succeed.
-     */
-    public KafkaFuture<Void> all() {
-        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture<?>[0]));
+    ListStreamsGroupOffsetsResult(ListConsumerGroupOffsetsResult parent) {
+        super(parent.futures(), true);
     }
 }
