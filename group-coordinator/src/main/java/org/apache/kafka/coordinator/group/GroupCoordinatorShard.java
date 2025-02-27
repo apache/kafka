@@ -1079,17 +1079,17 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 );
                 break;
 
-            case STREAMS_GROUP_TOPOLOGY:
-                groupMetadataManager.replay(
-                    (StreamsGroupTopologyKey) key,
-                    (StreamsGroupTopologyValue) Utils.messageOrNull(value)
-                );
-                break;
-
             case SHARE_GROUP_STATE_PARTITION_METADATA:
                 groupMetadataManager.replay(
                     (ShareGroupStatePartitionMetadataKey) key,
                     (ShareGroupStatePartitionMetadataValue) Utils.messageOrNull(value)
+                );
+                break;
+
+            case STREAMS_GROUP_TOPOLOGY:
+                groupMetadataManager.replay(
+                    (StreamsGroupTopologyKey) key,
+                    (StreamsGroupTopologyValue) Utils.messageOrNull(value)
                 );
                 break;
 

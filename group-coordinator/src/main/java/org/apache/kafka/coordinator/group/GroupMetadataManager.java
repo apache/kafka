@@ -477,11 +477,11 @@ public class GroupMetadataManager {
      * keyed on share group id.
      *
      * @param initializedTopics Map of set of partition ids keyed on the topic id.
-     * @param deletingTopics    Map of topic names keyed on topic id.
+     * @param deletingTopics    Set of topic ids.
      */
     private record ShareGroupStatePartitionMetadataInfo(
-        Map<Uuid, Set<Integer>> initializedTopics,   // topicId -> set of parition ids
-        Map<Uuid, String> deletingTopics    // topicId -> topicName
+        Map<Uuid, Set<Integer>> initializedTopics,
+        Set<Uuid> deletingTopics
     ) {
     }
 
@@ -4123,8 +4123,32 @@ public class GroupMetadataManager {
             return new CoordinatorResult<>(List.of(), null);
         }
 
+        // We must combine the existing information in the record with the
+        // topicPartitionMap argument.
+        ShareGroupStatePartitionMetadataInfo currentMap = shareGroupPartitionMetadata.get(groupId);
+        if (currentMap == null) {
+            return new CoordinatorResult<>(
+                List.of(newShareGroupPartitionMetadataRecord(group.groupId(), topicPartitionMap, Map.of())),
+                null
+            );
+        }
+
+        Set<Uuid> combinedTopicIdSet = new HashSet<>(topicPartitionMap.keySet());
+        combinedTopicIdSet.addAll(currentMap.initializedTopics.keySet());
+
+        Map<Uuid, Map.Entry<String, List<Integer>>> combinedMap = new HashMap<>();
+
+        for (Uuid topicId : combinedTopicIdSet) {
+            String topicName = metadataImage.topics().getTopic(topicId).name();
+            Set<Integer> partitions = new HashSet<>(currentMap.initializedTopics.getOrDefault(topicId, new HashSet<>()));
+            if (topicPartitionMap.containsKey(topicId)) {
+                partitions.addAll(topicPartitionMap.get(topicId).getValue());
+            }
+            combinedMap.computeIfAbsent(topicId, k -> Map.entry(topicName, partitions.stream().toList()));
+        }
+
         return new CoordinatorResult<>(
-            List.of(newShareGroupPartitionMetadataRecord(group.groupId(), topicPartitionMap, Map.of())),
+            List.of(newShareGroupPartitionMetadataRecord(group.groupId(), combinedMap, Map.of())),
             null
         );
     }
@@ -4909,27 +4933,18 @@ public class GroupMetadataManager {
             // Tombstone!
             shareGroupPartitionMetadata.remove(groupId);
         } else {
-            // Init java record.
-            ShareGroupStatePartitionMetadataInfo record = shareGroupPartitionMetadata.computeIfAbsent(
-                groupId, k -> new ShareGroupStatePartitionMetadataInfo(new HashMap<>(), new HashMap<>())
+
+            ShareGroupStatePartitionMetadataInfo info = new ShareGroupStatePartitionMetadataInfo(
+                value.initializedTopics().stream()
+                    .map(topicPartitionInfo -> Map.entry(topicPartitionInfo.topicId(), new HashSet<>(topicPartitionInfo.partitions())))
+                    .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)),
+                value.deletingTopics().stream()
+                    .map(ShareGroupStatePartitionMetadataValue.TopicInfo::topicId)
+                    .collect(Collectors.toSet())
             );
 
-            // Remove all topicIds in deleting state from java record.
-            Map<Uuid, String> deleting = new HashMap<>();
-            for (ShareGroupStatePartitionMetadataValue.TopicInfo deletingTopic : value.deletingTopics()) {
-                deleting.put(deletingTopic.topicId(), deletingTopic.topicName());
-            }
-            deleting.forEach((tId, tName) -> record.initializedTopics.remove(tId));
-
-            // Add all initialized topic info from the replayed record to
-            // the java record.
-            for (ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo info : value.initializedTopics()) {
-                record.initializedTopics.computeIfAbsent(info.topicId(), k -> new HashSet<>())
-                    .addAll(info.partitions());
-            }
-
-            // Update the deleting state topics in the java record.
-            record.deletingTopics.putAll(deleting);
+            // Init java record.
+            shareGroupPartitionMetadata.put(groupId, info);
         }
     }
 
