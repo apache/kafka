@@ -100,6 +100,7 @@ import org.slf4j.Logger;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -921,7 +922,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             // For backwards compatibility, we support DeleteGroups for the empty group id.
             if (groupId == null) {
                 futures.add(CompletableFuture.completedFuture(DeleteGroupsRequest.getErrorResultCollection(
-                    List.of(null),
+                    Collections.singletonList(null),
                     Errors.INVALID_GROUP_ID
                 )));
             } else {
