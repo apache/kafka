@@ -128,7 +128,6 @@ jobs:
           gradle-cache-write-only: ${{ inputs.is-trunk }}
           develocity-access-key: ${{ secrets.DEVELOCITY_ACCESS_KEY }}
       - name: Verify license file
-        if: always()
         run: python committer-tools/verify_license.py
       - name: Compile and validate
         env:
