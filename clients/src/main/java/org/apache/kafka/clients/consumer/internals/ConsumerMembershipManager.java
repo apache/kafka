@@ -189,6 +189,14 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
     }
 
     /**
+     * @return Instance ID used by the member when joining the group. If non-empty, it will indicate that
+     * this is a static member.
+     */
+    public Optional<String> groupInstanceId() {
+        return groupInstanceId;
+    }
+
+    /**
      * {@inheritDoc}
      */
     @Override
@@ -409,14 +417,6 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
             groupInstanceId().isPresent();
 
         return isLeavingState && hasLeaveOperation;
-    }
-
-    /**
-     * @return Instance ID used by the member when joining the group. If non-empty, it will indicate that
-     * this is a static member.
-     */
-    public Optional<String> groupInstanceId() {
-        return groupInstanceId;
     }
 
     /**

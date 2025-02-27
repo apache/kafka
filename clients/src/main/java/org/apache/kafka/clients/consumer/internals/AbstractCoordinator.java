@@ -1171,7 +1171,6 @@ public abstract class AbstractCoordinator implements Closeable {
         if (rebalanceConfig.leaveGroupOnClose && shouldSendLeaveGroupRequest(membershipOperation)) {
             log.info("Member {} sending LeaveGroup request to coordinator {} due to {}",
                 generation.memberId, coordinator, leaveReason);
-
             LeaveGroupRequest.Builder request = new LeaveGroupRequest.Builder(
                 rebalanceConfig.groupId,
                 Collections.singletonList(new MemberIdentity().setMemberId(generation.memberId).setReason(JoinGroupRequest.maybeTruncateReason(leaveReason)))
