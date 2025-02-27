@@ -102,6 +102,10 @@ runs:
         -PcommitId=xxxxxxxxxxxxxxxx \
         $TEST_TASK
         exitcode="$?"
+        echo "LS"
+        ls -R
+        echo "Find"
+        find heap-dumps
         echo "exitcode=$exitcode" >> $GITHUB_OUTPUT
     - name: Archive build scan (${{ inputs.test-task }})
       if: always()
