@@ -79,7 +79,7 @@ public class ProducerRebootstrapTest {
     public void testRebootstrap(ClusterInstance clusterInstance) throws ExecutionException, InterruptedException {
         var topic = "topic";
         try (var admin = clusterInstance.admin()) {
-            admin.createTopics(List.of(new NewTopic(topic, BROKER_COUNT, (short) 2))).all().get();
+            admin.createTopics(List.of(new NewTopic(topic, BROKER_COUNT, (short) 2)));
         }
 
         var part = 0;
