@@ -114,7 +114,6 @@ import org.apache.kafka.snapshot.Snapshots;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -124,7 +123,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -178,17 +176,6 @@ public class QuorumControllerTest {
 
     static final BootstrapMetadata SIMPLE_BOOTSTRAP = BootstrapMetadata.
             fromVersion(MetadataVersion.IBP_3_7_IV0, "test-provided bootstrap");
-
-    @Tag("flaky")
-    @Test
-    public void testOOM() {
-        List<byte[]> bunchOfByteArrays = new ArrayList<>();
-        for (int i = 0; i < 1000000; i++) {
-            byte[] b = new byte[1024 * 1025];
-            bunchOfByteArrays.add(b);
-        }
-        assertTrue(!bunchOfByteArrays.isEmpty());
-    }
 
     /**
      * Test setting some configuration values and reading them back.
