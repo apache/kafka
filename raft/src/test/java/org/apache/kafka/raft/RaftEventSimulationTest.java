@@ -133,12 +133,7 @@ public class RaftEventSimulationTest {
         MessageRouter router = new MessageRouter(cluster);
         EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
 
-        cluster.startAll();
-        schedulePolling(scheduler, cluster, 3, 5);
-        scheduler.schedule(router::deliverAll, 0, 2, 1);
-        scheduler.schedule(new SequentialAppendAction(cluster), 0, 2, 3);
-        scheduler.runUntil(cluster::hasConsistentLeader);
-        scheduler.runUntil(() -> cluster.allReachedHighWatermark(10));
+        initializeClusterAndStartAppending(cluster, router, scheduler, 2);
     }
 
     @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
@@ -152,14 +147,7 @@ public class RaftEventSimulationTest {
         MessageRouter router = new MessageRouter(cluster);
         EventScheduler scheduler = schedulerWithKip853Invariants(cluster);
 
-        cluster.startAll();
-        schedulePolling(scheduler, cluster, 3, 5);
-        scheduler.schedule(router::deliverAll, 0, 2, 1);
-        // Have to increase the time between appends to the log, otherwise the add voter request will time out
-        // because the new voter may not be caught up to the LEO when the leader receives the API_VERSIONS_RESPONSE.
-        scheduler.schedule(new SequentialAppendAction(cluster), 0, 10, 3);
-        scheduler.runUntil(cluster::hasConsistentLeader);
-        scheduler.runUntil(() -> cluster.allReachedHighWatermark(10));
+        initializeClusterAndStartAppending(cluster, router, scheduler, 10);
         int firstObserverId = numVoters;
         scheduler.scheduleOnce(new AddVoterAction(cluster, cluster.running.get(firstObserverId)), 0);
         scheduler.runUntil(() -> cluster.leaderWithMaxEpoch().get().client.partitionState().lastVoterSet().size() == numVoters + 1);
@@ -178,34 +166,24 @@ public class RaftEventSimulationTest {
         MessageRouter router = new MessageRouter(cluster);
         EventScheduler scheduler = schedulerWithKip853Invariants(cluster);
 
-        cluster.startAll();
-        schedulePolling(scheduler, cluster, 3, 5);
-        scheduler.schedule(router::deliverAll, 0, 2, 1);
-        // Have to increase the time between appends to the log, otherwise the add voter request will time out
-        // because the new voter may not be caught up to the LEO when the leader receives the API_VERSIONS_RESPONSE.
-        scheduler.schedule(new SequentialAppendAction(cluster), 0, 10, 3);
-        scheduler.runUntil(cluster::hasConsistentLeader);
-        scheduler.runUntil(() -> cluster.allReachedHighWatermark(10));
+        initializeClusterAndStartAppending(cluster, router, scheduler, 10);
 
         // Schedule all the observers to be added as voters
-        for (int voterIdsToAdd = numVoters; voterIdsToAdd < numVoters + numObservers; voterIdsToAdd++) {
-            scheduler.schedule(new AddVoterAction(cluster, cluster.running.get(voterIdsToAdd)), 0, 5, 3);
+        for (int voterIdToAdd = numVoters; voterIdToAdd < numVoters + numObservers; voterIdToAdd++) {
+            int nextVoterSetSize = voterIdToAdd + 1;
+            scheduler.schedule(new AddVoterAction(cluster, cluster.running.get(voterIdToAdd)), 0, 5, 3);
+            scheduler.runUntil(() -> cluster.leaderWithMaxEpoch().get().client.partitionState().lastVoterSet().size() == nextVoterSetSize);
         }
         int voterSetSize = numVoters + numObservers;
-        scheduler.runUntil(() -> cluster.leaderWithMaxEpoch().get().client.partitionState().lastVoterSet().size() == voterSetSize);
-        scheduler.runUntil(() -> cluster.allHaveLatestVoterSet(cluster.leaderWithMaxEpoch().get().client.partitionState().lastVoterSet()));
 
         // Schedule all voters besides the first to be removed
-        for (int voterIdsToRemove = numVoters + numObservers - 1; voterIdsToRemove > 0; voterIdsToRemove--) {
+        for (int voterIdToRemove = numVoters + numObservers - 1; voterIdToRemove > 0; voterIdToRemove--) {
             int nextVoterSetSize = voterSetSize - 1;
-            if (voterIdsToRemove == cluster.leaderWithMaxEpoch().get().id()) {
-                scheduler.scheduleOnce(new RemoveVoterAction(cluster, cluster.running.get(voterIdsToRemove)), 0);
+            scheduler.schedule(new RemoveVoterAction(cluster, cluster.running.get(voterIdToRemove)), 0, 5, 3);
+            if (cluster.leaderWithMaxEpoch().isEmpty()) {
                 scheduler.runUntil(cluster::hasConsistentLeader);
-            } else {
-                scheduler.scheduleOnce(new RemoveVoterAction(cluster, cluster.running.get(voterIdsToRemove)), 0);
             }
             scheduler.runUntil(() -> cluster.leaderWithMaxEpoch().get().client.partitionState().lastVoterSet().size() == nextVoterSetSize);
-            scheduler.runUntil(() -> cluster.allHaveLatestVoterSet(cluster.leaderWithMaxEpoch().get().client.partitionState().lastVoterSet()));
         }
     }
 
@@ -220,12 +198,8 @@ public class RaftEventSimulationTest {
         MessageRouter router = new MessageRouter(cluster);
         EventScheduler scheduler = schedulerWithKip853Invariants(cluster);
 
-        cluster.startAll();
-        schedulePolling(scheduler, cluster, 3, 5);
-        scheduler.schedule(router::deliverAll, 0, 2, 1);
-        scheduler.schedule(new SequentialAppendAction(cluster), 0, 2, 3);
-        scheduler.runUntil(cluster::hasConsistentLeader);
-        scheduler.runUntil(() -> cluster.allReachedHighWatermark(10));
+        initializeClusterAndStartAppending(cluster, router, scheduler, 2);
+
         scheduler.scheduleOnce(new RemoveVoterAction(cluster, cluster.running.get(random.nextInt(numVoters))), 0);
         scheduler.runUntil(() -> cluster.leaderWithMaxEpoch().get().client.partitionState().lastVoterSet().size() == numVoters - 1);
         VoterSet latestVoterSet = cluster.leaderWithMaxEpoch().get().client.partitionState().lastVoterSet();
@@ -245,13 +219,7 @@ public class RaftEventSimulationTest {
         MessageRouter router = new MessageRouter(cluster);
         EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
 
-        // Seed the cluster with some data
-        cluster.startAll();
-        schedulePolling(scheduler, cluster, 3, 5);
-        scheduler.schedule(router::deliverAll, 0, 2, 1);
-        scheduler.schedule(new SequentialAppendAction(cluster), 0, 2, 3);
-        scheduler.runUntil(cluster::hasConsistentLeader);
-        scheduler.runUntil(() -> cluster.anyReachedHighWatermark(10));
+        initializeClusterAndStartAppending(cluster, router, scheduler, 2);
 
         // Shutdown the leader and write some more data. We can verify the new leader has been elected
         // by verifying that the high watermark can still advance.
@@ -285,13 +253,7 @@ public class RaftEventSimulationTest {
         MessageRouter router = new MessageRouter(cluster);
         EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
 
-        // Seed the cluster with some data
-        cluster.startAll();
-        schedulePolling(scheduler, cluster, 3, 5);
-        scheduler.schedule(router::deliverAll, 0, 2, 1);
-        scheduler.schedule(new SequentialAppendAction(cluster), 0, 2, 3);
-        scheduler.runUntil(cluster::hasConsistentLeader);
-        scheduler.runUntil(() -> cluster.anyReachedHighWatermark(10));
+        initializeClusterAndStartAppending(cluster, router, scheduler, 2);
         long highWatermark = cluster.maxHighWatermarkReached();
 
         // We kill all of the nodes. Then we bring back a majority and verify that
@@ -319,13 +281,7 @@ public class RaftEventSimulationTest {
         MessageRouter router = new MessageRouter(cluster);
         EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
 
-        // Seed the cluster with some data
-        cluster.startAll();
-        schedulePolling(scheduler, cluster, 3, 5);
-        scheduler.schedule(router::deliverAll, 0, 2, 2);
-        scheduler.schedule(new SequentialAppendAction(cluster), 0, 2, 3);
-        scheduler.runUntil(cluster::hasConsistentLeader);
-        scheduler.runUntil(() -> cluster.anyReachedHighWatermark(10));
+        initializeClusterAndStartAppending(cluster, router, scheduler, 2);
 
         // The leader gets partitioned off. We can verify the new leader has been elected
         // by writing some data and ensuring that it gets replicated
@@ -352,13 +308,7 @@ public class RaftEventSimulationTest {
         MessageRouter router = new MessageRouter(cluster);
         EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
 
-        // Seed the cluster with some data
-        cluster.startAll();
-        schedulePolling(scheduler, cluster, 3, 5);
-        scheduler.schedule(router::deliverAll, 0, 2, 2);
-        scheduler.schedule(new SequentialAppendAction(cluster), 0, 2, 3);
-        scheduler.runUntil(cluster::hasConsistentLeader);
-        scheduler.runUntil(() -> cluster.anyReachedHighWatermark(10));
+        initializeClusterAndStartAppending(cluster, router, scheduler, 2);
 
         // Partition the nodes into two sets. Nodes are reachable within each set,
         // but the two sets cannot communicate with each other. We should be able
@@ -412,13 +362,7 @@ public class RaftEventSimulationTest {
         MessageRouter router = new MessageRouter(cluster);
         EventScheduler scheduler = schedulerWithKip853Invariants(cluster);
 
-        // Seed the cluster with some data
-        cluster.startAll();
-        schedulePolling(scheduler, cluster, 3, 5);
-        scheduler.schedule(router::deliverAll, 0, 2, 2);
-        scheduler.schedule(new SequentialAppendAction(cluster), 0, 10, 3);
-        scheduler.runUntil(cluster::hasConsistentLeader);
-        scheduler.runUntil(() -> cluster.anyReachedHighWatermark(10));
+        initializeClusterAndStartAppending(cluster, router, scheduler, 10);
 
         // Partition the nodes into two sets. Nodes are reachable within each set,
         // but the two sets cannot communicate with each other. We should be able
@@ -538,13 +482,7 @@ public class RaftEventSimulationTest {
         EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
         scheduler.addInvariant(new StableLeadership(cluster));
 
-        // Seed the cluster with some data
-        cluster.startAll();
-        schedulePolling(scheduler, cluster, 3, 5);
-        scheduler.schedule(router::deliverAll, 0, 2, 1);
-        scheduler.schedule(new SequentialAppendAction(cluster), 0, 2, 1);
-        scheduler.runUntil(cluster::hasConsistentLeader);
-        scheduler.runUntil(() -> cluster.allReachedHighWatermark(5));
+        initializeClusterAndStartAppending(cluster, router, scheduler, 2);
 
         int leaderId = cluster.latestLeader().orElseThrow(() ->
             new AssertionError("Failed to find current leader during setup")
@@ -589,13 +527,7 @@ public class RaftEventSimulationTest {
         MessageRouter router = new MessageRouter(cluster);
         EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
 
-        // Seed the cluster with some data
-        cluster.startAll();
-        schedulePolling(scheduler, cluster, 3, 5);
-        scheduler.schedule(router::deliverAll, 0, 2, 5);
-        scheduler.schedule(new SequentialAppendAction(cluster), 0, 2, 3);
-        scheduler.runUntil(cluster::hasConsistentLeader);
-        scheduler.runUntil(() -> cluster.anyReachedHighWatermark(10));
+        initializeClusterAndStartAppending(cluster, router, scheduler, 2);
 
         int leaderId = cluster.latestLeader().getAsInt();
         router.filter(leaderId, new DropAllTraffic());
@@ -630,11 +562,7 @@ public class RaftEventSimulationTest {
 
         MessageRouter router = new MessageRouter(cluster);
 
-        cluster.startAll();
-        schedulePolling(scheduler, cluster, 3, 5);
-        scheduler.schedule(router::deliverAll, 0, 2, 5);
-        scheduler.schedule(new SequentialAppendAction(cluster), 0, 2, 3);
-        scheduler.runUntil(() -> cluster.anyReachedHighWatermark(10));
+        initializeClusterAndStartAppending(cluster, router, scheduler, 2);
 
         RaftNode node = cluster.randomRunning().orElseThrow(() ->
             new AssertionError("Failed to find running node")
@@ -650,6 +578,22 @@ public class RaftEventSimulationTest {
         long highWatermarkBeforeRestart = cluster.maxHighWatermarkReached();
         cluster.start(node.nodeId);
         scheduler.runUntil(() -> cluster.allReachedHighWatermark(highWatermarkBeforeRestart + 10));
+    }
+
+    /**
+     * This method initializes the cluster and starts appending to the log.
+     * @param appendActionPeriodMs - the period at which the append action should be scheduled, in milliseconds
+     *                             This value is important for tests that add voters, since if the cluster is appending
+     *                             records too quickly, it may prevent the new voter from catching up to the leader's LEO
+     *                             so that it can be added to the voter set.
+     */
+    private void initializeClusterAndStartAppending(Cluster cluster, MessageRouter router, EventScheduler scheduler, int appendActionPeriodMs) {
+        cluster.startAll();
+        schedulePolling(scheduler, cluster, 3, 5);
+        scheduler.schedule(router::deliverAll, 0, 2, 5);
+        scheduler.schedule(new SequentialAppendAction(cluster), 0, appendActionPeriodMs, 3);
+        scheduler.runUntil(cluster::hasConsistentLeader);
+        scheduler.runUntil(() -> cluster.anyReachedHighWatermark(10));
     }
 
     private EventScheduler schedulerWithDefaultInvariants(Cluster cluster) {
