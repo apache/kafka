@@ -1289,7 +1289,7 @@ public class SharePartition {
         if (nextFetchOffset() != endOffset() + 1) {
             return true;
         }
-        return numInflightRecords() < maxInFlightMessages;
+        return numInFlightRecords() < maxInFlightMessages;
     }
 
     /**
@@ -1372,11 +1372,11 @@ public class SharePartition {
     }
 
     private void registerGaugeMetrics() {
-        sharePartitionMetrics.registerInflightMessageCount(this::numInflightRecords);
-        sharePartitionMetrics.registerInflightBatchCount(this.cachedState::size);
+        sharePartitionMetrics.registerInFlightMessageCount(this::numInFlightRecords);
+        sharePartitionMetrics.registerInFlightBatchCount(this.cachedState::size);
     }
 
-    private long numInflightRecords() {
+    private long numInFlightRecords() {
         lock.readLock().lock();
         long numRecords;
         try {

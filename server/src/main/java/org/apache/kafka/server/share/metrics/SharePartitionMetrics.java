@@ -33,11 +33,11 @@ import java.util.function.Supplier;
  */
 public class SharePartitionMetrics implements AutoCloseable {
 
-    public static final String INFLIGHT_MESSAGE_COUNT = "InFlightMessageCount";
-    public static final String INFLIGHT_BATCH_COUNT = "InFlightBatchCount";
+    public static final String IN_FLIGHT_MESSAGE_COUNT = "InFlightMessageCount";
+    public static final String IN_FLIGHT_BATCH_COUNT = "InFlightBatchCount";
 
     private static final String ACQUISITION_LOCK_TIMEOUT_PER_SEC = "AcquisitionLockTimeoutPerSec";
-    private static final String INFLIGHT_BATCH_MESSAGE_COUNT = "InFlightBatchMessageCount";
+    private static final String IN_FLIGHT_BATCH_MESSAGE_COUNT = "InFlightBatchMessageCount";
     private static final String FETCH_LOCK_TIME_MS = "FetchLockTimeMs";
     private static final String FETCH_LOCK_RATIO = "FetchLockRatio";
 
@@ -76,7 +76,7 @@ public class SharePartitionMetrics implements AutoCloseable {
             this.tags);
 
         this.inFlightBatchMessageCount = metricsGroup.newHistogram(
-            INFLIGHT_BATCH_MESSAGE_COUNT,
+            IN_FLIGHT_BATCH_MESSAGE_COUNT,
             true,
             this.tags);
 
@@ -96,9 +96,9 @@ public class SharePartitionMetrics implements AutoCloseable {
      *
      * @param messageCountSupplier The supplier for the in-flight message count.
      */
-    public void registerInflightMessageCount(Supplier<Long> messageCountSupplier) {
+    public void registerInFlightMessageCount(Supplier<Long> messageCountSupplier) {
         metricsGroup.newGauge(
-            INFLIGHT_MESSAGE_COUNT,
+            IN_FLIGHT_MESSAGE_COUNT,
             messageCountSupplier,
             this.tags
         );
@@ -109,9 +109,9 @@ public class SharePartitionMetrics implements AutoCloseable {
      *
      * @param batchCountSupplier The supplier for the in-flight batch count.
      */
-    public void registerInflightBatchCount(Supplier<Integer> batchCountSupplier) {
+    public void registerInFlightBatchCount(Supplier<Integer> batchCountSupplier) {
         metricsGroup.newGauge(
-            INFLIGHT_BATCH_COUNT,
+            IN_FLIGHT_BATCH_COUNT,
             batchCountSupplier,
             this.tags
         );
@@ -156,9 +156,9 @@ public class SharePartitionMetrics implements AutoCloseable {
     @Override
     public void close() throws Exception {
         List.of(ACQUISITION_LOCK_TIMEOUT_PER_SEC,
-            INFLIGHT_MESSAGE_COUNT,
-            INFLIGHT_BATCH_COUNT,
-            INFLIGHT_BATCH_MESSAGE_COUNT,
+            IN_FLIGHT_MESSAGE_COUNT,
+            IN_FLIGHT_BATCH_COUNT,
+            IN_FLIGHT_BATCH_MESSAGE_COUNT,
             FETCH_LOCK_TIME_MS,
             FETCH_LOCK_RATIO
         ).forEach(m -> metricsGroup.removeMetric(m, tags));

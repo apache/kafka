@@ -215,9 +215,9 @@ public class SharePartitionTest {
         assertEquals(3, sharePartition.cachedState().get(11L).batchDeliveryCount());
         assertNull(sharePartition.cachedState().get(11L).offsetState());
 
-        TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.INFLIGHT_BATCH_COUNT).intValue() == 2,
+        TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_BATCH_COUNT).intValue() == 2,
             "In-flight batch count should be 2.");
-        TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.INFLIGHT_MESSAGE_COUNT).longValue() == 11,
+        TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_MESSAGE_COUNT).longValue() == 11,
             "In-flight message count should be 11.");
         assertEquals(11, sharePartitionMetrics.inFlightBatchMessageCount().sum());
         assertEquals(2, sharePartitionMetrics.inFlightBatchMessageCount().count());
@@ -385,9 +385,9 @@ public class SharePartitionTest {
         assertEquals(15, sharePartition.endOffset());
         assertEquals(PartitionFactory.DEFAULT_STATE_EPOCH, sharePartition.stateEpoch());
 
-        TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.INFLIGHT_BATCH_COUNT).intValue() == 0,
+        TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_BATCH_COUNT).intValue() == 0,
             "In-flight batch count should be 0.");
-        TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.INFLIGHT_MESSAGE_COUNT).longValue() == 0,
+        TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_MESSAGE_COUNT).longValue() == 0,
             "In-flight message count should be 0.");
     }
 
@@ -1112,9 +1112,9 @@ public class SharePartitionTest {
         assertEquals(1, sharePartition.cachedState().get(0L).batchDeliveryCount());
         assertNull(sharePartition.cachedState().get(0L).offsetState());
 
-        TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.INFLIGHT_BATCH_COUNT).intValue() == 1,
+        TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_BATCH_COUNT).intValue() == 1,
             "In-flight batch count should be 1.");
-        TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.INFLIGHT_MESSAGE_COUNT).longValue() == 1,
+        TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_MESSAGE_COUNT).longValue() == 1,
             "In-flight message count should be 1.");
         assertEquals(1, sharePartitionMetrics.inFlightBatchMessageCount().sum());
     }
@@ -1139,9 +1139,9 @@ public class SharePartitionTest {
         assertEquals(1, sharePartition.cachedState().get(10L).batchDeliveryCount());
         assertNull(sharePartition.cachedState().get(10L).offsetState());
 
-        TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.INFLIGHT_BATCH_COUNT).intValue() == 1,
+        TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_BATCH_COUNT).intValue() == 1,
             "In-flight batch count should be 1.");
-        TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.INFLIGHT_MESSAGE_COUNT).longValue() == 5,
+        TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_MESSAGE_COUNT).longValue() == 5,
             "In-flight message count should be 5.");
         assertEquals(5, sharePartitionMetrics.inFlightBatchMessageCount().sum());
     }
@@ -1229,9 +1229,9 @@ public class SharePartitionTest {
         assertEquals(1, sharePartition.cachedState().get(10L).batchDeliveryCount());
         assertNull(sharePartition.cachedState().get(10L).offsetState());
 
-        TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.INFLIGHT_BATCH_COUNT).intValue() == 1,
+        TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_BATCH_COUNT).intValue() == 1,
             "In-flight batch count should be 1.");
-        TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.INFLIGHT_MESSAGE_COUNT).longValue() == 20,
+        TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_MESSAGE_COUNT).longValue() == 20,
             "In-flight message count should be 20.");
         assertEquals(20, sharePartitionMetrics.inFlightBatchMessageCount().sum());
     }
@@ -1469,9 +1469,9 @@ public class SharePartitionTest {
         assertTrue(sharePartition.cachedState().containsKey(4L));
         assertTrue(sharePartition.cachedState().containsKey(10L));
 
-        TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.INFLIGHT_BATCH_COUNT).intValue() == 2,
+        TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_BATCH_COUNT).intValue() == 2,
             "In-flight batch count should be 2.");
-        TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.INFLIGHT_MESSAGE_COUNT).longValue() == 13,
+        TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_MESSAGE_COUNT).longValue() == 13,
             "In-flight message count should be 13.");
         assertEquals(13, sharePartitionMetrics.inFlightBatchMessageCount().sum());
         assertEquals(2, sharePartitionMetrics.inFlightBatchMessageCount().count());
