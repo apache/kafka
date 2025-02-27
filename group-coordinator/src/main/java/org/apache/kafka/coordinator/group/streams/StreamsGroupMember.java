@@ -355,10 +355,10 @@ public record StreamsGroupMember(String memberId,
 
     private static List<StreamsGroupDescribeResponseData.TaskIds> taskIdsFromMap(Map<String, Set<Integer>> tasks) {
         List<StreamsGroupDescribeResponseData.TaskIds> taskIds = new ArrayList<>();
-        tasks.forEach((subtopologyId, partitionSet) -> {
+        tasks.keySet().stream().sorted().forEach(subtopologyId -> {
             taskIds.add(new StreamsGroupDescribeResponseData.TaskIds()
                 .setSubtopologyId(subtopologyId)
-                .setPartitions(new ArrayList<>(partitionSet)));
+                .setPartitions(tasks.get(subtopologyId).stream().sorted().toList()));
         });
         return taskIds;
     }
