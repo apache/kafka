@@ -18,7 +18,6 @@ package org.apache.kafka.jmh.common;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.server.common.TopicIdPartition;
-
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -32,59 +31,49 @@ import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Warmup;
 import org.openjdk.jmh.infra.Blackhole;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
 import java.util.Objects;
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.IntStream;
 
 @State(Scope.Benchmark)
 @Fork(value = 1)
 @Warmup(iterations = 5)
-@Measurement(iterations = 15)
+@Measurement(iterations = 10)
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
 public class TopicIdPartitionBenchmark {
-    private static final int UUID_SIZE = 100;
-    private static final int PARTITION_SIZE = 100000;
-    private final List<Uuid> uuids = new ArrayList<>(UUID_SIZE);
-    private final HashSet<TopicIdPartition> topicIdPartitions = new HashSet<>();
-    private final HashSet<TopicIdPartitionOldImplementation> oldTopicIdPartitions = new HashSet<>();
+    private TopicIdPartition topicIdPartition1;
+    private TopicIdPartition topicIdPartition2;
+    private TopicIdPartitionOldImplementation oldTopicIdPartition1;
+    private TopicIdPartitionOldImplementation oldTopicIdPartition2;
+
 
     @Setup(Level.Trial)
     public void setUp() {
-        IntStream.range(0, UUID_SIZE).forEach(i -> {
-            Uuid uuid = Uuid.randomUuid();
-            uuids.add(uuid);
-            IntStream.range(0, PARTITION_SIZE).forEach(j -> {
-                topicIdPartitions.add(new TopicIdPartition(uuid, j));
-                oldTopicIdPartitions.add(new TopicIdPartitionOldImplementation(uuid, j));
-            });
-        });
+        Uuid topicId = Uuid.randomUuid();
+        topicIdPartition1 = new TopicIdPartition(topicId, 1);
+        topicIdPartition2 = new TopicIdPartition(topicId, 1);
+        oldTopicIdPartition1 = new TopicIdPartitionOldImplementation(topicId, 1);
+        oldTopicIdPartition2 = new TopicIdPartitionOldImplementation(topicId, 1);
     }
 
     @Benchmark
-    public void recordBenchmark(Blackhole blackhole) {
-        for (int i = 0; i < PARTITION_SIZE; i++) {
-            int uuidIndex = ThreadLocalRandom.current().nextInt(UUID_SIZE);
-            int partitionId = ThreadLocalRandom.current().nextInt(PARTITION_SIZE);
-            Uuid uuid = uuids.get(uuidIndex);
-            TopicIdPartition tp = new TopicIdPartition(uuid, partitionId);
-            blackhole.consume(topicIdPartitions.contains(tp));
-        }
+    public void recordEqualsBenchmark(Blackhole blackhole) {
+        blackhole.consume(topicIdPartition1.equals(topicIdPartition2));
     }
 
     @Benchmark
-    public void oldImplBenchmark(Blackhole blackhole) {
-        for (int i = 0; i < PARTITION_SIZE; i++) {
-            int uuidIndex = ThreadLocalRandom.current().nextInt(UUID_SIZE);
-            int partitionId = ThreadLocalRandom.current().nextInt(PARTITION_SIZE);
-            Uuid uuid = uuids.get(uuidIndex);
-            TopicIdPartitionOldImplementation oldTp = new TopicIdPartitionOldImplementation(uuid, partitionId);
-            blackhole.consume(oldTopicIdPartitions.contains(oldTp));
-        }
+    public void oldImplEqualsBenchmark(Blackhole blackhole) {
+        blackhole.consume(oldTopicIdPartition1.equals(oldTopicIdPartition2));
+    }
+
+    @Benchmark
+    public void recordHashCodeBenchmark(Blackhole blackhole) {
+        blackhole.consume(topicIdPartition1.hashCode());
+    }
+
+    @Benchmark
+    public void oldImplHashCodeBenchmark(Blackhole blackhole) {
+        blackhole.consume(oldTopicIdPartition1.hashCode());
     }
 }
 
