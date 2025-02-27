@@ -428,7 +428,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             // call close methods if internal objects are already constructed; this is to prevent resource leak. see KAFKA-2121
             // we do not need to call `close` at all when `log` is null, which means no internal objects were initialized.
             if (this.log != null) {
-                close(Duration.ZERO, CloseOptions.GroupMembershipOperation.DEFAULT, true);
+                close(Duration.ZERO, CloseOptions.GroupMembershipOperation.LEAVE_GROUP, true);
             }
             // now propagate the exception
             throw new KafkaException("Failed to construct kafka consumer", t);
@@ -1267,7 +1267,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
         if (timeout.toMillis() < 0)
             throw new IllegalArgumentException("The timeout cannot be negative.");
-
         acquire();
         try {
             if (!closed) {
@@ -1363,15 +1362,11 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         swallow(log, Level.ERROR, "Failed to release group assignment",
             this::runRebalanceCallbacksOnClose, firstException);
         swallow(log, Level.ERROR, "Failed to leave group while closing consumer",
-            () -> leaveGroupOnClose(closeTimer), firstException);
+            () -> leaveGroupOnClose(closeTimer, membershipOperation), firstException);
         swallow(log, Level.ERROR, "Failed invoking asynchronous commit callbacks while closing consumer",
             () -> awaitPendingAsyncCommitsAndExecuteCommitCallbacks(closeTimer, false), firstException);
         if (applicationEventHandler != null)
-            closeQuietly(
-                () -> applicationEventHandler.close(Duration.ofMillis(closeTimer.remainingMs()), membershipOperation),
-                "Failed shutting down network thread",
-                firstException
-            );
+            closeQuietly(() -> applicationEventHandler.close(Duration.ofMillis(closeTimer.remainingMs())), "Failed shutting down network thread", firstException);
         closeTimer.update();
 
         // close() can be called from inside one of the constructors. In that case, it's possible that neither
@@ -1438,13 +1433,13 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             throw ConsumerUtils.maybeWrapAsKafkaException(error);
     }
 
-    private void leaveGroupOnClose(final Timer timer) {
+    private void leaveGroupOnClose(final Timer timer, final CloseOptions.GroupMembershipOperation membershipOperation) {
         if (groupMetadata.get().isEmpty())
             return;
 
         log.debug("Leaving the consumer group during consumer close");
         try {
-            applicationEventHandler.addAndGet(new LeaveGroupOnCloseEvent(calculateDeadlineMs(timer)));
+            applicationEventHandler.addAndGet(new LeaveGroupOnCloseEvent(calculateDeadlineMs(timer), membershipOperation));
             log.info("Completed leaving the group");
         } catch (TimeoutException e) {
             log.warn("Consumer attempted to leave the group but couldn't " +

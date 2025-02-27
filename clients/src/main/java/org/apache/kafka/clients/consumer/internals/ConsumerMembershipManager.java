@@ -192,14 +192,6 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
      * {@inheritDoc}
      */
     @Override
-    public void leaveGroupOperationOnClose(CloseOptions.GroupMembershipOperation operation) {
-        this.leaveGroupOperation = operation;
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
     public void onHeartbeatSuccess(ConsumerGroupHeartbeatResponse response) {
         ConsumerGroupHeartbeatResponseData responseData = response.data();
         if (responseData.errorCode() != Errors.NONE.code()) {

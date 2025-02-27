@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
 import org.apache.kafka.clients.consumer.internals.ConsumerUtils;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate;
@@ -134,12 +133,12 @@ public class ApplicationEventHandler implements Closeable {
 
     @Override
     public void close() {
-        close(Duration.ZERO, CloseOptions.GroupMembershipOperation.DEFAULT);
+        close(Duration.ZERO);
     }
 
-    public void close(final Duration timeout, CloseOptions.GroupMembershipOperation membershipOperation) {
+    public void close(final Duration timeout) {
         closer.close(
-                () -> Utils.closeQuietly(() -> networkThread.close(timeout, membershipOperation), "consumer network thread"),
+                () -> Utils.closeQuietly(() -> networkThread.close(timeout), "consumer network thread"),
                 () -> log.warn("The application event handler was already closed")
         );
     }

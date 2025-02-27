@@ -1174,7 +1174,7 @@ public abstract class AbstractCoordinator implements Closeable {
 
             LeaveGroupRequest.Builder request = new LeaveGroupRequest.Builder(
                 rebalanceConfig.groupId,
-                List.of(new MemberIdentity().setMemberId(generation.memberId).setReason(JoinGroupRequest.maybeTruncateReason(leaveReason)))
+                Collections.singletonList(new MemberIdentity().setMemberId(generation.memberId).setReason(JoinGroupRequest.maybeTruncateReason(leaveReason)))
             );
 
             future = client.send(coordinator, request).compose(new LeaveGroupResponseHandler(generation));

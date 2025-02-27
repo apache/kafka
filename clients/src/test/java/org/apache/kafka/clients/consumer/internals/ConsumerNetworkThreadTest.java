@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.CompletableEventReaper;
@@ -160,7 +159,7 @@ public class ConsumerNetworkThreadTest {
         TestUtils.waitForCondition(isStarted,
                 "The consumer network thread did not start within " + DEFAULT_MAX_WAIT_MS + " ms");
 
-        consumerNetworkThread.close(Duration.ofMillis(DEFAULT_MAX_WAIT_MS), CloseOptions.GroupMembershipOperation.DEFAULT);
+        consumerNetworkThread.close(Duration.ofMillis(DEFAULT_MAX_WAIT_MS));
 
         TestUtils.waitForCondition(isClosed,
                 "The consumer network thread did not stop within " + DEFAULT_MAX_WAIT_MS + " ms");

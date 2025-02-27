@@ -131,7 +131,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
      * partition assigned, or revoked), but it is not present the Metadata cache at that moment.
      * The cache is cleared when the subscription changes ({@link #transitionToJoining()}, the
      * member fails ({@link #transitionToFatal()} or leaves the group
-     * ({@link #leaveGroup()}/{@link #leaveGroupOnClose()}).
+     * ({@link #leaveGroup()}/{@link #leaveGroupOnClose(CloseOptions.GroupMembershipOperation)}).
      */
     private final Map<Uuid, String> assignedTopicNamesCache;
 
@@ -159,7 +159,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
 
     /**
      * If the member is currently leaving the group after a call to {@link #leaveGroup()} or
-     * {@link #leaveGroupOnClose()}, this will have a future that will complete when the ongoing leave operation
+     * {@link #leaveGroupOnClose(CloseOptions.GroupMembershipOperation)}, this will have a future that will complete when the ongoing leave operation
      * completes (callbacks executed and heartbeat request to leave is sent out). This will be empty if the
      * member is not leaving.
      */
@@ -292,15 +292,6 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
     public CloseOptions.GroupMembershipOperation leaveGroupOperation() {
         return leaveGroupOperation;
     }
-
-    /**
-     * Sets the operation on consumer group membership that the consumer will perform when closing.
-     * The {@link AbstractMembershipManager#leaveGroupOperation} should remain {@code GroupMembershipOperation.DEFAULT}
-     * until the consumer is closed.
-     *
-     * @param operation the operation to be performed on close
-     */
-    public abstract void leaveGroupOperationOnClose(CloseOptions.GroupMembershipOperation operation);
 
     /**
      * Update member info and transition member state based on a successful heartbeat response.
@@ -556,11 +547,14 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
     /**
      * Transition to {@link MemberState#PREPARE_LEAVING} to release the assignment. Once completed,
      * transition to {@link MemberState#LEAVING} to send the heartbeat request and leave the group.
+     * It also sets the membership operation to be performed on close.
      * This is expected to be invoked when the user calls the {@link Consumer#close()} API.
      *
+     * @param membershipOperation the membership operation to be performed on close
      * @return Future that will complete when the heartbeat to leave the group has been sent out.
      */
-    public CompletableFuture<Void> leaveGroupOnClose() {
+    public CompletableFuture<Void> leaveGroupOnClose(CloseOptions.GroupMembershipOperation membershipOperation) {
+        this.leaveGroupOperation = membershipOperation;
         return leaveGroup(false);
     }
 

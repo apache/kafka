@@ -467,7 +467,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
             return;
 
         log.debug("Signal the ConsumerMembershipManager to leave the consumer group since the consumer is closing");
-        CompletableFuture<Void> future = requestManagers.consumerMembershipManager.get().leaveGroupOnClose();
+        CompletableFuture<Void> future = requestManagers.consumerMembershipManager.get().leaveGroupOnClose(event.membershipOperation());
         future.whenComplete(complete(event.future()));
     }
 

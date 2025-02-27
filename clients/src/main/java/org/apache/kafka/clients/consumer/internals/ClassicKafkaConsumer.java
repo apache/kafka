@@ -266,7 +266,10 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             // call close methods if internal objects are already constructed; this is to prevent resource leak. see KAFKA-2121
             // we do not need to call `close` at all when `log` is null, which means no internal objects were initialized.
             if (this.log != null) {
-                close(Duration.ZERO, CloseOptions.GroupMembershipOperation.DEFAULT, true);
+                // If a consumer fails during initialization, it means it hasn't joined the group yet.
+                // Since it's not a group member, we use REMAIN_IN_GROUP option when closing
+                // to prevent sending an unnecessary leave request to the coordinator.
+                close(Duration.ZERO, CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP, true);
             }
             // now propagate the exception
             throw new KafkaException("Failed to construct kafka consumer", t);

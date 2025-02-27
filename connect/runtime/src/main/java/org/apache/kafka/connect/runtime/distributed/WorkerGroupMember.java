@@ -199,7 +199,7 @@ public class WorkerGroupMember {
     }
 
     public void maybeLeaveGroup(String leaveReason) {
-        coordinator.maybeLeaveGroup(CloseOptions.GroupMembershipOperation.DEFAULT, leaveReason);
+        coordinator.maybeLeaveGroup(CloseOptions.GroupMembershipOperation.LEAVE_GROUP, leaveReason);
     }
 
     public String ownerUrl(String connector) {
