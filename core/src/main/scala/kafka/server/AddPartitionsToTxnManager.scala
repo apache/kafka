@@ -39,18 +39,42 @@ object AddPartitionsToTxnManager {
 
   val VerificationFailureRateMetricName = "VerificationFailureRate"
   val VerificationTimeMsMetricName = "VerificationTimeMs"
+
+  def produceRequestVersionToTransactionSupportedOperation(version: Short): TransactionSupportedOperation = {
+    if (version > 11) {
+      addPartition
+    } else if (version > 10) {
+      genericErrorSupported
+    } else {
+      defaultError
+    }
+  }
+
+  def txnOffsetCommitRequestVersionToTransactionSupportedOperation(version: Short): TransactionSupportedOperation = {
+    if (version > 4) {
+      addPartition
+    } else if (version > 3) {
+      genericErrorSupported
+    } else {
+      defaultError
+    }
+  }
 }
 
 /**
  * This is an enum which handles the Partition Response based on the Request Version and the exact operation
- *    defaultError:       This is the default workflow which maps to cases when the Produce Request Version or the Txn_offset_commit request was lower than the first version supporting the new Error Class
- *    genericError:       This maps to the case when the clients are updated to handle the TransactionAbortableException
- *    addPartition:       This is a WIP. To be updated as a part of KIP-890 Part 2
+ *    defaultError:          This is the default workflow which maps to cases when the Produce Request Version or the Txn_offset_commit request was lower than the first version supporting the new Error Class
+ *    genericErrorSupported: This maps to the case when the clients are updated to handle the TransactionAbortableException
+ *    addPartition:          This allows the partition to be added to the transactions inflight with the Produce and TxnOffsetCommit requests. Plus the behaviors in genericErrorSupported.
  */
-sealed trait TransactionSupportedOperation
+sealed trait TransactionSupportedOperation {
+  val supportsEpochBump = false;
+}
 case object defaultError extends TransactionSupportedOperation
-case object genericError extends TransactionSupportedOperation
-case object addPartition extends TransactionSupportedOperation
+case object genericErrorSupported extends TransactionSupportedOperation
+case object addPartition extends TransactionSupportedOperation {
+  override val supportsEpochBump = true
+}
 
 /*
  * Data structure to hold the transactional data to send to a node. Note -- at most one request per transactional ID
@@ -85,7 +109,7 @@ class AddPartitionsToTxnManager(
   private val verificationFailureRate = metricsGroup.newMeter(VerificationFailureRateMetricName, "failures", TimeUnit.SECONDS)
   private val verificationTimeMs = metricsGroup.newHistogram(VerificationTimeMsMetricName)
 
-  def verifyTransaction(
+  def addOrVerifyTransaction(
     transactionalId: String,
     producerId: Long,
     producerEpoch: Short,
@@ -108,7 +132,7 @@ class AddPartitionsToTxnManager(
         .setTransactionalId(transactionalId)
         .setProducerId(producerId)
         .setProducerEpoch(producerEpoch)
-        .setVerifyOnly(true)
+        .setVerifyOnly(!transactionSupportedOperation.supportsEpochBump)
         .setTopics(topicCollection)
 
       addTxnData(coordinatorNode.get, transactionData, callback, transactionSupportedOperation)
@@ -162,7 +186,7 @@ class AddPartitionsToTxnManager(
   }
 
   private def getTransactionCoordinator(partition: Int): Option[Node] = {
-   metadataCache.getPartitionInfo(Topic.TRANSACTION_STATE_TOPIC_NAME, partition)
+   metadataCache.getLeaderAndIsr(Topic.TRANSACTION_STATE_TOPIC_NAME, partition)
       .filter(_.leader != MetadataResponse.NO_LEADER_ID)
       .flatMap(metadata => metadataCache.getAliveBrokerNode(metadata.leader, interBrokerListenerName))
   }
@@ -225,7 +249,8 @@ class AddPartitionsToTxnManager(
                   val code =
                     if (partitionResult.partitionErrorCode == Errors.PRODUCER_FENCED.code)
                       Errors.INVALID_PRODUCER_EPOCH.code
-                    else if (partitionResult.partitionErrorCode() == Errors.TRANSACTION_ABORTABLE.code && transactionDataAndCallbacks.transactionSupportedOperation != genericError) // For backward compatibility with clients.
+                    else if (partitionResult.partitionErrorCode() == Errors.TRANSACTION_ABORTABLE.code
+                      && transactionDataAndCallbacks.transactionSupportedOperation == defaultError) // For backward compatibility with clients.
                       Errors.INVALID_TXN_STATE.code
                     else
                       partitionResult.partitionErrorCode

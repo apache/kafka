@@ -16,14 +16,11 @@
  */
 package kafka.admin;
 
-import org.apache.kafka.common.test.api.ClusterInstance;
+import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTest;
-import org.apache.kafka.common.test.api.ClusterTestExtensions;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.test.NoRetryException;
 import org.apache.kafka.test.TestUtils;
-
-import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -37,7 +34,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SuppressWarnings("dontUseSystemExit")
-@ExtendWith(value = ClusterTestExtensions.class)
 public class UserScramCredentialsCommandTest {
     private static final String USER1 = "user1";
     private static final String USER2 = "user2";
@@ -62,10 +58,10 @@ public class UserScramCredentialsCommandTest {
         }
     }
 
-    private ConfigCommandResult runConfigCommandViaBroker(String...args) {
+    private ConfigCommandResult runConfigCommandViaBroker(String... args) {
         AtomicReference<OptionalInt> exitStatus = new AtomicReference<>(OptionalInt.empty());
         Exit.setExitProcedure((status, __) -> {
-            exitStatus.set(OptionalInt.of((Integer) status));
+            exitStatus.set(OptionalInt.of(status));
             throw new RuntimeException();
         });
 

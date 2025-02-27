@@ -20,7 +20,6 @@ import kafka.server.logger.RuntimeLoggerManager
 
 import java.util
 import java.util.Properties
-import kafka.server.metadata.ConfigRepository
 import kafka.utils._
 import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry}
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
@@ -36,6 +35,7 @@ import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.{Alte
 import org.apache.kafka.common.protocol.Errors.{INVALID_REQUEST, UNKNOWN_SERVER_ERROR}
 import org.apache.kafka.common.requests.ApiError
 import org.apache.kafka.common.resource.{Resource, ResourceType}
+import org.apache.kafka.metadata.ConfigRepository
 import org.slf4j.{Logger, LoggerFactory}
 
 import scala.collection.{Map, Seq}
@@ -58,9 +58,8 @@ import scala.jdk.CollectionConverters._
  * KIP-412 added support for changing log4j log levels via IncrementalAlterConfigs, but
  * not via the original AlterConfigs. In retrospect, this would have been better off as a
  * separate RPC, since the semantics are quite different. In particular, KIP-226 configs
- * are stored durably (in ZK or KRaft) and persist across broker restarts, but KIP-412
- * log4j levels do not. However, we have to handle it here now in order to maintain
- * compatibility.
+ * are stored durably and persist across broker restarts, but KIP-412 log4j levels do not. 
+ * However, we have to handle it here now in order to maintain compatibility.
  *
  * Configuration processing is split into two parts.
  * - The first step, called "preprocessing," handles setting KIP-412 log levels, validating
@@ -69,14 +68,10 @@ import scala.jdk.CollectionConverters._
  * - The second step is "persistence," and handles storing the configurations durably to our
  * metadata store.
  *
- * When KIP-590 forwarding is active (such as in KRaft mode), preprocessing will happen
- * on the broker, while persistence will happen on the active controller. (If KIP-590
- * forwarding is not active, then both steps are done on the same broker.)
- *
- * In KRaft mode, the active controller performs its own configuration validation step in
+ * The active controller performs its own configuration validation step in
  * [[kafka.server.ControllerConfigurationValidator]]. This is mainly important for
  * TOPIC resources, since we already validated changes to BROKER resources on the
- * forwarding broker. The KRaft controller is also responsible for enforcing the configured
+ * forwarding broker. The controller is also responsible for enforcing the configured
  * [[org.apache.kafka.server.policy.AlterConfigPolicy]].
  */
 class ConfigAdminManager(nodeId: Int,

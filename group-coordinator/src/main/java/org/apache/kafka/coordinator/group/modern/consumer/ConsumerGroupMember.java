@@ -408,7 +408,8 @@ public class ConsumerGroupMember extends ModernGroupMember {
             .setInstanceId(instanceId)
             .setRackId(rackId)
             .setSubscribedTopicNames(subscribedTopicNames == null ? null : new ArrayList<>(subscribedTopicNames))
-            .setSubscribedTopicRegex(subscribedTopicRegex);
+            .setSubscribedTopicRegex(subscribedTopicRegex)
+            .setMemberType(useClassicProtocol() ? (byte) 0 : (byte) 1);
     }
 
     private static List<ConsumerGroupDescribeResponseData.TopicPartitions> topicPartitionsFromMap(
@@ -516,5 +517,13 @@ public class ConsumerGroupMember extends ModernGroupMember {
             ", partitionsPendingRevocation=" + partitionsPendingRevocation +
             ", classicMemberMetadata='" + classicMemberMetadata + '\'' +
             ')';
+    }
+
+    public static String subscribedTopicRegexOrNull(ConsumerGroupMember member) {
+        if (member != null && member.subscribedTopicRegex() != null && !member.subscribedTopicRegex().isEmpty()) {
+            return member.subscribedTopicRegex();
+        } else {
+            return null;
+        }
     }
 }

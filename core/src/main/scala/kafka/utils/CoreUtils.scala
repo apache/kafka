@@ -27,7 +27,7 @@ import com.typesafe.scalalogging.Logger
 import javax.management._
 import scala.collection._
 import scala.collection.Seq
-import kafka.cluster.EndPoint
+import org.apache.kafka.network.EndPoint
 import org.apache.commons.validator.routines.InetAddressValidator
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
@@ -209,7 +209,7 @@ object CoreUtils {
 
     val endPoints = try {
       SocketServerConfigs.listenerListToEndPoints(listeners, securityProtocolMap.asJava).
-        asScala.map(EndPoint.fromJava(_))
+        asScala.map(EndPoint.fromPublic)
     } catch {
       case e: Exception =>
         throw new IllegalArgumentException(s"Error creating broker listeners from '$listeners': ${e.getMessage}", e)

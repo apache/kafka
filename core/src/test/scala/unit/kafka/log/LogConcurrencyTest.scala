@@ -126,9 +126,14 @@ class LogConcurrencyTest {
               log.appendAsLeader(TestUtils.records(records), leaderEpoch)
               log.maybeIncrementHighWatermark(logEndOffsetMetadata)
             } else {
-              log.appendAsFollower(TestUtils.records(records,
-                baseOffset = logEndOffset,
-                partitionLeaderEpoch = leaderEpoch))
+              log.appendAsFollower(
+                TestUtils.records(
+                  records,
+                  baseOffset = logEndOffset,
+                  partitionLeaderEpoch = leaderEpoch
+                ),
+                Int.MaxValue
+              )
               log.updateHighWatermark(logEndOffset)
             }
 
@@ -156,8 +161,7 @@ class LogConcurrencyTest {
       producerStateManagerConfig = new ProducerStateManagerConfig(TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_DEFAULT, false),
       producerIdExpirationCheckIntervalMs = TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
       logDirFailureChannel = new LogDirFailureChannel(10),
-      topicId = None,
-      keepPartitionMetadataFile = true
+      topicId = None
     )
   }
 

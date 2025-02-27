@@ -21,7 +21,6 @@
   // Version 1 adds SubscribedTopicRegex (KIP-848), and requires the consumer to generate their own Member ID (KIP-1082)
   "validVersions": "0-1",
   "flexibleVersions": "0+",
-  "latestVersionUnstable": true,
   "fields": [
     { "name": "GroupId", "type": "string", "versions": "0+", "entityType": "groupId",
       "about": "The group identifier." },
@@ -38,7 +37,7 @@
     { "name": "SubscribedTopicNames", "type": "[]string", "versions": "0+", "nullableVersions": "0+", "default": "null", "entityType": "topicName",
       "about": "null if it didn't change since the last heartbeat; the subscribed topic names otherwise." },
     { "name": "SubscribedTopicRegex", "type": "string", "versions": "1+", "nullableVersions": "1+", "default": "null",
-      "about": "null if it didn't change since the last heartbeat; the subscribed topic regex otherwise" },
+      "about": "null if it didn't change since the last heartbeat; the subscribed topic regex otherwise." },
     { "name": "ServerAssignor", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": "null",
       "about": "null if not used or if it didn't change since the last heartbeat; the server side assignor to use otherwise." },
     { "name": "TopicPartitions", "type": "[]TopicPartitions", "versions": "0+", "nullableVersions": "0+", "default": "null",

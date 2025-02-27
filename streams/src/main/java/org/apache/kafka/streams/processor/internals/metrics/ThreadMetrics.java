@@ -22,9 +22,11 @@ import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.StreamThreadTotalBlockedTime;
 
+import java.util.Collections;
 import java.util.Map;
 
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.LATENCY_SUFFIX;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.PROCESS_ID_TAG;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RATE_DESCRIPTION;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RATE_SUFFIX;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RATIO_SUFFIX;
@@ -296,13 +298,15 @@ public class ThreadMetrics {
         );
     }
 
-    public static void addThreadStateTelemetryMetric(final String threadId,
+    public static void addThreadStateTelemetryMetric(final String processId,
+                                                     final String threadId,
                                                      final StreamsMetricsImpl streamsMetrics,
                                                      final Gauge<Integer> threadStateProvider) {
         streamsMetrics.addThreadLevelMutableMetric(
             THREAD_STATE,
             THREAD_STATE_DESCRIPTION,
             threadId,
+            Collections.singletonMap(PROCESS_ID_TAG, processId),
             threadStateProvider
         );
     }

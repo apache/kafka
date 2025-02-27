@@ -20,29 +20,24 @@ package kafka.admin;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.FenceProducersOptions;
-import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.InvalidProducerEpochException;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.serialization.ByteArraySerializer;
+import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
-import org.apache.kafka.common.test.api.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
-import org.apache.kafka.common.test.api.ClusterTestExtensions;
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
 import org.apache.kafka.coordinator.transaction.TransactionStateManagerConfig;
 import org.apache.kafka.server.config.ServerLogConfigs;
 
-import org.junit.jupiter.api.extension.ExtendWith;
-
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -50,13 +45,12 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ClusterTestDefaults(serverProperties = {
-        @ClusterConfigProperty(key = ServerLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG, value = "false"),
-        @ClusterConfigProperty(key = TransactionLogConfig.TRANSACTIONS_TOPIC_PARTITIONS_CONFIG, value = "1"),
-        @ClusterConfigProperty(key = TransactionLogConfig.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
-        @ClusterConfigProperty(key = TransactionLogConfig.TRANSACTIONS_TOPIC_MIN_ISR_CONFIG, value = "1"),
-        @ClusterConfigProperty(key = TransactionStateManagerConfig.TRANSACTIONS_ABORT_TIMED_OUT_TRANSACTION_CLEANUP_INTERVAL_MS_CONFIG, value = "2000")
+    @ClusterConfigProperty(key = ServerLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG, value = "false"),
+    @ClusterConfigProperty(key = TransactionLogConfig.TRANSACTIONS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+    @ClusterConfigProperty(key = TransactionLogConfig.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+    @ClusterConfigProperty(key = TransactionLogConfig.TRANSACTIONS_TOPIC_MIN_ISR_CONFIG, value = "1"),
+    @ClusterConfigProperty(key = TransactionStateManagerConfig.TRANSACTIONS_ABORT_TIMED_OUT_TRANSACTION_CLEANUP_INTERVAL_MS_CONFIG, value = "2000")
 })
-@ExtendWith(ClusterTestExtensions.class)
 public class AdminFenceProducersTest {
     private static final String TOPIC_NAME = "mytopic";
     private static final String TXN_ID = "mytxnid";
@@ -68,22 +62,16 @@ public class AdminFenceProducersTest {
         this.clusterInstance = clusterInstance;
     }
 
-    private KafkaProducer<byte[], byte[]> createProducer() {
-        Properties config = new Properties();
-        config.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers());
-        config.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, TXN_ID);
-        config.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, "2000");
-        config.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
-        config.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
-
-        return new KafkaProducer<>(config);
+    private Producer<byte[], byte[]> createProducer() {
+        return clusterInstance.producer(Map.of(ProducerConfig.TRANSACTIONAL_ID_CONFIG, TXN_ID,
+                ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, "2000"));
     }
 
     @ClusterTest
     void testFenceAfterProducerCommit() throws Exception {
         clusterInstance.createTopic(TOPIC_NAME, 1, (short) 1);
 
-        try (KafkaProducer<byte[], byte[]> producer = createProducer();
+        try (Producer<byte[], byte[]> producer = createProducer();
              Admin adminClient = clusterInstance.admin()) {
             producer.initTransactions();
             producer.beginTransaction();
@@ -95,11 +83,16 @@ public class AdminFenceProducersTest {
             producer.beginTransaction();
             ExecutionException exceptionDuringSend = assertThrows(
                     ExecutionException.class,
-                    () -> producer.send(RECORD).get(), "expected ProducerFencedException"
+                    () -> producer.send(RECORD).get(), "expected InvalidProducerEpochException"
             );
-            assertInstanceOf(ProducerFencedException.class, exceptionDuringSend.getCause());
 
-            assertThrows(ProducerFencedException.class, producer::commitTransaction);
+            // In Transaction V2, the ProducerFencedException will be converted to InvalidProducerEpochException when
+            // coordinator handles AddPartitionRequest.
+            assertInstanceOf(InvalidProducerEpochException.class, exceptionDuringSend.getCause());
+
+            // InvalidProducerEpochException is treated as fatal error. The commitTransaction will return this last
+            // fatal error.
+            assertThrows(InvalidProducerEpochException.class, producer::commitTransaction);
         }
     }
 
@@ -120,7 +113,7 @@ public class AdminFenceProducersTest {
     void testFenceBeforeProducerCommit() throws Exception {
         clusterInstance.createTopic(TOPIC_NAME, 1, (short) 1);
 
-        try (KafkaProducer<byte[], byte[]> producer = createProducer();
+        try (Producer<byte[], byte[]> producer = createProducer();
              Admin adminClient = clusterInstance.admin()) {
 
             producer.initTransactions();

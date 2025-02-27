@@ -276,8 +276,7 @@ public class RecordTestUtils {
     public static void deepSortRecords(Object o) throws Exception {
         if (o == null) {
             return;
-        } else if (o instanceof List) {
-            List<?> list = (List<?>) o;
+        } else if (o instanceof List<?> list) {
             for (Object entry : list) {
                 if (entry != null) {
                     if (Number.class.isAssignableFrom(entry.getClass())) {
@@ -287,8 +286,7 @@ public class RecordTestUtils {
                 }
             }
             list.sort(Comparator.comparing(Object::toString));
-        } else if (o instanceof ImplicitLinkedHashCollection) {
-            ImplicitLinkedHashCollection<?> coll = (ImplicitLinkedHashCollection<?>) o;
+        } else if (o instanceof ImplicitLinkedHashCollection<?> coll) {
             for (Object entry : coll) {
                 deepSortRecords(entry);
             }
@@ -376,7 +374,7 @@ public class RecordTestUtils {
                 Collections.singletonList(
                     new RegisterControllerRecord.ControllerFeature().
                         setName(MetadataVersion.FEATURE_NAME).
-                        setMinSupportedVersion(MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel()).
+                        setMinSupportedVersion(MetadataVersion.MINIMUM_VERSION.featureLevel()).
                         setMaxSupportedVersion(MetadataVersion.IBP_3_6_IV1.featureLevel())
                 ).iterator()
             ));

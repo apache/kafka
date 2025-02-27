@@ -18,7 +18,7 @@ import java.util.Properties
 import com.yammer.metrics.core.Gauge
 import kafka.security.JaasTestUtils
 import kafka.utils.TestUtils
-import org.apache.kafka.clients.admin.{AdminClientConfig, CreateAclsResult}
+import org.apache.kafka.clients.admin.{AdminClientConfig, CreateAclsResult, DescribeClusterOptions}
 import org.apache.kafka.common.acl._
 import org.apache.kafka.common.config.SslConfigs
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
@@ -32,10 +32,8 @@ import org.apache.kafka.common.network.ConnectionMode
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.metadata.authorizer.{ClusterMetadataAuthorizer, StandardAuthorizer}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
-import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotNull, assertTrue}
-import org.junit.jupiter.api.{AfterEach, TestInfo}
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotNull, assertThrows, assertTrue}
+import org.junit.jupiter.api.{AfterEach, Test, TestInfo}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.{Seq, mutable}
@@ -127,7 +125,7 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
     SslAdminIntegrationTest.executor = None
     SslAdminIntegrationTest.lastUpdateRequestContext = None
 
-    startSasl(jaasSections(List.empty, None, KafkaSasl))
+    startSasl(jaasSections(List.empty, None))
   }
 
   override def createConfig: util.Map[String, Object] = {
@@ -158,15 +156,30 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
     super.tearDown()
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testAclUpdatesUsingSynchronousAuthorizer(quorum: String): Unit = {
+  @Test
+  def testListNodesFromControllersIncludingFencedBrokers(): Unit = {
+    useBoostrapControllers()
+    client = createAdminClient
+    val result = client.describeCluster(new DescribeClusterOptions().includeFencedBrokers(true))
+    val exception = assertThrows(classOf[Exception], () => { result.nodes().get()})
+    assertTrue(exception.getCause.getCause.getMessage.contains("Cannot request fenced brokers from controller endpoint"))
+  }
+
+  @Test
+  def testListNodesFromControllers(): Unit = {
+    useBoostrapControllers()
+    client = createAdminClient
+    val result = client.describeCluster(new DescribeClusterOptions())
+    assertTrue(result.nodes().get().size().equals(controllerServers.size))
+  }
+
+  @Test
+  def testAclUpdatesUsingSynchronousAuthorizer(): Unit = {
     verifyAclUpdates()
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testAclUpdatesUsingAsynchronousAuthorizer(quorum: String): Unit = {
+  @Test
+  def testAclUpdatesUsingAsynchronousAuthorizer(): Unit = {
     SslAdminIntegrationTest.executor = Some(Executors.newSingleThreadExecutor)
     verifyAclUpdates()
   }
@@ -175,9 +188,8 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
    * Verify that ACL updates using synchronous authorizer are performed synchronously
    * on request threads without any performance overhead introduced by a purgatory.
    */
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testSynchronousAuthorizerAclUpdatesBlockRequestThreads(quorum: String): Unit = {
+  @Test
+  def testSynchronousAuthorizerAclUpdatesBlockRequestThreads(): Unit = {
     val testSemaphore = new Semaphore(0)
     SslAdminIntegrationTest.semaphore = Some(testSemaphore)
     waitForNoBlockedRequestThreads()
@@ -227,9 +239,8 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
    * Verify that ACL updates using an asynchronous authorizer are completed asynchronously
    * using a purgatory, enabling other requests to be processed even when ACL updates are blocked.
    */
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testAsynchronousAuthorizerAclUpdatesDontBlockRequestThreads(quorum: String): Unit = {
+  @Test
+  def testAsynchronousAuthorizerAclUpdatesDontBlockRequestThreads(): Unit = {
     SslAdminIntegrationTest.executor = Some(Executors.newSingleThreadExecutor)
     val testSemaphore = new Semaphore(0)
     SslAdminIntegrationTest.semaphore = Some(testSemaphore)

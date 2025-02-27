@@ -27,7 +27,7 @@ import org.apache.kafka.server.share.persister.PersisterStateBatch;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -47,30 +47,28 @@ public class ShareCoordinatorRecordHelpersTest {
                 .setStateEpoch(1)
                 .setLeaderEpoch(5)
                 .setStartOffset(0)
-                .setStateBatches(Collections.singletonList(batch))
+                .setStateBatches(List.of(batch))
                 .build()
         );
 
-        CoordinatorRecord expectedRecord = new CoordinatorRecord(
-            new ApiMessageAndVersion(
-                new ShareSnapshotKey()
-                    .setGroupId(groupId)
-                    .setTopicId(topicId)
-                    .setPartition(partitionId),
-                ShareCoordinator.SHARE_SNAPSHOT_RECORD_KEY_VERSION),
+        CoordinatorRecord expectedRecord = CoordinatorRecord.record(
+            new ShareSnapshotKey()
+                .setGroupId(groupId)
+                .setTopicId(topicId)
+                .setPartition(partitionId),
             new ApiMessageAndVersion(
                 new ShareSnapshotValue()
                     .setSnapshotEpoch(0)
                     .setStateEpoch(1)
                     .setLeaderEpoch(5)
                     .setStartOffset(0)
-                    .setStateBatches(Collections.singletonList(
+                    .setStateBatches(List.of(
                         new ShareSnapshotValue.StateBatch()
                             .setFirstOffset(1L)
                             .setLastOffset(10L)
                             .setDeliveryState((byte) 0)
                             .setDeliveryCount((short) 1))),
-                ShareCoordinator.SHARE_SNAPSHOT_RECORD_VALUE_VERSION));
+                (short) 0));
 
         assertEquals(expectedRecord, record);
     }
@@ -90,29 +88,48 @@ public class ShareCoordinatorRecordHelpersTest {
                 .setStateEpoch(-1)  // ignored for share update
                 .setLeaderEpoch(5)
                 .setStartOffset(0)
-                .setStateBatches(Collections.singletonList(batch))
+                .setStateBatches(List.of(batch))
                 .build()
         );
 
-        CoordinatorRecord expectedRecord = new CoordinatorRecord(
-            new ApiMessageAndVersion(
-                new ShareUpdateKey()
-                    .setGroupId(groupId)
-                    .setTopicId(topicId)
-                    .setPartition(partitionId),
-                ShareCoordinator.SHARE_UPDATE_RECORD_KEY_VERSION),
+        CoordinatorRecord expectedRecord = CoordinatorRecord.record(
+            new ShareUpdateKey()
+                .setGroupId(groupId)
+                .setTopicId(topicId)
+                .setPartition(partitionId),
             new ApiMessageAndVersion(
                 new ShareUpdateValue()
                     .setSnapshotEpoch(0)
                     .setLeaderEpoch(5)
                     .setStartOffset(0)
-                    .setStateBatches(Collections.singletonList(
+                    .setStateBatches(List.of(
                         new ShareUpdateValue.StateBatch()
                             .setFirstOffset(1L)
                             .setLastOffset(10L)
                             .setDeliveryState((byte) 0)
                             .setDeliveryCount((short) 1))),
-                ShareCoordinator.SHARE_UPDATE_RECORD_VALUE_VERSION));
+                (short) 0));
+
+        assertEquals(expectedRecord, record);
+    }
+
+    @Test
+    public void testNewShareStateTombstoneRecord() {
+        String groupId = "test-group";
+        Uuid topicId = Uuid.randomUuid();
+        int partitionId = 1;
+        CoordinatorRecord record = ShareCoordinatorRecordHelpers.newShareStateTombstoneRecord(
+            groupId,
+            topicId,
+            partitionId
+        );
+
+        CoordinatorRecord expectedRecord = CoordinatorRecord.tombstone(
+            new ShareSnapshotKey()
+                .setGroupId(groupId)
+                .setTopicId(topicId)
+                .setPartition(partitionId)
+        );
 
         assertEquals(expectedRecord, record);
     }

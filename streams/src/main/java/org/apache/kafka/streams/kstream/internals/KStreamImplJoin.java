@@ -30,6 +30,7 @@ import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
 import org.apache.kafka.streams.kstream.internals.graph.StreamStreamJoinNode;
 import org.apache.kafka.streams.kstream.internals.graph.WindowedStreamProcessorNode;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.InternalResourcesNaming;
 import org.apache.kafka.streams.processor.internals.StoreBuilderWrapper;
 import org.apache.kafka.streams.processor.internals.StoreFactory;
 import org.apache.kafka.streams.state.Stores;
@@ -146,16 +147,16 @@ class KStreamImplJoin {
             otherWindowStore = joinWindowStoreBuilderFromSupplier(otherStoreSupplier, streamJoinedInternal.keySerde(), streamJoinedInternal.otherValueSerde());
         }
 
-        final KStreamJoinWindow<K, V1> thisWindowedStream = new KStreamJoinWindow<>(thisWindowStore.name());
+        final KStreamJoinWindow<K, V1> thisWindowedStream = new KStreamJoinWindow<>(thisWindowStore);
 
         final ProcessorParameters<K, V1, ?, ?> thisWindowStreamProcessorParams = new ProcessorParameters<>(thisWindowedStream, thisWindowStreamProcessorName);
-        final ProcessorGraphNode<K, V1> thisWindowedStreamsNode = new WindowedStreamProcessorNode<>(thisWindowStore.name(), thisWindowStreamProcessorParams);
+        final ProcessorGraphNode<K, V1> thisWindowedStreamsNode = new WindowedStreamProcessorNode<>(thisWindowStore.storeName(), thisWindowStreamProcessorParams);
         builder.addGraphNode(thisGraphNode, thisWindowedStreamsNode);
 
-        final KStreamJoinWindow<K, V2> otherWindowedStream = new KStreamJoinWindow<>(otherWindowStore.name());
+        final KStreamJoinWindow<K, V2> otherWindowedStream = new KStreamJoinWindow<>(otherWindowStore);
 
         final ProcessorParameters<K, V2, ?, ?> otherWindowStreamProcessorParams = new ProcessorParameters<>(otherWindowedStream, otherWindowStreamProcessorName);
-        final ProcessorGraphNode<K, V2> otherWindowedStreamsNode = new WindowedStreamProcessorNode<>(otherWindowStore.name(), otherWindowStreamProcessorParams);
+        final ProcessorGraphNode<K, V2> otherWindowedStreamsNode = new WindowedStreamProcessorNode<>(otherWindowStore.storeName(), otherWindowStreamProcessorParams);
         builder.addGraphNode(otherGraphNode, otherWindowedStreamsNode);
 
         Optional<StoreFactory> outerJoinWindowStore = Optional.empty();
@@ -168,30 +169,38 @@ class KStreamImplJoin {
             );
         }
 
+        if (userProvidedBaseStoreName == null) {
+            addInternalResourceName(thisWindowStore);
+            addInternalResourceName(otherWindowStore);
+            if (outerJoinWindowStore.isPresent()) {
+                addInternalResourceName(outerJoinWindowStore.get());
+            }
+        }
+
         // Time-shared between joins to keep track of the maximum stream time
         final TimeTrackerSupplier sharedTimeTrackerSupplier = new TimeTrackerSupplier();
 
         final JoinWindowsInternal internalWindows = new JoinWindowsInternal(windows);
         final KStreamKStreamJoinLeftSide<K, V1, V2, VOut> joinThis = new KStreamKStreamJoinLeftSide<>(
-            otherWindowStore.name(),
             internalWindows,
             joiner,
             leftOuter,
-            outerJoinWindowStore.map(StoreFactory::name),
-            sharedTimeTrackerSupplier
+            sharedTimeTrackerSupplier,
+            otherWindowStore,
+            outerJoinWindowStore
         );
 
         final KStreamKStreamJoinRightSide<K, V1, V2, VOut> joinOther = new KStreamKStreamJoinRightSide<>(
-            thisWindowStore.name(),
             internalWindows,
             AbstractStream.reverseJoinerWithKey(joiner),
             rightOuter,
-            outerJoinWindowStore.map(StoreFactory::name),
-            sharedTimeTrackerSupplier
+            sharedTimeTrackerSupplier,
+            thisWindowStore,
+            outerJoinWindowStore
         );
 
         final KStreamKStreamSelfJoin<K, V1, V2, VOut> selfJoin = new KStreamKStreamSelfJoin<>(
-            thisWindowStore.name(),
+            thisWindowStore,
             internalWindows,
             joiner,
             windows.size() + windows.gracePeriodMs()
@@ -209,18 +218,11 @@ class KStreamImplJoin {
         joinBuilder.withJoinMergeProcessorParameters(joinMergeProcessorParams)
                    .withJoinThisProcessorParameters(joinThisProcessorParams)
                    .withJoinOtherProcessorParameters(joinOtherProcessorParams)
-                   .withThisWindowStoreBuilder(thisWindowStore)
-                   .withOtherWindowStoreBuilder(otherWindowStore)
-                   .withThisWindowedStreamProcessorParameters(thisWindowStreamProcessorParams)
-                   .withOtherWindowedStreamProcessorParameters(otherWindowStreamProcessorParams)
-                   .withOuterJoinWindowStoreBuilder(outerJoinWindowStore)
+                   .withSelfJoinProcessorParameters(selfJoinProcessorParams)
+                   .withThisWindowedStreamProcessorName(thisWindowStreamProcessorParams.processorName())
+                   .withOtherWindowedStreamProcessorName(otherWindowStreamProcessorParams.processorName())
                    .withValueJoiner(joiner)
-                   .withNodeName(joinMergeName)
-                   .withSelfJoinProcessorParameters(selfJoinProcessorParams);
-
-        if (internalWindows.spuriousResultFixEnabled()) {
-            joinBuilder.withSpuriousResultFixEnabled();
-        }
+                   .withNodeName(joinMergeName);
 
         final GraphNode joinGraphNode = joinBuilder.build();
 
@@ -262,10 +264,18 @@ class KStreamImplJoin {
     private static <K, V> StoreFactory joinWindowStoreBuilderFromSupplier(final WindowBytesStoreSupplier storeSupplier,
                                                                           final Serde<K> keySerde,
                                                                           final Serde<V> valueSerde) {
-        return new StoreBuilderWrapper(Stores.windowStoreBuilder(
+        return StoreBuilderWrapper.wrapStoreBuilder(Stores.windowStoreBuilder(
             storeSupplier,
             keySerde,
             valueSerde
         ));
+    }
+
+    private void addInternalResourceName(final StoreFactory windowStore) {
+        final InternalResourcesNaming.Builder thisInternalResourcesNaming = InternalResourcesNaming.builder().withStateStore(windowStore.storeName());
+        if (windowStore.loggingEnabled()) {
+            thisInternalResourcesNaming.withChangelogTopic(windowStore.storeName() + "-changelog");
+        }
+        builder.internalTopologyBuilder().addImplicitInternalNames(thisInternalResourcesNaming.build());
     }
 }

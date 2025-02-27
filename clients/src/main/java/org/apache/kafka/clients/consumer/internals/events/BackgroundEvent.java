@@ -27,7 +27,12 @@ import java.util.Objects;
 public abstract class BackgroundEvent {
 
     public enum Type {
-        ERROR, CONSUMER_REBALANCE_LISTENER_CALLBACK_NEEDED, SHARE_ACKNOWLEDGEMENT_COMMIT_CALLBACK
+        ERROR,
+        CONSUMER_REBALANCE_LISTENER_CALLBACK_NEEDED,
+        SHARE_ACKNOWLEDGEMENT_COMMIT_CALLBACK,
+        STREAMS_ON_TASKS_ASSIGNED_CALLBACK_NEEDED,
+        STREAMS_ON_TASKS_REVOKED_CALLBACK_NEEDED,
+        STREAMS_ON_ALL_TASKS_LOST_CALLBACK_NEEDED
     }
 
     private final Type type;
@@ -37,6 +42,12 @@ public abstract class BackgroundEvent {
      * {@link #equals(Object)} and can be used in log messages when debugging.
      */
     private final Uuid id;
+
+    /**
+     * The time in milliseconds when this event was enqueued.
+     * This field can be changed after the event is created, so it should not be used in hashCode or equals.
+     */
+    private long enqueuedMs;
 
     protected BackgroundEvent(Type type) {
         this.type = Objects.requireNonNull(type);
@@ -49,6 +60,14 @@ public abstract class BackgroundEvent {
 
     public Uuid id() {
         return id;
+    }
+
+    public void setEnqueuedMs(long enqueuedMs) {
+        this.enqueuedMs = enqueuedMs;
+    }
+
+    public long enqueuedMs() {
+        return enqueuedMs;
     }
 
     @Override
@@ -65,7 +84,7 @@ public abstract class BackgroundEvent {
     }
 
     protected String toStringBase() {
-        return "type=" + type + ", id=" + id;
+        return "type=" + type + ", id=" + id + ", enqueuedMs=" + enqueuedMs;
     }
 
     @Override

@@ -29,18 +29,8 @@ import java.util.Map;
 public class UpdateFeaturesOptions extends AbstractOptions<UpdateFeaturesOptions> {
     private boolean validateOnly = false;
 
-    @Deprecated
-    public boolean dryRun() {
-        return validateOnly;
-    }
-
     public boolean validateOnly() {
         return validateOnly;
-    }
-
-    @Deprecated
-    public UpdateFeaturesOptions dryRun(boolean dryRun) {
-        return validateOnly(dryRun);
     }
 
     public UpdateFeaturesOptions validateOnly(boolean validateOnly) {

@@ -21,8 +21,8 @@ from ducktape.utils.util import wait_until
 
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 from kafkatest.services.monitor.jmx import JmxMixin, JmxTool
-from kafkatest.version import DEV_BRANCH, LATEST_3_7
-from kafkatest.services.kafka.util import fix_opts_for_new_jvm
+from kafkatest.version import DEV_BRANCH, LATEST_3_7, get_version, LATEST_4_0
+from kafkatest.services.kafka.util import fix_opts_for_new_jvm, get_log4j_config_param, get_log4j_config_for_tools
 
 """
 The console consumer is a tool that reads data from Kafka and outputs it to standard output.
@@ -36,7 +36,6 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
     STDERR_CAPTURE = os.path.join(PERSISTENT_ROOT, "console_consumer.stderr")
     LOG_DIR = os.path.join(PERSISTENT_ROOT, "logs")
     LOG_FILE = os.path.join(LOG_DIR, "console_consumer.log")
-    LOG4J_CONFIG = os.path.join(PERSISTENT_ROOT, "tools-log4j.properties")
     CONFIG_FILE = os.path.join(PERSISTENT_ROOT, "console_consumer.properties")
     JMX_TOOL_LOG = os.path.join(PERSISTENT_ROOT, "jmx_tool.log")
     JMX_TOOL_ERROR_LOG = os.path.join(PERSISTENT_ROOT, "jmx_tool.err.log")
@@ -146,7 +145,8 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
         args['stdout'] = ConsoleConsumer.STDOUT_CAPTURE
         args['stderr'] = ConsoleConsumer.STDERR_CAPTURE
         args['log_dir'] = ConsoleConsumer.LOG_DIR
-        args['log4j_config'] = ConsoleConsumer.LOG4J_CONFIG
+        args['log4j_param'] = get_log4j_config_param(node)
+        args['log4j_config'] = get_log4j_config_for_tools(node)
         args['config_file'] = ConsoleConsumer.CONFIG_FILE
         args['stdout'] = ConsoleConsumer.STDOUT_CAPTURE
         args['jmx_port'] = self.jmx_port
@@ -160,7 +160,7 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
         cmd = fix_opts_for_new_jvm(node)
         cmd += "export JMX_PORT=%(jmx_port)s; " \
               "export LOG_DIR=%(log_dir)s; " \
-              "export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%(log4j_config)s\"; " \
+              "export KAFKA_LOG4J_OPTS=\"%(log4j_param)s%(log4j_config)s\"; " \
               "export KAFKA_OPTS=%(kafka_opts)s; " \
               "%(console_consumer)s " \
               "--topic %(topic)s " \
@@ -226,8 +226,8 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
         node.account.create_file(ConsoleConsumer.CONFIG_FILE, prop_file)
 
         # Create and upload log properties
-        log_config = self.render('tools_log4j.properties', log_file=ConsoleConsumer.LOG_FILE)
-        node.account.create_file(ConsoleConsumer.LOG4J_CONFIG, log_config)
+        log_config = self.render(get_log4j_config_for_tools(node), log_file=ConsoleConsumer.LOG_FILE)
+        node.account.create_file(get_log4j_config_for_tools(node), log_config)
 
         # Run and capture output
         cmd = self.start_cmd(node)

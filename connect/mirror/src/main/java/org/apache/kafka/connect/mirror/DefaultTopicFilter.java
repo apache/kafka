@@ -33,7 +33,7 @@ public class DefaultTopicFilter implements TopicFilter {
 
     public static final String TOPICS_EXCLUDE_CONFIG = "topics.exclude";
     private static final String TOPICS_EXCLUDE_DOC = "List of topics and/or regexes that should not be replicated.";
-    public static final String TOPICS_EXCLUDE_DEFAULT = ".*[\\-\\.]internal, .*\\.replica, __.*";
+    public static final String TOPICS_EXCLUDE_DEFAULT = "mm2.*\\.internal, .*\\.replica, __.*";
 
     private Pattern includePattern;
     private Pattern excludePattern;

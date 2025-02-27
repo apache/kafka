@@ -62,6 +62,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     private final SubscriptionState subscriptions;
     private final Map<TopicPartition, Long> beginningOffsets;
     private final Map<TopicPartition, Long> endOffsets;
+    private final Map<TopicPartition, Long> durationResetOffsets;
     private final Map<TopicPartition, OffsetAndMetadata> committed;
     private final Queue<Runnable> pollTasks;
     private final Set<TopicPartition> paused;
@@ -81,7 +82,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     private final List<KafkaMetric> addedMetrics = new ArrayList<>();
 
     /**
-     * @deprecated Since 4.0. Use {@link #MockConsumer(String)}.
+     * @deprecated Since 4.0. Use {@link #MockConsumer(String)} instead.
      */
     @Deprecated
     public MockConsumer(OffsetResetStrategy offsetResetStrategy) {
@@ -104,6 +105,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         this.closed = false;
         this.beginningOffsets = new HashMap<>();
         this.endOffsets = new HashMap<>();
+        this.durationResetOffsets = new HashMap<>();
         this.pollTasks = new LinkedList<>();
         this.pollException = null;
         this.wakeup = new AtomicBoolean(false);
@@ -161,13 +163,23 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
-    public void subscribe(SubscriptionPattern pattern, ConsumerRebalanceListener callback) {
-        throw new UnsupportedOperationException("Subscribe to RE2/J regular expression not supported in MockConsumer yet");
+    public void subscribe(SubscriptionPattern pattern, ConsumerRebalanceListener listener) {
+        if (listener == null)
+            throw new IllegalArgumentException("RebalanceListener cannot be null");
+        subscribe(pattern, Optional.of(listener));
     }
 
     @Override
     public void subscribe(SubscriptionPattern pattern) {
-        throw new UnsupportedOperationException("Subscribe to RE2/J regular expression not supported in MockConsumer yet");
+        subscribe(pattern, Optional.empty());
+    }
+
+    private void subscribe(SubscriptionPattern pattern, Optional<ConsumerRebalanceListener> listener) {
+        if (pattern == null || pattern.toString().isEmpty())
+            throw new IllegalArgumentException("Topic pattern cannot be " + (pattern == null ? "null" : "empty"));
+        ensureNotClosed();
+        committed.clear();
+        this.subscriptions.subscribe(pattern, listener);
     }
 
     @Override
@@ -302,14 +314,6 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         recs.add(record);
     }
 
-    /**
-     * @deprecated Use {@link #setPollException(KafkaException)} instead
-     */
-    @Deprecated
-    public synchronized void setException(KafkaException exception) {
-        setPollException(exception);
-    }
-
     public synchronized void setPollException(KafkaException exception) {
         this.pollException = exception;
     }
@@ -421,6 +425,10 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 
     public synchronized void updateEndOffsets(final Map<TopicPartition, Long> newOffsets) {
         endOffsets.putAll(newOffsets);
+    }
+
+    public synchronized void updateDurationOffsets(final Map<TopicPartition, Long> newOffsets) {
+        durationResetOffsets.putAll(newOffsets);
     }
 
     public void disableTelemetry() {
@@ -600,6 +608,10 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
             offset = endOffsets.get(tp);
             if (offset == null)
                 throw new IllegalStateException("MockConsumer didn't have end offset specified, but tried to seek to end");
+        } else if (strategy.type() == AutoOffsetResetStrategy.StrategyType.BY_DURATION) {
+            offset = durationResetOffsets.get(tp);
+            if (offset == null)
+                throw new IllegalStateException("MockConsumer didn't have duration offset specified, but tried to seek to timestamp");
         } else {
             throw new NoOffsetForPartitionException(tp);
         }

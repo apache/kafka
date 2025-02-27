@@ -41,7 +41,7 @@ import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.server.quota.QuotaType;
 import org.apache.kafka.tools.reassign.ReassignPartitionsCommand;
 
-import org.apache.log4j.PropertyConfigurator;
+import org.apache.logging.log4j.core.config.Configurator;
 import org.jfree.chart.ChartFactory;
 import org.jfree.chart.ChartFrame;
 import org.jfree.chart.JFreeChart;
@@ -95,7 +95,7 @@ public class ReplicationQuotasTestRig {
     private static final String DIR;
 
     static {
-        PropertyConfigurator.configure("core/src/test/resources/log4j.properties");
+        Configurator.reconfigure();
 
         new File("Experiments").mkdir();
         DIR = "Experiments/Run" + Long.valueOf(System.currentTimeMillis()).toString().substring(8);

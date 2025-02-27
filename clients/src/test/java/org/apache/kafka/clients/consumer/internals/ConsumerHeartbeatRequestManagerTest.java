@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.SubscriptionPattern;
 import org.apache.kafka.clients.consumer.internals.AbstractHeartbeatRequestManager.HeartbeatRequestState;
 import org.apache.kafka.clients.consumer.internals.AbstractMembershipManager.LocalAssignment;
 import org.apache.kafka.clients.consumer.internals.ConsumerHeartbeatRequestManager.HeartbeatState;
@@ -30,6 +31,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.metrics.Metrics;
@@ -64,6 +66,8 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.SortedSet;
 
+import static org.apache.kafka.clients.consumer.internals.AbstractHeartbeatRequestManager.CONSUMER_PROTOCOL_NOT_SUPPORTED_MSG;
+import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.REGEX_RESOLUTION_NOT_SUPPORTED_MSG;
 import static org.apache.kafka.common.utils.Utils.mkSortedSet;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -578,6 +582,11 @@ public class ConsumerHeartbeatRequestManagerTest {
                 verify(backgroundEventHandler, never()).add(any());
                 assertNextHeartbeatTiming(0);
                 break;
+            case TOPIC_AUTHORIZATION_FAILED:
+                verify(backgroundEventHandler).add(any(ErrorEvent.class));
+                assertNextHeartbeatTiming(DEFAULT_RETRY_BACKOFF_MS);
+                verify(membershipManager, never()).transitionToFatal();
+                break;
             default:
                 if (isFatal) {
                     when(coordinatorRequestManager.coordinator()).thenReturn(Optional.empty());
@@ -599,6 +608,61 @@ public class ConsumerHeartbeatRequestManagerTest {
             result = heartbeatRequestManager.poll(time.milliseconds());
             assertEquals(1, result.unsentRequests.size());
         }
+    }
+
+    /**
+     * This validates the UnsupportedApiVersion the client generates while building a HB if:
+     * 1. HB API is not supported.
+     * 2. Required HB API version is not available.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {CONSUMER_PROTOCOL_NOT_SUPPORTED_MSG})
+    public void testUnsupportedVersionFromBroker(String errorMsg) {
+        mockResponseWithException(new UnsupportedVersionException(errorMsg), true);
+        ArgumentCaptor<ErrorEvent> errorEventArgumentCaptor = ArgumentCaptor.forClass(ErrorEvent.class);
+        verify(backgroundEventHandler).add(errorEventArgumentCaptor.capture());
+        ErrorEvent errorEvent = errorEventArgumentCaptor.getValue();
+        assertInstanceOf(Errors.UNSUPPORTED_VERSION.exception().getClass(), errorEvent.error());
+        assertEquals(errorMsg, errorEvent.error().getMessage());
+        clearInvocations(backgroundEventHandler);
+    }
+
+    /**
+     * This validates the UnsupportedApiVersion the client generates while building a HB if:
+     * REGEX_RESOLUTION_NOT_SUPPORTED_MSG only generated on the client side.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {CONSUMER_PROTOCOL_NOT_SUPPORTED_MSG, REGEX_RESOLUTION_NOT_SUPPORTED_MSG})
+    public void testUnsupportedVersionFromClient(String errorMsg) {
+        mockResponseWithException(new UnsupportedVersionException(errorMsg), false);
+        ArgumentCaptor<ErrorEvent> errorEventArgumentCaptor = ArgumentCaptor.forClass(ErrorEvent.class);
+        verify(backgroundEventHandler).add(errorEventArgumentCaptor.capture());
+        ErrorEvent errorEvent = errorEventArgumentCaptor.getValue();
+        assertInstanceOf(Errors.UNSUPPORTED_VERSION.exception().getClass(), errorEvent.error());
+        assertEquals(errorMsg, errorEvent.error().getMessage());
+        clearInvocations(backgroundEventHandler);
+    }
+
+    private void mockErrorResponse(Errors error, String exceptionCustomMsg) {
+        time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
+        NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(1, result.unsentRequests.size());
+
+        when(subscriptions.hasAutoAssignedPartitions()).thenReturn(true);
+        ClientResponse response = createHeartbeatResponse(
+            result.unsentRequests.get(0), error, exceptionCustomMsg);
+        result.unsentRequests.get(0).handler().onComplete(response);
+    }
+
+    private void mockResponseWithException(UnsupportedVersionException exception, boolean isFromBroker) {
+        time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
+        NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(1, result.unsentRequests.size());
+
+        when(subscriptions.hasAutoAssignedPartitions()).thenReturn(true);
+        ClientResponse response = createHeartbeatResponseWithException(
+            result.unsentRequests.get(0), exception, isFromBroker);
+        result.unsentRequests.get(0).handler().onComplete(response);
     }
 
     private void assertNextHeartbeatTiming(long expectedTimeToNextHeartbeatMs) {
@@ -864,6 +928,61 @@ public class ConsumerHeartbeatRequestManagerTest {
             "No requests should be generated on close if the member is not leaving when closing the manager");
     }
 
+    @Test
+    public void testRegexInHeartbeatLifecycle() {
+        heartbeatState = new HeartbeatState(subscriptions, membershipManager, DEFAULT_MAX_POLL_INTERVAL_MS);
+        createHeartbeatRequestStateWithZeroHeartbeatInterval();
+
+        // Initial heartbeat with regex
+        mockJoiningMemberData(null);
+        when(subscriptions.subscriptionPattern()).thenReturn(new SubscriptionPattern("t1.*"));
+        ConsumerGroupHeartbeatRequestData data = heartbeatState.buildRequestData();
+        assertEquals("t1.*", data.subscribedTopicRegex());
+
+        // Regex not included in HB if not updated
+        when(membershipManager.state()).thenReturn(MemberState.STABLE);
+        data = heartbeatState.buildRequestData();
+        assertNull(data.subscribedTopicRegex());
+
+        // Regex included in HB if updated
+        when(subscriptions.subscriptionPattern()).thenReturn(new SubscriptionPattern("t2.*"));
+        data = heartbeatState.buildRequestData();
+        assertEquals("t2.*", data.subscribedTopicRegex());
+
+        // Empty regex included in HB to remove pattern subscription
+        when(subscriptions.subscriptionPattern()).thenReturn(null);
+        data = heartbeatState.buildRequestData();
+        assertEquals("", data.subscribedTopicRegex());
+
+        // Regex not included in HB after pattern subscription removed
+        when(subscriptions.subscriptionPattern()).thenReturn(null);
+        data = heartbeatState.buildRequestData();
+        assertNull(data.subscribedTopicRegex());
+    }
+
+    @Test
+    public void testRegexInJoiningHeartbeat() {
+        heartbeatState = new HeartbeatState(subscriptions, membershipManager, DEFAULT_MAX_POLL_INTERVAL_MS);
+        createHeartbeatRequestStateWithZeroHeartbeatInterval();
+
+        // Initial heartbeat with regex
+        mockJoiningMemberData(null);
+        when(subscriptions.subscriptionPattern()).thenReturn(new SubscriptionPattern("t1.*"));
+        ConsumerGroupHeartbeatRequestData data = heartbeatState.buildRequestData();
+        assertEquals("t1.*", data.subscribedTopicRegex());
+
+        // Members unsubscribes from regex (empty regex included in HB)
+        when(subscriptions.subscriptionPattern()).thenReturn(null);
+        data = heartbeatState.buildRequestData();
+        assertEquals("", data.subscribedTopicRegex());
+
+        // Member rejoins (ie. fenced) should not include regex field in HB
+        when(membershipManager.state()).thenReturn(MemberState.JOINING);
+        when(subscriptions.subscriptionPattern()).thenReturn(null);
+        data = heartbeatState.buildRequestData();
+        assertNull(data.subscribedTopicRegex());
+    }
+
     private void assertHeartbeat(ConsumerHeartbeatRequestManager hrm, int nextPollMs) {
         NetworkClientDelegate.PollResult pollResult = hrm.poll(time.milliseconds());
         assertEquals(1, pollResult.unsentRequests.size());
@@ -910,12 +1029,19 @@ public class ConsumerHeartbeatRequestManagerTest {
             Arguments.of(Errors.UNSUPPORTED_VERSION, true),
             Arguments.of(Errors.UNRELEASED_INSTANCE_ID, true),
             Arguments.of(Errors.FENCED_INSTANCE_ID, true),
-            Arguments.of(Errors.GROUP_MAX_SIZE_REACHED, true));
+            Arguments.of(Errors.GROUP_MAX_SIZE_REACHED, true),
+            Arguments.of(Errors.TOPIC_AUTHORIZATION_FAILED, false));
+    }
+
+    private ClientResponse createHeartbeatResponse(NetworkClientDelegate.UnsentRequest request,
+                                                   Errors error) {
+        return createHeartbeatResponse(request, error, "stubbed error message");
     }
 
     private ClientResponse createHeartbeatResponse(
         final NetworkClientDelegate.UnsentRequest request,
-        final Errors error
+        final Errors error,
+        final String msg
     ) {
         ConsumerGroupHeartbeatResponseData data = new ConsumerGroupHeartbeatResponseData()
             .setErrorCode(error.code())
@@ -923,7 +1049,7 @@ public class ConsumerHeartbeatRequestManagerTest {
             .setMemberId(DEFAULT_MEMBER_ID)
             .setMemberEpoch(DEFAULT_MEMBER_EPOCH);
         if (error != Errors.NONE) {
-            data.setErrorMessage("stubbed error message");
+            data.setErrorMessage(msg);
         }
         ConsumerGroupHeartbeatResponse response = new ConsumerGroupHeartbeatResponse(data);
         return new ClientResponse(
@@ -938,6 +1064,27 @@ public class ConsumerHeartbeatRequestManagerTest {
             response);
     }
 
+    private ClientResponse createHeartbeatResponseWithException(
+        final NetworkClientDelegate.UnsentRequest request,
+        final UnsupportedVersionException exception,
+        final boolean isFromBroker
+    ) {
+        ConsumerGroupHeartbeatResponse response = null;
+        if (isFromBroker) {
+            response = new ConsumerGroupHeartbeatResponse(null);
+        }
+        return new ClientResponse(
+            new RequestHeader(ApiKeys.CONSUMER_GROUP_HEARTBEAT, ApiKeys.CONSUMER_GROUP_HEARTBEAT.latestVersion(), "client-id", 1),
+            request.handler(),
+            "0",
+            time.milliseconds(),
+            time.milliseconds(),
+            false,
+            exception,
+            null,
+            response);
+    }
+
     private ConsumerConfig config() {
         Properties prop = new Properties();
         prop.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
@@ -947,7 +1094,6 @@ public class ConsumerHeartbeatRequestManagerTest {
         prop.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, String.valueOf(DEFAULT_MAX_POLL_INTERVAL_MS));
         prop.setProperty(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG, String.valueOf(DEFAULT_RETRY_BACKOFF_MS));
         prop.setProperty(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG, String.valueOf(DEFAULT_RETRY_BACKOFF_MAX_MS));
-        prop.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, String.valueOf(DEFAULT_HEARTBEAT_INTERVAL_MS));
         return new ConsumerConfig(prop);
     }
 

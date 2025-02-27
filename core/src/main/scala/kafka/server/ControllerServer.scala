@@ -22,10 +22,11 @@ import kafka.raft.KafkaRaftManager
 import kafka.server.QuotaFactory.QuotaManagers
 
 import scala.collection.immutable
-import kafka.server.metadata.{AclPublisher, ClientQuotaMetadataManager, DelegationTokenPublisher, DynamicClientQuotaPublisher, DynamicConfigPublisher, KRaftMetadataCache, KRaftMetadataCachePublisher, ScramPublisher}
+import kafka.server.metadata.{AclPublisher, ClientQuotaMetadataManager, DelegationTokenPublisher, DynamicClientQuotaPublisher, DynamicConfigPublisher, DynamicTopicClusterQuotaPublisher, KRaftMetadataCache, KRaftMetadataCachePublisher, ScramPublisher}
 import kafka.utils.{CoreUtils, Logging}
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.utils.{LogContext, Utils}
@@ -123,7 +124,7 @@ class ControllerServer(
     try {
       this.logIdent = logContext.logPrefix()
       info("Starting controller")
-      config.dynamicConfig.initialize(zkClientOpt = None, clientMetricsReceiverPluginOpt = None)
+      config.dynamicConfig.initialize(clientMetricsReceiverPluginOpt = None)
 
       maybeChangeStatus(STARTING, STARTED)
 
@@ -155,6 +156,11 @@ class ControllerServer(
         () => featuresPublisher.features()
       )
 
+      //  metrics will be set to null when closing a controller, so we should recreate it for testing
+      if (sharedServer.metrics == null){
+        sharedServer.metrics = new Metrics()
+      }
+
       tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames)
       credentialProvider = new CredentialProvider(ScramMechanism.mechanismNames, tokenCache)
       socketServer = new SocketServer(config,
@@ -165,7 +171,7 @@ class ControllerServer(
         sharedServer.socketFactory)
 
       val listenerInfo = ListenerInfo
-        .create(config.effectiveAdvertisedControllerListeners.map(_.toJava).asJava)
+        .create(config.effectiveAdvertisedControllerListeners.map(_.toPublic).asJava)
         .withWildcardHostnamesResolved()
         .withEphemeralPortsCorrected(name => socketServer.boundPort(new ListenerName(name)))
       socketServerFirstBoundPortFuture.complete(listenerInfo.firstListener().port())
@@ -194,7 +200,7 @@ class ControllerServer(
         startupDeadline, time)
       val controllerNodes = QuorumConfig.voterConnectionsToNodes(voterConnections)
       val quorumFeatures = new QuorumFeatures(config.nodeId,
-        QuorumFeatures.defaultFeatureMap(config.unstableFeatureVersionsEnabled),
+        QuorumFeatures.defaultSupportedFeatureMap(config.unstableFeatureVersionsEnabled),
         controllerNodes.asScala.map(node => Integer.valueOf(node.id())).asJava)
 
       val delegationTokenKeyString = {
@@ -243,7 +249,8 @@ class ControllerServer(
           setDelegationTokenExpiryCheckIntervalMs(config.delegationTokenExpiryCheckIntervalMs).
           setUncleanLeaderElectionCheckIntervalMs(config.uncleanLeaderElectionCheckIntervalMs).
           setInterBrokerListenerName(config.interBrokerListenerName.value()).
-          setEligibleLeaderReplicasEnabled(config.elrEnabled)
+          setControllerPerformanceSamplePeriodMs(config.controllerPerformanceSamplePeriodMs).
+          setControllerPerformanceAlwaysLogThresholdMs(config.controllerPerformanceAlwaysLogThresholdMs)
       }
       controller = controllerBuilder.build()
 
@@ -293,7 +300,7 @@ class ControllerServer(
         clusterId,
         time,
         s"controller-${config.nodeId}-",
-        QuorumFeatures.defaultFeatureMap(config.unstableFeatureVersionsEnabled),
+        QuorumFeatures.defaultSupportedFeatureMap(config.unstableFeatureVersionsEnabled),
         incarnationId,
         listenerInfo)
 
@@ -325,7 +332,17 @@ class ControllerServer(
         config,
         sharedServer.metadataPublishingFaultHandler,
         "controller",
-        clientQuotaMetadataManager))
+        clientQuotaMetadataManager
+      ))
+
+      // Set up the DynamicTopicClusterQuotaPublisher. This will enable quotas for the cluster and topics.
+      metadataPublishers.add(new DynamicTopicClusterQuotaPublisher(
+        clusterId,
+        config,
+        sharedServer.metadataPublishingFaultHandler,
+        "controller",
+        quotaManagers,
+      ))
 
       // Set up the SCRAM publisher.
       metadataPublishers.add(new ScramPublisher(

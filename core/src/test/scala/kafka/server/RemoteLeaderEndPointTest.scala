@@ -59,13 +59,13 @@ class RemoteLeaderEndPointTest {
         val time = new MockTime
         val logPrefix = "remote-leader-endpoint"
         val sourceBroker: BrokerEndPoint = new BrokerEndPoint(0, "localhost", 9092)
-        val props = TestUtils.createBrokerConfig(sourceBroker.id, TestUtils.MockZkConnect, port = sourceBroker.port)
+        val props = TestUtils.createBrokerConfig(sourceBroker.id, port = sourceBroker.port)
         val fetchSessionHandler = new FetchSessionHandler(new LogContext(logPrefix), sourceBroker.id)
         val config = KafkaConfig.fromProps(props)
         blockingSend = new MockBlockingSender(offsets = new util.HashMap[TopicPartition, EpochEndOffset](),
             sourceBroker = sourceBroker, time = time)
         endPoint = new RemoteLeaderEndPoint(logPrefix, blockingSend, fetchSessionHandler,
-            config, replicaManager, QuotaFactory.UNBOUNDED_QUOTA, () => MetadataVersion.MINIMUM_KRAFT_VERSION, () => currentBrokerEpoch)
+            config, replicaManager, QuotaFactory.UNBOUNDED_QUOTA, () => MetadataVersion.MINIMUM_VERSION, () => currentBrokerEpoch)
     }
 
     @Test

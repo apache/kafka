@@ -20,7 +20,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.feature.SupportedVersionRange;
 import org.apache.kafka.common.network.ListenerName;
-import org.apache.kafka.server.common.Features;
+import org.apache.kafka.server.common.Feature;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -359,7 +359,7 @@ public final class VoterSetTest {
     }
 
     public static VoterSet.VoterNode voterNode(ReplicaKey replicaKey) {
-        return new VoterSet.VoterNode(
+        return voterNode(
             replicaKey,
             Endpoints.fromInetSocketAddresses(
                 Collections.singletonMap(
@@ -369,8 +369,15 @@ public final class VoterSetTest {
                         9990 + replicaKey.id()
                     )
                 )
-            ),
-            Features.KRAFT_VERSION.supportedVersionRange()
+            )
+        );
+    }
+
+    public static VoterSet.VoterNode voterNode(ReplicaKey replicaKey, Endpoints endpoints) {
+        return new VoterSet.VoterNode(
+            replicaKey,
+            endpoints,
+            Feature.KRAFT_VERSION.supportedVersionRange()
         );
     }
 

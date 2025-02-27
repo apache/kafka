@@ -17,7 +17,6 @@
 
 package kafka.log
 
-import kafka.common.{OffsetsOutOfOrderException, UnexpectedAppendOffsetException}
 import kafka.log.remote.RemoteLogManager
 import kafka.server.{DelayedRemoteListOffsets, KafkaConfig}
 import kafka.utils.TestUtils
@@ -34,35 +33,39 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.{ListOffsetsRequest, ListOffsetsResponse}
 import org.apache.kafka.common.utils.{BufferSupplier, Time, Utils}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
+import org.apache.kafka.server.config.KRaftConfigs
 import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig
 import org.apache.kafka.server.log.remote.storage.{NoOpRemoteLogMetadataManager, NoOpRemoteStorageManager, RemoteLogManagerConfig}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.purgatory.DelayedOperationPurgatory
-import org.apache.kafka.server.storage.log.FetchIsolation
+import org.apache.kafka.server.storage.log.{FetchIsolation, UnexpectedAppendOffsetException}
 import org.apache.kafka.server.util.{KafkaScheduler, MockTime, Scheduler}
 import org.apache.kafka.storage.internals.checkpoint.{LeaderEpochCheckpointFile, PartitionMetadataFile}
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
-import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, EpochEntry, LogConfig, LogFileUtils, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogSegment, LogSegments, LogStartOffsetIncrementReason, ProducerStateManager, ProducerStateManagerConfig, RecordValidationException, VerificationGuard}
+import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, EpochEntry, LogConfig, LogFileUtils, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogSegment, LogSegments, LogStartOffsetIncrementReason, OffsetResultHolder, OffsetsOutOfOrderException, ProducerStateManager, ProducerStateManagerConfig, RecordValidationException, UnifiedLog => JUnifiedLog, VerificationGuard}
 import org.apache.kafka.storage.internals.utils.Throttler
 import org.apache.kafka.storage.log.metrics.{BrokerTopicMetrics, BrokerTopicStats}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ArgumentsSource
 import org.junit.jupiter.params.provider.{EnumSource, ValueSource}
 import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers.{any, anyLong}
 import org.mockito.Mockito.{doAnswer, doThrow, spy}
 
+import net.jqwik.api.AfterFailureMode
+import net.jqwik.api.ForAll
+import net.jqwik.api.Property
+
 import java.io._
 import java.nio.ByteBuffer
 import java.nio.file.Files
 import java.util.concurrent.{Callable, ConcurrentHashMap, Executors, TimeUnit}
-import java.util.{Optional, OptionalLong, Properties}
-import scala.annotation.nowarn
+import java.util.{Optional, OptionalInt, OptionalLong, Properties}
 import scala.collection.immutable.SortedSet
 import scala.collection.mutable.ListBuffer
 import scala.jdk.CollectionConverters._
-import scala.jdk.OptionConverters.{RichOptional, RichOptionalInt}
 
 class UnifiedLogTest {
   var config: KafkaConfig = _
@@ -76,7 +79,7 @@ class UnifiedLogTest {
 
   @BeforeEach
   def setUp(): Unit = {
-    val props = TestUtils.createBrokerConfig(0, "127.0.0.1:1", port = -1)
+    val props = TestUtils.createBrokerConfig(0, port = -1)
     config = KafkaConfig.fromProps(props)
   }
 
@@ -306,7 +309,7 @@ class UnifiedLogTest {
     assertHighWatermark(3L)
 
     // Update high watermark as follower
-    log.appendAsFollower(records(3L))
+    log.appendAsFollower(records(3L), leaderEpoch)
     log.updateHighWatermark(6L)
     assertHighWatermark(6L)
 
@@ -529,13 +532,6 @@ class UnifiedLogTest {
     assertLsoBoundedFetches()
   }
 
-  @Test
-  def testOffsetFromProducerSnapshotFile(): Unit = {
-    val offset = 23423423L
-    val snapshotFile = LogFileUtils.producerSnapshotFile(tmpDir, offset)
-    assertEquals(offset, UnifiedLog.offsetFromFile(snapshotFile))
-  }
-
   /**
    * Tests for time based log roll. This test appends messages then changes the time
    * using the mock clock to force the log to roll and checks the number of segments.
@@ -591,6 +587,7 @@ class UnifiedLogTest {
   @Test
   def testRollSegmentThatAlreadyExists(): Unit = {
     val logConfig = LogTestUtils.createLogConfig(segmentMs = 1 * 60 * 60L)
+    val partitionLeaderEpoch = 0
 
     // create a log
     val log = createLog(logDir, logConfig)
@@ -603,16 +600,16 @@ class UnifiedLogTest {
     // should be able to append records to active segment
     val records = TestUtils.records(
       List(new SimpleRecord(mockTime.milliseconds, "k1".getBytes, "v1".getBytes)),
-      baseOffset = 0L, partitionLeaderEpoch = 0)
-    log.appendAsFollower(records)
+      baseOffset = 0L, partitionLeaderEpoch = partitionLeaderEpoch)
+    log.appendAsFollower(records, partitionLeaderEpoch)
     assertEquals(1, log.numberOfSegments, "Expect one segment.")
     assertEquals(0L, log.activeSegment.baseOffset)
 
     // make sure we can append more records
     val records2 = TestUtils.records(
       List(new SimpleRecord(mockTime.milliseconds + 10, "k2".getBytes, "v2".getBytes)),
-      baseOffset = 1L, partitionLeaderEpoch = 0)
-    log.appendAsFollower(records2)
+      baseOffset = 1L, partitionLeaderEpoch = partitionLeaderEpoch)
+    log.appendAsFollower(records2, partitionLeaderEpoch)
 
     assertEquals(2, log.logEndOffset, "Expect two records in the log")
     assertEquals(0, LogTestUtils.readLog(log, 0, 1).records.batches.iterator.next().lastOffset)
@@ -627,8 +624,8 @@ class UnifiedLogTest {
     log.activeSegment.offsetIndex.resize(0)
     val records3 = TestUtils.records(
       List(new SimpleRecord(mockTime.milliseconds + 12, "k3".getBytes, "v3".getBytes)),
-      baseOffset = 2L, partitionLeaderEpoch = 0)
-    log.appendAsFollower(records3)
+      baseOffset = 2L, partitionLeaderEpoch = partitionLeaderEpoch)
+    log.appendAsFollower(records3, partitionLeaderEpoch)
     assertTrue(log.activeSegment.offsetIndex.maxEntries > 1)
     assertEquals(2, LogTestUtils.readLog(log, 2, 1).records.batches.iterator.next().lastOffset)
     assertEquals(2, log.numberOfSegments, "Expect two segments.")
@@ -656,23 +653,20 @@ class UnifiedLogTest {
     val records = TestUtils.records(List(new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes)),
       baseOffset = 27)
     appendAsFollower(log, records, leaderEpoch = 19)
-    assertEquals(Some(new EpochEntry(19, 27)),
-      log.leaderEpochCache.flatMap(_.latestEntry.toScala))
+    assertEquals(Optional.of(new EpochEntry(19, 27)), log.leaderEpochCache.latestEntry)
     assertEquals(29, log.logEndOffset)
 
     def verifyTruncationClearsEpochCache(epoch: Int, truncationOffset: Long): Unit = {
       // Simulate becoming a leader
-      log.maybeAssignEpochStartOffset(leaderEpoch = epoch, startOffset = log.logEndOffset)
-      assertEquals(Some(new EpochEntry(epoch, 29)),
-        log.leaderEpochCache.flatMap(_.latestEntry.toScala))
+      log.assignEpochStartOffset(leaderEpoch = epoch, startOffset = log.logEndOffset)
+      assertEquals(Optional.of(new EpochEntry(epoch, 29)), log.leaderEpochCache.latestEntry)
       assertEquals(29, log.logEndOffset)
 
       // Now we become the follower and truncate to an offset greater
       // than or equal to the log end offset. The trivial epoch entry
       // at the end of the log should be gone
       log.truncateTo(truncationOffset)
-      assertEquals(Some(new EpochEntry(19, 27)),
-        log.leaderEpochCache.flatMap(_.latestEntry.toScala))
+      assertEquals(Optional.of(new EpochEntry(19, 27)), log.leaderEpochCache.latestEntry)
       assertEquals(29, log.logEndOffset)
     }
 
@@ -805,35 +799,47 @@ class UnifiedLogTest {
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 2048 * 5)
     val log = createLog(logDir, logConfig)
     val pid = 1L
-    val epoch = 0.toShort
+    val producerEpoch = 0.toShort
+    val partitionLeaderEpoch = 0
     val seq = 0
     val baseOffset = 23L
 
     // create a batch with a couple gaps to simulate compaction
-    val records = TestUtils.records(producerId = pid, producerEpoch = epoch, sequence = seq, baseOffset = baseOffset, records = List(
-      new SimpleRecord(mockTime.milliseconds(), "a".getBytes),
-      new SimpleRecord(mockTime.milliseconds(), "key".getBytes, "b".getBytes),
-      new SimpleRecord(mockTime.milliseconds(), "c".getBytes),
-      new SimpleRecord(mockTime.milliseconds(), "key".getBytes, "d".getBytes)))
-    records.batches.forEach(_.setPartitionLeaderEpoch(0))
+    val records = TestUtils.records(
+      producerId = pid,
+      producerEpoch = producerEpoch,
+      sequence = seq,
+      baseOffset = baseOffset,
+      records = List(
+        new SimpleRecord(mockTime.milliseconds(), "a".getBytes),
+        new SimpleRecord(mockTime.milliseconds(), "key".getBytes, "b".getBytes),
+        new SimpleRecord(mockTime.milliseconds(), "c".getBytes),
+        new SimpleRecord(mockTime.milliseconds(), "key".getBytes, "d".getBytes)
+      )
+    )
+    records.batches.forEach(_.setPartitionLeaderEpoch(partitionLeaderEpoch))
 
     val filtered = ByteBuffer.allocate(2048)
-    records.filterTo(new TopicPartition("foo", 0), new RecordFilter(0, 0) {
+    records.filterTo(new RecordFilter(0, 0) {
       override def checkBatchRetention(batch: RecordBatch): RecordFilter.BatchRetentionResult =
         new RecordFilter.BatchRetentionResult(RecordFilter.BatchRetention.DELETE_EMPTY, false)
       override def shouldRetainRecord(recordBatch: RecordBatch, record: Record): Boolean = !record.hasKey
-    }, filtered, Int.MaxValue, BufferSupplier.NO_CACHING)
+    }, filtered, BufferSupplier.NO_CACHING)
     filtered.flip()
     val filteredRecords = MemoryRecords.readableRecords(filtered)
 
-    log.appendAsFollower(filteredRecords)
+    log.appendAsFollower(filteredRecords, partitionLeaderEpoch)
 
     // append some more data and then truncate to force rebuilding of the PID map
-    val moreRecords = TestUtils.records(baseOffset = baseOffset + 4, records = List(
-      new SimpleRecord(mockTime.milliseconds(), "e".getBytes),
-      new SimpleRecord(mockTime.milliseconds(), "f".getBytes)))
-    moreRecords.batches.forEach(_.setPartitionLeaderEpoch(0))
-    log.appendAsFollower(moreRecords)
+    val moreRecords = TestUtils.records(
+      baseOffset = baseOffset + 4,
+      records = List(
+        new SimpleRecord(mockTime.milliseconds(), "e".getBytes),
+        new SimpleRecord(mockTime.milliseconds(), "f".getBytes)
+      )
+    )
+    moreRecords.batches.forEach(_.setPartitionLeaderEpoch(partitionLeaderEpoch))
+    log.appendAsFollower(moreRecords, partitionLeaderEpoch)
 
     log.truncateTo(baseOffset + 4)
 
@@ -849,33 +855,45 @@ class UnifiedLogTest {
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 2048 * 5)
     val log = createLog(logDir, logConfig)
     val pid = 1L
-    val epoch = 0.toShort
+    val producerEpoch = 0.toShort
+    val partitionLeaderEpoch = 0
     val seq = 0
     val baseOffset = 23L
 
     // create an empty batch
-    val records = TestUtils.records(producerId = pid, producerEpoch = epoch, sequence = seq, baseOffset = baseOffset, records = List(
-      new SimpleRecord(mockTime.milliseconds(), "key".getBytes, "a".getBytes),
-      new SimpleRecord(mockTime.milliseconds(), "key".getBytes, "b".getBytes)))
-    records.batches.forEach(_.setPartitionLeaderEpoch(0))
+    val records = TestUtils.records(
+      producerId = pid,
+      producerEpoch = producerEpoch,
+      sequence = seq,
+      baseOffset = baseOffset,
+      records = List(
+        new SimpleRecord(mockTime.milliseconds(), "key".getBytes, "a".getBytes),
+        new SimpleRecord(mockTime.milliseconds(), "key".getBytes, "b".getBytes)
+      )
+    )
+    records.batches.forEach(_.setPartitionLeaderEpoch(partitionLeaderEpoch))
 
     val filtered = ByteBuffer.allocate(2048)
-    records.filterTo(new TopicPartition("foo", 0), new RecordFilter(0, 0) {
+    records.filterTo(new RecordFilter(0, 0) {
       override def checkBatchRetention(batch: RecordBatch): RecordFilter.BatchRetentionResult =
         new RecordFilter.BatchRetentionResult(RecordFilter.BatchRetention.RETAIN_EMPTY, true)
       override def shouldRetainRecord(recordBatch: RecordBatch, record: Record): Boolean = false
-    }, filtered, Int.MaxValue, BufferSupplier.NO_CACHING)
+    }, filtered, BufferSupplier.NO_CACHING)
     filtered.flip()
     val filteredRecords = MemoryRecords.readableRecords(filtered)
 
-    log.appendAsFollower(filteredRecords)
+    log.appendAsFollower(filteredRecords, partitionLeaderEpoch)
 
     // append some more data and then truncate to force rebuilding of the PID map
-    val moreRecords = TestUtils.records(baseOffset = baseOffset + 2, records = List(
-      new SimpleRecord(mockTime.milliseconds(), "e".getBytes),
-      new SimpleRecord(mockTime.milliseconds(), "f".getBytes)))
-    moreRecords.batches.forEach(_.setPartitionLeaderEpoch(0))
-    log.appendAsFollower(moreRecords)
+    val moreRecords = TestUtils.records(
+      baseOffset = baseOffset + 2,
+      records = List(
+        new SimpleRecord(mockTime.milliseconds(), "e".getBytes),
+        new SimpleRecord(mockTime.milliseconds(), "f".getBytes)
+      )
+    )
+    moreRecords.batches.forEach(_.setPartitionLeaderEpoch(partitionLeaderEpoch))
+    log.appendAsFollower(moreRecords, partitionLeaderEpoch)
 
     log.truncateTo(baseOffset + 2)
 
@@ -891,28 +909,36 @@ class UnifiedLogTest {
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 2048 * 5)
     val log = createLog(logDir, logConfig)
     val pid = 1L
-    val epoch = 0.toShort
+    val producerEpoch = 0.toShort
+    val partitionLeaderEpoch = 0
     val seq = 0
     val baseOffset = 23L
 
     // create a batch with a couple gaps to simulate compaction
-    val records = TestUtils.records(producerId = pid, producerEpoch = epoch, sequence = seq, baseOffset = baseOffset, records = List(
-      new SimpleRecord(mockTime.milliseconds(), "a".getBytes),
-      new SimpleRecord(mockTime.milliseconds(), "key".getBytes, "b".getBytes),
-      new SimpleRecord(mockTime.milliseconds(), "c".getBytes),
-      new SimpleRecord(mockTime.milliseconds(), "key".getBytes, "d".getBytes)))
-    records.batches.forEach(_.setPartitionLeaderEpoch(0))
+    val records = TestUtils.records(
+      producerId = pid,
+      producerEpoch = producerEpoch,
+      sequence = seq,
+      baseOffset = baseOffset,
+      records = List(
+        new SimpleRecord(mockTime.milliseconds(), "a".getBytes),
+        new SimpleRecord(mockTime.milliseconds(), "key".getBytes, "b".getBytes),
+        new SimpleRecord(mockTime.milliseconds(), "c".getBytes),
+        new SimpleRecord(mockTime.milliseconds(), "key".getBytes, "d".getBytes)
+      )
+    )
+    records.batches.forEach(_.setPartitionLeaderEpoch(partitionLeaderEpoch))
 
     val filtered = ByteBuffer.allocate(2048)
-    records.filterTo(new TopicPartition("foo", 0), new RecordFilter(0, 0) {
+    records.filterTo(new RecordFilter(0, 0) {
       override def checkBatchRetention(batch: RecordBatch): RecordFilter.BatchRetentionResult =
         new RecordFilter.BatchRetentionResult(RecordFilter.BatchRetention.DELETE_EMPTY, false)
       override def shouldRetainRecord(recordBatch: RecordBatch, record: Record): Boolean = !record.hasKey
-    }, filtered, Int.MaxValue, BufferSupplier.NO_CACHING)
+    }, filtered, BufferSupplier.NO_CACHING)
     filtered.flip()
     val filteredRecords = MemoryRecords.readableRecords(filtered)
 
-    log.appendAsFollower(filteredRecords)
+    log.appendAsFollower(filteredRecords, partitionLeaderEpoch)
     val activeProducers = log.activeProducersWithLastSequence
     assertTrue(activeProducers.contains(pid))
 
@@ -1342,33 +1368,44 @@ class UnifiedLogTest {
     // create a log
     val log = createLog(logDir, new LogConfig(new Properties))
 
-    val epoch: Short = 0
+    val producerEpoch: Short = 0
+    val partitionLeaderEpoch = 0
     val buffer = ByteBuffer.allocate(512)
 
-    var builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, Compression.NONE,
-      TimestampType.LOG_APPEND_TIME, 0L, mockTime.milliseconds(), 1L, epoch, 0, false, 0)
+    var builder = MemoryRecords.builder(
+      buffer, RecordBatch.MAGIC_VALUE_V2, Compression.NONE,
+      TimestampType.LOG_APPEND_TIME, 0L, mockTime.milliseconds(), 1L, producerEpoch, 0, false,
+      partitionLeaderEpoch
+    )
     builder.append(new SimpleRecord("key".getBytes, "value".getBytes))
     builder.close()
 
     builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, Compression.NONE,
-      TimestampType.LOG_APPEND_TIME, 1L, mockTime.milliseconds(), 2L, epoch, 0, false, 0)
+      TimestampType.LOG_APPEND_TIME, 1L, mockTime.milliseconds(), 2L, producerEpoch, 0, false,
+      partitionLeaderEpoch)
     builder.append(new SimpleRecord("key".getBytes, "value".getBytes))
     builder.close()
 
-    builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, Compression.NONE,
-      TimestampType.LOG_APPEND_TIME, 2L, mockTime.milliseconds(), 3L, epoch, 0, false, 0)
+    builder = MemoryRecords.builder(
+      buffer, RecordBatch.MAGIC_VALUE_V2, Compression.NONE,
+      TimestampType.LOG_APPEND_TIME, 2L, mockTime.milliseconds(), 3L, producerEpoch, 0, false,
+      partitionLeaderEpoch
+    )
     builder.append(new SimpleRecord("key".getBytes, "value".getBytes))
     builder.close()
 
-    builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, Compression.NONE,
-      TimestampType.LOG_APPEND_TIME, 3L, mockTime.milliseconds(), 4L, epoch, 0, false, 0)
+    builder = MemoryRecords.builder(
+      buffer, RecordBatch.MAGIC_VALUE_V2, Compression.NONE,
+      TimestampType.LOG_APPEND_TIME, 3L, mockTime.milliseconds(), 4L, producerEpoch, 0, false,
+      partitionLeaderEpoch
+    )
     builder.append(new SimpleRecord("key".getBytes, "value".getBytes))
     builder.close()
 
     buffer.flip()
     val memoryRecords = MemoryRecords.readableRecords(buffer)
 
-    log.appendAsFollower(memoryRecords)
+    log.appendAsFollower(memoryRecords, partitionLeaderEpoch)
     log.flush(false)
 
     val fetchedData = LogTestUtils.readLog(log, 0, Int.MaxValue)
@@ -1387,7 +1424,7 @@ class UnifiedLogTest {
   def testDuplicateAppendToFollower(): Unit = {
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024 * 5)
     val log = createLog(logDir, logConfig)
-    val epoch: Short = 0
+    val producerEpoch: Short = 0
     val pid = 1L
     val baseSequence = 0
     val partitionLeaderEpoch = 0
@@ -1395,10 +1432,32 @@ class UnifiedLogTest {
     // this is a bit contrived. to trigger the duplicate case for a follower append, we have to append
     // a batch with matching sequence numbers, but valid increasing offsets
     assertEquals(0L, log.logEndOffset)
-    log.appendAsFollower(MemoryRecords.withIdempotentRecords(0L, Compression.NONE, pid, epoch, baseSequence,
-      partitionLeaderEpoch, new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes)))
-    log.appendAsFollower(MemoryRecords.withIdempotentRecords(2L, Compression.NONE, pid, epoch, baseSequence,
-      partitionLeaderEpoch, new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes)))
+    log.appendAsFollower(
+      MemoryRecords.withIdempotentRecords(
+        0L,
+        Compression.NONE,
+        pid,
+        producerEpoch,
+        baseSequence,
+        partitionLeaderEpoch,
+        new SimpleRecord("a".getBytes),
+        new SimpleRecord("b".getBytes)
+      ),
+      partitionLeaderEpoch
+    )
+    log.appendAsFollower(
+      MemoryRecords.withIdempotentRecords(
+        2L,
+        Compression.NONE,
+        pid,
+        producerEpoch,
+        baseSequence,
+        partitionLeaderEpoch,
+        new SimpleRecord("a".getBytes),
+        new SimpleRecord("b".getBytes)
+      ),
+      partitionLeaderEpoch
+    )
 
     // Ensure that even the duplicate sequences are accepted on the follower.
     assertEquals(4L, log.logEndOffset)
@@ -1411,48 +1470,49 @@ class UnifiedLogTest {
 
     val pid1 = 1L
     val pid2 = 2L
-    val epoch: Short = 0
+    val producerEpoch: Short = 0
 
     val buffer = ByteBuffer.allocate(512)
 
     // pid1 seq = 0
     var builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, Compression.NONE,
-      TimestampType.LOG_APPEND_TIME, 0L, mockTime.milliseconds(), pid1, epoch, 0)
+      TimestampType.LOG_APPEND_TIME, 0L, mockTime.milliseconds(), pid1, producerEpoch, 0)
     builder.append(new SimpleRecord("key".getBytes, "value".getBytes))
     builder.close()
 
     // pid2 seq = 0
     builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, Compression.NONE,
-      TimestampType.LOG_APPEND_TIME, 1L, mockTime.milliseconds(), pid2, epoch, 0)
+      TimestampType.LOG_APPEND_TIME, 1L, mockTime.milliseconds(), pid2, producerEpoch, 0)
     builder.append(new SimpleRecord("key".getBytes, "value".getBytes))
     builder.close()
 
     // pid1 seq = 1
     builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, Compression.NONE,
-      TimestampType.LOG_APPEND_TIME, 2L, mockTime.milliseconds(), pid1, epoch, 1)
+      TimestampType.LOG_APPEND_TIME, 2L, mockTime.milliseconds(), pid1, producerEpoch, 1)
     builder.append(new SimpleRecord("key".getBytes, "value".getBytes))
     builder.close()
 
     // pid2 seq = 1
     builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, Compression.NONE,
-      TimestampType.LOG_APPEND_TIME, 3L, mockTime.milliseconds(), pid2, epoch, 1)
+      TimestampType.LOG_APPEND_TIME, 3L, mockTime.milliseconds(), pid2, producerEpoch, 1)
     builder.append(new SimpleRecord("key".getBytes, "value".getBytes))
     builder.close()
 
     // // pid1 seq = 1 (duplicate)
     builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, Compression.NONE,
-      TimestampType.LOG_APPEND_TIME, 4L, mockTime.milliseconds(), pid1, epoch, 1)
+      TimestampType.LOG_APPEND_TIME, 4L, mockTime.milliseconds(), pid1, producerEpoch, 1)
     builder.append(new SimpleRecord("key".getBytes, "value".getBytes))
     builder.close()
 
     buffer.flip()
 
+    val epoch = 0
     val records = MemoryRecords.readableRecords(buffer)
-    records.batches.forEach(_.setPartitionLeaderEpoch(0))
+    records.batches.forEach(_.setPartitionLeaderEpoch(epoch))
 
     // Ensure that batches with duplicates are accepted on the follower.
     assertEquals(0L, log.logEndOffset)
-    log.appendAsFollower(records)
+    log.appendAsFollower(records, epoch)
     assertEquals(5L, log.logEndOffset)
   }
 
@@ -1594,8 +1654,12 @@ class UnifiedLogTest {
     val records = messageIds.map(id => new SimpleRecord(id.toString.getBytes))
 
     // now test the case that we give the offsets and use non-sequential offsets
-    for (i <- records.indices)
-      log.appendAsFollower(MemoryRecords.withRecords(messageIds(i), Compression.NONE, 0, records(i)))
+    for (i <- records.indices) {
+      log.appendAsFollower(
+        MemoryRecords.withRecords(messageIds(i), Compression.NONE, 0, records(i)),
+        Int.MaxValue
+      )
+    }
     for (i <- 50 until messageIds.max) {
       val idx = messageIds.indexWhere(_ >= i)
       val read = LogTestUtils.readLog(log, i, 100).records.records.iterator.next()
@@ -1642,8 +1706,12 @@ class UnifiedLogTest {
     val records = messageIds.map(id => new SimpleRecord(id.toString.getBytes))
 
     // now test the case that we give the offsets and use non-sequential offsets
-    for (i <- records.indices)
-      log.appendAsFollower(MemoryRecords.withRecords(messageIds(i), Compression.NONE, 0, records(i)))
+    for (i <- records.indices) {
+      log.appendAsFollower(
+        MemoryRecords.withRecords(messageIds(i), Compression.NONE, 0, records(i)),
+        Int.MaxValue
+      )
+    }
 
     for (i <- 50 until messageIds.max) {
       val idx = messageIds.indexWhere(_ >= i)
@@ -1667,8 +1735,12 @@ class UnifiedLogTest {
     val records = messageIds.map(id => new SimpleRecord(id.toString.getBytes))
 
     // now test the case that we give the offsets and use non-sequential offsets
-    for (i <- records.indices)
-      log.appendAsFollower(MemoryRecords.withRecords(messageIds(i), Compression.NONE, 0, records(i)))
+    for (i <- records.indices) {
+      log.appendAsFollower(
+        MemoryRecords.withRecords(messageIds(i), Compression.NONE, 0, records(i)),
+        Int.MaxValue
+      )
+    }
 
     for (i <- 50 until messageIds.max) {
       assertEquals(MemoryRecords.EMPTY, LogTestUtils.readLog(log, i, maxLength = 0, minOneMessage = false).records)
@@ -1916,9 +1988,94 @@ class UnifiedLogTest {
 
     val log = createLog(logDir, LogTestUtils.createLogConfig(maxMessageBytes = second.sizeInBytes - 1))
 
-    log.appendAsFollower(first)
+    log.appendAsFollower(first, Int.MaxValue)
     // the second record is larger then limit but appendAsFollower does not validate the size.
-    log.appendAsFollower(second)
+    log.appendAsFollower(second, Int.MaxValue)
+  }
+
+  @ParameterizedTest
+  @ArgumentsSource(classOf[InvalidMemoryRecordsProvider])
+  def testInvalidMemoryRecords(records: MemoryRecords, expectedException: Optional[Class[Exception]]): Unit = {
+    val logConfig = LogTestUtils.createLogConfig()
+    val log = createLog(logDir, logConfig)
+    val previousEndOffset = log.logEndOffsetMetadata.messageOffset
+
+    if (expectedException.isPresent()) {
+      assertThrows(
+        expectedException.get(),
+        () => log.appendAsFollower(records, Int.MaxValue)
+      )
+    } else {
+        log.appendAsFollower(records, Int.MaxValue)
+    }
+
+    assertEquals(previousEndOffset, log.logEndOffsetMetadata.messageOffset)
+  }
+
+  @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
+  def testRandomRecords(
+    @ForAll(supplier = classOf[ArbitraryMemoryRecords]) records: MemoryRecords
+  ): Unit = {
+    val tempDir = TestUtils.tempDir()
+    val logDir = TestUtils.randomPartitionLogDir(tempDir)
+    try {
+      val logConfig = LogTestUtils.createLogConfig()
+      val log = createLog(logDir, logConfig)
+      val previousEndOffset = log.logEndOffsetMetadata.messageOffset
+
+      // Depending on the corruption, unified log sometimes throws and sometimes returns an
+      // empty set of batches
+      assertThrows(
+        classOf[CorruptRecordException],
+        () => {
+          val info = log.appendAsFollower(records, Int.MaxValue)
+          if (info.firstOffset == JUnifiedLog.UNKNOWN_OFFSET) {
+            throw new CorruptRecordException("Unknown offset is test")
+          }
+        }
+      )
+
+      assertEquals(previousEndOffset, log.logEndOffsetMetadata.messageOffset)
+    } finally {
+      Utils.delete(tempDir)
+    }
+  }
+
+  @Test
+  def testInvalidLeaderEpoch(): Unit = {
+    val logConfig = LogTestUtils.createLogConfig()
+    val log = createLog(logDir, logConfig)
+    val previousEndOffset = log.logEndOffsetMetadata.messageOffset
+    val epoch = log.latestEpoch.getOrElse(0) + 1
+    val numberOfRecords = 10
+
+    val batchWithValidEpoch = MemoryRecords.withRecords(
+      previousEndOffset,
+      Compression.NONE,
+      epoch,
+      (0 until numberOfRecords).map(number => new SimpleRecord(number.toString.getBytes)): _*
+    )
+
+    val batchWithInvalidEpoch = MemoryRecords.withRecords(
+      previousEndOffset + numberOfRecords,
+      Compression.NONE,
+      epoch + 1,
+      (0 until numberOfRecords).map(number => new SimpleRecord(number.toString.getBytes)): _*
+    )
+
+    val buffer = ByteBuffer.allocate(batchWithValidEpoch.sizeInBytes() + batchWithInvalidEpoch.sizeInBytes())
+    buffer.put(batchWithValidEpoch.buffer())
+    buffer.put(batchWithInvalidEpoch.buffer())
+    buffer.flip()
+
+    val records = MemoryRecords.readableRecords(buffer)
+
+    log.appendAsFollower(records, epoch)
+
+    // Check that only the first batch was appended
+    assertEquals(previousEndOffset + numberOfRecords, log.logEndOffsetMetadata.messageOffset)
+    // Check that the last fetched epoch matches the first batch
+    assertEquals(epoch, log.latestEpoch.get)
   }
 
   @Test
@@ -1970,26 +2127,6 @@ class UnifiedLogTest {
   }
 
   @Test
-  def testNoOpWhenKeepPartitionMetadataFileIsFalse(): Unit = {
-    val logConfig = LogTestUtils.createLogConfig()
-    val log = createLog(logDir, logConfig, keepPartitionMetadataFile = false)
-
-    val topicId = Uuid.randomUuid()
-    log.assignTopicId(topicId)
-    // We should not write to this file or set the topic ID
-    assertFalse(log.partitionMetadataFile.get.exists())
-    assertEquals(None, log.topicId)
-    log.close()
-
-    val log2 = createLog(logDir, logConfig, topicId = Some(Uuid.randomUuid()),  keepPartitionMetadataFile = false)
-
-    // We should not write to this file or set the topic ID
-    assertFalse(log2.partitionMetadataFile.get.exists())
-    assertEquals(None, log2.topicId)
-    log2.close()
-  }
-
-  @Test
   def testLogFailsWhenInconsistentTopicIdSet(): Unit = {
     val logConfig = LogTestUtils.createLogConfig()
     var log = createLog(logDir, logConfig)
@@ -2019,7 +2156,7 @@ class UnifiedLogTest {
     val messages = (0 until numMessages).map { i =>
       MemoryRecords.withRecords(100 + i, Compression.NONE, 0, new SimpleRecord(mockTime.milliseconds + i, i.toString.getBytes()))
     }
-    messages.foreach(log.appendAsFollower)
+    messages.foreach(message => log.appendAsFollower(message, Int.MaxValue))
     val timeIndexEntries = log.logSegments.asScala.foldLeft(0) { (entries, segment) => entries + segment.timeIndex.entries }
     assertEquals(numMessages - 1, timeIndexEntries, s"There should be ${numMessages - 1} time index entries")
     assertEquals(mockTime.milliseconds + numMessages - 1, log.activeSegment.timeIndex.lastEntry.timestamp,
@@ -2031,7 +2168,7 @@ class UnifiedLogTest {
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 200, indexIntervalBytes = 1)
     val log = createLog(logDir, logConfig)
 
-    assertEquals(OffsetResultHolder(None), log.fetchOffsetByTimestamp(0L))
+    assertEquals(new OffsetResultHolder(Optional.empty[FileRecords.TimestampAndOffset]()), log.fetchOffsetByTimestamp(0L))
 
     val firstTimestamp = mockTime.milliseconds
     val firstLeaderEpoch = 0
@@ -2047,23 +2184,23 @@ class UnifiedLogTest {
       timestamp = secondTimestamp),
       leaderEpoch = secondLeaderEpoch)
 
-    assertEquals(OffsetResultHolder(Some(new TimestampAndOffset(firstTimestamp, 0L, Optional.of(firstLeaderEpoch)))),
+    assertEquals(new OffsetResultHolder(new TimestampAndOffset(firstTimestamp, 0L, Optional.of(firstLeaderEpoch))),
       log.fetchOffsetByTimestamp(firstTimestamp))
-    assertEquals(OffsetResultHolder(Some(new TimestampAndOffset(secondTimestamp, 1L, Optional.of(secondLeaderEpoch)))),
+    assertEquals(new OffsetResultHolder(new TimestampAndOffset(secondTimestamp, 1L, Optional.of(secondLeaderEpoch))),
       log.fetchOffsetByTimestamp(secondTimestamp))
 
-    assertEquals(OffsetResultHolder(Some(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 0L, Optional.of(firstLeaderEpoch)))),
+    assertEquals(new OffsetResultHolder(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 0L, Optional.of(firstLeaderEpoch))),
       log.fetchOffsetByTimestamp(ListOffsetsRequest.EARLIEST_TIMESTAMP))
-    assertEquals(OffsetResultHolder(Some(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 0L, Optional.of(firstLeaderEpoch)))),
+    assertEquals(new OffsetResultHolder(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 0L, Optional.of(firstLeaderEpoch))),
       log.fetchOffsetByTimestamp(ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP))
-    assertEquals(OffsetResultHolder(Some(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 2L, Optional.of(secondLeaderEpoch)))),
+    assertEquals(new OffsetResultHolder(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 2L, Optional.of(secondLeaderEpoch))),
       log.fetchOffsetByTimestamp(ListOffsetsRequest.LATEST_TIMESTAMP))
 
     // The cache can be updated directly after a leader change.
     // The new latest offset should reflect the updated epoch.
-    log.maybeAssignEpochStartOffset(2, 2L)
+    log.assignEpochStartOffset(2, 2L)
 
-    assertEquals(OffsetResultHolder(Some(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 2L, Optional.of(2)))),
+    assertEquals(new OffsetResultHolder(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 2L, Optional.of(2))),
       log.fetchOffsetByTimestamp(ListOffsetsRequest.LATEST_TIMESTAMP))
   }
 
@@ -2072,7 +2209,7 @@ class UnifiedLogTest {
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 200, indexIntervalBytes = 1)
     val log = createLog(logDir, logConfig)
 
-    assertEquals(OffsetResultHolder(None), log.fetchOffsetByTimestamp(0L))
+    assertEquals(new OffsetResultHolder(Optional.empty[FileRecords.TimestampAndOffset]()), log.fetchOffsetByTimestamp(0L))
 
     val firstTimestamp = mockTime.milliseconds
     val leaderEpoch = 0
@@ -2092,7 +2229,7 @@ class UnifiedLogTest {
       timestamp = firstTimestamp),
       leaderEpoch = leaderEpoch)
 
-    assertEquals(OffsetResultHolder(Some(new TimestampAndOffset(secondTimestamp, 1L, Optional.of(leaderEpoch)))),
+    assertEquals(new OffsetResultHolder(new TimestampAndOffset(secondTimestamp, 1L, Optional.of(leaderEpoch))),
       log.fetchOffsetByTimestamp(ListOffsetsRequest.MAX_TIMESTAMP))
   }
 
@@ -2115,7 +2252,7 @@ class UnifiedLogTest {
       remoteLogStorageEnable = true)
     val log = createLog(logDir, logConfig, remoteStorageSystemEnable = true, remoteLogManager = Some(remoteLogManager))
     // Note that the log is empty, so remote offset read won't happen
-    assertEquals(OffsetResultHolder(None), log.fetchOffsetByTimestamp(0L, Some(remoteLogManager)))
+    assertEquals(new OffsetResultHolder(Optional.empty[FileRecords.TimestampAndOffset]()), log.fetchOffsetByTimestamp(0L, Optional.of(remoteLogManager)))
 
     val firstTimestamp = mockTime.milliseconds
     val firstLeaderEpoch = 0
@@ -2137,35 +2274,35 @@ class UnifiedLogTest {
         .filter(_ == firstTimestamp)
         .map[TimestampAndOffset](x => new TimestampAndOffset(x, 0L, Optional.of(firstLeaderEpoch)))
     }).when(remoteLogManager).findOffsetByTimestamp(ArgumentMatchers.eq(log.topicPartition),
-      anyLong(), anyLong(), ArgumentMatchers.eq(log.leaderEpochCache.get))
+      anyLong(), anyLong(), ArgumentMatchers.eq(log.leaderEpochCache))
     log._localLogStartOffset = 1
 
     def assertFetchOffsetByTimestamp(expected: Option[TimestampAndOffset], timestamp: Long): Unit = {
-      val offsetResultHolder = log.fetchOffsetByTimestamp(timestamp, Some(remoteLogManager))
-      assertTrue(offsetResultHolder.futureHolderOpt.isDefined)
+      val offsetResultHolder = log.fetchOffsetByTimestamp(timestamp, Optional.of(remoteLogManager))
+      assertTrue(offsetResultHolder.futureHolderOpt.isPresent)
       offsetResultHolder.futureHolderOpt.get.taskFuture.get(1, TimeUnit.SECONDS)
       assertTrue(offsetResultHolder.futureHolderOpt.get.taskFuture.isDone)
-      assertTrue(offsetResultHolder.futureHolderOpt.get.taskFuture.get().isRight)
-      assertEquals(expected, offsetResultHolder.futureHolderOpt.get.taskFuture.get().getOrElse(null))
+      assertTrue(offsetResultHolder.futureHolderOpt.get.taskFuture.get().hasTimestampAndOffset)
+      assertEquals(expected.get, offsetResultHolder.futureHolderOpt.get.taskFuture.get().timestampAndOffset().orElse(null))
     }
 
     // In the assertions below we test that offset 0 (first timestamp) is in remote and offset 1 (second timestamp) is in local storage.
     assertFetchOffsetByTimestamp(Some(new TimestampAndOffset(firstTimestamp, 0L, Optional.of(firstLeaderEpoch))), firstTimestamp)
     assertFetchOffsetByTimestamp(Some(new TimestampAndOffset(secondTimestamp, 1L, Optional.of(secondLeaderEpoch))), secondTimestamp)
 
-    assertEquals(OffsetResultHolder(Some(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 0L, Optional.of(firstLeaderEpoch)))),
-      log.fetchOffsetByTimestamp(ListOffsetsRequest.EARLIEST_TIMESTAMP, Some(remoteLogManager)))
-    assertEquals(OffsetResultHolder(Some(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 1L, Optional.of(secondLeaderEpoch)))),
-      log.fetchOffsetByTimestamp(ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP, Some(remoteLogManager)))
-    assertEquals(OffsetResultHolder(Some(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 2L, Optional.of(secondLeaderEpoch)))),
-      log.fetchOffsetByTimestamp(ListOffsetsRequest.LATEST_TIMESTAMP, Some(remoteLogManager)))
+    assertEquals(new OffsetResultHolder(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 0L, Optional.of(firstLeaderEpoch))),
+      log.fetchOffsetByTimestamp(ListOffsetsRequest.EARLIEST_TIMESTAMP, Optional.of(remoteLogManager)))
+    assertEquals(new OffsetResultHolder(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 1L, Optional.of(secondLeaderEpoch))),
+      log.fetchOffsetByTimestamp(ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP, Optional.of(remoteLogManager)))
+    assertEquals(new OffsetResultHolder(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 2L, Optional.of(secondLeaderEpoch))),
+      log.fetchOffsetByTimestamp(ListOffsetsRequest.LATEST_TIMESTAMP, Optional.of(remoteLogManager)))
 
     // The cache can be updated directly after a leader change.
     // The new latest offset should reflect the updated epoch.
-    log.maybeAssignEpochStartOffset(2, 2L)
+    log.assignEpochStartOffset(2, 2L)
 
-    assertEquals(OffsetResultHolder(Some(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 2L, Optional.of(2)))),
-      log.fetchOffsetByTimestamp(ListOffsetsRequest.LATEST_TIMESTAMP, Some(remoteLogManager)))
+    assertEquals(new OffsetResultHolder(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 2L, Optional.of(2))),
+      log.fetchOffsetByTimestamp(ListOffsetsRequest.LATEST_TIMESTAMP, Optional.of(remoteLogManager)))
   }
 
   @Test
@@ -2173,7 +2310,7 @@ class UnifiedLogTest {
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 200, indexIntervalBytes = 1)
     val log = createLog(logDir, logConfig)
 
-    assertEquals(OffsetResultHolder(Some(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, -1, Optional.of(-1)))),
+    assertEquals(new OffsetResultHolder(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, -1, Optional.of(-1))),
       log.fetchOffsetByTimestamp(ListOffsetsRequest.LATEST_TIERED_TIMESTAMP))
 
     val firstTimestamp = mockTime.milliseconds
@@ -2189,7 +2326,7 @@ class UnifiedLogTest {
       timestamp = secondTimestamp),
       leaderEpoch = leaderEpoch)
 
-    assertEquals(OffsetResultHolder(Some(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, -1, Optional.of(-1)))),
+    assertEquals(new OffsetResultHolder(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, -1, Optional.of(-1))),
       log.fetchOffsetByTimestamp(ListOffsetsRequest.LATEST_TIERED_TIMESTAMP))
   }
 
@@ -2212,9 +2349,9 @@ class UnifiedLogTest {
       remoteLogStorageEnable = true)
     val log = createLog(logDir, logConfig, remoteStorageSystemEnable = true, remoteLogManager = Some(remoteLogManager))
     // Note that the log is empty, so remote offset read won't happen
-    assertEquals(OffsetResultHolder(None), log.fetchOffsetByTimestamp(0L, Some(remoteLogManager)))
-    assertEquals(OffsetResultHolder(Some(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 0, Optional.empty()))),
-      log.fetchOffsetByTimestamp(ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP, Some(remoteLogManager)))
+    assertEquals(new OffsetResultHolder(Optional.empty[FileRecords.TimestampAndOffset]()), log.fetchOffsetByTimestamp(0L, Optional.of(remoteLogManager)))
+    assertEquals(new OffsetResultHolder(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 0, Optional.empty())),
+      log.fetchOffsetByTimestamp(ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP, Optional.of(remoteLogManager)))
 
     val firstTimestamp = mockTime.milliseconds
     val firstLeaderEpoch = 0
@@ -2236,43 +2373,48 @@ class UnifiedLogTest {
         .filter(_ == firstTimestamp)
         .map[TimestampAndOffset](x => new TimestampAndOffset(x, 0L, Optional.of(firstLeaderEpoch)))
     }).when(remoteLogManager).findOffsetByTimestamp(ArgumentMatchers.eq(log.topicPartition),
-      anyLong(), anyLong(), ArgumentMatchers.eq(log.leaderEpochCache.get))
+      anyLong(), anyLong(), ArgumentMatchers.eq(log.leaderEpochCache))
     log._localLogStartOffset = 1
     log._highestOffsetInRemoteStorage = 0
 
     def assertFetchOffsetByTimestamp(expected: Option[TimestampAndOffset], timestamp: Long): Unit = {
-      val offsetResultHolder = log.fetchOffsetByTimestamp(timestamp, Some(remoteLogManager))
-      assertTrue(offsetResultHolder.futureHolderOpt.isDefined)
+      val offsetResultHolder = log.fetchOffsetByTimestamp(timestamp, Optional.of(remoteLogManager))
+      assertTrue(offsetResultHolder.futureHolderOpt.isPresent)
       offsetResultHolder.futureHolderOpt.get.taskFuture.get(1, TimeUnit.SECONDS)
       assertTrue(offsetResultHolder.futureHolderOpt.get.taskFuture.isDone)
-      assertTrue(offsetResultHolder.futureHolderOpt.get.taskFuture.get().isRight)
-      assertEquals(expected, offsetResultHolder.futureHolderOpt.get.taskFuture.get().getOrElse(null))
+      assertTrue(offsetResultHolder.futureHolderOpt.get.taskFuture.get().hasTimestampAndOffset)
+      assertEquals(expected.get, offsetResultHolder.futureHolderOpt.get.taskFuture.get().timestampAndOffset().orElse(null))
     }
 
     // In the assertions below we test that offset 0 (first timestamp) is in remote and offset 1 (second timestamp) is in local storage.
     assertFetchOffsetByTimestamp(Some(new TimestampAndOffset(firstTimestamp, 0L, Optional.of(firstLeaderEpoch))), firstTimestamp)
     assertFetchOffsetByTimestamp(Some(new TimestampAndOffset(secondTimestamp, 1L, Optional.of(secondLeaderEpoch))), secondTimestamp)
 
-    assertEquals(OffsetResultHolder(Some(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 0L, Optional.of(firstLeaderEpoch)))),
-      log.fetchOffsetByTimestamp(ListOffsetsRequest.EARLIEST_TIMESTAMP, Some(remoteLogManager)))
-    assertEquals(OffsetResultHolder(Some(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 0L, Optional.of(firstLeaderEpoch)))),
-      log.fetchOffsetByTimestamp(ListOffsetsRequest.LATEST_TIERED_TIMESTAMP, Some(remoteLogManager)))
-    assertEquals(OffsetResultHolder(Some(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 1L, Optional.of(secondLeaderEpoch)))),
-      log.fetchOffsetByTimestamp(ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP, Some(remoteLogManager)))
-    assertEquals(OffsetResultHolder(Some(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 2L, Optional.of(secondLeaderEpoch)))),
-      log.fetchOffsetByTimestamp(ListOffsetsRequest.LATEST_TIMESTAMP, Some(remoteLogManager)))
+    assertEquals(new OffsetResultHolder(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 0L, Optional.of(firstLeaderEpoch))),
+      log.fetchOffsetByTimestamp(ListOffsetsRequest.EARLIEST_TIMESTAMP, Optional.of(remoteLogManager)))
+    assertEquals(new OffsetResultHolder(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 0L, Optional.of(firstLeaderEpoch))),
+      log.fetchOffsetByTimestamp(ListOffsetsRequest.LATEST_TIERED_TIMESTAMP, Optional.of(remoteLogManager)))
+    assertEquals(new OffsetResultHolder(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 1L, Optional.of(secondLeaderEpoch))),
+      log.fetchOffsetByTimestamp(ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP, Optional.of(remoteLogManager)))
+    assertEquals(new OffsetResultHolder(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 2L, Optional.of(secondLeaderEpoch))),
+      log.fetchOffsetByTimestamp(ListOffsetsRequest.LATEST_TIMESTAMP, Optional.of(remoteLogManager)))
 
     // The cache can be updated directly after a leader change.
     // The new latest offset should reflect the updated epoch.
-    log.maybeAssignEpochStartOffset(2, 2L)
+    log.assignEpochStartOffset(2, 2L)
 
-    assertEquals(OffsetResultHolder(Some(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 2L, Optional.of(2)))),
-      log.fetchOffsetByTimestamp(ListOffsetsRequest.LATEST_TIMESTAMP, Some(remoteLogManager)))
+    assertEquals(new OffsetResultHolder(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 2L, Optional.of(2))),
+      log.fetchOffsetByTimestamp(ListOffsetsRequest.LATEST_TIMESTAMP, Optional.of(remoteLogManager)))
   }
 
   private def createKafkaConfigWithRLM: KafkaConfig = {
     val props = new Properties()
-    props.put("zookeeper.connect", "test")
+    props.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller")
+    props.setProperty(KRaftConfigs.NODE_ID_CONFIG, "0")
+    props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
+    props.setProperty("controller.quorum.bootstrap.servers", "localhost:9093")
+    props.setProperty("listeners", "CONTROLLER://:9093")
+    props.setProperty("advertised.listeners", "CONTROLLER://127.0.0.1:9093")
     props.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, "true")
     props.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP, classOf[NoOpRemoteStorageManager].getName)
     props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP, classOf[NoOpRemoteLogMetadataManager].getName)
@@ -2426,20 +2568,22 @@ class UnifiedLogTest {
   def testAppendWithOutOfOrderOffsetsThrowsException(): Unit = {
     val log = createLog(logDir, new LogConfig(new Properties))
 
+    val epoch = 0
     val appendOffsets = Seq(0L, 1L, 3L, 2L, 4L)
     val buffer = ByteBuffer.allocate(512)
     for (offset <- appendOffsets) {
       val builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, Compression.NONE,
                                           TimestampType.LOG_APPEND_TIME, offset, mockTime.milliseconds(),
-                                          1L, 0, 0, false, 0)
+                                          1L, 0, 0, false, epoch)
       builder.append(new SimpleRecord("key".getBytes, "value".getBytes))
       builder.close()
     }
     buffer.flip()
     val memoryRecords = MemoryRecords.readableRecords(buffer)
 
-    assertThrows(classOf[OffsetsOutOfOrderException], () =>
-      log.appendAsFollower(memoryRecords)
+    assertThrows(
+      classOf[OffsetsOutOfOrderException],
+      () => log.appendAsFollower(memoryRecords, epoch)
     )
   }
 
@@ -2454,9 +2598,11 @@ class UnifiedLogTest {
     for (magic <- magicVals; compressionType <- compressionTypes) {
       val compression = Compression.of(compressionType).build()
       val invalidRecord = MemoryRecords.withRecords(magic, compression, new SimpleRecord(1.toString.getBytes))
-      assertThrows(classOf[UnexpectedAppendOffsetException],
-        () => log.appendAsFollower(invalidRecord),
-        () => s"Magic=$magic, compressionType=$compressionType")
+      assertThrows(
+        classOf[UnexpectedAppendOffsetException],
+        () => log.appendAsFollower(invalidRecord, Int.MaxValue),
+        () => s"Magic=$magic, compressionType=$compressionType"
+      )
     }
   }
 
@@ -2477,7 +2623,10 @@ class UnifiedLogTest {
                                     magicValue = magic, codec = Compression.of(compressionType).build(),
                                     baseOffset = firstOffset)
 
-      val exception = assertThrows(classOf[UnexpectedAppendOffsetException], () => log.appendAsFollower(records = batch))
+      val exception = assertThrows(
+        classOf[UnexpectedAppendOffsetException],
+        () => log.appendAsFollower(records = batch, Int.MaxValue)
+      )
       assertEquals(firstOffset, exception.firstOffset, s"Magic=$magic, compressionType=$compressionType, UnexpectedAppendOffsetException#firstOffset")
       assertEquals(firstOffset + 2, exception.lastOffset, s"Magic=$magic, compressionType=$compressionType, UnexpectedAppendOffsetException#lastOffset")
     }
@@ -2515,8 +2664,8 @@ class UnifiedLogTest {
     assertEquals(Some(5), log.latestEpoch)
 
     // Ensure that after a directory rename, the epoch cache is written to the right location
-    val tp = UnifiedLog.parseTopicPartitionName(log.dir)
-    log.renameDir(UnifiedLog.logDeleteDirName(tp), true)
+    val tp = JUnifiedLog.parseTopicPartitionName(log.dir)
+    log.renameDir(JUnifiedLog.logDeleteDirName(tp), true)
     log.appendAsLeader(TestUtils.records(List(new SimpleRecord("foo".getBytes()))), leaderEpoch = 10)
     assertEquals(Some(10), log.latestEpoch)
     assertTrue(LeaderEpochCheckpointFile.newFile(log.dir).exists())
@@ -2536,8 +2685,8 @@ class UnifiedLogTest {
     assertEquals(Some(5), log.latestEpoch)
 
     // Ensure that after a directory rename, the partition metadata file is written to the right location.
-    val tp = UnifiedLog.parseTopicPartitionName(log.dir)
-    log.renameDir(UnifiedLog.logDeleteDirName(tp), true)
+    val tp = JUnifiedLog.parseTopicPartitionName(log.dir)
+    log.renameDir(JUnifiedLog.logDeleteDirName(tp), true)
     log.appendAsLeader(TestUtils.records(List(new SimpleRecord("foo".getBytes()))), leaderEpoch = 10)
     assertEquals(Some(10), log.latestEpoch)
     assertTrue(PartitionMetadataFile.newFile(log.dir).exists())
@@ -2559,8 +2708,8 @@ class UnifiedLogTest {
     log.partitionMetadataFile.get.record(topicId)
 
     // Ensure that after a directory rename, the partition metadata file is written to the right location.
-    val tp = UnifiedLog.parseTopicPartitionName(log.dir)
-    log.renameDir(UnifiedLog.logDeleteDirName(tp), true)
+    val tp = JUnifiedLog.parseTopicPartitionName(log.dir)
+    log.renameDir(JUnifiedLog.logDeleteDirName(tp), true)
     assertTrue(PartitionMetadataFile.newFile(log.dir).exists())
     assertFalse(PartitionMetadataFile.newFile(this.logDir).exists())
 
@@ -2574,54 +2723,35 @@ class UnifiedLogTest {
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1000, indexIntervalBytes = 1, maxMessageBytes = 64 * 1024)
     val log = createLog(logDir, logConfig)
     log.appendAsLeader(TestUtils.records(List(new SimpleRecord("foo".getBytes()))), leaderEpoch = 5)
-    assertEquals(Some(5), log.leaderEpochCache.flatMap(_.latestEpoch.toScala))
+    assertEquals(OptionalInt.of(5), log.leaderEpochCache.latestEpoch)
 
-    log.appendAsFollower(TestUtils.records(List(new SimpleRecord("foo".getBytes())),
-      baseOffset = 1L,
-      magicValue = RecordVersion.V1.value))
-    assertEquals(None, log.leaderEpochCache.flatMap(_.latestEpoch.toScala))
+    log.appendAsFollower(
+      TestUtils.records(
+        List(
+          new SimpleRecord("foo".getBytes())
+        ),
+        baseOffset = 1L,
+        magicValue = RecordVersion.V1.value
+      ),
+      5
+    )
+    assertEquals(OptionalInt.empty, log.leaderEpochCache.latestEpoch)
   }
 
-  @nowarn("cat=deprecation")
-  @Test
-  def testLeaderEpochCacheClearedAfterDynamicMessageFormatDowngrade(): Unit = {
-    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1000, indexIntervalBytes = 1, maxMessageBytes = 64 * 1024)
-    val log = createLog(logDir, logConfig)
-    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("foo".getBytes()))), leaderEpoch = 5)
-    assertEquals(Some(5), log.latestEpoch)
-
-    val logProps = new Properties()
-    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, "1000")
-    logProps.put(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, "1")
-    logProps.put(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, "65536")
-    logProps.put(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG, "0.10.2")
-    val downgradedLogConfig = new LogConfig(logProps)
-    log.updateConfig(downgradedLogConfig)
-    LogTestUtils.assertLeaderEpochCacheEmpty(log)
-
-    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("bar".getBytes())),
-      magicValue = RecordVersion.V1.value), leaderEpoch = 5)
-    LogTestUtils.assertLeaderEpochCacheEmpty(log)
-  }
-
-  @nowarn("cat=deprecation")
   @Test
   def testLeaderEpochCacheCreatedAfterMessageFormatUpgrade(): Unit = {
     val logProps = new Properties()
     logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, "1000")
     logProps.put(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, "1")
     logProps.put(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, "65536")
-    logProps.put(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG, "0.10.2")
     val logConfig = new LogConfig(logProps)
     val log = createLog(logDir, logConfig)
-    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("bar".getBytes())),
-      magicValue = RecordVersion.V1.value), leaderEpoch = 5)
-    LogTestUtils.assertLeaderEpochCacheEmpty(log)
+    log.appendAsLeaderWithRecordVersion(TestUtils.records(List(new SimpleRecord("bar".getBytes())),
+      magicValue = RecordVersion.V1.value), leaderEpoch = 5, RecordVersion.V1)
+    assertEquals(None, log.latestEpoch)
 
-    logProps.put(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG, "0.11.0")
-    val upgradedLogConfig = new LogConfig(logProps)
-    log.updateConfig(upgradedLogConfig)
-    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("foo".getBytes()))), leaderEpoch = 5)
+    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("foo".getBytes())),
+      magicValue = RecordVersion.V2.value), leaderEpoch = 5)
     assertEquals(Some(5), log.latestEpoch)
   }
 
@@ -2710,8 +2840,8 @@ class UnifiedLogTest {
     for (_ <- 0 until 100)
       log.appendAsLeader(createRecords, leaderEpoch = 0)
 
-    log.maybeAssignEpochStartOffset(0, 40)
-    log.maybeAssignEpochStartOffset(1, 90)
+    log.assignEpochStartOffset(0, 40)
+    log.assignEpochStartOffset(1, 90)
 
     // segments are not eligible for deletion if no high watermark has been set
     val numSegments = log.numberOfSegments
@@ -2796,9 +2926,7 @@ class UnifiedLogTest {
     assertEquals(log.logStartOffset, 15)
   }
 
-  def epochCache(log: UnifiedLog): LeaderEpochFileCache = {
-    log.leaderEpochCache.get
-  }
+  def epochCache(log: UnifiedLog): LeaderEpochFileCache = log.leaderEpochCache
 
   @Test
   def shouldDeleteSizeBasedSegments(): Unit = {
@@ -2927,7 +3055,7 @@ class UnifiedLogTest {
     //Given this partition is on leader epoch 72
     val epoch = 72
     val log = createLog(logDir, new LogConfig(new Properties))
-    log.maybeAssignEpochStartOffset(epoch, records.length)
+    log.assignEpochStartOffset(epoch, records.length)
 
     //When appending messages as a leader (i.e. assignOffsets = true)
     for (record <- records)
@@ -2962,7 +3090,7 @@ class UnifiedLogTest {
 
     //When appending as follower (assignOffsets = false)
     for (i <- records.indices)
-      log.appendAsFollower(recordsForEpoch(i))
+      log.appendAsFollower(recordsForEpoch(i), i)
 
     assertEquals(Some(42), log.latestEpoch)
   }
@@ -3030,7 +3158,7 @@ class UnifiedLogTest {
 
     def append(epoch: Int, startOffset: Long, count: Int): Unit = {
       for (i <- 0 until count)
-        log.appendAsFollower(createRecords(startOffset + i, epoch))
+        log.appendAsFollower(createRecords(startOffset + i, epoch), epoch)
     }
 
     //Given 2 segments, 10 messages per segment
@@ -3264,7 +3392,7 @@ class UnifiedLogTest {
 
     buffer.flip()
 
-    appendAsFollower(log, MemoryRecords.readableRecords(buffer))
+    appendAsFollower(log, MemoryRecords.readableRecords(buffer), epoch)
 
     val abortedTransactions = LogTestUtils.allAbortedTransactions(log)
     val expectedTransactions = List(
@@ -3348,7 +3476,7 @@ class UnifiedLogTest {
     appendEndTxnMarkerToBuffer(buffer, pid, epoch, 10L, ControlRecordType.COMMIT, leaderEpoch = 1)
 
     buffer.flip()
-    log.appendAsFollower(MemoryRecords.readableRecords(buffer))
+    log.appendAsFollower(MemoryRecords.readableRecords(buffer), epoch)
 
     LogTestUtils.appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, mockTime.milliseconds(), coordinatorEpoch = 2, leaderEpoch = 1)
     LogTestUtils.appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, mockTime.milliseconds(), coordinatorEpoch = 2, leaderEpoch = 1)
@@ -3469,10 +3597,16 @@ class UnifiedLogTest {
     val log = createLog(logDir, logConfig)
 
     // append a few records
-    appendAsFollower(log, MemoryRecords.withRecords(Compression.NONE,
-      new SimpleRecord("a".getBytes),
-      new SimpleRecord("b".getBytes),
-      new SimpleRecord("c".getBytes)), 5)
+    appendAsFollower(
+      log,
+      MemoryRecords.withRecords(
+        Compression.NONE,
+        new SimpleRecord("a".getBytes),
+        new SimpleRecord("b".getBytes),
+        new SimpleRecord("c".getBytes)
+      ),
+      5
+    )
 
 
     log.updateHighWatermark(3L)
@@ -3579,7 +3713,7 @@ class UnifiedLogTest {
 
   @Test
   def testLoadPartitionDirWithNoSegmentsShouldNotThrow(): Unit = {
-    val dirName = UnifiedLog.logDeleteDirName(new TopicPartition("foo", 3))
+    val dirName = JUnifiedLog.logDeleteDirName(new TopicPartition("foo", 3))
     val logDir = new File(tmpDir, dirName)
     logDir.mkdirs()
     val logConfig = LogTestUtils.createLogConfig()
@@ -3672,6 +3806,7 @@ class UnifiedLogTest {
     assertThrows(classOf[OffsetOutOfRangeException], () => log.maybeIncrementLogStartOffset(26L, LogStartOffsetIncrementReason.ClientRecordDeletion))
   }
 
+  @Test
   def testBackgroundDeletionWithIOException(): Unit = {
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024)
     val log = createLog(logDir, logConfig)
@@ -3701,14 +3836,9 @@ class UnifiedLogTest {
     assertTrue(newDir.exists())
 
     log.renameDir(newDir.getName, false)
-    assertTrue(log.leaderEpochCache.isEmpty)
+    assertFalse(log.leaderEpochCache.nonEmpty)
     assertTrue(log.partitionMetadataFile.isEmpty)
     assertEquals(0, log.logEndOffset)
-    // verify that records appending can still succeed
-    // even with the uninitialized leaderEpochCache and partitionMetadataFile
-    val records = TestUtils.records(List(new SimpleRecord(mockTime.milliseconds, "key".getBytes, "value".getBytes)))
-    log.appendAsLeader(records, leaderEpoch = 0)
-    assertEquals(1, log.logEndOffset)
 
     // verify that the background deletion can succeed
     log.delete()
@@ -3736,6 +3866,7 @@ class UnifiedLogTest {
     assertEquals(None, log.maybeUpdateHighWatermark(101L))
   }
 
+  @Test
   def testEnableRemoteLogStorageOnCompactedTopics(): Unit = {
       var logConfig = LogTestUtils.createLogConfig()
       var log = createLog(logDir, logConfig)
@@ -3899,7 +4030,7 @@ class UnifiedLogTest {
     var sequence = if (appendOrigin == AppendOrigin.CLIENT) 3 else 0
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 2048 * 5)
     val log = createLog(logDir, logConfig, producerStateManagerConfig = producerStateManagerConfig)
-    assertFalse(log.hasOngoingTransaction(producerId))
+    assertFalse(log.hasOngoingTransaction(producerId, producerEpoch))
     assertEquals(VerificationGuard.SENTINEL, log.verificationGuard(producerId))
     assertFalse(log.verificationGuard(producerId).verify(VerificationGuard.SENTINEL))
 
@@ -3925,11 +4056,11 @@ class UnifiedLogTest {
       new SimpleRecord("2".getBytes)
     )
 
-    val verificationGuard = log.maybeStartTransactionVerification(producerId, sequence, producerEpoch)
+    val verificationGuard = log.maybeStartTransactionVerification(producerId, sequence, producerEpoch, true)
     assertNotEquals(VerificationGuard.SENTINEL, verificationGuard)
 
     log.appendAsLeader(idempotentRecords, origin = appendOrigin, leaderEpoch = 0)
-    assertFalse(log.hasOngoingTransaction(producerId))
+    assertFalse(log.hasOngoingTransaction(producerId, producerEpoch))
 
     // Since we wrote idempotent records, we keep VerificationGuard.
     assertEquals(verificationGuard, log.verificationGuard(producerId))
@@ -3937,12 +4068,12 @@ class UnifiedLogTest {
     // Now write the transactional records
     assertTrue(log.verificationGuard(producerId).verify(verificationGuard))
     log.appendAsLeader(transactionalRecords, origin = appendOrigin, leaderEpoch = 0, verificationGuard = verificationGuard)
-    assertTrue(log.hasOngoingTransaction(producerId))
+    assertTrue(log.hasOngoingTransaction(producerId, producerEpoch))
     // VerificationGuard should be cleared now.
     assertEquals(VerificationGuard.SENTINEL, log.verificationGuard(producerId))
 
     // A subsequent maybeStartTransactionVerification will be empty since we are already verified.
-    assertEquals(VerificationGuard.SENTINEL, log.maybeStartTransactionVerification(producerId, sequence, producerEpoch))
+    assertEquals(VerificationGuard.SENTINEL, log.maybeStartTransactionVerification(producerId, sequence, producerEpoch, true))
 
     val endTransactionMarkerRecord = MemoryRecords.withEndTransactionMarker(
       producerId,
@@ -3951,21 +4082,22 @@ class UnifiedLogTest {
     )
 
     log.appendAsLeader(endTransactionMarkerRecord, origin = AppendOrigin.COORDINATOR, leaderEpoch = 0)
-    assertFalse(log.hasOngoingTransaction(producerId))
+    assertFalse(log.hasOngoingTransaction(producerId, producerEpoch))
     assertEquals(VerificationGuard.SENTINEL, log.verificationGuard(producerId))
 
     if (appendOrigin == AppendOrigin.CLIENT)
       sequence = sequence + 1
 
     // A new maybeStartTransactionVerification will not be empty, as we need to verify the next transaction.
-    val newVerificationGuard = log.maybeStartTransactionVerification(producerId, sequence, producerEpoch)
+    val newVerificationGuard = log.maybeStartTransactionVerification(producerId, sequence, producerEpoch, true)
     assertNotEquals(VerificationGuard.SENTINEL, newVerificationGuard)
     assertNotEquals(verificationGuard, newVerificationGuard)
     assertFalse(verificationGuard.verify(newVerificationGuard))
   }
 
-  @Test
-  def testEmptyTransactionStillClearsVerificationGuard(): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testEmptyTransactionStillClearsVerificationGuard(supportsEpochBump: Boolean): Unit = {
     val producerStateManagerConfig = new ProducerStateManagerConfig(86400000, true)
 
     val producerId = 23L
@@ -3973,9 +4105,34 @@ class UnifiedLogTest {
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 2048 * 5)
     val log = createLog(logDir, logConfig, producerStateManagerConfig = producerStateManagerConfig)
 
-    val verificationGuard = log.maybeStartTransactionVerification(producerId, 0, producerEpoch)
+    val verificationGuard = log.maybeStartTransactionVerification(producerId, 0, producerEpoch, supportsEpochBump)
     assertNotEquals(VerificationGuard.SENTINEL, verificationGuard)
 
+    val endMarkerProducerEpoch = if (supportsEpochBump) (producerEpoch + 1).toShort else producerEpoch
+    val endTransactionMarkerRecord = MemoryRecords.withEndTransactionMarker(
+      producerId,
+      endMarkerProducerEpoch,
+      new EndTransactionMarker(ControlRecordType.COMMIT, 0)
+    )
+
+    log.appendAsLeader(endTransactionMarkerRecord, origin = AppendOrigin.COORDINATOR, leaderEpoch = 0)
+    assertFalse(log.hasOngoingTransaction(producerId, producerEpoch))
+    assertEquals(VerificationGuard.SENTINEL, log.verificationGuard(producerId))
+  }
+
+  @Test
+  def testNextTransactionVerificationGuardNotCleared(): Unit = {
+    val producerStateManagerConfig = new ProducerStateManagerConfig(86400000, true)
+
+    val producerId = 23L
+    val producerEpoch = 1.toShort
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 2048 * 5)
+    val log = createLog(logDir, logConfig, producerStateManagerConfig = producerStateManagerConfig)
+
+    val verificationGuard = log.maybeStartTransactionVerification(producerId, 0, producerEpoch, true)
+    assertNotEquals(VerificationGuard.SENTINEL, verificationGuard)
+
+    // If the producer epoch is the same on the EndTxn marker, the verification must be for the next transaction, so we shouldn't clear it.
     val endTransactionMarkerRecord = MemoryRecords.withEndTransactionMarker(
       producerId,
       producerEpoch,
@@ -3983,12 +4140,13 @@ class UnifiedLogTest {
     )
 
     log.appendAsLeader(endTransactionMarkerRecord, origin = AppendOrigin.COORDINATOR, leaderEpoch = 0)
-    assertFalse(log.hasOngoingTransaction(producerId))
-    assertEquals(VerificationGuard.SENTINEL, log.verificationGuard(producerId))
+    assertFalse(log.hasOngoingTransaction(producerId, producerEpoch))
+    assertEquals(verificationGuard, log.verificationGuard(producerId))
   }
 
-  @Test
-  def testDisabledVerificationClearsVerificationGuard(): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testDisabledVerificationClearsVerificationGuard(supportsEpochBump: Boolean): Unit = {
     val producerStateManagerConfig = new ProducerStateManagerConfig(86400000, true)
 
     val producerId = 23L
@@ -3996,7 +4154,7 @@ class UnifiedLogTest {
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 2048 * 5)
     val log = createLog(logDir, logConfig, producerStateManagerConfig = producerStateManagerConfig)
 
-    val verificationGuard = log.maybeStartTransactionVerification(producerId, 0, producerEpoch)
+    val verificationGuard = log.maybeStartTransactionVerification(producerId, 0, producerEpoch, supportsEpochBump)
     assertNotEquals(VerificationGuard.SENTINEL, verificationGuard)
 
     producerStateManagerConfig.setTransactionVerificationEnabled(false)
@@ -4011,7 +4169,7 @@ class UnifiedLogTest {
     )
     log.appendAsLeader(transactionalRecords, leaderEpoch = 0)
 
-    assertTrue(log.hasOngoingTransaction(producerId))
+    assertTrue(log.hasOngoingTransaction(producerId, producerEpoch))
     assertEquals(VerificationGuard.SENTINEL, log.verificationGuard(producerId))
   }
 
@@ -4036,14 +4194,14 @@ class UnifiedLogTest {
       new SimpleRecord("2".getBytes)
     )
     assertThrows(classOf[InvalidTxnStateException], () => log.appendAsLeader(transactionalRecords, leaderEpoch = 0))
-    assertFalse(log.hasOngoingTransaction(producerId))
+    assertFalse(log.hasOngoingTransaction(producerId, producerEpoch))
     assertEquals(VerificationGuard.SENTINEL, log.verificationGuard(producerId))
 
-    val verificationGuard = log.maybeStartTransactionVerification(producerId, sequence, producerEpoch)
+    val verificationGuard = log.maybeStartTransactionVerification(producerId, sequence, producerEpoch, true)
     assertNotEquals(VerificationGuard.SENTINEL, verificationGuard)
 
     log.appendAsLeader(transactionalRecords, leaderEpoch = 0, verificationGuard = verificationGuard)
-    assertTrue(log.hasOngoingTransaction(producerId))
+    assertTrue(log.hasOngoingTransaction(producerId, producerEpoch))
     assertEquals(VerificationGuard.SENTINEL, log.verificationGuard(producerId))
   }
 
@@ -4056,7 +4214,7 @@ class UnifiedLogTest {
     val sequence = 3
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 2048 * 5)
     val log = createLog(logDir, logConfig, producerStateManagerConfig = producerStateManagerConfig)
-    assertFalse(log.hasOngoingTransaction(producerId))
+    assertFalse(log.hasOngoingTransaction(producerId, producerEpoch))
     assertEquals(VerificationGuard.SENTINEL, log.verificationGuard(producerId))
 
     val transactionalRecords = MemoryRecords.withTransactionalRecords(
@@ -4068,7 +4226,7 @@ class UnifiedLogTest {
       new SimpleRecord("2".getBytes)
     )
 
-    val verificationGuard = log.maybeStartTransactionVerification(producerId, sequence, producerEpoch)
+    val verificationGuard = log.maybeStartTransactionVerification(producerId, sequence, producerEpoch, true)
     // Append should not throw error.
     log.appendAsLeader(transactionalRecords, leaderEpoch = 0, verificationGuard = verificationGuard)
   }
@@ -4462,8 +4620,8 @@ class UnifiedLogTest {
     segments.add(seg2)
     assertEquals(Seq(Long.MaxValue, Long.MaxValue), log.getFirstBatchTimestampForSegments(segments).asScala.toSeq)
 
-    seg1.append(1, 1000L, 1, MemoryRecords.withRecords(1, Compression.NONE, new SimpleRecord("one".getBytes)))
-    seg2.append(2, 2000L, 1, MemoryRecords.withRecords(2, Compression.NONE, new SimpleRecord("two".getBytes)))
+    seg1.append(1, MemoryRecords.withRecords(1, Compression.NONE, new SimpleRecord(1000L, "one".getBytes)))
+    seg2.append(2, MemoryRecords.withRecords(2, Compression.NONE, new SimpleRecord(2000L, "two".getBytes)))
     assertEquals(Seq(1000L, 2000L), log.getFirstBatchTimestampForSegments(segments).asScala.toSeq)
 
     seg1.close()
@@ -4474,8 +4632,8 @@ class UnifiedLogTest {
   def testFetchOffsetByTimestampShouldReadOnlyLocalLogWhenLogIsEmpty(): Unit = {
     val logConfig = LogTestUtils.createLogConfig(remoteLogStorageEnable = true)
     val log = createLog(logDir, logConfig, remoteStorageSystemEnable = true)
-    val result = log.fetchOffsetByTimestamp(mockTime.milliseconds(), Some(null))
-    assertEquals(OffsetResultHolder(None, None), result)
+    val result = log.fetchOffsetByTimestamp(mockTime.milliseconds(), Optional.empty)
+    assertEquals(new OffsetResultHolder(Optional.empty(), Optional.empty()), result)
   }
 
   private def appendTransactionalToBuffer(buffer: ByteBuffer,
@@ -4515,9 +4673,9 @@ class UnifiedLogTest {
     builder.close()
   }
 
-  private def appendAsFollower(log: UnifiedLog, records: MemoryRecords, leaderEpoch: Int = 0): Unit = {
+  private def appendAsFollower(log: UnifiedLog, records: MemoryRecords, leaderEpoch: Int): Unit = {
     records.batches.forEach(_.setPartitionLeaderEpoch(leaderEpoch))
-    log.appendAsFollower(records)
+    log.appendAsFollower(records, leaderEpoch)
   }
 
   private def createLog(dir: File,
@@ -4532,13 +4690,12 @@ class UnifiedLogTest {
                         producerIdExpirationCheckIntervalMs: Int = TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
                         lastShutdownClean: Boolean = true,
                         topicId: Option[Uuid] = None,
-                        keepPartitionMetadataFile: Boolean = true,
                         remoteStorageSystemEnable: Boolean = false,
                         remoteLogManager: Option[RemoteLogManager] = None,
                         logOffsetsListener: LogOffsetsListener = LogOffsetsListener.NO_OP_OFFSETS_LISTENER): UnifiedLog = {
     val log = LogTestUtils.createLog(dir, config, brokerTopicStats, scheduler, time, logStartOffset, recoveryPoint,
       maxTransactionTimeoutMs, producerStateManagerConfig, producerIdExpirationCheckIntervalMs,
-      lastShutdownClean, topicId, keepPartitionMetadataFile, new ConcurrentHashMap[String, Integer],
+      lastShutdownClean, topicId, new ConcurrentHashMap[String, Integer],
       remoteStorageSystemEnable, remoteLogManager, logOffsetsListener)
     logsToClose = logsToClose :+ log
     log

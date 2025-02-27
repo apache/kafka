@@ -22,7 +22,6 @@ import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
-import org.apache.kafka.common.metadata.ZkMigrationStateRecord;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.image.writer.RecordListWriter;
 import org.apache.kafka.image.writer.UnwritableMetadataException;
@@ -79,59 +78,6 @@ public class ImageDowngradeTest {
     }
 
     /**
-     * Test downgrading to a MetadataVersion that doesn't support FeatureLevelRecord.
-     */
-    @Test
-    public void testPremodernVersion() {
-        writeWithExpectedLosses(MetadataVersion.IBP_3_2_IV0,
-            Collections.singletonList(
-                "feature flag(s): foo.feature"),
-            Arrays.asList(
-                metadataVersionRecord(MetadataVersion.IBP_3_3_IV0),
-                TEST_RECORDS.get(0),
-                TEST_RECORDS.get(1),
-                new ApiMessageAndVersion(new FeatureLevelRecord().
-                        setName("foo.feature").
-                        setFeatureLevel((short) 4), (short) 0)),
-            Arrays.asList(
-                TEST_RECORDS.get(0),
-                TEST_RECORDS.get(1))
-        );
-    }
-
-    /**
-     * Test downgrading to a MetadataVersion that doesn't support inControlledShutdown.
-     */
-    @Test
-    public void testPreControlledShutdownStateVersion() {
-        writeWithExpectedLosses(MetadataVersion.IBP_3_3_IV2,
-            Collections.singletonList(
-                "the inControlledShutdown state of one or more brokers"),
-            Arrays.asList(
-                metadataVersionRecord(MetadataVersion.IBP_3_3_IV3),
-                new ApiMessageAndVersion(new RegisterBrokerRecord().
-                    setBrokerId(123).
-                    setIncarnationId(Uuid.fromString("XgjKo16hRWeWrTui0iR5Nw")).
-                    setBrokerEpoch(456).
-                    setRack(null).
-                    setFenced(false).
-                    setInControlledShutdown(true), (short) 1),
-                TEST_RECORDS.get(0),
-                TEST_RECORDS.get(1)),
-            Arrays.asList(
-                metadataVersionRecord(MetadataVersion.IBP_3_3_IV2),
-                new ApiMessageAndVersion(new RegisterBrokerRecord().
-                    setBrokerId(123).
-                    setIncarnationId(Uuid.fromString("XgjKo16hRWeWrTui0iR5Nw")).
-                    setBrokerEpoch(456).
-                    setRack(null).
-                    setFenced(false), (short) 0),
-                TEST_RECORDS.get(0),
-                TEST_RECORDS.get(1))
-        );
-    }
-
-    /**
      * Test downgrading to a MetadataVersion that doesn't support ZK migration.
      */
     @Test
@@ -183,7 +129,6 @@ public class ImageDowngradeTest {
                     (short) 2)),
             Arrays.asList(
                 metadataVersionRecord(outputMetadataVersion),
-                new ApiMessageAndVersion(new ZkMigrationStateRecord(), (short) 0),
                 TEST_RECORDS.get(0),
                 new ApiMessageAndVersion(
                     testPartitionRecord.duplicate().setDirectories(Collections.emptyList()),
@@ -202,8 +147,7 @@ public class ImageDowngradeTest {
         RecordTestUtils.replayAll(delta, inputs);
         MetadataImage image = delta.apply(MetadataProvenance.EMPTY);
         RecordListWriter writer = new RecordListWriter();
-        image.write(writer, new ImageWriterOptions.Builder().
-                setMetadataVersion(metadataVersion).
+        image.write(writer, new ImageWriterOptions.Builder(metadataVersion).
                 setLossHandler(lossConsumer).
                 build());
         assertEquals(expectedLosses, lossConsumer.losses, "Failed to get expected metadata losses.");

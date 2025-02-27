@@ -94,6 +94,10 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
      */
     private final HeartbeatMetricsManager metricsManager;
 
+    public static final String CONSUMER_PROTOCOL_NOT_SUPPORTED_MSG = "The cluster does not support the new CONSUMER " +
+        "group protocol. Set group.protocol=classic on the consumer configs to revert to the CLASSIC protocol " +
+        "until the cluster is upgraded.";
+
     AbstractHeartbeatRequestManager(
             final LogContext logContext,
             final Time time,
@@ -157,6 +161,7 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
     public NetworkClientDelegate.PollResult poll(long currentTimeMs) {
         if (coordinatorRequestManager.coordinator().isEmpty() || membershipManager().shouldSkipHeartbeat()) {
             membershipManager().onHeartbeatRequestSkipped();
+            maybePropagateCoordinatorFatalErrorEvent();
             return NetworkClientDelegate.PollResult.EMPTY;
         }
         pollTimer.update(currentTimeMs);
@@ -259,6 +264,11 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
         pollTimer.reset(maxPollIntervalMs);
     }
 
+    private void maybePropagateCoordinatorFatalErrorEvent() {
+        coordinatorRequestManager.getAndClearFatalError()
+                .ifPresent(fatalError -> backgroundEventHandler.add(new ErrorEvent(fatalError)));
+    }
+
     private NetworkClientDelegate.UnsentRequest makeHeartbeatRequest(final long currentTimeMs, final boolean ignoreResponse) {
         NetworkClientDelegate.UnsentRequest request = makeHeartbeatRequest(ignoreResponse);
         heartbeatRequestState.onSendAttempt(currentTimeMs);
@@ -311,7 +321,7 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
                 heartbeatRequestState.remainingBackoffMs(responseTimeMs),
                 exception.getMessage());
             logger.debug(message);
-        } else {
+        } else if (!handleSpecificFailure(exception)) {
             logger.error("{} failed due to fatal error: {}", heartbeatRequestName(), exception.getMessage());
             handleFatalFailure(exception);
         }
@@ -374,18 +384,19 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
                 handleFatalFailure(error.exception(exception.getMessage()));
                 break;
 
+            case TOPIC_AUTHORIZATION_FAILED:
+                logger.error("{} failed for member {} with state {} due to {}: {}", heartbeatRequestName(),
+                        membershipManager().memberId, membershipManager().state, error, errorMessage);
+                // Propagate auth error received in HB so that it's returned on poll.
+                // Member should stay in its current state so it can recover if ever the missing ACLs are added.
+                backgroundEventHandler.add(new ErrorEvent(error.exception()));
+                break;
+
             case INVALID_REQUEST:
             case GROUP_MAX_SIZE_REACHED:
             case UNSUPPORTED_ASSIGNOR:
                 logger.error("{} failed due to {}: {}", heartbeatRequestName(), error, errorMessage);
                 handleFatalFailure(error.exception(errorMessage));
-                break;
-
-            case UNSUPPORTED_VERSION:
-                message = "The cluster doesn't yet support the new consumer group protocol." +
-                        " Set group.protocol=classic to revert to the classic protocol until the cluster is upgraded.";
-                logger.error("{} failed due to {}: {}", heartbeatRequestName(), error, errorMessage);
-                handleFatalFailure(error.exception(message));
                 break;
 
             case FENCED_MEMBER_EPOCH:
@@ -406,8 +417,14 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
                 heartbeatRequestState.reset();
                 break;
 
+            case INVALID_REGULAR_EXPRESSION:
+                logger.error("{} failed due to {}: {}", heartbeatRequestName(), error, errorMessage);
+                handleFatalFailure(error.exception("Invalid RE2J SubscriptionPattern provided in the call to " +
+                    "subscribe. " + errorMessage));
+                break;
+
             default:
-                if (!handleSpecificError(response, currentTimeMs)) {
+                if (!handleSpecificExceptionInResponse(response, currentTimeMs)) {
                     // If the manager receives an unknown error - there could be a bug in the code or a new error code
                     logger.error("{} failed due to unexpected error {}: {}", heartbeatRequestName(), error, errorMessage);
                     handleFatalFailure(error.exception(errorMessage));
@@ -431,15 +448,25 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
         membershipManager().transitionToFatal();
     }
 
+    /**
+     * Error handling specific failure to a group type when sending the request
+     * and no response has been received.
+     *
+     * @param exception The exception thrown building the request
+     * @return true if the error was handled, else false
+     */
+    public boolean handleSpecificFailure(Throwable exception) {
+        return false;
+    }
 
     /**
-     * Error handling specific to a group type.
+     * Error handling specific response exception to a group type.
      *
      * @param response The heartbeat response
      * @param currentTimeMs Current time
      * @return true if the error was handled, else false
      */
-    public boolean handleSpecificError(final R response, final long currentTimeMs) {
+    public boolean handleSpecificExceptionInResponse(final R response, final long currentTimeMs) {
         return false;
     }
 

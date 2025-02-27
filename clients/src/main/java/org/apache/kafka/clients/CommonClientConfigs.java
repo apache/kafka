@@ -130,8 +130,7 @@ public class CommonClientConfigs {
     public static final String METRICS_CONTEXT_PREFIX = "metrics.context.";
 
     public static final String SECURITY_PROTOCOL_CONFIG = "security.protocol";
-    public static final String SECURITY_PROTOCOL_DOC = "Protocol used to communicate with brokers. Valid values are: " +
-        String.join(", ", SecurityProtocol.names()) + ".";
+    public static final String SECURITY_PROTOCOL_DOC = "Protocol used to communicate with brokers.";
     public static final String DEFAULT_SECURITY_PROTOCOL = "PLAINTEXT";
 
     public static final String SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG = "socket.connection.setup.timeout.ms";
@@ -207,7 +206,8 @@ public class CommonClientConfigs {
                                                         + "to the broker. If no heartbeats are received by the broker before the expiration of this session timeout, "
                                                         + "then the broker will remove this client from the group and initiate a rebalance. Note that the value "
                                                         + "must be in the allowable range as configured in the broker configuration by <code>group.min.session.timeout.ms</code> "
-                                                        + "and <code>group.max.session.timeout.ms</code>.";
+                                                        + "and <code>group.max.session.timeout.ms</code>. Note that this configuration is not supported when <code>group.protocol</code> "
+                                                        + "is set to \"consumer\".";
 
     public static final String HEARTBEAT_INTERVAL_MS_CONFIG = "heartbeat.interval.ms";
     public static final String HEARTBEAT_INTERVAL_MS_DOC = "The expected time between heartbeats to the consumer "

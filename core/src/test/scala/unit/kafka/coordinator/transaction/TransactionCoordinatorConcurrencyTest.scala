@@ -74,9 +74,6 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
   override def setUp(): Unit = {
     super.setUp()
 
-    when(zkClient.getTopicPartitionCount(TRANSACTION_STATE_TOPIC_NAME))
-      .thenReturn(Some(numPartitions))
-
     val brokerNode = new Node(0, "host", 10)
     val metadataCache: MetadataCache = mock(classOf[MetadataCache])
     when(metadataCache.getPartitionLeaderEndpoint(
@@ -88,9 +85,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
       new FinalizedFeatures(
         MetadataVersion.latestTesting(),
         Collections.singletonMap(TransactionVersion.FEATURE_NAME, TransactionVersion.TV_2.featureLevel()),
-        0,
-        true
-      )
+        0)
     }
 
     when(metadataCache.metadataVersion())
@@ -98,8 +93,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
     
     txnStateManager = new TransactionStateManager(0, scheduler, replicaManager, metadataCache, txnConfig, time,
       new Metrics())
-    txnStateManager.startup(() => zkClient.getTopicPartitionCount(TRANSACTION_STATE_TOPIC_NAME).get,
-      enableTransactionalIdExpiration = true)
+    txnStateManager.startup(() => numPartitions, enableTransactionalIdExpiration = true)
     for (i <- 0 until numPartitions)
       txnStateManager.addLoadedTransactionsToCache(i, coordinatorEpoch, new Pool[String, TransactionMetadata]())
 
@@ -507,7 +501,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
   private def prepareExhaustedEpochTxnMetadata(txn: Transaction): TransactionMetadata = {
     new TransactionMetadata(transactionalId = txn.transactionalId,
       producerId = producerId,
-      previousProducerId = RecordBatch.NO_PRODUCER_ID,
+      prevProducerId = RecordBatch.NO_PRODUCER_ID,
       nextProducerId = RecordBatch.NO_PRODUCER_ID,
       producerEpoch = (Short.MaxValue - 1).toShort,
       lastProducerEpoch = RecordBatch.NO_PRODUCER_EPOCH,
@@ -547,6 +541,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
             txnMetadata.producerEpoch,
             partitions,
             resultCallback,
+            TransactionVersion.TV_2,
             RequestLocal.withThreadConfinedCaching)
         replicaManager.tryCompleteActions()
       }

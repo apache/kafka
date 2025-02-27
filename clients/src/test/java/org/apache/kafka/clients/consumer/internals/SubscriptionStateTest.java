@@ -21,6 +21,7 @@ import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.SubscriptionPattern;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState.LogTruncation;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.Node;
@@ -396,6 +397,40 @@ public class SubscriptionStateTest {
         state.subscribeFromPattern(new HashSet<>(Arrays.asList(topic, topic1)));
         assertEquals(2, state.subscription().size(), "Expected subscribed topics count is incorrect");
     }
+
+    @Test
+    public void testSubscribeToRe2JPattern() {
+        String pattern = "t.*";
+        state.subscribe(new SubscriptionPattern(pattern), Optional.of(rebalanceListener));
+        assertTrue(state.toString().contains("type=AUTO_PATTERN_RE2J"));
+        assertTrue(state.toString().contains("subscribedPattern=" + pattern));
+    }
+
+    @Test
+    public void testMixedPatternSubscriptionNotAllowed() {
+        state.subscribe(Pattern.compile(".*"), Optional.of(rebalanceListener));
+        assertThrows(IllegalStateException.class, () -> state.subscribe(new SubscriptionPattern("t.*"),
+            Optional.of(rebalanceListener)));
+
+        state.unsubscribe();
+
+        state.subscribe(new SubscriptionPattern("t.*"), Optional.of(rebalanceListener));
+        assertThrows(IllegalStateException.class, () -> state.subscribe(Pattern.compile(".*"), Optional.of(rebalanceListener)));
+    }
+
+    @Test
+    public void testSubscriptionPattern() {
+        SubscriptionPattern pattern = new SubscriptionPattern("t.*");
+        state.subscribe(pattern, Optional.of(rebalanceListener));
+        assertTrue(state.hasRe2JPatternSubscription());
+        assertEquals(pattern, state.subscriptionPattern());
+        assertTrue(state.hasAutoAssignedPartitions());
+
+        state.unsubscribe();
+        assertFalse(state.hasRe2JPatternSubscription());
+        assertNull(state.subscriptionPattern());
+    }
+
 
     @Test
     public void unsubscribeUserAssignment() {

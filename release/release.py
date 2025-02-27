@@ -127,14 +127,14 @@ def command_stage_docs():
     if not os.path.exists(kafka_site_repo_path) or not os.path.exists(os.path.join(kafka_site_repo_path, "powered-by.html")):
         fail("{kafka_site_repo_path} doesn't exist or does not appear to be the kafka-site repository")
 
-    jdk17_env = get_jdk(17)
+    jdk21_env = get_jdk(21)
 
     # We explicitly override the version of the project that we normally get from gradle.properties since we want to be
     # able to run this from a release branch where we made some updates, but the build would show an incorrect SNAPSHOT
     # version due to already having bumped the bugfix version number.
     gradle_version_override = detect_docs_release_version(project_version)
 
-    cmd("Building docs", f"./gradlew -Pversion={gradle_version_override} clean siteDocsTar aggregatedJavadoc", cwd=repo_dir, env=jdk17_env)
+    cmd("Building docs", f"./gradlew -Pversion={gradle_version_override} clean siteDocsTar aggregatedJavadoc", cwd=repo_dir, env=jdk21_env)
 
     docs_tar = os.path.join(repo_dir, "core", "build", "distributions", f"kafka_2.13-{gradle_version_override}-site-docs.tgz")
 
@@ -229,8 +229,7 @@ gpg_key_pass_id = gpg.key_pass_id(gpg_key_id, gpg_passphrase)
 preferences.once(f"verify_gpg_key_{gpg_key_pass_id}", verify_gpg_key)
 
 apache_id = preferences.get('apache_id', lambda: prompt("Please enter your apache-id: "))
-jdk8_env = get_jdk(8)
-jdk17_env = get_jdk(17)
+jdk21_env = get_jdk(21)
 
 
 def verify_prerequeisites():
@@ -328,9 +327,9 @@ except Exception as e:
 
 
 git.targz(rc_tag, f"kafka-{release_version}-src/", f"{artifacts_dir}/kafka-{release_version}-src.tgz")
-cmd("Building artifacts", "./gradlew clean && ./gradlew releaseTarGz -PscalaVersion=2.13", cwd=kafka_dir, env=jdk8_env, shell=True)
+cmd("Building artifacts", "./gradlew clean && ./gradlew releaseTarGz -PscalaVersion=2.13", cwd=kafka_dir, env=jdk21_env, shell=True)
 cmd("Copying artifacts", f"cp {kafka_dir}/core/build/distributions/* {artifacts_dir}", shell=True)
-cmd("Building docs", "./gradlew clean aggregatedJavadoc", cwd=kafka_dir, env=jdk17_env)
+cmd("Building docs", "./gradlew clean aggregatedJavadoc", cwd=kafka_dir, env=jdk21_env)
 cmd("Copying docs", f"cp -R {kafka_dir}/build/docs/javadoc {artifacts_dir}")
 
 for filename in os.listdir(artifacts_dir):
@@ -355,8 +354,8 @@ confirm_or_fail(f"Going to check in artifacts to svn under {SVN_DEV_URL}/{rc_tag
 svn.commit_artifacts(rc_tag, artifacts_dir, work_dir)
 
 confirm_or_fail("Going to build and upload mvn artifacts based on these settings:\n" + textfiles.read(global_gradle_props) + '\nOK?')
-cmd("Building and uploading archives", "./gradlew publish -PscalaVersion=2.13", cwd=kafka_dir, env=jdk8_env, shell=True)
-cmd("Building and uploading archives", "mvn deploy -Pgpg-signing", cwd=os.path.join(kafka_dir, "streams/quickstart"), env=jdk8_env, shell=True)
+cmd("Building and uploading archives", "./gradlew publish -PscalaVersion=2.13", cwd=kafka_dir, env=jdk21_env, shell=True)
+cmd("Building and uploading archives", "mvn deploy -Pgpg-signing", cwd=os.path.join(kafka_dir, "streams/quickstart"), env=jdk21_env, shell=True)
 
 # TODO: Many of these suggested validation steps could be automated
 # and would help pre-validate a lot of the stuff voters test

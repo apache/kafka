@@ -45,6 +45,7 @@
     <allow pkg="org.apache.kafka.common.utils" />
     <allow pkg="org.apache.kafka.common.errors" exact-match="true" />
     <allow pkg="org.apache.kafka.common.memory" />
+    <allow pkg="org.apache.kafka.common.test.api" />
 
     <subpackage name="coordinator">
         <subpackage name="group">
@@ -64,6 +65,7 @@
             <allow pkg="org.apache.kafka.image"/>
             <allow pkg="org.apache.kafka.server.common"/>
             <allow pkg="org.apache.kafka.server.record"/>
+            <allow pkg="org.apache.kafka.server.share.persister"/>
             <allow pkg="org.apache.kafka.server.util"/>
             <allow pkg="org.apache.kafka.storage.internals.log"/>
             <allow pkg="org.apache.kafka.test" />
@@ -71,6 +73,7 @@
             <allow pkg="org.apache.kafka.coordinator.common" />
             <allow pkg="org.apache.kafka.coordinator.common.runtime" />
             <allow pkg="com.google.re2j" />
+            <allow pkg="org.apache.kafka.metadata" />
             <subpackage name="metrics">
                 <allow pkg="com.yammer.metrics"/>
                 <allow pkg="org.HdrHistogram" />

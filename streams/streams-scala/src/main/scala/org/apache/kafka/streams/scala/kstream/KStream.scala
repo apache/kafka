@@ -17,14 +17,7 @@
 package org.apache.kafka.streams.scala
 package kstream
 
-import org.apache.kafka.streams.kstream.{
-  GlobalKTable,
-  JoinWindows,
-  KStream => KStreamJ,
-  Printed,
-  ValueTransformerSupplier,
-  ValueTransformerWithKeySupplier
-}
+import org.apache.kafka.streams.kstream.{GlobalKTable, JoinWindows, KStream => KStreamJ, Printed}
 import org.apache.kafka.streams.processor.TopicNameExtractor
 import org.apache.kafka.streams.processor.api.{FixedKeyProcessorSupplier, ProcessorSupplier}
 import org.apache.kafka.streams.scala.FunctionsCompatConversions.{
@@ -35,9 +28,7 @@ import org.apache.kafka.streams.scala.FunctionsCompatConversions.{
   MapperFromFunction,
   PredicateFromFunction,
   ValueMapperFromFunction,
-  ValueMapperWithKeyFromFunction,
-  ValueTransformerSupplierAsJava,
-  ValueTransformerSupplierWithKeyAsJava
+  ValueMapperWithKeyFromFunction
 }
 
 import scala.jdk.CollectionConverters._
@@ -491,142 +482,6 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    */
   def toTable(named: Named, materialized: Materialized[K, V, ByteArrayKeyValueStore]): KTable[K, V] =
     new KTable(inner.toTable(named, materialized))
-
-  /**
-   * Transform the value of each input record into zero or more records (with possible new type) in the
-   * output stream.
-   * A `ValueTransformer` (provided by the given `ValueTransformerSupplier`) is applied to each input
-   * record value and computes a new value for it.
-   * In order to assign a state, the state must be created and added via `addStateStore` before they can be connected
-   * to the `ValueTransformer`.
-   * It's not required to connect global state stores that are added via `addGlobalStore`;
-   * read-only access to global state stores is available by default.
-   *
-   * @param valueTransformerSupplier a instance of `ValueTransformerSupplier` that generates a `ValueTransformer`
-   * @param stateStoreNames          the names of the state stores used by the processor
-   * @return a [[KStream]] that contains records with unmodified key and new values (possibly of different type)
-   * @see `org.apache.kafka.streams.kstream.KStream#transformValues`
-   */
-  @deprecated(since = "3.3", message = "Use processValues(FixedKeyProcessorSupplier, Named, String*) instead.")
-  def flatTransformValues[VR](
-    valueTransformerSupplier: ValueTransformerSupplier[V, Iterable[VR]],
-    stateStoreNames: String*
-  ): KStream[K, VR] =
-    new KStream(inner.flatTransformValues[VR](valueTransformerSupplier.asJava, stateStoreNames: _*))
-
-  /**
-   * Transform the value of each input record into zero or more records (with possible new type) in the
-   * output stream.
-   * A `ValueTransformer` (provided by the given `ValueTransformerSupplier`) is applied to each input
-   * record value and computes a new value for it.
-   * In order to assign a state, the state must be created and added via `addStateStore` before they can be connected
-   * to the `ValueTransformer`.
-   * It's not required to connect global state stores that are added via `addGlobalStore`;
-   * read-only access to global state stores is available by default.
-   *
-   * @param valueTransformerSupplier a instance of `ValueTransformerSupplier` that generates a `ValueTransformer`
-   * @param named                    a [[Named]] config used to name the processor in the topology
-   * @param stateStoreNames          the names of the state stores used by the processor
-   * @return a [[KStream]] that contains records with unmodified key and new values (possibly of different type)
-   * @see `org.apache.kafka.streams.kstream.KStream#transformValues`
-   */
-  @deprecated(since = "3.3", message = "Use processValues(FixedKeyProcessorSupplier, Named, String*) instead.")
-  def flatTransformValues[VR](
-    valueTransformerSupplier: ValueTransformerSupplier[V, Iterable[VR]],
-    named: Named,
-    stateStoreNames: String*
-  ): KStream[K, VR] =
-    new KStream(inner.flatTransformValues[VR](valueTransformerSupplier.asJava, named, stateStoreNames: _*))
-
-  /**
-   * Transform the value of each input record into zero or more records (with possible new type) in the
-   * output stream.
-   * A `ValueTransformer` (provided by the given `ValueTransformerSupplier`) is applied to each input
-   * record value and computes a new value for it.
-   * In order to assign a state, the state must be created and added via `addStateStore` before they can be connected
-   * to the `ValueTransformer`.
-   * It's not required to connect global state stores that are added via `addGlobalStore`;
-   * read-only access to global state stores is available by default.
-   *
-   * @param valueTransformerSupplier a instance of `ValueTransformerWithKeySupplier` that generates a `ValueTransformerWithKey`
-   * @param stateStoreNames          the names of the state stores used by the processor
-   * @return a [[KStream]] that contains records with unmodified key and new values (possibly of different type)
-   * @see `org.apache.kafka.streams.kstream.KStream#transformValues`
-   */
-  @deprecated(since = "3.3", message = "Use processValues(FixedKeyProcessorSupplier, String*) instead.")
-  def flatTransformValues[VR](
-    valueTransformerSupplier: ValueTransformerWithKeySupplier[K, V, Iterable[VR]],
-    stateStoreNames: String*
-  ): KStream[K, VR] =
-    new KStream(inner.flatTransformValues[VR](valueTransformerSupplier.asJava, stateStoreNames: _*))
-
-  /**
-   * Transform the value of each input record into zero or more records (with possible new type) in the
-   * output stream.
-   * A `ValueTransformer` (provided by the given `ValueTransformerSupplier`) is applied to each input
-   * record value and computes a new value for it.
-   * In order to assign a state, the state must be created and added via `addStateStore` before they can be connected
-   * to the `ValueTransformer`.
-   * It's not required to connect global state stores that are added via `addGlobalStore`;
-   * read-only access to global state stores is available by default.
-   *
-   * @param valueTransformerSupplier a instance of `ValueTransformerWithKeySupplier` that generates a `ValueTransformerWithKey`
-   * @param named                    a [[Named]] config used to name the processor in the topology
-   * @param stateStoreNames          the names of the state stores used by the processor
-   * @return a [[KStream]] that contains records with unmodified key and new values (possibly of different type)
-   * @see `org.apache.kafka.streams.kstream.KStream#transformValues`
-   */
-  @deprecated(since = "3.3", message = "Use processValues(FixedKeyProcessorSupplier, Named, String*) instead.")
-  def flatTransformValues[VR](
-    valueTransformerSupplier: ValueTransformerWithKeySupplier[K, V, Iterable[VR]],
-    named: Named,
-    stateStoreNames: String*
-  ): KStream[K, VR] =
-    new KStream(inner.flatTransformValues[VR](valueTransformerSupplier.asJava, named, stateStoreNames: _*))
-
-  /**
-   * Process all records in this stream, one record at a time, by applying a `Processor` (provided by the given
-   * `processorSupplier`).
-   * In order to assign a state, the state must be created and added via `addStateStore` before they can be connected
-   * to the `Processor`.
-   * It's not required to connect global state stores that are added via `addGlobalStore`;
-   * read-only access to global state stores is available by default.
-   *
-   * @param processorSupplier a function that generates a `org.apache.kafka.streams.processor.Processor`
-   * @param stateStoreNames   the names of the state store used by the processor
-   * @see `org.apache.kafka.streams.kstream.KStream#process`
-   */
-  @deprecated(since = "3.0", message = "Use process(ProcessorSupplier, String*) instead.")
-  def process(
-    processorSupplier: () => org.apache.kafka.streams.processor.Processor[K, V],
-    stateStoreNames: String*
-  ): Unit = {
-    val processorSupplierJ: org.apache.kafka.streams.processor.ProcessorSupplier[K, V] = () => processorSupplier()
-    inner.process(processorSupplierJ, stateStoreNames: _*)
-  }
-
-  /**
-   * Process all records in this stream, one record at a time, by applying a `Processor` (provided by the given
-   * `processorSupplier`).
-   * In order to assign a state, the state must be created and added via `addStateStore` before they can be connected
-   * to the `Processor`.
-   * It's not required to connect global state stores that are added via `addGlobalStore`;
-   * read-only access to global state stores is available by default.
-   *
-   * @param processorSupplier a function that generates a `org.apache.kafka.streams.processor.Processor`
-   * @param named             a [[Named]] config used to name the processor in the topology
-   * @param stateStoreNames   the names of the state store used by the processor
-   * @see `org.apache.kafka.streams.kstream.KStream#process`
-   */
-  @deprecated(since = "3.0", message = "Use process(ProcessorSupplier, String*) instead.")
-  def process(
-    processorSupplier: () => org.apache.kafka.streams.processor.Processor[K, V],
-    named: Named,
-    stateStoreNames: String*
-  ): Unit = {
-    val processorSupplierJ: org.apache.kafka.streams.processor.ProcessorSupplier[K, V] = () => processorSupplier()
-    inner.process(processorSupplierJ, named, stateStoreNames: _*)
-  }
 
   /**
    * Process all records in this stream, one record at a time, by applying a `Processor` (provided by the given

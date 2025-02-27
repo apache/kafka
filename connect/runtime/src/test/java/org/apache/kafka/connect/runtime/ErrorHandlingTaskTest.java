@@ -25,6 +25,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.components.Versioned;
@@ -33,7 +34,7 @@ import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.RetriableException;
-import org.apache.kafka.connect.integration.MonitorableSourceConnector;
+import org.apache.kafka.connect.integration.TestableSourceConnector;
 import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
 import org.apache.kafka.connect.runtime.errors.ErrorReporter;
@@ -74,8 +75,6 @@ import org.mockito.quality.Strictness;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
-import java.time.Duration;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -85,7 +84,7 @@ import java.util.Set;
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.utils.Time.SYSTEM;
-import static org.apache.kafka.connect.integration.MonitorableSourceConnector.TOPIC_CONFIG;
+import static org.apache.kafka.connect.integration.TestableSourceConnector.TOPIC_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
@@ -197,7 +196,7 @@ public class ErrorHandlingTaskTest {
         // setup up props for the source connector
         Map<String, String> props = new HashMap<>();
         props.put("name", "foo-connector");
-        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getSimpleName());
+        props.put(CONNECTOR_CLASS_CONFIG, TestableSourceConnector.class.getSimpleName());
         props.put(TASKS_MAX_CONFIG, String.valueOf(1));
         props.put(TOPIC_CONFIG, topic);
         props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
@@ -408,15 +407,6 @@ public class ErrorHandlingTaskTest {
         assertEquals(expected, measured, 0.001d);
     }
 
-    private void verifyCloseSource() throws IOException {
-        verify(producer).close(any(Duration.class));
-        verify(admin).close(any(Duration.class));
-        verify(offsetReader).close();
-        verify(offsetStore).stop();
-        // headerConverter.close() can throw IOException
-        verify(headerConverter).close();
-    }
-
     private void expectTopicCreation(String topic) {
         if (enableTopicCreation) {
             when(admin.describeTopics(topic)).thenReturn(Collections.emptyMap());
@@ -435,13 +425,17 @@ public class ErrorHandlingTaskTest {
         oo.put("schemas.enable", "false");
         converter.configure(oo);
 
+        Plugin<Transformation<SinkRecord>> transformationPlugin = metrics.wrap(new FaultyPassthrough<SinkRecord>(), taskId, "");
         TransformationChain<ConsumerRecord<byte[], byte[]>, SinkRecord> sinkTransforms =
-                new TransformationChain<>(singletonList(new TransformationStage<>(new FaultyPassthrough<SinkRecord>())), retryWithToleranceOperator);
+                new TransformationChain<>(singletonList(new TransformationStage<>(transformationPlugin)), retryWithToleranceOperator);
 
+        Plugin<Converter> keyConverterPlugin = metrics.wrap(converter, taskId,  true);
+        Plugin<Converter> valueConverterPlugin = metrics.wrap(converter, taskId,  false);
+        Plugin<HeaderConverter> headerConverterPlugin = metrics.wrap(headerConverter, taskId);
         workerSinkTask = new WorkerSinkTask(
             taskId, sinkTask, statusListener, initialState, workerConfig,
-            ClusterConfigState.EMPTY, metrics, converter, converter, errorHandlingMetrics,
-            headerConverter, sinkTransforms, consumer, pluginLoader, time,
+            ClusterConfigState.EMPTY, metrics, keyConverterPlugin, valueConverterPlugin, errorHandlingMetrics,
+                headerConverterPlugin, sinkTransforms, consumer, pluginLoader, time,
             retryWithToleranceOperator, workerErrantRecordReporter,
                 statusBackingStore, () -> errorReporters);
     }
@@ -467,12 +461,16 @@ public class ErrorHandlingTaskTest {
 
     private void createSourceTask(TargetState initialState, RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator,
                                   List<ErrorReporter<SourceRecord>> errorReporters, Converter converter) {
+        Plugin<Transformation<SourceRecord>> transformationPlugin = metrics.wrap(new FaultyPassthrough<SourceRecord>(), taskId, "");
         TransformationChain<SourceRecord, SourceRecord> sourceTransforms = new TransformationChain<>(singletonList(
-                new TransformationStage<>(new FaultyPassthrough<SourceRecord>())), retryWithToleranceOperator);
+                new TransformationStage<>(transformationPlugin)), retryWithToleranceOperator);
 
+        Plugin<Converter> keyConverterPlugin = metrics.wrap(converter, taskId,  true);
+        Plugin<Converter> valueConverterPlugin = metrics.wrap(converter, taskId,  false);
+        Plugin<HeaderConverter> headerConverterPlugin = metrics.wrap(headerConverter, taskId);
         workerSourceTask = spy(new WorkerSourceTask(
-            taskId, sourceTask, statusListener, initialState, converter,
-                converter, errorHandlingMetrics, headerConverter,
+            taskId, sourceTask, statusListener, initialState, keyConverterPlugin,
+                valueConverterPlugin, errorHandlingMetrics, headerConverterPlugin,
                 sourceTransforms, producer, admin,
                 TopicCreationGroup.configuredGroups(sourceConfig),
                 offsetReader, offsetWriter, offsetStore, workerConfig,

@@ -17,23 +17,21 @@
 package kafka.server
 
 import kafka.utils.TestUtils
-import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterInstance, ClusterTest, ClusterTestDefaults, ClusterTestExtensions, ClusterTests, Type}
+import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, ClusterTests, Type}
 import org.apache.kafka.common.message.ShareFetchResponseData.AcquiredRecords
 import org.apache.kafka.common.message.{ShareAcknowledgeRequestData, ShareAcknowledgeResponseData, ShareFetchRequestData, ShareFetchResponseData}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.requests.{ShareAcknowledgeRequest, ShareAcknowledgeResponse, ShareFetchRequest, ShareFetchResponse, ShareRequestMetadata}
+import org.apache.kafka.common.test.ClusterInstance
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{AfterEach, Tag, Timeout}
-import org.junit.jupiter.api.extension.ExtendWith
 
 import java.util
 import java.util.Collections
-import scala.collection.convert.ImplicitConversions.`list asScalaBuffer`
 import scala.jdk.CollectionConverters._
 
 @Timeout(1200)
-@ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 @ClusterTestDefaults(types = Array(Type.KRAFT), brokers = 1, serverProperties = Array(
   new ClusterConfigProperty(key = "group.share.persister.class.name", value = "")
 ))
@@ -266,7 +264,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       val partitionsCount = shareFetchResponseData.responses().get(0).partitions().size()
       if (partitionsCount > 0) {
         assertEquals(topicId, shareFetchResponseData.responses().get(0).topicId())
-        shareFetchResponseData.responses().get(0).partitions().foreach(partitionData => {
+        shareFetchResponseData.responses().get(0).partitions().asScala.foreach(partitionData => {
           if (!partitionData.acquiredRecords().isEmpty) {
             responses = responses :+ partitionData
           }
@@ -835,38 +833,57 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setAcknowledgeErrorCode(Errors.NONE.code())
       .setAcquiredRecords(expectedAcquiredRecords(Collections.singletonList(0), Collections.singletonList(9), Collections.singletonList(1)))
 
-    var fetchPartitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
+    val fetchPartitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
     compareFetchResponsePartitions(expectedFetchPartitionData, fetchPartitionData)
 
     // Producing 10 more records to the topic created above
     produceData(topicIdPartition, 10)
-
-    // Send a third Share Fetch request with piggybacked acknowledgements
-    shareSessionEpoch = ShareRequestMetadata.nextEpoch(shareSessionEpoch)
-    metadata = new ShareRequestMetadata(memberId, shareSessionEpoch)
-    acknowledgementsMapForFetch = Map(topicIdPartition -> List(new ShareFetchRequestData.AcknowledgementBatch()
-      .setFirstOffset(0)
-      .setLastOffset(9)
-      .setAcknowledgeTypes(Collections.singletonList(2.toByte))).asJava) // Release the records
-    shareFetchRequest = createShareFetchRequest(groupId, metadata, MAX_PARTITION_BYTES, send, Seq.empty, acknowledgementsMapForFetch)
-    shareFetchResponse = connectAndReceive[ShareFetchResponse](shareFetchRequest)
-
-    shareFetchResponseData = shareFetchResponse.data()
-    assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
-    assertEquals(1, shareFetchResponseData.responses().size())
-    assertEquals(topicId, shareFetchResponseData.responses().get(0).topicId())
-    assertEquals(1, shareFetchResponseData.responses().get(0).partitions().size())
 
     expectedFetchPartitionData = new ShareFetchResponseData.PartitionData()
       .setPartitionIndex(partition)
       .setErrorCode(Errors.NONE.code())
       .setAcknowledgeErrorCode(Errors.NONE.code())
       .setAcquiredRecords(expectedAcquiredRecords(List(0L, 10L).asJava, List(9L, 19L).asJava, List(2, 1).asJava))
+
+    val acquiredRecords : util.List[AcquiredRecords] = new util.ArrayList[AcquiredRecords]()
+    var releaseAcknowledgementSent = false
+
+    TestUtils.waitUntilTrue(() => {
+      shareSessionEpoch = ShareRequestMetadata.nextEpoch(shareSessionEpoch)
+      metadata = new ShareRequestMetadata(memberId, shareSessionEpoch)
+      if (releaseAcknowledgementSent) {
+        // For fourth share fetch request onwards
+        acknowledgementsMapForFetch = Map.empty
+      } else {
+        // Send a third Share Fetch request with piggybacked acknowledgements
+        acknowledgementsMapForFetch = Map(topicIdPartition -> List(new ShareFetchRequestData.AcknowledgementBatch()
+          .setFirstOffset(0)
+          .setLastOffset(9)
+          .setAcknowledgeTypes(Collections.singletonList(2.toByte))).asJava) // Release the records
+        releaseAcknowledgementSent = true
+      }
+      shareFetchRequest = createShareFetchRequest(groupId, metadata, MAX_PARTITION_BYTES, send, Seq.empty, acknowledgementsMapForFetch)
+      shareFetchResponse = connectAndReceive[ShareFetchResponse](shareFetchRequest)
+
+      shareFetchResponseData = shareFetchResponse.data()
+      assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
+      assertEquals(1, shareFetchResponseData.responses().size())
+      assertEquals(topicId, shareFetchResponseData.responses().get(0).topicId())
+      val responseSize = shareFetchResponseData.responses().get(0).partitions().size()
+      if (responseSize > 0) {
+        acquiredRecords.addAll(shareFetchResponseData.responses().get(0).partitions().get(0).acquiredRecords())
+      }
+      // There should be 2 acquired record batches finally -
+      // 1. batch containing 0-9 offsets which were initially acknowledged as RELEASED.
+      // 2. batch containing 10-19 offsets which were produced in the second produceData function call.
+      acquiredRecords.size() == 2
+
+    }, "Share fetch request failed", 5000)
+
     // All the records from offsets 0 to 19 will be fetched. Records from 0 to 9 will have delivery count as 2 because
     // they are re delivered, and records from 10 to 19 will have delivery count as 1 because they are newly acquired
-
-    fetchPartitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
-    compareFetchResponsePartitions(expectedFetchPartitionData, fetchPartitionData)
+    assertTrue(expectedFetchPartitionData.acquiredRecords().containsAll(acquiredRecords) &&
+      acquiredRecords.containsAll(expectedFetchPartitionData.acquiredRecords()))
   }
 
   @ClusterTests(
@@ -1291,7 +1308,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       ),
     )
   )
-  def testShareFetchBrokerRespectsPartitionsSizeLimit(): Unit = {
+  def testShareFetchBrokerDoesNotRespectPartitionsSizeLimit(): Unit = {
     val groupId: String = "group"
     val memberId = Uuid.randomUuid()
 
@@ -1331,10 +1348,10 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setPartitionIndex(partition)
       .setErrorCode(Errors.NONE.code())
       .setAcknowledgeErrorCode(Errors.NONE.code())
-      .setAcquiredRecords(expectedAcquiredRecords(Collections.singletonList(0), Collections.singletonList(11), Collections.singletonList(1)))
+      .setAcquiredRecords(expectedAcquiredRecords(Collections.singletonList(0), Collections.singletonList(12), Collections.singletonList(1)))
     // The first 10 records will be consumed as it is. For the last 3 records, each of size MAX_PARTITION_BYTES/3,
-    // only 2 of then will be consumed (offsets 10 and 11) because the inclusion of the third last record will exceed
-    // the max partition bytes limit
+    // all 3 of then will be consumed (offsets 10, 11 and 12) because even though the inclusion of the third last record will exceed
+    // the max partition bytes limit. We should only consider the request level maxBytes as the hard limit.
 
     val partitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
     compareFetchResponsePartitions(expectedPartitionData, partitionData)
@@ -1393,15 +1410,15 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     // mocking the behaviour of multiple share consumers from the same share group
     val metadata1: ShareRequestMetadata = new ShareRequestMetadata(memberId1, ShareRequestMetadata.INITIAL_EPOCH)
     val acknowledgementsMap1: Map[TopicIdPartition, util.List[ShareFetchRequestData.AcknowledgementBatch]] = Map.empty
-    val shareFetchRequest1 = createShareFetchRequest(groupId, metadata1, MAX_PARTITION_BYTES, send, Seq.empty, acknowledgementsMap1)
+    val shareFetchRequest1 = createShareFetchRequest(groupId, metadata1, MAX_PARTITION_BYTES, send, Seq.empty, acknowledgementsMap1, minBytes = 100, maxBytes = 1500)
 
     val metadata2: ShareRequestMetadata = new ShareRequestMetadata(memberId2, ShareRequestMetadata.INITIAL_EPOCH)
     val acknowledgementsMap2: Map[TopicIdPartition, util.List[ShareFetchRequestData.AcknowledgementBatch]] = Map.empty
-    val shareFetchRequest2 = createShareFetchRequest(groupId, metadata2, MAX_PARTITION_BYTES, send, Seq.empty, acknowledgementsMap2)
+    val shareFetchRequest2 = createShareFetchRequest(groupId, metadata2, MAX_PARTITION_BYTES, send, Seq.empty, acknowledgementsMap2, minBytes = 100, maxBytes = 1500)
 
     val metadata3: ShareRequestMetadata = new ShareRequestMetadata(memberId3, ShareRequestMetadata.INITIAL_EPOCH)
     val acknowledgementsMap3: Map[TopicIdPartition, util.List[ShareFetchRequestData.AcknowledgementBatch]] = Map.empty
-    val shareFetchRequest3 = createShareFetchRequest(groupId, metadata3, MAX_PARTITION_BYTES, send, Seq.empty, acknowledgementsMap3)
+    val shareFetchRequest3 = createShareFetchRequest(groupId, metadata3, MAX_PARTITION_BYTES, send, Seq.empty, acknowledgementsMap3, minBytes = 100, maxBytes = 1500)
 
     val shareFetchResponse1 = connectAndReceive[ShareFetchResponse](shareFetchRequest1)
     val shareFetchResponse2 = connectAndReceive[ShareFetchResponse](shareFetchRequest2)
@@ -2256,7 +2273,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       val partitionsCount = shareFetchResponseData.responses().get(0).partitions().size()
       if (partitionsCount > 0) {
         assertEquals(topicId, shareFetchResponseData.responses().get(0).topicId())
-        shareFetchResponseData.responses().get(0).partitions().foreach(partitionData => {
+        shareFetchResponseData.responses().get(0).partitions().asScala.foreach(partitionData => {
           if (!partitionData.acquiredRecords().isEmpty) {
             responses = responses :+ partitionData
           }
@@ -2303,7 +2320,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       val shareFetchResponseData = shareFetchResponse.data()
 
       assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
-      shareFetchResponseData.responses().foreach(response => {
+      shareFetchResponseData.responses().asScala.foreach(response => {
         if (!response.partitions().isEmpty) {
           response.partitions().forEach(partitionData => partitions.add(partitionData.partitionIndex))
         }
@@ -2315,7 +2332,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
   private def expectedAcquiredRecords(firstOffsets: util.List[Long], lastOffsets: util.List[Long], deliveryCounts: util.List[Int]): util.List[AcquiredRecords] = {
     val acquiredRecordsList: util.List[AcquiredRecords] = new util.ArrayList()
-    for (i <- firstOffsets.indices) {
+    for (i <- firstOffsets.asScala.indices) {
       acquiredRecordsList.add(new AcquiredRecords()
         .setFirstOffset(firstOffsets.get(i))
         .setLastOffset(lastOffsets.get(i))
@@ -2347,8 +2364,9 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
                                       acknowledgementsMap: Map[TopicIdPartition, util.List[ShareFetchRequestData.AcknowledgementBatch]],
                                       maxWaitMs: Int = MAX_WAIT_MS,
                                       minBytes: Int = 0,
-                                      maxBytes: Int = Int.MaxValue): ShareFetchRequest = {
-    ShareFetchRequest.Builder.forConsumer(groupId, metadata, maxWaitMs, minBytes, maxBytes, maxPartitionBytes, send.asJava, forget.asJava, acknowledgementsMap.asJava)
+                                      maxBytes: Int = Int.MaxValue,
+                                      batchSize: Int = 500): ShareFetchRequest = {
+    ShareFetchRequest.Builder.forConsumer(groupId, metadata, maxWaitMs, minBytes, maxBytes, maxPartitionBytes, batchSize, send.asJava, forget.asJava, acknowledgementsMap.asJava)
       .build()
   }
   

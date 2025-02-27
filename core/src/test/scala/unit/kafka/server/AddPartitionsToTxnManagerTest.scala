@@ -25,20 +25,23 @@ import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.{AddPartitionsToTxnTopic, AddPartitionsToTxnTopicCollection, AddPartitionsToTxnTransaction, AddPartitionsToTxnTransactionCollection}
 import org.apache.kafka.common.message.AddPartitionsToTxnResponseData
 import org.apache.kafka.common.message.AddPartitionsToTxnResponseData.AddPartitionsToTxnResultCollection
-import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AbstractResponse, AddPartitionsToTxnRequest, AddPartitionsToTxnResponse, MetadataResponse}
 import org.apache.kafka.common.utils.MockTime
+import org.apache.kafka.metadata.LeaderAndIsr
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.RequestAndCompletionHandler
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers.{any, anyLong, anyString}
 import org.mockito.MockedConstruction.Context
 import org.mockito.Mockito.{mock, mockConstruction, times, verify, verifyNoMoreInteractions, when}
 
+import java.util
 import java.util.concurrent.TimeUnit
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
@@ -70,9 +73,9 @@ class AddPartitionsToTxnManagerTest {
   private val authenticationErrorResponse = clientResponse(null, authException = new SaslAuthenticationException(""))
   private val versionMismatchResponse = clientResponse(null, mismatchException = new UnsupportedVersionException(""))
   private val disconnectedResponse = clientResponse(null, disconnected = true)
-  private val transactionSupportedOperation = genericError
+  private val transactionSupportedOperation = genericErrorSupported
 
-  private val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:2181"))
+  private val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1))
 
   @BeforeEach
   def setup(): Unit = {
@@ -94,8 +97,10 @@ class AddPartitionsToTxnManagerTest {
     callbackErrors.foreachEntry(errors.put)
   }
 
-  @Test
-  def testAddTxnData(): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testAddTxnData(isAddPartition: Boolean): Unit = {
+    val transactionSupportedOperation = if (isAddPartition) addPartition else genericErrorSupported
     when(partitionFor.apply(transactionalId1)).thenReturn(0)
     when(partitionFor.apply(transactionalId2)).thenReturn(1)
     when(partitionFor.apply(transactionalId3)).thenReturn(0)
@@ -106,9 +111,9 @@ class AddPartitionsToTxnManagerTest {
     val transaction2Errors = mutable.Map[TopicPartition, Errors]()
     val transaction3Errors = mutable.Map[TopicPartition, Errors]()
 
-    addPartitionsToTxnManager.verifyTransaction(transactionalId1, producerId1, producerEpoch = 0, topicPartitions, setErrors(transaction1Errors), transactionSupportedOperation)
-    addPartitionsToTxnManager.verifyTransaction(transactionalId2, producerId2, producerEpoch = 0, topicPartitions, setErrors(transaction2Errors), transactionSupportedOperation)
-    addPartitionsToTxnManager.verifyTransaction(transactionalId3, producerId3, producerEpoch = 0, topicPartitions, setErrors(transaction3Errors), transactionSupportedOperation)
+    addPartitionsToTxnManager.addOrVerifyTransaction(transactionalId1, producerId1, producerEpoch = 0, topicPartitions, setErrors(transaction1Errors), transactionSupportedOperation)
+    addPartitionsToTxnManager.addOrVerifyTransaction(transactionalId2, producerId2, producerEpoch = 0, topicPartitions, setErrors(transaction2Errors), transactionSupportedOperation)
+    addPartitionsToTxnManager.addOrVerifyTransaction(transactionalId3, producerId3, producerEpoch = 0, topicPartitions, setErrors(transaction3Errors), transactionSupportedOperation)
 
     // We will try to add transaction1 3 more times (retries). One will have the same epoch, one will have a newer epoch, and one will have an older epoch than the new one we just added.
     val transaction1RetryWithSameEpochErrors = mutable.Map[TopicPartition, Errors]()
@@ -116,17 +121,17 @@ class AddPartitionsToTxnManagerTest {
     val transaction1RetryWithOldEpochErrors = mutable.Map[TopicPartition, Errors]()
 
     // Trying to add more transactional data for the same transactional ID, producer ID, and epoch should simply replace the old data and send a retriable response.
-    addPartitionsToTxnManager.verifyTransaction(transactionalId1, producerId1, producerEpoch = 0, topicPartitions, setErrors(transaction1RetryWithSameEpochErrors), transactionSupportedOperation)
+    addPartitionsToTxnManager.addOrVerifyTransaction(transactionalId1, producerId1, producerEpoch = 0, topicPartitions, setErrors(transaction1RetryWithSameEpochErrors), transactionSupportedOperation)
     val expectedNetworkErrors = topicPartitions.map(_ -> Errors.NETWORK_EXCEPTION).toMap
     assertEquals(expectedNetworkErrors, transaction1Errors)
 
     // Trying to add more transactional data for the same transactional ID and producer ID, but new epoch should replace the old data and send an error response for it.
-    addPartitionsToTxnManager.verifyTransaction(transactionalId1, producerId1, producerEpoch = 1, topicPartitions, setErrors(transaction1RetryWithNewerEpochErrors), transactionSupportedOperation)
+    addPartitionsToTxnManager.addOrVerifyTransaction(transactionalId1, producerId1, producerEpoch = 1, topicPartitions, setErrors(transaction1RetryWithNewerEpochErrors), transactionSupportedOperation)
     val expectedEpochErrors = topicPartitions.map(_ -> Errors.INVALID_PRODUCER_EPOCH).toMap
     assertEquals(expectedEpochErrors, transaction1RetryWithSameEpochErrors)
 
     // Trying to add more transactional data for the same transactional ID and producer ID, but an older epoch should immediately return with error and keep the old data queued to send.
-    addPartitionsToTxnManager.verifyTransaction(transactionalId1, producerId1, producerEpoch = 0, topicPartitions, setErrors(transaction1RetryWithOldEpochErrors), transactionSupportedOperation)
+    addPartitionsToTxnManager.addOrVerifyTransaction(transactionalId1, producerId1, producerEpoch = 0, topicPartitions, setErrors(transaction1RetryWithOldEpochErrors), transactionSupportedOperation)
     assertEquals(expectedEpochErrors, transaction1RetryWithOldEpochErrors)
 
     val requestsAndHandlers = addPartitionsToTxnManager.generateRequests().asScala
@@ -136,45 +141,44 @@ class AddPartitionsToTxnManagerTest {
         assertEquals(
           AddPartitionsToTxnRequest.Builder.forBroker(
             new AddPartitionsToTxnTransactionCollection(Seq(
-              transactionData(transactionalId3, producerId3),
-              transactionData(transactionalId1, producerId1, producerEpoch = 1)
+              transactionData(transactionalId3, producerId3, verifyOnly = !isAddPartition),
+              transactionData(transactionalId1, producerId1, producerEpoch = 1, verifyOnly = !isAddPartition)
             ).iterator.asJava)
           ).data,
           requestAndHandler.request.asInstanceOf[AddPartitionsToTxnRequest.Builder].data // insertion order
         )
       } else {
-        verifyRequest(node1, transactionalId2, producerId2, requestAndHandler)
+        verifyRequest(node1, transactionalId2, producerId2, !isAddPartition, requestAndHandler)
       }
     }
   }
 
-  @Test
-  def testGenerateRequests(): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testGenerateRequests(isAddPartition: Boolean): Unit = {
     when(partitionFor.apply(transactionalId1)).thenReturn(0)
     when(partitionFor.apply(transactionalId2)).thenReturn(1)
     when(partitionFor.apply(transactionalId3)).thenReturn(2)
     mockTransactionStateMetadata(0, 0, Some(node0))
     mockTransactionStateMetadata(1, 1, Some(node1))
     mockTransactionStateMetadata(2, 2, Some(node2))
+    val transactionSupportedOperation = if (isAddPartition) addPartition else genericErrorSupported
 
     val transactionErrors = mutable.Map[TopicPartition, Errors]()
 
-    addPartitionsToTxnManager.verifyTransaction(transactionalId1, producerId1, producerEpoch = 0, topicPartitions, setErrors(transactionErrors), transactionSupportedOperation)
-    addPartitionsToTxnManager.verifyTransaction(transactionalId2, producerId2, producerEpoch = 0, topicPartitions, setErrors(transactionErrors), transactionSupportedOperation)
+    addPartitionsToTxnManager.addOrVerifyTransaction(transactionalId1, producerId1, producerEpoch = 0, topicPartitions, setErrors(transactionErrors), transactionSupportedOperation)
+    addPartitionsToTxnManager.addOrVerifyTransaction(transactionalId2, producerId2, producerEpoch = 0, topicPartitions, setErrors(transactionErrors), transactionSupportedOperation)
 
     val requestsAndHandlers = addPartitionsToTxnManager.generateRequests().asScala
     assertEquals(2, requestsAndHandlers.size)
     // Note: handlers are tested in testAddPartitionsToTxnHandlerErrorHandling
     requestsAndHandlers.foreach { requestAndHandler =>
-      if (requestAndHandler.destination == node0) {
-        verifyRequest(node0, transactionalId1, producerId1, requestAndHandler)
-      } else {
-        verifyRequest(node1, transactionalId2, producerId2, requestAndHandler)
-      }
+      if (requestAndHandler.destination == node0) verifyRequest(node0, transactionalId1, producerId1, !isAddPartition, requestAndHandler)
+      else verifyRequest(node1, transactionalId2, producerId2, !isAddPartition, requestAndHandler)
     }
 
-    addPartitionsToTxnManager.verifyTransaction(transactionalId2, producerId2, producerEpoch = 0, topicPartitions, setErrors(transactionErrors), transactionSupportedOperation)
-    addPartitionsToTxnManager.verifyTransaction(transactionalId3, producerId3, producerEpoch = 0, topicPartitions, setErrors(transactionErrors), transactionSupportedOperation)
+    addPartitionsToTxnManager.addOrVerifyTransaction(transactionalId2, producerId2, producerEpoch = 0, topicPartitions, setErrors(transactionErrors), transactionSupportedOperation)
+    addPartitionsToTxnManager.addOrVerifyTransaction(transactionalId3, producerId3, producerEpoch = 0, topicPartitions, setErrors(transactionErrors), transactionSupportedOperation)
 
     // Test creationTimeMs increases too.
     time.sleep(10)
@@ -183,7 +187,7 @@ class AddPartitionsToTxnManagerTest {
     // The request for node1 should not be added because one request is already inflight.
     assertEquals(1, requestsAndHandlers2.size)
     requestsAndHandlers2.foreach { requestAndHandler =>
-      verifyRequest(node2, transactionalId3, producerId3, requestAndHandler)
+      verifyRequest(node2, transactionalId3, producerId3, !isAddPartition, requestAndHandler)
     }
 
     // Complete the request for node1 so the new one can go through.
@@ -191,7 +195,7 @@ class AddPartitionsToTxnManagerTest {
     val requestsAndHandlers3 = addPartitionsToTxnManager.generateRequests().asScala
     assertEquals(1, requestsAndHandlers3.size)
     requestsAndHandlers3.foreach { requestAndHandler =>
-      verifyRequest(node1, transactionalId2, producerId2, requestAndHandler)
+      verifyRequest(node1, transactionalId2, producerId2, !isAddPartition, requestAndHandler)
     }
   }
 
@@ -202,7 +206,7 @@ class AddPartitionsToTxnManagerTest {
     def checkError(): Unit = {
       val errors = mutable.Map[TopicPartition, Errors]()
 
-      addPartitionsToTxnManager.verifyTransaction(
+      addPartitionsToTxnManager.addOrVerifyTransaction(
         transactionalId1,
         producerId1,
         producerEpoch = 0,
@@ -215,7 +219,7 @@ class AddPartitionsToTxnManagerTest {
     }
 
     // The transaction state topic does not exist.
-    when(metadataCache.getPartitionInfo(Topic.TRANSACTION_STATE_TOPIC_NAME, 0))
+    when(metadataCache.getLeaderAndIsr(Topic.TRANSACTION_STATE_TOPIC_NAME, 0))
       .thenReturn(Option.empty)
     checkError()
 
@@ -241,16 +245,16 @@ class AddPartitionsToTxnManagerTest {
       transaction1Errors.clear()
       transaction2Errors.clear()
 
-      addPartitionsToTxnManager.verifyTransaction(transactionalId1, producerId1, producerEpoch = 0, topicPartitions, setErrors(transaction1Errors), transactionSupportedOperation)
-      addPartitionsToTxnManager.verifyTransaction(transactionalId2, producerId2, producerEpoch = 0, topicPartitions, setErrors(transaction2Errors), transactionSupportedOperation)
+      addPartitionsToTxnManager.addOrVerifyTransaction(transactionalId1, producerId1, producerEpoch = 0, topicPartitions, setErrors(transaction1Errors), transactionSupportedOperation)
+      addPartitionsToTxnManager.addOrVerifyTransaction(transactionalId2, producerId2, producerEpoch = 0, topicPartitions, setErrors(transaction2Errors), transactionSupportedOperation)
     }
 
     def addTransactionsToVerifyRequestVersion(operationExpected: TransactionSupportedOperation): Unit = {
       transaction1Errors.clear()
       transaction2Errors.clear()
 
-      addPartitionsToTxnManager.verifyTransaction(transactionalId1, producerId1, producerEpoch = 0, topicPartitions, setErrors(transaction1Errors), operationExpected)
-      addPartitionsToTxnManager.verifyTransaction(transactionalId2, producerId2, producerEpoch = 0, topicPartitions, setErrors(transaction2Errors), operationExpected)
+      addPartitionsToTxnManager.addOrVerifyTransaction(transactionalId1, producerId1, producerEpoch = 0, topicPartitions, setErrors(transaction1Errors), operationExpected)
+      addPartitionsToTxnManager.addOrVerifyTransaction(transactionalId2, producerId2, producerEpoch = 0, topicPartitions, setErrors(transaction2Errors), operationExpected)
     }
 
     val expectedAuthErrors = topicPartitions.map(_ -> Errors.SASL_AUTHENTICATION_FAILED).toMap
@@ -319,7 +323,7 @@ class AddPartitionsToTxnManagerTest {
     assertEquals(expectedTransactionAbortableErrorsTxn1LowerVersion, transaction1Errors)
     assertEquals(expectedTransactionAbortableErrorsTxn2LowerVersion, transaction2Errors)
 
-    addTransactionsToVerifyRequestVersion(genericError)
+    addTransactionsToVerifyRequestVersion(genericErrorSupported)
     receiveResponse(mixedAbortableErrorsResponse)
     assertEquals(expectedTransactionAbortableErrorsTxn1HigherVersion, transaction1Errors)
     assertEquals(expectedTransactionAbortableErrorsTxn2HigherVersion, transaction2Errors)
@@ -360,8 +364,8 @@ class AddPartitionsToTxnManagerTest {
     )
 
     try {
-      addPartitionsManagerWithMockedMetrics.verifyTransaction(transactionalId1, producerId1, producerEpoch = 0, topicPartitions, setErrors(transactionErrors), transactionSupportedOperation)
-      addPartitionsManagerWithMockedMetrics.verifyTransaction(transactionalId2, producerId2, producerEpoch = 0, topicPartitions, setErrors(transactionErrors), transactionSupportedOperation)
+      addPartitionsManagerWithMockedMetrics.addOrVerifyTransaction(transactionalId1, producerId1, producerEpoch = 0, topicPartitions, setErrors(transactionErrors), transactionSupportedOperation)
+      addPartitionsManagerWithMockedMetrics.addOrVerifyTransaction(transactionalId2, producerId2, producerEpoch = 0, topicPartitions, setErrors(transactionErrors), transactionSupportedOperation)
 
       time.sleep(100)
 
@@ -400,12 +404,8 @@ class AddPartitionsToTxnManagerTest {
   }
 
   private def mockTransactionStateMetadata(partitionIndex: Int, leaderId: Int, leaderNode: Option[Node]): Unit = {
-    when(metadataCache.getPartitionInfo(Topic.TRANSACTION_STATE_TOPIC_NAME, partitionIndex))
-      .thenReturn(Some(
-        new UpdateMetadataPartitionState()
-          .setTopicName(Topic.TRANSACTION_STATE_TOPIC_NAME)
-          .setPartitionIndex(partitionIndex)
-          .setLeader(leaderId)))
+    when(metadataCache.getLeaderAndIsr(Topic.TRANSACTION_STATE_TOPIC_NAME, partitionIndex))
+      .thenReturn(Some(new LeaderAndIsr(leaderId, util.Arrays.asList(leaderId))))
     if (leaderId != MetadataResponse.NO_LEADER_ID) {
       when(metadataCache.getAliveBrokerNode(leaderId, config.interBrokerListenerName))
         .thenReturn(leaderNode)
@@ -424,13 +424,14 @@ class AddPartitionsToTxnManagerTest {
   private def transactionData(
     transactionalId: String,
     producerId: Long,
-    producerEpoch: Short = 0
+    producerEpoch: Short = 0,
+    verifyOnly: Boolean,
   ): AddPartitionsToTxnTransaction = {
     new AddPartitionsToTxnTransaction()
       .setTransactionalId(transactionalId)
       .setProducerId(producerId)
       .setProducerEpoch(producerEpoch)
-      .setVerifyOnly(true)
+      .setVerifyOnly(verifyOnly)
       .setTopics(new AddPartitionsToTxnTopicCollection(
         Seq(new AddPartitionsToTxnTopic()
           .setName(topic)
@@ -445,6 +446,7 @@ class AddPartitionsToTxnManagerTest {
     expectedDestination: Node,
     transactionalId: String,
     producerId: Long,
+    verifyOnly: Boolean,
     requestAndHandler: RequestAndCompletionHandler
   ): Unit = {
     assertEquals(time.milliseconds(), requestAndHandler.creationTimeMs)
@@ -452,7 +454,7 @@ class AddPartitionsToTxnManagerTest {
     assertEquals(
       AddPartitionsToTxnRequest.Builder.forBroker(
         new AddPartitionsToTxnTransactionCollection(
-          Seq(transactionData(transactionalId, producerId)).iterator.asJava
+          Seq(transactionData(transactionalId, producerId, verifyOnly = verifyOnly)).iterator.asJava
         )
       ).data,
       requestAndHandler.request.asInstanceOf[AddPartitionsToTxnRequest.Builder].data

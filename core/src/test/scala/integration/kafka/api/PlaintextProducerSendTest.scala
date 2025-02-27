@@ -33,7 +33,6 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 
 import java.nio.charset.StandardCharsets
-import scala.annotation.nowarn
 
 
 class PlaintextProducerSendTest extends BaseProducerSendTest {
@@ -276,14 +275,11 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
 
 object PlaintextProducerSendTest {
 
-  // See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for deprecation details
-  @nowarn("cat=deprecation")
   def quorumAndTimestampConfigProvider: java.util.stream.Stream[Arguments] = {
     val now: Long = System.currentTimeMillis()
     val fiveMinutesInMs: Long = 5 * 60 * 60 * 1000L
     val data = new java.util.ArrayList[Arguments]()
     for (groupProtocol <- GroupProtocol.values().map(gp => gp.name.toLowerCase(Locale.ROOT))) {
-      data.add(Arguments.of("kraft", groupProtocol, TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG, Long.box(now - fiveMinutesInMs)))
       data.add(Arguments.of("kraft", groupProtocol, TopicConfig.MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG, Long.box(now - fiveMinutesInMs)))
       data.add(Arguments.of("kraft", groupProtocol, TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG, Long.box(now + fiveMinutesInMs)))
     }

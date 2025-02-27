@@ -17,15 +17,13 @@
 package org.apache.kafka.tools;
 
 import org.apache.kafka.clients.admin.AdminClientConfig;
-import org.apache.kafka.common.test.api.ClusterInstance;
+import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTest;
-import org.apache.kafka.common.test.api.ClusterTestExtensions;
 import org.apache.kafka.common.test.api.ClusterTests;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.io.File;
 import java.io.IOException;
@@ -38,7 +36,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@ExtendWith(value = ClusterTestExtensions.class)
 class MetadataQuorumCommandTest {
 
     /**
@@ -63,10 +60,10 @@ class MetadataQuorumCommandTest {
 
         assertTrue(header.matches("NodeId\\s+DirectoryId\\s+LogEndOffset\\s+Lag\\s+LastFetchTimestamp\\s+LastCaughtUpTimestamp\\s+Status\\s+"));
 
-        if (cluster.type() == Type.CO_KRAFT)
-          assertEquals(Math.max(cluster.config().numControllers(), cluster.config().numBrokers()), data.size());
-        else
-          assertEquals(cluster.config().numBrokers() + cluster.config().numControllers(), data.size());
+        if (cluster.type() == Type.CO_KRAFT) 
+            assertEquals(Math.max(cluster.config().numControllers(), cluster.config().numBrokers()), data.size());
+        else 
+            assertEquals(cluster.config().numBrokers() + cluster.config().numControllers(), data.size());
 
         Pattern leaderPattern = Pattern.compile("\\d+\\s+\\S+\\s+\\d+\\s+\\d+\\s+-?\\d+\\s+-?\\d+\\s+Leader\\s*");
         assertTrue(leaderPattern.matcher(data.get(0)).find());

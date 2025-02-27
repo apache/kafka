@@ -35,9 +35,8 @@ public class HasHeaderKey<R extends ConnectRecord<R>> implements Predicate<R>, V
     private static final String NAME_CONFIG = "name";
     public static final String OVERVIEW_DOC = "A predicate which is true for records with at least one header with the configured name.";
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
-            .define(NAME_CONFIG, ConfigDef.Type.STRING, ConfigDef.NO_DEFAULT_VALUE,
-            new ConfigDef.NonEmptyString(), ConfigDef.Importance.MEDIUM,
-            "The header name.");
+            .define(NAME_CONFIG, ConfigDef.Type.STRING, ConfigDef.NO_DEFAULT_VALUE, 
+                new ConfigDef.NonEmptyString(), ConfigDef.Importance.MEDIUM, "The header name.");
     private String name;
 
     @Override

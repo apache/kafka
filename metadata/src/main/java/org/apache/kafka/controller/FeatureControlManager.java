@@ -19,15 +19,14 @@ package org.apache.kafka.controller;
 
 import org.apache.kafka.clients.admin.FeatureUpdate;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
-import org.apache.kafka.common.metadata.ZkMigrationStateRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.metadata.FinalizedControllerFeatures;
 import org.apache.kafka.metadata.VersionRange;
-import org.apache.kafka.metadata.migration.ZkMigrationState;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
-import org.apache.kafka.server.common.Features;
+import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
+import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.mutable.BoundedList;
 import org.apache.kafka.timeline.SnapshotRegistry;
@@ -56,7 +55,6 @@ public class FeatureControlManager {
         private SnapshotRegistry snapshotRegistry = null;
         private QuorumFeatures quorumFeatures = null;
         private MetadataVersion metadataVersion = MetadataVersion.latestProduction();
-        private MetadataVersion minimumBootstrapVersion = MetadataVersion.MINIMUM_BOOTSTRAP_VERSION;
         private ClusterFeatureSupportDescriber clusterSupportDescriber = new ClusterFeatureSupportDescriber() {
             @Override
             public Iterator<Entry<Integer, Map<String, VersionRange>>> brokerSupported() {
@@ -89,11 +87,6 @@ public class FeatureControlManager {
             return this;
         }
 
-        Builder setMinimumBootstrapVersion(MetadataVersion minimumBootstrapVersion) {
-            this.minimumBootstrapVersion = minimumBootstrapVersion;
-            return this;
-        }
-
         Builder setClusterFeatureSupportDescriber(ClusterFeatureSupportDescriber clusterSupportDescriber) {
             this.clusterSupportDescriber = clusterSupportDescriber;
             return this;
@@ -105,7 +98,7 @@ public class FeatureControlManager {
             if (quorumFeatures == null) {
                 Map<String, VersionRange> localSupportedFeatures = new HashMap<>();
                 localSupportedFeatures.put(MetadataVersion.FEATURE_NAME, VersionRange.of(
-                        MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel(),
+                        MetadataVersion.MINIMUM_VERSION.featureLevel(),
                         MetadataVersion.latestProduction().featureLevel()));
                 quorumFeatures = new QuorumFeatures(0, localSupportedFeatures, Collections.singletonList(0));
             }
@@ -114,7 +107,6 @@ public class FeatureControlManager {
                 quorumFeatures,
                 snapshotRegistry,
                 metadataVersion,
-                minimumBootstrapVersion,
                 clusterSupportDescriber
             );
         }
@@ -138,16 +130,6 @@ public class FeatureControlManager {
     private final TimelineObject<MetadataVersion> metadataVersion;
 
     /**
-     * The current ZK migration state
-     */
-    private final TimelineObject<ZkMigrationState> migrationControlState;
-
-    /**
-     * The minimum bootstrap version that we can't downgrade before.
-     */
-    private final MetadataVersion minimumBootstrapVersion;
-
-    /**
      * Gives information about the supported versions in the cluster.
      */
     private final ClusterFeatureSupportDescriber clusterSupportDescriber;
@@ -157,15 +139,12 @@ public class FeatureControlManager {
         QuorumFeatures quorumFeatures,
         SnapshotRegistry snapshotRegistry,
         MetadataVersion metadataVersion,
-        MetadataVersion minimumBootstrapVersion,
         ClusterFeatureSupportDescriber clusterSupportDescriber
     ) {
         this.log = logContext.logger(FeatureControlManager.class);
         this.quorumFeatures = quorumFeatures;
         this.finalizedVersions = new TimelineHashMap<>(snapshotRegistry, 0);
         this.metadataVersion = new TimelineObject<>(snapshotRegistry, metadataVersion);
-        this.minimumBootstrapVersion = minimumBootstrapVersion;
-        this.migrationControlState = new TimelineObject<>(snapshotRegistry, ZkMigrationState.NONE);
         this.clusterSupportDescriber = clusterSupportDescriber;
     }
 
@@ -198,10 +177,6 @@ public class FeatureControlManager {
 
     MetadataVersion metadataVersion() {
         return metadataVersion.get();
-    }
-
-    ZkMigrationState zkMigrationState() {
-        return migrationControlState.get();
     }
 
     private ApiError updateFeature(
@@ -251,9 +226,9 @@ public class FeatureControlManager {
         } else {
             // Validate dependencies for features that are not metadata.version
             try {
-                Features.validateVersion(
+                Feature.validateVersion(
                     // Allow unstable feature versions is true because the version range is already checked above.
-                    Features.featureFromName(featureName).fromFeatureLevel(newVersion, true),
+                    Feature.featureFromName(featureName).fromFeatureLevel(newVersion, true),
                     proposedUpdatedVersions);
             } catch (IllegalArgumentException e) {
                 return invalidUpdateVersion(featureName, newVersion, e.getMessage());
@@ -335,26 +310,14 @@ public class FeatureControlManager {
         Consumer<ApiMessageAndVersion> recordConsumer
     ) {
         MetadataVersion currentVersion = metadataVersion();
-        ZkMigrationState zkMigrationState = zkMigrationState();
         final MetadataVersion newVersion;
         try {
             newVersion = MetadataVersion.fromFeatureLevel(newVersionLevel);
         } catch (IllegalArgumentException e) {
-            return invalidMetadataVersion(newVersionLevel, "Unknown metadata.version.");
+            return invalidMetadataVersion(newVersionLevel, "Valid versions are from "
+                + MetadataVersion.MINIMUM_VERSION.featureLevel() + " to " + MetadataVersion.latestTesting().featureLevel() + ".");
         }
 
-        // Don't allow metadata.version changes while we're migrating
-        if (zkMigrationState.inProgress()) {
-            return invalidMetadataVersion(newVersionLevel, "Unable to modify metadata.version while a " +
-                "ZK migration is in progress.");
-        }
-
-        // We cannot set a version earlier than IBP_3_3_IV0, since that was the first version that contained
-        // FeatureLevelRecord itself.
-        if (newVersion.isLessThan(minimumBootstrapVersion)) {
-            return invalidMetadataVersion(newVersionLevel, "Unable to set a metadata.version less than " +
-                    minimumBootstrapVersion);
-        }
         if (newVersion.isLessThan(currentVersion)) {
             // This is a downgrade
             boolean metadataChanged = MetadataVersion.checkIfMetadataChanged(currentVersion, newVersion);
@@ -396,6 +359,15 @@ public class FeatureControlManager {
         return new FinalizedControllerFeatures(features, epoch);
     }
 
+    FinalizedControllerFeatures latestFinalizedFeatures() {
+        Map<String, Short> features = new HashMap<>();
+        features.put(MetadataVersion.FEATURE_NAME, metadataVersion.get().featureLevel());
+        for (Entry<String, Short> entry : finalizedVersions.entrySet()) {
+            features.put(entry.getKey(), entry.getValue());
+        }
+        return new FinalizedControllerFeatures(features, -1);
+    }
+
     public void replay(FeatureLevelRecord record) {
         VersionRange range = quorumFeatures.localSupportedFeature(record.name());
         if (!range.contains(record.featureLevel())) {
@@ -418,20 +390,12 @@ public class FeatureControlManager {
         }
     }
 
-    public void replay(ZkMigrationStateRecord record) {
-        ZkMigrationState newState = ZkMigrationState.of(record.zkMigrationState());
-        ZkMigrationState previousState = migrationControlState.get();
-        if (previousState.equals(newState)) {
-            log.debug("Replayed a ZkMigrationStateRecord which did not alter the state from {}.",
-                    previousState);
-        } else {
-            migrationControlState.set(newState);
-            log.info("Replayed a ZkMigrationStateRecord changing the migration state from {} to {}.",
-                    previousState, newState);
-        }
-    }
-
     boolean isControllerId(int nodeId) {
         return quorumFeatures.isControllerId(nodeId);
+    }
+
+    boolean isElrFeatureEnabled() {
+        return latestFinalizedFeatures().versionOrDefault(EligibleLeaderReplicasVersion.FEATURE_NAME, (short) 0) >=
+            EligibleLeaderReplicasVersion.ELRV_1.featureLevel();
     }
 }

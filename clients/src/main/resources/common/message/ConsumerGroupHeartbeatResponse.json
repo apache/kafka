@@ -35,7 +35,7 @@
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",
       "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
     { "name": "ErrorCode", "type": "int16", "versions": "0+",
-      "about": "The top-level error code, or 0 if there was no error" },
+      "about": "The top-level error code, or 0 if there was no error." },
     { "name": "ErrorMessage", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": "null",
       "about": "The top-level error message, or null if there was no error." },
     { "name": "MemberId", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": "null",

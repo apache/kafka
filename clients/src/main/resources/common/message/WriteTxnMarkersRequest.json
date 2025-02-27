@@ -16,10 +16,12 @@
 {
   "apiKey": 27,
   "type": "request",
-  "listeners": ["zkBroker", "broker"],
+  "listeners": ["broker"],
   "name": "WriteTxnMarkersRequest",
+  // Version 0 was removed in Apache Kafka 4.0, Version 1 is the new baseline.
+  //
   // Version 1 enables flexible versions.
-  "validVersions": "0-1",
+  "validVersions": "1",
   "flexibleVersions": "1+",
   "fields": [
     { "name": "Markers", "type": "[]WritableTxnMarker", "versions": "0+",
@@ -38,7 +40,7 @@
           "about": "The indexes of the partitions to write transaction markers for." }
       ]},
       { "name": "CoordinatorEpoch", "type": "int32", "versions": "0+",
-        "about": "Epoch associated with the transaction state partition hosted by this transaction coordinator" }
+        "about": "Epoch associated with the transaction state partition hosted by this transaction coordinator." }
     ]}
   ]
 }

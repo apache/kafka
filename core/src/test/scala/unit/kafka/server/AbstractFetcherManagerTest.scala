@@ -328,9 +328,12 @@ class AbstractFetcherManagerTest {
       fetchBackOffMs = 0,
       brokerTopicStats = new BrokerTopicStats) {
 
-    override protected def processPartitionData(topicPartition: TopicPartition, fetchOffset: Long, partitionData: FetchData): Option[LogAppendInfo] = {
-      None
-    }
+    override protected def processPartitionData(
+      topicPartition: TopicPartition,
+      fetchOffset: Long,
+      partitionLeaderEpoch: Int,
+      partitionData: FetchData
+    ): Option[LogAppendInfo] = None
 
     override protected def truncate(topicPartition: TopicPartition, truncationState: OffsetTruncationState): Unit = {}
 
@@ -343,8 +346,6 @@ class AbstractFetcherManagerTest {
     override protected def logEndOffset(topicPartition: TopicPartition): Long = 1
 
     override protected def endOffsetForEpoch(topicPartition: TopicPartition, epoch: Int): Option[OffsetAndEpoch] = Some(new OffsetAndEpoch(1, 0))
-
-    override protected val isOffsetForLeaderEpochSupported: Boolean = false
   }
 
 }
