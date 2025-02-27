@@ -44,7 +44,7 @@ public class AclPublisher implements MetadataPublisher {
         this.faultHandler = faultHandler;
         this.nodeType = nodeType;
         this.authorizer = authorizer.filter(ClusterMetadataAuthorizer.class::isInstance).map(ClusterMetadataAuthorizer.class::cast);
-        this.log = new LogContext(String.format("[%s %s id=%d] ", AclPublisher.class.getSimpleName(), nodeType, nodeId)).logger(AclPublisher.class);
+        this.log = new LogContext(name()).logger(AclPublisher.class);
     }
 
     @Override
