@@ -36,7 +36,6 @@ import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -70,7 +69,7 @@ public class RequestConvertToJsonTest {
                 }
             }
         }
-        assertEquals(Collections.emptyList(), unhandledKeys, "Unhandled request keys");
+        assertEquals(List.of(), unhandledKeys, "Unhandled request keys");
     }
 
     @Test
@@ -116,7 +115,7 @@ public class RequestConvertToJsonTest {
                 }
             }
         }
-        assertEquals(Collections.emptyList(), unhandledKeys, "Unhandled response keys");
+        assertEquals(List.of(), unhandledKeys, "Unhandled response keys");
     }
 
     @Test
