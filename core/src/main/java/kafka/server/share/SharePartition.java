@@ -1320,11 +1320,11 @@ public class SharePartition {
         // if the fetch lock was not acquired.
         if (fetchLock.get()) {
             long currentTime = time.hiResClockMs();
-            long acquiredTime = currentTime - fetchLockAcquiredTimeMs;
+            long acquiredDurationMs = currentTime - fetchLockAcquiredTimeMs;
             // Update the metric for the fetch lock time.
-            sharePartitionMetrics.recordFetchLockTimeMs(acquiredTime);
+            sharePartitionMetrics.recordFetchLockTimeMs(acquiredDurationMs);
             // Update fetch lock ratio metric.
-            recordFetchLockRatioMetric(acquiredTime);
+            recordFetchLockRatioMetric(acquiredDurationMs);
             timeSinceLastLockAcquisitionMs = currentTime;
         }
         fetchLock.set(false);
@@ -1360,10 +1360,10 @@ public class SharePartition {
      * acquired to the total time since the last lock acquisition. The total time is calculated by
      * adding the time since the last lock acquisition to the time the fetch lock was acquired.
      *
-     * @param acquiredTime The time duration the fetch lock was acquired.
+     * @param acquiredDurationMs The time duration the fetch lock was acquired.
      */
     // Visible for testing
-    void recordFetchLockRatioMetric(long acquiredTime) {
+    void recordFetchLockRatioMetric(long acquiredDurationMs) {
         if (timeSinceLastLockAcquisitionMs < 0) {
             // This is just a safe check to avoid negative time since last lock acquisition. This
             // should not happen in any scenarios. If it does then just return from the method and
@@ -1373,14 +1373,14 @@ public class SharePartition {
 
         // Update the total fetch lock acquired time.
         double fetchLockToTotalTime;
-        if (acquiredTime + timeSinceLastLockAcquisitionMs == 0) {
+        if (acquiredDurationMs + timeSinceLastLockAcquisitionMs == 0) {
             // If the total time is 0 then the ratio is 1 i.e. the fetch lock was acquired for the complete time.
             fetchLockToTotalTime = 1.0;
-        } else if (acquiredTime == 0) {
-            // If the acquired time is 0 then the ratio is the time spent since the last lock acquisition.
+        } else if (acquiredDurationMs == 0) {
+            // If the acquired duration is 0 then the ratio is the time spent since the last lock acquisition.
             fetchLockToTotalTime = 1.0 / timeSinceLastLockAcquisitionMs;
         } else {
-            fetchLockToTotalTime = acquiredTime * (1.0 / (acquiredTime + timeSinceLastLockAcquisitionMs));
+            fetchLockToTotalTime = acquiredDurationMs * (1.0 / (acquiredDurationMs + timeSinceLastLockAcquisitionMs));
         }
         sharePartitionMetrics.recordFetchLockRatio((int) (fetchLockToTotalTime * 100));
     }
