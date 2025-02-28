@@ -134,7 +134,7 @@ public abstract class AbstractCoordinator implements Closeable {
     private final GroupCoordinatorMetrics sensors;
     private final GroupRebalanceConfig rebalanceConfig;
     private final Optional<ClientTelemetryReporter> clientTelemetryReporter;
-    private final Supplier<BaseHeartbeatThread> heartbeatThreadSupplier;
+    private final Optional<Supplier<BaseHeartbeatThread>> heartbeatThreadSupplier;
 
     protected final Time time;
     protected final ConsumerNetworkClient client;
@@ -168,7 +168,6 @@ public abstract class AbstractCoordinator implements Closeable {
         this(rebalanceConfig, logContext, client, metrics, metricGrpPrefix, time, Optional.empty(), Optional.empty());
     }
 
-    @SuppressWarnings("this-escape")
     public AbstractCoordinator(GroupRebalanceConfig rebalanceConfig,
                                LogContext logContext,
                                ConsumerNetworkClient client,
@@ -191,7 +190,7 @@ public abstract class AbstractCoordinator implements Closeable {
         this.heartbeat = new Heartbeat(rebalanceConfig, time);
         this.sensors = new GroupCoordinatorMetrics(metrics, metricGrpPrefix);
         this.clientTelemetryReporter = clientTelemetryReporter;
-        this.heartbeatThreadSupplier = heartbeatThreadSupplier.orElse(HeartbeatThread::new);
+        this.heartbeatThreadSupplier = heartbeatThreadSupplier;
     }
 
     /**
@@ -420,7 +419,7 @@ public abstract class AbstractCoordinator implements Closeable {
 
     private synchronized void startHeartbeatThreadIfNeeded() {
         if (heartbeatThread == null) {
-            heartbeatThread = heartbeatThreadSupplier.get();
+            heartbeatThread = heartbeatThreadSupplier.orElse(HeartbeatThread::new).get();
             heartbeatThread.start();
         }
     }
