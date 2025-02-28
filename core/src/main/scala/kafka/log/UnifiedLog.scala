@@ -669,6 +669,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    * Append this message set to the active segment of the local log, assigning offsets and Partition Leader Epochs
    *
    * @param records The records to append
+   * @param leaderEpoch the epoch of the replica appending
    * @param origin Declares the origin of the append which affects required validations
    * @param requestLocal request local instance
    * @throws KafkaStorageException If the append fails due to an I/O error.
@@ -699,14 +700,15 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    * Append this message set to the active segment of the local log without assigning offsets or Partition Leader Epochs
    *
    * @param records The records to append
+   * @param leaderEpoch the epoch of the replica appending
    * @throws KafkaStorageException If the append fails due to an I/O error.
    * @return Information about the appended messages including the first and last offset.
    */
-  def appendAsFollower(records: MemoryRecords): LogAppendInfo = {
+  def appendAsFollower(records: MemoryRecords, leaderEpoch: Int): LogAppendInfo = {
     append(records,
       origin = AppendOrigin.REPLICATION,
       validateAndAssignOffsets = false,
-      leaderEpoch = -1,
+      leaderEpoch = leaderEpoch,
       requestLocal = None,
       verificationGuard = VerificationGuard.SENTINEL,
       // disable to check the validation of record size since the record is already accepted by leader.
@@ -1085,63 +1087,85 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     var shallowOffsetOfMaxTimestamp = -1L
     var readFirstMessage = false
     var lastOffsetOfFirstBatch = -1L
+    var skipRemainingBatches = false
 
     records.batches.forEach { batch =>
       if (origin == AppendOrigin.RAFT_LEADER && batch.partitionLeaderEpoch != leaderEpoch) {
-        throw new InvalidRecordException("Append from Raft leader did not set the batch epoch correctly")
+        throw new InvalidRecordException(
+          s"Append from Raft leader did not set the batch epoch correctly, expected $leaderEpoch " +
+          s"but the batch has ${batch.partitionLeaderEpoch}"
+        )
       }
       // we only validate V2 and higher to avoid potential compatibility issues with older clients
-      if (batch.magic >= RecordBatch.MAGIC_VALUE_V2 && origin == AppendOrigin.CLIENT && batch.baseOffset != 0)
+      if (batch.magic >= RecordBatch.MAGIC_VALUE_V2 && origin == AppendOrigin.CLIENT && batch.baseOffset != 0) {
         throw new InvalidRecordException(s"The baseOffset of the record batch in the append to $topicPartition should " +
           s"be 0, but it is ${batch.baseOffset}")
-
-      // update the first offset if on the first message. For magic versions older than 2, we use the last offset
-      // to avoid the need to decompress the data (the last offset can be obtained directly from the wrapper message).
-      // For magic version 2, we can get the first offset directly from the batch header.
-      // When appending to the leader, we will update LogAppendInfo.baseOffset with the correct value. In the follower
-      // case, validation will be more lenient.
-      // Also indicate whether we have the accurate first offset or not
-      if (!readFirstMessage) {
-        if (batch.magic >= RecordBatch.MAGIC_VALUE_V2)
-          firstOffset = batch.baseOffset
-        lastOffsetOfFirstBatch = batch.lastOffset
-        readFirstMessage = true
       }
 
-      // check that offsets are monotonically increasing
-      if (lastOffset >= batch.lastOffset)
-        monotonic = false
+      /* During replication of uncommitted data it is possible for the remote replica to send record batches after it lost
+       * leadership. This can happen if sending FETCH responses is slow. There is a race between sending the FETCH
+       * response and the replica truncating and appending to the log. The replicating replica resolves this issue by only
+       * persisting up to the current leader epoch used in the fetch request. See KAFKA-18723 for more details.
+       */
+      skipRemainingBatches = skipRemainingBatches || hasHigherPartitionLeaderEpoch(batch, origin, leaderEpoch)
+      if (skipRemainingBatches) {
+        info(
+          s"Skipping batch $batch from an origin of $origin because its partition leader epoch " +
+          s"${batch.partitionLeaderEpoch} is higher than the replica's current leader epoch " +
+          s"$leaderEpoch"
+        )
+      } else {
+        // update the first offset if on the first message. For magic versions older than 2, we use the last offset
+        // to avoid the need to decompress the data (the last offset can be obtained directly from the wrapper message).
+        // For magic version 2, we can get the first offset directly from the batch header.
+        // When appending to the leader, we will update LogAppendInfo.baseOffset with the correct value. In the follower
+        // case, validation will be more lenient.
+        // Also indicate whether we have the accurate first offset or not
+        if (!readFirstMessage) {
+          if (batch.magic >= RecordBatch.MAGIC_VALUE_V2) {
+            firstOffset = batch.baseOffset
+          }
+          lastOffsetOfFirstBatch = batch.lastOffset
+          readFirstMessage = true
+        }
 
-      // update the last offset seen
-      lastOffset = batch.lastOffset
-      lastLeaderEpoch = batch.partitionLeaderEpoch
+        // check that offsets are monotonically increasing
+        if (lastOffset >= batch.lastOffset) {
+          monotonic = false
+        }
 
-      // Check if the message sizes are valid.
-      val batchSize = batch.sizeInBytes
-      if (!ignoreRecordSize && batchSize > config.maxMessageSize) {
-        brokerTopicStats.topicStats(topicPartition.topic).bytesRejectedRate.mark(records.sizeInBytes)
-        brokerTopicStats.allTopicsStats.bytesRejectedRate.mark(records.sizeInBytes)
-        throw new RecordTooLargeException(s"The record batch size in the append to $topicPartition is $batchSize bytes " +
-          s"which exceeds the maximum configured value of ${config.maxMessageSize}.")
+        // update the last offset seen
+        lastOffset = batch.lastOffset
+        lastLeaderEpoch = batch.partitionLeaderEpoch
+
+        // Check if the message sizes are valid.
+        val batchSize = batch.sizeInBytes
+        if (!ignoreRecordSize && batchSize > config.maxMessageSize) {
+          brokerTopicStats.topicStats(topicPartition.topic).bytesRejectedRate.mark(records.sizeInBytes)
+          brokerTopicStats.allTopicsStats.bytesRejectedRate.mark(records.sizeInBytes)
+          throw new RecordTooLargeException(s"The record batch size in the append to $topicPartition is $batchSize bytes " +
+            s"which exceeds the maximum configured value of ${config.maxMessageSize}.")
+        }
+
+        // check the validity of the message by checking CRC
+        if (!batch.isValid) {
+          brokerTopicStats.allTopicsStats.invalidMessageCrcRecordsPerSec.mark()
+          throw new CorruptRecordException(s"Record is corrupt (stored crc = ${batch.checksum()}) in topic partition $topicPartition.")
+        }
+
+        if (batch.maxTimestamp > maxTimestamp) {
+          maxTimestamp = batch.maxTimestamp
+          shallowOffsetOfMaxTimestamp = lastOffset
+        }
+
+        validBytesCount += batchSize
+
+        val batchCompression = CompressionType.forId(batch.compressionType.id)
+        // sourceCompression is only used on the leader path, which only contains one batch if version is v2 or messages are compressed
+        if (batchCompression != CompressionType.NONE) {
+          sourceCompression = batchCompression
+        }
       }
-
-      // check the validity of the message by checking CRC
-      if (!batch.isValid) {
-        brokerTopicStats.allTopicsStats.invalidMessageCrcRecordsPerSec.mark()
-        throw new CorruptRecordException(s"Record is corrupt (stored crc = ${batch.checksum()}) in topic partition $topicPartition.")
-      }
-
-      if (batch.maxTimestamp > maxTimestamp) {
-        maxTimestamp = batch.maxTimestamp
-        shallowOffsetOfMaxTimestamp = lastOffset
-      }
-
-      validBytesCount += batchSize
-
-      val batchCompression = CompressionType.forId(batch.compressionType.id)
-      // sourceCompression is only used on the leader path, which only contains one batch if version is v2 or messages are compressed
-      if (batchCompression != CompressionType.NONE)
-        sourceCompression = batchCompression
     }
 
     if (requireOffsetsMonotonic && !monotonic)
@@ -1156,6 +1180,25 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     new LogAppendInfo(firstOffset, lastOffset, lastLeaderEpochOpt, maxTimestamp,
       RecordBatch.NO_TIMESTAMP, logStartOffset, RecordValidationStats.EMPTY, sourceCompression,
       validBytesCount, lastOffsetOfFirstBatch, Collections.emptyList[RecordError], LeaderHwChange.NONE)
+  }
+
+  /**
+   * Return true if the record batch has a higher leader epoch than the specified leader epoch
+   *
+   * @param batch the batch to validate
+   * @param origin the reason for appending the record batch
+   * @param leaderEpoch the epoch to compare
+   * @return true if the append reason is replication and the batch's partition leader epoch is
+   *         greater than the specified leaderEpoch, otherwise false
+   */
+  private def hasHigherPartitionLeaderEpoch(
+    batch: RecordBatch,
+    origin: AppendOrigin,
+    leaderEpoch: Int
+  ): Boolean = {
+    origin == AppendOrigin.REPLICATION &&
+    batch.partitionLeaderEpoch() != RecordBatch.NO_PARTITION_LEADER_EPOCH &&
+    batch.partitionLeaderEpoch() > leaderEpoch
   }
 
   /**
@@ -1295,7 +1338,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
           val asyncOffsetReadFutureHolder = remoteOffsetReader.get.asyncOffsetRead(topicPartition, targetTimestamp,
             logStartOffset, leaderEpochCache, () => searchOffsetInLocalLog(targetTimestamp, localLogStartOffset()))
-          
+
           new OffsetResultHolder(Optional.empty(), Optional.of(asyncOffsetReadFutureHolder))
         } else {
           new OffsetResultHolder(searchOffsetInLocalLog(targetTimestamp, logStartOffset))

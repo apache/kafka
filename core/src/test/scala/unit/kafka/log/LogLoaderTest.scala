@@ -923,17 +923,17 @@ class LogLoaderTest {
     val set3 = MemoryRecords.withRecords(Integer.MAX_VALUE.toLong + 3, Compression.NONE, 0, new SimpleRecord("v4".getBytes(), "k4".getBytes()))
     val set4 = MemoryRecords.withRecords(Integer.MAX_VALUE.toLong + 4, Compression.NONE, 0, new SimpleRecord("v5".getBytes(), "k5".getBytes()))
     //Writes into an empty log with baseOffset 0
-    log.appendAsFollower(set1)
+    log.appendAsFollower(set1, Int.MaxValue)
     assertEquals(0L, log.activeSegment.baseOffset)
     //This write will roll the segment, yielding a new segment with base offset = max(1, Integer.MAX_VALUE+2) = Integer.MAX_VALUE+2
-    log.appendAsFollower(set2)
+    log.appendAsFollower(set2, Int.MaxValue)
     assertEquals(Integer.MAX_VALUE.toLong + 2, log.activeSegment.baseOffset)
     assertTrue(LogFileUtils.producerSnapshotFile(logDir, Integer.MAX_VALUE.toLong + 2).exists)
     //This will go into the existing log
-    log.appendAsFollower(set3)
+    log.appendAsFollower(set3, Int.MaxValue)
     assertEquals(Integer.MAX_VALUE.toLong + 2, log.activeSegment.baseOffset)
     //This will go into the existing log
-    log.appendAsFollower(set4)
+    log.appendAsFollower(set4, Int.MaxValue)
     assertEquals(Integer.MAX_VALUE.toLong + 2, log.activeSegment.baseOffset)
     log.close()
     val indexFiles = logDir.listFiles.filter(file => file.getName.contains(".index"))
@@ -962,17 +962,17 @@ class LogLoaderTest {
       new SimpleRecord("v7".getBytes(), "k7".getBytes()),
       new SimpleRecord("v8".getBytes(), "k8".getBytes()))
     //Writes into an empty log with baseOffset 0
-    log.appendAsFollower(set1)
+    log.appendAsFollower(set1, Int.MaxValue)
     assertEquals(0L, log.activeSegment.baseOffset)
     //This write will roll the segment, yielding a new segment with base offset = max(1, Integer.MAX_VALUE+2) = Integer.MAX_VALUE+2
-    log.appendAsFollower(set2)
+    log.appendAsFollower(set2, Int.MaxValue)
     assertEquals(Integer.MAX_VALUE.toLong + 2, log.activeSegment.baseOffset)
     assertTrue(LogFileUtils.producerSnapshotFile(logDir, Integer.MAX_VALUE.toLong + 2).exists)
     //This will go into the existing log
-    log.appendAsFollower(set3)
+    log.appendAsFollower(set3, Int.MaxValue)
     assertEquals(Integer.MAX_VALUE.toLong + 2, log.activeSegment.baseOffset)
     //This will go into the existing log
-    log.appendAsFollower(set4)
+    log.appendAsFollower(set4, Int.MaxValue)
     assertEquals(Integer.MAX_VALUE.toLong + 2, log.activeSegment.baseOffset)
     log.close()
     val indexFiles = logDir.listFiles.filter(file => file.getName.contains(".index"))
@@ -1002,18 +1002,18 @@ class LogLoaderTest {
       new SimpleRecord("v7".getBytes(), "k7".getBytes()),
       new SimpleRecord("v8".getBytes(), "k8".getBytes()))
     //Writes into an empty log with baseOffset 0
-    log.appendAsFollower(set1)
+    log.appendAsFollower(set1, Int.MaxValue)
     assertEquals(0L, log.activeSegment.baseOffset)
     //This write will roll the segment, yielding a new segment with base offset = max(1, 3) = 3
-    log.appendAsFollower(set2)
+    log.appendAsFollower(set2, Int.MaxValue)
     assertEquals(3, log.activeSegment.baseOffset)
     assertTrue(LogFileUtils.producerSnapshotFile(logDir, 3).exists)
     //This will also roll the segment, yielding a new segment with base offset = max(5, Integer.MAX_VALUE+4) = Integer.MAX_VALUE+4
-    log.appendAsFollower(set3)
+    log.appendAsFollower(set3, Int.MaxValue)
     assertEquals(Integer.MAX_VALUE.toLong + 4, log.activeSegment.baseOffset)
     assertTrue(LogFileUtils.producerSnapshotFile(logDir, Integer.MAX_VALUE.toLong + 4).exists)
     //This will go into the existing log
-    log.appendAsFollower(set4)
+    log.appendAsFollower(set4, Int.MaxValue)
     assertEquals(Integer.MAX_VALUE.toLong + 4, log.activeSegment.baseOffset)
     log.close()
     val indexFiles = logDir.listFiles.filter(file => file.getName.contains(".index"))
@@ -1203,16 +1203,16 @@ class LogLoaderTest {
     val log = createLog(logDir, new LogConfig(new Properties))
     val leaderEpochCache = log.leaderEpochCache
     val firstBatch = singletonRecordsWithLeaderEpoch(value = "random".getBytes, leaderEpoch = 1, offset = 0)
-    log.appendAsFollower(records = firstBatch)
+    log.appendAsFollower(records = firstBatch, Int.MaxValue)
 
     val secondBatch = singletonRecordsWithLeaderEpoch(value = "random".getBytes, leaderEpoch = 2, offset = 1)
-    log.appendAsFollower(records = secondBatch)
+    log.appendAsFollower(records = secondBatch, Int.MaxValue)
 
     val thirdBatch = singletonRecordsWithLeaderEpoch(value = "random".getBytes, leaderEpoch = 2, offset = 2)
-    log.appendAsFollower(records = thirdBatch)
+    log.appendAsFollower(records = thirdBatch, Int.MaxValue)
 
     val fourthBatch = singletonRecordsWithLeaderEpoch(value = "random".getBytes, leaderEpoch = 3, offset = 3)
-    log.appendAsFollower(records = fourthBatch)
+    log.appendAsFollower(records = fourthBatch, Int.MaxValue)
 
     assertEquals(java.util.Arrays.asList(new EpochEntry(1, 0), new EpochEntry(2, 1), new EpochEntry(3, 3)), leaderEpochCache.epochEntries)
 

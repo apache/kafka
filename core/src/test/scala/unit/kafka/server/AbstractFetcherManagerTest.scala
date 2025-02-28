@@ -328,9 +328,12 @@ class AbstractFetcherManagerTest {
       fetchBackOffMs = 0,
       brokerTopicStats = new BrokerTopicStats) {
 
-    override protected def processPartitionData(topicPartition: TopicPartition, fetchOffset: Long, partitionData: FetchData): Option[LogAppendInfo] = {
-      None
-    }
+    override protected def processPartitionData(
+      topicPartition: TopicPartition,
+      fetchOffset: Long,
+      partitionLeaderEpoch: Int,
+      partitionData: FetchData
+    ): Option[LogAppendInfo] = None
 
     override protected def truncate(topicPartition: TopicPartition, truncationState: OffsetTruncationState): Unit = {}
 
