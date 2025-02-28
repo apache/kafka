@@ -17,6 +17,7 @@
 package org.apache.kafka.server.log.remote.metadata.storage;
 
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.config.ConfigDef;
@@ -33,6 +34,7 @@ import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.Type.INT;
 import static org.apache.kafka.common.config.ConfigDef.Type.LONG;
 import static org.apache.kafka.common.config.ConfigDef.Type.SHORT;
+import static org.apache.kafka.common.utils.ConfigUtils.configMapToRedactedString;
 
 /**
  * This class defines the configuration of topic based {@link org.apache.kafka.server.log.remote.storage.RemoteLogMetadataManager} implementation.
@@ -227,9 +229,9 @@ public final class TopicBasedRemoteLogMetadataManagerConfig {
                 ", metadataTopicReplicationFactor=" + metadataTopicReplicationFactor +
                 ", initializationRetryMaxTimeoutMs=" + initializationRetryMaxTimeoutMs +
                 ", initializationRetryIntervalMs=" + initializationRetryIntervalMs +
-                ", commonProps=" + commonProps +
-                ", consumerProps=" + consumerProps +
-                ", producerProps=" + producerProps +
+                ", commonProps=" + configMapToRedactedString(commonProps, AdminClientConfig.configDef()) +
+                ", consumerProps=" + configMapToRedactedString(consumerProps, ConsumerConfig.configDef()) +
+                ", producerProps=" + configMapToRedactedString(producerProps, ProducerConfig.configDef()) +
                 '}';
     }
 
