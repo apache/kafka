@@ -20,6 +20,7 @@ package org.apache.kafka.image;
 import org.apache.kafka.common.DirectoryId;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.metadata.ClearElrRecord;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.RemoveTopicRecord;
@@ -30,6 +31,7 @@ import org.apache.kafka.metadata.LeaderRecoveryState;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.immutable.ImmutableMap;
 
 import org.junit.jupiter.api.Test;
@@ -45,6 +47,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import static org.apache.kafka.common.metadata.MetadataRecordType.CLEAR_ELR_RECORD;
 import static org.apache.kafka.common.metadata.MetadataRecordType.PARTITION_CHANGE_RECORD;
 import static org.apache.kafka.common.metadata.MetadataRecordType.PARTITION_RECORD;
 import static org.apache.kafka.common.metadata.MetadataRecordType.REMOVE_TOPIC_RECORD;
@@ -353,6 +356,95 @@ public class TopicsImageTest {
     }
 
     @Test
+    public void testClearElrRecords() {
+        Uuid fooId = Uuid.fromString("0hHJ3X5ZQ-CFfQ5xgpj90w");
+        Uuid barId = Uuid.fromString("f62ptyETTjet8SL5ZeREiw");
+
+        List<TopicImage> topics = new ArrayList<>();
+        topics.add(
+            newTopicImage(
+                "foo",
+                fooId,
+                newPartition(new int[] {0, 1, 2, 3})
+            )
+        );
+        TopicsImage image = new TopicsImage(newTopicsByIdMap(topics),
+            newTopicsByNameMap(topics));
+
+        List<ApiMessageAndVersion> topicRecords = new ArrayList<>();
+        topicRecords.add(
+            new ApiMessageAndVersion(
+                new PartitionChangeRecord().setTopicId(fooId).setPartitionId(0).
+                    setIsr(Arrays.asList(0, 1)).
+                    setEligibleLeaderReplicas(Arrays.asList(2)).
+                    setLastKnownElr(Arrays.asList(3)),
+                PARTITION_CHANGE_RECORD.highestSupportedVersion()
+            )
+        );
+
+        TopicsDelta delta = new TopicsDelta(image);
+        RecordTestUtils.replayAll(delta, topicRecords);
+        image = delta.apply();
+
+        assertEquals(1, image.getTopic(fooId).partitions().get(0).elr.length);
+        assertEquals(1, image.getTopic(fooId).partitions().get(0).lastKnownElr.length);
+
+        topicRecords = new ArrayList<>();
+
+        /* Test the following:
+        1. The clear elr record should work on all existing topics(foo).
+        2. The clear elr record should work on the new topic(bar) in the same batch.
+        */
+        topicRecords.addAll(Arrays.asList(
+            new ApiMessageAndVersion(
+                new TopicRecord().setTopicId(barId).
+                    setName("bar"),
+                TOPIC_RECORD.highestSupportedVersion()
+            ),
+            new ApiMessageAndVersion(
+                new PartitionRecord().setTopicId(barId).
+                    setPartitionId(0).
+                    setLeader(0).
+                    setIsr(Arrays.asList(1)).
+                    setEligibleLeaderReplicas(Arrays.asList(2)).
+                    setLastKnownElr(Arrays.asList(3)),
+                PARTITION_RECORD.highestSupportedVersion()
+            ),
+            new ApiMessageAndVersion(
+                new ClearElrRecord().setTopicName("bar"),
+                CLEAR_ELR_RECORD.highestSupportedVersion()
+            ),
+            new ApiMessageAndVersion(
+                new ClearElrRecord(),
+                CLEAR_ELR_RECORD.highestSupportedVersion()
+            ))
+        );
+        delta = new TopicsDelta(image);
+        RecordTestUtils.replayAll(delta, topicRecords);
+        image = delta.apply();
+
+        assertEquals(0, image.getTopic(fooId).partitions().get(0).elr.length);
+        assertEquals(0, image.getTopic(fooId).partitions().get(0).lastKnownElr.length);
+        assertEquals(0, image.getTopic(barId).partitions().get(0).elr.length);
+        assertEquals(0, image.getTopic(barId).partitions().get(0).lastKnownElr.length);
+    }
+
+    @Test
+    public void testClearElrRecordForNonExistTopic() {
+        TopicsImage image = new TopicsImage(newTopicsByIdMap(Collections.emptyList()),
+            newTopicsByNameMap(Collections.emptyList()));
+        TopicsDelta delta = new TopicsDelta(image);
+        List<ApiMessageAndVersion> topicRecords = new ArrayList<>();
+        topicRecords.addAll(Collections.singletonList(
+            new ApiMessageAndVersion(
+                new ClearElrRecord().setTopicName("non-exist"),
+                CLEAR_ELR_RECORD.highestSupportedVersion()
+            ))
+        );
+        assertThrows(RuntimeException.class, () -> RecordTestUtils.replayAll(delta, topicRecords));
+    }
+
+    @Test
     public void testLocalReassignmentChanges() {
         int localId = 3;
         Uuid zooId = Uuid.fromString("0hHJ3X5ZQ-CFfQ5xgpj90w");
@@ -504,7 +596,7 @@ public class TopicsImageTest {
 
     private static List<ApiMessageAndVersion> getImageRecords(TopicsImage image) {
         RecordListWriter writer = new RecordListWriter();
-        image.write(writer, new ImageWriterOptions.Builder().build());
+        image.write(writer, new ImageWriterOptions.Builder(MetadataVersion.latestProduction()).build());
         return writer.records();
     }
 

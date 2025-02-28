@@ -598,9 +598,8 @@ public class PartitionChangeBuilderTest {
         );
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testChangeInLeadershipDoesNotChangeRecoveryState(boolean isLeaderRecoverySupported) {
+    @Test
+    public void testChangeInLeadershipDoesNotChangeRecoveryState() {
         final byte noChange = (byte) -1;
         int leaderId = 1;
         LeaderRecoveryState recoveryState = LeaderRecoveryState.RECOVERING;
@@ -618,7 +617,7 @@ public class PartitionChangeBuilderTest {
             setPartitionEpoch(200).
             build();
 
-        MetadataVersion metadataVersion = leaderRecoveryMetadataVersion(isLeaderRecoverySupported);
+        MetadataVersion metadataVersion = MetadataVersion.MINIMUM_VERSION;
 
         // Change the partition so that there is no leader
         PartitionChangeBuilder offlineBuilder = new PartitionChangeBuilder(
@@ -667,10 +666,8 @@ public class PartitionChangeBuilderTest {
         assertEquals(recoveryState, registration.leaderRecoveryState);
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    void testUncleanSetsLeaderRecoveringState(boolean isLeaderRecoverySupported) {
-        final byte noChange = (byte) -1;
+    @Test
+    void testUncleanSetsLeaderRecoveringState() {
         int leaderId = 1;
         PartitionRegistration registration = new PartitionRegistration.Builder().
             setReplicas(new int[] {leaderId, leaderId + 1, leaderId + 2}).
@@ -686,7 +683,7 @@ public class PartitionChangeBuilderTest {
             setPartitionEpoch(200).
             build();
 
-        MetadataVersion metadataVersion = leaderRecoveryMetadataVersion(isLeaderRecoverySupported);
+        MetadataVersion metadataVersion = MetadataVersion.MINIMUM_VERSION;
 
         // Change the partition using unclean leader election
         PartitionChangeBuilder onlineBuilder = new PartitionChangeBuilder(
@@ -703,26 +700,16 @@ public class PartitionChangeBuilderTest {
             .get()
             .message();
 
-        byte expectedRecoveryChange = noChange;
-        if (isLeaderRecoverySupported) {
-            expectedRecoveryChange = LeaderRecoveryState.RECOVERING.value();
-        }
-
-        assertEquals(expectedRecoveryChange, changeRecord.leaderRecoveryState());
+        assertEquals(LeaderRecoveryState.RECOVERING.value(), changeRecord.leaderRecoveryState());
         assertEquals(leaderId, changeRecord.leader());
         assertEquals(1, changeRecord.isr().size());
         assertEquals(leaderId, changeRecord.isr().get(0));
 
         registration = registration.merge(changeRecord);
 
-        LeaderRecoveryState expectedRecovery = LeaderRecoveryState.RECOVERED;
-        if (isLeaderRecoverySupported) {
-            expectedRecovery = LeaderRecoveryState.RECOVERING;
-        }
-
         assertEquals(leaderId, registration.leader);
         assertEquals(leaderId, registration.isr[0]);
-        assertEquals(expectedRecovery, registration.leaderRecoveryState);
+        assertEquals(LeaderRecoveryState.RECOVERING, registration.leaderRecoveryState);
     }
 
     @Test
@@ -770,7 +757,7 @@ public class PartitionChangeBuilderTest {
             topicId,
             0,
             isValidLeader,
-            leaderRecoveryMetadataVersion(false),
+            MetadataVersion.MINIMUM_VERSION,
             2
         );
 
@@ -788,14 +775,6 @@ public class PartitionChangeBuilderTest {
                 (short) 0)),
             partitionChangeBuilder.setTargetIsr(Arrays.asList(0, 1, 2, 3)).
                 build());
-    }
-
-    private MetadataVersion leaderRecoveryMetadataVersion(boolean isSupported) {
-        if (isSupported) {
-            return MetadataVersion.IBP_3_2_IV0;
-        } else {
-            return MetadataVersion.IBP_3_1_IV0;
-        }
     }
 
     @ParameterizedTest

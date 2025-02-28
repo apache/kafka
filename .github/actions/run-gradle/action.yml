@@ -22,7 +22,10 @@ inputs:
   # Composite actions do not support typed parameters. Everything is treated as a string
   # See: https://github.com/actions/runner/issues/2238
   test-task:
-    description: "The test suite to run. Either 'test' or 'quarantinedTest'."
+    description: "The Gradle task name to run."
+    required: true
+  test-xml-output:
+    description: "Output directory for JUnit XML results"
     required: true
   timeout-minutes:
     description: "The timeout for the tests, in minutes."
@@ -33,10 +36,32 @@ inputs:
   build-scan-artifact-name:
     description: "The name to use for archiving the build scan."
     required: true
+  test-retries:
+    description: "The number of retries for a given test should we allow"
+    required: true
+    default: "0"
+  test-repeat:
+    description: "The number of times to repeat the integration tests"
+    required: true
+    default: "1"
+  test-verbose:
+    description: "Enable additional logging by the JUnit infrastructure"
+    required: true
+    default: "false"
+  run-new-tests:
+    description: "Run tests not present in the given test catalog"
+    required: true
+    default: "false"
+  run-flaky-tests:
+    description: "Run tests marked as flaky"
+    required: true
+    default: "false"
+
 outputs:
   gradle-exitcode:
     description: "The result of the Gradle test task."
     value: ${{ steps.run-tests.outputs.exitcode }}
+
 runs:
   using: "composite"
   steps:
@@ -52,15 +77,25 @@ runs:
         TIMEOUT_MINUTES: ${{ inputs.timeout-minutes}}
         TEST_CATALOG: ${{ inputs.test-catalog-path }}
         TEST_TASK: ${{ inputs.test-task }}
+        TEST_RETRIES: ${{ inputs.test-retries }}
+        TEST_REPEAT: ${{ inputs.test-repeat }}
+        RUN_NEW_TESTS: ${{ inputs.run-new-tests }}
+        RUN_FLAKY_TESTS: ${{ inputs.run-flaky-tests }}
+        TEST_XML_OUTPUT_DIR: ${{ inputs.test-xml-output }}
+        TEST_VERBOSE: ${{ inputs.test-verbose }}
       run: |
         set +e
         ./.github/scripts/thread-dump.sh &
         timeout ${TIMEOUT_MINUTES}m ./gradlew --build-cache --continue --no-scan \
         -PtestLoggingEvents=started,passed,skipped,failed \
         -PmaxParallelForks=2 \
-        -PmaxTestRetries=1 -PmaxTestRetryFailures=3 \
-        -PmaxQuarantineTestRetries=3 -PmaxQuarantineTestRetryFailures=0 \
+        -PmaxTestRetries=$TEST_RETRIES -PmaxTestRetryFailures=10 \
         -Pkafka.test.catalog.file=$TEST_CATALOG \
+        -Pkafka.test.run.new=$RUN_NEW_TESTS \
+        -Pkafka.test.run.flaky=$RUN_FLAKY_TESTS \
+        -Pkafka.test.xml.output.dir=$TEST_XML_OUTPUT_DIR \
+        -Pkafka.cluster.test.repeat=$TEST_REPEAT \
+        -Pkafka.test.verbose=$TEST_VERBOSE \
         -PcommitId=xxxxxxxxxxxxxxxx \
         $TEST_TASK
         exitcode="$?"

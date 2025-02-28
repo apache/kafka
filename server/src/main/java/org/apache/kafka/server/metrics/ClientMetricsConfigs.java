@@ -24,7 +24,6 @@ import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -36,7 +35,7 @@ import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 
 /**
- * Client metric configuration related parameters and the supporting methods like validation are
+ * Client metric configuration related parameters and the supporting methods like validation, etc. are
  * defined in this class.
  * <p>
  * {
@@ -101,9 +100,9 @@ public class ClientMetricsConfigs extends AbstractConfig {
     ));
 
     private static final ConfigDef CONFIG = new ConfigDef()
-        .define(METRICS_CONFIG, Type.LIST, Collections.emptyList(), Importance.MEDIUM, "Telemetry metric name prefix list")
+        .define(METRICS_CONFIG, Type.LIST, List.of(), Importance.MEDIUM, "Telemetry metric name prefix list")
         .define(INTERVAL_MS_CONFIG, Type.INT, INTERVAL_MS_DEFAULT, Importance.MEDIUM, "Metrics push interval in milliseconds")
-        .define(MATCH_CONFIG, Type.LIST, Collections.emptyList(), Importance.MEDIUM, "Client match criteria");
+        .define(MATCH_CONFIG, Type.LIST, List.of(), Importance.MEDIUM, "Client match criteria");
 
     public ClientMetricsConfigs(Properties props) {
         super(CONFIG, props);
@@ -119,9 +118,9 @@ public class ClientMetricsConfigs extends AbstractConfig {
 
     public static Map<String, Object> defaultConfigsMap() {
         Map<String, Object> clientMetricsProps = new HashMap<>();
-        clientMetricsProps.put(METRICS_CONFIG, Collections.emptyList());
+        clientMetricsProps.put(METRICS_CONFIG, List.of());
         clientMetricsProps.put(INTERVAL_MS_CONFIG, INTERVAL_MS_DEFAULT);
-        clientMetricsProps.put(MATCH_CONFIG, Collections.emptyList());
+        clientMetricsProps.put(MATCH_CONFIG, List.of());
         return clientMetricsProps;
     }
 
@@ -179,7 +178,7 @@ public class ClientMetricsConfigs extends AbstractConfig {
      */
     public static Map<String, Pattern> parseMatchingPatterns(List<String> patterns) {
         if (patterns == null || patterns.isEmpty()) {
-            return Collections.emptyMap();
+            return Map.of();
         }
 
         Map<String, Pattern> patternsMap = new HashMap<>();

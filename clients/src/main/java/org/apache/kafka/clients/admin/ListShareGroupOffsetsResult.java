@@ -45,10 +45,10 @@ public class ListShareGroupOffsetsResult {
     /**
      * Return the future when the requests for all groups succeed.
      *
-     * @return - Future which yields all Map<String, Map<TopicPartition, Long> objects, if requests for all the groups succeed.
+     * @return Future which yields all {@code Map<String, Map<TopicPartition, Long>>} objects, if requests for all the groups succeed.
      */
     public KafkaFuture<Map<String, Map<TopicPartition, Long>>> all() {
-        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0])).thenApply(
+        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture<?>[0])).thenApply(
             nil -> {
                 Map<String, Map<TopicPartition, Long>> offsets = new HashMap<>(futures.size());
                 futures.forEach((groupId, future) -> {
@@ -65,8 +65,10 @@ public class ListShareGroupOffsetsResult {
     }
 
     /**
-     * @param groupId - The groupId for which the Map<TopicPartition, Long> is needed
-     * @return - Future which yields a map of topic partitions to offsets for the specified group.
+     * Return a future which yields a map of topic partitions to offsets for the specified group.
+     *
+     * @param groupId The group ID.
+     * @return Future which yields a map of topic partitions to offsets for the specified group.
      */
     public KafkaFuture<Map<TopicPartition, Long>> partitionsToOffset(String groupId) {
         if (!futures.containsKey(groupId)) {

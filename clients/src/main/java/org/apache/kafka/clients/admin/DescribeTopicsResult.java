@@ -100,7 +100,7 @@ public class DescribeTopicsResult {
      */
     private static <T> KafkaFuture<Map<T, TopicDescription>> all(Map<T, KafkaFuture<TopicDescription>> futures) {
         if (futures == null) return null;
-        KafkaFuture<Void> future = KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0]));
+        KafkaFuture<Void> future = KafkaFuture.allOf(futures.values().toArray(new KafkaFuture<?>[0]));
         return future.
             thenApply(v -> {
                 Map<T, TopicDescription> descriptions = new HashMap<>(futures.size());

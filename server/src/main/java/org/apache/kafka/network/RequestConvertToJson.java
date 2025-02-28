@@ -34,6 +34,8 @@ import org.apache.kafka.common.message.AlterPartitionRequestDataJsonConverter;
 import org.apache.kafka.common.message.AlterPartitionResponseDataJsonConverter;
 import org.apache.kafka.common.message.AlterReplicaLogDirsRequestDataJsonConverter;
 import org.apache.kafka.common.message.AlterReplicaLogDirsResponseDataJsonConverter;
+import org.apache.kafka.common.message.AlterShareGroupOffsetsRequestDataJsonConverter;
+import org.apache.kafka.common.message.AlterShareGroupOffsetsResponseDataJsonConverter;
 import org.apache.kafka.common.message.AlterUserScramCredentialsRequestDataJsonConverter;
 import org.apache.kafka.common.message.AlterUserScramCredentialsResponseDataJsonConverter;
 import org.apache.kafka.common.message.ApiVersionsRequestDataJsonConverter;
@@ -50,8 +52,6 @@ import org.apache.kafka.common.message.ConsumerGroupDescribeRequestDataJsonConve
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseDataJsonConverter;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestDataJsonConverter;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseDataJsonConverter;
-import org.apache.kafka.common.message.ControlledShutdownRequestDataJsonConverter;
-import org.apache.kafka.common.message.ControlledShutdownResponseDataJsonConverter;
 import org.apache.kafka.common.message.ControllerRegistrationRequestDataJsonConverter;
 import org.apache.kafka.common.message.ControllerRegistrationResponseDataJsonConverter;
 import org.apache.kafka.common.message.CreateAclsRequestDataJsonConverter;
@@ -68,6 +68,8 @@ import org.apache.kafka.common.message.DeleteGroupsRequestDataJsonConverter;
 import org.apache.kafka.common.message.DeleteGroupsResponseDataJsonConverter;
 import org.apache.kafka.common.message.DeleteRecordsRequestDataJsonConverter;
 import org.apache.kafka.common.message.DeleteRecordsResponseDataJsonConverter;
+import org.apache.kafka.common.message.DeleteShareGroupOffsetsRequestDataJsonConverter;
+import org.apache.kafka.common.message.DeleteShareGroupOffsetsResponseDataJsonConverter;
 import org.apache.kafka.common.message.DeleteShareGroupStateRequestDataJsonConverter;
 import org.apache.kafka.common.message.DeleteShareGroupStateResponseDataJsonConverter;
 import org.apache.kafka.common.message.DeleteTopicsRequestDataJsonConverter;
@@ -126,8 +128,6 @@ import org.apache.kafka.common.message.InitializeShareGroupStateRequestDataJsonC
 import org.apache.kafka.common.message.InitializeShareGroupStateResponseDataJsonConverter;
 import org.apache.kafka.common.message.JoinGroupRequestDataJsonConverter;
 import org.apache.kafka.common.message.JoinGroupResponseDataJsonConverter;
-import org.apache.kafka.common.message.LeaderAndIsrRequestDataJsonConverter;
-import org.apache.kafka.common.message.LeaderAndIsrResponseDataJsonConverter;
 import org.apache.kafka.common.message.LeaveGroupRequestDataJsonConverter;
 import org.apache.kafka.common.message.LeaveGroupResponseDataJsonConverter;
 import org.apache.kafka.common.message.ListClientMetricsResourcesRequestDataJsonConverter;
@@ -175,8 +175,6 @@ import org.apache.kafka.common.message.ShareGroupDescribeRequestDataJsonConverte
 import org.apache.kafka.common.message.ShareGroupDescribeResponseDataJsonConverter;
 import org.apache.kafka.common.message.ShareGroupHeartbeatRequestDataJsonConverter;
 import org.apache.kafka.common.message.ShareGroupHeartbeatResponseDataJsonConverter;
-import org.apache.kafka.common.message.StopReplicaRequestDataJsonConverter;
-import org.apache.kafka.common.message.StopReplicaResponseDataJsonConverter;
 import org.apache.kafka.common.message.StreamsGroupDescribeRequestDataJsonConverter;
 import org.apache.kafka.common.message.StreamsGroupDescribeResponseDataJsonConverter;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestDataJsonConverter;
@@ -189,8 +187,6 @@ import org.apache.kafka.common.message.UnregisterBrokerRequestDataJsonConverter;
 import org.apache.kafka.common.message.UnregisterBrokerResponseDataJsonConverter;
 import org.apache.kafka.common.message.UpdateFeaturesRequestDataJsonConverter;
 import org.apache.kafka.common.message.UpdateFeaturesResponseDataJsonConverter;
-import org.apache.kafka.common.message.UpdateMetadataRequestDataJsonConverter;
-import org.apache.kafka.common.message.UpdateMetadataResponseDataJsonConverter;
 import org.apache.kafka.common.message.UpdateRaftVoterRequestDataJsonConverter;
 import org.apache.kafka.common.message.UpdateRaftVoterResponseDataJsonConverter;
 import org.apache.kafka.common.message.VoteRequestDataJsonConverter;
@@ -220,6 +216,8 @@ import org.apache.kafka.common.requests.AlterPartitionRequest;
 import org.apache.kafka.common.requests.AlterPartitionResponse;
 import org.apache.kafka.common.requests.AlterReplicaLogDirsRequest;
 import org.apache.kafka.common.requests.AlterReplicaLogDirsResponse;
+import org.apache.kafka.common.requests.AlterShareGroupOffsetsRequest;
+import org.apache.kafka.common.requests.AlterShareGroupOffsetsResponse;
 import org.apache.kafka.common.requests.AlterUserScramCredentialsRequest;
 import org.apache.kafka.common.requests.AlterUserScramCredentialsResponse;
 import org.apache.kafka.common.requests.ApiVersionsRequest;
@@ -236,8 +234,6 @@ import org.apache.kafka.common.requests.ConsumerGroupDescribeRequest;
 import org.apache.kafka.common.requests.ConsumerGroupDescribeResponse;
 import org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest;
 import org.apache.kafka.common.requests.ConsumerGroupHeartbeatResponse;
-import org.apache.kafka.common.requests.ControlledShutdownRequest;
-import org.apache.kafka.common.requests.ControlledShutdownResponse;
 import org.apache.kafka.common.requests.ControllerRegistrationRequest;
 import org.apache.kafka.common.requests.ControllerRegistrationResponse;
 import org.apache.kafka.common.requests.CreateAclsRequest;
@@ -254,6 +250,8 @@ import org.apache.kafka.common.requests.DeleteGroupsRequest;
 import org.apache.kafka.common.requests.DeleteGroupsResponse;
 import org.apache.kafka.common.requests.DeleteRecordsRequest;
 import org.apache.kafka.common.requests.DeleteRecordsResponse;
+import org.apache.kafka.common.requests.DeleteShareGroupOffsetsRequest;
+import org.apache.kafka.common.requests.DeleteShareGroupOffsetsResponse;
 import org.apache.kafka.common.requests.DeleteShareGroupStateRequest;
 import org.apache.kafka.common.requests.DeleteShareGroupStateResponse;
 import org.apache.kafka.common.requests.DeleteTopicsRequest;
@@ -312,8 +310,6 @@ import org.apache.kafka.common.requests.InitializeShareGroupStateRequest;
 import org.apache.kafka.common.requests.InitializeShareGroupStateResponse;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.JoinGroupResponse;
-import org.apache.kafka.common.requests.LeaderAndIsrRequest;
-import org.apache.kafka.common.requests.LeaderAndIsrResponse;
 import org.apache.kafka.common.requests.LeaveGroupRequest;
 import org.apache.kafka.common.requests.LeaveGroupResponse;
 import org.apache.kafka.common.requests.ListClientMetricsResourcesRequest;
@@ -362,8 +358,6 @@ import org.apache.kafka.common.requests.ShareGroupDescribeRequest;
 import org.apache.kafka.common.requests.ShareGroupDescribeResponse;
 import org.apache.kafka.common.requests.ShareGroupHeartbeatRequest;
 import org.apache.kafka.common.requests.ShareGroupHeartbeatResponse;
-import org.apache.kafka.common.requests.StopReplicaRequest;
-import org.apache.kafka.common.requests.StopReplicaResponse;
 import org.apache.kafka.common.requests.StreamsGroupDescribeRequest;
 import org.apache.kafka.common.requests.StreamsGroupDescribeResponse;
 import org.apache.kafka.common.requests.StreamsGroupHeartbeatRequest;
@@ -376,8 +370,6 @@ import org.apache.kafka.common.requests.UnregisterBrokerRequest;
 import org.apache.kafka.common.requests.UnregisterBrokerResponse;
 import org.apache.kafka.common.requests.UpdateFeaturesRequest;
 import org.apache.kafka.common.requests.UpdateFeaturesResponse;
-import org.apache.kafka.common.requests.UpdateMetadataRequest;
-import org.apache.kafka.common.requests.UpdateMetadataResponse;
 import org.apache.kafka.common.requests.UpdateRaftVoterRequest;
 import org.apache.kafka.common.requests.UpdateRaftVoterResponse;
 import org.apache.kafka.common.requests.VoteRequest;
@@ -419,6 +411,8 @@ public class RequestConvertToJson {
                 return AlterPartitionRequestDataJsonConverter.write(((AlterPartitionRequest) request).data(), request.version());
             case ALTER_REPLICA_LOG_DIRS:
                 return AlterReplicaLogDirsRequestDataJsonConverter.write(((AlterReplicaLogDirsRequest) request).data(), request.version());
+            case ALTER_SHARE_GROUP_OFFSETS:
+                return AlterShareGroupOffsetsRequestDataJsonConverter.write(((AlterShareGroupOffsetsRequest) request).data(), request.version());
             case ALTER_USER_SCRAM_CREDENTIALS:
                 return AlterUserScramCredentialsRequestDataJsonConverter.write(((AlterUserScramCredentialsRequest) request).data(), request.version());
             case API_VERSIONS:
@@ -435,8 +429,6 @@ public class RequestConvertToJson {
                 return ConsumerGroupDescribeRequestDataJsonConverter.write(((ConsumerGroupDescribeRequest) request).data(), request.version());
             case CONSUMER_GROUP_HEARTBEAT:
                 return ConsumerGroupHeartbeatRequestDataJsonConverter.write(((ConsumerGroupHeartbeatRequest) request).data(), request.version());
-            case CONTROLLED_SHUTDOWN:
-                return ControlledShutdownRequestDataJsonConverter.write(((ControlledShutdownRequest) request).data(), request.version());
             case CONTROLLER_REGISTRATION:
                 return ControllerRegistrationRequestDataJsonConverter.write(((ControllerRegistrationRequest) request).data(), request.version());
             case CREATE_ACLS:
@@ -453,6 +445,8 @@ public class RequestConvertToJson {
                 return DeleteGroupsRequestDataJsonConverter.write(((DeleteGroupsRequest) request).data(), request.version());
             case DELETE_RECORDS:
                 return DeleteRecordsRequestDataJsonConverter.write(((DeleteRecordsRequest) request).data(), request.version());
+            case DELETE_SHARE_GROUP_OFFSETS:
+                return DeleteShareGroupOffsetsRequestDataJsonConverter.write(((DeleteShareGroupOffsetsRequest) request).data(), request.version());
             case DELETE_SHARE_GROUP_STATE:
                 return DeleteShareGroupStateRequestDataJsonConverter.write(((DeleteShareGroupStateRequest) request).data(), request.version());
             case DELETE_TOPICS:
@@ -511,8 +505,6 @@ public class RequestConvertToJson {
                 return InitProducerIdRequestDataJsonConverter.write(((InitProducerIdRequest) request).data(), request.version());
             case JOIN_GROUP:
                 return JoinGroupRequestDataJsonConverter.write(((JoinGroupRequest) request).data(), request.version());
-            case LEADER_AND_ISR:
-                return LeaderAndIsrRequestDataJsonConverter.write(((LeaderAndIsrRequest) request).data(), request.version());
             case LEAVE_GROUP:
                 return LeaveGroupRequestDataJsonConverter.write(((LeaveGroupRequest) request).data(), request.version());
             case LIST_CLIENT_METRICS_RESOURCES:
@@ -563,8 +555,6 @@ public class RequestConvertToJson {
                 return StreamsGroupDescribeRequestDataJsonConverter.write(((StreamsGroupDescribeRequest) request).data(), request.version());
             case STREAMS_GROUP_HEARTBEAT:
                 return StreamsGroupHeartbeatRequestDataJsonConverter.write(((StreamsGroupHeartbeatRequest) request).data(), request.version());
-            case STOP_REPLICA:
-                return StopReplicaRequestDataJsonConverter.write(((StopReplicaRequest) request).data(), request.version());
             case SYNC_GROUP:
                 return SyncGroupRequestDataJsonConverter.write(((SyncGroupRequest) request).data(), request.version());
             case TXN_OFFSET_COMMIT:
@@ -573,8 +563,6 @@ public class RequestConvertToJson {
                 return UnregisterBrokerRequestDataJsonConverter.write(((UnregisterBrokerRequest) request).data(), request.version());
             case UPDATE_FEATURES:
                 return UpdateFeaturesRequestDataJsonConverter.write(((UpdateFeaturesRequest) request).data(), request.version());
-            case UPDATE_METADATA:
-                return UpdateMetadataRequestDataJsonConverter.write(((UpdateMetadataRequest) request).data(), request.version());
             case UPDATE_RAFT_VOTER:
                 return UpdateRaftVoterRequestDataJsonConverter.write(((UpdateRaftVoterRequest) request).data(), request.version());
             case VOTE:
@@ -609,6 +597,8 @@ public class RequestConvertToJson {
                 return AlterPartitionResponseDataJsonConverter.write(((AlterPartitionResponse) response).data(), version);
             case ALTER_REPLICA_LOG_DIRS:
                 return AlterReplicaLogDirsResponseDataJsonConverter.write(((AlterReplicaLogDirsResponse) response).data(), version);
+            case ALTER_SHARE_GROUP_OFFSETS:
+                return AlterShareGroupOffsetsResponseDataJsonConverter.write(((AlterShareGroupOffsetsResponse) response).data(), version);
             case ALTER_USER_SCRAM_CREDENTIALS:
                 return AlterUserScramCredentialsResponseDataJsonConverter.write(((AlterUserScramCredentialsResponse) response).data(), version);
             case API_VERSIONS:
@@ -625,8 +615,6 @@ public class RequestConvertToJson {
                 return ConsumerGroupDescribeResponseDataJsonConverter.write(((ConsumerGroupDescribeResponse) response).data(), version);
             case CONSUMER_GROUP_HEARTBEAT:
                 return ConsumerGroupHeartbeatResponseDataJsonConverter.write(((ConsumerGroupHeartbeatResponse) response).data(), version);
-            case CONTROLLED_SHUTDOWN:
-                return ControlledShutdownResponseDataJsonConverter.write(((ControlledShutdownResponse) response).data(), version);
             case CONTROLLER_REGISTRATION:
                 return ControllerRegistrationResponseDataJsonConverter.write(((ControllerRegistrationResponse) response).data(), version);
             case CREATE_ACLS:
@@ -643,6 +631,8 @@ public class RequestConvertToJson {
                 return DeleteGroupsResponseDataJsonConverter.write(((DeleteGroupsResponse) response).data(), version);
             case DELETE_RECORDS:
                 return DeleteRecordsResponseDataJsonConverter.write(((DeleteRecordsResponse) response).data(), version);
+            case DELETE_SHARE_GROUP_OFFSETS:
+                return DeleteShareGroupOffsetsResponseDataJsonConverter.write(((DeleteShareGroupOffsetsResponse) response).data(), version);
             case DELETE_SHARE_GROUP_STATE:
                 return DeleteShareGroupStateResponseDataJsonConverter.write(((DeleteShareGroupStateResponse) response).data(), version);
             case DELETE_TOPICS:
@@ -701,8 +691,6 @@ public class RequestConvertToJson {
                 return InitProducerIdResponseDataJsonConverter.write(((InitProducerIdResponse) response).data(), version);
             case JOIN_GROUP:
                 return JoinGroupResponseDataJsonConverter.write(((JoinGroupResponse) response).data(), version);
-            case LEADER_AND_ISR:
-                return LeaderAndIsrResponseDataJsonConverter.write(((LeaderAndIsrResponse) response).data(), version);
             case LEAVE_GROUP:
                 return LeaveGroupResponseDataJsonConverter.write(((LeaveGroupResponse) response).data(), version);
             case LIST_CLIENT_METRICS_RESOURCES:
@@ -753,8 +741,6 @@ public class RequestConvertToJson {
                 return StreamsGroupDescribeResponseDataJsonConverter.write(((StreamsGroupDescribeResponse) response).data(), version);
             case STREAMS_GROUP_HEARTBEAT:
                 return StreamsGroupHeartbeatResponseDataJsonConverter.write(((StreamsGroupHeartbeatResponse) response).data(), version);
-            case STOP_REPLICA:
-                return StopReplicaResponseDataJsonConverter.write(((StopReplicaResponse) response).data(), version);
             case SYNC_GROUP:
                 return SyncGroupResponseDataJsonConverter.write(((SyncGroupResponse) response).data(), version);
             case TXN_OFFSET_COMMIT:
@@ -763,8 +749,6 @@ public class RequestConvertToJson {
                 return UnregisterBrokerResponseDataJsonConverter.write(((UnregisterBrokerResponse) response).data(), version);
             case UPDATE_FEATURES:
                 return UpdateFeaturesResponseDataJsonConverter.write(((UpdateFeaturesResponse) response).data(), version);
-            case UPDATE_METADATA:
-                return UpdateMetadataResponseDataJsonConverter.write(((UpdateMetadataResponse) response).data(), version);
             case UPDATE_RAFT_VOTER:
                 return UpdateRaftVoterResponseDataJsonConverter.write(((UpdateRaftVoterResponse) response).data(), version);
             case VOTE:

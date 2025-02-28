@@ -43,7 +43,7 @@ public class MetadataImageNode implements MetadataNode {
         ConfigurationsImageNode.NAME, image -> new ConfigurationsImageNode(image.configs()),
         ClientQuotasImageNode.NAME, image -> new ClientQuotasImageNode(image.clientQuotas()),
         ProducerIdsImageNode.NAME, image -> new ProducerIdsImageNode(image.producerIds()),
-        AclsImageNode.NAME, image -> new AclsImageByIdNode(image.acls()),
+        AclsImageNode.NAME, image -> new AclsImageNode(image.acls()),
         ScramImageNode.NAME, image -> new ScramImageNode(image.scram()),
         DelegationTokenImageNode.NAME, image -> new DelegationTokenImageNode(image.delegationTokens())
     );

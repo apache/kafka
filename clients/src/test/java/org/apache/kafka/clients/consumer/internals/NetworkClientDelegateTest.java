@@ -129,7 +129,7 @@ public class NetworkClientDelegateTest {
             time.sleep(REQUEST_TIMEOUT_MS);
             ncd.poll(0, time.milliseconds());
             assertTrue(unsentRequest.future().isDone());
-            TestUtils.assertFutureThrows(unsentRequest.future(), TimeoutException.class);
+            TestUtils.assertFutureThrows(TimeoutException.class, unsentRequest.future());
         }
     }
 
@@ -142,7 +142,7 @@ public class NetworkClientDelegateTest {
             time.sleep(REQUEST_TIMEOUT_MS);
             ncd.poll(0, time.milliseconds());
             assertTrue(unsentRequest.future().isDone());
-            TestUtils.assertFutureThrows(unsentRequest.future(), DisconnectException.class);
+            TestUtils.assertFutureThrows(DisconnectException.class, unsentRequest.future());
         }
     }
 

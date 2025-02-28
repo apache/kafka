@@ -17,10 +17,8 @@
 
 package kafka.server
 
-import kafka.log.UnifiedLog
 import kafka.network.SocketServer
 import kafka.server.IntegrationTestUtils.connectAndReceive
-import org.apache.kafka.common.test.{KafkaClusterTestKit, TestKitNodes}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin._
@@ -36,6 +34,7 @@ import org.apache.kafka.common.quota.ClientQuotaAlteration.Op
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter, ClientQuotaFilterComponent}
 import org.apache.kafka.common.requests.{ApiError, DescribeClusterRequest, DescribeClusterResponse}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
+import org.apache.kafka.common.test.{KafkaClusterTestKit, TestKitNodes}
 import org.apache.kafka.common.{Cluster, Endpoint, Reconfigurable, TopicPartition, TopicPartitionInfo}
 import org.apache.kafka.controller.{QuorumController, QuorumControllerIntegrationTestUtils}
 import org.apache.kafka.image.ClusterImage
@@ -48,6 +47,7 @@ import org.apache.kafka.server.config.{KRaftConfigs, ServerConfigs}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.quota
 import org.apache.kafka.server.quota.{ClientQuotaCallback, ClientQuotaType}
+import org.apache.kafka.storage.internals.log.UnifiedLog
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{Tag, Test, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
@@ -437,18 +437,6 @@ class KRaftClusterTest {
     }
   }
 
-  @Test
-  def testCreateClusterInvalidMetadataVersion(): Unit = {
-    assertEquals("Bootstrap metadata.version before 3.3-IV0 are not supported. Can't load " +
-      "metadata from testkit", assertThrows(classOf[RuntimeException], () => {
-        new KafkaClusterTestKit.Builder(
-          new TestKitNodes.Builder().
-            setBootstrapMetadataVersion(MetadataVersion.IBP_3_0_IV1).
-            setNumBrokerNodes(1).
-            setNumControllerNodes(1).build()).build()
-    }).getMessage)
-  }
-
   private def doOnStartedKafkaCluster(nodes: TestKitNodes)
                                      (action: KafkaClusterTestKit => Unit): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(nodes).build()
@@ -696,7 +684,8 @@ class KRaftClusterTest {
             new AlterConfigOp(new ConfigEntry("max.connections.per.ip", "60"), OpType.SET))))))
         validateConfigs(admin, Map(new ConfigResource(Type.BROKER, "") -> Seq(
           ("log.roll.ms", "1234567"),
-          ("max.connections.per.ip", "60"))), exhaustive = true)
+          ("max.connections.per.ip", "60"),
+          ("min.insync.replicas", "1"))), exhaustive = true)
 
         admin.createTopics(util.Arrays.asList(
           new NewTopic("foo", 2, 3.toShort),
@@ -872,9 +861,12 @@ class KRaftClusterTest {
     }
   }
 
-  def createAdminClient(cluster: KafkaClusterTestKit): Admin = {
+  def createAdminClient(cluster: KafkaClusterTestKit, bootstrapController: Boolean): Admin = {
     var props: Properties = null
-    props = cluster.clientProperties()
+    props = if (bootstrapController)
+      cluster.newClientPropertiesBuilder().setUsingBootstrapControllers(true).build()
+    else
+      cluster.clientProperties()
     props.put(AdminClientConfig.CLIENT_ID_CONFIG, this.getClass.getName)
     Admin.create(props)
   }
@@ -892,7 +884,7 @@ class KRaftClusterTest {
         TestUtils.waitUntilTrue(() => cluster.brokers.get(i).brokerState == BrokerState.RUNNING,
           "Broker Never started up")
       }
-      val admin = createAdminClient(cluster)
+      val admin = createAdminClient(cluster, bootstrapController = false)
       try {
         val quorumState = admin.describeMetadataQuorum(new DescribeMetadataQuorumOptions)
         val quorumInfo = quorumState.quorumInfo.get()
@@ -937,10 +929,56 @@ class KRaftClusterTest {
   }
 
   @Test
+  def testDescribeQuorumRequestToControllers() : Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumBrokerNodes(4).
+        setNumControllerNodes(3).build()).build()
+    try {
+      cluster.format()
+      cluster.startup()
+      for (i <- 0 to 3) {
+        TestUtils.waitUntilTrue(() => cluster.brokers.get(i).brokerState == BrokerState.RUNNING,
+          "Broker Never started up")
+      }
+      val admin = createAdminClient(cluster, bootstrapController = true)
+      try {
+        val quorumInfo = admin.describeMetadataQuorum(new DescribeMetadataQuorumOptions).quorumInfo.get()
+
+        assertEquals(cluster.controllers.asScala.keySet, quorumInfo.voters.asScala.map(_.replicaId).toSet)
+        assertTrue(cluster.controllers.asScala.keySet.contains(quorumInfo.leaderId),
+          s"Leader ID ${quorumInfo.leaderId} was not a controller ID.")
+
+        // Try to bring down the raft client in the active controller node to force the leader election.
+        // Stop raft client but not the controller, because we would like to get NOT_LEADER_OR_FOLLOWER error first.
+        // If the controller is shutdown, the client can't send request to the original leader.
+        cluster.controllers().get(quorumInfo.leaderId).sharedServer.raftManager.client.shutdown(1000)
+        // Send another describe metadata quorum request, it'll get NOT_LEADER_OR_FOLLOWER error first and then re-retrieve the metadata update
+        // and send to the correct active controller.
+        val quorumInfo2Future = admin.describeMetadataQuorum(new DescribeMetadataQuorumOptions).quorumInfo
+        // If raft client finishes shutdown before returning NOT_LEADER_OR_FOLLOWER error, the request will not be handled.
+        // This makes test fail. Shutdown the controller to make sure the request is handled by another controller.
+        cluster.controllers.get(quorumInfo.leaderId).shutdown()
+        val quorumInfo2 = quorumInfo2Future.get
+        // Make sure the leader has changed
+        assertTrue(quorumInfo.leaderId() != quorumInfo2.leaderId())
+
+        assertEquals(cluster.controllers.asScala.keySet, quorumInfo.voters.asScala.map(_.replicaId).toSet)
+        assertTrue(cluster.controllers.asScala.keySet.contains(quorumInfo.leaderId),
+          s"Leader ID ${quorumInfo.leaderId} was not a controller ID.")
+      } finally {
+        admin.close()
+      }
+    } finally {
+      cluster.close()
+    }
+  }
+
+  @Test
   def testUpdateMetadataVersion(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
-        setBootstrapMetadataVersion(MetadataVersion.MINIMUM_BOOTSTRAP_VERSION).
+        setBootstrapMetadataVersion(MetadataVersion.MINIMUM_VERSION).
         setNumBrokerNodes(4).
         setNumControllerNodes(3).build()).build()
     try {
@@ -958,8 +996,8 @@ class KRaftClusterTest {
       } finally {
         admin.close()
       }
-      TestUtils.waitUntilTrue(() => cluster.brokers().get(0).metadataCache.currentImage().features().metadataVersion().equals(MetadataVersion.latestTesting()),
-        "Timed out waiting for metadata.version update")
+      TestUtils.waitUntilTrue(() => cluster.brokers().get(0).metadataCache.currentImage().features().metadataVersion()
+        .equals(Optional.of(MetadataVersion.latestTesting())), "Timed out waiting for metadata.version update")
     } finally {
       cluster.close()
     }
@@ -1093,7 +1131,7 @@ class KRaftClusterTest {
   def testSingleControllerSingleBrokerCluster(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
-        setBootstrapMetadataVersion(MetadataVersion.MINIMUM_BOOTSTRAP_VERSION).
+        setBootstrapMetadataVersion(MetadataVersion.MINIMUM_VERSION).
         setNumBrokerNodes(1).
         setNumControllerNodes(1).build()).build()
     try {
@@ -1352,7 +1390,7 @@ class KRaftClusterTest {
         // Shut down broker0 and wait until the ISR of foo-0 is set to [1, 2]
         broker0.shutdown()
         TestUtils.retry(60000) {
-          val info = broker1.metadataCache.getPartitionInfo("foo", 0)
+          val info = broker1.metadataCache.getLeaderAndIsr("foo", 0)
           assertTrue(info.isDefined)
           assertEquals(Set(1, 2), info.get.isr().asScala.toSet)
         }
@@ -1366,7 +1404,7 @@ class KRaftClusterTest {
         // Start up broker0 and wait until the ISR of foo-0 is set to [0, 1, 2]
         broker0.startup()
         TestUtils.retry(60000) {
-          val info = broker1.metadataCache.getPartitionInfo("foo", 0)
+          val info = broker1.metadataCache.getLeaderAndIsr("foo", 0)
           assertTrue(info.isDefined)
           assertEquals(Set(0, 1, 2), info.get.isr().asScala.toSet)
         }
@@ -1407,7 +1445,7 @@ class KRaftClusterTest {
         // Shut down broker0 and wait until the ISR of foo-0 is set to [1, 2]
         broker0.shutdown()
         TestUtils.retry(60000) {
-          val info = broker1.metadataCache.getPartitionInfo("foo", 0)
+          val info = broker1.metadataCache.getLeaderAndIsr("foo", 0)
           assertTrue(info.isDefined)
           assertEquals(Set(1, 2), info.get.isr().asScala.toSet)
         }
@@ -1421,7 +1459,7 @@ class KRaftClusterTest {
         // Start up broker0 and wait until the ISR of foo-0 is set to [0, 1, 2]
         broker0.startup()
         TestUtils.retry(60000) {
-          val info = broker1.metadataCache.getPartitionInfo("foo", 0)
+          val info = broker1.metadataCache.getLeaderAndIsr("foo", 0)
           assertTrue(info.isDefined)
           assertEquals(Set(0, 1, 2), info.get.isr().asScala.toSet)
           assertTrue(broker0.logManager.getLog(foo0, isFuture = true).isEmpty)
@@ -1472,7 +1510,7 @@ class KRaftClusterTest {
         // Shut down broker0 and wait until the ISR of foo-0 is set to [1, 2]
         broker0.shutdown()
         TestUtils.retry(60000) {
-          val info = broker1.metadataCache.getPartitionInfo("foo", 0)
+          val info = broker1.metadataCache.getLeaderAndIsr("foo", 0)
           assertTrue(info.isDefined)
           assertEquals(Set(1, 2), info.get.isr().asScala.toSet)
         }
@@ -1498,7 +1536,7 @@ class KRaftClusterTest {
         // Start up broker0 and wait until the ISR of foo-0 is set to [0, 1, 2]
         broker0.startup()
         TestUtils.retry(60000) {
-          val info = broker1.metadataCache.getPartitionInfo("foo", 0)
+          val info = broker1.metadataCache.getLeaderAndIsr("foo", 0)
           assertTrue(info.isDefined)
           assertEquals(Set(0, 1, 2), info.get.isr().asScala.toSet)
           assertTrue(broker0.logManager.getLog(foo0, isFuture = true).isEmpty)

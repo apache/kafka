@@ -31,6 +31,7 @@ import org.apache.kafka.metadata.KafkaConfigSchema;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.config.ConfigSynonym;
 import org.apache.kafka.server.policy.AlterConfigPolicy;
 import org.apache.kafka.server.policy.AlterConfigPolicy.RequestMetadata;
@@ -64,7 +65,9 @@ import static org.apache.kafka.common.config.ConfigResource.Type.TOPIC;
 import static org.apache.kafka.common.metadata.MetadataRecordType.CONFIG_RECORD;
 import static org.apache.kafka.server.config.ConfigSynonym.HOURS_TO_MILLISECONDS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 @Timeout(value = 40)
@@ -84,7 +87,8 @@ public class ConfigurationControlManagerTest {
             define("abc", ConfigDef.Type.LIST, ConfigDef.Importance.HIGH, "abc").
             define("def", ConfigDef.Type.STRING, ConfigDef.Importance.HIGH, "def").
             define("ghi", ConfigDef.Type.BOOLEAN, true, ConfigDef.Importance.HIGH, "ghi").
-            define("quuux", ConfigDef.Type.LONG, ConfigDef.Importance.HIGH, "quux"));
+            define("quuux", ConfigDef.Type.LONG, ConfigDef.Importance.HIGH, "quux").
+            define(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, ConfigDef.Type.INT, ConfigDef.Importance.HIGH, ""));
     }
 
     public static final Map<String, List<ConfigSynonym>> SYNONYMS = new HashMap<>();
@@ -95,6 +99,7 @@ public class ConfigurationControlManagerTest {
         SYNONYMS.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG,
             Collections.singletonList(new ConfigSynonym(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG)));
         SYNONYMS.put("quuux", Collections.singletonList(new ConfigSynonym("quux", HOURS_TO_MILLISECONDS)));
+        SYNONYMS.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, Collections.singletonList(new ConfigSynonym(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG)));
     }
 
     static final KafkaConfigSchema SCHEMA = new KafkaConfigSchema(CONFIGS, SYNONYMS);
@@ -114,7 +119,7 @@ public class ConfigurationControlManagerTest {
     }
 
     @SuppressWarnings("unchecked")
-    private static <A, B> Map<A, B> toMap(Entry... entries) {
+    static <A, B> Map<A, B> toMap(Entry... entries) {
         Map<A, B> map = new LinkedHashMap<>();
         for (Entry<A, B> entry : entries) {
             map.put(entry.getKey(), entry.getValue());
@@ -470,7 +475,8 @@ public class ConfigurationControlManagerTest {
             Collections.singletonMap(EligibleLeaderReplicasVersion.FEATURE_NAME,
                 FeatureUpdate.UpgradeType.UPGRADE),
             false);
-        assertNull(result.response());
+        assertNotNull(result.response());
+        assertEquals(Errors.NONE, result.response().error());
         RecordTestUtils.replayAll(manager, result.records());
         RecordTestUtils.replayAll(featureManager, result.records());
 
@@ -494,6 +500,38 @@ public class ConfigurationControlManagerTest {
                     result.response().message());
         } else {
             assertEquals(Errors.NONE, result.response().error());
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testElrUpgrade(boolean isMetadataVersionElrEnabled) {
+        FeatureControlManager featureManager = new FeatureControlManager.Builder().
+            setQuorumFeatures(new QuorumFeatures(0,
+                QuorumFeatures.defaultSupportedFeatureMap(true),
+                Collections.emptyList())).
+            setMetadataVersion(isMetadataVersionElrEnabled ? MetadataVersion.IBP_4_0_IV1 : MetadataVersion.IBP_4_0_IV0).
+            build();
+        ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
+            setStaticConfig(Map.of(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2")).
+            setFeatureControl(featureManager).
+            setKafkaConfigSchema(SCHEMA).
+            build();
+        assertFalse(featureManager.isElrFeatureEnabled());
+        ControllerResult<ApiError> result = manager.updateFeatures(
+            Collections.singletonMap(EligibleLeaderReplicasVersion.FEATURE_NAME,
+                EligibleLeaderReplicasVersion.ELRV_1.featureLevel()),
+            Collections.singletonMap(EligibleLeaderReplicasVersion.FEATURE_NAME,
+                FeatureUpdate.UpgradeType.UPGRADE),
+            false);
+        assertNotNull(result.response());
+        if (isMetadataVersionElrEnabled) {
+            assertEquals(Errors.NONE, result.response().error());
+            RecordTestUtils.replayAll(manager, result.records());
+            RecordTestUtils.replayAll(featureManager, result.records());
+            assertTrue(featureManager.isElrFeatureEnabled());
+        } else {
+            assertEquals(Errors.INVALID_UPDATE_VERSION, result.response().error());
         }
     }
 }

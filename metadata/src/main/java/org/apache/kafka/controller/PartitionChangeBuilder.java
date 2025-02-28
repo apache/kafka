@@ -349,8 +349,7 @@ public class PartitionChangeBuilder {
                 // If the election was unclean, we have to forcibly set the ISR to just the
                 // new leader. This can result in data loss!
                 record.setIsr(Collections.singletonList(electionResult.node));
-                if (partition.leaderRecoveryState != LeaderRecoveryState.RECOVERING &&
-                    metadataVersion.isLeaderRecoverySupported()) {
+                if (partition.leaderRecoveryState != LeaderRecoveryState.RECOVERING) {
                     // And mark the leader recovery state as RECOVERING
                     record.setLeaderRecoveryState(LeaderRecoveryState.RECOVERING.value());
                 }

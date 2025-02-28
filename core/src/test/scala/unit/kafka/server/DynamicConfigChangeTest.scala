@@ -321,7 +321,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
       val resource = new ConfigResource(ConfigResource.Type.TOPIC, "")
       val op = new AlterConfigOp(new ConfigEntry(TopicConfig.FLUSH_MESSAGES_INTERVAL_CONFIG, "200000"), OpType.SET)
       val future = admin.incrementalAlterConfigs(Map(resource -> List(op).asJavaCollection).asJava).all
-      assertFutureThrows(future, classOf[InvalidRequestException])
+      assertFutureThrows(classOf[InvalidRequestException], future)
     } finally {
       admin.close()
     }
@@ -472,7 +472,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
       val resource = new ConfigResource(ConfigResource.Type.GROUP, "")
       val op = new AlterConfigOp(new ConfigEntry(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "200000"), OpType.SET)
       val future = admin.incrementalAlterConfigs(Map(resource -> List(op).asJavaCollection).asJava).all
-      assertFutureThrows(future, classOf[InvalidRequestException])
+      assertFutureThrows(classOf[InvalidRequestException], future)
     } finally {
       admin.close()
     }
@@ -486,14 +486,6 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
 }
 
 class DynamicConfigChangeUnitTest {
-  @Test
-  def testIpHandlerUnresolvableAddress(): Unit = {
-    val configHandler = new IpConfigHandler(null)
-    val props: Properties = new Properties()
-    props.put(QuotaConfig.IP_CONNECTION_RATE_OVERRIDE_CONFIG, "1")
-
-    assertThrows(classOf[IllegalArgumentException], () => configHandler.processConfigChanges("illegal-hostname", props))
-  }
 
   @Test
   def shouldParseReplicationQuotaProperties(): Unit = {

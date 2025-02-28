@@ -31,7 +31,34 @@ on:
         type: boolean
 
 jobs:
+  configure:
+    runs-on: ubuntu-latest
+    name: Configure Workflow
+    outputs:
+      is-draft: ${{ steps.check-draft-pr.outputs.is-draft }}
+      test-catalog-days: ${{ steps.test-catalog.outputs.days }}
+    steps:
+      - name: Env
+        run: printenv
+        env:
+          GITHUB_CONTEXT: ${{ toJson(github) }}
+      - name: Check for Draft PR
+        id: check-draft-pr
+        if: |
+          github.event_name == 'pull_request' && 
+          github.event.pull_request.draft
+        run: echo "is-draft=true" >> "$GITHUB_OUTPUT"
+      - name: Test Catalog Age
+        id: test-catalog
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "days=0" >> "$GITHUB_OUTPUT"
+          else
+            echo "days=7" >> "$GITHUB_OUTPUT"
+          fi
+
   load-catalog:
+    needs: [configure]
     runs-on: ubuntu-latest
     name: Load Test Catalog
     steps:
@@ -49,9 +76,12 @@ jobs:
           path: test-catalog
 
       - name: Checkout catalog at earlier date
+        if: ${{ needs.configure.outputs.test-catalog-days != '0' }}
+        env:
+          DAYS: ${{ needs.configure.outputs.test-catalog-days }}
         run: |
           cd test-catalog
-          SHA=$(git rev-list -1 --before 7.days.ago origin/test-catalog)
+          SHA=$(git rev-list -1 --before $DAYS.days.ago origin/test-catalog)
           echo $SHA
           git switch --detach $SHA
           git show --no-patch
@@ -76,21 +106,14 @@ jobs:
           compression-level: 9
 
   validate:
+    needs: [configure]
     runs-on: ubuntu-latest
     name: Compile and Check Java
-    outputs:
-      is-draft: ${{ steps.check-draft-pr.outputs.is-draft }}
     steps:
       - name: Env
         run: printenv
         env:
           GITHUB_CONTEXT: ${{ toJson(github) }}
-      - name: Check for Draft PR
-        id: check-draft-pr
-        if: |
-          github.event_name == 'pull_request' && 
-          github.event.pull_request.draft
-        run: echo "is-draft=true" >> "$GITHUB_OUTPUT"
       - name: Checkout code
         uses: actions/checkout@v4
         with:
@@ -103,7 +126,7 @@ jobs:
           java-version: 23
           gradle-cache-read-only: ${{ !inputs.is-trunk }}
           gradle-cache-write-only: ${{ inputs.is-trunk }}
-          develocity-access-key: ${{ secrets.GE_ACCESS_TOKEN }}
+          develocity-access-key: ${{ secrets.DEVELOCITY_ACCESS_KEY }}
       - name: Compile and validate
         env:
           SCAN_ARG: ${{ inputs.is-public-fork && '--no-scan' || '--scan' }}
@@ -145,16 +168,22 @@ jobs:
           fi
 
   test:
-    needs: [validate, load-catalog]
-    if: ${{ ! needs.validate.outputs.is-draft }}
+    needs: [configure, validate, load-catalog]
+    if: ${{ ! needs.configure.outputs.is-draft }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        java: [ 23, 17 ]  # If we change these, make sure to adjust ci-complete.yml
-    outputs:
-      timed-out: ${{ (steps.junit-test.outputs.gradle-exitcode == '124' || steps.junit-quarantined-test.outputs.gradle-exitcode == '124') }}
-    name: JUnit tests Java ${{ matrix.java }}
+        # If we change these, make sure to adjust ci-complete.yml
+        java: [ 23, 17 ]
+        run-flaky: [ true, false ]
+        run-new: [ true, false ]
+        exclude:
+          - run-flaky: true
+            run-new: true
+    env:
+      job-variation: ${{ matrix.java }}-${{ matrix.run-flaky == true && 'flaky' || 'noflaky' }}-${{ matrix.run-new == true && 'new' || 'nonew' }}
+    name: JUnit tests Java ${{ matrix.java }}${{ matrix.run-flaky == true && ' (flaky)' || '' }}${{ matrix.run-new == true && ' (new)' || '' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -168,7 +197,7 @@ jobs:
           java-version: ${{ matrix.java }}
           gradle-cache-read-only: ${{ !inputs.is-trunk }}
           gradle-cache-write-only: ${{ inputs.is-trunk }}
-          develocity-access-key: ${{ secrets.GE_ACCESS_TOKEN }}
+          develocity-access-key: ${{ secrets.DEVELOCITY_ACCESS_KEY }}
 
       # If the load-catalog job failed, we won't be able to download the artifact. Since we don't want this to fail
       # the overall workflow, so we'll continue here without a test catalog.
@@ -179,15 +208,6 @@ jobs:
         with:
           name: combined-test-catalog
 
-      - name: JUnit Quarantined Tests
-        id: junit-quarantined-test
-        uses: ./.github/actions/run-gradle
-        with:
-          test-task: quarantinedTest
-          timeout-minutes: 180
-          test-catalog-path: ${{ steps.load-test-catalog.outputs.download-path }}/combined-test-catalog.txt
-          build-scan-artifact-name: build-scan-quarantined-test-${{ matrix.java }}
-
       - name: JUnit Tests
         id: junit-test
         uses: ./.github/actions/run-gradle
@@ -195,13 +215,19 @@ jobs:
           test-task: test
           timeout-minutes: 180  # 3 hours
           test-catalog-path: ${{ steps.load-test-catalog.outputs.download-path }}/combined-test-catalog.txt
-          build-scan-artifact-name: build-scan-test-${{ matrix.java }}
+          build-scan-artifact-name: build-scan-${{ env.job-variation }}
+          run-new-tests: ${{ matrix.run-new }}
+          run-flaky-tests: ${{ matrix.run-flaky }}
+          test-retries: ${{ matrix.run-flaky == true && '3' || '1' }}
+          test-xml-output: ${{ env.job-variation }}
+          test-repeat: ${{ !inputs.is-trunk && matrix.run-new && '3' || '1' }}
+          test-verbose: ${{ runner.debug == '1' }}
 
       - name: Archive JUnit HTML reports
         uses: actions/upload-artifact@v4
-        id: junit-upload-artifact
+        id: archive-junit-html
         with:
-          name: junit-reports-${{ matrix.java }}
+          name: junit-reports-${{ env.job-variation }}
           path: |
             **/build/reports/tests/*
           compression-level: 9
@@ -210,45 +236,92 @@ jobs:
       - name: Archive JUnit XML
         uses: actions/upload-artifact@v4
         with:
-          name: junit-xml-${{ matrix.java }}
+          name: junit-xml-${{ env.job-variation }}
           path: |
             build/junit-xml/**/*.xml
           compression-level: 9
           if-no-files-found: ignore
 
       - name: Archive Thread Dumps
-        id: thread-dump-upload-artifact
-        if: always() && (steps.junit-test.outputs.gradle-exitcode == '124' || steps.junit-quarantined-test.outputs.gradle-exitcode == '124')
+        id: archive-thread-dump
+        if: steps.junit-test.outputs.gradle-exitcode == '124'
         uses: actions/upload-artifact@v4
         with:
-          name: junit-thread-dumps-${{ matrix.java }}
+          name: junit-thread-dumps-${{ env.job-variation }}
           path: |
             thread-dumps/*
           compression-level: 9
           if-no-files-found: ignore
 
       - name: Parse JUnit tests
-        run: python .github/scripts/junit.py --export-test-catalog ./test-catalog >> $GITHUB_STEP_SUMMARY
         env:
           GITHUB_WORKSPACE: ${{ github.workspace }}
-          JUNIT_REPORT_URL: ${{ steps.junit-upload-artifact.outputs.artifact-url }}
-          THREAD_DUMP_URL: ${{ steps.thread-dump-upload-artifact.outputs.artifact-url }}
+          JUNIT_REPORT_URL: ${{ steps.archive-junit-html.outputs.artifact-url }}
+          THREAD_DUMP_URL: ${{ steps.archive-thread-dump.outputs.artifact-url }}
           GRADLE_TEST_EXIT_CODE: ${{ steps.junit-test.outputs.gradle-exitcode }}
-          GRADLE_QUARANTINED_TEST_EXIT_CODE: ${{ steps.junit-quarantined-test.outputs.gradle-exitcode }}
+        run: |
+          python .github/scripts/junit.py \
+           --path build/junit-xml >> $GITHUB_STEP_SUMMARY
 
+  # This job downloads all the JUnit XML files and thread dumps from the JDK 23 test runs.
+  # If any test job fails, we will not run this job. Also, if any thread dump artifacts
+  # are present, this means there was a timeout in the tests and so we will not proceed
+  # with catalog creation.
+  collate-test-catalog:
+    name: Collate Test Catalog
+    needs: test
+    runs-on: ubuntu-latest
+    outputs:
+      uploaded-test-catalog: ${{ steps.archive-test-catalog.outcome == 'success' }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Download Thread Dumps
+        uses: actions/download-artifact@v4
+        with:
+          pattern: junit-thread-dumps-23-*
+          path: thread-dumps
+          merge-multiple: true
+      - name: Check For Thread Dump
+        id: check-for-thread-dump
+        run: |
+          find .
+          if [ -d thread-dumps ]; then
+              echo "Found 'thread-dumps' directory. Will not proceed with test catalog collation.";
+              exit 1;
+          fi
+      - name: Download JUnit XMLs
+        uses: actions/download-artifact@v4
+        with:
+          pattern: junit-xml-23-*  # Only look at JDK 23 tests for the test catalog
+          path: junit-xml
+          merge-multiple: true
+      - name: Collate Test Catalog
+        continue-on-error: true
+        env:
+          GITHUB_WORKSPACE: ${{ github.workspace }}
+          GRADLE_TEST_EXIT_CODE: 0
+        run: |
+          python .github/scripts/junit.py \
+           --path junit-xml \
+           --export-test-catalog ./test-catalog >> $GITHUB_STEP_SUMMARY
       - name: Archive Test Catalog
-        if: ${{ always() && matrix.java == '23' }}
+        id: archive-test-catalog
         uses: actions/upload-artifact@v4
         with:
           name: test-catalog
           path: test-catalog
           compression-level: 9
-          if-no-files-found: ignore
+          if-no-files-found: error
 
+  # This job downloads the test catalog from the previous job and overlays it on the test-catalog branch.
+  # This will only run on trunk and only if the collate job did not detect a timeout.
   update-test-catalog:
     name: Update Test Catalog
-    needs: test
-    if: ${{ always() && inputs.is-trunk && needs.test.outputs.timed-out == 'false' }}
+    needs: collate-test-catalog
+    if: ${{ inputs.is-trunk && needs.collate-test-catalog.outputs.uploaded-test-catalog == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write

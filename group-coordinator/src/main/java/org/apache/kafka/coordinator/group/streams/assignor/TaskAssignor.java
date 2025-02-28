@@ -32,6 +32,8 @@ public interface TaskAssignor {
      * @param groupSpec         The assignment spec which includes member metadata.
      * @param topologyDescriber The task metadata describer.
      * @return The new assignment for the group.
+     *
+     * @throws TaskAssignorException For empty groups
      */
     GroupAssignment assign(
         GroupSpec groupSpec,

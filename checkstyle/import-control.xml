@@ -1,6 +1,6 @@
 <!DOCTYPE import-control PUBLIC
-"-//Puppy Crawl//DTD Import Control 1.1//EN"
-"http://www.puppycrawl.com/dtds/import_control_1_1.dtd">
+    "-//Checkstyle//DTD ImportControl Configuration 1.4//EN"
+    "https://checkstyle.sourceforge.io/dtds/import_control_1_4.dtd">
 <!--
  Licensed to the Apache Software Foundation (ASF) under one or more
  contributor license agreements.  See the NOTICE file distributed with
@@ -46,6 +46,9 @@
   <allow pkg="org.apache.kafka.common.utils" />
   <allow pkg="org.apache.kafka.common.errors" exact-match="true" />
   <allow pkg="org.apache.kafka.common.memory" />
+ 
+  <!-- anyone can use internal test apis -->
+  <allow pkg="org.apache.kafka.common.test.api" />
 
   <subpackage name="common">
     <allow class="org.apache.kafka.clients.consumer.ConsumerRecord" exact-match="true" />
@@ -82,6 +85,11 @@
       <allow class="org.apache.kafka.common.record.CompressionType.LZ4" />
       <allow class="org.apache.kafka.common.record.CompressionType.ZSTD" />
       <allow class="org.apache.kafka.common.record.RecordBatch" exact-match="true" />
+    </subpackage>
+
+    <subpackage name="internals">
+      <allow pkg="org.apache.kafka.common.metrics" />
+      <allow pkg="org.apache.kafka.common.metrics.internals" />
     </subpackage>
 
     <subpackage name="message">
@@ -573,7 +581,10 @@
       <allow pkg="javax.crypto"/>
       <allow pkg="org.apache.maven.artifact.versioning" />
       <allow pkg="org.eclipse.jetty.util" />
-      <allow pkg="org.apache.logging.log4j" />
+
+      <file name="(Mock)?Loggers(Test)?" regex="true">
+        <allow pkg="org.apache.logging.log4j" />
+      </file>
 
       <subpackage name="rest">
         <allow pkg="org.eclipse.jetty" />
@@ -585,7 +596,6 @@
         <allow pkg="com.fasterxml.jackson" />
         <allow pkg="org.apache.http"/>
         <allow pkg="io.swagger.v3.oas.annotations"/>
-        <allow pkg="org.apache.logging.log4j" />
       </subpackage>
 
       <subpackage name="isolation">
@@ -632,7 +642,6 @@
         <allow pkg="org.apache.kafka.metadata" />
         <allow pkg="org.eclipse.jetty.client"/>
         <allow class="org.apache.kafka.storage.internals.log.CleanerConfig" />
-        <allow class="org.apache.kafka.server.config.ZkConfigs" />
       </subpackage>
     </subpackage>
 

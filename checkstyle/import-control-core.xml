@@ -1,6 +1,6 @@
 <!DOCTYPE import-control PUBLIC
-"-//Puppy Crawl//DTD Import Control 1.1//EN"
-"http://www.puppycrawl.com/dtds/import_control_1_1.dtd">
+    "-//Checkstyle//DTD ImportControl Configuration 1.4//EN"
+    "https://checkstyle.sourceforge.io/dtds/import_control_1_4.dtd">
 <!--
  Licensed to the Apache Software Foundation (ASF) under one or more
  contributor license agreements.  See the NOTICE file distributed with
@@ -36,6 +36,7 @@
   <allow pkg="kafka.utils" />
   <allow pkg="kafka.serializer" />
   <allow pkg="org.apache.kafka.common" />
+  <allow pkg="org.apache.kafka.common.test.api" />
   <allow pkg="org.mockito" class="AssignmentsManagerTest"/>
   <allow pkg="org.apache.kafka.server"/>
   <allow pkg="org.opentest4j" class="RemoteLogManagerTest"/>
@@ -71,6 +72,14 @@
 
   <subpackage name="coordinator">
     <allow class="kafka.server.MetadataCache" />
+  </subpackage>
+
+  <subpackage name="docker">
+    <allow class="com.fasterxml.jackson.annotation.JsonAnyGetter" />
+    <allow class="com.fasterxml.jackson.annotation.JsonAnySetter" />
+    <allow class="com.fasterxml.jackson.annotation.JsonProperty" />
+    <allow class="com.fasterxml.jackson.annotation.JsonPropertyOrder" />
+    <allow class="com.fasterxml.jackson.annotation.JsonIgnoreProperties" />
   </subpackage>
 
   <subpackage name="examples">
@@ -134,6 +143,7 @@
     <allow pkg="kafka.security.authorizer"/>
     <allow pkg="kafka.server"/>
     <allow pkg="kafka.zk"/>
+    <allow pkg="org.apache.kafka.clients"/>
     <allow pkg="org.apache.kafka.clients.admin"/>
     <allow pkg="org.apache.kafka.coordinator.group"/>
     <allow pkg="org.apache.kafka.metadata"/>
@@ -147,6 +157,7 @@
     <allow pkg="org.apache.kafka.common.test"/>
     <allow pkg="org.apache.kafka.common.test.api"/>
     <allow pkg="org.apache.kafka.common.test.api"/>
+    <allow pkg="org.apache.kafka.admin"/>
   </subpackage>
 
   <subpackage name="security">
@@ -159,8 +170,10 @@
   </subpackage>
 
   <subpackage name="utils">
-    <allow pkg="org.apache.logging.log4j" />
-    <allow pkg="org.apache.logging.log4j.core.config" />
+    <file name="LoggingController.scala">
+      <allow pkg="org.apache.logging.log4j" />
+      <allow pkg="org.apache.logging.log4j.core.config" />
+    </file>
   </subpackage>
 
   <subpackage name="clients">

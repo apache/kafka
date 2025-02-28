@@ -21,7 +21,7 @@ import java.util.Map;
 
 public enum KRaftVersion implements FeatureVersion {
     // Version 0 is the initial version of KRaft.
-    KRAFT_VERSION_0(0, MetadataVersion.MINIMUM_KRAFT_VERSION),
+    KRAFT_VERSION_0(0, MetadataVersion.MINIMUM_VERSION),
 
     // Version 1 enables KIP-853.
     KRAFT_VERSION_1(1, MetadataVersion.IBP_3_9_IV0);

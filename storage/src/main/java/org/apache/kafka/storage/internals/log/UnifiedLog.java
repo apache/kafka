@@ -17,16 +17,22 @@
 package org.apache.kafka.storage.internals.log;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig;
 import org.apache.kafka.server.util.Scheduler;
+import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile;
+import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache;
+import org.apache.kafka.storage.log.metrics.BrokerTopicMetrics;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -39,6 +45,16 @@ public class UnifiedLog {
 
     private static final Logger LOG = LoggerFactory.getLogger(UnifiedLog.class);
 
+    public static final String LOG_FILE_SUFFIX = LogFileUtils.LOG_FILE_SUFFIX;
+    public static final String INDEX_FILE_SUFFIX = LogFileUtils.INDEX_FILE_SUFFIX;
+    public static final String TIME_INDEX_FILE_SUFFIX = LogFileUtils.TIME_INDEX_FILE_SUFFIX;
+    public static final String TXN_INDEX_FILE_SUFFIX = LogFileUtils.TXN_INDEX_FILE_SUFFIX;
+    public static final String CLEANED_FILE_SUFFIX = LogFileUtils.CLEANED_FILE_SUFFIX;
+    public static final String SWAP_FILE_SUFFIX = LogFileUtils.SWAP_FILE_SUFFIX;
+    public static final String DELETE_DIR_SUFFIX = LogFileUtils.DELETE_DIR_SUFFIX;
+    public static final String STRAY_DIR_SUFFIX = LogFileUtils.STRAY_DIR_SUFFIX;
+    public static final long UNKNOWN_OFFSET = LocalLog.UNKNOWN_OFFSET;
+
     /**
      * Rebuilds producer state until the provided lastOffset. This function may be called from the
      * recovery code path, and thus must be free of all side effects, i.e. it must not update any
@@ -48,7 +64,6 @@ public class UnifiedLog {
      * @param segments                The segments of the log whose producer state is being rebuilt
      * @param logStartOffset          The log start offset
      * @param lastOffset              The last offset upto which the producer state needs to be rebuilt
-     * @param recordVersion           The record version
      * @param time                    The time instance used for checking the clock
      * @param reloadFromCleanShutdown True if the producer state is being built after a clean shutdown, false otherwise.
      * @param logPrefix               The logging prefix
@@ -130,8 +145,8 @@ public class UnifiedLog {
             }
             producerStateManager.updateMapEndOffset(lastOffset);
             producerStateManager.takeSnapshot();
-            LOG.info(logPrefix + "Producer state recovery took " + (segmentRecoveryStart - producerStateLoadStart) + "ms for snapshot load " +
-                    "and " + (time.milliseconds() - segmentRecoveryStart) + "ms for segment recovery from offset " + lastOffset);
+            LOG.info("{}Producer state recovery took {}ms for snapshot load and {}ms for segment recovery from offset {}",
+                    logPrefix, segmentRecoveryStart - producerStateLoadStart, time.milliseconds() - segmentRecoveryStart, lastOffset);
         }
     }
 
@@ -196,10 +211,116 @@ public class UnifiedLog {
         long producerId = batch.producerId();
         ProducerAppendInfo appendInfo = producers.computeIfAbsent(producerId, __ -> producerStateManager.prepareUpdate(producerId, origin));
         Optional<CompletedTxn> completedTxn = appendInfo.append(batch, firstOffsetMetadata);
-        // Whether we wrote a control marker or a data batch, we can remove VerificationGuard since either the transaction is complete or we have a first offset.
+        // Whether we wrote a control marker or a data batch, we may be able to remove VerificationGuard since either the transaction is complete or we have a first offset.
         if (batch.isTransactional()) {
-            producerStateManager.clearVerificationStateEntry(producerId);
+            VerificationStateEntry entry = producerStateManager.verificationStateEntry(producerId);
+            // The only case we should not remove the verification guard is if the marker was a control marker, we are using TV2 and the epochs match.
+            // This is safe because we always bump epoch upon upgrading to TV2.
+            boolean isV2NextTransactionStarted = entry != null && entry.supportsEpochBump() && batch.isControlBatch() && batch.producerEpoch() == entry.epoch();
+            if (!isV2NextTransactionStarted)
+                producerStateManager.clearVerificationStateEntry(producerId);
         }
         return completedTxn;
+    }
+
+    public static boolean isRemoteLogEnabled(boolean remoteStorageSystemEnable, LogConfig config, String topic) {
+        // Remote log is enabled only for non-compact and non-internal topics
+        return remoteStorageSystemEnable &&
+                !(config.compact || Topic.isInternal(topic)
+                        || TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_NAME.equals(topic)
+                        || Topic.CLUSTER_METADATA_TOPIC_NAME.equals(topic)) &&
+                config.remoteStorageEnable();
+    }
+
+    // Visible for benchmarking
+    public static LogValidator.MetricsRecorder newValidatorMetricsRecorder(BrokerTopicMetrics allTopicsStats) {
+        return new LogValidator.MetricsRecorder() {
+            public void recordInvalidMagic() {
+                allTopicsStats.invalidMagicNumberRecordsPerSec().mark();
+            }
+
+            public void recordInvalidOffset() {
+                allTopicsStats.invalidOffsetOrSequenceRecordsPerSec().mark();
+            }
+
+            public void recordInvalidSequence() {
+                allTopicsStats.invalidOffsetOrSequenceRecordsPerSec().mark();
+            }
+
+            public void recordInvalidChecksums() {
+                allTopicsStats.invalidMessageCrcRecordsPerSec().mark();
+            }
+
+            public void recordNoKeyCompactedTopic() {
+                allTopicsStats.noKeyCompactedTopicRecordsPerSec().mark();
+            }
+        };
+    }
+
+    /**
+     * Create a new LeaderEpochFileCache instance and load the epoch entries from the backing checkpoint file or
+     * the provided currentCache (if not empty).
+     *
+     * @param dir                  The directory in which the log will reside
+     * @param topicPartition       The topic partition
+     * @param logDirFailureChannel The LogDirFailureChannel to asynchronously handle log dir failure
+     * @param currentCache         The current LeaderEpochFileCache instance (if any)
+     * @param scheduler            The scheduler for executing asynchronous tasks
+     * @return The new LeaderEpochFileCache instance
+     */
+    public static LeaderEpochFileCache createLeaderEpochCache(File dir,
+                                                                             TopicPartition topicPartition,
+                                                                             LogDirFailureChannel logDirFailureChannel,
+                                                                             Optional<LeaderEpochFileCache> currentCache,
+                                                                             Scheduler scheduler) throws IOException {
+        File leaderEpochFile = LeaderEpochCheckpointFile.newFile(dir);
+        LeaderEpochCheckpointFile checkpointFile = new LeaderEpochCheckpointFile(leaderEpochFile, logDirFailureChannel);
+        return currentCache.map(cache -> cache.withCheckpoint(checkpointFile))
+                .orElse(new LeaderEpochFileCache(topicPartition, checkpointFile, scheduler));
+
+    }
+
+    public static LogSegment createNewCleanedSegment(File dir, LogConfig logConfig, long baseOffset) throws IOException {
+        return LocalLog.createNewCleanedSegment(dir, logConfig, baseOffset);
+    }
+
+    public static long localRetentionMs(LogConfig config, boolean remoteLogEnabledAndRemoteCopyEnabled) {
+        return remoteLogEnabledAndRemoteCopyEnabled ? config.localRetentionMs() : config.retentionMs;
+    }
+
+    public static long localRetentionSize(LogConfig config, boolean remoteLogEnabledAndRemoteCopyEnabled) {
+        return remoteLogEnabledAndRemoteCopyEnabled ? config.localRetentionBytes() : config.retentionSize;
+    }
+
+    public static String logDeleteDirName(TopicPartition topicPartition) {
+        return LocalLog.logDeleteDirName(topicPartition);
+    }
+
+    public static String logFutureDirName(TopicPartition topicPartition) {
+        return LocalLog.logFutureDirName(topicPartition);
+    }
+
+    public static String logStrayDirName(TopicPartition topicPartition) {
+        return LocalLog.logStrayDirName(topicPartition);
+    }
+
+    public static String logDirName(TopicPartition topicPartition) {
+        return LocalLog.logDirName(topicPartition);
+    }
+
+    public static File transactionIndexFile(File dir, long offset, String suffix) {
+        return LogFileUtils.transactionIndexFile(dir, offset, suffix);
+    }
+
+    public static long offsetFromFile(File file) {
+        return LogFileUtils.offsetFromFile(file);
+    }
+
+    public static long sizeInBytes(Collection<LogSegment> segments) {
+        return LogSegments.sizeInBytes(segments);
+    }
+
+    public static TopicPartition parseTopicPartitionName(File dir) throws IOException {
+        return LocalLog.parseTopicPartitionName(dir);
     }
 }

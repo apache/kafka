@@ -190,14 +190,13 @@ object AbstractCoordinatorConcurrencyTest {
       delayedProducePurgatoryParam = Some(producePurgatory),
       delayedFetchPurgatoryParam = Some(delayedFetchPurgatoryParam),
       delayedDeleteRecordsPurgatoryParam = Some(delayedDeleteRecordsPurgatoryParam),
-      delayedElectLeaderPurgatoryParam = Some(delayedElectLeaderPurgatoryParam),
       delayedRemoteFetchPurgatoryParam = Some(delayedRemoteFetchPurgatoryParam),
       delayedRemoteListOffsetsPurgatoryParam = Some(delayedRemoteListOffsetsPurgatoryParam),
       threadNamePrefix = Option(this.getClass.getName)) {
 
     @volatile var logs: mutable.Map[TopicPartition, (UnifiedLog, Long)] = _
 
-    override def maybeStartTransactionVerificationForPartition(
+    override def maybeSendPartitionToTransactionCoordinator(
       topicPartition: TopicPartition,
       transactionalId: String,
       producerId: Long,

@@ -209,7 +209,7 @@ public class ProducerConfig extends AbstractConfig {
     /** <code>buffer.memory</code> */
     public static final String BUFFER_MEMORY_CONFIG = "buffer.memory";
     private static final String BUFFER_MEMORY_DOC = "The total bytes of memory the producer can use to buffer records waiting to be sent to the server. If records are "
-                                                    + "sent faster than they can be delivered to the server the producer will block for <code>" + MAX_BLOCK_MS_CONFIG + "</code> after which it will throw an exception."
+                                                    + "sent faster than they can be delivered to the server the producer will block for <code>" + MAX_BLOCK_MS_CONFIG + "</code> after which it will fail with an exception."
                                                     + "<p>"
                                                     + "This setting should correspond roughly to the total memory the producer will use, but is not a hard bound since "
                                                     + "not all memory the producer uses is used for buffering. Some additional memory will be used for compression (if "
@@ -309,8 +309,8 @@ public class ProducerConfig extends AbstractConfig {
     public static final String PARTITIONER_CLASS_CONFIG = "partitioner.class";
     private static final String PARTITIONER_CLASS_DOC = "Determines which partition to send a record to when records are produced. Available options are:" +
             "<ul>" +
-            "<li>If not set, the default partitioning logic is used. " + 
-            "This strategy send records to a partition until at least " + BATCH_SIZE_CONFIG + " bytes is produced to the partition. It works with the strategy:" + 
+            "<li>If not set, the default partitioning logic is used. " +
+            "This strategy send records to a partition until at least " + BATCH_SIZE_CONFIG + " bytes is produced to the partition. It works with the strategy:" +
             "<ol>" +
             "<li>If no partition is specified but a key is present, choose a partition based on a hash of the key.</li>" +
             "<li>If no partition or key is present, choose the sticky partition that changes when at least " + BATCH_SIZE_CONFIG + " bytes are produced to the partition.</li>" +
