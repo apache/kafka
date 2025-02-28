@@ -62,6 +62,7 @@ public class ShareSessionCache {
     // Maps last used times to sessions.
     private final TreeMap<LastUsedKey, ShareSession> lastUsed = new TreeMap<>();
 
+    @SuppressWarnings("this-escape")
     public ShareSessionCache(int maxEntries, long evictionMs) {
         this.maxEntries = maxEntries;
         this.evictionMs = evictionMs;
