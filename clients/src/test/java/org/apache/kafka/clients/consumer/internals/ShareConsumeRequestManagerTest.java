@@ -332,7 +332,8 @@ public class ShareConsumeRequestManagerTest {
         acknowledgements.add(2L, AcknowledgeType.ACCEPT);
         acknowledgements.add(3L, AcknowledgeType.REJECT);
 
-        shareConsumeRequestManager.commitSync(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)), time.milliseconds() + 2000);
+        shareConsumeRequestManager.commitSync(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)),
+                calculateDeadlineMs(time.timer(2000)));
 
         assertEquals(1, shareConsumeRequestManager.sendAcknowledgements());
 
@@ -576,7 +577,7 @@ public class ShareConsumeRequestManagerTest {
         resultHandler.complete(tip0, null, ShareConsumeRequestManager.AcknowledgeRequestType.COMMIT_ASYNC);
         assertEquals(0, completedAcknowledgements.size());
 
-        // Setting isCommitAsync to false should still not send any background event
+        // Setting the request type to COMMIT_SYNC should still not send any background event
         // as we have initialized remainingResults to null.
         resultHandler.complete(tip0, acknowledgements, ShareConsumeRequestManager.AcknowledgeRequestType.COMMIT_SYNC);
         assertEquals(0, completedAcknowledgements.size());
@@ -1142,7 +1143,8 @@ public class ShareConsumeRequestManagerTest {
         acknowledgements.add(5L, AcknowledgeType.RELEASE);
         acknowledgements.add(6L, AcknowledgeType.ACCEPT);
 
-        shareConsumeRequestManager.commitSync(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)), 60000L);
+        shareConsumeRequestManager.commitSync(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)),
+            calculateDeadlineMs(time.timer(60000L)));
         assertNull(shareConsumeRequestManager.requestStates(0).getAsyncRequest());
 
         assertEquals(1, shareConsumeRequestManager.requestStates(0).getSyncRequestQueue().size());
