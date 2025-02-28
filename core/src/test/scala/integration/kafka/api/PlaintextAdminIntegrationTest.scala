@@ -144,19 +144,17 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val defaultQuota = "<default>"
     client = Admin.create(config)
 
+    //"<default>" can not create default quota
     val userEntity = new ClientQuotaEntity(Map(ClientQuotaEntity.USER -> defaultQuota).asJava)
     val clientEntity = new ClientQuotaEntity(Map(ClientQuotaEntity.CLIENT_ID -> defaultQuota).asJava)
-
     val userAlterations = new ClientQuotaAlteration(userEntity,
       Collections.singleton(new ClientQuotaAlteration.Op("consumer_byte_rate", 10000D)))
     val clientAlterations = new ClientQuotaAlteration(clientEntity,
       Collections.singleton(new ClientQuotaAlteration.Op("producer_byte_rate", 10000D)))
     val alterations = List(userAlterations, clientAlterations)
-    val result = client.alterClientQuotas(alterations.asJava)
-    result.all().get()
+    client.alterClientQuotas(alterations.asJava).all().get()
 
-    val values = result.values()
-    assertEquals(2, values.size())
+    val values = client.alterClientQuotas(alterations.asJava).values()
     values.forEach((entity, future) => {
       val entityName = entity.entries().values().iterator().next()
       assertEquals(defaultQuota, entityName)
@@ -180,6 +178,25 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       ClientQuotaFilterComponent.ofDefaultEntity(ClientQuotaEntity.CLIENT_ID)))).entities().get()
     assertEquals(0, userQuotas.size())
     assertEquals(0, clientQuotas.size())
+
+    //null can create default quota
+    val correctDefaultEntity = new ClientQuotaEntity(Map(ClientQuotaEntity.USER -> Option.empty[String].orNull).asJava)
+    client.alterClientQuotas(List(new ClientQuotaAlteration(correctDefaultEntity, Collections.singleton(
+            new ClientQuotaAlteration.Op("producer_byte_rate", 1000D)))).asJava).all().get()
+
+    TestUtils.waitUntilTrue(() => {
+      try {
+        val defaultQuotas = client.describeClientQuotas(ClientQuotaFilter.containsOnly(Collections.singletonList(
+          ClientQuotaFilterComponent.ofDefaultEntity(ClientQuotaEntity.USER)))).entities().get()
+        defaultQuotas.size == 1
+      } catch {
+        case _: Exception => false
+      }
+    }, "Timed out waiting for quota config to be propagated to all servers")
+
+    val defaultQuotas = client.describeClientQuotas(ClientQuotaFilter.containsOnly(Collections.singletonList(
+      ClientQuotaFilterComponent.ofDefaultEntity(ClientQuotaEntity.USER)))).entities().get()
+    assertEquals(1, defaultQuotas.size())
   }
 
   @Test
