@@ -178,6 +178,7 @@ jobs:
         java: [ 17 ]
         run-flaky: [ true ]
         run-new: [ false ]
+        foo: [1, 2, 3, 4, 5, 6]
 
     env:
       job-variation: ${{ matrix.java }}-${{ matrix.run-flaky == true && 'flaky' || 'noflaky' }}-${{ matrix.run-new == true && 'new' || 'nonew' }}
