@@ -1631,7 +1631,8 @@ public class SharePartitionTest {
 
         when(time.hiResClockMs())
             .thenReturn(10L) // for time when lock is acquired
-            .thenReturn(80L); // for time when lock is released
+            .thenReturn(80L) // for time when lock is released
+            .thenReturn(160L); // to update lock idle duration while acquiring lock again.
 
         assertTrue(sharePartition.maybeAcquireFetchLock());
         sharePartition.releaseFetchLock();
@@ -1640,16 +1641,17 @@ public class SharePartitionTest {
         assertEquals(2, sharePartitionMetrics.fetchLockRatio().count());
         assertEquals(100, sharePartitionMetrics.fetchLockRatio().mean());
 
-        // Update metric again with 0 as acquire time and 80 as last acquisition time.
+        assertTrue(sharePartition.maybeAcquireFetchLock());
+        // Update metric again with 0 as acquire time and 80 as idle duration ms.
         sharePartition.recordFetchLockRatioMetric(0);
         assertEquals(3, sharePartitionMetrics.fetchLockRatio().count());
-        // Mean should be (100+100+1)/3 = 67, as when last acquisition time was 80, the ratio should be 1.
+        // Mean should be (100+100+1)/3 = 67, as when idle duration is 80, the ratio should be 1.
         assertEquals(67, sharePartitionMetrics.fetchLockRatio().mean());
 
-        // Update metric again with 10 as acquire time and 80 as last acquisition time.
+        // Update metric again with 10 as acquire time and 80 as idle duration ms.
         sharePartition.recordFetchLockRatioMetric(10);
         assertEquals(4, sharePartitionMetrics.fetchLockRatio().count());
-        // Mean should be (100+100+1+11)/4 = 53, as when last acquisition time was 80 and acquire time 10, the ratio should be 11.
+        // Mean should be (100+100+1+11)/4 = 53, as when idle time is 80 and acquire time 10, the ratio should be 11.
         assertEquals(53, sharePartitionMetrics.fetchLockRatio().mean());
     }
 

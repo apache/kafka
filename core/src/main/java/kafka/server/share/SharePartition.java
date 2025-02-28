@@ -326,9 +326,14 @@ public class SharePartition {
     private long fetchLockAcquiredTimeMs;
 
     /**
-     * The time since last lock acquisition is used to track the time since the last lock acquisition.
+     * The fetch lock released time is used to track the time when the lock for share partition is released.
      */
-    private long timeSinceLastLockAcquisitionMs;
+    private long fetchLockReleasedTimeMs;
+
+    /**
+     * The fetch lock idle duration is used to track the time for which the fetch lock is idle.
+     */
+    private long fetchLockIdleDurationMs;
 
     /**
      * The replica manager is used to check to see if any delayed share fetch request can be completed because of data
@@ -1307,7 +1312,7 @@ public class SharePartition {
         if (acquired) {
             long currentTime = time.hiResClockMs();
             fetchLockAcquiredTimeMs = currentTime;
-            timeSinceLastLockAcquisitionMs = timeSinceLastLockAcquisitionMs != 0 ? currentTime - timeSinceLastLockAcquisitionMs : 0;
+            fetchLockIdleDurationMs = fetchLockReleasedTimeMs != 0 ? currentTime - fetchLockReleasedTimeMs : 0;
         }
         return acquired;
     }
@@ -1325,7 +1330,7 @@ public class SharePartition {
             sharePartitionMetrics.recordFetchLockTimeMs(acquiredDurationMs);
             // Update fetch lock ratio metric.
             recordFetchLockRatioMetric(acquiredDurationMs);
-            timeSinceLastLockAcquisitionMs = currentTime;
+            fetchLockReleasedTimeMs = currentTime;
         }
         fetchLock.set(false);
     }
@@ -1356,16 +1361,16 @@ public class SharePartition {
     }
 
     /**
-     * Records the fetch lock ratio metric. The metric is the ratio of the time the fetch lock was
-     * acquired to the total time since the last lock acquisition. The total time is calculated by
-     * adding the time since the last lock acquisition to the time the fetch lock was acquired.
+     * Records the fetch lock ratio metric. The metric is the ratio of the time duration the fetch
+     * lock was acquired to the total time since the last lock acquisition. The total time is calculated
+     * by adding the duration of the fetch lock idle time to the time the fetch lock was acquired.
      *
      * @param acquiredDurationMs The time duration the fetch lock was acquired.
      */
     // Visible for testing
     void recordFetchLockRatioMetric(long acquiredDurationMs) {
-        if (timeSinceLastLockAcquisitionMs < 0) {
-            // This is just a safe check to avoid negative time since last lock acquisition. This
+        if (fetchLockIdleDurationMs < 0) {
+            // This is just a safe check to avoid negative time for fetch lock idle duration. This
             // should not happen in any scenarios. If it does then just return from the method and
             // no metric update is an indicator of the issue.
             return;
@@ -1373,14 +1378,14 @@ public class SharePartition {
 
         // Update the total fetch lock acquired time.
         double fetchLockToTotalTime;
-        if (acquiredDurationMs + timeSinceLastLockAcquisitionMs == 0) {
+        if (acquiredDurationMs + fetchLockIdleDurationMs == 0) {
             // If the total time is 0 then the ratio is 1 i.e. the fetch lock was acquired for the complete time.
             fetchLockToTotalTime = 1.0;
         } else if (acquiredDurationMs == 0) {
-            // If the acquired duration is 0 then the ratio is the time spent since the last lock acquisition.
-            fetchLockToTotalTime = 1.0 / timeSinceLastLockAcquisitionMs;
+            // If the acquired duration is 0 then the ratio is the calculated by the idle duration.
+            fetchLockToTotalTime = 1.0 / fetchLockIdleDurationMs;
         } else {
-            fetchLockToTotalTime = acquiredDurationMs * (1.0 / (acquiredDurationMs + timeSinceLastLockAcquisitionMs));
+            fetchLockToTotalTime = acquiredDurationMs * (1.0 / (acquiredDurationMs + fetchLockIdleDurationMs));
         }
         sharePartitionMetrics.recordFetchLockRatio((int) (fetchLockToTotalTime * 100));
     }
