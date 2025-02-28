@@ -1037,6 +1037,7 @@ project(':core') {
     testImplementation project(':test-common:test-common-util')
     testImplementation libs.bcpkix
     testImplementation libs.mockitoCore
+    testImplementation libs.jqwik
     testImplementation(libs.apacheda) {
       exclude group: 'xml-apis', module: 'xml-apis'
       // `mina-core` is a transitive dependency for `apacheds` and `apacheda`.
@@ -1229,6 +1230,12 @@ project(':core') {
     attributes(
       'Version': "${version}"
     )
+  }
+
+  test {
+    useJUnitPlatform {
+      includeEngines 'jqwik', 'junit-jupiter'
+    }
   }
 
   tasks.create(name: "copyDependantTestLibs", type: Copy) {
@@ -1802,6 +1809,7 @@ project(':clients') {
     testImplementation libs.jacksonJakartarsJsonProvider
     testImplementation libs.jose4j
     testImplementation libs.junitJupiter
+    testImplementation libs.jqwik
     testImplementation libs.spotbugs
     testImplementation libs.mockitoCore
     testImplementation libs.mockitoJunitJupiter // supports MockitoExtension

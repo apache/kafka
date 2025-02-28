@@ -601,7 +601,8 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
   private def consumerGroupHeartbeatRequest = new ConsumerGroupHeartbeatRequest.Builder(
     new ConsumerGroupHeartbeatRequestData()
       .setGroupId(group)
-      .setMemberEpoch(0)).build()
+      .setMemberEpoch(0)
+      .setSubscribedTopicNames(List(topic).asJava)).build()
 
   private def consumerGroupDescribeRequest = new ConsumerGroupDescribeRequest.Builder(
     new ConsumerGroupDescribeRequestData()
@@ -2492,11 +2493,12 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
 
   @ParameterizedTest
   @ValueSource(strings = Array("kraft"))
-  def testConsumerGroupHeartbeatWithReadAcl(quorum: String): Unit = {
+  def testConsumerGroupHeartbeatWithGroupReadAndTopicDescribeAcl(quorum: String): Unit = {
     addAndVerifyAcls(groupReadAcl(groupResource), groupResource)
+    addAndVerifyAcls(topicDescribeAcl(topicResource), topicResource)
 
     val request = consumerGroupHeartbeatRequest
-    val resource = Set[ResourceType](GROUP)
+    val resource = Set[ResourceType](GROUP, TOPIC)
     sendRequestAndVerifyResponseError(request, resource, isAuthorized = true)
   }
 
@@ -2505,50 +2507,115 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
   def testConsumerGroupHeartbeatWithOperationAll(quorum: String): Unit = {
     val allowAllOpsAcl = new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, ALL, ALLOW)
     addAndVerifyAcls(Set(allowAllOpsAcl), groupResource)
+    addAndVerifyAcls(Set(allowAllOpsAcl), topicResource)
 
     val request = consumerGroupHeartbeatRequest
-    val resource = Set[ResourceType](GROUP)
+    val resource = Set[ResourceType](GROUP, TOPIC)
     sendRequestAndVerifyResponseError(request, resource, isAuthorized = true)
   }
 
   @ParameterizedTest
   @ValueSource(strings = Array("kraft"))
-  def testConsumerGroupHeartbeatWithoutReadAcl(quorum: String): Unit = {
+  def testConsumerGroupHeartbeatWithoutGroupReadOrTopicDescribeAcl(quorum: String): Unit = {
     removeAllClientAcls()
 
     val request = consumerGroupHeartbeatRequest
-    val resource = Set[ResourceType](GROUP)
+    val resource = Set[ResourceType](GROUP, TOPIC)
     sendRequestAndVerifyResponseError(request, resource, isAuthorized = false)
   }
 
   @ParameterizedTest
   @ValueSource(strings = Array("kraft"))
-  def testConsumerGroupDescribeWithDescribeAcl(quorum: String): Unit = {
+  def testConsumerGroupHeartbeatWithoutGroupReadAcl(quorum: String): Unit = {
+    addAndVerifyAcls(topicDescribeAcl(topicResource), topicResource)
+
+    val request = consumerGroupHeartbeatRequest
+
+    val resource = Set[ResourceType](GROUP, TOPIC)
+    sendRequestAndVerifyResponseError(request, resource, isAuthorized = false)
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
+  def testConsumerGroupHeartbeatWithoutTopicDescribeAcl(quorum: String): Unit = {
+    addAndVerifyAcls(groupReadAcl(groupResource), groupResource)
+
+    val request = consumerGroupHeartbeatRequest
+
+    val resource = Set[ResourceType](GROUP, TOPIC)
+    sendRequestAndVerifyResponseError(request, resource, isAuthorized = false)
+  }
+
+  private def createConsumerGroupToDescribe(): Unit = {
+    createTopicWithBrokerPrincipal(topic)
+    addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, READ, ALLOW)), groupResource)
+    addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, READ, ALLOW)), topicResource)
+    consumerConfig.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, "consumer")
+    consumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, group)
+    val consumer = createConsumer()
+    consumer.subscribe(Collections.singleton(topic))
+    consumer.poll(Duration.ofMillis(500L))
+    removeAllClientAcls()
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
+  def testConsumerGroupDescribeWithGroupDescribeAndTopicDescribeAcl(quorum: String): Unit = {
+    createConsumerGroupToDescribe()
+
     addAndVerifyAcls(groupDescribeAcl(groupResource), groupResource)
+    addAndVerifyAcls(topicDescribeAcl(topicResource), topicResource)
 
     val request = consumerGroupDescribeRequest
-    val resource = Set[ResourceType](GROUP)
+    val resource = Set[ResourceType](GROUP, TOPIC)
     sendRequestAndVerifyResponseError(request, resource, isAuthorized = true)
   }
 
   @ParameterizedTest
   @ValueSource(strings = Array("kraft"))
   def testConsumerGroupDescribeWithOperationAll(quorum: String): Unit = {
+    createConsumerGroupToDescribe()
+
     val allowAllOpsAcl = new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, ALL, ALLOW)
     addAndVerifyAcls(Set(allowAllOpsAcl), groupResource)
+    addAndVerifyAcls(Set(allowAllOpsAcl), topicResource)
 
     val request = consumerGroupDescribeRequest
-    val resource = Set[ResourceType](GROUP)
+    val resource = Set[ResourceType](GROUP, TOPIC)
     sendRequestAndVerifyResponseError(request, resource, isAuthorized = true)
   }
 
   @ParameterizedTest
   @ValueSource(strings = Array("kraft"))
-  def testConsumerGroupDescribeWithoutDescribeAcl(quorum: String): Unit = {
-    removeAllClientAcls()
+  def testConsumerGroupDescribeWithoutGroupDescribeAcl(quorum: String): Unit = {
+    createConsumerGroupToDescribe()
+
+    addAndVerifyAcls(topicDescribeAcl(topicResource), topicResource)
 
     val request = consumerGroupDescribeRequest
-    val resource = Set[ResourceType](GROUP)
+    val resource = Set[ResourceType](GROUP, TOPIC)
+    sendRequestAndVerifyResponseError(request, resource, isAuthorized = false)
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
+  def testConsumerGroupDescribeWithoutTopicDescribeAcl(quorum: String): Unit = {
+    createConsumerGroupToDescribe()
+
+    addAndVerifyAcls(groupDescribeAcl(groupResource), groupResource)
+
+    val request = consumerGroupDescribeRequest
+    val resource = Set[ResourceType](GROUP, TOPIC)
+    sendRequestAndVerifyResponseError(request, resource, isAuthorized = false)
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
+  def testConsumerGroupDescribeWithoutGroupDescribeOrTopicDescribeAcl(quorum: String): Unit = {
+    createConsumerGroupToDescribe()
+
+    val request = consumerGroupDescribeRequest
+    val resource = Set[ResourceType](GROUP, TOPIC)
     sendRequestAndVerifyResponseError(request, resource, isAuthorized = false)
   }
 
