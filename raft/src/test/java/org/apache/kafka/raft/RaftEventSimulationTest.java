@@ -146,13 +146,12 @@ public class RaftEventSimulationTest {
         Cluster cluster = new Cluster(numVoters, numObservers, random, true);
         MessageRouter router = new MessageRouter(cluster);
         EventScheduler scheduler = schedulerWithKip853Invariants(cluster);
+        Set<Integer> expectedVoterIds = new HashSet<>(cluster.initialVoters.keySet());
 
         initializeClusterAndStartAppending(cluster, router, scheduler, 10);
-        int firstObserverId = numVoters;
-        scheduler.schedule(new AddVoterAction(cluster, cluster.running.get(firstObserverId)), 0, 5, 3);
-        scheduler.runUntil(() -> cluster.leaderWithMaxEpoch().get().client.partitionState().lastVoterSet().size() == numVoters + 1);
-        VoterSet latestVoterSet = cluster.leaderWithMaxEpoch().get().client.partitionState().lastVoterSet();
-        scheduler.runUntil(() -> cluster.allHaveLatestVoterSet(latestVoterSet));
+
+        addVoter(cluster, scheduler, numVoters, expectedVoterIds);
+        runUntilNewHighWatermark(cluster, scheduler);
     }
 
     @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
@@ -165,14 +164,13 @@ public class RaftEventSimulationTest {
         Cluster cluster = new Cluster(numVoters, numObservers, random, true);
         MessageRouter router = new MessageRouter(cluster);
         EventScheduler scheduler = schedulerWithKip853Invariants(cluster);
+        Set<Integer> expectedVoterIds = new HashSet<>(cluster.initialVoters.keySet());
 
         initializeClusterAndStartAppending(cluster, router, scheduler, 10);
 
         // Schedule all the observers to be added as voters
         for (int voterIdToAdd = numVoters; voterIdToAdd < numVoters + numObservers; voterIdToAdd++) {
-            int nextVoterSetSize = voterIdToAdd + 1;
-            scheduler.schedule(new AddVoterAction(cluster, cluster.running.get(voterIdToAdd)), 0, 5, 3);
-            scheduler.runUntil(() -> cluster.leaderWithMaxEpoch().get().client.partitionState().lastVoterSet().size() == nextVoterSetSize);
+            addVoter(cluster, scheduler, voterIdToAdd, expectedVoterIds);
         }
         int voterSetSize = numVoters + numObservers;
 
@@ -197,13 +195,12 @@ public class RaftEventSimulationTest {
         Cluster cluster = new Cluster(numVoters, numObservers, random, true);
         MessageRouter router = new MessageRouter(cluster);
         EventScheduler scheduler = schedulerWithKip853Invariants(cluster);
+        Set<Integer> expectedVoterIds = new HashSet<>(cluster.initialVoters.keySet());
 
         initializeClusterAndStartAppending(cluster, router, scheduler, 2);
 
-        scheduler.schedule(new RemoveVoterAction(cluster, cluster.running.get(random.nextInt(numVoters))), 0, 5, 3);
-        scheduler.runUntil(() -> cluster.leaderWithMaxEpoch().get().client.partitionState().lastVoterSet().size() == numVoters - 1);
-        VoterSet latestVoterSet = cluster.leaderWithMaxEpoch().get().client.partitionState().lastVoterSet();
-        scheduler.runUntil(() -> cluster.allHaveLatestVoterSet(latestVoterSet));
+        removeVoter(cluster, scheduler, random.nextInt(numVoters), expectedVoterIds);
+        runUntilNewHighWatermark(cluster, scheduler);
     }
 
     @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
@@ -361,6 +358,7 @@ public class RaftEventSimulationTest {
         Cluster cluster = new Cluster(numVoters, numObservers, random, true);
         MessageRouter router = new MessageRouter(cluster);
         EventScheduler scheduler = schedulerWithKip853Invariants(cluster);
+        Set<Integer> expectedVoterIds = new HashSet<>(cluster.initialVoters.keySet());
 
         initializeClusterAndStartAppending(cluster, router, scheduler, 10);
 
@@ -397,8 +395,7 @@ public class RaftEventSimulationTest {
         );
 
         // Verify we can add a voter, since a majority is still reachable
-        scheduler.schedule(new AddVoterAction(cluster, cluster.running.get(firstObserverId)), 0, 10, 3);
-        scheduler.runUntil(() -> cluster.leaderWithMaxEpoch().get().client.partitionState().lastVoterSet().size() == numVoters + 1);
+        addVoter(cluster, scheduler, firstObserverId, expectedVoterIds);
 
         // Now restore the partition and verify everyone catches up
         router.filter(0, new PermitAllTraffic());
@@ -410,7 +407,6 @@ public class RaftEventSimulationTest {
 
         long restoredLogEndOffset = cluster.maxLogEndOffset();
         scheduler.runUntil(() -> cluster.allReachedHighWatermark(2 * restoredLogEndOffset));
-        scheduler.runUntil(() -> cluster.allHaveLatestVoterSet(cluster.leaderWithMaxEpoch().get().client.partitionState().lastVoterSet()));
     }
 
     @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
@@ -580,6 +576,30 @@ public class RaftEventSimulationTest {
         scheduler.runUntil(() -> cluster.allReachedHighWatermark(highWatermarkBeforeRestart + 10));
     }
 
+    @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
+    void canSwapPartitionedVoterForObserver(
+        @ForAll int seed,
+        @ForAll @IntRange(min = 3, max = 5) int numVoters
+    ) {
+        Random random = new Random(seed);
+        Cluster cluster = new Cluster(numVoters, 1, random, true);
+        MessageRouter router = new MessageRouter(cluster);
+        EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
+        Set<Integer> expectedVoterIds = new HashSet<>(cluster.initialVoters.keySet());
+
+        initializeClusterAndStartAppending(cluster, router, scheduler, 10);
+
+        // Partition a random voter, and wait for a consistent leader before attempting to remove it
+        RaftNode voterToRemove = cluster.running.get(random.nextInt(numVoters));
+        router.filter(voterToRemove.id(), new DropAllTraffic());
+        scheduler.runUntil(cluster::hasConsistentLeader);
+
+        removeVoter(cluster, scheduler, voterToRemove.id(), expectedVoterIds);
+
+        addVoter(cluster, scheduler, numVoters, expectedVoterIds);
+        runUntilNewHighWatermarkOnVoterNodes(cluster, scheduler, expectedVoterIds);
+    }
+
     /**
      * This method initializes the cluster and starts appending to the log.
      * @param appendActionPeriodMs - the period at which the append action should be scheduled, in milliseconds
@@ -594,6 +614,28 @@ public class RaftEventSimulationTest {
         scheduler.schedule(new SequentialAppendAction(cluster), 0, appendActionPeriodMs, 3);
         scheduler.runUntil(cluster::hasConsistentLeader);
         scheduler.runUntil(() -> cluster.anyReachedHighWatermark(10));
+    }
+
+    private void runUntilNewHighWatermark(Cluster cluster, EventScheduler scheduler) {
+        long highWatermark = cluster.maxHighWatermarkReached();
+        scheduler.runUntil(() -> cluster.allReachedHighWatermark(highWatermark + 10));
+    }
+
+    private void runUntilNewHighWatermarkOnVoterNodes(Cluster cluster, EventScheduler scheduler, Set<Integer> aliveNodes) {
+        long highWatermark = cluster.maxHighWatermarkReached();
+        scheduler.runUntil(() -> cluster.allReachedHighWatermark(highWatermark + 10, aliveNodes));
+    }
+
+    private void addVoter(Cluster cluster, EventScheduler scheduler, int idToAdd, Set<Integer> expectedVoterIds) {
+        scheduler.schedule(new AddVoterAction(cluster, cluster.running.get(idToAdd)), 0, 5, 3);
+        expectedVoterIds.add(idToAdd);
+        scheduler.runUntil(() -> cluster.leaderHasNextExpectedVoterSet(expectedVoterIds));
+    }
+
+    private void removeVoter(Cluster cluster, EventScheduler scheduler, int idToRemove, Set<Integer> expectedVoterIds) {
+        scheduler.schedule(new RemoveVoterAction(cluster, cluster.running.get(idToRemove)), 0, 5, 3);
+        expectedVoterIds.remove(idToRemove);
+        scheduler.runUntil(() -> cluster.leaderHasNextExpectedVoterSet(expectedVoterIds));
     }
 
     private EventScheduler schedulerWithDefaultInvariants(Cluster cluster) {
@@ -945,9 +987,13 @@ public class RaftEventSimulationTest {
                 .allMatch(node -> node.highWatermark() >= offset);
         }
 
-        boolean allHaveLatestVoterSet(VoterSet latestVoterSet) {
-            return running.values().stream()
-                .allMatch(node -> node.client.partitionState().lastVoterSet().equals(latestVoterSet));
+        boolean leaderHasNextExpectedVoterSet(Set<Integer> voterIds) {
+            Optional<RaftNode> leader = leaderWithMaxEpoch();
+            if (leader.isEmpty()) {
+                return false;
+            } else {
+                return leader.get().client.partitionState().lastVoterSet().voterIds().equals(voterIds);
+            }
         }
 
         boolean hasLeader(int nodeId) {
@@ -1201,7 +1247,7 @@ public class RaftEventSimulationTest {
                     client.poll();
                 } while (client.isRunning() && !messageQueue.isEmpty());
             } catch (Exception e) {
-                throw new RuntimeException("Uncaught exception during poll of node " + nodeId, e);
+                throw new RuntimeException("Uncaught exception during poll of node " + nodeId + ": " + e, e);
             }
         }
 
