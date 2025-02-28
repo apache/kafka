@@ -1355,13 +1355,20 @@ public class SharePartition {
         return leaderEpoch;
     }
 
+    /**
+     * Records the fetch lock ratio metric. The metric is the ratio of the time the fetch lock was
+     * acquired to the total time since the last lock acquisition. The total time is calculated by
+     * adding the time since the last lock acquisition to the time the fetch lock was acquired.
+     *
+     * @param acquiredTime The time duration the fetch lock was acquired.
+     */
     // Visible for testing
     void recordFetchLockRatioMetric(long acquiredTime) {
         // Update the total fetch lock acquired time.
         double fetchLockToTotalTime;
         if (acquiredTime + timeSinceLastLockAcquisitionMs == 0) {
             // If the total time is 0 then the ratio is 1 i.e. the fetch lock was acquired for the complete time.
-            fetchLockToTotalTime = 1;
+            fetchLockToTotalTime = 1.0;
         } else if (acquiredTime == 0) {
             // If the acquired time is 0 then the ratio is the time spent since the last lock acquisition.
             fetchLockToTotalTime = 1.0 / timeSinceLastLockAcquisitionMs;
