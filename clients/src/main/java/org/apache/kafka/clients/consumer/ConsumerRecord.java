@@ -27,6 +27,8 @@ import java.util.Optional;
  * A key/value pair to be received from Kafka. This also consists of a topic name and 
  * a partition number from which the record is being received, an offset that points 
  * to the record in a Kafka partition, and a timestamp as marked by the corresponding ProducerRecord.
+ *
+ * This class is not thread-safe!
  */
 public class ConsumerRecord<K, V> {
     public static final long NO_TIMESTAMP = RecordBatch.NO_TIMESTAMP;
