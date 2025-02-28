@@ -17,6 +17,7 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.clients.admin.internals.DeleteGroupsResult;
 import org.apache.kafka.common.KafkaFuture;
 
 import java.util.Collection;

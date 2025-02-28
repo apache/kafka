@@ -14,8 +14,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.admin;
+package org.apache.kafka.clients.admin.internals;
 
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
@@ -33,7 +34,7 @@ import java.util.Map;
 public abstract class DeleteGroupsResult {
     private final Map<String, KafkaFuture<Void>> futures;
 
-    DeleteGroupsResult(final Map<String, KafkaFuture<Void>> futures) {
+    public DeleteGroupsResult(final Map<String, KafkaFuture<Void>> futures) {
         this.futures = futures;
     }
 
