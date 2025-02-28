@@ -42,7 +42,7 @@ Follow instructions in https://kafka.apache.org/quickstart
     ./gradlew test  # runs both unit and integration tests
     ./gradlew unitTest
     ./gradlew integrationTest
-    ./gradlew test -Pkafka.test.run.flaky=true
+    ./gradlew test -Pkafka.test.run.flaky=true  # runs tests that are marked as flaky
 
     
 ### Force re-running tests without code change ###
@@ -76,7 +76,6 @@ Retries are disabled by default, but you can set maxTestRetryFailures and maxTes
 The following example declares -PmaxTestRetries=1 and -PmaxTestRetryFailures=3 to enable a failed test to be retried once, with a total retry limit of 3.
 
     ./gradlew test -PmaxTestRetries=1 -PmaxTestRetryFailures=3
-    ./gradlew test -Pkafka.test.run.flaky=true -PmaxTestRetries=1 -PmaxTestRetryFailures=3
 
 See [Test Retry Gradle Plugin](https://github.com/gradle/test-retry-gradle-plugin) for and [build.yml](.github/workflows/build.yml) more details.
 
