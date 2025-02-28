@@ -1364,6 +1364,13 @@ public class SharePartition {
      */
     // Visible for testing
     void recordFetchLockRatioMetric(long acquiredTime) {
+        if (timeSinceLastLockAcquisitionMs < 0) {
+            // This is just a safe check to avoid negative time since last lock acquisition. This
+            // should not happen in any scenarios. If it does then just return from the method and
+            // no metric update is an indicator of the issue.
+            return;
+        }
+
         // Update the total fetch lock acquired time.
         double fetchLockToTotalTime;
         if (acquiredTime + timeSinceLastLockAcquisitionMs == 0) {
