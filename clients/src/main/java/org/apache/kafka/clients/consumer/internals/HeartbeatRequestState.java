@@ -21,8 +21,10 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 
 /**
- * Represents the state of a heartbeat request, including logic for timing, retries, and exponential backoff. The object extends
- * {@link org.apache.kafka.clients.consumer.internals.RequestState} to enable exponential backoff and duplicated request handling. The two fields that it holds are:
+ * Represents the state of a heartbeat request, including logic for timing, retries, and exponential backoff.
+ *
+ * The class extends {@link org.apache.kafka.clients.consumer.internals.RequestState} to enable exponential backoff
+ * and duplicated request handling.
  */
 public class HeartbeatRequestState extends RequestState {
 
@@ -69,12 +71,16 @@ public class HeartbeatRequestState extends RequestState {
         return heartbeatTimer.remainingMs();
     }
 
+    /**
+     * @inheritDoc
+     *
+     * Adds to the overridden method the reset of the heartbeat timer to a zero interval which allows sending
+     * heartbeats after a failure without waiting for the interval.
+     * After a failure, a next heartbeat may be needed with backoff (ex. errors that lead to retries, like coordinator
+     * load error), or immediately (ex. errors that lead to rejoining, like fencing errors).
+     */
     @Override
     public void onFailedAttempt(final long currentTimeMs) {
-        // Reset timer to allow sending HB after a failure without waiting for the interval.
-        // After a failure, a next HB may be needed with backoff (ex. errors that lead to
-        // retries, like coordinator load error), or immediately (ex. errors that lead to
-        // rejoining, like fencing errors).
         heartbeatTimer.reset(0);
         super.onFailedAttempt(currentTimeMs);
     }
