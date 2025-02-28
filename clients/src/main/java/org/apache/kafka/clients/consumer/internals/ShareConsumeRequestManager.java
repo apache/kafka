@@ -527,8 +527,12 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
      * Enqueue an AcknowledgeRequestState to be picked up on the next poll.
      *
      * @param acknowledgementsMap The acknowledgements to commit
+     * @param deadlineMs          Time until which the request will be retried if it fails with
+     *                            an expected retriable error.
      */
-    public void commitAsync(final Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap) {
+    public void commitAsync(
+            final Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap,
+            final long deadlineMs) {
         final Cluster cluster = metadata.fetch();
         final ResultHandler resultHandler = new ResultHandler(Optional.empty());
 
@@ -552,7 +556,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                             if (asyncRequestState == null) {
                                 acknowledgeRequestStates.get(nodeId).setAsyncRequest(new AcknowledgeRequestState(logContext,
                                         ShareConsumeRequestManager.class.getSimpleName() + ":2",
-                                        Long.MAX_VALUE,
+                                        deadlineMs,
                                         retryBackoffMs,
                                         retryBackoffMaxMs,
                                         sessionHandler,

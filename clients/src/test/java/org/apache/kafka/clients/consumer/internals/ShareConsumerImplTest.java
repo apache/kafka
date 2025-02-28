@@ -164,7 +164,7 @@ public class ShareConsumerImplTest {
                 new Metrics(),
                 subscriptions,
                 metadata,
-                defaultApiTimeoutMs,
+                Duration.ofMillis(defaultApiTimeoutMs),
                 groupId
         );
     }
