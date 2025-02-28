@@ -181,7 +181,7 @@ jobs:
         foo: [1, 2, 3, 4, 5, 6]
 
     env:
-      job-variation: ${{ matrix.java }}-${{ matrix.run-flaky == true && 'flaky' || 'noflaky' }}-${{ matrix.run-new == true && 'new' || 'nonew' }}
+      job-variation: ${{ matrix.java }}-${{ matrix.foo }}-${{ matrix.run-flaky == true && 'flaky' || 'noflaky' }}-${{ matrix.run-new == true && 'new' || 'nonew' }}
     name: JUnit tests Java ${{ matrix.java }}${{ matrix.run-flaky == true && ' (flaky)' || '' }}${{ matrix.run-new == true && ' (new)' || '' }}
     steps:
       - name: Checkout code
