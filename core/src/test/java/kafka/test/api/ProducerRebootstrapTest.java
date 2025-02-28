@@ -17,6 +17,7 @@
 
 package kafka.test.api;
 
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -54,15 +55,15 @@ public class ProducerRebootstrapTest {
     static Map<String, String> getRebootstrapConfig(boolean useRebootstrapTriggerMs) {
         Map<String, String> properties = new HashMap<>();
         if (useRebootstrapTriggerMs) {
-            properties.put("metadata.recovery.rebootstrap.trigger.ms", "5000");
+            properties.put(CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_CONFIG, "5000");
         } else {
-            properties.put("metadata.recovery.rebootstrap.trigger.ms", "3600000");
-            properties.put("socket.connection.setup.timeout.ms", "5000");
-            properties.put("socket.connection.setup.timeout.max.ms", "5000");
-            properties.put("reconnect.backoff.ms", "1000");
-            properties.put("reconnect.backoff.max.ms", "1000");
+            properties.put(CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_CONFIG, "3600000");
+            properties.put(CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG, "5000");
+            properties.put(CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG, "5000");
+            properties.put(CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG, "1000");
+            properties.put(CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_CONFIG, "1000");
         }
-        properties.put("metadata.recovery.strategy", "rebootstrap");
+        properties.put(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG, "rebootstrap");
         properties.putIfAbsent(ProducerConfig.ACKS_CONFIG, "-1");
         return properties;
     }
