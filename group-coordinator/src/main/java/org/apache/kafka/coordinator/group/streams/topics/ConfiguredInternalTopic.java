@@ -56,12 +56,11 @@ public record ConfiguredInternalTopic(String name,
             .setPartitions(numberOfPartitions)
             .setReplicationFactor(replicationFactor.orElse((short) 0))
             .setTopicConfigs(
-                topicConfigs != null ?
-                    topicConfigs.entrySet().stream().map(
-                        y -> new StreamsGroupDescribeResponseData.KeyValue()
-                            .setKey(y.getKey())
-                            .setValue(y.getValue())
-                    ).toList() : null
+                topicConfigs.entrySet().stream().map(
+                    y -> new StreamsGroupDescribeResponseData.KeyValue()
+                        .setKey(y.getKey())
+                        .setValue(y.getValue())
+                ).toList()
             );
     }
 
