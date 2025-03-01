@@ -47,7 +47,9 @@ class Snapshot {
     }
 
     void setDelta(Revertable owner, Delta delta) {
-        map.put(owner, delta);
+        if (map != null) {
+            map.put(owner, delta);
+        }
     }
 
     void handleRevert() {
