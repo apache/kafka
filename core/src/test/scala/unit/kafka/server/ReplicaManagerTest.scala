@@ -39,6 +39,9 @@ import org.apache.kafka.common.message.{DeleteRecordsResponseData, ShareFetchRes
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.metadata.{PartitionChangeRecord, PartitionRecord, RemoveTopicRecord, TopicRecord}
 import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.common.metrics.Monitorable
+import org.apache.kafka.common.metrics.PluginMetrics
+import org.apache.kafka.common.metrics.internals.PluginMetricsImpl
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record._
@@ -69,7 +72,7 @@ import org.apache.kafka.server.util.timer.MockTimer
 import org.apache.kafka.server.util.{MockScheduler, MockTime, Scheduler}
 import org.apache.kafka.storage.internals.checkpoint.LazyOffsetCheckpoints
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
-import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, LocalLog, LogConfig, LogDirFailureChannel, LogLoader, LogOffsetMetadata, LogOffsetSnapshot, LogSegments, ProducerStateManager, ProducerStateManagerConfig, RemoteStorageFetchInfo, UnifiedLog => JUnifiedLog, VerificationGuard}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, LocalLog, LogConfig, LogDirFailureChannel, LogLoader, LogOffsetMetadata, LogOffsetSnapshot, LogSegments, ProducerStateManager, ProducerStateManagerConfig, RemoteStorageFetchInfo, VerificationGuard, UnifiedLog => JUnifiedLog}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterAll, AfterEach, BeforeEach, Test}
@@ -1659,7 +1662,7 @@ class ReplicaManagerTest {
 
       // PartitionView passed to ReplicaSelector should not contain the follower as it's not in the ISR
       val expectedReplicaViews = Set(new DefaultReplicaView(leaderNode, 1, 0))
-      val partitionView = replicaManager.replicaSelectorOpt.get.get
+      val partitionView = replicaManager.replicaSelectorPlugin.get.get
         .asInstanceOf[MockReplicaSelector].getPartitionViewArgument
 
       assertTrue(partitionView.isDefined)
@@ -1708,7 +1711,7 @@ class ReplicaManagerTest {
       assertTrue(consumerResult.hasFired)
 
       // Expect not run the preferred read replica selection
-      assertEquals(0, replicaManager.replicaSelectorOpt.get.get.asInstanceOf[MockReplicaSelector].getSelectionCount)
+      assertEquals(0, replicaManager.replicaSelectorPlugin.get.get.asInstanceOf[MockReplicaSelector].getSelectionCount)
 
       // Only leader will compute preferred replica
       assertTrue(!consumerResult.assertFired.preferredReadReplica.isPresent)
@@ -1892,7 +1895,7 @@ class ReplicaManagerTest {
       topicPartition, leaderEpoch + leaderEpochIncrement, followerBrokerId,
       leaderBrokerId, countDownLatch, expectTruncation = true)
     try {
-      assertFalse(replicaManager.replicaSelectorOpt.isDefined)
+      assertFalse(replicaManager.replicaSelectorPlugin.isDefined)
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }
@@ -6134,6 +6137,18 @@ class ReplicaManagerTest {
 
   }
 
+
+  @Test
+  def testMonitorableReplicaSelector(): Unit = {
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time),
+      propsModifier = props => props.put(ReplicationConfigs.REPLICA_SELECTOR_CLASS_CONFIG, classOf[MonitorableReplicaSelector].getName))
+    try {
+      assertTrue(replicaManager.replicaSelectorPlugin.get.get.asInstanceOf[MonitorableReplicaSelector].pluginMetrics)
+    } finally {
+      replicaManager.shutdown(checkpointHW = false)
+    }
+  }
+
   private def readFromLogWithOffsetOutOfRange(tp: TopicPartition): Seq[(TopicIdPartition, LogReadResult)] = {
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), aliveBrokerIds = Seq(0, 1, 2), enableRemoteStorage = true, shouldMockLog = true)
     try {
@@ -6211,5 +6226,14 @@ class MockReplicaSelector extends ReplicaSelector {
     selectionCount.incrementAndGet()
     partitionViewArgument = Some(partitionView)
     Optional.of(partitionView.leader)
+  }
+}
+
+
+class MonitorableReplicaSelector extends MockReplicaSelector with Monitorable {
+  var pluginMetrics = false
+
+  override def withPluginMetrics(metrics: PluginMetrics): Unit = {
+    pluginMetrics = true
   }
 }
