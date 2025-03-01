@@ -339,6 +339,8 @@ public class ConfigurationControlManager {
                 return DISALLOWED_CLUSTER_MIN_ISR_REMOVAL_ERROR;
             } else if (configRecord.value() == null) {
                 allConfigs.remove(configRecord.name());
+            } else if (configRecord.value().length() > Short.MAX_VALUE) {
+                return DISALLOWED_CONFIG_VALUE_SIZE_ERROR;
             } else {
                 allConfigs.put(configRecord.name(), configRecord.value());
             }
@@ -384,6 +386,10 @@ public class ConfigurationControlManager {
     private static final ApiError DISALLOWED_CLUSTER_MIN_ISR_REMOVAL_ERROR =
         new ApiError(INVALID_CONFIG, "Cluster-level " + MIN_IN_SYNC_REPLICAS_CONFIG +
             " cannot be removed while ELR is enabled.");
+
+    private static final ApiError DISALLOWED_CONFIG_VALUE_SIZE_ERROR =
+            new ApiError(INVALID_CONFIG, "The configuration value cannot be added because " +
+                    "it exceeds the maximum value size of " + Short.MAX_VALUE + " bytes.");
 
     boolean isDisallowedBrokerMinIsrTransition(ConfigRecord configRecord) {
         if (configRecord.name().equals(MIN_IN_SYNC_REPLICAS_CONFIG) &&
