@@ -362,7 +362,7 @@ public class BootstrapControllersIntegrationTest {
                     "123456"))
             ).all().get();
             TestUtils.waitForCondition(() -> adminUsingController.describeUserScramCredentials().all().get().size() == 1,
-                "Alter user scram credential timeout");
+                "Should get one user credential from controller");
             Map<String, UserScramCredentialsDescription> nameToUserCredentials = adminUsingController.describeUserScramCredentials().all().get();
             UserScramCredentialsDescription userCredential = nameToUserCredentials.get(targetUserName);
             assertNotNull(userCredential);
