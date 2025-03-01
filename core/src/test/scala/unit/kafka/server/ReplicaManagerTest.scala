@@ -1659,7 +1659,7 @@ class ReplicaManagerTest {
 
       // PartitionView passed to ReplicaSelector should not contain the follower as it's not in the ISR
       val expectedReplicaViews = Set(new DefaultReplicaView(leaderNode, 1, 0))
-      val partitionView = replicaManager.replicaSelectorOpt.get
+      val partitionView = replicaManager.replicaSelectorOpt.get.get
         .asInstanceOf[MockReplicaSelector].getPartitionViewArgument
 
       assertTrue(partitionView.isDefined)
@@ -1708,7 +1708,7 @@ class ReplicaManagerTest {
       assertTrue(consumerResult.hasFired)
 
       // Expect not run the preferred read replica selection
-      assertEquals(0, replicaManager.replicaSelectorOpt.get.asInstanceOf[MockReplicaSelector].getSelectionCount)
+      assertEquals(0, replicaManager.replicaSelectorOpt.get.get.asInstanceOf[MockReplicaSelector].getSelectionCount)
 
       // Only leader will compute preferred replica
       assertTrue(!consumerResult.assertFired.preferredReadReplica.isPresent)
