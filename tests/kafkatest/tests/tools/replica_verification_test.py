@@ -68,7 +68,7 @@ class ReplicaVerificationToolTest(Test):
 
     @cluster(num_nodes=6)
     @matrix(metadata_quorum=quorum.all_non_upgrade)
-    def test_replica_lags(self, security_protocol='PLAINTEXT', metadata_quorum=quorum.zk):
+    def test_replica_lags(self, security_protocol='PLAINTEXT', metadata_quorum=quorum.all_non_upgrade):
         """
         Tests ReplicaVerificationTool
         :return: None
