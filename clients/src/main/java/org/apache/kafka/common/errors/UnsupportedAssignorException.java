@@ -16,9 +16,6 @@
  */
 package org.apache.kafka.common.errors;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
-
-@InterfaceStability.Evolving
 public class UnsupportedAssignorException extends ApiException {
     public UnsupportedAssignorException(String message) {
         super(message);

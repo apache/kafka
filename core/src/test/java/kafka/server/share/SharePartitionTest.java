@@ -48,8 +48,10 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.GroupConfig;
 import org.apache.kafka.coordinator.group.GroupConfigManager;
 import org.apache.kafka.coordinator.group.ShareGroupAutoOffsetResetStrategy;
+import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch;
 import org.apache.kafka.server.share.fetch.ShareAcquiredRecords;
+import org.apache.kafka.server.share.metrics.SharePartitionMetrics;
 import org.apache.kafka.server.share.persister.NoOpStatePersister;
 import org.apache.kafka.server.share.persister.PartitionFactory;
 import org.apache.kafka.server.share.persister.Persister;
@@ -64,6 +66,8 @@ import org.apache.kafka.server.util.timer.SystemTimerReaper;
 import org.apache.kafka.server.util.timer.Timer;
 import org.apache.kafka.storage.internals.log.OffsetResultHolder;
 import org.apache.kafka.test.TestUtils;
+
+import com.yammer.metrics.core.Gauge;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -96,6 +100,8 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class SharePartitionTest {
 
@@ -104,7 +110,6 @@ public class SharePartitionTest {
     private static final int MAX_DELIVERY_COUNT = 5;
     private static final TopicIdPartition TOPIC_ID_PARTITION = new TopicIdPartition(Uuid.randomUuid(), 0, "test-topic");
     private static final String MEMBER_ID = "member-1";
-    private static Timer mockTimer;
     private static final Time MOCK_TIME = new MockTime();
     private static final short MAX_IN_FLIGHT_MESSAGES = 200;
     private static final int ACQUISITION_LOCK_TIMEOUT_MS = 100;
@@ -113,16 +118,21 @@ public class SharePartitionTest {
     private static final int DEFAULT_FETCH_OFFSET = 0;
     private static final int MAX_FETCH_RECORDS = Integer.MAX_VALUE;
     private static final byte ACKNOWLEDGE_TYPE_GAP_ID = 0;
+    private static Timer mockTimer;
+    private SharePartitionMetrics sharePartitionMetrics;
 
     @BeforeEach
     public void setUp() {
+        kafka.utils.TestUtils.clearYammerMetrics();
         mockTimer = new SystemTimerReaper("share-group-lock-timeout-test-reaper",
             new SystemTimer("share-group-lock-test-timeout"));
+        sharePartitionMetrics = new SharePartitionMetrics(GROUP_ID, TOPIC_ID_PARTITION.topic(), TOPIC_ID_PARTITION.partition());
     }
 
     @AfterEach
     public void tearDown() throws Exception {
         mockTimer.close();
+        sharePartitionMetrics.close();
     }
 
     @Test
@@ -165,7 +175,7 @@ public class SharePartitionTest {
     }
 
     @Test
-    public void testMaybeInitialize() {
+    public void testMaybeInitialize() throws InterruptedException {
         Persister persister = Mockito.mock(Persister.class);
         ReadShareGroupStateResult readShareGroupStateResult = Mockito.mock(ReadShareGroupStateResult.class);
         Mockito.when(readShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
@@ -175,7 +185,10 @@ public class SharePartitionTest {
                         new PersisterStateBatch(5L, 10L, RecordState.AVAILABLE.id, (short) 2),
                         new PersisterStateBatch(11L, 15L, RecordState.ARCHIVED.id, (short) 3)))))));
         Mockito.when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
-        SharePartition sharePartition = SharePartitionBuilder.builder().withPersister(persister).build();
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withPersister(persister)
+            .withSharePartitionMetrics(sharePartitionMetrics)
+            .build();
 
         CompletableFuture<Void> result = sharePartition.maybeInitialize();
         assertTrue(result.isDone());
@@ -201,6 +214,15 @@ public class SharePartitionTest {
         assertEquals(RecordState.ARCHIVED, sharePartition.cachedState().get(11L).batchState());
         assertEquals(3, sharePartition.cachedState().get(11L).batchDeliveryCount());
         assertNull(sharePartition.cachedState().get(11L).offsetState());
+
+        TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_BATCH_COUNT).intValue() == 2,
+            "In-flight batch count should be 2.");
+        TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_MESSAGE_COUNT).longValue() == 11,
+            "In-flight message count should be 11.");
+        assertEquals(11, sharePartitionMetrics.inFlightBatchMessageCount().sum());
+        assertEquals(2, sharePartitionMetrics.inFlightBatchMessageCount().count());
+        assertEquals(5, sharePartitionMetrics.inFlightBatchMessageCount().min());
+        assertEquals(6, sharePartitionMetrics.inFlightBatchMessageCount().max());
     }
 
     @Test
@@ -304,7 +326,8 @@ public class SharePartitionTest {
     }
 
     @Test
-    public void testMaybeInitializeDefaultStartEpochGroupConfigReturnsByDuration() {
+    public void testMaybeInitializeDefaultStartEpochGroupConfigReturnsByDuration()
+        throws InterruptedException {
         Persister persister = Mockito.mock(Persister.class);
         ReadShareGroupStateResult readShareGroupStateResult = Mockito.mock(ReadShareGroupStateResult.class);
         Mockito.when(readShareGroupStateResult.topicsData()).thenReturn(Collections.singletonList(
@@ -332,7 +355,8 @@ public class SharePartitionTest {
 
         ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
 
-        FileRecords.TimestampAndOffset timestampAndOffset = new FileRecords.TimestampAndOffset(MOCK_TIME.milliseconds() - TimeUnit.HOURS.toMillis(1), 15L, Optional.empty());
+        FileRecords.TimestampAndOffset timestampAndOffset = new FileRecords.TimestampAndOffset(
+            MOCK_TIME.milliseconds() - TimeUnit.HOURS.toMillis(1), 15L, Optional.empty());
         Mockito.doReturn(new OffsetResultHolder(Optional.of(timestampAndOffset), Optional.empty())).
             when(replicaManager).fetchOffsetForTimestamp(Mockito.any(TopicPartition.class), Mockito.anyLong(), Mockito.any(), Mockito.any(), Mockito.anyBoolean());
 
@@ -340,6 +364,7 @@ public class SharePartitionTest {
             .withPersister(persister)
             .withGroupConfigManager(groupConfigManager)
             .withReplicaManager(replicaManager)
+            .withSharePartitionMetrics(sharePartitionMetrics)
             .build();
 
         CompletableFuture<Void> result = sharePartition.maybeInitialize();
@@ -359,6 +384,11 @@ public class SharePartitionTest {
         assertEquals(15, sharePartition.startOffset());
         assertEquals(15, sharePartition.endOffset());
         assertEquals(PartitionFactory.DEFAULT_STATE_EPOCH, sharePartition.stateEpoch());
+
+        TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_BATCH_COUNT).intValue() == 0,
+            "In-flight batch count should be 0.");
+        TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_MESSAGE_COUNT).longValue() == 0,
+            "In-flight message count should be 0.");
     }
 
     @Test
@@ -1063,8 +1093,11 @@ public class SharePartitionTest {
     }
 
     @Test
-    public void testAcquireSingleRecord() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
+    public void testAcquireSingleRecord() throws InterruptedException {
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withState(SharePartitionState.ACTIVE)
+            .withSharePartitionMetrics(sharePartitionMetrics)
+            .build();
         MemoryRecords records = memoryRecords(1);
 
         List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition, records, 1);
@@ -1078,11 +1111,20 @@ public class SharePartitionTest {
         assertEquals(MEMBER_ID, sharePartition.cachedState().get(0L).batchMemberId());
         assertEquals(1, sharePartition.cachedState().get(0L).batchDeliveryCount());
         assertNull(sharePartition.cachedState().get(0L).offsetState());
+
+        TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_BATCH_COUNT).intValue() == 1,
+            "In-flight batch count should be 1.");
+        TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_MESSAGE_COUNT).longValue() == 1,
+            "In-flight message count should be 1.");
+        assertEquals(1, sharePartitionMetrics.inFlightBatchMessageCount().sum());
     }
 
     @Test
-    public void testAcquireMultipleRecords() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
+    public void testAcquireMultipleRecords() throws InterruptedException {
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withState(SharePartitionState.ACTIVE)
+            .withSharePartitionMetrics(sharePartitionMetrics)
+            .build();
         MemoryRecords records = memoryRecords(5, 10);
 
         List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(sharePartition, records, 3L, 5);
@@ -1096,6 +1138,12 @@ public class SharePartitionTest {
         assertEquals(MEMBER_ID, sharePartition.cachedState().get(10L).batchMemberId());
         assertEquals(1, sharePartition.cachedState().get(10L).batchDeliveryCount());
         assertNull(sharePartition.cachedState().get(10L).offsetState());
+
+        TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_BATCH_COUNT).intValue() == 1,
+            "In-flight batch count should be 1.");
+        TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_MESSAGE_COUNT).longValue() == 5,
+            "In-flight message count should be 5.");
+        assertEquals(5, sharePartitionMetrics.inFlightBatchMessageCount().sum());
     }
 
     @Test
@@ -1145,8 +1193,11 @@ public class SharePartitionTest {
     }
 
     @Test
-    public void testAcquireWithMultipleBatchesAndMaxFetchRecords() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
+    public void testAcquireWithMultipleBatchesAndMaxFetchRecords() throws InterruptedException {
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withState(SharePartitionState.ACTIVE)
+            .withSharePartitionMetrics(sharePartitionMetrics)
+            .build();
 
         // Create 3 batches of records.
         ByteBuffer buffer = ByteBuffer.allocate(4096);
@@ -1177,6 +1228,12 @@ public class SharePartitionTest {
         assertEquals(MEMBER_ID, sharePartition.cachedState().get(10L).batchMemberId());
         assertEquals(1, sharePartition.cachedState().get(10L).batchDeliveryCount());
         assertNull(sharePartition.cachedState().get(10L).offsetState());
+
+        TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_BATCH_COUNT).intValue() == 1,
+            "In-flight batch count should be 1.");
+        TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_MESSAGE_COUNT).longValue() == 20,
+            "In-flight message count should be 20.");
+        assertEquals(20, sharePartitionMetrics.inFlightBatchMessageCount().sum());
     }
 
     @Test
@@ -1378,8 +1435,12 @@ public class SharePartitionTest {
     }
 
     @Test
-    public void testAcquireWithBatchSizeAndEndOffsetLargerThanBatchFirstOffset() {
-        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
+    public void testAcquireWithBatchSizeAndEndOffsetLargerThanBatchFirstOffset()
+        throws InterruptedException {
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withState(SharePartitionState.ACTIVE)
+            .withSharePartitionMetrics(sharePartitionMetrics)
+            .build();
         sharePartition.updateCacheAndOffsets(4L);
 
         // Create 2 batches of records.
@@ -1407,6 +1468,15 @@ public class SharePartitionTest {
         assertEquals(2, sharePartition.cachedState().size());
         assertTrue(sharePartition.cachedState().containsKey(4L));
         assertTrue(sharePartition.cachedState().containsKey(10L));
+
+        TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_BATCH_COUNT).intValue() == 2,
+            "In-flight batch count should be 2.");
+        TestUtils.waitForCondition(() -> yammerMetricValue(SharePartitionMetrics.IN_FLIGHT_MESSAGE_COUNT).longValue() == 13,
+            "In-flight message count should be 13.");
+        assertEquals(13, sharePartitionMetrics.inFlightBatchMessageCount().sum());
+        assertEquals(2, sharePartitionMetrics.inFlightBatchMessageCount().count());
+        assertEquals(6, sharePartitionMetrics.inFlightBatchMessageCount().min());
+        assertEquals(7, sharePartitionMetrics.inFlightBatchMessageCount().max());
     }
 
     @Test
@@ -1507,15 +1577,82 @@ public class SharePartitionTest {
         Mockito.doReturn(new OffsetResultHolder(Optional.of(timestampAndOffset), Optional.empty())).
             when(replicaManager).fetchOffsetForTimestamp(Mockito.any(TopicPartition.class), Mockito.anyLong(), Mockito.any(), Mockito.any(), Mockito.anyBoolean());
 
-        SharePartition sharePartition = SharePartitionBuilder.builder().withReplicaManager(replicaManager).build();
+        Time time = mock(Time.class);
+        when(time.hiResClockMs())
+            .thenReturn(100L) // for tracking loadTimeMs
+            .thenReturn(110L) // for time when lock is acquired
+            .thenReturn(120L) // for time when lock is released
+            .thenReturn(140L) // for subsequent lock acquire
+            .thenReturn(170L); // for subsequent lock release
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withReplicaManager(replicaManager)
+            .withTime(time)
+            .withSharePartitionMetrics(sharePartitionMetrics)
+            .build();
+
         sharePartition.maybeInitialize();
         assertTrue(sharePartition.maybeAcquireFetchLock());
         // Lock cannot be acquired again, as already acquired.
         assertFalse(sharePartition.maybeAcquireFetchLock());
         // Release the lock.
         sharePartition.releaseFetchLock();
+
+        assertEquals(1, sharePartitionMetrics.fetchLockTimeMs().count());
+        assertEquals(10, sharePartitionMetrics.fetchLockTimeMs().sum());
+        assertEquals(1, sharePartitionMetrics.fetchLockRatio().count());
+        // Since first request didn't have any lock idle wait time, the ratio should be 1.
+        assertEquals(100, sharePartitionMetrics.fetchLockRatio().mean());
+
         // Lock can be acquired again.
         assertTrue(sharePartition.maybeAcquireFetchLock());
+        // Release lock to update metrics and verify.
+        sharePartition.releaseFetchLock();
+
+        assertEquals(2, sharePartitionMetrics.fetchLockTimeMs().count());
+        assertEquals(40, sharePartitionMetrics.fetchLockTimeMs().sum());
+        assertEquals(2, sharePartitionMetrics.fetchLockRatio().count());
+        // Since the second request had 20ms of idle wait time, the ratio should be 0.6 and mean as 0.8.
+        assertEquals(80, sharePartitionMetrics.fetchLockRatio().mean());
+    }
+
+    @Test
+    public void testRecordFetchLockRatioMetric() {
+        Time time = mock(Time.class);
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withState(SharePartitionState.ACTIVE)
+            .withTime(time)
+            .withSharePartitionMetrics(sharePartitionMetrics)
+            .build();
+
+        // Acquired time and last lock acquisition time is 0;
+        sharePartition.recordFetchLockRatioMetric(0);
+        assertEquals(1, sharePartitionMetrics.fetchLockRatio().count());
+        assertEquals(100, sharePartitionMetrics.fetchLockRatio().mean());
+
+        when(time.hiResClockMs())
+            .thenReturn(10L) // for time when lock is acquired
+            .thenReturn(80L) // for time when lock is released
+            .thenReturn(160L); // to update lock idle duration while acquiring lock again.
+
+        assertTrue(sharePartition.maybeAcquireFetchLock());
+        sharePartition.releaseFetchLock();
+        // Acquired time is 70 but last lock acquisition time was still 0, as it's the first request
+        // when last acquisition time was recorded. The last acquisition time should be updated to 80.
+        assertEquals(2, sharePartitionMetrics.fetchLockRatio().count());
+        assertEquals(100, sharePartitionMetrics.fetchLockRatio().mean());
+
+        assertTrue(sharePartition.maybeAcquireFetchLock());
+        // Update metric again with 0 as acquire time and 80 as idle duration ms.
+        sharePartition.recordFetchLockRatioMetric(0);
+        assertEquals(3, sharePartitionMetrics.fetchLockRatio().count());
+        // Mean should be (100+100+1)/3 = 67, as when idle duration is 80, the ratio should be 1.
+        assertEquals(67, sharePartitionMetrics.fetchLockRatio().mean());
+
+        // Update metric again with 10 as acquire time and 80 as idle duration ms.
+        sharePartition.recordFetchLockRatioMetric(10);
+        assertEquals(4, sharePartitionMetrics.fetchLockRatio().count());
+        // Mean should be (100+100+1+11)/4 = 53, as when idle time is 80 and acquire time 10, the ratio should be 11.
+        assertEquals(53, sharePartitionMetrics.fetchLockRatio().mean());
     }
 
     @Test
@@ -2762,6 +2899,7 @@ public class SharePartitionTest {
         SharePartition sharePartition = SharePartitionBuilder.builder()
             .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
             .withState(SharePartitionState.ACTIVE)
+            .withSharePartitionMetrics(sharePartitionMetrics)
             .build();
         fetchAcquiredRecords(sharePartition, memoryRecords(1), 1);
 
@@ -2777,6 +2915,9 @@ public class SharePartitionTest {
                         sharePartition.timer().size() == 0,
                 DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
                 () -> ACQUISITION_LOCK_NEVER_GOT_RELEASED);
+
+        assertEquals(1, sharePartitionMetrics.acquisitionLockTimeoutPerSec().count());
+        assertTrue(sharePartitionMetrics.acquisitionLockTimeoutPerSec().meanRate() > 0);
     }
 
     @Test
@@ -2784,6 +2925,7 @@ public class SharePartitionTest {
         SharePartition sharePartition = SharePartitionBuilder.builder()
             .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
             .withState(SharePartitionState.ACTIVE)
+            .withSharePartitionMetrics(sharePartitionMetrics)
             .build();
         fetchAcquiredRecords(sharePartition, memoryRecords(5, 10), 5);
 
@@ -2799,6 +2941,9 @@ public class SharePartitionTest {
                         && sharePartition.cachedState().get(10L).batchAcquisitionLockTimeoutTask() == null,
                 DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
                 () -> ACQUISITION_LOCK_NEVER_GOT_RELEASED);
+
+        assertEquals(5, sharePartitionMetrics.acquisitionLockTimeoutPerSec().count());
+        assertTrue(sharePartitionMetrics.acquisitionLockTimeoutPerSec().meanRate() > 0);
     }
 
     @Test
@@ -2806,6 +2951,7 @@ public class SharePartitionTest {
         SharePartition sharePartition = SharePartitionBuilder.builder()
             .withDefaultAcquisitionLockTimeoutMs(ACQUISITION_LOCK_TIMEOUT_MS)
             .withState(SharePartitionState.ACTIVE)
+            .withSharePartitionMetrics(sharePartitionMetrics)
             .build();
 
         fetchAcquiredRecords(sharePartition, memoryRecords(5, 0), 5);
@@ -2830,6 +2976,9 @@ public class SharePartitionTest {
                         sharePartition.cachedState().get(5L).batchAcquisitionLockTimeoutTask() == null,
                 DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
                 () -> ACQUISITION_LOCK_NEVER_GOT_RELEASED);
+
+        assertEquals(10, sharePartitionMetrics.acquisitionLockTimeoutPerSec().count());
+        assertTrue(sharePartitionMetrics.acquisitionLockTimeoutPerSec().meanRate() > 0);
     }
 
     @Test
@@ -6587,6 +6736,19 @@ public class SharePartitionTest {
         Mockito.when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
     }
 
+    private Number yammerMetricValue(String name) {
+        try {
+            Gauge gauge = (Gauge) KafkaYammerMetrics.defaultRegistry().allMetrics().entrySet().stream()
+                .filter(e -> e.getKey().getMBeanName().contains(name))
+                .findFirst()
+                .orElseThrow()
+                .getValue();
+            return (Number) gauge.value();
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
     private static class SharePartitionBuilder {
 
         private int defaultAcquisitionLockTimeoutMs = 30000;
@@ -6597,6 +6759,8 @@ public class SharePartitionTest {
         private ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
         private GroupConfigManager groupConfigManager = Mockito.mock(GroupConfigManager.class);
         private SharePartitionState state = SharePartitionState.EMPTY;
+        private Time time = MOCK_TIME;
+        private SharePartitionMetrics sharePartitionMetrics = Mockito.mock(SharePartitionMetrics.class);
 
         private SharePartitionBuilder withMaxInflightMessages(int maxInflightMessages) {
             this.maxInflightMessages = maxInflightMessages;
@@ -6633,14 +6797,24 @@ public class SharePartitionTest {
             return this;
         }
 
+        private SharePartitionBuilder withTime(Time time) {
+            this.time = time;
+            return this;
+        }
+
+        private SharePartitionBuilder withSharePartitionMetrics(SharePartitionMetrics sharePartitionMetrics) {
+            this.sharePartitionMetrics = sharePartitionMetrics;
+            return this;
+        }
+
         public static SharePartitionBuilder builder() {
             return new SharePartitionBuilder();
         }
 
         public SharePartition build() {
             return new SharePartition(GROUP_ID, TOPIC_ID_PARTITION, 0, maxInflightMessages, maxDeliveryCount,
-                    defaultAcquisitionLockTimeoutMs, mockTimer, MOCK_TIME, persister, replicaManager, groupConfigManager,
-                    state, Mockito.mock(SharePartitionListener.class));
+                    defaultAcquisitionLockTimeoutMs, mockTimer, time, persister, replicaManager, groupConfigManager,
+                    state, Mockito.mock(SharePartitionListener.class), sharePartitionMetrics);
         }
     }
 }
