@@ -112,6 +112,7 @@ class ControllerApis(
         case ApiKeys.ALTER_PARTITION_REASSIGNMENTS => handleAlterPartitionReassignments(request)
         case ApiKeys.LIST_PARTITION_REASSIGNMENTS => handleListPartitionReassignments(request)
         case ApiKeys.ALTER_USER_SCRAM_CREDENTIALS => handleAlterUserScramCredentials(request)
+        case ApiKeys.DESCRIBE_USER_SCRAM_CREDENTIALS => handleDescribeUserScramCredentials(request)
         case ApiKeys.CREATE_DELEGATION_TOKEN => handleCreateDelegationTokenRequest(request)
         case ApiKeys.RENEW_DELEGATION_TOKEN => handleRenewDelegationTokenRequest(request)
         case ApiKeys.EXPIRE_DELEGATION_TOKEN => handleExpireDelegationTokenRequest(request)
@@ -896,6 +897,15 @@ class ControllerApis(
          requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
            new AlterUserScramCredentialsResponse(response.setThrottleTimeMs(requestThrottleMs)))
       }
+  }
+
+  private def handleDescribeUserScramCredentials(request: RequestChannel.Request): CompletableFuture[Unit] = {
+    val describeRequest = request.body[DescribeUserScramCredentialsRequest]
+    authHelper.authorizeClusterOperation(request, DESCRIBE)
+    val result = metadataCache.describeScramCredentials(describeRequest.data())
+    requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+      new DescribeUserScramCredentialsResponse(result.setThrottleTimeMs(requestThrottleMs)))
+    CompletableFuture.completedFuture[Unit](())
   }
 
   // The principal is carried through in the forwarded case.

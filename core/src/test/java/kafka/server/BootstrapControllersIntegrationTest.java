@@ -31,9 +31,13 @@ import org.apache.kafka.clients.admin.ListOffsetsResult;
 import org.apache.kafka.clients.admin.NewPartitionReassignment;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.OffsetSpec;
+import org.apache.kafka.clients.admin.ScramCredentialInfo;
+import org.apache.kafka.clients.admin.ScramMechanism;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.admin.UpdateFeaturesOptions;
 import org.apache.kafka.clients.admin.UpdateFeaturesResult;
+import org.apache.kafka.clients.admin.UserScramCredentialUpsertion;
+import org.apache.kafka.clients.admin.UserScramCredentialsDescription;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionInfo;
@@ -340,6 +344,33 @@ public class BootstrapControllersIntegrationTest {
             Collection<AclBinding> deletedAclBindings = admin.deleteAcls(Collections.singleton(AclBindingFilter.ANY)).all().get(1, TimeUnit.MINUTES);
             assertEquals(1, deletedAclBindings.size());
             assertEquals(aclBinding, deletedAclBindings.iterator().next());
+        }
+    }
+
+    @ClusterTest
+    public void testDescribeUserScramCredentials(ClusterInstance clusterInstance) throws Exception {
+        try (
+            // alterUserScramCredentials not support for admin using bootstrapController yet.
+            Admin admin = Admin.create(adminConfig(clusterInstance, false));
+            Admin adminUsingController = Admin.create(adminConfig(clusterInstance, true))
+        ) {
+            String targetUserName = "dummy-user";
+            int iterations = 4096;
+            admin.alterUserScramCredentials(
+                List.of(new UserScramCredentialUpsertion(targetUserName,
+                    new ScramCredentialInfo(ScramMechanism.SCRAM_SHA_256, iterations),
+                    "123456"))
+            ).all().get();
+            TestUtils.waitForCondition(() -> adminUsingController.describeUserScramCredentials().all().get().size() == 1,
+                "Alter user scram credential timeout");
+            Map<String, UserScramCredentialsDescription> nameToUserCredentials = adminUsingController.describeUserScramCredentials().all().get();
+            UserScramCredentialsDescription userCredential = nameToUserCredentials.get(targetUserName);
+            assertNotNull(userCredential);
+            assertEquals(targetUserName, userCredential.name());
+            List<ScramCredentialInfo> scramCredentialInfos = userCredential.credentialInfos();
+            assertEquals(1, scramCredentialInfos.size());
+            assertEquals(ScramMechanism.SCRAM_SHA_256, scramCredentialInfos.get(0).mechanism());
+            assertEquals(iterations, scramCredentialInfos.get(0).iterations());
         }
     }
 }

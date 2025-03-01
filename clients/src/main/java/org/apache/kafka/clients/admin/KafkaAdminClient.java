@@ -4294,7 +4294,7 @@ public class KafkaAdminClient extends AdminClient {
         final KafkaFutureImpl<DescribeUserScramCredentialsResponseData> dataFuture = new KafkaFutureImpl<>();
         final long now = time.milliseconds();
         Call call = new Call("describeUserScramCredentials", calcDeadlineMs(now, options.timeoutMs()),
-                new LeastLoadedNodeProvider()) {
+                new LeastLoadedBrokerOrActiveKController()) {
             @Override
             public DescribeUserScramCredentialsRequest.Builder createRequest(final int timeoutMs) {
                 final DescribeUserScramCredentialsRequestData requestData = new DescribeUserScramCredentialsRequestData();
