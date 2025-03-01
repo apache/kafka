@@ -17,18 +17,13 @@
 
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
-
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
 /**
  * A class representing a configuration entry containing name, value and additional metadata.
- *
- * The API of this class is evolving, see {@link Admin} for details.
  */
-@InterfaceStability.Evolving
 public class ConfigEntry {
 
     private final String name;

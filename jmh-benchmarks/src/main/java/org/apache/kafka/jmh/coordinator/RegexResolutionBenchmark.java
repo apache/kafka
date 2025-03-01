@@ -42,6 +42,7 @@ import org.slf4j.Logger;
 
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -118,10 +119,12 @@ public class RegexResolutionBenchmark {
     @OutputTimeUnit(TimeUnit.MILLISECONDS)
     public void run() {
         GroupMetadataManager.refreshRegularExpressions(
+            null,
             GROUP_ID,
             LOG,
             TIME,
             image,
+            Optional.empty(),
             regexes
         );
     }
