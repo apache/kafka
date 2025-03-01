@@ -24,6 +24,10 @@ import java.util.Map;
 
 /**
  * Quota callback interface for brokers and controllers that enables customization of client quota computation.
+ * Implement {@link org.apache.kafka.common.metrics.Monitorable} to enable the interceptor to register metrics. 
+ * The following tags are automatically added to all metrics registered: 
+ * <code>config</code> set to <code>interceptor.classes</code>, and <code>class</code> set to the ConsumerInterceptor 
+ * class name.
  */
 public interface ClientQuotaCallback extends Configurable {
 
