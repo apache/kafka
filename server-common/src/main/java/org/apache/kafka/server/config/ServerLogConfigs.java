@@ -135,15 +135,7 @@ public class ServerLogConfigs {
 
     public static final String MIN_IN_SYNC_REPLICAS_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG);
     public static final int MIN_IN_SYNC_REPLICAS_DEFAULT = 1;
-    public static final String MIN_IN_SYNC_REPLICAS_DOC = "When a producer sets acks to \"all\" (or \"-1\"), " +
-            "<code>min.insync.replicas</code> specifies the minimum number of replicas that must acknowledge " +
-            "a write for the write to be considered successful. If this minimum cannot be met, " +
-            "then the producer will raise an exception (either <code>NotEnoughReplicas</code> or " +
-            "<code>NotEnoughReplicasAfterAppend</code>).<br>When used together, <code>min.insync.replicas</code> and acks " +
-            "allow you to enforce greater durability guarantees. A typical scenario would be to " +
-            "create a topic with a replication factor of 3, set <code>min.insync.replicas</code> to 2, and " +
-            "produce with acks of \"all\". This will ensure that the producer raises an exception " +
-            "if a majority of replicas do not receive a write.";
+    public static final String MIN_IN_SYNC_REPLICAS_DOC = TopicConfig.MIN_IN_SYNC_REPLICAS_DOC;
 
     public static final String CREATE_TOPIC_POLICY_CLASS_NAME_CONFIG = "create.topic.policy.class.name";
     public static final String CREATE_TOPIC_POLICY_CLASS_NAME_DOC = "The create topic policy class that should be used for validation. The class should " +

@@ -1029,7 +1029,8 @@ public class ConsumerHeartbeatRequestManagerTest {
             Arguments.of(Errors.UNSUPPORTED_VERSION, true),
             Arguments.of(Errors.UNRELEASED_INSTANCE_ID, true),
             Arguments.of(Errors.FENCED_INSTANCE_ID, true),
-            Arguments.of(Errors.GROUP_MAX_SIZE_REACHED, true));
+            Arguments.of(Errors.GROUP_MAX_SIZE_REACHED, true),
+            Arguments.of(Errors.TOPIC_AUTHORIZATION_FAILED, false));
     }
 
     private ClientResponse createHeartbeatResponse(NetworkClientDelegate.UnsentRequest request,

@@ -20,7 +20,6 @@ package kafka.server
 import java.util
 import java.util.concurrent.TimeUnit
 import java.util.Properties
-import kafka.cluster.EndPoint
 import kafka.utils.{CoreUtils, Logging}
 import kafka.utils.Implicits._
 import org.apache.kafka.common.Reconfigurable
@@ -33,6 +32,7 @@ import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.security.auth.KafkaPrincipalSerde
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.network.EndPoint
 import org.apache.kafka.coordinator.group.Group.GroupType
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig
 import org.apache.kafka.coordinator.group.{GroupConfig, GroupCoordinatorConfig}
@@ -410,6 +410,13 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
       }
       warn(s"Share groups and the new '${GroupType.SHARE}' rebalance protocol are enabled. " +
         "This is part of the early access of KIP-932 and MUST NOT be used in production.")
+    }
+    if (protocols.contains(GroupType.STREAMS)) {
+      if (processRoles.isEmpty || !isNewGroupCoordinatorEnabled) {
+        throw new ConfigException(s"The new '${GroupType.STREAMS}' rebalance protocol is only supported in KRaft cluster with the new group coordinator.")
+      }
+      warn(s"The new '${GroupType.STREAMS}' rebalance protocol is enabled along with the new group coordinator. " +
+        "This is part of the preview of KIP-1071 and MUST NOT be used in production.")
     }
     protocols
   }
