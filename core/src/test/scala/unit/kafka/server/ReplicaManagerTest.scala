@@ -41,7 +41,6 @@ import org.apache.kafka.common.metadata.{PartitionChangeRecord, PartitionRecord,
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.metrics.Monitorable
 import org.apache.kafka.common.metrics.PluginMetrics
-import org.apache.kafka.common.metrics.internals.PluginMetricsImpl
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record._
