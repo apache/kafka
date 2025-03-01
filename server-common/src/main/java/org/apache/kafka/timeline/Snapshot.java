@@ -29,7 +29,7 @@ import java.util.Map;
  */
 class Snapshot {
     private final long epoch;
-    private final IdentityHashMap<Revertable, Delta> map = new IdentityHashMap<>(4);
+    private IdentityHashMap<Revertable, Delta> map = new IdentityHashMap<>(4);
     private Snapshot prev = this;
     private Snapshot next = this;
 
@@ -89,7 +89,7 @@ class Snapshot {
     }
 
     void erase() {
-        map.clear();
+        map = null;
         next.prev = prev;
         prev.next = next;
         prev = this;
