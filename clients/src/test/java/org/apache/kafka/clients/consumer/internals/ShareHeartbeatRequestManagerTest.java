@@ -402,12 +402,6 @@ public class ShareHeartbeatRequestManagerTest {
                 assertNextHeartbeatTiming(0);
                 break;
 
-            case TOPIC_AUTHORIZATION_FAILED:
-                verify(backgroundEventHandler).add(any(ErrorEvent.class));
-                assertNextHeartbeatTiming(DEFAULT_RETRY_BACKOFF_MS);
-                verify(membershipManager, never()).transitionToFatal();
-                break;
-
             default:
                 if (isFatal) {
                     when(coordinatorRequestManager.coordinator()).thenReturn(Optional.empty());
@@ -668,8 +662,7 @@ public class ShareHeartbeatRequestManagerTest {
                 Arguments.of(Errors.UNSUPPORTED_ASSIGNOR, true),
                 Arguments.of(Errors.UNSUPPORTED_VERSION, true),
                 Arguments.of(Errors.UNRELEASED_INSTANCE_ID, true),
-                Arguments.of(Errors.GROUP_MAX_SIZE_REACHED, true),
-                Arguments.of(Errors.TOPIC_AUTHORIZATION_FAILED, false));
+                Arguments.of(Errors.GROUP_MAX_SIZE_REACHED, true));
     }
 
     private ClientResponse createHeartbeatResponse(
