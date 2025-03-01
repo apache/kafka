@@ -37,7 +37,6 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -92,7 +91,7 @@ public class RecordTestUtils {
         Object target,
         ApiMessageAndVersion recordAndVersion
     ) {
-        replayAll(target, Collections.singletonList(recordAndVersion));
+        replayAll(target, List.of(recordAndVersion));
     }
 
     public static <T extends ApiMessage> Optional<T> recordAtIndexAs(
@@ -371,7 +370,7 @@ public class RecordTestUtils {
                 ).iterator()
             )).
             setFeatures(new RegisterControllerRecord.ControllerFeatureCollection(
-                Collections.singletonList(
+                List.of(
                     new RegisterControllerRecord.ControllerFeature().
                         setName(MetadataVersion.FEATURE_NAME).
                         setMinSupportedVersion(MetadataVersion.MINIMUM_VERSION.featureLevel()).

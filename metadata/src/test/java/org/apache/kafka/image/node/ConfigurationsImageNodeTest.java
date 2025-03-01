@@ -26,11 +26,9 @@ import org.junit.jupiter.api.Timeout;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.config.ConfigResource.Type.BROKER;
 import static org.apache.kafka.common.config.ConfigResource.Type.TOPIC;
@@ -51,7 +49,7 @@ public class ConfigurationsImageNodeTest {
                 new ConfigResource(TOPIC, ":colons:"),
                 new ConfigResource(TOPIC, "__internal"))) {
             resourceMap.put(resource, new ConfigurationImage(resource,
-                    Collections.singletonMap("foo", "bar")));
+                    Map.of("foo", "bar")));
         }
         ConfigurationsImage image = new ConfigurationsImage(resourceMap);
         NODE = new ConfigurationsImageNode(image);
@@ -75,7 +73,7 @@ public class ConfigurationsImageNodeTest {
         List<ConfigResource> childResources = NODE.childNames().stream().
             sorted().
             map(ConfigurationsImageNode::resourceFromName).
-            collect(Collectors.toList());
+            toList();
         assertEquals(Arrays.asList(
             new ConfigResource(BROKER, ""),
             new ConfigResource(BROKER, "0"),

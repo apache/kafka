@@ -28,7 +28,6 @@ import org.junit.jupiter.api.Timeout;
 import java.util.Arrays;
 import java.util.List;
 import java.util.OptionalInt;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.metalog.MockMetaLogManagerListener.COMMIT;
 import static org.apache.kafka.metalog.MockMetaLogManagerListener.LAST_COMMITTED_OFFSET;
@@ -152,7 +151,7 @@ public class LocalLogManagerTest {
             }
             List<MockMetaLogManagerListener> listeners = env.logManagers().stream().
                 map(m -> (MockMetaLogManagerListener) m.listeners().get(0)).
-                collect(Collectors.toList());
+                toList();
             env.close();
             for (MockMetaLogManagerListener listener : listeners) {
                 List<String> events = listener.serializedEvents();

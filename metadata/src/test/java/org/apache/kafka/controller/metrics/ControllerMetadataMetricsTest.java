@@ -25,9 +25,9 @@ import com.yammer.metrics.core.MetricsRegistry;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 
@@ -53,7 +53,7 @@ public class ControllerMetadataMetricsTest {
                     )));
             }
             ControllerMetricsTestUtils.assertMetricsForTypeEqual(registry, "KafkaController",
-                    Collections.emptySet());
+                    Set.of());
         } finally {
             registry.shutdown();
         }

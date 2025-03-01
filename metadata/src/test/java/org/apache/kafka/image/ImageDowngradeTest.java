@@ -34,7 +34,6 @@ import org.junit.jupiter.api.Timeout;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -83,7 +82,7 @@ public class ImageDowngradeTest {
     @Test
     public void testPreZkMigrationSupportVersion() {
         writeWithExpectedLosses(MetadataVersion.IBP_3_3_IV3,
-            Collections.singletonList(
+            List.of(
                 "the isMigratingZkBroker state of one or more brokers"),
             Arrays.asList(
                 metadataVersionRecord(MetadataVersion.IBP_3_4_IV0),
@@ -117,7 +116,7 @@ public class ImageDowngradeTest {
         MetadataVersion inputMetadataVersion = outputMetadataVersion;
         PartitionRecord testPartitionRecord = (PartitionRecord) TEST_RECORDS.get(1).message();
         writeWithExpectedLosses(outputMetadataVersion,
-            Collections.singletonList(
+            List.of(
                     "the directory assignment state of one or more replicas"),
             Arrays.asList(
                 metadataVersionRecord(inputMetadataVersion),
@@ -131,7 +130,7 @@ public class ImageDowngradeTest {
                 metadataVersionRecord(outputMetadataVersion),
                 TEST_RECORDS.get(0),
                 new ApiMessageAndVersion(
-                    testPartitionRecord.duplicate().setDirectories(Collections.emptyList()),
+                    testPartitionRecord.duplicate().setDirectories(List.of()),
                     (short) 0))
         );
     }

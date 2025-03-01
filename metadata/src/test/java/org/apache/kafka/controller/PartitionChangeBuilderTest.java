@@ -38,7 +38,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Arrays;
-import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.IntPredicate;
@@ -82,13 +82,13 @@ public class PartitionChangeBuilderTest {
         assertFalse(changeRecordIsNoOp(new PartitionChangeRecord().
             setIsr(Arrays.asList(1, 2, 3))));
         assertFalse(changeRecordIsNoOp(new PartitionChangeRecord().
-            setRemovingReplicas(Collections.singletonList(1))));
+            setRemovingReplicas(List.of(1))));
         assertFalse(changeRecordIsNoOp(new PartitionChangeRecord().
-            setAddingReplicas(Collections.singletonList(4))));
+            setAddingReplicas(List.of(4))));
         assertFalse(changeRecordIsNoOp(new PartitionChangeRecord().
-                setEligibleLeaderReplicas(Collections.singletonList(5))));
+                setEligibleLeaderReplicas(List.of(5))));
         assertFalse(changeRecordIsNoOp(new PartitionChangeRecord().
-                setLastKnownElr(Collections.singletonList(6))));
+                setLastKnownElr(List.of(6))));
         assertFalse(
             changeRecordIsNoOp(
                 new PartitionChangeRecord()
@@ -274,12 +274,12 @@ public class PartitionChangeBuilderTest {
         assertElectLeaderEquals(createFooBuilder(version).setElection(Election.UNCLEAN)
             .setTargetIsrWithBrokerStates(AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(Arrays.asList(1, 3))), 1, false);
         assertElectLeaderEquals(createFooBuilder(version)
-            .setTargetIsrWithBrokerStates(AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(Collections.singletonList(3))), NO_LEADER, false);
+            .setTargetIsrWithBrokerStates(AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(List.of(3))), NO_LEADER, false);
         assertElectLeaderEquals(createFooBuilder(version).setElection(Election.UNCLEAN).
-            setTargetIsrWithBrokerStates(AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(Collections.singletonList(3))), 2, true);
+            setTargetIsrWithBrokerStates(AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(List.of(3))), 2, true);
         assertElectLeaderEquals(
             createFooBuilder(version).setElection(Election.UNCLEAN)
-                .setTargetIsrWithBrokerStates(AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(Collections.singletonList(4))).setTargetReplicas(Arrays.asList(2, 1, 3, 4)),
+                .setTargetIsrWithBrokerStates(AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(List.of(4))).setTargetReplicas(Arrays.asList(2, 1, 3, 4)),
             4,
             false
         );
@@ -392,7 +392,7 @@ public class PartitionChangeBuilderTest {
             2).
             setEligibleLeaderReplicasEnabled(metadataVersion.isElrSupported()).
             setDefaultDirProvider(DEFAULT_DIR_PROVIDER).
-            setTargetReplicas(Collections.emptyList());
+            setTargetReplicas(List.of());
         PartitionChangeRecord record = new PartitionChangeRecord();
         builder.triggerLeaderEpochBumpForIsrShrinkIfNeeded(record);
         assertEquals(NO_LEADER_CHANGE, record.leader());
@@ -468,8 +468,8 @@ public class PartitionChangeBuilderTest {
                 setReplicas(Arrays.asList(2, 3, 4)).
                 setIsr(Arrays.asList(2, 3, 4)).
                 setLeader(2).
-                setRemovingReplicas(Collections.emptyList()).
-                setAddingReplicas(Collections.emptyList());
+                setRemovingReplicas(List.of()).
+                setAddingReplicas(List.of());
         if (version >= 1) {
             Map<Integer, Uuid> dirs = DirectoryId.createAssignmentMap(BAR.replicas, BAR.directories);
             expectedRecord.setDirectories(Arrays.asList(dirs.get(2), dirs.get(3), dirs.get(4)));
@@ -490,8 +490,8 @@ public class PartitionChangeBuilderTest {
                 setPartitionId(0).
                 setReplicas(Arrays.asList(1, 2, 3)).
                 setLeader(1).
-                setRemovingReplicas(Collections.emptyList()).
-                setAddingReplicas(Collections.emptyList());
+                setRemovingReplicas(List.of()).
+                setAddingReplicas(List.of());
         if (version >= 1) {
             Map<Integer, Uuid> dirs = DirectoryId.createAssignmentMap(BAR.replicas, BAR.directories);
             expectedRecord.setDirectories(Arrays.asList(dirs.get(1), dirs.get(2), dirs.get(3)));
@@ -500,8 +500,8 @@ public class PartitionChangeBuilderTest {
             createBarBuilder(version).
                 setTargetReplicas(revert.replicas()).
                 setTargetIsrWithBrokerStates(AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(revert.isr())).
-                setTargetRemoving(Collections.emptyList()).
-                setTargetAdding(Collections.emptyList()).
+                setTargetRemoving(List.of()).
+                setTargetAdding(List.of()).
                 build());
     }
 
@@ -510,8 +510,8 @@ public class PartitionChangeBuilderTest {
     public void testRemovingReplicaReassignment(short version) {
         PartitionReassignmentReplicas replicas = new PartitionReassignmentReplicas(
             partitionAssignment(Replicas.toList(FOO.replicas)), partitionAssignment(Arrays.asList(1, 2)));
-        assertEquals(Collections.singletonList(3), replicas.removing());
-        assertEquals(Collections.emptyList(), replicas.adding());
+        assertEquals(List.of(3), replicas.removing());
+        assertEquals(List.of(), replicas.adding());
         assertEquals(Arrays.asList(1, 2, 3), replicas.replicas());
         PartitionChangeRecord expectedRecord = new PartitionChangeRecord().
                 setTopicId(FOO_ID).
@@ -535,14 +535,14 @@ public class PartitionChangeBuilderTest {
     public void testAddingReplicaReassignment(short version) {
         PartitionReassignmentReplicas replicas = new PartitionReassignmentReplicas(
             partitionAssignment(Replicas.toList(FOO.replicas)), partitionAssignment(Arrays.asList(1, 2, 3, 4)));
-        assertEquals(Collections.emptyList(), replicas.removing());
-        assertEquals(Collections.singletonList(4), replicas.adding());
+        assertEquals(List.of(), replicas.removing());
+        assertEquals(List.of(4), replicas.adding());
         assertEquals(Arrays.asList(1, 2, 3, 4), replicas.replicas());
         PartitionChangeRecord expectedRecord = new PartitionChangeRecord().
                 setTopicId(FOO_ID).
                 setPartitionId(0).
                 setReplicas(Arrays.asList(1, 2, 3, 4)).
-                setAddingReplicas(Collections.singletonList(4));
+                setAddingReplicas(List.of(4));
         if (version >= 1) {
             Map<Integer, Uuid> dirs = DirectoryId.createAssignmentMap(FOO.replicas, FOO.directories);
             expectedRecord.setDirectories(Arrays.asList(dirs.get(1), dirs.get(2), dirs.get(3), DirectoryId.UNASSIGNED));
@@ -561,7 +561,7 @@ public class PartitionChangeBuilderTest {
             new PartitionChangeRecord()
                 .setTopicId(FOO_ID)
                 .setPartitionId(0)
-                .setIsr(Collections.singletonList(2))
+                .setIsr(List.of(2))
                 .setLeader(2)
                 .setLeaderRecoveryState(LeaderRecoveryState.RECOVERING.value()),
             version
@@ -569,20 +569,20 @@ public class PartitionChangeBuilderTest {
         assertEquals(
             Optional.of(expectedRecord),
             createFooBuilder(version).setElection(Election.UNCLEAN)
-                .setTargetIsrWithBrokerStates(AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(Collections.singletonList(3))).build()
+                .setTargetIsrWithBrokerStates(AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(List.of(3))).build()
         );
 
         PartitionChangeRecord record = new PartitionChangeRecord()
             .setTopicId(OFFLINE_ID)
             .setPartitionId(0)
-            .setIsr(Collections.singletonList(1))
+            .setIsr(List.of(1))
             .setLeader(1)
             .setLeaderRecoveryState(LeaderRecoveryState.RECOVERING.value());
 
         if (version >= 2) {
             // The test partition has ELR, so unclean election will clear these fields.
-            record.setEligibleLeaderReplicas(Collections.emptyList())
-                .setLastKnownElr(Collections.emptyList());
+            record.setEligibleLeaderReplicas(List.of())
+                .setLastKnownElr(List.of());
         }
 
         expectedRecord = new ApiMessageAndVersion(record, version);
@@ -594,7 +594,7 @@ public class PartitionChangeBuilderTest {
         assertEquals(
             Optional.of(expectedRecord),
             createOfflineBuilder(version).setElection(Election.UNCLEAN)
-                .setTargetIsrWithBrokerStates(AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(Collections.singletonList(2))).build()
+                .setTargetIsrWithBrokerStates(AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(List.of(2))).build()
         );
     }
 
@@ -629,7 +629,7 @@ public class PartitionChangeBuilderTest {
             2
         );
         // Set the target ISR to empty to indicate that the last leader is offline
-        offlineBuilder.setTargetIsrWithBrokerStates(Collections.emptyList());
+        offlineBuilder.setTargetIsrWithBrokerStates(List.of());
 
         // The partition should stay as recovering
         PartitionChangeRecord changeRecord = (PartitionChangeRecord) offlineBuilder
@@ -769,8 +769,8 @@ public class PartitionChangeBuilderTest {
                 setPartitionId(0).
                 setReplicas(Arrays.asList(2, 3)).
                 setIsr(Arrays.asList(2, 3)).
-                setRemovingReplicas(Collections.emptyList()).
-                setAddingReplicas(Collections.emptyList()).
+                setRemovingReplicas(List.of()).
+                setAddingReplicas(List.of()).
                 setLeader(NO_LEADER),
                 (short) 0)),
             partitionChangeBuilder.setTargetIsr(Arrays.asList(0, 1, 2, 3)).
@@ -863,8 +863,8 @@ public class PartitionChangeBuilderTest {
             .setLeaderRecoveryState(LeaderRecoveryState.NO_CHANGE);
 
         // Both versions will set the elr and lastKnownElr as empty list.
-        record.setEligibleLeaderReplicas(Collections.emptyList())
-            .setLastKnownElr(Collections.emptyList());
+        record.setEligibleLeaderReplicas(List.of())
+            .setLastKnownElr(List.of());
         ApiMessageAndVersion expectedRecord = new ApiMessageAndVersion(record, version);
         assertEquals(Optional.of(expectedRecord), builder.build());
         partition = partition.merge((PartitionChangeRecord) builder.build().get().message());
@@ -908,8 +908,8 @@ public class PartitionChangeBuilderTest {
             .setLeader(-2)
             .setLeaderRecoveryState(LeaderRecoveryState.NO_CHANGE);
         if (version < 2) {
-            record.setEligibleLeaderReplicas(Collections.emptyList());
-            record.setLastKnownElr(Collections.emptyList());
+            record.setEligibleLeaderReplicas(List.of());
+            record.setLastKnownElr(List.of());
         }
         // No change is expected to ELR/LastKnownElr.
         ApiMessageAndVersion expectedRecord = new ApiMessageAndVersion(record, version);
@@ -952,7 +952,7 @@ public class PartitionChangeBuilderTest {
             .setDefaultDirProvider(DEFAULT_DIR_PROVIDER)
             .setUseLastKnownLeaderInBalancedRecovery(false);
 
-        builder.setUncleanShutdownReplicas(Collections.singletonList(3));
+        builder.setUncleanShutdownReplicas(List.of(3));
 
         PartitionChangeRecord record = new PartitionChangeRecord()
             .setTopicId(topicId)
@@ -960,10 +960,10 @@ public class PartitionChangeBuilderTest {
             .setLeader(-2)
             .setLeaderRecoveryState(LeaderRecoveryState.NO_CHANGE);
         if (version >= 2) {
-            record.setEligibleLeaderReplicas(Collections.singletonList(2))
-                .setLastKnownElr(Collections.singletonList(3));
+            record.setEligibleLeaderReplicas(List.of(2))
+                .setLastKnownElr(List.of(3));
         } else {
-            record.setEligibleLeaderReplicas(Collections.emptyList());
+            record.setEligibleLeaderReplicas(List.of());
         }
         ApiMessageAndVersion expectedRecord = new ApiMessageAndVersion(record, version);
         assertEquals(Optional.of(expectedRecord), builder.build());
@@ -1075,14 +1075,14 @@ public class PartitionChangeBuilderTest {
             .setUseLastKnownLeaderInBalancedRecovery(lastKnownLeaderEnabled)
             .setDefaultDirProvider(DEFAULT_DIR_PROVIDER);
 
-        builder.setTargetIsr(Collections.emptyList());
+        builder.setTargetIsr(List.of());
 
         ApiMessageAndVersion expectedRecord = new ApiMessageAndVersion(
             new PartitionChangeRecord()
                 .setTopicId(topicId)
                 .setPartitionId(0)
-                .setIsr(Collections.singletonList(3))
-                .setEligibleLeaderReplicas(Collections.singletonList(1))
+                .setIsr(List.of(3))
+                .setEligibleLeaderReplicas(List.of(1))
                 .setLeader(3)
                 .setLeaderRecoveryState(LeaderRecoveryState.NO_CHANGE),
             version
@@ -1124,18 +1124,18 @@ public class PartitionChangeBuilderTest {
             .setDefaultDirProvider(DEFAULT_DIR_PROVIDER)
             .setUseLastKnownLeaderInBalancedRecovery(lastKnownLeaderEnabled);
 
-        builder.setTargetIsr(Collections.emptyList());
+        builder.setTargetIsr(List.of());
 
         PartitionChangeRecord record = new PartitionChangeRecord()
             .setTopicId(topicId)
             .setPartitionId(0)
-            .setIsr(Collections.emptyList())
+            .setIsr(List.of())
             .setLeader(-1)
             .setLeaderRecoveryState(LeaderRecoveryState.NO_CHANGE)
             .setEligibleLeaderReplicas(Arrays.asList(1, 2, 3, 4));
 
         if (lastKnownLeaderEnabled) {
-            record.setLastKnownElr(Collections.singletonList(1));
+            record.setLastKnownElr(List.of(1));
         }
 
         ApiMessageAndVersion expectedRecord = new ApiMessageAndVersion(record, version);
@@ -1148,7 +1148,7 @@ public class PartitionChangeBuilderTest {
                     metadataVersionForPartitionChangeRecordVersion(version), 3)
                 .setElection(Election.PREFERRED)
                 .setEligibleLeaderReplicasEnabled(true)
-                .setUncleanShutdownReplicas(Collections.singletonList(2))
+                .setUncleanShutdownReplicas(List.of(2))
                 .setDefaultDirProvider(DEFAULT_DIR_PROVIDER)
                 .setUseLastKnownLeaderInBalancedRecovery(lastKnownLeaderEnabled);
             PartitionChangeRecord changeRecord = (PartitionChangeRecord) builder.build().get().message();
@@ -1182,16 +1182,16 @@ public class PartitionChangeBuilderTest {
             .setDefaultDirProvider(DEFAULT_DIR_PROVIDER)
             .setEligibleLeaderReplicasEnabled(true);
 
-        builder.setTargetIsr(Collections.emptyList());
+        builder.setTargetIsr(List.of());
 
         ApiMessageAndVersion expectedRecord = new ApiMessageAndVersion(
             new PartitionChangeRecord()
                 .setTopicId(topicId)
                 .setPartitionId(0)
-                .setIsr(Collections.singletonList(1))
+                .setIsr(List.of(1))
                 .setLeader(1)
                 .setLeaderRecoveryState(LeaderRecoveryState.RECOVERING.value())
-                .setLastKnownElr(Collections.emptyList()),
+                .setLastKnownElr(List.of()),
             version
         );
         assertEquals(Optional.of(expectedRecord), builder.build());
@@ -1229,7 +1229,7 @@ public class PartitionChangeBuilderTest {
             .setDefaultDirProvider(DEFAULT_DIR_PROVIDER)
             .setUseLastKnownLeaderInBalancedRecovery(true);
 
-        builder.setTargetIsr(Collections.emptyList());
+        builder.setTargetIsr(List.of());
 
         // No change to the partition.
         assertEquals(Optional.empty(), builder.build());

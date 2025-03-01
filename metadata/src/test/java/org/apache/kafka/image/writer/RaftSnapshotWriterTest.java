@@ -23,8 +23,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.util.Arrays;
+import java.util.List;
 
-import static java.util.Collections.emptyList;
 import static org.apache.kafka.metadata.RecordTestUtils.testRecord;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -56,6 +56,6 @@ public class RaftSnapshotWriterTest {
         writer.close();
         assertFalse(snapshotWriter.isFrozen());
         assertTrue(snapshotWriter.isClosed());
-        assertEquals(emptyList(), snapshotWriter.batches());
+        assertEquals(List.of(), snapshotWriter.batches());
     }
 }

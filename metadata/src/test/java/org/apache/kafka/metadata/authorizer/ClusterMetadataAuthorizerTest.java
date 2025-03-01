@@ -41,10 +41,10 @@ import org.junit.jupiter.api.Timeout;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.stream.Collectors;
@@ -209,7 +209,7 @@ public class ClusterMetadataAuthorizerTest {
         authorizer.setAclMutator(mutator);
         CompletableFuture<List<AclDeleteResult>> response = new CompletableFuture<>();
         response.complete(Arrays.asList(new AclDeleteResult(
-                Collections.singleton(new AclBindingDeleteResult(TEST_BINDINGS.get(0)))),
+                Set.of(new AclBindingDeleteResult(TEST_BINDINGS.get(0)))),
             new AclDeleteResult(new InvalidRequestException("invalid"))));
         mutator.setDeleteAclsResponse(response);
         List<? extends CompletionStage<AclDeleteResult>> results = authorizer.deleteAcls(

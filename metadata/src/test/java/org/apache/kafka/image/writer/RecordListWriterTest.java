@@ -24,8 +24,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.util.Arrays;
+import java.util.List;
 
-import static java.util.Collections.emptyList;
 import static org.apache.kafka.metadata.RecordTestUtils.testRecord;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -47,7 +47,7 @@ public class RecordListWriterTest {
         RecordListWriter writer = new RecordListWriter();
         writer.write(testRecord(0));
         writer.close();
-        assertEquals(emptyList(), writer.records());
+        assertEquals(List.of(), writer.records());
     }
 
     @Test

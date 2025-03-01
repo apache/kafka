@@ -28,7 +28,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -79,7 +78,7 @@ public class StripedReplicaPlacerTest {
             new UsableBroker(2, Optional.empty(), false)).iterator());
         assertEquals(5, rackList.numTotalBrokers());
         assertEquals(4, rackList.numUnfencedBrokers());
-        assertEquals(Collections.singletonList(Optional.empty()), rackList.rackNames());
+        assertEquals(List.of(Optional.empty()), rackList.rackNames());
         assertThrows(InvalidReplicationFactorException.class, () -> rackList.place(0));
         assertThrows(InvalidReplicationFactorException.class, () -> rackList.place(-1));
         assertEquals(Arrays.asList(3, 4, 0, 2), rackList.place(4));
@@ -120,9 +119,9 @@ public class StripedReplicaPlacerTest {
     public void testMultiPartitionTopicPlacementOnSingleUnfencedBroker() {
         MockRandom random = new MockRandom();
         StripedReplicaPlacer placer = new StripedReplicaPlacer(random);
-        assertEquals(new TopicAssignment(Arrays.asList(partitionAssignment(Collections.singletonList(0)),
-                partitionAssignment(Collections.singletonList(0)),
-                partitionAssignment(Collections.singletonList(0)))),
+        assertEquals(new TopicAssignment(Arrays.asList(partitionAssignment(List.of(0)),
+                partitionAssignment(List.of(0)),
+                partitionAssignment(List.of(0)))),
                 place(placer, 0, 3, (short) 1, Arrays.asList(
                         new UsableBroker(0, Optional.empty(), false),
                         new UsableBroker(1, Optional.empty(), true))));
@@ -140,7 +139,7 @@ public class StripedReplicaPlacerTest {
             new UsableBroker(2, Optional.empty(), false)).iterator());
         assertEquals(3, rackList.numTotalBrokers());
         assertEquals(2, rackList.numUnfencedBrokers());
-        assertEquals(Collections.singletonList(Optional.empty()), rackList.rackNames());
+        assertEquals(List.of(Optional.empty()), rackList.rackNames());
         assertEquals(Arrays.asList(3, 2, 1), rackList.place(3));
         assertEquals(Arrays.asList(2, 3, 1), rackList.place(3));
         assertEquals(Arrays.asList(3, 2, 1), rackList.place(3));
@@ -275,7 +274,7 @@ public class StripedReplicaPlacerTest {
                 new UsableBroker(2, Optional.empty(), true)).iterator());
         assertEquals(3, rackList.numTotalBrokers());
         assertEquals(0, rackList.numUnfencedBrokers());
-        assertEquals(Collections.singletonList(Optional.empty()), rackList.rackNames());
+        assertEquals(List.of(Optional.empty()), rackList.rackNames());
         assertEquals("All brokers are currently fenced.",
                 assertThrows(InvalidReplicationFactorException.class,
                         () -> rackList.place(3)).getMessage());

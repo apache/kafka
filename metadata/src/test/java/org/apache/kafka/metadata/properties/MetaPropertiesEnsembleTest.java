@@ -27,7 +27,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -37,6 +36,7 @@ import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Random;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -55,7 +55,7 @@ public final class MetaPropertiesEnsembleTest {
     private static final MetaPropertiesEnsemble FOO =
         new MetaPropertiesEnsemble(
             new HashSet<>(Arrays.asList("/tmp/empty1", "/tmp/empty2")),
-            new HashSet<>(Collections.singletonList("/tmp/error3")),
+            new HashSet<>(List.of("/tmp/error3")),
             Stream.of(
                 new SimpleImmutableEntry<>("/tmp/dir4",
                     new MetaProperties.Builder().
@@ -105,7 +105,7 @@ public final class MetaPropertiesEnsembleTest {
 
     @Test
     public void testErrorLogDirsForFoo() {
-        assertEquals(new HashSet<>(Collections.singletonList("/tmp/error3")), FOO.errorLogDirs());
+        assertEquals(new HashSet<>(List.of("/tmp/error3")), FOO.errorLogDirs());
     }
 
     @Test
@@ -226,9 +226,9 @@ public final class MetaPropertiesEnsembleTest {
     @Test
     public void testVerificationFailureOnLackOfMetadataLogDir() {
         MetaPropertiesEnsemble ensemble = new MetaPropertiesEnsemble(
-            Collections.singleton("/tmp/foo1"),
-            Collections.emptySet(),
-            Collections.emptyMap(),
+            Set.of("/tmp/foo1"),
+            Set.of(),
+            Map.of(),
             Optional.empty());
         assertEquals("No metadata log directory was specified.",
             assertThrows(RuntimeException.class,
@@ -241,9 +241,9 @@ public final class MetaPropertiesEnsembleTest {
     @Test
     public void testVerificationFailureOnMetadataLogDirWithError() {
         MetaPropertiesEnsemble ensemble = new MetaPropertiesEnsemble(
-            Collections.emptySet(),
-            Collections.singleton("/tmp/foo1"),
-            Collections.emptyMap(),
+            Set.of(),
+            Set.of("/tmp/foo1"),
+            Map.of(),
             Optional.of("/tmp/foo1"));
         assertEquals("Encountered I/O error in metadata log directory /tmp/foo1. Cannot continue.",
             assertThrows(RuntimeException.class,
@@ -285,7 +285,7 @@ public final class MetaPropertiesEnsembleTest {
     public void testMetaPropertiesEnsembleLoadError() throws IOException {
         MetaPropertiesEnsemble.Loader loader = new MetaPropertiesEnsemble.Loader();
         loader.addMetadataLogDir(createErrorLogDir());
-        loader.addLogDirs(Collections.singletonList(createLogDir(new MetaProperties.Builder().
+        loader.addLogDirs(List.of(createLogDir(new MetaProperties.Builder().
             setVersion(MetaPropertiesVersion.V1).
             setClusterId("AtgGav8yQjiaJ3rTXE7VCA").
             setNodeId(1).

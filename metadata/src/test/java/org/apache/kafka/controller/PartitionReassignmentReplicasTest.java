@@ -25,7 +25,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.util.Arrays;
-import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 
 import static org.apache.kafka.metadata.placement.PartitionAssignmentTest.partitionAssignment;
@@ -40,8 +40,8 @@ public class PartitionReassignmentReplicasTest {
     public void testNoneAddedOrRemoved() {
         PartitionReassignmentReplicas replicas = new PartitionReassignmentReplicas(
             partitionAssignment(Arrays.asList(3, 2, 1)), partitionAssignment(Arrays.asList(3, 2, 1)));
-        assertEquals(Collections.emptyList(), replicas.removing());
-        assertEquals(Collections.emptyList(), replicas.adding());
+        assertEquals(List.of(), replicas.removing());
+        assertEquals(List.of(), replicas.adding());
         assertEquals(Arrays.asList(3, 2, 1), replicas.replicas());
     }
 
@@ -49,7 +49,7 @@ public class PartitionReassignmentReplicasTest {
     public void testAdditions() {
         PartitionReassignmentReplicas replicas = new PartitionReassignmentReplicas(
             partitionAssignment(Arrays.asList(3, 2, 1)), partitionAssignment(Arrays.asList(3, 6, 2, 1, 5)));
-        assertEquals(Collections.emptyList(), replicas.removing());
+        assertEquals(List.of(), replicas.removing());
         assertEquals(Arrays.asList(5, 6), replicas.adding());
         assertEquals(Arrays.asList(3, 6, 2, 1, 5), replicas.replicas());
     }
@@ -59,7 +59,7 @@ public class PartitionReassignmentReplicasTest {
         PartitionReassignmentReplicas replicas = new PartitionReassignmentReplicas(
             partitionAssignment(Arrays.asList(3, 2, 1, 0)), partitionAssignment(Arrays.asList(3, 1)));
         assertEquals(Arrays.asList(0, 2), replicas.removing());
-        assertEquals(Collections.emptyList(), replicas.adding());
+        assertEquals(List.of(), replicas.adding());
         assertEquals(Arrays.asList(3, 1, 0, 2), replicas.replicas());
     }
 
@@ -76,8 +76,8 @@ public class PartitionReassignmentReplicasTest {
     public void testRearrangement() {
         PartitionReassignmentReplicas replicas = new PartitionReassignmentReplicas(
             partitionAssignment(Arrays.asList(3, 2, 1, 0)), partitionAssignment(Arrays.asList(0, 1, 3, 2)));
-        assertEquals(Collections.emptyList(), replicas.removing());
-        assertEquals(Collections.emptyList(), replicas.adding());
+        assertEquals(List.of(), replicas.removing());
+        assertEquals(List.of(), replicas.adding());
         assertEquals(Arrays.asList(0, 1, 3, 2), replicas.replicas());
     }
 
@@ -94,8 +94,8 @@ public class PartitionReassignmentReplicasTest {
     @Test
     public void testDoesNotCompleteReassignmentIfNoneOngoing() {
         PartitionReassignmentReplicas replicas = new PartitionReassignmentReplicas(
-            Collections.emptyList(),
-            Collections.emptyList(),
+            List.of(),
+            List.of(),
             Arrays.asList(0, 1, 2)
         );
         assertFalse(replicas.isReassignmentInProgress());
@@ -203,7 +203,7 @@ public class PartitionReassignmentReplicasTest {
             partitionAssignment(Arrays.asList(0, 1, 2)), partitionAssignment(Arrays.asList(0, 1, 3)));
         assertTrue(replicas.isReassignmentInProgress());
         Optional<PartitionReassignmentReplicas.CompletedReassignment> reassignmentOptional =
-            replicas.maybeCompleteReassignment(Collections.singletonList(3));
+            replicas.maybeCompleteReassignment(List.of(3));
         assertFalse(reassignmentOptional.isPresent());
     }
 

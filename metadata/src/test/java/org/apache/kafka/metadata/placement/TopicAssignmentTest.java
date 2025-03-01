@@ -22,7 +22,6 @@ import org.apache.kafka.common.Uuid;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 
 import static org.apache.kafka.metadata.placement.PartitionAssignmentTest.partitionAssignment;
@@ -46,14 +45,14 @@ public class TopicAssignmentTest {
     public void testConsistentEqualsAndHashCode() {
         List<TopicAssignment> topicAssignments = Arrays.asList(
             new TopicAssignment(
-                Collections.singletonList(
+                List.of(
                     partitionAssignment(
                         Arrays.asList(0, 1, 2)
                     )
                 )
             ),
             new TopicAssignment(
-                Collections.singletonList(
+                List.of(
                     partitionAssignment(
                         Arrays.asList(1, 2, 0)
                     )
@@ -83,7 +82,7 @@ public class TopicAssignmentTest {
                 Uuid.fromString("MvUIAsOiRlSePeiBHdZrSQ"),
                 Uuid.fromString("jUqCchHtTHqMxeVv4dw1RA")
         );
-        List<PartitionAssignment> partitionAssignments = Collections.singletonList(
+        List<PartitionAssignment> partitionAssignments = List.of(
             new PartitionAssignment(replicas, directories::get)
         );
         TopicAssignment topicAssignment = new TopicAssignment(partitionAssignments);

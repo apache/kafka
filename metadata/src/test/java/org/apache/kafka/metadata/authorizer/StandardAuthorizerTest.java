@@ -50,17 +50,16 @@ import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static java.util.Arrays.asList;
-import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.acl.AclOperation.ALL;
 import static org.apache.kafka.common.acl.AclOperation.ALTER;
 import static org.apache.kafka.common.acl.AclOperation.ALTER_CONFIGS;
@@ -147,25 +146,25 @@ public class StandardAuthorizerTest {
 
     @Test
     public void testGetConfiguredSuperUsers() {
-        assertEquals(Collections.emptySet(),
-            getConfiguredSuperUsers(Collections.emptyMap()));
-        assertEquals(Collections.emptySet(),
-            getConfiguredSuperUsers(Collections.singletonMap(SUPER_USERS_CONFIG, " ")));
+        assertEquals(Set.of(),
+            getConfiguredSuperUsers(Map.of()));
+        assertEquals(Set.of(),
+            getConfiguredSuperUsers(Map.of(SUPER_USERS_CONFIG, " ")));
         assertEquals(new HashSet<>(asList("User:bob", "User:alice")),
-            getConfiguredSuperUsers(Collections.singletonMap(SUPER_USERS_CONFIG, "User:bob;User:alice ")));
+            getConfiguredSuperUsers(Map.of(SUPER_USERS_CONFIG, "User:bob;User:alice ")));
         assertEquals(new HashSet<>(asList("User:bob", "User:alice")),
-            getConfiguredSuperUsers(Collections.singletonMap(SUPER_USERS_CONFIG, ";  User:bob  ;  User:alice ")));
+            getConfiguredSuperUsers(Map.of(SUPER_USERS_CONFIG, ";  User:bob  ;  User:alice ")));
         assertEquals("expected a string in format principalType:principalName but got bob",
             assertThrows(IllegalArgumentException.class, () -> getConfiguredSuperUsers(
-                Collections.singletonMap(SUPER_USERS_CONFIG, "bob;:alice"))).getMessage());
+                Map.of(SUPER_USERS_CONFIG, "bob;:alice"))).getMessage());
     }
 
     @Test
     public void testGetDefaultResult() {
-        assertEquals(DENIED, getDefaultResult(Collections.emptyMap()));
-        assertEquals(ALLOWED, getDefaultResult(Collections.singletonMap(
+        assertEquals(DENIED, getDefaultResult(Map.of()));
+        assertEquals(ALLOWED, getDefaultResult(Map.of(
             ALLOW_EVERYONE_IF_NO_ACL_IS_FOUND_CONFIG, "true")));
-        assertEquals(DENIED, getDefaultResult(Collections.singletonMap(
+        assertEquals(DENIED, getDefaultResult(Map.of(
             ALLOW_EVERYONE_IF_NO_ACL_IS_FOUND_CONFIG, "false")));
     }
 
@@ -176,26 +175,26 @@ public class StandardAuthorizerTest {
         configs.put(SUPER_USERS_CONFIG, "User:alice;User:chris");
         configs.put(ALLOW_EVERYONE_IF_NO_ACL_IS_FOUND_CONFIG, "true");
         authorizer.configure(configs);
-        authorizer.start(new AuthorizerTestServerInfo(Collections.singletonList(PLAINTEXT)));
+        authorizer.start(new AuthorizerTestServerInfo(List.of(PLAINTEXT)));
         authorizer.completeInitialLoad();
 
-        List<StandardAclWithId> acls = singletonList(
+        List<StandardAclWithId> acls = List.of(
                 withId(new StandardAcl(TOPIC, "topic1", LITERAL, "User:Alice", WILDCARD, READ, ALLOW))
         );
         acls.forEach(acl -> authorizer.addAcl(acl.id(), acl.acl()));
-        assertEquals(singletonList(DENIED),
+        assertEquals(List.of(DENIED),
                 authorizer.authorize(
                         new MockAuthorizableRequestContext.Builder()
                                 .setPrincipal(new KafkaPrincipal(USER_TYPE, "Bob"))
                                 .build(),
-                        singletonList(newAction(READ, TOPIC, "topic1"))
+                        List.of(newAction(READ, TOPIC, "topic1"))
                 ));
-        assertEquals(singletonList(ALLOWED),
+        assertEquals(List.of(ALLOWED),
                 authorizer.authorize(
                         new MockAuthorizableRequestContext.Builder()
                                 .setPrincipal(new KafkaPrincipal(USER_TYPE, "Bob"))
                                 .build(),
-                        singletonList(newAction(READ, TOPIC, "topic2"))
+                        List.of(newAction(READ, TOPIC, "topic2"))
                 ));
     }
 
@@ -206,26 +205,26 @@ public class StandardAuthorizerTest {
         configs.put(SUPER_USERS_CONFIG, "User:alice;User:chris");
         configs.put(ALLOW_EVERYONE_IF_NO_ACL_IS_FOUND_CONFIG, "false");
         authorizer.configure(configs);
-        authorizer.start(new AuthorizerTestServerInfo(Collections.singletonList(PLAINTEXT)));
+        authorizer.start(new AuthorizerTestServerInfo(List.of(PLAINTEXT)));
         authorizer.completeInitialLoad();
 
-        List<StandardAclWithId> acls = singletonList(
+        List<StandardAclWithId> acls = List.of(
                 withId(new StandardAcl(TOPIC, "topic1", LITERAL, "User:Alice", WILDCARD, READ, ALLOW))
         );
         acls.forEach(acl -> authorizer.addAcl(acl.id(), acl.acl()));
-        assertEquals(singletonList(DENIED),
+        assertEquals(List.of(DENIED),
                 authorizer.authorize(
                         new MockAuthorizableRequestContext.Builder()
                                 .setPrincipal(new KafkaPrincipal(USER_TYPE, "Bob"))
                                 .build(),
-                        singletonList(newAction(READ, TOPIC, "topic1"))
+                        List.of(newAction(READ, TOPIC, "topic1"))
                 ));
-        assertEquals(singletonList(DENIED),
+        assertEquals(List.of(DENIED),
                 authorizer.authorize(
                         new MockAuthorizableRequestContext.Builder()
                                 .setPrincipal(new KafkaPrincipal(USER_TYPE, "Bob"))
                                 .build(),
-                        singletonList(newAction(READ, TOPIC, "topic2"))
+                        List.of(newAction(READ, TOPIC, "topic2"))
                 ));
     }
 
@@ -249,8 +248,8 @@ public class StandardAuthorizerTest {
 
     static StandardAuthorizer createAndInitializeStandardAuthorizer() {
         StandardAuthorizer authorizer = new StandardAuthorizer();
-        authorizer.configure(Collections.singletonMap(SUPER_USERS_CONFIG, "User:superman"));
-        authorizer.start(new AuthorizerTestServerInfo(Collections.singletonList(PLAINTEXT)));
+        authorizer.configure(Map.of(SUPER_USERS_CONFIG, "User:superman"));
+        authorizer.start(new AuthorizerTestServerInfo(List.of(PLAINTEXT)));
         authorizer.completeInitialLoad();
         return authorizer;
     }
@@ -388,14 +387,14 @@ public class StandardAuthorizerTest {
             withId(newBarAcl(ALTER_CONFIGS, ALLOW)));
         fooAcls.forEach(a -> authorizer.addAcl(a.id(), a.acl()));
         barAcls.forEach(a -> authorizer.addAcl(a.id(), a.acl()));
-        assertEquals(singletonList(ALLOWED),
+        assertEquals(List.of(ALLOWED),
             authorizer.authorize(new MockAuthorizableRequestContext.Builder().
                 setPrincipal(new KafkaPrincipal(USER_TYPE, "bob")).build(),
-                    singletonList(newAction(READ, TOPIC, "foo_"))));
-        assertEquals(singletonList(ALLOWED),
+                    List.of(newAction(READ, TOPIC, "foo_"))));
+        assertEquals(List.of(ALLOWED),
             authorizer.authorize(new MockAuthorizableRequestContext.Builder().
                     setPrincipal(new KafkaPrincipal(USER_TYPE, "fred")).build(),
-                singletonList(newAction(ALTER_CONFIGS, GROUP, "bar"))));
+                List.of(newAction(ALTER_CONFIGS, GROUP, "bar"))));
     }
 
     @Test
@@ -579,7 +578,7 @@ public class StandardAuthorizerTest {
                 .setClientAddress(InetAddress.getByName("127.0.0.1"))
                 .build();
 
-            assertEquals(singletonList(DENIED), authorizer.authorize(requestContext, singletonList(action)));
+            assertEquals(List.of(DENIED), authorizer.authorize(requestContext, List.of(action)));
 
             String expectedAuditLog = "Principal = User:bob is Denied operation = READ " +
                 "from host = 127.0.0.1 on resource = Topic:LITERAL:alpha for request = Fetch " +
@@ -621,7 +620,7 @@ public class StandardAuthorizerTest {
                 .setClientAddress(InetAddress.getByName("127.0.0.1"))
                 .build();
 
-            assertEquals(singletonList(ALLOWED), authorizer.authorize(requestContext, singletonList(action)));
+            assertEquals(List.of(ALLOWED), authorizer.authorize(requestContext, List.of(action)));
 
             String expectedAuditLog = "Principal = User:bob is Allowed operation = READ " +
                 "from host = 127.0.0.1 on resource = Topic:LITERAL:green1 for request = Fetch " +
@@ -644,7 +643,7 @@ public class StandardAuthorizerTest {
     @Test
     public void testStartWithEarlyStartListeners() {
         StandardAuthorizer authorizer = new StandardAuthorizer();
-        authorizer.configure(Collections.singletonMap(SUPER_USERS_CONFIG, "User:superman"));
+        authorizer.configure(Map.of(SUPER_USERS_CONFIG, "User:superman"));
         Map<Endpoint, ? extends CompletionStage<Void>> futures2 = authorizer.
             start(new AuthorizerTestServerInfo(Arrays.asList(PLAINTEXT, CONTROLLER)));
         assertEquals(new HashSet<>(Arrays.asList(PLAINTEXT, CONTROLLER)), futures2.keySet());
@@ -661,7 +660,7 @@ public class StandardAuthorizerTest {
     @Test
     public void testAuthorizationPriorToCompleteInitialLoad() throws Exception {
         StandardAuthorizer authorizer = new StandardAuthorizer();
-        authorizer.configure(Collections.singletonMap(SUPER_USERS_CONFIG, "User:superman"));
+        authorizer.configure(Map.of(SUPER_USERS_CONFIG, "User:superman"));
         assertThrows(AuthorizerNotReadyException.class, () ->
             authorizer.authorize(new MockAuthorizableRequestContext.Builder().
                     setPrincipal(new KafkaPrincipal(USER_TYPE, "bob")).build(),
@@ -677,10 +676,10 @@ public class StandardAuthorizerTest {
     @Test
     public void testCompleteInitialLoad() {
         StandardAuthorizer authorizer = new StandardAuthorizer();
-        authorizer.configure(Collections.singletonMap(SUPER_USERS_CONFIG, "User:superman"));
+        authorizer.configure(Map.of(SUPER_USERS_CONFIG, "User:superman"));
         Map<Endpoint, ? extends CompletionStage<Void>> futures = authorizer.
-            start(new AuthorizerTestServerInfo(Collections.singleton(PLAINTEXT)));
-        assertEquals(Collections.singleton(PLAINTEXT), futures.keySet());
+            start(new AuthorizerTestServerInfo(Set.of(PLAINTEXT)));
+        assertEquals(Set.of(PLAINTEXT), futures.keySet());
         assertFalse(futures.get(PLAINTEXT).toCompletableFuture().isDone());
         authorizer.completeInitialLoad();
         assertTrue(futures.get(PLAINTEXT).toCompletableFuture().isDone());
@@ -690,7 +689,7 @@ public class StandardAuthorizerTest {
     @Test
     public void testCompleteInitialLoadWithException() {
         StandardAuthorizer authorizer = new StandardAuthorizer();
-        authorizer.configure(Collections.singletonMap(SUPER_USERS_CONFIG, "User:superman"));
+        authorizer.configure(Map.of(SUPER_USERS_CONFIG, "User:superman"));
         Map<Endpoint, ? extends CompletionStage<Void>> futures = authorizer.
             start(new AuthorizerTestServerInfo(Arrays.asList(PLAINTEXT, CONTROLLER)));
         assertEquals(new HashSet<>(Arrays.asList(PLAINTEXT, CONTROLLER)), futures.keySet());

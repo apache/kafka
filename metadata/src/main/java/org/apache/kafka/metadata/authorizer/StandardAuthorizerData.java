@@ -122,7 +122,7 @@ public class StandardAuthorizerData {
         return new StandardAuthorizerData(createLogger(-1),
             null,
             false,
-            Collections.emptySet(),
+            Set.of(),
             DENIED,
             new AclCache());
     }

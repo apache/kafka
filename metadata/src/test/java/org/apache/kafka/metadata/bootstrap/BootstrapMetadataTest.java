@@ -27,10 +27,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 
-import static java.util.Collections.emptyList;
 import static org.apache.kafka.server.common.MetadataVersion.FEATURE_NAME;
 import static org.apache.kafka.server.common.MetadataVersion.IBP_3_3_IV3;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -50,7 +48,7 @@ public class BootstrapMetadataTest {
 
     @Test
     public void testFromVersion() {
-        assertEquals(new BootstrapMetadata(Collections.singletonList(
+        assertEquals(new BootstrapMetadata(List.of(
             new ApiMessageAndVersion(new FeatureLevelRecord().
                 setName(FEATURE_NAME).
                 setFeatureLevel((short) 7), (short) 0)),
@@ -68,7 +66,7 @@ public class BootstrapMetadataTest {
     public void testFromRecordsListWithoutMetadataVersion() {
         assertEquals("No FeatureLevelRecord for metadata.version was found in the bootstrap " +
             "metadata from quux", assertThrows(RuntimeException.class,
-                () -> BootstrapMetadata.fromRecords(emptyList(), "quux")).getMessage());
+                () -> BootstrapMetadata.fromRecords(List.of(), "quux")).getMessage());
     }
 
     private static final ApiMessageAndVersion MV_10 =
@@ -124,7 +122,7 @@ public class BootstrapMetadataTest {
             fromRecords(Arrays.asList(MV_10, FOO_2), "src").featureLevel("foo"));
     }
 
-    static final List<ApiMessageAndVersion> RECORDS_WITH_OLD_METADATA_VERSION = Collections.singletonList(
+    static final List<ApiMessageAndVersion> RECORDS_WITH_OLD_METADATA_VERSION = List.of(
             new ApiMessageAndVersion(new FeatureLevelRecord().
                 setName(FEATURE_NAME).
                 setFeatureLevel(MetadataVersionTestUtils.IBP_3_0_IV1_FEATURE_LEVEL), (short) 0));

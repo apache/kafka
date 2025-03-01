@@ -40,12 +40,12 @@ import org.junit.jupiter.api.Timeout;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.apache.kafka.common.metadata.MetadataRecordType.CLEAR_ELR_RECORD;
 import static org.apache.kafka.common.metadata.MetadataRecordType.PARTITION_CHANGE_RECORD;
@@ -147,8 +147,8 @@ public class TopicsImageTest {
             setTopicId(BAZ_UUID).
             setReplicas(Arrays.asList(1, 2, 3, 4)).
             setIsr(Arrays.asList(3, 4)).
-            setRemovingReplicas(Collections.singletonList(2)).
-            setAddingReplicas(Collections.singletonList(1)).
+            setRemovingReplicas(List.of(2)).
+            setAddingReplicas(List.of(1)).
             setLeader(3).
             setLeaderEpoch(2).
             setPartitionEpoch(1), PARTITION_RECORD.highestSupportedVersion()));
@@ -251,11 +251,11 @@ public class TopicsImageTest {
 
         LocalReplicaChanges changes = delta.localChanges(localId);
         assertEquals(
-            new HashSet<>(Collections.singletonList(new TopicPartition("baz", 0))),
+            new HashSet<>(List.of(new TopicPartition("baz", 0))),
             changes.electedLeaders().keySet()
         );
         assertEquals(
-            new HashSet<>(Collections.singletonList(new TopicPartition("baz", 0))),
+            new HashSet<>(List.of(new TopicPartition("baz", 0))),
             changes.leaders().keySet()
         );
         assertEquals(
@@ -307,10 +307,10 @@ public class TopicsImageTest {
         RecordTestUtils.replayAll(delta, topicRecords);
 
         LocalReplicaChanges changes = delta.localChanges(localId);
-        assertEquals(new HashSet<>(Collections.singletonList(new TopicPartition("zoo", 0))), changes.deletes());
-        assertEquals(Collections.emptyMap(), changes.electedLeaders());
-        assertEquals(Collections.emptyMap(), changes.leaders());
-        assertEquals(Collections.emptyMap(), changes.followers());
+        assertEquals(new HashSet<>(List.of(new TopicPartition("zoo", 0))), changes.deletes());
+        assertEquals(Map.of(), changes.electedLeaders());
+        assertEquals(Map.of(), changes.leaders());
+        assertEquals(Map.of(), changes.followers());
 
         TopicsImage finalImage = delta.apply();
         List<ApiMessageAndVersion> imageRecords = getImageRecords(image);
@@ -346,13 +346,13 @@ public class TopicsImageTest {
         RecordTestUtils.replayAll(delta, topicRecords);
 
         LocalReplicaChanges changes = delta.localChanges(localId);
-        assertEquals(Collections.emptySet(), changes.deletes());
-        assertEquals(Collections.emptyMap(), changes.electedLeaders());
+        assertEquals(Set.of(), changes.deletes());
+        assertEquals(Map.of(), changes.electedLeaders());
         assertEquals(
-            new HashSet<>(Collections.singletonList(new TopicPartition("zoo", 0))),
+            new HashSet<>(List.of(new TopicPartition("zoo", 0))),
             changes.leaders().keySet()
         );
-        assertEquals(Collections.emptyMap(), changes.followers());
+        assertEquals(Map.of(), changes.followers());
     }
 
     @Test
@@ -431,11 +431,11 @@ public class TopicsImageTest {
 
     @Test
     public void testClearElrRecordForNonExistTopic() {
-        TopicsImage image = new TopicsImage(newTopicsByIdMap(Collections.emptyList()),
-            newTopicsByNameMap(Collections.emptyList()));
+        TopicsImage image = new TopicsImage(newTopicsByIdMap(List.of()),
+            newTopicsByNameMap(List.of()));
         TopicsDelta delta = new TopicsDelta(image);
         List<ApiMessageAndVersion> topicRecords = new ArrayList<>();
-        topicRecords.addAll(Collections.singletonList(
+        topicRecords.addAll(List.of(
             new ApiMessageAndVersion(
                 new ClearElrRecord().setTopicName("non-exist"),
                 CLEAR_ELR_RECORD.highestSupportedVersion()

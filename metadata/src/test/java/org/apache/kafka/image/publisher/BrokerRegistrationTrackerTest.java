@@ -33,7 +33,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Arrays;
-import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -114,7 +114,7 @@ public class BrokerRegistrationTrackerTest {
         delta.replay(new RegisterBrokerRecord().
             setBrokerId(1).
             setIncarnationId(INCARNATION_ID).
-            setLogDirs(Collections.emptyList()));
+            setLogDirs(List.of()));
         delta.replay(new FeatureLevelRecord().
             setName(MetadataVersion.FEATURE_NAME).
             setFeatureLevel(jbodMv ? MetadataVersion.IBP_3_7_IV2.featureLevel() :
@@ -135,7 +135,7 @@ public class BrokerRegistrationTrackerTest {
         delta.replay(new RegisterBrokerRecord().
             setBrokerId(1).
             setIncarnationId(INCARNATION_ID).
-            setLogDirs(Collections.emptyList()));
+            setLogDirs(List.of()));
         delta.replay(new FeatureLevelRecord().
             setName(MetadataVersion.FEATURE_NAME).
             setFeatureLevel(MetadataVersion.IBP_3_7_IV1.featureLevel()));

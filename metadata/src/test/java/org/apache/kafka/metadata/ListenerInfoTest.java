@@ -27,7 +27,6 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -67,23 +66,23 @@ public class ListenerInfoTest {
 
     @Test
     public void testNullHostname() {
-        assertNull(ListenerInfo.create(Collections.singletonList(INTERNAL)).firstListener().host());
+        assertNull(ListenerInfo.create(List.of(INTERNAL)).firstListener().host());
     }
 
     @Test
     public void testNullHostnameGetsResolved() throws Exception {
-        assertNotNull(ListenerInfo.create(Collections.singletonList(INTERNAL)).
+        assertNotNull(ListenerInfo.create(List.of(INTERNAL)).
                 withWildcardHostnamesResolved().firstListener().host());
     }
 
     @Test
     public void testEmptyHostname() {
-        assertEquals("", ListenerInfo.create(Collections.singletonList(SSL)).firstListener().host());
+        assertEquals("", ListenerInfo.create(List.of(SSL)).firstListener().host());
     }
 
     @Test
     public void testEmptyHostnameGetsResolved() throws Exception {
-        assertNotEquals("", ListenerInfo.create(Collections.singletonList(SSL)).
+        assertNotEquals("", ListenerInfo.create(List.of(SSL)).
                 withWildcardHostnamesResolved().firstListener().host());
     }
 
@@ -120,14 +119,14 @@ public class ListenerInfoTest {
     @Test
     public void testToControllerRegistrationRequestFailsOnNullHost() {
         assertThrows(RuntimeException.class,
-            () -> ListenerInfo.create(Collections.singletonList(INTERNAL)).
+            () -> ListenerInfo.create(List.of(INTERNAL)).
                 toControllerRegistrationRequest());
     }
 
     @Test
     public void testToControllerRegistrationRequestFailsOnZeroPort() {
         assertThrows(RuntimeException.class,
-            () -> ListenerInfo.create(Collections.singletonList(INTERNAL)).
+            () -> ListenerInfo.create(List.of(INTERNAL)).
                 withWildcardHostnamesResolved().
                 toControllerRegistrationRequest());
     }
@@ -145,14 +144,14 @@ public class ListenerInfoTest {
     @Test
     public void testToControllerRegistrationRecordFailsOnNullHost() {
         assertThrows(RuntimeException.class,
-            () -> ListenerInfo.create(Collections.singletonList(INTERNAL)).
+            () -> ListenerInfo.create(List.of(INTERNAL)).
                 toControllerRegistrationRecord());
     }
 
     @Test
     public void testToControllerRegistrationRecordFailsOnZeroPort() {
         assertThrows(RuntimeException.class,
-            () -> ListenerInfo.create(Collections.singletonList(INTERNAL)).
+            () -> ListenerInfo.create(List.of(INTERNAL)).
                 withWildcardHostnamesResolved().
                 toControllerRegistrationRecord());
     }
@@ -170,14 +169,14 @@ public class ListenerInfoTest {
     @Test
     public void testToBrokerRegistrationRequestFailsOnNullHost() {
         assertThrows(RuntimeException.class,
-            () -> ListenerInfo.create(Collections.singletonList(INTERNAL)).
+            () -> ListenerInfo.create(List.of(INTERNAL)).
                 toBrokerRegistrationRequest());
     }
 
     @Test
     public void testToBrokerRegistrationRequestFailsOnZeroPort() {
         assertThrows(RuntimeException.class,
-            () -> ListenerInfo.create(Collections.singletonList(INTERNAL)).
+            () -> ListenerInfo.create(List.of(INTERNAL)).
                 withWildcardHostnamesResolved().
                 toBrokerRegistrationRequest());
     }
@@ -195,14 +194,14 @@ public class ListenerInfoTest {
     @Test
     public void testToBrokerRegistrationRecordFailsOnNullHost() {
         assertThrows(RuntimeException.class,
-            () -> ListenerInfo.create(Collections.singletonList(INTERNAL)).
+            () -> ListenerInfo.create(List.of(INTERNAL)).
                 toBrokerRegistrationRecord());
     }
 
     @Test
     public void testToBrokerRegistrationRecordFailsOnZeroPort() {
         assertThrows(RuntimeException.class,
-            () -> ListenerInfo.create(Collections.singletonList(INTERNAL)).
+            () -> ListenerInfo.create(List.of(INTERNAL)).
                 withWildcardHostnamesResolved().
                 toBrokerRegistrationRecord());
     }

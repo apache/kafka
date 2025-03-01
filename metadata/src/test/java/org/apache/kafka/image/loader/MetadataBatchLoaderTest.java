@@ -39,10 +39,8 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.OptionalInt;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -97,13 +95,13 @@ public class MetadataBatchLoaderTest {
                     .setTopicId(TOPIC_BAR), (short) 0)
             );
 
-            TXN_BEGIN_SINGLETON = Collections.singletonList(
+            TXN_BEGIN_SINGLETON = List.of(
                 new ApiMessageAndVersion(new BeginTransactionRecord().setName("txn-1"), (short) 0));
 
-            TXN_END_SINGLETON = Collections.singletonList(
+            TXN_END_SINGLETON = List.of(
                 new ApiMessageAndVersion(new EndTransactionRecord(), (short) 0));
 
-            TXN_ABORT_SINGLETON = Collections.singletonList(
+            TXN_ABORT_SINGLETON = List.of(
                 new ApiMessageAndVersion(new AbortTransactionRecord(), (short) 0));
         }
     }
@@ -111,7 +109,7 @@ public class MetadataBatchLoaderTest {
     static List<ApiMessageAndVersion> noOpRecords(int n) {
         return IntStream.range(0, n)
                 .mapToObj(__ -> new ApiMessageAndVersion(new NoOpRecord(), (short) 0))
-                .collect(Collectors.toList());
+                .toList();
     }
 
 

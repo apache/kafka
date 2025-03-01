@@ -56,7 +56,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalInt;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.metadata.storage.ScramParserTest.TEST_SALT;
@@ -310,7 +309,7 @@ public class FormatterTest {
             assertEquals(MetadataVersion.IBP_3_8_IV0, bootstrapMetadata.metadataVersion());
             List<ApiMessageAndVersion> scramRecords = bootstrapMetadata.records().stream().
                 filter(r -> r.message() instanceof UserScramCredentialRecord).
-                    collect(Collectors.toList());
+                    toList();
             ScramFormatter scram256 = new ScramFormatter(ScramMechanism.SCRAM_SHA_256);
             ScramFormatter scram512 = new ScramFormatter(ScramMechanism.SCRAM_SHA_512);
             assertEquals(Arrays.asList(
@@ -399,7 +398,7 @@ public class FormatterTest {
                     testEnv.directory(0),
                     MetadataVersion.FEATURE_NAME,
                     MetadataVersion.latestTesting())),
-                formatter1.outputLines().stream().sorted().collect(Collectors.toList()));
+                formatter1.outputLines().stream().sorted().toList());
             MetaPropertiesEnsemble ensemble = new MetaPropertiesEnsemble.Loader().
                 addLogDirs(testEnv.directories).
                 load();
@@ -509,7 +508,7 @@ public class FormatterTest {
                         testEnv.directory(0),
                         MetadataVersion.FEATURE_NAME,
                         MetadataVersion.latestTesting())),
-                formatter1.outputLines().stream().sorted().collect(Collectors.toList()));
+                formatter1.outputLines().stream().sorted().toList());
             MetaPropertiesEnsemble ensemble = new MetaPropertiesEnsemble.Loader().
                 addLogDirs(testEnv.directories).
                 load();

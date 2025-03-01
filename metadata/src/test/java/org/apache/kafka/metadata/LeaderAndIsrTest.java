@@ -20,7 +20,7 @@ package org.apache.kafka.metadata;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
-import java.util.Collections;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -28,10 +28,10 @@ public final class LeaderAndIsrTest {
     @Test
     public void testRecoveringLeaderAndIsr() {
         LeaderAndIsr leaderAndIsr = new LeaderAndIsr(1, Arrays.asList(1, 2));
-        LeaderAndIsr recoveringLeaderAndIsr = leaderAndIsr.newRecoveringLeaderAndIsr(3, Collections.singletonList(3));
+        LeaderAndIsr recoveringLeaderAndIsr = leaderAndIsr.newRecoveringLeaderAndIsr(3, List.of(3));
 
         assertEquals(3, recoveringLeaderAndIsr.leader());
-        assertEquals(Collections.singletonList(3), recoveringLeaderAndIsr.isr());
+        assertEquals(List.of(3), recoveringLeaderAndIsr.isr());
         assertEquals(LeaderRecoveryState.RECOVERING, recoveringLeaderAndIsr.leaderRecoveryState());
     }
 

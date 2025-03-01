@@ -57,7 +57,7 @@ public class ControllerRegistrationTest {
             setListeners(doubleMap(
                 "PLAINTEXT", new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9107),
                 "SSL", new Endpoint("SSL", SecurityProtocol.SSL, "localhost", 9207))).
-            setSupportedFeatures(Collections.singletonMap(MetadataVersion.FEATURE_NAME, VersionRange.of(1, 10))).
+            setSupportedFeatures(Map.of(MetadataVersion.FEATURE_NAME, VersionRange.of(1, 10))).
             build(),
         new ControllerRegistration.Builder().
             setId(1).
@@ -66,7 +66,7 @@ public class ControllerRegistrationTest {
             setListeners(doubleMap(
                 "PLAINTEXT", new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9108),
                 "SSL", new Endpoint("SSL", SecurityProtocol.SSL, "localhost", 9208))).
-            setSupportedFeatures(Collections.singletonMap(MetadataVersion.FEATURE_NAME, VersionRange.of(1, 10))).
+            setSupportedFeatures(Map.of(MetadataVersion.FEATURE_NAME, VersionRange.of(1, 10))).
             build(),
         new ControllerRegistration.Builder().
             setId(2).
@@ -75,7 +75,7 @@ public class ControllerRegistrationTest {
             setListeners(doubleMap(
                 "PLAINTEXT", new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9109),
                 "SSL", new Endpoint("SSL", SecurityProtocol.SSL, "localhost", 9209))).
-            setSupportedFeatures(Collections.singletonMap(MetadataVersion.FEATURE_NAME, VersionRange.of(1, 10))).
+            setSupportedFeatures(Map.of(MetadataVersion.FEATURE_NAME, VersionRange.of(1, 10))).
             build()
     );
 

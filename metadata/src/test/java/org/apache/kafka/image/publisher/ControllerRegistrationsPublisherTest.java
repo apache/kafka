@@ -33,8 +33,8 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.OptionalInt;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -47,7 +47,7 @@ public class ControllerRegistrationsPublisherTest {
     @Test
     public void testInitialControllers() {
         ControllerRegistrationsPublisher publisher = new ControllerRegistrationsPublisher();
-        assertEquals(Collections.emptyMap(), publisher.controllers());
+        assertEquals(Map.of(), publisher.controllers());
     }
 
     @Test

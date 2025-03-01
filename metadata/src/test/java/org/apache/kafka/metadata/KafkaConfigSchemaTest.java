@@ -31,7 +31,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static java.util.Collections.emptyList;
 import static org.apache.kafka.common.config.ConfigResource.Type.BROKER;
 import static org.apache.kafka.common.config.ConfigResource.Type.TOPIC;
 import static org.apache.kafka.server.config.ConfigSynonym.HOURS_TO_MILLISECONDS;
@@ -153,16 +152,16 @@ public class KafkaConfigSchemaTest {
         dynamicTopicConfigs.put("ghi", "true");
         Map<String, ConfigEntry> expected = new HashMap<>();
         expected.put("abc", new ConfigEntry("abc", "the,dynamic,cluster,config,value",
-            ConfigEntry.ConfigSource.DYNAMIC_DEFAULT_BROKER_CONFIG, false, false, emptyList(),
+            ConfigEntry.ConfigSource.DYNAMIC_DEFAULT_BROKER_CONFIG, false, false, List.of(),
                 ConfigEntry.ConfigType.LIST, "abc doc"));
         expected.put("def", new ConfigEntry("def", "2840400000",
-            ConfigEntry.ConfigSource.DYNAMIC_BROKER_CONFIG, false, false, emptyList(),
+            ConfigEntry.ConfigSource.DYNAMIC_BROKER_CONFIG, false, false, List.of(),
             ConfigEntry.ConfigType.LONG, "def doc"));
         expected.put("ghi", new ConfigEntry("ghi", "true",
-            ConfigEntry.ConfigSource.DYNAMIC_TOPIC_CONFIG, false, false, emptyList(),
+            ConfigEntry.ConfigSource.DYNAMIC_TOPIC_CONFIG, false, false, List.of(),
             ConfigEntry.ConfigType.BOOLEAN, "ghi doc"));
         expected.put("xyz", new ConfigEntry("xyz", "thedefault",
-            ConfigEntry.ConfigSource.DEFAULT_CONFIG, true, false, emptyList(),
+            ConfigEntry.ConfigSource.DEFAULT_CONFIG, true, false, List.of(),
             ConfigEntry.ConfigType.PASSWORD, "xyz doc"));
         assertEquals(expected, SCHEMA.resolveEffectiveTopicConfigs(staticNodeConfig,
             dynamicClusterConfigs,
