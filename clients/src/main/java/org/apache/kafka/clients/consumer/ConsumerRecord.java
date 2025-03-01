@@ -21,14 +21,33 @@ import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
 
+import java.util.ConcurrentModificationException;
 import java.util.Optional;
 
 /**
- * A key/value pair to be received from Kafka. This also consists of a topic name and 
- * a partition number from which the record is being received, an offset that points 
+ * A key/value pair to be received from Kafka. This also consists of a topic name and
+ * a partition number from which the record is being received, an offset that points
  * to the record in a Kafka partition, and a timestamp as marked by the corresponding ProducerRecord.
  *
- * This class is not thread-safe!
+ * <h3>Thread Safety</h3>
+ * This class is <b>not thread-safe</b>. Concurrent access to a {@code ConsumerRecord} instance by multiple threads
+ * may result in undefined behavior, including but not limited to the following:
+ * <ul>
+ *   <li>Throwing {@link ConcurrentModificationException} (e.g., when concurrently modifying {@link #headers()}).</li>
+ *   <li>Data corruption or logical errors (e.g., inconsistent state of {@code headers} or {@code value}).</li>
+ *   <li>Visibility issues (e.g., modifications by one thread not being visible to another thread).</li>
+ * </ul>
+ *
+ * <p>
+ * In particular, the {@link #headers()} method returns a mutable collection of headers. If multiple
+ * threads access or modify these headers concurrently, it may lead to race conditions or inconsistent
+ * states. It is the responsibility of the user to ensure that multi-threaded access is properly synchronized.
+ *
+ * <p>
+ * For a thread-safe processing model, consider using a single consumer per thread (one consumer per
+ * thread model) or decoupling consumption and processing into separate threads, where the consumer thread
+ * hands off records to a thread pool for processing. Refer to the {@link KafkaConsumer} documentation for
+ * more details on multi-threaded consumption and processing strategies.
  */
 public class ConsumerRecord<K, V> {
     public static final long NO_TIMESTAMP = RecordBatch.NO_TIMESTAMP;
