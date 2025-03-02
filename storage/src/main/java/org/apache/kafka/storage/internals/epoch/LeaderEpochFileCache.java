@@ -26,7 +26,6 @@ import org.slf4j.Logger;
 
 import java.util.AbstractMap;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -406,7 +405,7 @@ public final class LeaderEpochFileCache {
         if (endOffset >= 0 && epochEntry.isPresent() && epochEntry.get().startOffset >= endOffset) {
             return removeWhileMatching(epochs.descendingMap().entrySet().iterator(), x -> x.startOffset >= endOffset);
         }
-        return Collections.emptyList();
+        return List.of();
     }
 
     public OptionalInt epochForOffset(long offset) {

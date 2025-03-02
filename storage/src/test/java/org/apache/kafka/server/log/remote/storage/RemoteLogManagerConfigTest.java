@@ -21,7 +21,6 @@ import org.apache.kafka.common.config.ConfigException;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -33,8 +32,8 @@ public class RemoteLogManagerConfigTest {
     public void testValidConfigs() {
         String rsmPrefix = "__custom.rsm.";
         String rlmmPrefix = "__custom.rlmm.";
-        Map<String, Object> rsmProps = Collections.singletonMap("rsm.prop", "val");
-        Map<String, Object> rlmmProps = Collections.singletonMap("rlmm.prop", "val");
+        Map<String, Object> rsmProps = Map.of("rsm.prop", "val");
+        Map<String, Object> rlmmProps = Map.of("rlmm.prop", "val");
 
         Map<String, Object> props = getRLMProps(rsmPrefix, rlmmPrefix);
         rsmProps.forEach((k, v) -> props.put(rsmPrefix + k, v));
@@ -68,7 +67,7 @@ public class RemoteLogManagerConfigTest {
     @Test
     public void testValidateEmptyStringConfig() {
         // Test with a empty string props should throw ConfigException
-        Map<String, Object> emptyStringProps = Collections.singletonMap(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP, "");
+        Map<String, Object> emptyStringProps = Map.of(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP, "");
         assertThrows(ConfigException.class, () ->
                 new RLMTestConfig(emptyStringProps).remoteLogManagerConfig());
     }

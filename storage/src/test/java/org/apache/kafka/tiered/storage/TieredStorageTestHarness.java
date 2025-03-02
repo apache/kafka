@@ -38,7 +38,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -71,7 +70,7 @@ public abstract class TieredStorageTestHarness extends IntegrationTestHarness {
 
     @Override
     public Seq<Properties> kraftControllerConfigs(TestInfo testInfo) {
-        return CollectionConverters.asScala(Collections.singletonList(overridingProps())).toSeq();
+        return CollectionConverters.asScala(List.of(overridingProps())).toSeq();
     }
 
     protected int numRemoteLogMetadataPartitions() {
