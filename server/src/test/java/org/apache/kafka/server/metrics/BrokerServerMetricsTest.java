@@ -25,7 +25,6 @@ import org.apache.kafka.image.MetadataProvenance;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
@@ -43,12 +42,12 @@ public final class BrokerServerMetricsTest {
 
         // Metric description is not use for metric name equality
         Set<MetricName> expectedMetrics = new HashSet<>(Arrays.asList(
-                new MetricName("last-applied-record-offset", expectedGroup, "", Collections.emptyMap()),
-                new MetricName("last-applied-record-timestamp", expectedGroup, "", Collections.emptyMap()),
-                new MetricName("last-applied-record-lag-ms", expectedGroup, "", Collections.emptyMap()),
-                new MetricName("metadata-load-error-count", expectedGroup, "", Collections.emptyMap()),
-                new MetricName("metadata-apply-error-count", expectedGroup, "", Collections.emptyMap()),
-                new MetricName("ignored-static-voters", expectedGroup, "", Collections.emptyMap())
+                new MetricName("last-applied-record-offset", expectedGroup, "", Map.of()),
+                new MetricName("last-applied-record-timestamp", expectedGroup, "", Map.of()),
+                new MetricName("last-applied-record-lag-ms", expectedGroup, "", Map.of()),
+                new MetricName("metadata-load-error-count", expectedGroup, "", Map.of()),
+                new MetricName("metadata-apply-error-count", expectedGroup, "", Map.of()),
+                new MetricName("ignored-static-voters", expectedGroup, "", Map.of())
         ));
 
         try (BrokerServerMetrics ignored = new BrokerServerMetrics(metrics)) {

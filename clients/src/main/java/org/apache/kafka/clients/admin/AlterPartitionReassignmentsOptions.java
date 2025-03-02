@@ -17,16 +17,11 @@
 
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
-
 import java.util.Map;
 
 /**
  * Options for {@link AdminClient#alterPartitionReassignments(Map, AlterPartitionReassignmentsOptions)}
- *
- * The API of this class is evolving. See {@link AdminClient} for details.
  */
-@InterfaceStability.Evolving
 public class AlterPartitionReassignmentsOptions extends AbstractOptions<AlterPartitionReassignmentsOptions> {
 
     private boolean allowReplicationFactorChange = true;

@@ -833,8 +833,9 @@ class KRaftClusterTest {
     Option(image.brokers().get(brokerId)).isEmpty
   }
 
-  @Test
-  def testUnregisterBroker(): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testUnregisterBroker(usingBootstrapController: Boolean): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
         setNumBrokerNodes(4).
@@ -848,7 +849,7 @@ class KRaftClusterTest {
       cluster.brokers().get(0).shutdown()
       TestUtils.waitUntilTrue(() => !brokerIsUnfenced(clusterImage(cluster, 1), 0),
         "Timed out waiting for broker 0 to be fenced.")
-      val admin = Admin.create(cluster.clientProperties())
+      val admin = createAdminClient(cluster, bootstrapController = usingBootstrapController);
       try {
         admin.unregisterBroker(0)
       } finally {

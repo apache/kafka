@@ -35,6 +35,7 @@ import java.util.Map;
  * - {@link Errors#INVALID_REQUEST}
  * - {@link Errors#INVALID_GROUP_ID}
  * - {@link Errors#GROUP_ID_NOT_FOUND}
+ * - {@link Errors#TOPIC_AUTHORIZATION_FAILED}
  */
 public class ConsumerGroupDescribeResponse extends AbstractResponse {
 
