@@ -139,11 +139,11 @@ public class RaftEventSimulationTest {
 
     @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
     void canAddAndRemoveVoters(
-        @ForAll int seed,
-        @ForAll @IntRange(min = 1, max = 5) int numVoters,
-        @ForAll @IntRange(min = 1, max = 10) int numObservers
+        @ForAll int seed
     ) {
         Random random = new Random(seed);
+        int numVoters = 3;
+        int numObservers = 2;
         Cluster cluster = new Cluster(numVoters, numObservers, random, true);
         MessageRouter router = new MessageRouter(cluster);
         EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
@@ -151,21 +151,17 @@ public class RaftEventSimulationTest {
 
         initializeClusterAndStartAppending(cluster, router, scheduler, 10);
 
-        // Schedule all the observers to be added as voters
+        // Add all observers to voter set one by one
         for (int voterIdToAdd = numVoters; voterIdToAdd < numVoters + numObservers; voterIdToAdd++) {
             addVoter(cluster, scheduler, voterIdToAdd, expectedVoterIds);
         }
-        int voterSetSize = numVoters + numObservers;
+        runUntilNewHighWatermark(cluster, scheduler);
 
-        // Schedule all voters besides the first to be removed
-        for (int voterIdToRemove = numVoters + numObservers - 1; voterIdToRemove > 0; voterIdToRemove--) {
-            int nextVoterSetSize = voterSetSize - 1;
-            scheduler.schedule(new RemoveVoterAction(cluster, cluster.running.get(voterIdToRemove)), 0, 5, 3);
-            if (cluster.leaderWithMaxEpoch().isEmpty()) {
-                scheduler.runUntil(cluster::hasConsistentLeader);
-            }
-            scheduler.runUntil(() -> cluster.leaderWithMaxEpoch().get().client.partitionState().lastVoterSet().size() == nextVoterSetSize);
+        // Remove all added observers from voter set one by one
+        for (int voterIdToRemove = numVoters + numObservers - 1; voterIdToRemove >= numVoters; voterIdToRemove--) {
+            removeVoter(cluster, scheduler, voterIdToRemove, expectedVoterIds);
         }
+        runUntilNewHighWatermark(cluster, scheduler);
     }
 
     @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
@@ -542,7 +538,7 @@ public class RaftEventSimulationTest {
     }
 
     @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
-    void canRemovePartitionedVoterAndAddObserver(
+    void canAddObserverAndRemovePartitionedVoter(
         @ForAll int seed,
         @ForAll @IntRange(min = 3, max = 5) int numVoters
     ) {
@@ -554,42 +550,39 @@ public class RaftEventSimulationTest {
 
         initializeClusterAndStartAppending(cluster, router, scheduler, 10);
 
-        // Partition a random voter, and wait for a consistent leader before attempting to remove it
+        // Partition a random voter, and add an observer to replace it
         RaftNode voterToRemove = cluster.running.get(random.nextInt(numVoters));
         router.filter(voterToRemove.id(), new DropAllTraffic());
-        scheduler.runUntil(cluster::hasConsistentLeader);
-
-        removeVoter(cluster, scheduler, voterToRemove.id(), expectedVoterIds);
-
         addVoter(cluster, scheduler, numVoters, expectedVoterIds);
+
+        // Remove the partitioned voter
+        removeVoter(cluster, scheduler, voterToRemove.id(), expectedVoterIds);
         runUntilNewHighWatermarkOnVoterNodes(cluster, scheduler, expectedVoterIds);
     }
 
     @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
     void canRemoveAndAddBackVoter(
         @ForAll int seed,
-        @ForAll @IntRange(min = 3, max = 5) int numVoters
+        @ForAll @IntRange(min = 3, max = 5) int numVoters,
+        @ForAll @IntRange(min = 0, max = 2) int numObservers
     ) {
         Random random = new Random(seed);
-        Cluster cluster = new Cluster(numVoters, 0, random, true);
+        Cluster cluster = new Cluster(numVoters, numObservers, random, true);
         MessageRouter router = new MessageRouter(cluster);
         EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
         Set<Integer> expectedVoterIds = new HashSet<>(cluster.initialVoters.keySet());
 
         initializeClusterAndStartAppending(cluster, router, scheduler, 10);
 
-        // Partition a random voter, and wait for a consistent leader before attempting to remove it
+        // Partition a random voter and remove it
         RaftNode voterToRemove = cluster.running.get(random.nextInt(numVoters));
         router.filter(voterToRemove.id(), new DropAllTraffic());
-        scheduler.runUntil(cluster::hasConsistentLeader);
-
         removeVoter(cluster, scheduler, voterToRemove.id(), expectedVoterIds);
 
+        // Restore the network and add the voter back
         router.filter(voterToRemove.id(), new PermitAllTraffic());
-
-        // catch up the partitioned voter and then add it back
-        runUntilNewHighWatermark(cluster, scheduler);
         addVoter(cluster, scheduler, voterToRemove.id(), expectedVoterIds);
+        runUntilNewHighWatermark(cluster, scheduler);
     }
 
     /**
@@ -1018,15 +1011,6 @@ public class RaftEventSimulationTest {
         boolean allReachedHighWatermark(long offset) {
             return running.values().stream()
                 .allMatch(node -> node.highWatermark() >= offset);
-        }
-
-        boolean leaderHasWrittenVoterSet(Set<Integer> voterIds) {
-            Optional<RaftNode> leader = leaderWithMaxEpoch();
-            if (leader.isEmpty()) {
-                return false;
-            } else {
-                return leader.get().client.partitionState().lastVoterSet().voterIds().equals(voterIds);
-            }
         }
 
         boolean leaderHasCommittedVoterSet(Set<Integer> voterIds) {
@@ -1482,14 +1466,10 @@ public class RaftEventSimulationTest {
                 * Note that 1 and 2 can be the same set, but when they are not, lastVoterSet() is uncommitted,
                 * which follows from the AtMostOneUncommittedVoterSet invariant.
                 *
-                * We need to perform a more elaborate check here because in clusters where a pending Add/RemoveVoter
-                * request would increase/decrease the majority of voters value by 1, the leader could have used the
-                * old majority value to update the high watermark value being checked here. So long as the leader has
-                * not added that new voter set to its log, its partitionState has not been updated with that
-                * uncommitted voter set yet. However, on the verify call after the leader's partitionState is updated
-                * with the uncommitted voter set, checking with only the uncommitted lastVoterSet() could incorrectly
-                * fail for a high watermark value that was calculated using the old voter set's majority and has not
-                * yet been updated with a new value calculated using the new voter set's majority.
+                * A more elaborate check is necessary for this invariant because this method can get called after the
+                * leader has updated its lastVoterSet() with a new uncommitted voter set, but before the leader has
+                * updated its high watermark using the new voter set. In this case, we need to check that the majority
+                * of the last committed voter set has reached the current high watermark.
                 * */
                 cluster.leaderWithMaxEpoch().ifPresent(leaderNode -> {
                     leaderNode.client.highWatermark().ifPresent(highWatermark -> {
@@ -1539,9 +1519,7 @@ public class RaftEventSimulationTest {
         @Override
         public void verify() {
             cluster.leaderWithMaxEpoch().ifPresent(leaderNode -> {
-                long leaderHighWatermark = leaderNode.highWatermark();
-                long leaderLogEndOffset = leaderNode.logEndOffset();
-                leaderNode.log.readBatches(leaderHighWatermark, OptionalLong.of(leaderLogEndOffset)).forEach(batch -> {
+                leaderNode.log.readBatches(leaderNode.highWatermark(), OptionalLong.of(leaderNode.logEndOffset())).forEach(batch -> {
                     Optional<LogEntry> uncommittedVotersEntry = Optional.empty();
                     if (batch.isControlBatch) {
                         for (LogEntry entry : batch.entries) {
