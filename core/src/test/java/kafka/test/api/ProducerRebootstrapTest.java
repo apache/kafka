@@ -85,6 +85,10 @@ public class ProducerRebootstrapTest {
         }
 
         var part = 0;
+        var key0 = "key 0";
+        var value0 = "value 0";
+        var key1 = "key 1";
+        var value1 = "value 1";
         var server0 = clusterInstance.brokers().get(0);
         var server1 = clusterInstance.brokers().get(1);
 
@@ -94,7 +98,7 @@ public class ProducerRebootstrapTest {
 
         try (var producer = clusterInstance.producer()) {
             // Only the server 0 is available for the producer during the bootstrap.
-            var recordMetadata0 = producer.send(new ProducerRecord<>(topic, part, "key 1".getBytes(), "value 1".getBytes())).get();
+            var recordMetadata0 = producer.send(new ProducerRecord<>(topic, part, key0.getBytes(), value0.getBytes())).get();
             assertEquals(0, recordMetadata0.offset());
 
             server0.shutdown();
@@ -104,7 +108,7 @@ public class ProducerRebootstrapTest {
             // Current server 0 is offline.
             // However, the server 1 from the bootstrap list is online.
             // Should be able to produce records.
-            var recordMetadata1 = producer.send(new ProducerRecord<>(topic, part, "key 1".getBytes(), "value 1".getBytes())).get();
+            var recordMetadata1 = producer.send(new ProducerRecord<>(topic, part, key1.getBytes(), value1.getBytes())).get();
             assertEquals(0, recordMetadata1.offset());
 
             server1.shutdown();
@@ -112,7 +116,7 @@ public class ProducerRebootstrapTest {
             server0.startup();
 
             // The same situation, but the server 1 has gone and server 0 is back.
-            var recordMetadata2 = producer.send(new ProducerRecord<>(topic, part, "key 1".getBytes(), "value 1".getBytes())).get();
+            var recordMetadata2 = producer.send(new ProducerRecord<>(topic, part, key1.getBytes(), value1.getBytes())).get();
             assertEquals(1, recordMetadata2.offset());
         }
     }
