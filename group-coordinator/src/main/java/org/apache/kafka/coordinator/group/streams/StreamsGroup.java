@@ -511,9 +511,9 @@ public class StreamsGroup implements Group {
     ) {
         Map<Integer, Set<String>> tasks = currentStandbyTaskToProcessIds.get(subtopologyId);
         if (tasks == null) {
-            return Collections.emptySet();
+            return Set.of();
         } else {
-            return tasks.getOrDefault(taskId, Collections.emptySet());
+            return tasks.getOrDefault(taskId, Set.of());
         }
     }
 
@@ -529,9 +529,9 @@ public class StreamsGroup implements Group {
     ) {
         Map<Integer, Set<String>> tasks = currentWarmupTaskToProcessIds.get(subtopologyId);
         if (tasks == null) {
-            return Collections.emptySet();
+            return Set.of();
         } else {
-            return tasks.getOrDefault(taskId, Collections.emptySet());
+            return tasks.getOrDefault(taskId, Set.of());
         }
     }
 
