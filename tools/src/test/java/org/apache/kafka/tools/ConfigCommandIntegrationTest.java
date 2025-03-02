@@ -157,13 +157,13 @@ public class ConfigCommandIntegrationTest {
                     "--entity-type", "topics",
                     "--entity-name", "topic",
                     "--alter", "--add-config", "cleanup.policy=[delete,compact]"));
-            String message = captureStandardStream(false, run(command));
+            String message = captureStandardOut(run(command));
             assertEquals("Completed updating config for topic topic.", message);
             command = Stream.concat(quorumArgs(), Stream.of(
                     "--entity-type", "topics",
                     "--entity-name", "topic",
                     "--describe"));
-            message = captureStandardStream(false, run(command));
+            message = captureStandardOut(run(command));
             assertTrue(message.contains("cleanup.policy=delete,compact"), "Config entry was not added correctly");
         }
     }
