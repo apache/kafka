@@ -217,7 +217,7 @@ public class ConfigurationControlManagerTest {
 
         ControllerResult<ApiError> invalidConfigValueResult = manager.incrementalAlterConfig(MYTOPIC, largeValueOfOps, true);
         assertEquals(Errors.INVALID_CONFIG, invalidConfigValueResult.response().error());
-        assertEquals(String.format("The configuration value cannot be added because it exceeds the maximum value size of %d bytes.", Short.MAX_VALUE),
+        assertEquals("The configuration value cannot be added because it exceeds the maximum value size of " + Short.MAX_VALUE + " bytes.",
                 invalidConfigValueResult.response().message());
     }
 
