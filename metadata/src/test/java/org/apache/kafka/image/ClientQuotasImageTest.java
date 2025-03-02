@@ -31,7 +31,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -66,7 +65,7 @@ public class ClientQuotasImageTest {
         DELTA1_RECORDS = new ArrayList<>();
         // remove quota
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new ClientQuotaRecord().
-                setEntity(Arrays.asList(
+                setEntity(List.of(
                     new EntityData().setEntityType(ClientQuotaEntity.USER).setEntityName("bar"),
                     new EntityData().setEntityType(ClientQuotaEntity.IP).setEntityName("127.0.0.1"))).
                 setKey(QuotaConfig.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG).

@@ -29,8 +29,8 @@ import org.junit.jupiter.api.Timeout;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Arrays;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
@@ -78,7 +78,7 @@ public class SnapshotEmitterMetricsTest {
     public void testMetricNames() {
         try (SnapshotEmitterMetricsTestContext ctx = new SnapshotEmitterMetricsTestContext()) {
             ControllerMetricsTestUtils.assertMetricsForTypeEqual(ctx.registry, "kafka.server:",
-                new HashSet<>(Arrays.asList(
+                new HashSet<>(List.of(
                     "kafka.server:type=SnapshotEmitter,name=LatestSnapshotGeneratedBytes",
                     "kafka.server:type=SnapshotEmitter,name=LatestSnapshotGeneratedAgeMs"
                 )));

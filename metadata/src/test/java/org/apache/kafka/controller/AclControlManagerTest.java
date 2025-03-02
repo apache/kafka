@@ -55,7 +55,6 @@ import org.junit.jupiter.api.Timeout;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -311,7 +310,7 @@ public class AclControlManagerTest {
         assertFalse(manager.idToAcl().isEmpty());
 
         ControllerResult<List<AclDeleteResult>> deleteResult =
-            manager.deleteAcls(Arrays.asList(
+            manager.deleteAcls(List.of(
                 new AclBindingFilter(
                     new ResourcePatternFilter(ResourceType.ANY, null, LITERAL),
                         AccessControlEntryFilter.ANY),
@@ -325,7 +324,7 @@ public class AclControlManagerTest {
             assertEquals(Optional.empty(), result.exception());
             deleted.add(result.aclBinding());
         }
-        assertEquals(new HashSet<>(Arrays.asList(
+        assertEquals(new HashSet<>(List.of(
             TEST_ACLS.get(0).toBinding(),
                 TEST_ACLS.get(2).toBinding())), deleted);
         assertEquals(InvalidRequestException.class,
@@ -360,7 +359,7 @@ public class AclControlManagerTest {
         assertEquals(id, ((RemoveAccessControlEntryRecord) deleteAclResultsSpecificFilter.records().get(0).message()).id());
         assertEquals(1, deleteAclResultsSpecificFilter.response().size());
 
-        ControllerResult<List<AclDeleteResult>> deleteAclResultsBothFilters = manager.deleteAcls(Arrays.asList(AclBindingFilter.ANY, aclBinding.toFilter()));
+        ControllerResult<List<AclDeleteResult>> deleteAclResultsBothFilters = manager.deleteAcls(List.of(AclBindingFilter.ANY, aclBinding.toFilter()));
         assertEquals(1, deleteAclResultsBothFilters.records().size());
         assertEquals(id, ((RemoveAccessControlEntryRecord) deleteAclResultsBothFilters.records().get(0).message()).id());
         assertEquals(2, deleteAclResultsBothFilters.response().size());

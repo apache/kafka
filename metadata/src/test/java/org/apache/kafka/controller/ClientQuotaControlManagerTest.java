@@ -324,7 +324,7 @@ public class ClientQuotaControlManagerTest {
     @Test
     public void testConfigKeysForEntityTypeWithUser() {
         testConfigKeysForEntityType(List.of(ClientQuotaEntity.USER),
-            Arrays.asList(
+            List.of(
                 "producer_byte_rate",
                 "consumer_byte_rate",
                 "controller_mutation_rate",
@@ -335,7 +335,7 @@ public class ClientQuotaControlManagerTest {
     @Test
     public void testConfigKeysForEntityTypeWithClientId() {
         testConfigKeysForEntityType(List.of(ClientQuotaEntity.CLIENT_ID),
-            Arrays.asList(
+            List.of(
                 "producer_byte_rate",
                 "consumer_byte_rate",
                 "controller_mutation_rate",
@@ -345,8 +345,8 @@ public class ClientQuotaControlManagerTest {
 
     @Test
     public void testConfigKeysForEntityTypeWithUserAndClientId() {
-        testConfigKeysForEntityType(Arrays.asList(ClientQuotaEntity.CLIENT_ID, ClientQuotaEntity.USER),
-            Arrays.asList(
+        testConfigKeysForEntityType(List.of(ClientQuotaEntity.CLIENT_ID, ClientQuotaEntity.USER),
+            List.of(
                 "producer_byte_rate",
                 "consumer_byte_rate",
                 "controller_mutation_rate",
@@ -392,14 +392,14 @@ public class ClientQuotaControlManagerTest {
 
     @Test
     public void testConfigKeysForEntityTypeWithIpAndUser() {
-        testConfigKeysError(Arrays.asList(ClientQuotaEntity.IP, ClientQuotaEntity.USER),
+        testConfigKeysError(List.of(ClientQuotaEntity.IP, ClientQuotaEntity.USER),
             new ApiError(Errors.INVALID_REQUEST, "Invalid quota entity combination, IP entity should" +
                 "not be combined with User or ClientId"));
     }
 
     @Test
     public void testConfigKeysForEntityTypeWithIpAndClientId() {
-        testConfigKeysError(Arrays.asList(ClientQuotaEntity.IP, ClientQuotaEntity.CLIENT_ID),
+        testConfigKeysError(List.of(ClientQuotaEntity.IP, ClientQuotaEntity.CLIENT_ID),
             new ApiError(Errors.INVALID_REQUEST, "Invalid quota entity combination, IP entity should" +
                 "not be combined with User or ClientId"));
     }

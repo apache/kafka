@@ -26,7 +26,6 @@ import org.apache.kafka.server.common.MetadataVersion;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -47,7 +46,7 @@ public class ClusterImageBrokersNodeTest {
                     setSupportedFeatures(Map.of(MetadataVersion.FEATURE_NAME, VersionRange.of(1, 4))).
                     setRack(Optional.empty()).
                     setFenced(false).
-                    setDirectories(Arrays.asList(Uuid.fromString("anCdBWcFTlu8gE1wP6bh3g"), Uuid.fromString("JsnDDNVyTL289kYk6sPzig"))).
+                    setDirectories(List.of(Uuid.fromString("anCdBWcFTlu8gE1wP6bh3g"), Uuid.fromString("JsnDDNVyTL289kYk6sPzig"))).
                     setInControlledShutdown(false).build()),
             Map.of());
 

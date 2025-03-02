@@ -62,7 +62,6 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -73,7 +72,6 @@ import java.util.OptionalLong;
 import java.util.Set;
 import java.util.stream.Stream;
 
-import static java.util.Arrays.asList;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -301,7 +299,7 @@ public class ClusterControlManagerTest {
             build();
         clusterControl.activate();
 
-        List<Uuid> logDirs = metadataVersion.isDirectoryAssignmentSupported() ? asList(
+        List<Uuid> logDirs = metadataVersion.isDirectoryAssignmentSupported() ? List.of(
                 Uuid.fromString("63k9SN1nQOS0dFHSCIMA0A"),
                 Uuid.fromString("Vm1MjsOCR1OjDDydOsDbzg")
         ) : List.of();
@@ -555,7 +553,7 @@ public class ClusterControlManagerTest {
             setName(TestFeatureVersion.FEATURE_NAME).setFeatureLevel((short) 1);
         featureControl.replay(testFeatureRecord);
 
-        List<Uuid> logDirs = asList(Uuid.fromString("yJGxmjfbQZSVFAlNM3uXZg"), Uuid.fromString("Mj3CW3OSRi29cFeNJlXuAQ"));
+        List<Uuid> logDirs = List.of(Uuid.fromString("yJGxmjfbQZSVFAlNM3uXZg"), Uuid.fromString("Mj3CW3OSRi29cFeNJlXuAQ"));
         BrokerRegistrationRequestData baseRequest = new BrokerRegistrationRequestData().
             setClusterId("fPZv1VBsRFmnlRvmGcOW9w").
             setBrokerId(0).
@@ -601,7 +599,7 @@ public class ClusterControlManagerTest {
             build();
         clusterControl.activate();
 
-        List<Uuid> logDirs = asList(Uuid.fromString("yJGxmjfbQZSVFAlNM3uXZg"), Uuid.fromString("Mj3CW3OSRi29cFeNJlXuAQ"));
+        List<Uuid> logDirs = List.of(Uuid.fromString("yJGxmjfbQZSVFAlNM3uXZg"), Uuid.fromString("Mj3CW3OSRi29cFeNJlXuAQ"));
         BrokerRegistrationRequestData baseRequest = new BrokerRegistrationRequestData().
             setClusterId("fPZv1VBsRFmnlRvmGcOW9w").
             setBrokerId(0).
@@ -632,7 +630,7 @@ public class ClusterControlManagerTest {
             assertThrows(UnsupportedVersionException.class,
                 () -> clusterControl.registerBroker(
                     baseRequest.setFeatures(new BrokerRegistrationRequestData.FeatureCollection(
-                        Arrays.asList(
+                        List.of(
                             new BrokerRegistrationRequestData.Feature().
                                 setName(MetadataVersion.FEATURE_NAME).
                                 setMinSupportedVersion(MetadataVersion.IBP_3_9_IV0.featureLevel()).
@@ -647,7 +645,7 @@ public class ClusterControlManagerTest {
 
         clusterControl.registerBroker(
             baseRequest.setFeatures(new BrokerRegistrationRequestData.FeatureCollection(
-                Arrays.asList(
+                List.of(
                     new BrokerRegistrationRequestData.Feature().
                         setName(MetadataVersion.FEATURE_NAME).
                         setMinSupportedVersion(MetadataVersion.IBP_3_9_IV0.featureLevel()).
@@ -742,7 +740,7 @@ public class ClusterControlManagerTest {
                 setFeatureControlManager(new FeatureControlManager.Builder().build()).
                 setBrokerShutdownHandler((brokerId, isCleanShutdown, records) -> { }).
                 build();
-        RegisterBrokerRecord brokerRecord = new RegisterBrokerRecord().setBrokerEpoch(100).setBrokerId(0).setLogDirs(asList(
+        RegisterBrokerRecord brokerRecord = new RegisterBrokerRecord().setBrokerEpoch(100).setBrokerId(0).setLogDirs(List.of(
                 Uuid.fromString("yJGxmjfbQZSVFAlNM3uXZg"),
                 Uuid.fromString("Mj3CW3OSRi29cFeNJlXuAQ")
         ));
@@ -751,20 +749,20 @@ public class ClusterControlManagerTest {
         clusterControl.activate();
 
         assertDoesNotThrow(() ->
-            registerNewBrokerWithDirs(clusterControl, 0, asList(Uuid.fromString("yJGxmjfbQZSVFAlNM3uXZg"), Uuid.fromString("Mj3CW3OSRi29cFeNJlXuAQ"))),
+            registerNewBrokerWithDirs(clusterControl, 0, List.of(Uuid.fromString("yJGxmjfbQZSVFAlNM3uXZg"), Uuid.fromString("Mj3CW3OSRi29cFeNJlXuAQ"))),
             "it should be possible to re-register the same broker with the same directories"
         );
         assertEquals("No directories specified in request", assertThrows(InvalidRegistrationException.class, () ->
                 registerNewBrokerWithDirs(clusterControl, 1, List.of())
         ).getMessage());
         assertEquals("Broker 0 is already registered with directory Mj3CW3OSRi29cFeNJlXuAQ", assertThrows(InvalidRegistrationException.class, () ->
-                registerNewBrokerWithDirs(clusterControl, 1, asList(Uuid.fromString("TyNK6XSSQJaJc2q9uflNHg"), Uuid.fromString("Mj3CW3OSRi29cFeNJlXuAQ")))
+                registerNewBrokerWithDirs(clusterControl, 1, List.of(Uuid.fromString("TyNK6XSSQJaJc2q9uflNHg"), Uuid.fromString("Mj3CW3OSRi29cFeNJlXuAQ")))
         ).getMessage());
         assertEquals("Reserved directory ID in request", assertThrows(InvalidRegistrationException.class, () ->
-                registerNewBrokerWithDirs(clusterControl, 1, asList(Uuid.fromString("TyNK6XSSQJaJc2q9uflNHg"), DirectoryId.UNASSIGNED))
+                registerNewBrokerWithDirs(clusterControl, 1, List.of(Uuid.fromString("TyNK6XSSQJaJc2q9uflNHg"), DirectoryId.UNASSIGNED))
         ).getMessage());
         assertEquals("Duplicate directory ID in request", assertThrows(InvalidRegistrationException.class, () ->
-                registerNewBrokerWithDirs(clusterControl, 1, asList(Uuid.fromString("aR6lssMrSeyXRf65hiUovQ"), Uuid.fromString("aR6lssMrSeyXRf65hiUovQ")))
+                registerNewBrokerWithDirs(clusterControl, 1, List.of(Uuid.fromString("aR6lssMrSeyXRf65hiUovQ"), Uuid.fromString("aR6lssMrSeyXRf65hiUovQ")))
         ).getMessage());
     }
 
@@ -792,7 +790,7 @@ public class ClusterControlManagerTest {
                 setBrokerShutdownHandler((brokerId, isCleanShutdown, records) -> { }).
                 build();
         clusterControl.activate();
-        registerNewBrokerWithDirs(clusterControl, 1, asList(Uuid.fromString("dir1SEbpRuG1dcpTRGOvJw"), Uuid.fromString("dir2xaEwR2m3JHTiy7PWwA")));
+        registerNewBrokerWithDirs(clusterControl, 1, List.of(Uuid.fromString("dir1SEbpRuG1dcpTRGOvJw"), Uuid.fromString("dir2xaEwR2m3JHTiy7PWwA")));
         assertTrue(clusterControl.registration(1).hasOnlineDir(Uuid.fromString("dir1SEbpRuG1dcpTRGOvJw")));
         assertTrue(clusterControl.hasOnlineDir(1, Uuid.fromString("dir1SEbpRuG1dcpTRGOvJw")));
         assertTrue(clusterControl.hasOnlineDir(1, Uuid.fromString("dir2xaEwR2m3JHTiy7PWwA")));
@@ -815,7 +813,7 @@ public class ClusterControlManagerTest {
         brokerRecord.endPoints().add(new BrokerEndpoint().setSecurityProtocol(SecurityProtocol.PLAINTEXT.id).setPort((short) 9092).setName("PLAINTEXT").setHost("127.0.0.1"));
         clusterControl.replay(brokerRecord, 100L);
         registerNewBrokerWithDirs(clusterControl, 2, List.of(Uuid.fromString("singleOnlineDirectoryA")));
-        registerNewBrokerWithDirs(clusterControl, 3, asList(Uuid.fromString("s4fRmyNFSH6J0vI8AVA5ew"), Uuid.fromString("UbtxBcqYSnKUEMcnTyZFWw")));
+        registerNewBrokerWithDirs(clusterControl, 3, List.of(Uuid.fromString("s4fRmyNFSH6J0vI8AVA5ew"), Uuid.fromString("UbtxBcqYSnKUEMcnTyZFWw")));
         assertEquals(DirectoryId.MIGRATING, clusterControl.defaultDir(1));
         assertEquals(Uuid.fromString("singleOnlineDirectoryA"), clusterControl.defaultDir(2));
         assertEquals(DirectoryId.UNASSIGNED, clusterControl.defaultDir(3));
@@ -843,7 +841,7 @@ public class ClusterControlManagerTest {
                         setMinSupportedVersion(MetadataVersion.MINIMUM_VERSION.featureLevel()).
                         setMaxSupportedVersion(MetadataVersion.MINIMUM_VERSION.featureLevel())).iterator())).
                 setIncarnationId(Uuid.fromString("mISEfEFwQIuaD1gKCc5tzQ")).
-                setLogDirs(Arrays.asList(Uuid.fromString("Vv1gzkM2QpuE-PPrIc6XEw"))),
+                setLogDirs(List.of(Uuid.fromString("Vv1gzkM2QpuE-PPrIc6XEw"))),
             100,
             finalizedFeatures,
             false).
@@ -859,7 +857,7 @@ public class ClusterControlManagerTest {
                         setMaxSupportedVersion(MetadataVersion.MINIMUM_VERSION.featureLevel())).iterator())).
                 setIncarnationId(newIncarnationId ?
                     Uuid.fromString("07OOcU7MQFeSmGAFPP2Zww") : Uuid.fromString("mISEfEFwQIuaD1gKCc5tzQ")).
-                setLogDirs(Arrays.asList(Uuid.fromString("Vv1gzkM2QpuE-PPrIc6XEw"))),
+                setLogDirs(List.of(Uuid.fromString("Vv1gzkM2QpuE-PPrIc6XEw"))),
             111,
             finalizedFeatures,
             false).
@@ -902,7 +900,7 @@ public class ClusterControlManagerTest {
                         setName(MetadataVersion.FEATURE_NAME).
                         setMinSupportedVersion(MetadataVersion.MINIMUM_VERSION.featureLevel()).
                         setMaxSupportedVersion(MetadataVersion.MINIMUM_VERSION.featureLevel())).iterator())).
-                setLogDirs(Arrays.asList(Uuid.fromString("Vv1gzkM2QpuE-PPrIc6XEw"))),
+                setLogDirs(List.of(Uuid.fromString("Vv1gzkM2QpuE-PPrIc6XEw"))),
             100,
             finalizedFeatures,
             true).
@@ -924,7 +922,7 @@ public class ClusterControlManagerTest {
                         setName(MetadataVersion.FEATURE_NAME).
                         setMinSupportedVersion(MetadataVersion.MINIMUM_VERSION.featureLevel()).
                         setMaxSupportedVersion(MetadataVersion.MINIMUM_VERSION.featureLevel())).iterator())).
-                setLogDirs(Arrays.asList(Uuid.fromString("Vv1gzkM2QpuE-PPrIc6XEw"))),
+                setLogDirs(List.of(Uuid.fromString("Vv1gzkM2QpuE-PPrIc6XEw"))),
             111,
             finalizedFeatures,
             true).records();
@@ -952,11 +950,11 @@ public class ClusterControlManagerTest {
         clusterControl.replay(new RegisterBrokerRecord().
             setBrokerEpoch(100).
             setBrokerId(0).
-            setLogDirs(asList(Uuid.fromString("Mj3CW3OSRi29cFeNJlXuAQ"))), 10002);
+            setLogDirs(List.of(Uuid.fromString("Mj3CW3OSRi29cFeNJlXuAQ"))), 10002);
         clusterControl.replay(new RegisterBrokerRecord().
             setBrokerEpoch(123).
             setBrokerId(1).
-            setLogDirs(asList(Uuid.fromString("TyNK6XSSQJaJc2q9uflNHg"))), 10005);
+            setLogDirs(List.of(Uuid.fromString("TyNK6XSSQJaJc2q9uflNHg"))), 10005);
         clusterControl.activate();
         assertEquals(OptionalLong.of(1000L), clusterControl.heartbeatManager().tracker().
             contactTime(new BrokerIdAndEpoch(0, 100)));

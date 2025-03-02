@@ -26,7 +26,6 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.util.AbstractMap.SimpleImmutableEntry;
-import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -54,7 +53,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 public final class MetaPropertiesEnsembleTest {
     private static final MetaPropertiesEnsemble FOO =
         new MetaPropertiesEnsemble(
-            new HashSet<>(Arrays.asList("/tmp/empty1", "/tmp/empty2")),
+            new HashSet<>(List.of("/tmp/empty1", "/tmp/empty2")),
             new HashSet<>(List.of("/tmp/error3")),
             Stream.of(
                 new SimpleImmutableEntry<>("/tmp/dir4",
@@ -94,7 +93,7 @@ public final class MetaPropertiesEnsembleTest {
 
     @Test
     public void testEmptyLogDirsForFoo() {
-        assertEquals(new HashSet<>(Arrays.asList("/tmp/empty1", "/tmp/empty2")),
+        assertEquals(new HashSet<>(List.of("/tmp/empty1", "/tmp/empty2")),
             FOO.emptyLogDirs());
     }
 
@@ -115,7 +114,7 @@ public final class MetaPropertiesEnsembleTest {
 
     @Test
     public void testLogDirPropsForFoo() {
-        assertEquals(new HashSet<>(Arrays.asList("/tmp/dir4", "/tmp/dir5")),
+        assertEquals(new HashSet<>(List.of("/tmp/dir4", "/tmp/dir5")),
             FOO.logDirProps().keySet());
     }
 
@@ -323,7 +322,7 @@ public final class MetaPropertiesEnsembleTest {
 
     static class MetaPropertiesMockRandom extends Random {
         private final AtomicInteger index = new AtomicInteger(0);
-        private final List<Long> results = Arrays.asList(
+        private final List<Long> results = List.of(
             0L,
             0L,
             2336837413447398698L,
@@ -393,7 +392,7 @@ public final class MetaPropertiesEnsembleTest {
             assertThrows(RuntimeException.class, copier::verify).getMessage());
     }
 
-    private static final List<MetaProperties> SAMPLE_META_PROPS_LIST = Arrays.asList(
+    private static final List<MetaProperties> SAMPLE_META_PROPS_LIST = List.of(
         new MetaProperties.Builder().
             setVersion(MetaPropertiesVersion.V1).
             setClusterId("AtgGav8yQjiaJ3rTXE7VCA").
@@ -436,7 +435,7 @@ public final class MetaPropertiesEnsembleTest {
         String dir0 = createLogDir(SAMPLE_META_PROPS_LIST.get(0));
         loader.addMetadataLogDir(dir0);
         String dir1 = createLogDir(SAMPLE_META_PROPS_LIST.get(1));
-        loader.addLogDirs(Arrays.asList(dir0, dir1));
+        loader.addLogDirs(List.of(dir0, dir1));
         MetaPropertiesEnsemble ensemble = loader.load();
         MetaPropertiesEnsemble.Copier copier = new MetaPropertiesEnsemble.Copier(ensemble);
         copier.setLogDirProps(dir0, SAMPLE_META_PROPS_LIST.get(2));

@@ -32,7 +32,6 @@ import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
-import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -98,7 +97,7 @@ public class BrokerRegistrationTrackerTest {
         delta.replay(new RegisterBrokerRecord().
             setBrokerId(1).
             setIncarnationId(INCARNATION_ID).
-            setLogDirs(Arrays.asList(A, B, C)));
+            setLogDirs(List.of(A, B, C)));
         delta.replay(new FeatureLevelRecord().
             setName(MetadataVersion.FEATURE_NAME).
             setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel()));

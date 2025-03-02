@@ -22,7 +22,6 @@ import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-import java.util.Arrays;
 import java.util.List;
 import java.util.NoSuchElementException;
 
@@ -40,11 +39,11 @@ public class StandardAclRecordIteratorTest {
         StandardAclRecordIterator iterator =
             new StandardAclRecordIterator(TEST_ACLS.iterator(), 2);
         assertTrue(iterator.hasNext());
-        assertEquals(Arrays.asList(
+        assertEquals(List.of(
             new ApiMessageAndVersion(TEST_ACLS.get(0).toRecord(), (short) 0),
             new ApiMessageAndVersion(TEST_ACLS.get(1).toRecord(), (short) 0)),
             iterator.next());
-        assertEquals(Arrays.asList(
+        assertEquals(List.of(
             new ApiMessageAndVersion(TEST_ACLS.get(2).toRecord(), (short) 0),
             new ApiMessageAndVersion(TEST_ACLS.get(3).toRecord(), (short) 0)),
             iterator.next());

@@ -26,7 +26,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -58,7 +57,7 @@ public class ListenerInfoTest {
         "example2.com",
         9094);
 
-    private static final List<Endpoint> ALL = Arrays.asList(
+    private static final List<Endpoint> ALL = List.of(
         INTERNAL,
         EXTERNAL,
         SSL,
@@ -208,7 +207,7 @@ public class ListenerInfoTest {
 
     @Test
     public void testToString() {
-        ListenerInfo listenerInfo = ListenerInfo.create(Arrays.asList(EXTERNAL, SASL_PLAINTEXT));
+        ListenerInfo listenerInfo = ListenerInfo.create(List.of(EXTERNAL, SASL_PLAINTEXT));
         assertEquals("ListenerInfo(Endpoint(listenerName='EXTERNAL', securityProtocol=SASL_SSL, host='example.com', port=9092), " +
             "Endpoint(listenerName='SASL_PLAINTEXT', securityProtocol=SASL_PLAINTEXT, host='example2.com', port=9094))",
             listenerInfo.toString());

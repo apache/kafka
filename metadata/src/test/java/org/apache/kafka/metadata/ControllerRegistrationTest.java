@@ -29,7 +29,6 @@ import org.apache.kafka.server.common.MetadataVersion;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -49,7 +48,7 @@ public class ControllerRegistrationTest {
         return Collections.unmodifiableMap(map);
     }
 
-    private static final List<ControllerRegistration> REGISTRATIONS = Arrays.asList(
+    private static final List<ControllerRegistration> REGISTRATIONS = List.of(
         new ControllerRegistration.Builder().
             setId(0).
             setIncarnationId(Uuid.fromString("ycRmGrOFQru7HXf6fOybZQ")).

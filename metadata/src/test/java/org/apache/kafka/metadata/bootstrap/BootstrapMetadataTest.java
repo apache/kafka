@@ -26,7 +26,6 @@ import org.apache.kafka.server.common.MetadataVersionTestUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-import java.util.Arrays;
 import java.util.List;
 
 import static org.apache.kafka.server.common.MetadataVersion.FEATURE_NAME;
@@ -91,35 +90,35 @@ public class BootstrapMetadataTest {
 
     @Test
     public void testCopyWithNewFeatureRecord() {
-        assertEquals(BootstrapMetadata.fromRecords(Arrays.asList(MV_10, FOO_1), "src"),
-            BootstrapMetadata.fromRecords(Arrays.asList(MV_10), "src").
+        assertEquals(BootstrapMetadata.fromRecords(List.of(MV_10, FOO_1), "src"),
+            BootstrapMetadata.fromRecords(List.of(MV_10), "src").
                 copyWithFeatureRecord("foo", (short) 1));
     }
 
     @Test
     public void testFeatureLevelForMetadataVersion() {
         assertEquals((short) 11, BootstrapMetadata.
-            fromRecords(Arrays.asList(MV_10, MV_11), "src").
+            fromRecords(List.of(MV_10, MV_11), "src").
                 featureLevel(FEATURE_NAME));
     }
 
     @Test
     public void testCopyWithModifiedFeatureRecord() {
-        assertEquals(BootstrapMetadata.fromRecords(Arrays.asList(MV_10, FOO_2), "src"),
-            BootstrapMetadata.fromRecords(Arrays.asList(MV_10, FOO_1), "src").
+        assertEquals(BootstrapMetadata.fromRecords(List.of(MV_10, FOO_2), "src"),
+            BootstrapMetadata.fromRecords(List.of(MV_10, FOO_1), "src").
                 copyWithFeatureRecord("foo", (short) 2));
     }
 
     @Test
     public void testFeatureLevelForFeatureThatIsNotSet() {
         assertEquals((short) 0, BootstrapMetadata.
-            fromRecords(Arrays.asList(MV_10), "src").featureLevel("foo"));
+            fromRecords(List.of(MV_10), "src").featureLevel("foo"));
     }
 
     @Test
     public void testFeatureLevelForFeature() {
         assertEquals((short) 2, BootstrapMetadata.
-            fromRecords(Arrays.asList(MV_10, FOO_2), "src").featureLevel("foo"));
+            fromRecords(List.of(MV_10, FOO_2), "src").featureLevel("foo"));
     }
 
     static final List<ApiMessageAndVersion> RECORDS_WITH_OLD_METADATA_VERSION = List.of(

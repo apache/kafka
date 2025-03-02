@@ -43,7 +43,6 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -54,7 +53,6 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
-import static java.util.Arrays.asList;
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.APPEND;
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.DELETE;
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET;
@@ -323,7 +321,7 @@ public class ConfigurationControlManagerTest {
 
     @Test
     public void testIncrementalAlterConfigsWithPolicy() {
-        MockAlterConfigsPolicy policy = new MockAlterConfigsPolicy(asList(
+        MockAlterConfigsPolicy policy = new MockAlterConfigsPolicy(List.of(
             new RequestMetadata(MYTOPIC, Map.of()),
             new RequestMetadata(BROKER0, toMap(
                 entry("foo.bar", "123"),
@@ -340,7 +338,7 @@ public class ConfigurationControlManagerTest {
                 setName("topic.config").setValue("123"));
         manager.replay(new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0").
                 setName("broker.config.to.remove").setValue("123"));
-        assertEquals(ControllerResult.atomicOf(asList(new ApiMessageAndVersion(
+        assertEquals(ControllerResult.atomicOf(List.of(new ApiMessageAndVersion(
                 new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0").
                     setName("foo.bar").setValue("123"), CONFIG_RECORD.highestSupportedVersion()), new ApiMessageAndVersion(
                                 new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0").
@@ -391,7 +389,7 @@ public class ConfigurationControlManagerTest {
             setKafkaConfigSchema(SCHEMA).
             setAlterConfigPolicy(Optional.of(new CheckForNullValuesPolicy())).
             build();
-        List<ApiMessageAndVersion> expectedRecords1 = asList(
+        List<ApiMessageAndVersion> expectedRecords1 = List.of(
             new ApiMessageAndVersion(new ConfigRecord().
                 setResourceType(TOPIC.id()).setResourceName("mytopic").
                 setName("abc").setValue("456"), CONFIG_RECORD.highestSupportedVersion()),
@@ -448,7 +446,7 @@ public class ConfigurationControlManagerTest {
             effectiveMinInsync + ". Removing broker-level min.insync.replicas " +
             "for brokers: 1.", manager.maybeGenerateElrSafetyRecords(records));
 
-        assertEquals(Arrays.asList(new ApiMessageAndVersion(
+        assertEquals(List.of(new ApiMessageAndVersion(
             new ConfigRecord().
                 setResourceType(BROKER.id()).
                 setResourceName("").

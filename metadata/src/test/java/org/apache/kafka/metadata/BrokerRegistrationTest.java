@@ -31,7 +31,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.util.AbstractMap.SimpleEntry;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -45,7 +44,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(value = 40)
 public class BrokerRegistrationTest {
-    private static final List<BrokerRegistration> REGISTRATIONS = Arrays.asList(
+    private static final List<BrokerRegistration> REGISTRATIONS = List.of(
         new BrokerRegistration.Builder().
             setId(0).
             setEpoch(0).
@@ -179,7 +178,7 @@ public class BrokerRegistrationTest {
                 setRack(Optional.empty()).
                 setFenced(false).
                 setInControlledShutdown(false).
-                setDirectories(Arrays.asList(
+                setDirectories(List.of(
                     Uuid.fromString("3MWIBL9NR4eXhtdfBVA7Bw"),
                     Uuid.fromString("SZQIVeLMQGiNi68StNSNZA"),
                     Uuid.fromString("LWZsWPBrQruOMMrnEBj7bw"),
@@ -188,7 +187,7 @@ public class BrokerRegistrationTest {
                     Uuid.fromString("VNetSHnySxSbvjwKrBzpkw"))
                 ).
                 build();
-        assertEquals(Arrays.asList(
+        assertEquals(List.of(
                 Uuid.fromString("3MWIBL9NR4eXhtdfBVA7Bw"),
                 Uuid.fromString("JhYia5HRTLihf2FFJVxopQ"),
                 Uuid.fromString("LWZsWPBrQruOMMrnEBj7bw"),
@@ -209,7 +208,7 @@ public class BrokerRegistrationTest {
                 setRack(Optional.empty()).
                 setFenced(false).
                 setInControlledShutdown(false).
-                setDirectories(Arrays.asList(
+                setDirectories(List.of(
                     Uuid.fromString("dir1G6EtuR1OTdAzFw1AFQ"),
                     Uuid.fromString("dir2gwpjTvKC7sMfcLNd8g"),
                     Uuid.fromString("dir3Ir8mQ0mMxfv93RITDA")

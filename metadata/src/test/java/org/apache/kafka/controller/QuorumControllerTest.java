@@ -260,9 +260,9 @@ public class QuorumControllerTest {
 
     @Test
     public void testFenceMultipleBrokers() throws Throwable {
-        List<Integer> allBrokers = Arrays.asList(1, 2, 3, 4, 5);
-        List<Integer> brokersToKeepUnfenced = Arrays.asList(1);
-        List<Integer> brokersToFence = Arrays.asList(2, 3, 4, 5);
+        List<Integer> allBrokers = List.of(1, 2, 3, 4, 5);
+        List<Integer> brokersToKeepUnfenced = List.of(1);
+        List<Integer> brokersToFence = List.of(2, 3, 4, 5);
         short replicationFactor = (short) allBrokers.size();
         short numberOfPartitions = (short) allBrokers.size();
         long sessionTimeoutMillis = 1000;
@@ -359,7 +359,7 @@ public class QuorumControllerTest {
             QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
                 setSessionTimeoutMillis(OptionalLong.of(sessionTimeoutMillis)).
                 setBootstrapMetadata(BootstrapMetadata.fromRecords(
-                    Arrays.asList(
+                    List.of(
                         new ApiMessageAndVersion(new FeatureLevelRecord().
                             setName(MetadataVersion.FEATURE_NAME).
                             setFeatureLevel(MetadataVersion.IBP_4_0_IV1.featureLevel()), (short) 0),
@@ -378,7 +378,7 @@ public class QuorumControllerTest {
 
     @Test
     public void testUncleanShutdownBrokerElrEnabled() throws Throwable {
-        List<Integer> allBrokers = Arrays.asList(1, 2, 3);
+        List<Integer> allBrokers = List.of(1, 2, 3);
         short replicationFactor = (short) allBrokers.size();
         long sessionTimeoutMillis = 500;
 
@@ -508,7 +508,7 @@ public class QuorumControllerTest {
 
     @Test
     public void testUncleanShutdownElrDisabled() throws Exception {
-        List<Integer> allBrokers = Arrays.asList(1, 2, 3);
+        List<Integer> allBrokers = List.of(1, 2, 3);
         short replicationFactor = (short) allBrokers.size();
         long sessionTimeoutMillis = 500;
 
@@ -602,9 +602,9 @@ public class QuorumControllerTest {
 
     @Test
     public void testMinIsrUpdateWithElr() throws Throwable {
-        List<Integer> allBrokers = Arrays.asList(1, 2, 3);
-        List<Integer> brokersToKeepUnfenced = Arrays.asList(1);
-        List<Integer> brokersToFence = Arrays.asList(2, 3);
+        List<Integer> allBrokers = List.of(1, 2, 3);
+        List<Integer> brokersToKeepUnfenced = List.of(1);
+        List<Integer> brokersToFence = List.of(2, 3);
         short replicationFactor = (short) allBrokers.size();
         long sessionTimeoutMillis = 300;
 
@@ -643,7 +643,7 @@ public class QuorumControllerTest {
             // Unfence all brokers and create a topic foo (min ISR 2)
             sendBrokerHeartbeatToUnfenceBrokers(active, allBrokers, brokerEpochs);
             CreateTopicsRequestData createTopicsRequestData = new CreateTopicsRequestData().setTopics(
-                new CreatableTopicCollection(Arrays.asList(
+                new CreatableTopicCollection(List.of(
                     new CreatableTopic().setName("foo").setNumPartitions(1).
                         setReplicationFactor(replicationFactor),
                     new CreatableTopic().setName("bar").setNumPartitions(1).
@@ -651,7 +651,7 @@ public class QuorumControllerTest {
                 ).iterator()));
             CreateTopicsResponseData createTopicsResponseData = active.createTopics(
                 ANONYMOUS_CONTEXT, createTopicsRequestData,
-                new HashSet<>(Arrays.asList("foo", "bar"))).get();
+                new HashSet<>(List.of("foo", "bar"))).get();
             assertEquals(Errors.NONE, Errors.forCode(createTopicsResponseData.topics().find("foo").errorCode()));
             assertEquals(Errors.NONE, Errors.forCode(createTopicsResponseData.topics().find("bar").errorCode()));
             Uuid topicIdFoo = createTopicsResponseData.topics().find("foo").topicId();
@@ -729,8 +729,8 @@ public class QuorumControllerTest {
 
     @Test
     public void testBalancePartitionLeaders() throws Throwable {
-        List<Integer> allBrokers = Arrays.asList(1, 2, 3);
-        List<Integer> brokersToKeepUnfenced = Arrays.asList(1, 2);
+        List<Integer> allBrokers = List.of(1, 2, 3);
+        List<Integer> brokersToKeepUnfenced = List.of(1, 2);
         List<Integer> brokersToFence = List.of(3);
         short replicationFactor = (short) allBrokers.size();
         short numberOfPartitions = (short) allBrokers.size();
@@ -834,7 +834,7 @@ public class QuorumControllerTest {
                 .setPartitionIndex(imbalancedPartitionId)
                 .setLeaderEpoch(partitionRegistration.leaderEpoch)
                 .setPartitionEpoch(partitionRegistration.partitionEpoch)
-                .setNewIsrWithEpochs(AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(Arrays.asList(1, 2, 3)));
+                .setNewIsrWithEpochs(AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(List.of(1, 2, 3)));
 
             AlterPartitionRequestData.TopicData topicData = new AlterPartitionRequestData.TopicData()
                 .setTopicId(impalancedTp.topicId());
@@ -1110,12 +1110,12 @@ public class QuorumControllerTest {
                         new CreatableTopic().setName("foo").setNumPartitions(-1).
                             setReplicationFactor((short) -1).
                             setAssignments(new CreatableReplicaAssignmentCollection(
-                                Arrays.asList(new CreatableReplicaAssignment().
+                                List.of(new CreatableReplicaAssignment().
                                     setPartitionIndex(0).
-                                    setBrokerIds(Arrays.asList(0, 1, 2)),
+                                    setBrokerIds(List.of(0, 1, 2)),
                                     new CreatableReplicaAssignment().
                                         setPartitionIndex(1).
-                                        setBrokerIds(Arrays.asList(1, 2, 0))).
+                                        setBrokerIds(List.of(1, 2, 0))).
                                             iterator()))).iterator())),
                 Set.of("foo")).get();
             fooId = fooData.topics().find("foo").topicId();
@@ -1129,7 +1129,7 @@ public class QuorumControllerTest {
     }
 
     private List<ApiMessageAndVersion> generateTestRecords(Uuid fooId, Map<Integer, Long> brokerEpochs) {
-        return Arrays.asList(
+        return List.of(
             new ApiMessageAndVersion(new BeginTransactionRecord().
                 setName("Bootstrap records"), (short) 0),
             new ApiMessageAndVersion(new FeatureLevelRecord().
@@ -1238,13 +1238,13 @@ public class QuorumControllerTest {
             new ApiMessageAndVersion(new TopicRecord().
                 setName("foo").setTopicId(fooId), (short) 0),
             new ApiMessageAndVersion(new PartitionRecord().setPartitionId(0).
-                setTopicId(fooId).setReplicas(Arrays.asList(0, 1, 2)).
-                setIsr(Arrays.asList(0, 1, 2)).setRemovingReplicas(List.of()).
+                setTopicId(fooId).setReplicas(List.of(0, 1, 2)).
+                setIsr(List.of(0, 1, 2)).setRemovingReplicas(List.of()).
                 setAddingReplicas(List.of()).setLeader(0).setLeaderEpoch(0).
                 setPartitionEpoch(0), (short) 0),
             new ApiMessageAndVersion(new PartitionRecord().setPartitionId(1).
-                setTopicId(fooId).setReplicas(Arrays.asList(1, 2, 0)).
-                setIsr(Arrays.asList(1, 2, 0)).setRemovingReplicas(List.of()).
+                setTopicId(fooId).setReplicas(List.of(1, 2, 0)).
+                setIsr(List.of(1, 2, 0)).setRemovingReplicas(List.of()).
                 setAddingReplicas(List.of()).setLeader(1).setLeaderEpoch(0).
                 setPartitionEpoch(0), (short) 0),
             new ApiMessageAndVersion(new ProducerIdsRecord().
@@ -1492,7 +1492,7 @@ public class QuorumControllerTest {
     }
 
     private static final BootstrapMetadata COMPLEX_BOOTSTRAP = BootstrapMetadata.fromRecords(
-            Arrays.asList(
+            List.of(
                 new ApiMessageAndVersion(new FeatureLevelRecord().
                         setName(MetadataVersion.FEATURE_NAME).
                         setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel()),
@@ -1569,7 +1569,7 @@ public class QuorumControllerTest {
     public void testAppendRecords() {
         TestAppender appender = new TestAppender();
         assertEquals(5, QuorumController.appendRecords(log,
-            ControllerResult.of(Arrays.asList(rec(0), rec(1), rec(2), rec(3), rec(4)), null),
+            ControllerResult.of(List.of(rec(0), rec(1), rec(2), rec(3), rec(4)), null),
             2,
             appender));
     }
@@ -1580,7 +1580,7 @@ public class QuorumControllerTest {
         assertEquals("Attempted to atomically commit 5 records, but maxRecordsPerBatch is 2",
             assertThrows(IllegalStateException.class, () ->
                 QuorumController.appendRecords(log,
-                        ControllerResult.atomicOf(Arrays.asList(rec(0), rec(1), rec(2), rec(3), rec(4)), null),
+                        ControllerResult.atomicOf(List.of(rec(0), rec(1), rec(2), rec(3), rec(4)), null),
                         2,
                         appender)).getMessage());
     }
@@ -1650,7 +1650,7 @@ public class QuorumControllerTest {
      */
     @SuppressWarnings("unchecked")
     private static void testToImages(List<ApiMessageAndVersion> fromRecords) {
-        List<ImageDeltaPair<?, ?>> testMatrix = Arrays.asList(
+        List<ImageDeltaPair<?, ?>> testMatrix = List.of(
             new ImageDeltaPair<>(() -> AclsImage.EMPTY, AclsDelta::new),
             new ImageDeltaPair<>(() -> ClientQuotasImage.EMPTY, ClientQuotasDelta::new),
             new ImageDeltaPair<>(() -> ClusterImage.EMPTY, ClusterDelta::new),

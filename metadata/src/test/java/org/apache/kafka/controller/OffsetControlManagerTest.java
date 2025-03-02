@@ -32,7 +32,6 @@ import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
-import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -143,7 +142,7 @@ public class OffsetControlManagerTest {
         assertEquals(2000L, offsetControl.metrics().lastAppliedRecordOffset());
         assertEquals(-1L, offsetControl.lastStableOffset());
         assertEquals(-1L, offsetControl.lastCommittedOffset());
-        assertEquals(Arrays.asList(-1L, 2000L), offsetControl.snapshotRegistry().epochsList());
+        assertEquals(List.of(-1L, 2000L), offsetControl.snapshotRegistry().epochsList());
 
         offsetControl.handleCommitBatch(newFakeBatch(2000L, 200, 3000L));
         assertEquals(2000L, offsetControl.lastStableOffset());
@@ -159,13 +158,13 @@ public class OffsetControlManagerTest {
                 build();
 
         offsetControl.beginLoadSnapshot(new OffsetAndEpoch(4000L, 300));
-        assertEquals(Arrays.asList("snapshot[-1]", "reset"), snapshotRegistry.operations());
+        assertEquals(List.of("snapshot[-1]", "reset"), snapshotRegistry.operations());
         assertEquals(new OffsetAndEpoch(4000L, 300), offsetControl.currentSnapshotId());
         assertEquals("00000000000000004000-0000000300", offsetControl.currentSnapshotName());
         assertEquals(List.of(), offsetControl.snapshotRegistry().epochsList());
 
         offsetControl.endLoadSnapshot(3456L);
-        assertEquals(Arrays.asList("snapshot[-1]", "reset", "snapshot[4000]"),
+        assertEquals(List.of("snapshot[-1]", "reset", "snapshot[4000]"),
             snapshotRegistry.operations());
         assertNull(offsetControl.currentSnapshotId());
         assertNull(offsetControl.currentSnapshotName());
@@ -229,7 +228,7 @@ public class OffsetControlManagerTest {
 
         offsetControl.replay(new BeginTransactionRecord(), 1500L);
         assertEquals(1500L, offsetControl.transactionStartOffset());
-        assertEquals(Arrays.asList(-1L, 1499L), offsetControl.snapshotRegistry().epochsList());
+        assertEquals(List.of(-1L, 1499L), offsetControl.snapshotRegistry().epochsList());
 
         offsetControl.handleCommitBatch(newFakeBatch(1550L, 100, 2000L));
         assertEquals(1550L, offsetControl.lastCommittedOffset());
@@ -239,11 +238,11 @@ public class OffsetControlManagerTest {
 
         if (aborted) {
             offsetControl.replay(new AbortTransactionRecord(), 1600L);
-            assertEquals(Arrays.asList("snapshot[-1]", "snapshot[1499]", "revert[1499]"),
+            assertEquals(List.of("snapshot[-1]", "snapshot[1499]", "revert[1499]"),
                 snapshotRegistry.operations());
         } else {
             offsetControl.replay(new EndTransactionRecord(), 1600L);
-            assertEquals(Arrays.asList("snapshot[-1]", "snapshot[1499]"),
+            assertEquals(List.of("snapshot[-1]", "snapshot[1499]"),
                 snapshotRegistry.operations());
         }
         assertEquals(-1L, offsetControl.transactionStartOffset());
@@ -263,7 +262,7 @@ public class OffsetControlManagerTest {
         offsetControl.replay(new BeginTransactionRecord(), 1500L);
         offsetControl.beginLoadSnapshot(new OffsetAndEpoch(4000L, 300));
         assertEquals(-1L, offsetControl.transactionStartOffset());
-        assertEquals(Arrays.asList("snapshot[-1]", "snapshot[1499]", "reset"),
+        assertEquals(List.of("snapshot[-1]", "snapshot[1499]", "reset"),
                 snapshotRegistry.operations());
     }
 }

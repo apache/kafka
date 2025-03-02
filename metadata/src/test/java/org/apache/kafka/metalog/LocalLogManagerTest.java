@@ -25,7 +25,6 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-import java.util.Arrays;
 import java.util.List;
 import java.util.OptionalInt;
 
@@ -140,7 +139,7 @@ public class LocalLogManagerTest {
 
             LocalLogManager activeLogManager = env.logManagers().get(leaderId);
             int epoch = activeLogManager.leaderAndEpoch().epoch();
-            List<ApiMessageAndVersion> messages = Arrays.asList(
+            List<ApiMessageAndVersion> messages = List.of(
                 new ApiMessageAndVersion(new RegisterBrokerRecord().setBrokerId(0), (short) 0),
                 new ApiMessageAndVersion(new RegisterBrokerRecord().setBrokerId(1), (short) 0),
                 new ApiMessageAndVersion(new RegisterBrokerRecord().setBrokerId(2), (short) 0));

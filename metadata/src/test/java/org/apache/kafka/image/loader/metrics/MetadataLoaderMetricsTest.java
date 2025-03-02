@@ -26,8 +26,8 @@ import com.yammer.metrics.core.MetricsRegistry;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -70,7 +70,7 @@ public class MetadataLoaderMetricsTest {
         try {
             try (FakeMetadataLoaderMetrics fakeMetrics = new FakeMetadataLoaderMetrics(registry)) {
                 ControllerMetricsTestUtils.assertMetricsForTypeEqual(registry, "kafka.server",
-                    new HashSet<>(Arrays.asList(
+                    new HashSet<>(List.of(
                         "kafka.server:type=MetadataLoader,name=CurrentControllerId",
                         "kafka.server:type=MetadataLoader,name=CurrentMetadataVersion",
                         "kafka.server:type=MetadataLoader,name=HandleLoadSnapshotCount"

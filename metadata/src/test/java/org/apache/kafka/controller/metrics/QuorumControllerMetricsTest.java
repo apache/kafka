@@ -26,8 +26,8 @@ import com.yammer.metrics.core.MetricsRegistry;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
@@ -42,7 +42,7 @@ public class QuorumControllerMetricsTest {
             try (QuorumControllerMetrics metrics = new QuorumControllerMetrics(
                     Optional.of(registry),
                     time)) {
-                HashSet<String> expected = new HashSet<>(Arrays.asList(
+                HashSet<String> expected = new HashSet<>(List.of(
                     "kafka.controller:type=ControllerEventManager,name=EventQueueProcessingTimeMs",
                     "kafka.controller:type=ControllerEventManager,name=EventQueueTimeMs",
                     "kafka.controller:type=KafkaController,name=ActiveControllerCount",

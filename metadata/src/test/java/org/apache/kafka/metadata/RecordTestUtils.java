@@ -36,7 +36,6 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -356,7 +355,7 @@ public class RecordTestUtils {
             setIncarnationId(new Uuid(3465346L, id)).
             setZkMigrationReady(zkMigrationReady).
             setEndPoints(new RegisterControllerRecord.ControllerEndpointCollection(
-                Arrays.asList(
+                List.of(
                     new RegisterControllerRecord.ControllerEndpoint().
                         setName("CONTROLLER").
                         setHost("localhost").

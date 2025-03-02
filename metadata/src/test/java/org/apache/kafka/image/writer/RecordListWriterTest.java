@@ -23,7 +23,6 @@ import org.apache.kafka.common.metadata.TopicRecord;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-import java.util.Arrays;
 import java.util.List;
 
 import static org.apache.kafka.metadata.RecordTestUtils.testRecord;
@@ -39,7 +38,7 @@ public class RecordListWriterTest {
         writer.write(testRecord(0));
         writer.write(testRecord(1));
         writer.close(true);
-        assertEquals(Arrays.asList(testRecord(0), testRecord(1)), writer.records());
+        assertEquals(List.of(testRecord(0), testRecord(1)), writer.records());
     }
 
     @Test

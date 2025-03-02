@@ -475,7 +475,7 @@ public class PartitionChangeBuilder {
                 for (int replica : targetReplicas) {
                     directories.add(this.targetDirectories.getOrDefault(replica, defaultDirProvider.defaultDir(replica)));
                 }
-                if (!directories.equals(Arrays.asList(partition.directories))) {
+                if (!directories.equals(List.of(partition.directories))) {
                     record.setDirectories(directories);
                 }
             }

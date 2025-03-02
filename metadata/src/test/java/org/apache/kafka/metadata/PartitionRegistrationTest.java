@@ -41,7 +41,6 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Stream;
 
@@ -121,9 +120,9 @@ public class PartitionRegistrationTest {
                 setControllerEpoch(-1).
                 setLeader(1).
                 setLeaderEpoch(123).
-                setIsr(Arrays.asList(1, 2)).
+                setIsr(List.of(1, 2)).
                 setPartitionEpoch(456).
-                setReplicas(Arrays.asList(1, 2, 3)).
+                setReplicas(List.of(1, 2, 3)).
                 setAddingReplicas(List.of()).
                 setRemovingReplicas(List.of()).
                 setIsNew(true).toString(),
@@ -134,9 +133,9 @@ public class PartitionRegistrationTest {
                 setControllerEpoch(-1).
                 setLeader(2).
                 setLeaderEpoch(234).
-                setIsr(Arrays.asList(2, 3, 4)).
+                setIsr(List.of(2, 3, 4)).
                 setPartitionEpoch(567).
-                setReplicas(Arrays.asList(2, 3, 4)).
+                setReplicas(List.of(2, 3, 4)).
                 setAddingReplicas(List.of()).
                 setRemovingReplicas(List.of()).
                 setIsNew(false).toString(),
@@ -154,17 +153,17 @@ public class PartitionRegistrationTest {
         PartitionRegistration partition1 = partition0.merge(new PartitionChangeRecord().
             setRemovingReplicas(List.of(3)).
             setAddingReplicas(List.of(4)).
-            setReplicas(Arrays.asList(1, 2, 3, 4)).
-            setDirectories(Arrays.asList(dir1, dir2, dir3, DirectoryId.UNASSIGNED)));
+            setReplicas(List.of(1, 2, 3, 4)).
+            setDirectories(List.of(dir1, dir2, dir3, DirectoryId.UNASSIGNED)));
         assertEquals(new PartitionRegistration.Builder().setReplicas(new int[] {1, 2, 3, 4}).
             setDirectories(new Uuid[]{dir1, dir2, dir3, DirectoryId.UNASSIGNED}).
             setIsr(new int[] {1, 2, 3}).setRemovingReplicas(new int[] {3}).setAddingReplicas(new int[] {4}).setLeader(1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(100).setPartitionEpoch(201).build(), partition1);
         PartitionRegistration partition2 = partition1.merge(new PartitionChangeRecord().
-            setIsr(Arrays.asList(1, 2, 4)).
+            setIsr(List.of(1, 2, 4)).
             setRemovingReplicas(List.of()).
             setAddingReplicas(List.of()).
-            setReplicas(Arrays.asList(1, 2, 4)).
-            setDirectories(Arrays.asList(dir1, dir2, DirectoryId.UNASSIGNED)));
+            setReplicas(List.of(1, 2, 4)).
+            setDirectories(List.of(dir1, dir2, DirectoryId.UNASSIGNED)));
         assertEquals(new PartitionRegistration.Builder().setReplicas(new int[] {1, 2, 4}).
             setDirectories(new Uuid[]{dir1, dir2, DirectoryId.UNASSIGNED}).
             setIsr(new int[] {1, 2, 4}).setLeader(1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(100).setPartitionEpoch(202).build(), partition2);
@@ -314,19 +313,19 @@ public class PartitionRegistrationTest {
         PartitionRecord expectRecord = new PartitionRecord().
             setTopicId(topicID).
             setPartitionId(0).
-            setReplicas(Arrays.asList(0, 1, 2, 3, 4)).
-            setIsr(Arrays.asList(0, 1)).
+            setReplicas(List.of(0, 1, 2, 3, 4)).
+            setIsr(List.of(0, 1)).
             setLeader(0).
             setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value()).
             setLeaderEpoch(0).
             setPartitionEpoch(0);
         if (metadataVersion.isElrSupported()) {
             expectRecord.
-                setEligibleLeaderReplicas(Arrays.asList(2, 3)).
+                setEligibleLeaderReplicas(List.of(2, 3)).
                 setLastKnownElr(List.of(4));
         }
         if (metadataVersion.isDirectoryAssignmentSupported()) {
-            expectRecord.setDirectories(Arrays.asList(
+            expectRecord.setDirectories(List.of(
                     DirectoryId.UNASSIGNED,
                     Uuid.fromString("KBJBm9GVRAG9Ffe25odmmg"),
                     DirectoryId.LOST,
@@ -363,12 +362,12 @@ public class PartitionRegistrationTest {
         PartitionRecord expectRecord = new PartitionRecord().
             setTopicId(topicID).
             setPartitionId(0).
-            setReplicas(Arrays.asList(0, 1, 2, 3, 4)).
-            setIsr(Arrays.asList(0, 1)).
+            setReplicas(List.of(0, 1, 2, 3, 4)).
+            setIsr(List.of(0, 1)).
             setLeader(0).
             setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value()).
             setLeaderEpoch(0).
-            setDirectories(Arrays.asList(DirectoryId.migratingArray(5))).
+            setDirectories(List.of(DirectoryId.migratingArray(5))).
             setPartitionEpoch(0);
         List<UnwritableMetadataException> exceptions = new ArrayList<>();
         ImageWriterOptions options = new ImageWriterOptions.Builder(MetadataVersion.IBP_4_0_IV1).
@@ -449,8 +448,8 @@ public class PartitionRegistrationTest {
         PartitionRecord record = new PartitionRecord().
                 setTopicId(Uuid.fromString("ONlQ7DDzQtGESsG499UDQg")).
                 setPartitionId(0).
-                setReplicas(Arrays.asList(0, 1)).
-                setIsr(Arrays.asList(0, 1)).
+                setReplicas(List.of(0, 1)).
+                setIsr(List.of(0, 1)).
                 setLeader(0).
                 setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value()).
                 setLeaderEpoch(0).

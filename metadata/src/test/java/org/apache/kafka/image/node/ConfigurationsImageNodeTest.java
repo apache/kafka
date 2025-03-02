@@ -25,7 +25,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -41,7 +40,7 @@ public class ConfigurationsImageNodeTest {
 
     static {
         Map<ConfigResource, ConfigurationImage> resourceMap = new HashMap<>();
-        for (ConfigResource resource : Arrays.asList(
+        for (ConfigResource resource : List.of(
                 new ConfigResource(BROKER, ""),
                 new ConfigResource(BROKER, "0"),
                 new ConfigResource(TOPIC, ""),
@@ -59,7 +58,7 @@ public class ConfigurationsImageNodeTest {
     public void testNodeChildNames() {
         List<String> childNames = new ArrayList<>(NODE.childNames());
         childNames.sort(String::compareTo);
-        assertEquals(Arrays.asList(
+        assertEquals(List.of(
             "BROKER",
             "BROKER:0",
             "TOPIC",
@@ -74,7 +73,7 @@ public class ConfigurationsImageNodeTest {
             sorted().
             map(ConfigurationsImageNode::resourceFromName).
             toList();
-        assertEquals(Arrays.asList(
+        assertEquals(List.of(
             new ConfigResource(BROKER, ""),
             new ConfigResource(BROKER, "0"),
             new ConfigResource(TOPIC, ""),

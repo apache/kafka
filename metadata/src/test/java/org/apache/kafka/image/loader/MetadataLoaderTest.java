@@ -50,7 +50,6 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
@@ -61,7 +60,6 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static java.util.Arrays.asList;
 import static org.apache.kafka.server.common.MetadataVersion.IBP_3_5_IV0;
 import static org.apache.kafka.server.common.MetadataVersion.MINIMUM_VERSION;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -143,7 +141,7 @@ public class MetadataLoaderTest {
     @Test
     public void testInstallPublishers() throws Exception {
         MockFaultHandler faultHandler = new MockFaultHandler("testInstallPublishers");
-        List<MockPublisher> publishers = asList(new MockPublisher("a"),
+        List<MockPublisher> publishers = List.of(new MockPublisher("a"),
                 new MockPublisher("b"),
                 new MockPublisher("c"));
         try (MetadataLoader loader = new MetadataLoader.Builder().
@@ -296,7 +294,7 @@ public class MetadataLoaderTest {
     @Test
     public void testRemovePublisher() throws Exception {
         MockFaultHandler faultHandler = new MockFaultHandler("testRemovePublisher");
-        List<MockPublisher> publishers = asList(new MockPublisher("a"),
+        List<MockPublisher> publishers = List.of(new MockPublisher("a"),
                 new MockPublisher("b"),
                 new MockPublisher("c"));
         try (MetadataLoader loader = new MetadataLoader.Builder().
@@ -517,7 +515,7 @@ public class MetadataLoaderTest {
     @Test
     public void testLastAppliedOffset() throws Exception {
         MockFaultHandler faultHandler = new MockFaultHandler("testLastAppliedOffset");
-        List<MockPublisher> publishers = asList(new MockPublisher("a"),
+        List<MockPublisher> publishers = List.of(new MockPublisher("a"),
                 new MockPublisher("b"));
         try (MetadataLoader loader = new MetadataLoader.Builder().
                 setFaultHandler(faultHandler).
@@ -525,7 +523,7 @@ public class MetadataLoaderTest {
                 build()) {
             loader.installPublishers(publishers).get();
             loader.handleLoadSnapshot(MockSnapshotReader.fromRecordLists(
-                new MetadataProvenance(200, 100, 4000, true), asList(
+                new MetadataProvenance(200, 100, 4000, true), List.of(
                     List.of(new ApiMessageAndVersion(new FeatureLevelRecord().
                         setName(MetadataVersion.FEATURE_NAME).
                         setFeatureLevel(MINIMUM_VERSION.featureLevel()), (short) 0)),
@@ -560,7 +558,7 @@ public class MetadataLoaderTest {
     @Test
     public void testCatchingUpState() throws Exception {
         MockFaultHandler faultHandler = new MockFaultHandler("testLastAppliedOffset");
-        List<MockPublisher> publishers = asList(new MockPublisher("a"),
+        List<MockPublisher> publishers = List.of(new MockPublisher("a"),
                 new MockPublisher("b"));
         AtomicReference<OptionalLong> highWaterMark = new AtomicReference<>(OptionalLong.empty());
         try (MetadataLoader loader = new MetadataLoader.Builder().
@@ -594,7 +592,7 @@ public class MetadataLoaderTest {
         long offset
     ) throws Exception {
         loader.handleLoadSnapshot(MockSnapshotReader.fromRecordLists(
-                new MetadataProvenance(offset, 100, 4000, true), asList(
+                new MetadataProvenance(offset, 100, 4000, true), List.of(
                         List.of(new ApiMessageAndVersion(new FeatureLevelRecord().
                                 setName(MetadataVersion.FEATURE_NAME).
                                 setFeatureLevel(MINIMUM_VERSION.featureLevel()), (short) 0)),
@@ -610,7 +608,7 @@ public class MetadataLoaderTest {
         long offset
     ) throws Exception {
         loader.handleLoadSnapshot(MockSnapshotReader.fromRecordLists(
-                new MetadataProvenance(offset, 100, 4000, true), asList(
+                new MetadataProvenance(offset, 100, 4000, true), List.of(
                         List.of(new ApiMessageAndVersion(new FeatureLevelRecord().
                                 setName(MetadataVersion.FEATURE_NAME).
                                 setFeatureLevel(MetadataVersion.latestProduction().featureLevel()), (short) 0)),
@@ -686,7 +684,7 @@ public class MetadataLoaderTest {
             loader.waitForAllEventsToBeHandled();
 
             loader.handleCommit(
-                MockBatchReader.newSingleBatchReader(500, 100, Arrays.asList(
+                MockBatchReader.newSingleBatchReader(500, 100, List.of(
                     new ApiMessageAndVersion(new BeginTransactionRecord()
                         .setName("testTransactions"), (short) 0),
                     new ApiMessageAndVersion(new TopicRecord()
@@ -699,7 +697,7 @@ public class MetadataLoaderTest {
                 "Topic should not be visible since we started transaction");
 
             loader.handleCommit(
-                MockBatchReader.newSingleBatchReader(500, 100, Arrays.asList(
+                MockBatchReader.newSingleBatchReader(500, 100, List.of(
                     new ApiMessageAndVersion(new PartitionRecord()
                         .setTopicId(Uuid.fromString("dMCqhcK4T5miGH5wEX7NsQ"))
                         .setPartitionId(0), (short) 0),
@@ -753,7 +751,7 @@ public class MetadataLoaderTest {
             loader.waitForAllEventsToBeHandled();
 
             loader.handleCommit(
-                MockBatchReader.newSingleBatchReader(500, 100, Arrays.asList(
+                MockBatchReader.newSingleBatchReader(500, 100, List.of(
                     new ApiMessageAndVersion(new BeginTransactionRecord()
                         .setName("txn-1"), (short) 0),
                     new ApiMessageAndVersion(new TopicRecord()
@@ -790,7 +788,7 @@ public class MetadataLoaderTest {
             loader.waitForAllEventsToBeHandled();
 
             loader.handleCommit(
-                MockBatchReader.newSingleBatchReader(500, 100, Arrays.asList(
+                MockBatchReader.newSingleBatchReader(500, 100, List.of(
                     new ApiMessageAndVersion(new BeginTransactionRecord()
                         .setName("txn-1"), (short) 0),
                     new ApiMessageAndVersion(new TopicRecord()

@@ -33,7 +33,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -58,14 +57,14 @@ public class ImageDowngradeTest {
         }
     }
 
-    static final List<ApiMessageAndVersion> TEST_RECORDS = Arrays.asList(
+    static final List<ApiMessageAndVersion> TEST_RECORDS = List.of(
             new ApiMessageAndVersion(new TopicRecord().
                     setName("foo").
                     setTopicId(Uuid.fromString("5JPuABiJTPu2pQjpZWM6_A")), (short) 0),
             new ApiMessageAndVersion(new PartitionRecord().
                     setTopicId(Uuid.fromString("5JPuABiJTPu2pQjpZWM6_A")).
-                    setReplicas(Arrays.asList(0, 1)).
-                    setIsr(Arrays.asList(0, 1)).
+                    setReplicas(List.of(0, 1)).
+                    setIsr(List.of(0, 1)).
                     setLeader(0).
                     setLeaderEpoch(1).
                     setPartitionEpoch(2), (short) 0));
@@ -84,7 +83,7 @@ public class ImageDowngradeTest {
         writeWithExpectedLosses(MetadataVersion.IBP_3_3_IV3,
             List.of(
                 "the isMigratingZkBroker state of one or more brokers"),
-            Arrays.asList(
+            List.of(
                 metadataVersionRecord(MetadataVersion.IBP_3_4_IV0),
                 new ApiMessageAndVersion(new RegisterBrokerRecord().
                     setBrokerId(123).
@@ -96,7 +95,7 @@ public class ImageDowngradeTest {
                     setIsMigratingZkBroker(true), (short) 2),
                 TEST_RECORDS.get(0),
                 TEST_RECORDS.get(1)),
-            Arrays.asList(
+            List.of(
                 metadataVersionRecord(MetadataVersion.IBP_3_3_IV3),
                 new ApiMessageAndVersion(new RegisterBrokerRecord().
                     setBrokerId(123).
@@ -118,15 +117,15 @@ public class ImageDowngradeTest {
         writeWithExpectedLosses(outputMetadataVersion,
             List.of(
                     "the directory assignment state of one or more replicas"),
-            Arrays.asList(
+            List.of(
                 metadataVersionRecord(inputMetadataVersion),
                 TEST_RECORDS.get(0),
                 new ApiMessageAndVersion(
-                    testPartitionRecord.duplicate().setDirectories(Arrays.asList(
+                    testPartitionRecord.duplicate().setDirectories(List.of(
                         Uuid.fromString("c7QfSi6xSIGQVh3Qd5RJxA"),
                         Uuid.fromString("rWaCHejCRRiptDMvW5Xw0g"))),
                     (short) 2)),
-            Arrays.asList(
+            List.of(
                 metadataVersionRecord(outputMetadataVersion),
                 TEST_RECORDS.get(0),
                 new ApiMessageAndVersion(
