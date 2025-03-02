@@ -252,12 +252,12 @@ public class GlobalStateTaskTest {
     @Test
     public void shouldNotCheckpointIfNotReceivedEnoughRecords() {
         globalStateTask.initialize();
-        // Reset after initialization since checkpointing should happen during initialization, KAFKA-18168
+        globalStateTask.update(record(topic1, 1, currentOffsetT1 + 9000L, "foo".getBytes(), "foo".getBytes()));
+        time.sleep(flushInterval); // flush interval elapsed
+
         stateMgr.checkpointWritten = false;
         stateMgr.flushed = false;
 
-        globalStateTask.update(record(topic1, 1, currentOffsetT1 + 9000L, "foo".getBytes(), "foo".getBytes()));
-        time.sleep(flushInterval); // flush interval elapsed
         globalStateTask.maybeCheckpoint();
 
         assertEquals(offsets, stateMgr.changelogOffsets());
@@ -268,14 +268,15 @@ public class GlobalStateTaskTest {
     @Test
     public void shouldNotCheckpointWhenFlushIntervalHasNotLapsed() {
         globalStateTask.initialize();
-        // Reset after initialization since checkpointing should happen during initialization, KAFKA-18168
-        stateMgr.checkpointWritten = false;
-        stateMgr.flushed = false;
 
         // offset delta exceeded
         globalStateTask.update(record(topic1, 1, currentOffsetT1 + 10000L, "foo".getBytes(), "foo".getBytes()));
 
         time.sleep(flushInterval / 2);
+
+        stateMgr.checkpointWritten = false;
+        stateMgr.flushed = false;
+
         globalStateTask.maybeCheckpoint();
 
         assertEquals(offsets, stateMgr.changelogOffsets());
@@ -290,14 +291,15 @@ public class GlobalStateTaskTest {
         expectedOffsets.put(t2, 100L);
 
         globalStateTask.initialize();
-        // Reset after initialization since checkpointing should happen during initialization, KAFKA-18168
-        stateMgr.checkpointWritten = false;
-        stateMgr.flushed = false;
 
         time.sleep(flushInterval); // flush interval elapsed
 
         // 10000 records received since last flush => do not flush
         globalStateTask.update(record(topic1, 1, currentOffsetT1 + 9999L, "foo".getBytes(), "foo".getBytes()));
+
+        stateMgr.checkpointWritten = false;
+        stateMgr.flushed = false;
+
         globalStateTask.maybeCheckpoint();
 
         assertEquals(offsets, stateMgr.changelogOffsets());
@@ -355,6 +357,10 @@ public class GlobalStateTaskTest {
     @Test
     public void shouldCheckpointDuringClose() throws Exception {
         globalStateTask.initialize();
+
+        stateMgr.checkpointWritten = false;
+        stateMgr.flushed = false;
+
         globalStateTask.close(false);
 
         assertTrue(stateMgr.checkpointWritten);
