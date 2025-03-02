@@ -29,7 +29,6 @@ import org.apache.kafka.server.common.TopicIdPartition;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -227,7 +226,7 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
         // When combining current assignment, we need to only consider the member topic subscription in current assignment
         // which is being subscribed in the new assignment as well.
         currentAssignment.forEach((topicIdPartition, members) -> members.forEach(member -> {
-            if (topicToMemberSubscription.getOrDefault(topicIdPartition.topicId(), Collections.emptySet()).contains(member)
+            if (topicToMemberSubscription.getOrDefault(topicIdPartition.topicId(), Set.of()).contains(member)
                 && !newAssignment.containsKey(topicIdPartition))
                 finalAssignment.computeIfAbsent(member, k -> new HashSet<>()).add(topicIdPartition);
         }));
