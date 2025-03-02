@@ -97,7 +97,7 @@ object TransactionLog {
     val version = buffer.getShort
     if (version == CoordinatorRecordType.TRANSACTION_LOG.id) {
       val value = new TransactionLogKey(new ByteBufferAccessor(buffer), 0.toShort)
-      new TxnKey(version,value.transactionalId)
+      new TxnKey(version, value.transactionalId)
     } else {
       new UnknownKey(version)
     }
