@@ -68,7 +68,7 @@ class CoordinatorLoaderImplTest {
       when(replicaManager.getLog(tp)).thenReturn(None)
 
       val result = loader.load(tp, coordinator)
-      assertFutureThrows(result, classOf[NotLeaderOrFollowerException])
+      assertFutureThrows(classOf[NotLeaderOrFollowerException], result)
     }
   }
 
@@ -88,7 +88,7 @@ class CoordinatorLoaderImplTest {
       loader.close()
 
       val result = loader.load(tp, coordinator)
-      assertFutureThrows(result, classOf[RuntimeException])
+      assertFutureThrows(classOf[RuntimeException], result)
     }
   }
 
@@ -233,7 +233,7 @@ class CoordinatorLoaderImplTest {
       latch.await(10, TimeUnit.SECONDS)
       loader.close()
 
-      val ex = assertFutureThrows(result, classOf[RuntimeException])
+      val ex = assertFutureThrows(classOf[RuntimeException], result)
       assertEquals("Coordinator loader is closed.", ex.getMessage)
     }
   }
@@ -311,7 +311,7 @@ class CoordinatorLoaderImplTest {
       when(serde.deserialize(ArgumentMatchers.any(), ArgumentMatchers.any()))
         .thenThrow(new RuntimeException("Error!"))
 
-      val ex = assertFutureThrows(loader.load(tp, coordinator), classOf[RuntimeException])
+      val ex = assertFutureThrows(classOf[RuntimeException], loader.load(tp, coordinator))
 
       assertEquals(s"Deserializing record DefaultRecord(offset=0, timestamp=-1, key=2 bytes, value=2 bytes) from $tp failed due to: Error!", ex.getMessage)
     }
@@ -628,7 +628,7 @@ class CoordinatorLoaderImplTest {
         minOneMessage = true
       )).thenReturn(readResult2)
 
-      assertFutureThrows(loader.load(tp, coordinator), classOf[NotLeaderOrFollowerException])
+      assertFutureThrows(classOf[NotLeaderOrFollowerException], loader.load(tp, coordinator))
     }
   }
 

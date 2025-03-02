@@ -18,12 +18,10 @@
 package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.common.Configurable;
-import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Map;
 
 /** Defines which topics should be replicated. */
-@InterfaceStability.Evolving
 public interface TopicFilter extends Configurable, AutoCloseable {
 
     boolean shouldReplicateTopic(String topic);

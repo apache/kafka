@@ -148,6 +148,27 @@ public class ConfigCommandIntegrationTest {
     }
 
     @ClusterTest
+    public void testAddConfigKeyValuesUsingCommand() throws Exception {
+        try (Admin client = cluster.admin()) {
+            NewTopic newTopic = new NewTopic("topic", 1, (short) 1);
+            client.createTopics(Collections.singleton(newTopic)).all().get();
+            cluster.waitForTopic("topic", 1);
+            Stream<String> command = Stream.concat(quorumArgs(), Stream.of(
+                    "--entity-type", "topics",
+                    "--entity-name", "topic",
+                    "--alter", "--add-config", "cleanup.policy=[delete,compact]"));
+            String message = captureStandardStream(false, run(command));
+            assertEquals("Completed updating config for topic topic.", message);
+            command = Stream.concat(quorumArgs(), Stream.of(
+                    "--entity-type", "topics",
+                    "--entity-name", "topic",
+                    "--describe"));
+            message = captureStandardStream(false, run(command));
+            assertTrue(message.contains("cleanup.policy=delete,compact"), "Config entry was not added correctly");
+        }
+    }
+
+    @ClusterTest
     public void testDynamicBrokerConfigUpdateUsingKraft() throws Exception {
         List<String> alterOpts = generateDefaultAlterOpts(cluster.bootstrapServers());
 
@@ -382,7 +403,7 @@ public class ConfigCommandIntegrationTest {
     @ClusterTest(
          // Must be at greater than 1MB per cleaner thread, set to 2M+2 so that we can set 2 cleaner threads.
          serverProperties = {@ClusterConfigProperty(key = "log.cleaner.dedupe.buffer.size", value = "2097154")},
-         metadataVersion = MetadataVersion.IBP_3_3_IV0
+         metadataVersion = MetadataVersion.IBP_3_9_IV0
     )
     public void testUnsupportedVersionException() {
         try (Admin client = cluster.admin()) {

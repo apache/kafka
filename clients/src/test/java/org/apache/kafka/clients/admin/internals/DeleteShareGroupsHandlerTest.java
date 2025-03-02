@@ -14,23 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.record;
 
-public class ConvertedRecords<T extends Records> {
+package org.apache.kafka.clients.admin.internals;
 
-    private final T records;
-    private final RecordValidationStats recordValidationStats;
+import org.apache.kafka.common.utils.LogContext;
 
-    public ConvertedRecords(T records, RecordValidationStats recordValidationStats) {
-        this.records = records;
-        this.recordValidationStats = recordValidationStats;
-    }
-
-    public T records() {
-        return records;
-    }
-
-    public RecordValidationStats recordConversionStats() {
-        return recordValidationStats;
+public class DeleteShareGroupsHandlerTest extends DeleteGroupsHandlerTest {
+    protected DeleteGroupsHandler handler() {
+        return new DeleteShareGroupsHandler(new LogContext());
     }
 }

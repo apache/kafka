@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.security.token.delegation;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 
 import java.util.ArrayList;
@@ -27,7 +26,6 @@ import java.util.Objects;
  * A class representing a delegation token details.
  *
  */
-@InterfaceStability.Evolving
 public class TokenInformation {
 
     private final KafkaPrincipal owner;
