@@ -34,7 +34,6 @@ import java.util
 import java.util.concurrent.TimeUnit
 import scala.collection.{Seq, mutable}
 import scala.jdk.CollectionConverters._
-import scala.jdk.javaapi.OptionConverters
 
 object AddPartitionsToTxnManager {
   type AppendCallback = Map[TopicPartition, Errors] => Unit
@@ -187,10 +186,10 @@ class AddPartitionsToTxnManager(
     }
   }
 
-  private def getTransactionCoordinator(partition: Int): Option[Node] = {
-   OptionConverters.toScala(metadataCache.getLeaderAndIsr(Topic.TRANSACTION_STATE_TOPIC_NAME, partition)
+  private def getTransactionCoordinator(partition: Int): util.Optional[Node] = {
+   metadataCache.getLeaderAndIsr(Topic.TRANSACTION_STATE_TOPIC_NAME, partition)
       .filter(_.leader != MetadataResponse.NO_LEADER_ID)
-      .flatMap(metadata => metadataCache.getAliveBrokerNode(metadata.leader, interBrokerListenerName)))
+      .flatMap(metadata => metadataCache.getAliveBrokerNode(metadata.leader, interBrokerListenerName))
   }
 
   private def topicPartitionsToError(transactionData: AddPartitionsToTxnTransaction, error: Errors): Map[TopicPartition, Errors] = {

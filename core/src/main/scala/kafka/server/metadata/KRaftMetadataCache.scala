@@ -39,7 +39,6 @@ import java.util.function.{Predicate, Supplier}
 import java.util.stream.Collectors
 import java.util.{Collections, Properties}
 import scala.collection.mutable.ListBuffer
-import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters.RichOptional
 import scala.util.control.Breaks._
@@ -253,7 +252,7 @@ class KRaftMetadataCache(
             .setTopicId(Option(image.topics().getTopic(topic).id()).getOrElse(Uuid.ZERO_UUID))
             .setIsInternal(Topic.isInternal(topic))
             .setPartitions(partitionMetadata.toBuffer.asJava))
-        case None =>  util.stream.Stream.empty()
+        case None => util.stream.Stream.empty()
       }
     ).collect(Collectors.toList())
   }
@@ -269,7 +268,7 @@ class KRaftMetadataCache(
     var remaining = maximumNumberOfPartitions
     val result = new DescribeTopicPartitionsResponseData()
     breakable {
-      topics.asScala.foreach { topicName =>
+      topics.forEachRemaining { topicName =>
         if (remaining > 0) {
           val (partitionResponse, nextPartition) =
             getPartitionMetadataForDescribeTopicResponse(
@@ -355,7 +354,7 @@ class KRaftMetadataCache(
   override def getAliveBrokers(): util.List[BrokerMetadata] = getAliveBrokers(_currentImage)
 
   private def getAliveBrokers(image: MetadataImage): util.List[BrokerMetadata] = {
-    _currentImage.cluster().brokers().values().stream()
+    image.cluster().brokers().values().stream()
       .filter(Predicate.not(_.fenced))
       .map(broker => new BrokerMetadata(broker.id, broker.rack))
       .collect(Collectors.toList())
@@ -420,7 +419,7 @@ class KRaftMetadataCache(
 
   override def getPartitionReplicaEndpoints(tp: TopicPartition, listenerName: ListenerName): util.Map[Integer, Node] = {
     val image = _currentImage
-    val result = new mutable.HashMap[Integer, Node]()
+    val result = new util.HashMap[Integer, Node]()
     Option(image.topics().getTopic(tp.topic())).foreach { topic =>
       Option(topic.partitions().get(tp.partition())).foreach { partition =>
         partition.replicas.foreach { replicaId =>
@@ -434,7 +433,7 @@ class KRaftMetadataCache(
         }
       }
     }
-    result.asJava
+    result
   }
 
   override def getRandomAliveBrokerId: util.Optional[Integer] = {
