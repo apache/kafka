@@ -3450,7 +3450,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val tp1 = new TopicPartition(topic, 0)
     val tp2 = new TopicPartition(topic, 1)
     val tp3 = new TopicPartition(topic, 2)
-    createTopic(topic, numPartitions = 4)
+    createTopic(topic, numPartitions = 4, replicationFactor = 2)
 
     val validAssignment = Optional.of(new NewPartitionReassignment(
       (0 until brokerCount).map(_.asInstanceOf[Integer]).asJava
@@ -3466,10 +3466,10 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       tp2 -> alterReplicaNumberTo2,
       tp3 -> alterReplicaNumberTo3,
     ).asJava, alterOptions).values()
-    assertDoesNotThrow(() => alterReplicaResults.get(tp1).get())
-    assertEquals("The replication factor is changed from 1 to 2",
-      assertFutureThrows(classOf[InvalidReplicationFactorException], alterReplicaResults.get(tp2)).getMessage)
-    assertEquals("The replication factor is changed from 1 to 3",
+    assertDoesNotThrow(() => alterReplicaResults.get(tp2).get())
+    assertEquals("The replication factor is changed from 2 to 1",
+      assertFutureThrows(classOf[InvalidReplicationFactorException], alterReplicaResults.get(tp1)).getMessage)
+    assertEquals("The replication factor is changed from 2 to 3",
       assertFutureThrows(classOf[InvalidReplicationFactorException], alterReplicaResults.get(tp3)).getMessage)
 
     val nonExistentTp1 = new TopicPartition("topicA", 0)

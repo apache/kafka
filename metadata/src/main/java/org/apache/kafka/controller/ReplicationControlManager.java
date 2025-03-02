@@ -2414,9 +2414,8 @@ public class ReplicationControlManager {
             newPartInfo.elr);
     }
 
-    private void validatePartitionReplicationFactorUnchanged(
-            PartitionRegistration part,
-            ReassignablePartition target) {
+    private void validatePartitionReplicationFactorUnchanged(PartitionRegistration part,
+                                                             ReassignablePartition target) {
         int currentReassignmentSetSize;
         if (isReassignmentInProgress(part)) {
             Set<Integer> set = new HashSet<>();

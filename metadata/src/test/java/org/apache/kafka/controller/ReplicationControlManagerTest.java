@@ -1932,14 +1932,14 @@ public class ReplicationControlManagerTest {
         ReplicationControlManager replication = ctx.replicationControl;
         ctx.registerBrokers(0, 1, 2, 3);
         ctx.unfenceBrokers(0, 1, 2, 3);
-        ctx.createTestTopic("foo", new int[][] {new int[] {1, 2, 3}, new int[] {1, 2, 3}, new int[] {1, 2, 3}});
+        ctx.createTestTopic("foo", new int[][] {new int[] {0, 1, 2}, new int[] {0, 1, 2}, new int[] {0, 1, 2}});
 
         ControllerResult<AlterPartitionReassignmentsResponseData> alterResult =
                 replication.alterPartitionReassignments(
                         new AlterPartitionReassignmentsRequestData().setTopics(singletonList(
                                 new ReassignableTopic().setName("foo").setPartitions(asList(
                                         new ReassignablePartition().setPartitionIndex(0).
-                                                setReplicas(asList(0, 1, 2)),
+                                                setReplicas(asList(1, 2, 3)),
                                         new ReassignablePartition().setPartitionIndex(1).
                                                 setReplicas(asList(0, 1)),
                                         new ReassignablePartition().setPartitionIndex(2).
@@ -1963,9 +1963,9 @@ public class ReplicationControlManagerTest {
                         setTopics(singletonList(new OngoingTopicReassignment().
                                 setName("foo").setPartitions(singletonList(
                                         new OngoingPartitionReassignment().setPartitionIndex(0).
-                                                setRemovingReplicas(singletonList(3)).
-                                                setAddingReplicas(singletonList(0)).
-                                                setReplicas(asList(0, 1, 2, 3))))));
+                                                setRemovingReplicas(singletonList(0)).
+                                                setAddingReplicas(singletonList(3)).
+                                                setReplicas(asList(1, 2, 3, 0))))));
         assertEquals(currentReassigning, replication.listPartitionReassignments(singletonList(
                 new ListPartitionReassignmentsTopics().setName("foo").
                         setPartitionIndexes(asList(0, 1, 2))), Long.MAX_VALUE));
@@ -2009,14 +2009,14 @@ public class ReplicationControlManagerTest {
         ReplicationControlManager replication = ctx.replicationControl;
         ctx.registerBrokers(0, 1, 2, 3);
         ctx.unfenceBrokers(0, 1, 2, 3);
-        ctx.createTestTopic("foo", new int[][] {new int[] {1, 2, 3}}).topicId();
+        ctx.createTestTopic("foo", new int[][] {new int[] {0, 1, 2}}).topicId();
 
         ControllerResult<AlterPartitionReassignmentsResponseData> alterResult =
                 replication.alterPartitionReassignments(
                         new AlterPartitionReassignmentsRequestData().setTopics(singletonList(
                                         new ReassignableTopic().setName("foo").setPartitions(singletonList(
                                                 new ReassignablePartition().setPartitionIndex(0).
-                                                        setReplicas(asList(0, 1, 2)))))));
+                                                        setReplicas(asList(1, 2, 3)))))));
         assertEquals(new AlterPartitionReassignmentsResponseData().
                         setErrorMessage(null).setResponses(singletonList(
                                 new ReassignableTopicResponse().setName("foo").setPartitions(singletonList(
@@ -2028,9 +2028,9 @@ public class ReplicationControlManagerTest {
                         setTopics(singletonList(new OngoingTopicReassignment().
                                 setName("foo").setPartitions(singletonList(
                                         new OngoingPartitionReassignment().setPartitionIndex(0).
-                                                setRemovingReplicas(singletonList(3)).
-                                                setAddingReplicas(singletonList(0)).
-                                                setReplicas(asList(0, 1, 2, 3))))));
+                                                setRemovingReplicas(singletonList(0)).
+                                                setAddingReplicas(singletonList(3)).
+                                                setReplicas(asList(1, 2, 3, 0))))));
         assertEquals(currentReassigning, replication.listPartitionReassignments(singletonList(
                 new ListPartitionReassignmentsTopics().setName("foo").
                         setPartitionIndexes(asList(0, 1, 2))), Long.MAX_VALUE));

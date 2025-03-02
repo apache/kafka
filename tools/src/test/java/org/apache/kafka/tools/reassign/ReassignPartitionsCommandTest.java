@@ -438,12 +438,14 @@ public class ReassignPartitionsCommandTest {
         createTopics();
         String assignment = "{\"version\":1,\"partitions\":" +
                 "[{\"topic\":\"foo\",\"partition\":0,\"replicas\":[0,1],\"log_dirs\":[\"any\",\"any\"]}," +
+                "{\"topic\":\"foo\",\"partition\":1,\"replicas\":[0,1,2,3],\"log_dirs\":[\"any\",\"any\",\"any\",\"any\"]}," +
                 "{\"topic\":\"bar\",\"partition\":0,\"replicas\":[3],\"log_dirs\":[\"any\"]}" +
                 "]}";
-        try (Admin admin = Admin.create(Collections.singletonMap(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
+        try (Admin admin = clusterInstance.admin()) {
             assertEquals("Error reassigning partition(s):\n" +
                             "bar-0: The replication factor is changed from 3 to 1\n" +
-                            "foo-0: The replication factor is changed from 3 to 2",
+                            "foo-0: The replication factor is changed from 3 to 2\n" +
+                            "foo-1: The replication factor is changed from 3 to 4",
                     assertThrows(TerseException.class, () -> executeAssignment(admin, false, assignment, -1L, -1L, 10000L, Time.SYSTEM, true)).getMessage());
         }
     }
