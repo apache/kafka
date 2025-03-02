@@ -18,16 +18,12 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
-import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Map;
 
 /**
  * The result of the {@link Admin#createPartitions(Map)} call.
- *
- * The API of this class is evolving, see {@link Admin} for details.
  */
-@InterfaceStability.Evolving
 public class CreatePartitionsResult {
 
     private final Map<String, KafkaFuture<Void>> values;
