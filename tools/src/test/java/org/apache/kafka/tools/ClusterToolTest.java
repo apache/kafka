@@ -18,7 +18,6 @@ package org.apache.kafka.tools;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.MockAdminClient;
-import org.apache.kafka.common.errors.UnsupportedEndpointTypeException;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.Type;
@@ -30,12 +29,10 @@ import java.io.PrintStream;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -102,13 +99,7 @@ public class ClusterToolTest {
         brokerIds.removeAll(clusterInstance.controllerIds());
         int brokerId = assertDoesNotThrow(() -> brokerIds.stream().findFirst().get());
         clusterInstance.shutdownBroker(brokerId);
-        ExecutionException exception =
-                assertThrows(ExecutionException.class,
-                        () -> ClusterTool.execute("unregister", "--bootstrap-controller", clusterInstance.bootstrapControllers(), "--id", String.valueOf(brokerId)));
-        assertNotNull(exception.getCause());
-        assertEquals(UnsupportedEndpointTypeException.class, exception.getCause().getClass());
-        assertEquals("This Admin API is not yet supported when communicating directly with " +
-                "the controller quorum.", exception.getCause().getMessage());
+        assertDoesNotThrow(() -> ClusterTool.execute("unregister", "--bootstrap-controller", clusterInstance.bootstrapControllers(), "--id", String.valueOf(brokerId)));
     }
 
     @ClusterTest(brokers = 3, types = {Type.KRAFT, Type.CO_KRAFT})

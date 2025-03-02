@@ -17,7 +17,6 @@
 package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.utils.AbstractIterator;
-import org.apache.kafka.common.utils.Time;
 
 import java.util.Iterator;
 import java.util.Optional;
@@ -84,17 +83,6 @@ public interface Records extends TransferableRecords {
      * @return true if all record batches have a matching magic value, false otherwise
      */
     boolean hasMatchingMagic(byte magic);
-
-    /**
-     * Convert all batches in this buffer to the format passed as a parameter. Note that this requires
-     * deep iteration since all of the deep records must also be converted to the desired format.
-     * @param toMagic The magic value to convert to
-     * @param firstOffset The starting offset for returned records. This only impacts some cases. See
-     *                    {@link RecordsUtil#downConvert(Iterable, byte, long, Time)} for an explanation.
-     * @param time instance used for reporting stats
-     * @return A ConvertedRecords instance which may or may not contain the same instance in its records field.
-     */
-    ConvertedRecords<? extends Records> downConvert(byte toMagic, long firstOffset, Time time);
 
     /**
      * Get an iterator over the records in this log. Note that this generally requires decompression,
