@@ -188,7 +188,7 @@ class LogCleaner(initialConfig: CleanerConfig,
    * @return A set of configs that is reconfigurable in LogCleaner
    */
   override def reconfigurableConfigs: Set[String] = {
-    LogCleaner.ReconfigurableConfigs
+    CleanerConfig.RECONFIGURABLE_CONFIGS.asScala ++ Set(ServerConfigs.MESSAGE_MAX_BYTES_CONFIG)
   }
 
   /**
@@ -500,15 +500,6 @@ class LogCleaner(initialConfig: CleanerConfig,
 }
 
 object LogCleaner {
-  val ReconfigurableConfigs: Set[String] = Set(
-    CleanerConfig.LOG_CLEANER_THREADS_PROP,
-    CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP,
-    CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_LOAD_FACTOR_PROP,
-    CleanerConfig.LOG_CLEANER_IO_BUFFER_SIZE_PROP,
-    ServerConfigs.MESSAGE_MAX_BYTES_CONFIG,
-    CleanerConfig.LOG_CLEANER_IO_MAX_BYTES_PER_SECOND_PROP,
-    CleanerConfig.LOG_CLEANER_BACKOFF_MS_PROP
-  )
 
   def cleanerConfig(config: KafkaConfig): CleanerConfig = {
     new CleanerConfig(config.logCleanerThreads,
