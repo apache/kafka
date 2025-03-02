@@ -65,12 +65,13 @@ import java.util.List;
 import java.util.Properties;
 
 import static java.util.Arrays.asList;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 
 @ExtendWith(MockitoExtension.class)
@@ -352,12 +353,10 @@ public class KTableImplTest {
         final String topic1 = "topic1";
         final String topic2 = "topic2";
 
-        final KTableImpl<String, String, String> table1 =
-            (KTableImpl<String, String, String>) builder.table(topic1, consumed);
+        final var table1 = builder.table(topic1, consumed);
         builder.table(topic2, consumed);
 
-        final KTableImpl<String, String, Integer> table1Mapped =
-            (KTableImpl<String, String, Integer>) table1.mapValues(s -> Integer.valueOf(s));
+        final var table1Mapped = table1.mapValues(s -> Integer.valueOf(s));
         table1Mapped.filter((key, value) -> (value % 2) == 0);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
@@ -371,15 +370,11 @@ public class KTableImplTest {
         final String topic1 = "topic1";
         final String topic2 = "topic2";
 
-        final KTableImpl<String, String, String> table1 =
-            (KTableImpl<String, String, String>) builder.table(topic1, consumed);
-        final KTableImpl<String, String, String> table2 =
-            (KTableImpl<String, String, String>) builder.table(topic2, consumed);
+        final var table1 = builder.table(topic1, consumed);
+        final var table2 = builder.table(topic2, consumed);
 
-        final KTableImpl<String, String, Integer> table1Mapped =
-            (KTableImpl<String, String, Integer>) table1.mapValues(s -> Integer.valueOf(s));
-        final KTableImpl<String, Integer, Integer> table1MappedFiltered =
-            (KTableImpl<String, Integer, Integer>) table1Mapped.filter((key, value) -> (value % 2) == 0);
+        final var table1Mapped = table1.mapValues(s -> Integer.valueOf(s));
+        final var table1MappedFiltered = table1Mapped.filter((key, value) -> (value % 2) == 0);
         table2.join(table1MappedFiltered, (v1, v2) -> v1 + v2);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
@@ -391,24 +386,20 @@ public class KTableImplTest {
     public void shouldNotEnableSendingOldValuesIfNotMaterializedAlreadyAndNotForcedToMaterialize() {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final KTableImpl<String, String, String> table =
-            (KTableImpl<String, String, String>) builder.table("topic1", consumed);
+        final var kTable = assertInstanceOf(KTableImpl.class, builder.table("topic1", consumed));
+        kTable.enableSendingOldValues(false);
 
-        table.enableSendingOldValues(false);
-
-        assertThat(table.sendingOldValueEnabled(), is(false));
+        assertFalse(kTable.sendingOldValueEnabled());
     }
 
     @Test
     public void shouldEnableSendingOldValuesIfNotMaterializedAlreadyButForcedToMaterialize() {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final KTableImpl<String, String, String> table =
-            (KTableImpl<String, String, String>) builder.table("topic1", consumed);
+        final var kTable = assertInstanceOf(KTableImpl.class, builder.table("topic1", consumed));
+        kTable.enableSendingOldValues(true);
 
-        table.enableSendingOldValues(true);
-
-        assertThat(table.sendingOldValueEnabled(), is(true));
+        assertTrue(kTable.sendingOldValueEnabled());
     }
 
     private void assertTopologyContainsProcessor(final Topology topology, final String processorName) {
@@ -429,8 +420,7 @@ public class KTableImplTest {
         final String topic1 = "topic1";
         final String storeName1 = "storeName1";
 
-        final KTableImpl<String, String, String> table1 =
-            (KTableImpl<String, String, String>) builder.table(
+        final var table1 = builder.table(
                 topic1,
                 consumed,
                 Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as(storeName1)
