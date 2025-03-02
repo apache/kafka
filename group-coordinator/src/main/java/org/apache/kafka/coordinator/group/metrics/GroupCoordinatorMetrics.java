@@ -126,49 +126,49 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
             GROUP_COUNT_METRIC_NAME,
             METRICS_GROUP,
             "The total number of groups using the classic rebalance protocol.",
-            Collections.singletonMap(GROUP_COUNT_PROTOCOL_TAG, Group.GroupType.CLASSIC.toString())
+            Map.of(GROUP_COUNT_PROTOCOL_TAG, Group.GroupType.CLASSIC.toString())
         );
 
         consumerGroupCountMetricName = metrics.metricName(
             GROUP_COUNT_METRIC_NAME,
             METRICS_GROUP,
             "The total number of groups using the consumer rebalance protocol.",
-            Collections.singletonMap(GROUP_COUNT_PROTOCOL_TAG, Group.GroupType.CONSUMER.toString())
+            Map.of(GROUP_COUNT_PROTOCOL_TAG, Group.GroupType.CONSUMER.toString())
         );
 
         consumerGroupCountEmptyMetricName = metrics.metricName(
             CONSUMER_GROUP_COUNT_METRIC_NAME,
             METRICS_GROUP,
             "The number of consumer groups in empty state.",
-            Collections.singletonMap(CONSUMER_GROUP_COUNT_STATE_TAG, ConsumerGroupState.EMPTY.toString())
+            Map.of(CONSUMER_GROUP_COUNT_STATE_TAG, ConsumerGroupState.EMPTY.toString())
         );
 
         consumerGroupCountAssigningMetricName = metrics.metricName(
             CONSUMER_GROUP_COUNT_METRIC_NAME,
             METRICS_GROUP,
             "The number of consumer groups in assigning state.",
-            Collections.singletonMap(CONSUMER_GROUP_COUNT_STATE_TAG, ConsumerGroupState.ASSIGNING.toString())
+            Map.of(CONSUMER_GROUP_COUNT_STATE_TAG, ConsumerGroupState.ASSIGNING.toString())
         );
 
         consumerGroupCountReconcilingMetricName = metrics.metricName(
             CONSUMER_GROUP_COUNT_METRIC_NAME,
             METRICS_GROUP,
             "The number of consumer groups in reconciling state.",
-            Collections.singletonMap(CONSUMER_GROUP_COUNT_STATE_TAG, ConsumerGroupState.RECONCILING.toString())
+            Map.of(CONSUMER_GROUP_COUNT_STATE_TAG, ConsumerGroupState.RECONCILING.toString())
         );
 
         consumerGroupCountStableMetricName = metrics.metricName(
             CONSUMER_GROUP_COUNT_METRIC_NAME,
             METRICS_GROUP,
             "The number of consumer groups in stable state.",
-            Collections.singletonMap(CONSUMER_GROUP_COUNT_STATE_TAG, ConsumerGroupState.STABLE.toString())
+            Map.of(CONSUMER_GROUP_COUNT_STATE_TAG, ConsumerGroupState.STABLE.toString())
         );
 
         consumerGroupCountDeadMetricName = metrics.metricName(
             CONSUMER_GROUP_COUNT_METRIC_NAME,
             METRICS_GROUP,
             "The number of consumer groups in dead state.",
-            Collections.singletonMap(CONSUMER_GROUP_COUNT_STATE_TAG, ConsumerGroupState.DEAD.toString())
+            Map.of(CONSUMER_GROUP_COUNT_STATE_TAG, ConsumerGroupState.DEAD.toString())
         );
 
         shareGroupCountMetricName = metrics.metricName(
@@ -203,49 +203,49 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
             GROUP_COUNT_METRIC_NAME,
             METRICS_GROUP,
             "The total number of groups using the streams rebalance protocol.",
-            Collections.singletonMap(GROUP_COUNT_PROTOCOL_TAG, Group.GroupType.STREAMS.toString())
+            Map.of(GROUP_COUNT_PROTOCOL_TAG, Group.GroupType.STREAMS.toString())
         );
 
         streamsGroupCountEmptyMetricName = metrics.metricName(
             STREAMS_GROUP_COUNT_METRIC_NAME,
             METRICS_GROUP,
             "The number of streams groups in empty state.",
-            Collections.singletonMap(STREAMS_GROUP_COUNT_STATE_TAG, StreamsGroupState.EMPTY.toString())
+            Map.of(STREAMS_GROUP_COUNT_STATE_TAG, StreamsGroupState.EMPTY.toString())
         );
 
         streamsGroupCountAssigningMetricName = metrics.metricName(
             STREAMS_GROUP_COUNT_METRIC_NAME,
             METRICS_GROUP,
             "The number of streams groups in assigning state.",
-            Collections.singletonMap(STREAMS_GROUP_COUNT_STATE_TAG, StreamsGroupState.ASSIGNING.toString())
+            Map.of(STREAMS_GROUP_COUNT_STATE_TAG, StreamsGroupState.ASSIGNING.toString())
         );
 
         streamsGroupCountReconcilingMetricName = metrics.metricName(
             STREAMS_GROUP_COUNT_METRIC_NAME,
             METRICS_GROUP,
             "The number of streams groups in reconciling state.",
-            Collections.singletonMap(STREAMS_GROUP_COUNT_STATE_TAG, StreamsGroupState.RECONCILING.toString())
+            Map.of(STREAMS_GROUP_COUNT_STATE_TAG, StreamsGroupState.RECONCILING.toString())
         );
 
         streamsGroupCountStableMetricName = metrics.metricName(
             STREAMS_GROUP_COUNT_METRIC_NAME,
             METRICS_GROUP,
             "The number of streams groups in stable state.",
-            Collections.singletonMap(STREAMS_GROUP_COUNT_STATE_TAG, StreamsGroupState.STABLE.toString())
+            Map.of(STREAMS_GROUP_COUNT_STATE_TAG, StreamsGroupState.STABLE.toString())
         );
 
         streamsGroupCountDeadMetricName = metrics.metricName(
             STREAMS_GROUP_COUNT_METRIC_NAME,
             METRICS_GROUP,
             "The number of streams groups in dead state.",
-            Collections.singletonMap(STREAMS_GROUP_COUNT_STATE_TAG, StreamsGroupState.DEAD.toString())
+            Map.of(STREAMS_GROUP_COUNT_STATE_TAG, StreamsGroupState.DEAD.toString())
         );
 
         streamsGroupCountNotReadyMetricName = metrics.metricName(
             STREAMS_GROUP_COUNT_METRIC_NAME,
             METRICS_GROUP,
             "The number of streams groups in not ready state.",
-            Collections.singletonMap(STREAMS_GROUP_COUNT_STATE_TAG, StreamsGroupState.NOT_READY.toString())
+            Map.of(STREAMS_GROUP_COUNT_STATE_TAG, StreamsGroupState.NOT_READY.toString())
         );
 
         registerGauges();

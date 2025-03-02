@@ -22,7 +22,6 @@ import org.apache.kafka.common.Uuid;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -46,10 +45,10 @@ public class ShareSessionTest {
 
     @Test
     public void testPartitionsToLogStringEmpty() {
-        String response = ShareSession.partitionsToLogString(Collections.emptyList(), false);
+        String response = ShareSession.partitionsToLogString(List.of(), false);
         assertEquals("0 partition(s)", response);
 
-        response = ShareSession.partitionsToLogString(Collections.emptyList(), true);
+        response = ShareSession.partitionsToLogString(List.of(), true);
         assertEquals("( [] )", response);
     }
 }
