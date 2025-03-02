@@ -48,6 +48,9 @@ import org.apache.kafka.common.message.ShareGroupDescribeResponseData;
 import org.apache.kafka.common.message.ShareGroupDescribeResponseData.DescribedGroup;
 import org.apache.kafka.common.message.ShareGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
+import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
+import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
@@ -61,6 +64,7 @@ import org.apache.kafka.common.requests.DescribeShareGroupOffsetsRequest;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.ShareGroupDescribeRequest;
+import org.apache.kafka.common.requests.StreamsGroupDescribeRequest;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.requests.TxnOffsetCommitRequest;
 import org.apache.kafka.common.utils.BufferSupplier;
@@ -77,8 +81,10 @@ import org.apache.kafka.coordinator.common.runtime.CoordinatorShardBuilderSuppli
 import org.apache.kafka.coordinator.common.runtime.MultiThreadedEventProcessor;
 import org.apache.kafka.coordinator.common.runtime.PartitionWriter;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
+import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
+import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.server.record.BrokerCompressionType;
 import org.apache.kafka.server.share.persister.DeleteShareGroupStateParameters;
 import org.apache.kafka.server.share.persister.DeleteShareGroupStateResult;
@@ -109,7 +115,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.IntSupplier;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.coordinator.common.runtime.CoordinatorOperationExceptionHelper.handleOperationException;
 
@@ -130,6 +135,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         private GroupCoordinatorMetrics groupCoordinatorMetrics;
         private GroupConfigManager groupConfigManager;
         private Persister persister;
+        private Optional<Authorizer> authorizer;
 
         public Builder(
             int nodeId,
@@ -179,6 +185,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
             return this;
         }
 
+        public Builder withAuthorizer(Optional<Authorizer> authorizer) {
+            this.authorizer = authorizer;
+            return this;
+        }
+
         public GroupCoordinatorService build() {
             requireNonNull(config, new IllegalArgumentException("Config must be set."));
             requireNonNull(writer, new IllegalArgumentException("Writer must be set."));
@@ -189,12 +200,14 @@ public class GroupCoordinatorService implements GroupCoordinator {
             requireNonNull(groupCoordinatorMetrics, new IllegalArgumentException("GroupCoordinatorMetrics must be set."));
             requireNonNull(groupConfigManager, new IllegalArgumentException("GroupConfigManager must be set."));
             requireNonNull(persister, new IllegalArgumentException("Persister must be set."));
+            requireNonNull(authorizer, new IllegalArgumentException("Authorizer must be set."));
 
             String logPrefix = String.format("GroupCoordinator id=%d", nodeId);
             LogContext logContext = new LogContext(String.format("[%s] ", logPrefix));
 
             CoordinatorShardBuilderSupplier<GroupCoordinatorShard, CoordinatorRecord> supplier = () ->
-                new GroupCoordinatorShard.Builder(config, groupConfigManager);
+                new GroupCoordinatorShard.Builder(config, groupConfigManager)
+                    .withAuthorizer(authorizer);
 
             CoordinatorEventProcessor processor = new MultiThreadedEventProcessor(
                 logContext,
@@ -369,6 +382,44 @@ public class GroupCoordinatorService implements GroupCoordinator {
             (error, message) -> new ConsumerGroupHeartbeatResponseData()
                 .setErrorCode(error.code())
                 .setErrorMessage(message),
+            log
+        ));
+    }
+
+    /**
+     * See
+     * {@link GroupCoordinator#streamsGroupHeartbeat(RequestContext, org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData)}.
+     */
+    @Override
+    public CompletableFuture<StreamsGroupHeartbeatResult> streamsGroupHeartbeat(
+        RequestContext context,
+        StreamsGroupHeartbeatRequestData request
+    ) {
+        if (!isActive.get()) {
+            return CompletableFuture.completedFuture(
+                new StreamsGroupHeartbeatResult(
+                    new StreamsGroupHeartbeatResponseData().setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code()),
+                    Map.of()
+                )
+            );
+        }
+
+        return runtime.scheduleWriteOperation(
+            "streams-group-heartbeat",
+            topicPartitionFor(request.groupId()),
+            Duration.ofMillis(config.offsetCommitTimeoutMs()),
+            coordinator -> coordinator.streamsGroupHeartbeat(context, request)
+        ).exceptionally(exception -> handleOperationException(
+            "streams-group-heartbeat",
+            request,
+            exception,
+            (error, message) ->
+                new StreamsGroupHeartbeatResult(
+                    new StreamsGroupHeartbeatResponseData()
+                        .setErrorCode(error.code())
+                        .setErrorMessage(message),
+                    Map.of()
+                ),
             log
         ));
     }
@@ -581,7 +632,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                              .setMemberId(member.memberId())
                              .setGroupInstanceId(member.groupInstanceId())
                              .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code()))
-                         .collect(Collectors.toList());
+                         .toList();
                     return new LeaveGroupResponseData()
                         .setMembers(memberResponses);
                 } else {
@@ -619,7 +670,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             exception -> {
                 exception = Errors.maybeUnwrapException(exception);
                 if (exception instanceof NotCoordinatorException) {
-                    return Collections.emptyList();
+                    return List.of();
                 } else {
                     throw new CompletionException(exception);
                 }
@@ -662,7 +713,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     .computeIfAbsent(topicPartitionFor(groupId), __ -> new ArrayList<>())
                     .add(groupId);
             } else {
-                futures.add(CompletableFuture.completedFuture(Collections.singletonList(
+                futures.add(CompletableFuture.completedFuture(List.of(
                     new ConsumerGroupDescribeResponseData.DescribedGroup()
                         .setGroupId(null)
                         .setErrorCode(Errors.INVALID_GROUP_ID.code())
@@ -691,6 +742,58 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
+     * See {@link GroupCoordinator#streamsGroupDescribe(RequestContext, List)}.
+     */
+    @Override
+    public CompletableFuture<List<StreamsGroupDescribeResponseData.DescribedGroup>> streamsGroupDescribe(
+        RequestContext context,
+        List<String> groupIds
+    ) {
+        if (!isActive.get()) {
+            return CompletableFuture.completedFuture(StreamsGroupDescribeRequest.getErrorDescribedGroupList(
+                groupIds,
+                Errors.COORDINATOR_NOT_AVAILABLE
+            ));
+        }
+
+        final List<CompletableFuture<List<StreamsGroupDescribeResponseData.DescribedGroup>>> futures =
+            new ArrayList<>(groupIds.size());
+        final Map<TopicPartition, List<String>> groupsByTopicPartition = new HashMap<>();
+        groupIds.forEach(groupId -> {
+            if (isGroupIdNotEmpty(groupId)) {
+                groupsByTopicPartition
+                    .computeIfAbsent(topicPartitionFor(groupId), __ -> new ArrayList<>())
+                    .add(groupId);
+            } else {
+                futures.add(CompletableFuture.completedFuture(List.of(
+                    new StreamsGroupDescribeResponseData.DescribedGroup()
+                        .setGroupId(null)
+                        .setErrorCode(Errors.INVALID_GROUP_ID.code())
+                )));
+            }
+        });
+
+        groupsByTopicPartition.forEach((topicPartition, groupList) -> {
+            CompletableFuture<List<StreamsGroupDescribeResponseData.DescribedGroup>> future =
+                runtime.scheduleReadOperation(
+                    "streams-group-describe",
+                    topicPartition,
+                    (coordinator, lastCommittedOffset) -> coordinator.streamsGroupDescribe(groupIds, lastCommittedOffset)
+                ).exceptionally(exception -> handleOperationException(
+                    "streams-group-describe",
+                    groupList,
+                    exception,
+                    (error, __) -> StreamsGroupDescribeRequest.getErrorDescribedGroupList(groupList, error),
+                    log
+                ));
+
+            futures.add(future);
+        });
+
+        return FutureUtils.combineFutures(futures, ArrayList::new, List::addAll);
+    }
+    
+    /**
      * See {@link GroupCoordinator#shareGroupDescribe(RequestContext, List)}.
      */
     @Override
@@ -713,7 +816,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     .computeIfAbsent(topicPartitionFor(groupId), __ -> new ArrayList<>())
                     .add(groupId);
             } else {
-                futures.add(CompletableFuture.completedFuture(Collections.singletonList(
+                futures.add(CompletableFuture.completedFuture(List.of(
                     new ShareGroupDescribeResponseData.DescribedGroup()
                         .setGroupId(null)
                         .setErrorCode(Errors.INVALID_GROUP_ID.code())
@@ -762,7 +865,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         groupIds.forEach(groupId -> {
             // For backwards compatibility, we support DescribeGroups for the empty group id.
             if (groupId == null) {
-                futures.add(CompletableFuture.completedFuture(Collections.singletonList(
+                futures.add(CompletableFuture.completedFuture(List.of(
                     new DescribeGroupsResponseData.DescribedGroup()
                         .setGroupId(null)
                         .setErrorCode(Errors.INVALID_GROUP_ID.code())
@@ -1045,7 +1148,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 topicPartitionFor(request.groupId()),
                 Duration.ofMillis(config.offsetCommitTimeoutMs()),
                 coordinator -> new CoordinatorResult<>(
-                    Collections.emptyList(),
+                    List.of(),
                     coordinator.fetchOffsets(request, Long.MAX_VALUE)
                 )
             ).exceptionally(exception -> handleOffsetFetchException(
@@ -1100,7 +1203,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 topicPartitionFor(request.groupId()),
                 Duration.ofMillis(config.offsetCommitTimeoutMs()),
                 coordinator -> new CoordinatorResult<>(
-                    Collections.emptyList(),
+                    List.of(),
                     coordinator.fetchAllOffsets(request, Long.MAX_VALUE)
                 )
             ).exceptionally(exception -> handleOffsetFetchException(

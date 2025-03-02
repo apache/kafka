@@ -15,14 +15,19 @@
  limitations under the License.
 -->
 
-<script><!--#include virtual="js/templateData.js" --></script>
-
-<script id="zk2kraft-template" type="text/x-handlebars-template"></script>
-
+<!--#include virtual="../includes/_header.htm" -->
+<!--#include virtual="../includes/_top.htm" -->
+<div class="content">
 <div class="p-zk2kraft">
-    <h4 class="anchor-heading">Significant Changes in Kafka 4.0 Release</h4>
-    <p>The following are some of the updates in Kafka 4.0 release:</p>
-    <h5 class="anchor-heading">Removal Zookeeper configs</h5>
+    <h1>Differences Between KRaft mode and ZooKeeper mode</h1>
+    <h2 class="anchor-heading">Removed ZooKeeper Features</h2>
+    <p>
+        This section documents differences in behavior between KRaft mode and ZooKeeper mode.
+        Specifically, several configurations, metrics and features have changed or are no longer required in KRaft mode.
+        To migrate an existing cluster from ZooKeeper mode to KRaft mode, please refer to the
+        <a href="/39/documentation.html#kraft_zk_migration">ZooKeeper to KRaft Migration</a> section.
+    </p>
+    <h3 class="anchor-heading">Configurations</h3>
     <ul>
         <li>
             <p>
@@ -40,7 +45,7 @@
                 <li><code>password.encoder.iterations</code></li>
             </ul>
             <p>
-                In Kraft mode, Kafka stores sensitive data in records, and the data is not encrypted in Kafka.
+                In KRaft mode, Kafka stores sensitive data in records, and the data is not encrypted in Kafka.
             </p>
         </li>
         <li>
@@ -88,7 +93,7 @@
                 <li><code>broker.id.generation.enable</code></li>
             </ul>
             <p>
-                Kafka use the node id in Kraft mode to identify servers.
+                Kafka use the node id in KRaft mode to identify servers.
             </p>
             <ul>
                 <li><code>node.id</code></li>
@@ -123,7 +128,7 @@
         </li>
         <li>
             <p>
-                Removed Zookeeper related configurations.
+                Removed ZooKeeper related configurations.
             </p>
             <ul>
                 <li><code>zookeeper.connect</code></li>
@@ -148,7 +153,7 @@
             </ul>
         </li>
     </ul>
-    <h5 class="anchor-heading">Removal metrics</h5>
+    <h2 class="anchor-heading">Metrics</h2>
     <ul>
         <li>
             <p>
@@ -162,7 +167,7 @@
                 <li><code>ControlPlaneExpiredConnectionsKilledCount</code></li>
             </ul>
             <p>
-                In Kraft mode, Kafka also provides metrics to monitor the network processors and expired connections.
+                In KRaft mode, Kafka also provides metrics to monitor the network processors and expired connections.
                 Use the following metrics to monitor the network processors and expired connections:
             </p>
             <ul>
@@ -227,4 +232,6 @@
             </ul>
         </li>
     </ul>
+</div>
+<!--#include virtual="../includes/_footer.htm" -->
 </div>
