@@ -63,6 +63,7 @@ jobs:
   load-catalog:
     needs: [configure]
     runs-on: ubuntu-latest
+    if: ${{ !github.event.repository.fork }}
     name: Load Test Catalog
     steps:
       - name: Checkout main
