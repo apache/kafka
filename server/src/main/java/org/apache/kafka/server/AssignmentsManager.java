@@ -46,7 +46,6 @@ import com.yammer.metrics.core.MetricsRegistry;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
@@ -181,7 +180,7 @@ public final class AssignmentsManager {
         this.directoryIdToDescription = directoryIdToDescription;
         this.metadataImageSupplier = metadataImageSupplier;
         this.ready = new ConcurrentHashMap<>();
-        this.inflight = Collections.emptyMap();
+        this.inflight = Map.of();
         this.metricsRegistry = metricsRegistry;
         this.metricsRegistry.newGauge(QUEUED_REPLICA_TO_DIR_ASSIGNMENTS_METRIC, new Gauge<Integer>() {
                 @Override
@@ -363,7 +362,7 @@ public final class AssignmentsManager {
         Map<TopicIdPartition, Assignment> sent,
         Optional<ClientResponse> assignmentResponse
     ) {
-        inflight = Collections.emptyMap();
+        inflight = Map.of();
         Optional<String> globalResponseError = globalResponseError(assignmentResponse);
         if (globalResponseError.isPresent()) {
             previousGlobalFailures++;

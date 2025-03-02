@@ -37,6 +37,8 @@ import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.ShareGroupDescribeResponseData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
+import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.network.ClientInformation;
@@ -108,7 +110,9 @@ import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupBuilder;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroup;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupBuilder;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupBuilder;
+import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
 import org.apache.kafka.image.MetadataImage;
+import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
@@ -120,6 +124,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -401,7 +406,7 @@ public class GroupMetadataManagerTestContext {
         String protocolType = "consumer";
         String protocolName = "range";
         int generationId = 0;
-        List<SyncGroupRequestData.SyncGroupRequestAssignment> assignment = Collections.emptyList();
+        List<SyncGroupRequestData.SyncGroupRequestAssignment> assignment = List.of();
 
         SyncGroupRequestBuilder withGroupId(String groupId) {
             this.groupId = groupId;
@@ -465,6 +470,7 @@ public class GroupMetadataManagerTestContext {
         private ShareGroupPartitionAssignor shareGroupAssignor = new MockPartitionAssignor("share");
         private final List<ShareGroupBuilder> shareGroupBuilders = new ArrayList<>();
         private final Map<String, Object> config = new HashMap<>();
+        private Optional<Authorizer> authorizer = Optional.empty();
 
         public Builder withConfig(String key, Object value) {
             config.put(key, value);
@@ -493,6 +499,11 @@ public class GroupMetadataManagerTestContext {
 
         public Builder withShareGroupAssignor(ShareGroupPartitionAssignor shareGroupAssignor) {
             this.shareGroupAssignor = shareGroupAssignor;
+            return this;
+        }
+
+        public Builder withAuthorizer(Authorizer authorizer) {
+            this.authorizer = Optional.of(authorizer);
             return this;
         }
 
@@ -525,6 +536,7 @@ public class GroupMetadataManagerTestContext {
                     .withGroupCoordinatorMetricsShard(metrics)
                     .withShareGroupAssignor(shareGroupAssignor)
                     .withGroupConfigManager(groupConfigManager)
+                    .withAuthorizer(authorizer)
                     .build(),
                 groupConfigManager
             );
@@ -673,6 +685,36 @@ public class GroupMetadataManagerTestContext {
         );
 
         result.records().forEach(this::replay);
+        return result;
+    }
+
+    public CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> streamsGroupHeartbeat(
+        StreamsGroupHeartbeatRequestData request
+    ) {
+        RequestContext context = new RequestContext(
+            new RequestHeader(
+                ApiKeys.STREAMS_GROUP_HEARTBEAT,
+                ApiKeys.STREAMS_GROUP_HEARTBEAT.latestVersion(),
+                "client",
+                0
+            ),
+            "1",
+            InetAddress.getLoopbackAddress(),
+            KafkaPrincipal.ANONYMOUS,
+            ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
+            SecurityProtocol.PLAINTEXT,
+            ClientInformation.EMPTY,
+            false
+        );
+
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result = groupMetadataManager.streamsGroupHeartbeat(
+            context,
+            request
+        );
+
+        if (result.replayRecords()) {
+            result.records().forEach(this::replay);
+        }
         return result;
     }
 
@@ -1089,7 +1131,7 @@ public class GroupMetadataManagerTestContext {
         SyncResult followerSyncResult = sendClassicGroupSync(
             syncRequest.setGroupInstanceId(followerInstanceId)
                        .setMemberId(followerId)
-                       .setAssignments(Collections.emptyList())
+                       .setAssignments(List.of())
         );
 
         assertTrue(followerSyncResult.records.isEmpty());
@@ -1231,7 +1273,7 @@ public class GroupMetadataManagerTestContext {
         List<CoordinatorRecord> expectedRecords = List.of(newGroupMetadataRecord(
             group.groupId(),
             new GroupMetadataValue()
-                .setMembers(Collections.emptyList())
+                .setMembers(List.of())
                 .setGeneration(group.generationId())
                 .setLeader(null)
                 .setProtocolType("consumer")
@@ -1284,6 +1326,10 @@ public class GroupMetadataManagerTestContext {
 
     public List<ConsumerGroupDescribeResponseData.DescribedGroup> sendConsumerGroupDescribe(List<String> groupIds) {
         return groupMetadataManager.consumerGroupDescribe(groupIds, lastCommittedOffset);
+    }
+
+    public List<StreamsGroupDescribeResponseData.DescribedGroup> sendStreamsGroupDescribe(List<String> groupIds) {
+        return groupMetadataManager.streamsGroupDescribe(groupIds, lastCommittedOffset);
     }
 
     public List<DescribeGroupsResponseData.DescribedGroup> describeGroups(List<String> groupIds) {
@@ -1452,10 +1498,10 @@ public class GroupMetadataManagerTestContext {
 
     public void verifyDescribeGroupsBeforeV6ReturnsDeadGroup(String groupId) {
         List<DescribeGroupsResponseData.DescribedGroup> describedGroups =
-            describeGroups(Collections.singletonList(groupId), (short) 5);
+            describeGroups(List.of(groupId), (short) 5);
 
         assertEquals(
-            Collections.singletonList(new DescribeGroupsResponseData.DescribedGroup()
+            List.of(new DescribeGroupsResponseData.DescribedGroup()
                 .setGroupId(groupId)
                 .setGroupState(DEAD.toString())
             ),
@@ -1481,7 +1527,7 @@ public class GroupMetadataManagerTestContext {
                 .withProtocolType(protocolType)
                 .build()
         );
-        assertEquals(Collections.emptyList(), syncResult.records);
+        assertEquals(List.of(), syncResult.records);
         assertFalse(syncResult.syncFuture.isDone());
 
         // Simulate a successful write to log.

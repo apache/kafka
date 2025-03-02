@@ -22,7 +22,6 @@ import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -44,7 +43,7 @@ public class ConfiguredTopologyTest {
             () -> new ConfiguredTopology(
                 0,
                 null,
-                Collections.emptyMap(),
+                Map.of(),
                 Optional.empty()
             )
         );
@@ -68,7 +67,7 @@ public class ConfiguredTopologyTest {
             () -> new ConfiguredTopology(
                 0,
                 Optional.empty(),
-                Collections.emptyMap(),
+                Map.of(),
                 null
             )
         );
@@ -80,7 +79,7 @@ public class ConfiguredTopologyTest {
             () -> new ConfiguredTopology(
                 -1,
                 Optional.of(new TreeMap<>()),
-                Collections.emptyMap(),
+                Map.of(),
                 Optional.empty()
             )
         );
@@ -92,7 +91,7 @@ public class ConfiguredTopologyTest {
             () -> new ConfiguredTopology(
                 1,
                 Optional.empty(),
-                Collections.emptyMap(),
+                Map.of(),
                 Optional.empty()
             )
         );

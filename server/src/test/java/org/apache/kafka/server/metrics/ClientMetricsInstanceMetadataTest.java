@@ -22,7 +22,6 @@ import org.junit.jupiter.api.Test;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.regex.Pattern;
@@ -37,25 +36,25 @@ public class ClientMetricsInstanceMetadataTest {
         Uuid uuid = Uuid.randomUuid();
         ClientMetricsInstanceMetadata instanceMetadata = new ClientMetricsInstanceMetadata(uuid, ClientMetricsTestUtils.requestContext());
         // We consider empty/missing client matching patterns as valid
-        assertTrue(instanceMetadata.isMatch(Collections.emptyMap()));
+        assertTrue(instanceMetadata.isMatch(Map.of()));
 
         assertTrue(instanceMetadata.isMatch(
-            Collections.singletonMap(ClientMetricsConfigs.CLIENT_ID, Pattern.compile(".*"))));
+            Map.of(ClientMetricsConfigs.CLIENT_ID, Pattern.compile(".*"))));
         assertTrue(instanceMetadata.isMatch(
-            Collections.singletonMap(ClientMetricsConfigs.CLIENT_ID, Pattern.compile("producer-1"))));
+            Map.of(ClientMetricsConfigs.CLIENT_ID, Pattern.compile("producer-1"))));
         assertTrue(instanceMetadata.isMatch(
-            Collections.singletonMap(ClientMetricsConfigs.CLIENT_ID, Pattern.compile("producer.*"))));
+            Map.of(ClientMetricsConfigs.CLIENT_ID, Pattern.compile("producer.*"))));
         assertTrue(instanceMetadata.isMatch(
-            Collections.singletonMap(ClientMetricsConfigs.CLIENT_INSTANCE_ID, Pattern.compile(uuid.toString()))));
+            Map.of(ClientMetricsConfigs.CLIENT_INSTANCE_ID, Pattern.compile(uuid.toString()))));
         assertTrue(instanceMetadata.isMatch(
-            Collections.singletonMap(ClientMetricsConfigs.CLIENT_SOFTWARE_NAME, Pattern.compile("apache-kafka-java"))));
+            Map.of(ClientMetricsConfigs.CLIENT_SOFTWARE_NAME, Pattern.compile("apache-kafka-java"))));
         assertTrue(instanceMetadata.isMatch(
-            Collections.singletonMap(ClientMetricsConfigs.CLIENT_SOFTWARE_VERSION, Pattern.compile("3.5.2"))));
+            Map.of(ClientMetricsConfigs.CLIENT_SOFTWARE_VERSION, Pattern.compile("3.5.2"))));
         assertTrue(instanceMetadata.isMatch(
-            Collections.singletonMap(ClientMetricsConfigs.CLIENT_SOURCE_ADDRESS, Pattern.compile(
+            Map.of(ClientMetricsConfigs.CLIENT_SOURCE_ADDRESS, Pattern.compile(
                 InetAddress.getLocalHost().getHostAddress()))));
         assertTrue(instanceMetadata.isMatch(
-            Collections.singletonMap(ClientMetricsConfigs.CLIENT_SOURCE_PORT, Pattern.compile(
+            Map.of(ClientMetricsConfigs.CLIENT_SOURCE_PORT, Pattern.compile(
                 String.valueOf(ClientMetricsTestUtils.CLIENT_PORT)))));
     }
 
@@ -125,9 +124,9 @@ public class ClientMetricsInstanceMetadataTest {
             ClientMetricsTestUtils.requestContext());
 
         // Unknown key in pattern map
-        assertFalse(instanceMetadata.isMatch(Collections.singletonMap("unknown", Pattern.compile(".*"))));
+        assertFalse(instanceMetadata.isMatch(Map.of("unknown", Pattern.compile(".*"))));
         // '*' key is considered as invalid regex pattern
-        assertFalse(instanceMetadata.isMatch(Collections.singletonMap("*", Pattern.compile(".*"))));
+        assertFalse(instanceMetadata.isMatch(Map.of("*", Pattern.compile(".*"))));
     }
 
     @Test
@@ -136,9 +135,9 @@ public class ClientMetricsInstanceMetadataTest {
         ClientMetricsInstanceMetadata instanceMetadata = new ClientMetricsInstanceMetadata(uuid,
             ClientMetricsTestUtils.requestContextWithNullClientInfo());
 
-        assertFalse(instanceMetadata.isMatch(Collections.singletonMap(ClientMetricsConfigs.CLIENT_SOFTWARE_NAME,
+        assertFalse(instanceMetadata.isMatch(Map.of(ClientMetricsConfigs.CLIENT_SOFTWARE_NAME,
             Pattern.compile(".*"))));
-        assertFalse(instanceMetadata.isMatch(Collections.singletonMap(ClientMetricsConfigs.CLIENT_SOFTWARE_VERSION,
+        assertFalse(instanceMetadata.isMatch(Map.of(ClientMetricsConfigs.CLIENT_SOFTWARE_VERSION,
             Pattern.compile(".*"))));
     }
 }
