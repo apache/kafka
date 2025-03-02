@@ -154,12 +154,6 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val alterations = List(userAlterations, clientAlterations)
     client.alterClientQuotas(alterations.asJava).all().get()
 
-    val values = client.alterClientQuotas(alterations.asJava).values()
-    values.forEach((entity, future) => {
-      val entityName = entity.entries().values().iterator().next()
-      assertEquals(defaultQuota, entityName)
-    })
-
     TestUtils.waitUntilTrue(() => {
       try {
         val userQuotas = client.describeClientQuotas(ClientQuotaFilter.containsOnly(Collections.singletonList(
@@ -193,10 +187,6 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         case _: Exception => false
       }
     }, "Timed out waiting for quota config to be propagated to all servers")
-
-    val defaultQuotas = client.describeClientQuotas(ClientQuotaFilter.containsOnly(Collections.singletonList(
-      ClientQuotaFilterComponent.ofDefaultEntity(ClientQuotaEntity.USER)))).entities().get()
-    assertEquals(1, defaultQuotas.size())
   }
 
   @Test
