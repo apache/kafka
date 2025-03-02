@@ -27,7 +27,6 @@ import org.apache.kafka.coordinator.group.streams.TopicMetadata;
 import org.slf4j.Logger;
 
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -290,7 +289,7 @@ public class InternalTopicManager {
             topicInfo.topicConfigs() != null ? topicInfo.topicConfigs().stream()
                 .collect(Collectors.toMap(StreamsGroupTopologyValue.TopicConfig::key,
                     StreamsGroupTopologyValue.TopicConfig::value))
-                : Collections.emptyMap()
+                : Map.of()
         );
     }
 
@@ -304,6 +303,6 @@ public class InternalTopicManager {
                 copartitionGroup.repartitionSourceTopics().stream()
                     .map(i -> subtopology.repartitionSourceTopics().get(i).name())
             ).collect(Collectors.toSet())
-        ).collect(Collectors.toList());
+        ).toList();
     }
 }

@@ -17,13 +17,11 @@
 package org.apache.kafka.server.log.remote.storage;
 
 import org.apache.kafka.common.TopicIdPartition;
-import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
  * Base class for remote log metadata objects like {@link RemoteLogSegmentMetadata}, {@link RemoteLogSegmentMetadataUpdate},
  * and {@link RemotePartitionDeleteMetadata}.
  */
-@InterfaceStability.Evolving
 public abstract class RemoteLogMetadata {
 
     /**
