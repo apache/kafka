@@ -40,7 +40,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 public class ProducerRebootstrapTest {
     private static final int BROKER_COUNT = 2;
 
-    static List<ClusterConfig> generator() {
+    private static List<ClusterConfig> generator() {
         // Enable unclean leader election for the test topic
         Map<String, String> serverProperties = Map.of(
                 TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, "true",
@@ -53,7 +53,7 @@ public class ProducerRebootstrapTest {
                 .toList();
     }
 
-    static Map<String, String> getRebootstrapConfig(boolean useRebootstrapTriggerMs) {
+    private static Map<String, String> getRebootstrapConfig(boolean useRebootstrapTriggerMs) {
         Map<String, String> properties = new HashMap<>();
         if (useRebootstrapTriggerMs) {
             properties.put(CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_CONFIG, "5000");
@@ -69,7 +69,7 @@ public class ProducerRebootstrapTest {
         return properties;
     }
 
-    static ClusterConfig buildConfig(Map<String, String> serverProperties, Map<String, String> rebootstrapProperties) {
+    private static ClusterConfig buildConfig(Map<String, String> serverProperties, Map<String, String> rebootstrapProperties) {
         return ClusterConfig.defaultBuilder()
                 .setTypes(Set.of(Type.KRAFT))
                 .setBrokers(BROKER_COUNT)
