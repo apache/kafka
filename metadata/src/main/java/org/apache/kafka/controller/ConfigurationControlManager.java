@@ -389,8 +389,8 @@ public class ConfigurationControlManager {
             " cannot be removed while ELR is enabled.");
 
     private static final ApiError DISALLOWED_CONFIG_VALUE_SIZE_ERROR =
-            new ApiError(INVALID_CONFIG, "The configuration value cannot be added because " +
-                    "it exceeds the maximum value size of " + Short.MAX_VALUE + " bytes.");
+            new ApiError(INVALID_CONFIG, String.format("The configuration value cannot be added because " +
+                    "it exceeds the maximum value size of %d bytes.", Short.MAX_VALUE));
 
     boolean isDisallowedBrokerMinIsrTransition(ConfigRecord configRecord) {
         if (configRecord.name().equals(MIN_IN_SYNC_REPLICAS_CONFIG) &&
