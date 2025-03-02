@@ -237,9 +237,4 @@ public class KRaftMetadataRequestBenchmark {
         Optional<com.fasterxml.jackson.databind.JsonNode> optional = option.isDefined() ? Optional.of(option.get()) : Optional.empty();
         return RequestConvertToJson.requestDesc(allTopicMetadataRequest.header(), optional, allTopicMetadataRequest.isForwarded()).toString();
     }
-
-    @Benchmark
-    public void testTopicIdInfo() {
-        metadataCache.topicIdInfo();
-    }
 }

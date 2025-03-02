@@ -37,7 +37,7 @@ import java.util
 import java.util.concurrent.ThreadLocalRandom
 import java.util.function.{Predicate, Supplier}
 import java.util.stream.Collectors
-import java.util.{Collections, Properties}
+import java.util.Properties
 import scala.collection.mutable.ListBuffer
 import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters.RichOptional
@@ -391,14 +391,7 @@ class KRaftMetadataCache(
       map(topic => topic.partitions().size())
   }
 
-  override def topicNamesToIds(): util.Map[String, Uuid] = _currentImage.topics.topicNameToIdView()
-
   override def topicIdsToNames(): util.Map[Uuid, String] = _currentImage.topics.topicIdToNameView()
-
-  override def topicIdInfo(): util.Map.Entry[util.Map[String, Uuid], util.Map[Uuid, String]] = {
-    val image = _currentImage
-    new util.AbstractMap.SimpleEntry(image.topics.topicNameToIdView(), image.topics.topicIdToNameView())
-  }
 
   // if the leader is not known, return None;
   // if the leader is known and corresponding node is available, return Some(node)
@@ -453,49 +446,6 @@ class KRaftMetadataCache(
     util.Optional.ofNullable(_currentImage.cluster().broker(brokerId))
       .filter(Predicate.not(_.fenced))
       .map(brokerRegistration => brokerRegistration.epoch())
-  }
-
-  override def getClusterMetadata(clusterId: String, listenerName: ListenerName): Cluster = {
-    val image = _currentImage
-    val nodes = new util.HashMap[Integer, Node]
-    image.cluster().brokers().values().forEach { broker =>
-      if (!broker.fenced()) {
-        broker.node(listenerName.value()).toScala.foreach { node =>
-          nodes.put(broker.id(), node)
-        }
-      }
-    }
-
-    def node(id: Int): Node = {
-      Option(nodes.get(id)).getOrElse(Node.noNode())
-    }
-
-    val partitionInfos = new util.ArrayList[PartitionInfo]
-    val internalTopics = new util.HashSet[String]
-
-    image.topics().topicsByName().values().forEach { topic =>
-      topic.partitions().forEach { (key, value) =>
-        val partitionId = key
-        val partition = value
-        partitionInfos.add(new PartitionInfo(topic.name(),
-          partitionId,
-          node(partition.leader),
-          partition.replicas.map(replica => node(replica)),
-          partition.isr.map(replica => node(replica)),
-          getOfflineReplicas(image, partition, listenerName).asScala.
-            map(replica => node(replica)).toArray))
-        if (Topic.isInternal(topic.name())) {
-          internalTopics.add(topic.name())
-        }
-      }
-    }
-    val controllerNode = node(getRandomAliveBroker(image).orElse(-1))
-    // Note: the constructor of Cluster does not allow us to reference unregistered nodes.
-    // So, for example, if partition foo-0 has replicas [1, 2] but broker 2 is not
-    // registered, we pass its replicas as [1, -1]. This doesn't make a lot of sense, but
-    // we are duplicating the behavior of ZkMetadataCache, for now.
-    new Cluster(clusterId, nodes.values(),
-      partitionInfos, Collections.emptySet(), internalTopics, controllerNode)
   }
 
   override def contains(topicName: String): Boolean =

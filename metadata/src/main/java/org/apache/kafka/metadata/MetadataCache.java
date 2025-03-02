@@ -100,11 +100,7 @@ public interface MetadataCache extends ConfigRepository {
      */
     Optional<Integer> numPartitions(String topic);
 
-    Map<String, Uuid> topicNamesToIds();
-
     Map<Uuid, String> topicIdsToNames();
-
-    Map.Entry<Map<String, Uuid>, Map<Uuid, String>> topicIdInfo();
 
     /**
      * Get a partition leader's endpoint
@@ -116,8 +112,6 @@ public interface MetadataCache extends ConfigRepository {
     Optional<Node> getPartitionLeaderEndpoint(String topic, int partitionId, ListenerName listenerName);
 
     Map<Integer, Node> getPartitionReplicaEndpoints(TopicPartition tp, ListenerName listenerName);
-
-    Cluster getClusterMetadata(String clusterId, ListenerName listenerName);
 
     boolean contains(String topic);
 
