@@ -340,6 +340,7 @@ public class ConfigurationControlManager {
             } else if (configRecord.value() == null) {
                 allConfigs.remove(configRecord.name());
             } else if (configRecord.value().length() > Short.MAX_VALUE) {
+                // ConfigRecord exceeds the maximum value size of Short.MAX_VALUE in KRaft mode, which is not allowed.
                 return DISALLOWED_CONFIG_VALUE_SIZE_ERROR;
             } else {
                 allConfigs.put(configRecord.name(), configRecord.value());
