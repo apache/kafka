@@ -1075,10 +1075,6 @@ project(':core') {
     from (configurations.runtimeClasspath) {
       exclude('kafka-clients*')
     }
-    from (configurations.releaseOnly) {
-      // Avoid 'multiple SLF4J bindings' warning when using tool scripts, as the jar is also generated under tools.
-      exclude('log4j-slf4j-impl-*.jar')
-    }
     into "${layout.buildDirectory.get().asFile.path}/dependant-libs-${versions.scala}"
     duplicatesStrategy 'exclude'
   }
