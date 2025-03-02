@@ -2915,7 +2915,6 @@ project(':streams:examples') {
   }
 
   dependencies {
-    // this dependency should be removed after we unify data API
     implementation project(':streams')
     implementation libs.slf4jApi
 
