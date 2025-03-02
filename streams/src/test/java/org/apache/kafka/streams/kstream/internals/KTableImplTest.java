@@ -587,19 +587,16 @@ public class KTableImplTest {
         assertThrows(NullPointerException.class, () -> table.transformValues(null));
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldThrowNullPointerOnTransformValuesWithKeyWhenMaterializedIsNull() {
-        final ValueTransformerWithKeySupplier<String, String, ?> valueTransformerSupplier =
-            mock(ValueTransformerWithKeySupplier.class);
+        final ValueTransformerWithKeySupplier<String, String, ?> valueTransformerSupplier = mock();
         assertThrows(NullPointerException.class, () -> table.transformValues(valueTransformerSupplier, (Materialized<String, Object, KeyValueStore<Bytes, byte[]>>) null));
     }
 
-    @SuppressWarnings("unchecked")
+
     @Test
     public void shouldThrowNullPointerOnTransformValuesWithKeyWhenStoreNamesNull() {
-        final ValueTransformerWithKeySupplier<String, String, ?> valueTransformerSupplier =
-            mock(ValueTransformerWithKeySupplier.class);
+        final ValueTransformerWithKeySupplier<String, String, ?> valueTransformerSupplier = mock();
         assertThrows(NullPointerException.class, () -> table.transformValues(valueTransformerSupplier, (String[]) null));
     }
 }
