@@ -27,7 +27,7 @@ import java.util.Optional;
 /**
  * Plug-able interface for selecting a preferred read replica given the current set of replicas for a partition
  * and metadata from the client.
- * Implement {@link org.apache.kafka.common.metrics.Monitorable} to enable the interceptor to register metrics.
+ * Implement {@link org.apache.kafka.common.metrics.Monitorable} to enable the selector to register metrics.
  * The following tags are automatically added to all metrics registered: <code>config</code> set to
  * <code>replica.selector.class</code>, and <code>class</code> set to the ReplicaSelector class name.
  */
