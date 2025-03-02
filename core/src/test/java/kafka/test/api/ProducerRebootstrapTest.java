@@ -41,10 +41,11 @@ public class ProducerRebootstrapTest {
     private static final int BROKER_COUNT = 2;
 
     static List<ClusterConfig> generator() {
-        Map<String, String> serverProperties = new HashMap<>();
         // Enable unclean leader election for the test topic
-        serverProperties.put(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, "true");
-        serverProperties.put(GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, String.valueOf(BROKER_COUNT));
+        Map<String, String> serverProperties = Map.of(
+                TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, "true",
+                GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, String.valueOf(BROKER_COUNT)
+        );
 
         return Stream.of(false, true)
                 .map(ProducerRebootstrapTest::getRebootstrapConfig)
