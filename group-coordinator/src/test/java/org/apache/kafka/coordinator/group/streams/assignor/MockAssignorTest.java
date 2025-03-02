@@ -18,7 +18,6 @@ package org.apache.kafka.coordinator.group.streams.assignor;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -43,10 +42,10 @@ public class MockAssignorTest {
 
         TaskAssignorException ex = assertThrows(TaskAssignorException.class, () -> assignor.assign(
             new GroupSpecImpl(
-                Collections.emptyMap(),
+                Map.of(),
                 new HashMap<>()
             ),
-            new TopologyDescriberImpl(5, Collections.singletonList("test-subtopology"))
+            new TopologyDescriberImpl(5, List.of("test-subtopology"))
         ));
 
         assertEquals("No member available to assign task 0 of subtopology test-subtopology", ex.getMessage());
@@ -58,25 +57,25 @@ public class MockAssignorTest {
         final AssignmentMemberSpec memberSpec1 = new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
-            Collections.singletonMap("test-subtopology", new HashSet<>(List.of(0))),
-            Collections.emptyMap(),
-            Collections.emptyMap(),
+            Map.of("test-subtopology", new HashSet<>(List.of(0))),
+            Map.of(),
+            Map.of(),
             "test-process",
-            Collections.emptyMap(),
-            Collections.emptyMap(),
-            Collections.emptyMap()
+            Map.of(),
+            Map.of(),
+            Map.of()
         );
 
         final AssignmentMemberSpec memberSpec2 = new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
-            Collections.singletonMap("test-subtopology", new HashSet<>(List.of(0))),
-            Collections.emptyMap(),
-            Collections.emptyMap(),
+            Map.of("test-subtopology", new HashSet<>(List.of(0))),
+            Map.of(),
+            Map.of(),
             "test-process",
-            Collections.emptyMap(),
-            Collections.emptyMap(),
-            Collections.emptyMap()
+            Map.of(),
+            Map.of(),
+            Map.of()
         );
 
         TaskAssignorException ex = assertThrows(TaskAssignorException.class, () -> assignor.assign(
@@ -84,7 +83,7 @@ public class MockAssignorTest {
                 Map.of("member1", memberSpec1, "member2", memberSpec2),
                 new HashMap<>()
             ),
-            new TopologyDescriberImpl(5, Collections.singletonList("test-subtopology"))
+            new TopologyDescriberImpl(5, List.of("test-subtopology"))
         ));
 
         assertEquals("Task 0 of subtopology test-subtopology is assigned to multiple members", ex.getMessage());
@@ -95,10 +94,10 @@ public class MockAssignorTest {
 
         final GroupAssignment result = assignor.assign(
             new GroupSpecImpl(
-                Collections.emptyMap(),
+                Map.of(),
                 new HashMap<>()
             ),
-            new TopologyDescriberImpl(5, Collections.emptyList())
+            new TopologyDescriberImpl(5, List.of())
         );
 
         assertEquals(0, result.members().size());
@@ -111,18 +110,18 @@ public class MockAssignorTest {
         final AssignmentMemberSpec memberSpec = new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
-            Collections.emptyMap(),
-            Collections.emptyMap(),
-            Collections.emptyMap(),
+            Map.of(),
+            Map.of(),
+            Map.of(),
             "test-process",
-            Collections.emptyMap(),
-            Collections.emptyMap(),
-            Collections.emptyMap()
+            Map.of(),
+            Map.of(),
+            Map.of()
         );
 
         final GroupAssignment result = assignor.assign(
             new GroupSpecImpl(
-                Collections.singletonMap("test_member", memberSpec),
+                Map.of("test_member", memberSpec),
                 new HashMap<>()
             ),
             new TopologyDescriberImpl(4, List.of("test-subtopology"))
@@ -143,25 +142,25 @@ public class MockAssignorTest {
         final AssignmentMemberSpec memberSpec1 = new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
-            Collections.emptyMap(),
-            Collections.emptyMap(),
-            Collections.emptyMap(),
+            Map.of(),
+            Map.of(),
+            Map.of(),
             "test-process",
-            Collections.emptyMap(),
-            Collections.emptyMap(),
-            Collections.emptyMap()
+            Map.of(),
+            Map.of(),
+            Map.of()
         );
 
         final AssignmentMemberSpec memberSpec2 = new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
-            Collections.emptyMap(),
-            Collections.emptyMap(),
-            Collections.emptyMap(),
+            Map.of(),
+            Map.of(),
+            Map.of(),
             "test-process",
-            Collections.emptyMap(),
-            Collections.emptyMap(),
-            Collections.emptyMap()
+            Map.of(),
+            Map.of(),
+            Map.of()
         );
 
         final GroupAssignment result = assignor.assign(
@@ -200,12 +199,12 @@ public class MockAssignorTest {
                 mkEntry("test-subtopology1", new HashSet<>(List.of(0, 2, 3))),
                 mkEntry("test-subtopology2", new HashSet<>(List.of(0)))
             ),
-            Collections.emptyMap(),
-            Collections.emptyMap(),
+            Map.of(),
+            Map.of(),
             "test-process",
-            Collections.emptyMap(),
-            Collections.emptyMap(),
-            Collections.emptyMap()
+            Map.of(),
+            Map.of(),
+            Map.of()
         );
 
         final AssignmentMemberSpec memberSpec2 = new AssignmentMemberSpec(
@@ -215,12 +214,12 @@ public class MockAssignorTest {
                 mkEntry("test-subtopology1", new HashSet<>(List.of(1))),
                 mkEntry("test-subtopology2", new HashSet<>(List.of(3)))
             ),
-            Collections.emptyMap(),
-            Collections.emptyMap(),
+            Map.of(),
+            Map.of(),
             "test-process",
-            Collections.emptyMap(),
-            Collections.emptyMap(),
-            Collections.emptyMap()
+            Map.of(),
+            Map.of(),
+            Map.of()
         );
         final GroupAssignment result = assignor.assign(
             new GroupSpecImpl(

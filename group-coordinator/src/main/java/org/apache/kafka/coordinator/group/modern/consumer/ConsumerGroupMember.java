@@ -29,7 +29,6 @@ import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsImage;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -62,11 +61,11 @@ public class ConsumerGroupMember extends ModernGroupMember {
         private int rebalanceTimeoutMs = -1;
         private String clientId = "";
         private String clientHost = "";
-        private Set<String> subscribedTopicNames = Collections.emptySet();
+        private Set<String> subscribedTopicNames = Set.of();
         private String subscribedTopicRegex = "";
         private String serverAssignorName = null;
-        private Map<Uuid, Set<Integer>> assignedPartitions = Collections.emptyMap();
-        private Map<Uuid, Set<Integer>> partitionsPendingRevocation = Collections.emptyMap();
+        private Map<Uuid, Set<Integer>> assignedPartitions = Map.of();
+        private Map<Uuid, Set<Integer>> partitionsPendingRevocation = Map.of();
         private ConsumerGroupMemberMetadataValue.ClassicMemberMetadata classicMemberMetadata = null;
 
         public Builder(String memberId) {
@@ -400,7 +399,7 @@ public class ConsumerGroupMember extends ModernGroupMember {
                 .setTopicPartitions(topicPartitionsFromMap(assignedPartitions, topicsImage)))
             .setTargetAssignment(new ConsumerGroupDescribeResponseData.Assignment()
                 .setTopicPartitions(topicPartitionsFromMap(
-                    targetAssignment != null ? targetAssignment.partitions() : Collections.emptyMap(),
+                    targetAssignment != null ? targetAssignment.partitions() : Map.of(),
                     topicsImage
                 )))
             .setClientHost(clientHost)
