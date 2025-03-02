@@ -406,7 +406,7 @@ public class GroupMetadataManagerTestContext {
         String protocolType = "consumer";
         String protocolName = "range";
         int generationId = 0;
-        List<SyncGroupRequestData.SyncGroupRequestAssignment> assignment = Collections.emptyList();
+        List<SyncGroupRequestData.SyncGroupRequestAssignment> assignment = List.of();
 
         SyncGroupRequestBuilder withGroupId(String groupId) {
             this.groupId = groupId;
@@ -1131,7 +1131,7 @@ public class GroupMetadataManagerTestContext {
         SyncResult followerSyncResult = sendClassicGroupSync(
             syncRequest.setGroupInstanceId(followerInstanceId)
                        .setMemberId(followerId)
-                       .setAssignments(Collections.emptyList())
+                       .setAssignments(List.of())
         );
 
         assertTrue(followerSyncResult.records.isEmpty());
@@ -1273,7 +1273,7 @@ public class GroupMetadataManagerTestContext {
         List<CoordinatorRecord> expectedRecords = List.of(newGroupMetadataRecord(
             group.groupId(),
             new GroupMetadataValue()
-                .setMembers(Collections.emptyList())
+                .setMembers(List.of())
                 .setGeneration(group.generationId())
                 .setLeader(null)
                 .setProtocolType("consumer")
@@ -1498,10 +1498,10 @@ public class GroupMetadataManagerTestContext {
 
     public void verifyDescribeGroupsBeforeV6ReturnsDeadGroup(String groupId) {
         List<DescribeGroupsResponseData.DescribedGroup> describedGroups =
-            describeGroups(Collections.singletonList(groupId), (short) 5);
+            describeGroups(List.of(groupId), (short) 5);
 
         assertEquals(
-            Collections.singletonList(new DescribeGroupsResponseData.DescribedGroup()
+            List.of(new DescribeGroupsResponseData.DescribedGroup()
                 .setGroupId(groupId)
                 .setGroupState(DEAD.toString())
             ),
@@ -1527,7 +1527,7 @@ public class GroupMetadataManagerTestContext {
                 .withProtocolType(protocolType)
                 .build()
         );
-        assertEquals(Collections.emptyList(), syncResult.records);
+        assertEquals(List.of(), syncResult.records);
         assertFalse(syncResult.syncFuture.isDone());
 
         // Simulate a successful write to log.
