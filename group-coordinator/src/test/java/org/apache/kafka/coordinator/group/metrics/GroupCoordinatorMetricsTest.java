@@ -37,9 +37,9 @@ import com.yammer.metrics.core.MetricsRegistry;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.IntStream;
 
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.CLASSIC_GROUP_COMPLETED_REBALANCES_SENSOR_NAME;
@@ -77,43 +77,43 @@ public class GroupCoordinatorMetricsTest {
             metrics.metricName(
                 "group-count",
                 GroupCoordinatorMetrics.METRICS_GROUP,
-                Collections.singletonMap("protocol", "classic")),
+                Map.of("protocol", "classic")),
             metrics.metricName(
                 "group-count",
                 GroupCoordinatorMetrics.METRICS_GROUP,
-                Collections.singletonMap("protocol", "consumer")),
+                Map.of("protocol", "consumer")),
             metrics.metricName(
                 "consumer-group-count",
                 GroupCoordinatorMetrics.METRICS_GROUP,
-                Collections.singletonMap("state", ConsumerGroupState.EMPTY.toString())),
+                Map.of("state", ConsumerGroupState.EMPTY.toString())),
             metrics.metricName(
                 "consumer-group-count",
                 GroupCoordinatorMetrics.METRICS_GROUP,
-                Collections.singletonMap("state", ConsumerGroupState.ASSIGNING.toString())),
+                Map.of("state", ConsumerGroupState.ASSIGNING.toString())),
             metrics.metricName(
                 "consumer-group-count",
                 GroupCoordinatorMetrics.METRICS_GROUP,
-                Collections.singletonMap("state", ConsumerGroupState.RECONCILING.toString())),
+                Map.of("state", ConsumerGroupState.RECONCILING.toString())),
             metrics.metricName(
                 "consumer-group-count",
                 GroupCoordinatorMetrics.METRICS_GROUP,
-                Collections.singletonMap("state", ConsumerGroupState.STABLE.toString())),
+                Map.of("state", ConsumerGroupState.STABLE.toString())),
             metrics.metricName(
                 "consumer-group-count",
                 GroupCoordinatorMetrics.METRICS_GROUP,
-                Collections.singletonMap("state", ConsumerGroupState.DEAD.toString())),
+                Map.of("state", ConsumerGroupState.DEAD.toString())),
             metrics.metricName(
                 "group-count",
                 GroupCoordinatorMetrics.METRICS_GROUP,
-                Collections.singletonMap("protocol", Group.GroupType.SHARE.toString())),
+                Map.of("protocol", Group.GroupType.SHARE.toString())),
             metrics.metricName(
                 "rebalance-rate",
                 GroupCoordinatorMetrics.METRICS_GROUP,
-                Collections.singletonMap("protocol", Group.GroupType.SHARE.toString())),
+                Map.of("protocol", Group.GroupType.SHARE.toString())),
             metrics.metricName(
                 "rebalance-count",
                 GroupCoordinatorMetrics.METRICS_GROUP,
-                Collections.singletonMap("protocol", Group.GroupType.SHARE.toString())),
+                Map.of("protocol", Group.GroupType.SHARE.toString())),
             metrics.metricName(
                 "share-group-count",
                 GroupCoordinatorMetrics.METRICS_GROUP,
@@ -132,33 +132,33 @@ public class GroupCoordinatorMetricsTest {
             metrics.metricName(
                 "group-count",
                 GroupCoordinatorMetrics.METRICS_GROUP,
-                Collections.singletonMap("protocol", Group.GroupType.STREAMS.toString())),
+                Map.of("protocol", Group.GroupType.STREAMS.toString())),
             metrics.metricName("streams-group-rebalance-rate", GroupCoordinatorMetrics.METRICS_GROUP),
             metrics.metricName("streams-group-rebalance-count", GroupCoordinatorMetrics.METRICS_GROUP),
             metrics.metricName(
                 "streams-group-count",
                 GroupCoordinatorMetrics.METRICS_GROUP,
-                Collections.singletonMap("state", StreamsGroupState.EMPTY.toString())),
+                Map.of("state", StreamsGroupState.EMPTY.toString())),
             metrics.metricName(
                 "streams-group-count",
                 GroupCoordinatorMetrics.METRICS_GROUP,
-                Collections.singletonMap("state", StreamsGroupState.ASSIGNING.toString())),
+                Map.of("state", StreamsGroupState.ASSIGNING.toString())),
             metrics.metricName(
                 "streams-group-count",
                 GroupCoordinatorMetrics.METRICS_GROUP,
-                Collections.singletonMap("state", StreamsGroupState.RECONCILING.toString())),
+                Map.of("state", StreamsGroupState.RECONCILING.toString())),
             metrics.metricName(
                 "streams-group-count",
                 GroupCoordinatorMetrics.METRICS_GROUP,
-                Collections.singletonMap("state", StreamsGroupState.STABLE.toString())),
+                Map.of("state", StreamsGroupState.STABLE.toString())),
             metrics.metricName(
                 "streams-group-count",
                 GroupCoordinatorMetrics.METRICS_GROUP,
-                Collections.singletonMap("state", StreamsGroupState.DEAD.toString())),
+                Map.of("state", StreamsGroupState.DEAD.toString())),
             metrics.metricName(
                 "streams-group-count",
                 GroupCoordinatorMetrics.METRICS_GROUP,
-                Collections.singletonMap("state", StreamsGroupState.NOT_READY.toString()))
+                Map.of("state", StreamsGroupState.NOT_READY.toString()))
         ));
 
         try {
@@ -176,7 +176,7 @@ public class GroupCoordinatorMetricsTest {
                 assertMetricsForTypeEqual(registry, "kafka.coordinator.group", expectedRegistry);
                 expectedMetrics.forEach(metricName -> assertTrue(metrics.metrics().containsKey(metricName), metricName + " is missing"));
             }
-            assertMetricsForTypeEqual(registry, "kafka.coordinator.group", Collections.emptySet());
+            assertMetricsForTypeEqual(registry, "kafka.coordinator.group", Set.of());
             expectedMetrics.forEach(metricName -> assertFalse(metrics.metrics().containsKey(metricName)));
         } finally {
             registry.shutdown();
@@ -211,13 +211,13 @@ public class GroupCoordinatorMetricsTest {
             Utils.mkEntry(ClassicGroupState.DEAD, 1L)
         ));
 
-        shard0.setConsumerGroupGauges(Collections.singletonMap(ConsumerGroupState.ASSIGNING, 5L));
+        shard0.setConsumerGroupGauges(Map.of(ConsumerGroupState.ASSIGNING, 5L));
         shard1.setConsumerGroupGauges(Map.of(
             ConsumerGroupState.RECONCILING, 1L,
             ConsumerGroupState.DEAD, 1L
         ));
 
-        shard0.setStreamsGroupGauges(Collections.singletonMap(StreamsGroupState.ASSIGNING, 2L));
+        shard0.setStreamsGroupGauges(Map.of(StreamsGroupState.ASSIGNING, 2L));
         shard1.setStreamsGroupGauges(Map.of(
             StreamsGroupState.RECONCILING, 1L,
             StreamsGroupState.DEAD, 1L,
@@ -240,7 +240,7 @@ public class GroupCoordinatorMetricsTest {
         assertGaugeValue(registry, metricName("GroupMetadataManager", "NumGroups"), 9);
         assertGaugeValue(
             metrics,
-            metrics.metricName("group-count", METRICS_GROUP, Collections.singletonMap("protocol", "classic")),
+            metrics.metricName("group-count", METRICS_GROUP, Map.of("protocol", "classic")),
             9
         );
 
@@ -256,7 +256,7 @@ public class GroupCoordinatorMetricsTest {
         assertEquals(1, shard1.numOffsets());
         assertGaugeValue(
             metrics,
-            metrics.metricName("group-count", METRICS_GROUP, Collections.singletonMap("protocol", "consumer")),
+            metrics.metricName("group-count", METRICS_GROUP, Map.of("protocol", "consumer")),
             7
         );
         assertGaugeValue(registry, metricName("GroupMetadataManager", "NumOffsets"), 7);
@@ -265,7 +265,7 @@ public class GroupCoordinatorMetricsTest {
         assertEquals(6, shard1.numShareGroups());
         assertGaugeValue(
             metrics,
-            metrics.metricName("group-count", METRICS_GROUP, Collections.singletonMap("protocol", "share")),
+            metrics.metricName("group-count", METRICS_GROUP, Map.of("protocol", "share")),
             8
         );
         
@@ -273,7 +273,7 @@ public class GroupCoordinatorMetricsTest {
         assertEquals(3, shard1.numStreamsGroups());
         assertGaugeValue(
             metrics,
-            metrics.metricName("group-count", METRICS_GROUP, Collections.singletonMap("protocol", "streams")),
+            metrics.metricName("group-count", METRICS_GROUP, Map.of("protocol", "streams")),
             5
         );
     }
