@@ -72,7 +72,7 @@ public class ActiveTaskCreatorTest {
     private ChangelogReader changeLogReader;
 
     private final MockClientSupplier mockClientSupplier = new MockClientSupplier();
-    private final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(new Metrics(), "clientId", new MockTime());
+    private final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(new Metrics(), "clientId", "processId", new MockTime());
     private final Map<String, Object> properties = mkMap(
         mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
         mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234")
@@ -190,7 +190,21 @@ public class ActiveTaskCreatorTest {
 
         activeTaskCreator.close();
 
+        assertThat(activeTaskCreator.streamsProducer().isClosed(), is(true));
         assertThat(mockClientSupplier.producers.get(0).closed(), is(true));
+    }
+
+    @Test
+    public void shouldNotReInitializeProducerOnClose() {
+        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
+        mockClientSupplier.setApplicationIdForProducer("appId");
+        createTasks();
+
+        activeTaskCreator.streamsProducer().close();
+        activeTaskCreator.reInitializeProducer();
+        // If streamsProducer is not closed, clientSupplier will recreate a producer,
+        // resulting in more than one producer being created.
+        assertThat(mockClientSupplier.producers.size(), is(1));
     }
 
     // error handling

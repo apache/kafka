@@ -48,7 +48,7 @@
       { "name": "Name", "type": "string", "versions": "0+", "mapKey": true, "entityType": "topicName",
         "about": "The topic name." },
       { "name": "ResultsByPartition", "type": "[]AddPartitionsToTxnPartitionResult", "versions": "0+",
-        "about": "The results for each partition" }
+        "about": "The results for each partition." }
     ]},
     { "name": "AddPartitionsToTxnPartitionResult", "versions": "0+", "fields": [
       { "name": "PartitionIndex", "type": "int32", "versions": "0+", "mapKey": true,

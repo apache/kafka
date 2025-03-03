@@ -36,7 +36,6 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-@SuppressWarnings("deprecation")
 public class GroupCoordinatorConfigTest {
     private static final List<ConfigDef> GROUP_COORDINATOR_CONFIG_DEFS = Arrays.asList(
             GroupCoordinatorConfig.GROUP_COORDINATOR_CONFIG_DEF,

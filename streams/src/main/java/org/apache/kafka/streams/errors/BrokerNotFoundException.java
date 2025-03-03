@@ -16,13 +16,13 @@
  */
 package org.apache.kafka.streams.errors;
 
-
 /**
  * Indicates that none of the specified {@link org.apache.kafka.streams.StreamsConfig#BOOTSTRAP_SERVERS_CONFIG brokers}
  * could be found.
  *
  * @see org.apache.kafka.streams.StreamsConfig
  */
+@SuppressWarnings("unused")
 public class BrokerNotFoundException extends StreamsException {
 
     private static final long serialVersionUID = 1L;

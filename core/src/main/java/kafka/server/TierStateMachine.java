@@ -229,12 +229,8 @@ public class TierStateMachine {
         }
 
         RemoteLogSegmentMetadata remoteLogSegmentMetadata = rlm.fetchRemoteLogSegmentMetadata(topicPartition, targetEpoch, previousOffsetToLeaderLocalLogStartOffset)
-                .orElseThrow(() -> new RemoteStorageException("Couldn't build the state from remote store for partition: " + topicPartition +
-                        ", currentLeaderEpoch: " + currentLeaderEpoch +
-                        ", leaderLocalLogStartOffset: " + leaderLocalLogStartOffset +
-                        ", leaderLogStartOffset: " + leaderLogStartOffset +
-                        ", epoch: " + targetEpoch +
-                        "as the previous remote log segment metadata was not found"));
+                .orElseThrow(() -> buildRemoteStorageException(topicPartition, targetEpoch, currentLeaderEpoch,
+                        leaderLocalLogStartOffset, leaderLogStartOffset));
 
 
         // Build leader epoch cache, producer snapshots until remoteLogSegmentMetadata.endOffset() and start
@@ -264,5 +260,18 @@ public class TierStateMachine {
                 partition, unifiedLog.producerStateManager().activeProducers().size(), leaderLogStartOffset, nextOffset);
 
         return nextOffset;
+    }
+
+    private RemoteStorageException buildRemoteStorageException(TopicPartition topicPartition,
+                                                               int targetEpoch,
+                                                               int currentLeaderEpoch,
+                                                               long leaderLocalLogStartOffset,
+                                                               long leaderLogStartOffset) {
+        String message = String.format(
+                "Couldn't build the state from remote store for partition: %s, currentLeaderEpoch: %d, " +
+                        "leaderLocalLogStartOffset: %d, leaderLogStartOffset: %d, epoch: %d as the previous remote log segment metadata was not found",
+                topicPartition, currentLeaderEpoch, leaderLocalLogStartOffset, leaderLogStartOffset, targetEpoch
+        );
+        return new RemoteStorageException(message);
     }
 }

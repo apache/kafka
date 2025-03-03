@@ -41,8 +41,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 final class EndpointsTest {
-    private ListenerName testListener = ListenerName.normalised("listener");
-    private InetSocketAddress testSocketAddress = InetSocketAddress.createUnresolved("localhost", 9092);
+    private final ListenerName testListener = ListenerName.normalised("listener");
+    private final InetSocketAddress testSocketAddress = InetSocketAddress.createUnresolved("localhost", 9092);
 
     @Test
     void testAddressWithValidEndpoint() {

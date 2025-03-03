@@ -17,12 +17,10 @@
 
 package org.apache.kafka.streams.kstream.internals.graph;
 
-import org.apache.kafka.streams.kstream.internals.KTableSource;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.StoreFactory;
 
 import java.util.Arrays;
-import java.util.Objects;
 
 public class TableProcessorNode<K, V> extends GraphNode {
 
@@ -31,9 +29,8 @@ public class TableProcessorNode<K, V> extends GraphNode {
     private final String[] storeNames;
 
     public TableProcessorNode(final String nodeName,
-                              final ProcessorParameters<K, V, ?, ?> processorParameters,
-                              final StoreFactory storeFactory) {
-        this(nodeName, processorParameters, storeFactory, null);
+                              final ProcessorParameters<K, V, ?, ?> processorParameters) {
+        this(nodeName, processorParameters, null, null);
     }
 
     public TableProcessorNode(final String nodeName,
@@ -54,7 +51,7 @@ public class TableProcessorNode<K, V> extends GraphNode {
     public String toString() {
         return "TableProcessorNode{" +
             ", processorParameters=" + processorParameters +
-            ", storeFactory=" + (storeFactory == null ? "null" : storeFactory.name()) +
+            ", storeFactory=" + (storeFactory == null ? "null" : storeFactory.storeName()) +
             ", storeNames=" + Arrays.toString(storeNames) +
             "} " + super.toString();
     }
@@ -62,21 +59,17 @@ public class TableProcessorNode<K, V> extends GraphNode {
     @SuppressWarnings("unchecked")
     @Override
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
+        processorParameters.addProcessorTo(topologyBuilder, parentNodeNames());
+
         final String processorName = processorParameters.processorName();
-        topologyBuilder.addProcessor(processorName, processorParameters.processorSupplier(), parentNodeNames());
 
         if (storeNames.length > 0) {
+            // todo(rodesai): remove me once all operators have been moved to ProcessorSupplier
             topologyBuilder.connectProcessorAndStateStores(processorName, storeNames);
         }
 
-        final KTableSource<K, V> tableSource =  processorParameters.processorSupplier() instanceof KTableSource ?
-                (KTableSource<K, V>) processorParameters.processorSupplier() : null;
-        if (tableSource != null) {
-            if (tableSource.materialized()) {
-                topologyBuilder.addStateStore(Objects.requireNonNull(storeFactory, "storeFactory was null"),
-                                              processorName);
-            }
-        } else if (storeFactory != null) {
+        if (storeFactory != null) {
+            // todo(rodesai) remove when KTableImpl#doFilter, KTableImpl#doTransformValues moved to ProcessorSupplier
             topologyBuilder.addStateStore(storeFactory, processorName);
         }
     }

@@ -86,6 +86,9 @@ public final class EventHandlerExceptionInfo {
             return new EventHandlerExceptionInfo(false, false, internal,
                 new PolicyViolationException("Unable to perform excessively large batch " +
                     "operation."));
+        } else if (internal instanceof PeriodicControlTaskException) {
+            // This exception is a periodic task which failed.
+            return new EventHandlerExceptionInfo(true, false, internal);
         } else if (internal instanceof InterruptedException) {
             // The controller event queue has been interrupted. This normally only happens during
             // a JUnit test that has hung. The test framework sometimes sends an InterruptException

@@ -23,7 +23,7 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
-import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
@@ -488,7 +488,8 @@ public class WorkerSinkTaskTest {
 
                     rebalanceListener.getValue().onPartitionsRevoked(INITIAL_ASSIGNMENT);
                     rebalanceListener.getValue().onPartitionsAssigned(Collections.emptyList());
-                    return new ConsumerRecords<>(Collections.singletonMap(TOPIC_PARTITION3, Collections.singletonList(newRecord)));
+                    return new ConsumerRecords<>(Map.of(TOPIC_PARTITION3, List.of(newRecord)),
+                        Map.of(TOPIC_PARTITION3, new OffsetAndMetadata(FIRST_OFFSET + 1, Optional.empty(), "")));
                 });
         expectConversionAndTransformation(null, new RecordHeaders());
 
@@ -831,7 +832,7 @@ public class WorkerSinkTaskTest {
                 .thenAnswer(invocation -> {
                     // stop the task during its second iteration
                     workerTask.stop();
-                    return new ConsumerRecords<>(Collections.emptyMap());
+                    return new ConsumerRecords<>(Map.of(), Map.of());
                 });
         expectConversionAndTransformation(null, new RecordHeaders());
 
@@ -1326,7 +1327,9 @@ public class WorkerSinkTaskTest {
                     0, 0, RAW_KEY, RAW_VALUE, new RecordHeaders(), Optional.empty()));
             recordsReturnedTp1 += 1;
             recordsReturnedTp3 += 1;
-            return new ConsumerRecords<>(Collections.singletonMap(new TopicPartition(TOPIC, PARTITION), records));
+            final TopicPartition tp = new TopicPartition(TOPIC, PARTITION);
+            final OffsetAndMetadata nextOffsetAndMetadata = new OffsetAndMetadata(FIRST_OFFSET + recordsReturnedTp1 + 2, Optional.empty(), "");
+            return new ConsumerRecords<>(Map.of(tp, records), Map.of(tp, nextOffsetAndMetadata));
         };
 
         // onPartitionsRevoked
@@ -1696,7 +1699,9 @@ public class WorkerSinkTaskTest {
                             new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + recordsReturnedTp1 + 2, RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE,
                                     0, 0, keyB.getBytes(), valueB.getBytes(encodingB), headersB, Optional.empty())
                     );
-                    return new ConsumerRecords<>(Collections.singletonMap(new TopicPartition(TOPIC, PARTITION), records));
+                    final OffsetAndMetadata nextOffsetAndMetadata = new OffsetAndMetadata(FIRST_OFFSET + recordsReturnedTp1 + 3, Optional.empty(), "");
+                    final TopicPartition tp = new TopicPartition(TOPIC, PARTITION);
+                    return new ConsumerRecords<>(Map.of(tp, records), Map.of(tp, nextOffsetAndMetadata));
                 });
 
         expectTransformation(null);
@@ -1747,7 +1752,7 @@ public class WorkerSinkTaskTest {
 
     @Test
     public void testPartitionCountInCaseOfPartitionRevocation() {
-        MockConsumer<byte[], byte[]> mockConsumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
+        MockConsumer<byte[], byte[]> mockConsumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name());
         // Setting up Worker Sink Task to check metrics
         workerTask = new WorkerSinkTask(
                 taskId, sinkTask, statusListener, TargetState.PAUSED, workerConfig, ClusterConfigState.EMPTY, metrics,
@@ -1755,7 +1760,7 @@ public class WorkerSinkTaskTest {
                 transformationChain, mockConsumer, pluginLoader, time,
                 RetryWithToleranceOperatorTest.noopOperator(), null, statusBackingStore, Collections::emptyList);
         mockConsumer.updateBeginningOffsets(
-                new HashMap<TopicPartition, Long>() {{
+                new HashMap<>() {{
                     put(TOPIC_PARTITION, 0L);
                     put(TOPIC_PARTITION2, 0L);
                 }}
@@ -1821,15 +1826,18 @@ public class WorkerSinkTaskTest {
     private Answer<ConsumerRecords<byte[], byte[]>> expectConsumerPoll(final int numMessages, final long timestamp, final TimestampType timestampType, Headers headers) {
         return invocation -> {
             List<ConsumerRecord<byte[], byte[]>> records = new ArrayList<>();
-            for (int i = 0; i < numMessages; i++)
-                records.add(new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + recordsReturnedTp1 + i, timestamp, timestampType,
-                        0, 0, RAW_KEY, RAW_VALUE, headers, Optional.empty()));
+            long offset = 0;
+            for (int i = 0; i < numMessages; i++) {
+                offset = FIRST_OFFSET + recordsReturnedTp1 + i;
+                records.add(new ConsumerRecord<>(TOPIC, PARTITION, offset, timestamp, timestampType,
+                    0, 0, RAW_KEY, RAW_VALUE, headers, Optional.empty()));
+            }
             recordsReturnedTp1 += numMessages;
-            return new ConsumerRecords<>(
-                    numMessages > 0 ?
-                            Collections.singletonMap(new TopicPartition(TOPIC, PARTITION), records)
-                            : Collections.emptyMap()
-            );
+            final TopicPartition tp = new TopicPartition(TOPIC, PARTITION);
+            if (numMessages > 0) {
+                return new ConsumerRecords<>(Map.of(tp, records), Map.of(tp, new OffsetAndMetadata(offset + 1, Optional.empty(), "")));
+            }
+            return new ConsumerRecords<>(Map.of(), Map.of());
         };
     }
 

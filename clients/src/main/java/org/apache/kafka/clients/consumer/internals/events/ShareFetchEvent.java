@@ -23,7 +23,7 @@ import java.util.Map;
 
 public class ShareFetchEvent extends ApplicationEvent {
 
-    private Map<TopicIdPartition, Acknowledgements> acknowledgementsMap;
+    private final Map<TopicIdPartition, Acknowledgements> acknowledgementsMap;
 
     public ShareFetchEvent(Map<TopicIdPartition, Acknowledgements> acknowledgementsMap) {
         super(Type.SHARE_FETCH);

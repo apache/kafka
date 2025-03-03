@@ -31,6 +31,10 @@ TC_PATHS="tests/kafkatest/tests/streams tests/kafkatest/tests/tools" bash tests/
 ```
 TC_PATHS="tests/kafkatest/tests/client/pluggable_test.py" bash tests/docker/run_tests.sh
 ```
+* Run multiple test files
+```
+TC_PATHS="tests/kafkatest/tests/client/pluggable_test.py tests/kafkatest/services/console_consumer.py" bash tests/docker/run_tests.sh
+```
 * Run a specific test class
 ```
 TC_PATHS="tests/kafkatest/tests/client/pluggable_test.py::PluggableConsumerTest" bash tests/docker/run_tests.sh
@@ -161,7 +165,7 @@ https://cwiki.apache.org/confluence/display/KAFKA/tutorial+-+set+up+and+run+Kafk
         $ cd kafka/tests
         $ virtualenv -p python3 venv
         $ . ./venv/bin/activate
-        $ python3 setup.py develop
+        $ python3 -m pip install --editable .
         $ cd ..  # back to base kafka directory
 
 * Run the bootstrap script to set up Vagrant for testing

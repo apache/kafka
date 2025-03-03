@@ -32,6 +32,8 @@ import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 
+import org.apache.maven.artifact.versioning.VersionRange;
+
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -101,13 +103,6 @@ public interface Herder {
      * @param callback callback to invoke with the configuration
      */
     void connectorConfig(String connName, Callback<Map<String, String>> callback);
-
-    /**
-     * Get the configuration for all tasks of a connector.
-     * @param connName name of the connector
-     * @param callback callback to invoke with the configuration
-     */
-    void tasksConfig(String connName, Callback<Map<ConnectorTaskId, Map<String, String>>> callback);
 
     /**
      * Set the configuration for a connector. This supports creation and updating.
@@ -328,6 +323,8 @@ public interface Herder {
      * @return the list of ConfigKeyInfo of the plugin
      */
     List<ConfigKeyInfo> connectorPluginConfig(String pluginName);
+
+    List<ConfigKeyInfo> connectorPluginConfig(String pluginName, VersionRange version);
 
     /**
      * Get the current offsets for a connector.

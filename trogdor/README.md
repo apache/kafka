@@ -12,8 +12,8 @@ Running Kafka in Kraft mode:
 
 ```
 KAFKA_CLUSTER_ID="$(./bin/kafka-storage.sh random-uuid)"
-./bin/kafka-storage.sh format -t $KAFKA_CLUSTER_ID -c config/kraft/server.properties
-./bin/kafka-server-start.sh config/kraft/server.properties  &> /tmp/kafka.log &
+./bin/kafka-storage.sh format --standalone -t $KAFKA_CLUSTER_ID -c config/kraft/reconfig-server.properties
+./bin/kafka-server-start.sh config/kraft/reconfig-server.properties  &> /tmp/kafka.log &
 ```
 Then, we want to run a Trogdor Agent, plus a Trogdor Coordinator.
 

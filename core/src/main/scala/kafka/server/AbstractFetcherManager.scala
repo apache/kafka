@@ -17,11 +17,11 @@
 
 package kafka.server
 
-import kafka.cluster.BrokerEndPoint
 import kafka.utils.Logging
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
+import org.apache.kafka.server.network.BrokerEndPoint
 
 import scala.collection.{Map, Set, mutable}
 import scala.jdk.CollectionConverters._

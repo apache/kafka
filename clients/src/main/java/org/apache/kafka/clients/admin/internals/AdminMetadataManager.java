@@ -84,6 +84,15 @@ public class AdminMetadataManager {
     private long lastMetadataFetchAttemptMs = 0;
 
     /**
+     * The time in wall-clock milliseconds when we started attempts to fetch metadata. If empty,
+     * metadata has not been requested. This is the start time based on which rebootstrap is
+     * triggered if metadata is not obtained for the configured rebootstrap trigger interval.
+     * Set to Optional.of(0L) to force rebootstrap immediately.
+     */
+    private Optional<Long> metadataAttemptStartMs = Optional.empty();
+
+
+    /**
      * The current cluster information.
      */
     private Cluster cluster = Cluster.empty();
@@ -128,6 +137,16 @@ public class AdminMetadataManager {
         @Override
         public void handleSuccessfulResponse(RequestHeader requestHeader, long now, MetadataResponse metadataResponse) {
             // Do nothing
+        }
+
+        @Override
+        public boolean needsRebootstrap(long now, long rebootstrapTriggerMs) {
+            return AdminMetadataManager.this.needsRebootstrap(now, rebootstrapTriggerMs);
+        }
+
+        @Override
+        public void rebootstrap(long now) {
+            AdminMetadataManager.this.rebootstrap(now);
         }
 
         @Override
@@ -240,12 +259,18 @@ public class AdminMetadataManager {
         return Math.max(0, refreshBackoffMs - timeSinceAttempt);
     }
 
+    public boolean needsRebootstrap(long now, long rebootstrapTriggerMs) {
+        return metadataAttemptStartMs.filter(startMs -> now - startMs > rebootstrapTriggerMs).isPresent();
+    }
+
     /**
      * Transition into the UPDATE_PENDING state.  Updates lastMetadataFetchAttemptMs.
      */
     public void transitionToUpdatePending(long now) {
         this.state = State.UPDATE_PENDING;
         this.lastMetadataFetchAttemptMs = now;
+        if (metadataAttemptStartMs.isEmpty())
+            metadataAttemptStartMs = Optional.of(now);
     }
 
     public void updateFailed(Throwable exception) {
@@ -289,10 +314,15 @@ public class AdminMetadataManager {
 
         this.state = State.QUIESCENT;
         this.fatalException = null;
+        this.metadataAttemptStartMs = Optional.empty();
 
         if (!cluster.nodes().isEmpty()) {
             this.cluster = cluster;
         }
+    }
+
+    public void initiateRebootstrap() {
+        this.metadataAttemptStartMs = Optional.of(0L);
     }
 
     /**
@@ -301,5 +331,6 @@ public class AdminMetadataManager {
     public void rebootstrap(long now) {
         log.info("Rebootstrapping with {}", this.bootstrapCluster);
         update(bootstrapCluster, now);
+        this.metadataAttemptStartMs = Optional.of(now);
     }
 }

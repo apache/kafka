@@ -872,7 +872,7 @@ public class OffsetMetadataManager {
         long currentTimestampMs = time.milliseconds();
         Optional<OffsetExpirationCondition> offsetExpirationCondition = group.offsetExpirationCondition();
 
-        if (!offsetExpirationCondition.isPresent()) {
+        if (offsetExpirationCondition.isEmpty()) {
             return false;
         }
 

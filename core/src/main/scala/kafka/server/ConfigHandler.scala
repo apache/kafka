@@ -22,21 +22,18 @@ import java.util.{Collections, Properties}
 import kafka.controller.KafkaController
 import kafka.log.UnifiedLog
 import kafka.network.ConnectionQuotas
-import kafka.server.Constants._
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.Logging
 import org.apache.kafka.server.config.{QuotaConfig, ReplicationConfigs, ZooKeeperInternals}
-import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.common.metrics.Quota._
 import org.apache.kafka.common.utils.Sanitizer
 import org.apache.kafka.coordinator.group.GroupCoordinator
 import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.ClientMetricsManager
+import org.apache.kafka.server.common.StopPartition
 import org.apache.kafka.storage.internals.log.{LogStartOffsetIncrementReason, ThrottledReplicaListValidator}
-import org.apache.kafka.storage.internals.log.LogConfig.MessageFormatVersion
 
-import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 import scala.collection.Seq
 import scala.util.Try
@@ -60,19 +57,13 @@ class TopicConfigHandler(private val replicaManager: ReplicaManager,
   private def updateLogConfig(topic: String,
                               topicConfig: Properties): Unit = {
     val logManager = replicaManager.logManager
-    // Validate the configurations.
-    val configNamesToExclude = excludedConfigs(topic, topicConfig)
-    val props = new Properties()
-    topicConfig.asScala.foreachEntry { (key, value) =>
-      if (!configNamesToExclude.contains(key)) props.put(key, value)
-    }
 
     val logs = logManager.logsByTopic(topic)
     val wasRemoteLogEnabled = logs.exists(_.remoteLogEnabled())
     val wasCopyDisabled = logs.exists(_.config.remoteLogCopyDisable())
 
     // kafkaController is only defined in Zookeeper's mode
-    logManager.updateTopicConfig(topic, props, kafkaConfig.remoteLogManagerConfig.isRemoteStorageSystemEnabled(),
+    logManager.updateTopicConfig(topic, topicConfig, kafkaConfig.remoteLogManagerConfig.isRemoteStorageSystemEnabled(),
       wasRemoteLogEnabled, kafkaController.isDefined)
     maybeUpdateRemoteLogComponents(topic, logs, wasRemoteLogEnabled, wasCopyDisabled)
   }
@@ -99,7 +90,7 @@ class TopicConfigHandler(private val replicaManager: ReplicaManager,
     // When copy disabled, we should stop leaderCopyRLMTask, but keep expirationTask
     if (isRemoteLogEnabled && !wasCopyDisabled && isCopyDisabled) {
       replicaManager.remoteLogManager.foreach(rlm => {
-        rlm.stopLeaderCopyRLMTasks(leaderPartitions.toSet.asJava);
+        rlm.stopLeaderCopyRLMTasks(leaderPartitions.toSet.asJava)
       })
     }
 
@@ -108,14 +99,12 @@ class TopicConfigHandler(private val replicaManager: ReplicaManager,
       val stopPartitions: java.util.HashSet[StopPartition] = new java.util.HashSet[StopPartition]()
       leaderPartitions.foreach(partition => {
         // delete remote logs and stop RemoteLogMetadataManager
-        stopPartitions.add(StopPartition(partition.topicPartition, deleteLocalLog = false,
-          deleteRemoteLog = true, stopRemoteLogMetadataManager = true))
+        stopPartitions.add(new StopPartition(partition.topicPartition, false, true, true))
       })
 
       followerPartitions.foreach(partition => {
         // we need to cancel follower tasks and stop RemoteLogMetadataManager
-        stopPartitions.add(StopPartition(partition.topicPartition, deleteLocalLog = false,
-          deleteRemoteLog = false, stopRemoteLogMetadataManager = true))
+        stopPartitions.add(new StopPartition(partition.topicPartition, false, false, true))
       })
 
       // update the log start offset to local log start offset for the leader replicas
@@ -132,7 +121,7 @@ class TopicConfigHandler(private val replicaManager: ReplicaManager,
     def updateThrottledList(prop: String, quotaManager: ReplicationQuotaManager): Unit = {
       if (topicConfig.containsKey(prop) && topicConfig.getProperty(prop).nonEmpty) {
         val partitions = parseThrottledPartitions(topicConfig, kafkaConfig.brokerId, prop)
-        quotaManager.markThrottled(topic, partitions)
+        quotaManager.markThrottled(topic, partitions.map(Integer.valueOf).asJava)
         debug(s"Setting $prop on broker ${kafkaConfig.brokerId} for topic: $topic and partitions $partitions")
       } else {
         quotaManager.removeThrottle(topic)
@@ -152,31 +141,13 @@ class TopicConfigHandler(private val replicaManager: ReplicaManager,
     ThrottledReplicaListValidator.ensureValidString(prop, configValue)
     configValue match {
       case "" => Seq()
-      case "*" => AllReplicas
+      case "*" => ReplicationQuotaManager.ALL_REPLICAS.asScala.map(_.toInt).toSeq
       case _ => configValue.trim
         .split(",")
         .map(_.split(":"))
         .filter(_ (1).toInt == brokerId) //Filter this replica
         .map(_ (0).toInt).toSeq //convert to list of partition ids
     }
-  }
-
-  @nowarn("cat=deprecation")
-  private def excludedConfigs(topic: String, topicConfig: Properties): Set[String] = {
-    // Verify message format version
-    Option(topicConfig.getProperty(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG)).flatMap { versionString =>
-      val messageFormatVersion = new MessageFormatVersion(versionString, kafkaConfig.interBrokerProtocolVersion.version)
-      if (messageFormatVersion.shouldIgnore) {
-        if (messageFormatVersion.shouldWarn)
-          warn(messageFormatVersion.topicWarningMessage(topic))
-        Some(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG)
-      } else if (kafkaConfig.interBrokerProtocolVersion.isLessThan(messageFormatVersion.messageFormatVersion)) {
-        warn(s"Topic configuration ${TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG} is ignored for `$topic` because `$versionString` " +
-          s"is higher than what is allowed by the inter-broker protocol version `${kafkaConfig.interBrokerProtocolVersionString}`")
-        Some(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG)
-      } else
-        None
-    }.toSet
   }
 }
 

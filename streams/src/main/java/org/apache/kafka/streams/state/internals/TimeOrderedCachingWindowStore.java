@@ -71,7 +71,7 @@ class TimeOrderedCachingWindowStore
     private String cacheName;
     private boolean hasIndex;
     private boolean sendOldValues;
-    private InternalProcessorContext<?, ?> context;
+    private InternalProcessorContext<?, ?> internalContext;
     private StateSerdes<Bytes, byte[]> bytesSerdes;
     private CacheFlushListener<byte[], byte[]> flushListener;
 
@@ -102,31 +102,29 @@ class TimeOrderedCachingWindowStore
             return (RocksDBTimeOrderedWindowStore) wrapped;
         }
         if (wrapped instanceof WrappedStateStore) {
-            return getWrappedStore(((WrappedStateStore) wrapped).wrapped());
+            return getWrappedStore(((WrappedStateStore<?, ?, ?>) wrapped).wrapped());
         }
         return null;
     }
 
     @Override
-    public void init(final StateStoreContext context, final StateStore root) {
+    public void init(final StateStoreContext stateStoreContext, final StateStore root) {
         final String prefix = StreamsConfig.InternalConfig.getString(
-            context.appConfigs(),
+            stateStoreContext.appConfigs(),
             StreamsConfig.InternalConfig.TOPIC_PREFIX_ALTERNATIVE,
-            context.applicationId()
+            stateStoreContext.applicationId()
         );
-        this.context = asInternalProcessorContext(context);
-        final String topic = ProcessorStateManager.storeChangelogTopic(prefix, name(),  context.taskId().topologyName());
+        internalContext = asInternalProcessorContext(stateStoreContext);
+        final String topic = ProcessorStateManager.storeChangelogTopic(prefix, name(),  stateStoreContext.taskId().topologyName());
 
         bytesSerdes = new StateSerdes<>(
             topic,
             Serdes.Bytes(),
             Serdes.ByteArray());
-        cacheName = context.taskId() + "-" + name();
+        cacheName = stateStoreContext.taskId() + "-" + name();
 
-        this.context.registerCacheFlushListener(cacheName, entries -> {
-            putAndMaybeForward(entries, this.context);
-        });
-        super.init(context, root);
+        internalContext.registerCacheFlushListener(cacheName, entries -> putAndMaybeForward(entries, internalContext));
+        super.init(stateStoreContext, root);
     }
 
     private void putAndMaybeForward(final List<DirtyEntry> entries,
@@ -257,12 +255,12 @@ class TimeOrderedCachingWindowStore
         final LRUCacheEntry entry =
             new LRUCacheEntry(
                 value,
-                context.headers(),
+                internalContext.headers(),
                 true,
-                context.offset(),
-                context.timestamp(),
-                context.partition(),
-                context.topic());
+                internalContext.offset(),
+                internalContext.timestamp(),
+                internalContext.partition(),
+                internalContext.topic());
 
         // Put to index first so that base can be evicted later
         if (hasIndex) {
@@ -270,20 +268,20 @@ class TimeOrderedCachingWindowStore
             // it could be evicted when we are putting base key. In that case, base key is not yet
             // in cache so we can't store key/value to store when index is evicted. Then if we fetch
             // using index, we can't find it in either store or cache
-            context.cache().put(cacheName, baseKeyCacheFunction.cacheKey(baseKeyBytes), entry);
+            internalContext.cache().put(cacheName, baseKeyCacheFunction.cacheKey(baseKeyBytes), entry);
             final LRUCacheEntry emptyEntry =
                 new LRUCacheEntry(
                     new byte[0],
                     new RecordHeaders(),
                     true,
-                    context.offset(),
-                    context.timestamp(),
-                    context.partition(),
+                    internalContext.offset(),
+                    internalContext.timestamp(),
+                    internalContext.partition(),
                     "");
             final Bytes indexKey = KeyFirstWindowKeySchema.toStoreKeyBinary(key, windowStartTimestamp, 0);
-            context.cache().put(cacheName, indexKeyCacheFunction.cacheKey(indexKey), emptyEntry);
+            internalContext.cache().put(cacheName, indexKeyCacheFunction.cacheKey(indexKey), emptyEntry);
         } else {
-            context.cache().put(cacheName, baseKeyCacheFunction.cacheKey(baseKeyBytes), entry);
+            internalContext.cache().put(cacheName, baseKeyCacheFunction.cacheKey(baseKeyBytes), entry);
         }
         maxObservedTimestamp.set(Math.max(windowStartTimestamp, maxObservedTimestamp.get()));
     }
@@ -292,14 +290,14 @@ class TimeOrderedCachingWindowStore
     public byte[] fetch(final Bytes key,
                         final long timestamp) {
         validateStoreOpen();
-        if (context.cache() == null) {
+        if (internalContext.cache() == null) {
             return wrapped().fetch(key, timestamp);
         }
 
         final Bytes baseBytesKey = TimeFirstWindowKeySchema.toStoreKeyBinary(key, timestamp, 0);
         final Bytes cacheKey = baseKeyCacheFunction.cacheKey(baseBytesKey);
 
-        final LRUCacheEntry entry = context.cache().get(cacheName, cacheKey);
+        final LRUCacheEntry entry = internalContext.cache().get(cacheName, cacheKey);
         if (entry == null) {
             return wrapped().fetch(key, timestamp);
         } else {
@@ -316,7 +314,7 @@ class TimeOrderedCachingWindowStore
         validateStoreOpen();
 
         final WindowStoreIterator<byte[]> underlyingIterator = wrapped().fetch(key, timeFrom, timeTo);
-        if (context.cache() == null) {
+        if (internalContext.cache() == null) {
             return underlyingIterator;
         }
 
@@ -332,7 +330,7 @@ class TimeOrderedCachingWindowStore
         validateStoreOpen();
 
         final WindowStoreIterator<byte[]> underlyingIterator = wrapped().backwardFetch(key, timeFrom, timeTo);
-        if (context.cache() == null) {
+        if (internalContext.cache() == null) {
             return underlyingIterator;
         }
 
@@ -377,7 +375,7 @@ class TimeOrderedCachingWindowStore
 
         final KeyValueIterator<Windowed<Bytes>, byte[]> underlyingIterator =
             wrapped().fetch(keyFrom, keyTo, timeFrom, timeTo);
-        if (context.cache() == null) {
+        if (internalContext.cache() == null) {
             return underlyingIterator;
         }
 
@@ -402,7 +400,7 @@ class TimeOrderedCachingWindowStore
 
         final KeyValueIterator<Windowed<Bytes>, byte[]> underlyingIterator =
             wrapped().backwardFetch(keyFrom, keyTo, timeFrom, timeTo);
-        if (context.cache() == null) {
+        if (internalContext.cache() == null) {
             return underlyingIterator;
         }
 
@@ -500,25 +498,25 @@ class TimeOrderedCachingWindowStore
 
     @Override
     public synchronized void flush() {
-        context.cache().flush(cacheName);
+        internalContext.cache().flush(cacheName);
         wrapped().flush();
     }
 
     @Override
     public void flushCache() {
-        context.cache().flush(cacheName);
+        internalContext.cache().flush(cacheName);
     }
 
     @Override
     public void clearCache() {
-        context.cache().clear(cacheName);
+        internalContext.cache().clear(cacheName);
     }
 
     @Override
     public synchronized void close() {
         final LinkedList<RuntimeException> suppressed = executeAll(
-            () -> context.cache().flush(cacheName),
-            () -> context.cache().close(cacheName),
+            () -> internalContext.cache().flush(cacheName),
+            () -> internalContext.cache().close(cacheName),
             wrapped()::close
         );
         if (!suppressed.isEmpty()) {
@@ -575,13 +573,13 @@ class TimeOrderedCachingWindowStore
                 this.currentSegmentId = cacheFunction.segmentId(timeFrom);
 
                 setCacheKeyRange(timeFrom, currentSegmentLastTime());
-                this.current = context.cache().range(cacheName, cacheKeyFrom, cacheKeyTo);
+                this.current = internalContext.cache().range(cacheName, cacheKeyFrom, cacheKeyTo);
             } else {
                 this.currentSegmentId = cacheFunction.segmentId(Math.min(timeTo, maxObservedTimestamp.get()));
                 this.lastSegmentId = cacheFunction.segmentId(timeFrom);
 
                 setCacheKeyRange(currentSegmentBeginTime(), Math.min(timeTo, maxObservedTimestamp.get()));
-                this.current = context.cache().reverseRange(cacheName, cacheKeyFrom, cacheKeyTo);
+                this.current = internalContext.cache().reverseRange(cacheName, cacheKeyFrom, cacheKeyTo);
             }
         }
 
@@ -599,7 +597,7 @@ class TimeOrderedCachingWindowStore
                         final Bytes indexKey = indexKeyCacheFunction.key(cacheIndexKey);
                         final Bytes baseKey = indexKeyToBaseKey(indexKey);
                         final Bytes cachedBaseKey = baseKeyCacheFunction.cacheKey(baseKey);
-                        cachedBaseValue = context.cache().get(cacheName, cachedBaseKey);
+                        cachedBaseValue = internalContext.cache().get(cacheName, cachedBaseKey);
                         if (cachedBaseValue != null) {
                             return true;
                         }
@@ -683,7 +681,7 @@ class TimeOrderedCachingWindowStore
 
                 current.close();
 
-                current = context.cache().range(cacheName, cacheKeyFrom, cacheKeyTo);
+                current = internalContext.cache().range(cacheName, cacheKeyFrom, cacheKeyTo);
             } else {
                 --currentSegmentId;
 
@@ -697,7 +695,7 @@ class TimeOrderedCachingWindowStore
 
                 current.close();
 
-                current = context.cache().reverseRange(cacheName, cacheKeyFrom, cacheKeyTo);
+                current = internalContext.cache().reverseRange(cacheName, cacheKeyFrom, cacheKeyTo);
             }
         }
 

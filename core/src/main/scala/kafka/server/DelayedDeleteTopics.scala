@@ -17,7 +17,9 @@
 
 package kafka.server
 
+import kafka.utils.Logging
 import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.server.purgatory.DelayedOperation
 
 import scala.collection._
 
@@ -40,7 +42,7 @@ class DelayedDeleteTopics(delayMs: Long,
                           deleteMetadata: Seq[DeleteTopicMetadata],
                           adminManager: ZkAdminManager,
                           responseCallback: Map[String, Errors] => Unit)
-  extends DelayedOperation(delayMs) {
+  extends DelayedOperation(delayMs) with Logging {
 
   /**
     * The operation can be completed if all of the topics not in error have been removed

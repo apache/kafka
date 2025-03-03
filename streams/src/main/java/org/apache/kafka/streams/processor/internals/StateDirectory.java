@@ -16,12 +16,18 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.TaskCorruptedException;
+import org.apache.kafka.streams.internals.StreamsConfigUtils;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -43,13 +49,19 @@ import java.nio.file.attribute.PosixFilePermission;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Predicate;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -100,6 +112,9 @@ public class StateDirectory implements AutoCloseable {
     private FileChannel stateDirLockChannel;
     private FileLock stateDirLock;
 
+    private final StreamsConfig config;
+    private final ConcurrentMap<TaskId, Task> tasksForLocalState = new ConcurrentHashMap<>();
+
     /**
      * Ensures that the state base directory as well as the application's sub-directory are created.
      *
@@ -118,6 +133,7 @@ public class StateDirectory implements AutoCloseable {
         this.hasPersistentStores = hasPersistentStores;
         this.hasNamedTopologies = hasNamedTopologies;
         this.appId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
+        this.config = config;
         final String stateDirName = config.getString(StreamsConfig.STATE_DIR_CONFIG);
         final File baseDir = new File(stateDirName);
         stateDir = new File(baseDir, appId);
@@ -180,6 +196,109 @@ public class StateDirectory implements AutoCloseable {
                 stateDir.getAbsolutePath()), e);
         }
         return stateDirLock != null;
+    }
+
+    public void initializeStartupTasks(final TopologyMetadata topologyMetadata,
+                                       final StreamsMetricsImpl streamsMetrics,
+                                       final LogContext logContext) {
+        final List<TaskDirectory> nonEmptyTaskDirectories = listNonEmptyTaskDirectories();
+        if (hasPersistentStores && !nonEmptyTaskDirectories.isEmpty()) {
+            final ThreadCache dummyCache = new ThreadCache(logContext, 0, streamsMetrics);
+            final boolean eosEnabled = StreamsConfigUtils.eosEnabled(config);
+            final boolean stateUpdaterEnabled = StreamsConfig.InternalConfig.stateUpdaterEnabled(config.originals());
+
+            // discover all non-empty task directories in StateDirectory
+            for (final TaskDirectory taskDirectory : nonEmptyTaskDirectories) {
+                final String dirName = taskDirectory.file().getName();
+                final TaskId id = parseTaskDirectoryName(dirName, taskDirectory.namedTopology());
+                final ProcessorTopology subTopology = topologyMetadata.buildSubtopology(id);
+
+                // we still check if the task's sub-topology is stateful, even though we know its directory contains state,
+                // because it's possible that the topology has changed since that data was written, and is now stateless
+                // this therefore prevents us from creating unnecessary Tasks just because of some left-over state
+                if (subTopology.hasStateWithChangelogs()) {
+                    final Set<TopicPartition> inputPartitions = topologyMetadata.nodeToSourceTopics(id).values().stream()
+                            .flatMap(Collection::stream)
+                            .map(t -> new TopicPartition(t, id.partition()))
+                            .collect(Collectors.toSet());
+                    final ProcessorStateManager stateManager = ProcessorStateManager.createStartupTaskStateManager(
+                        id,
+                        eosEnabled,
+                        logContext,
+                        this,
+                        subTopology.storeToChangelogTopic(),
+                        inputPartitions,
+                        stateUpdaterEnabled
+                    );
+
+                    final InternalProcessorContext<Object, Object> context = new ProcessorContextImpl(
+                        id,
+                        config,
+                        stateManager,
+                        streamsMetrics,
+                        dummyCache
+                    );
+
+                    final Task task = new StandbyTask(
+                        id,
+                        inputPartitions,
+                        subTopology,
+                        topologyMetadata.taskConfig(id),
+                        streamsMetrics,
+                        stateManager,
+                        this,
+                        dummyCache,
+                        context
+                    );
+
+                    try {
+                        task.initializeIfNeeded();
+
+                        tasksForLocalState.put(id, task);
+                    } catch (final TaskCorruptedException e) {
+                        // Task is corrupt - wipe it out (under EOS) and don't initialize a Standby for it
+                        task.suspend();
+                        task.closeDirty();
+                    }
+                }
+            }
+        }
+    }
+
+    public boolean hasStartupTasks() {
+        return !tasksForLocalState.isEmpty();
+    }
+
+    public Task removeStartupTask(final TaskId taskId) {
+        final Task task = tasksForLocalState.remove(taskId);
+        if (task != null) {
+            lockedTasksToOwner.replace(taskId, Thread.currentThread());
+        }
+        return task;
+    }
+
+    public void closeStartupTasks() {
+        closeStartupTasks(t -> true);
+    }
+
+    private void closeStartupTasks(final Predicate<Task> predicate) {
+        if (!tasksForLocalState.isEmpty()) {
+            // "drain" Tasks first to ensure that we don't try to close Tasks that another thread is attempting to close
+            final Set<Task> drainedTasks = new HashSet<>(tasksForLocalState.size());
+            for (final Map.Entry<TaskId, Task> entry : tasksForLocalState.entrySet()) {
+                if (predicate.test(entry.getValue()) && tasksForLocalState.remove(entry.getKey()) != null) {
+                    // only add to our list of drained Tasks if we exclusively "claimed" a Task from tasksForLocalState
+                    // to ensure we don't accidentally try to drain the same Task multiple times from concurrent threads
+                    drainedTasks.add(entry.getValue());
+                }
+            }
+
+            // now that we have exclusive ownership of the drained tasks, close them
+            for (final Task task : drainedTasks) {
+                task.suspend();
+                task.closeClean();
+            }
+        }
     }
 
     public UUID initializeProcessId() {
@@ -379,9 +498,17 @@ public class StateDirectory implements AutoCloseable {
         }
     }
 
+    /**
+     * Expose for tests.
+     */
+    Thread lockOwner(final TaskId taskId) {
+        return lockedTasksToOwner.get(taskId);
+    }
+
     @Override
     public void close() {
         if (hasPersistentStores) {
+            closeStartupTasks();
             try {
                 stateDirLock.release();
                 stateDirLockChannel.close();
@@ -499,6 +626,7 @@ public class StateDirectory implements AutoCloseable {
         );
         if (namedTopologyDirs != null) {
             for (final File namedTopologyDir : namedTopologyDirs) {
+                closeStartupTasks(task -> task.id().topologyName().equals(parseNamedTopologyFromDirectory(namedTopologyDir.getName())));
                 final File[] contents = namedTopologyDir.listFiles();
                 if (contents != null && contents.length == 0) {
                     try {
@@ -536,6 +664,7 @@ public class StateDirectory implements AutoCloseable {
             log.debug("Tried to clear out the local state for NamedTopology {} but none was found", topologyName);
         }
         try {
+            closeStartupTasks(task -> task.id().topologyName().equals(topologyName));
             Utils.delete(namedTopologyDir);
         } catch (final IOException e) {
             log.error("Hit an unexpected error while clearing local state for topology " + topologyName, e);

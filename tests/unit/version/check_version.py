@@ -15,7 +15,7 @@
 
 from mock import Mock
 
-from kafkatest.version import DEV_BRANCH, V_0_8_2_2, get_version
+from kafkatest.version import DEV_BRANCH, V_2_1_0, get_version
 
 
 class CheckVersion(object):
@@ -29,5 +29,5 @@ class CheckVersion(object):
         assert get_version(node) == DEV_BRANCH
 
         node = Mock()
-        node.version = V_0_8_2_2
-        assert get_version(node) == V_0_8_2_2
+        node.version = V_2_1_0
+        assert get_version(node) == V_2_1_0

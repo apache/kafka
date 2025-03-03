@@ -41,7 +41,7 @@ class RaftClusterSnapshotTest {
     val numberOfBrokers = 3
     val numberOfControllers = 3
 
-    Using(
+    Using.resource(
       new KafkaClusterTestKit
         .Builder(
           new TestKitNodes.Builder()
@@ -74,7 +74,7 @@ class RaftClusterSnapshotTest {
 
       // For every controller and broker perform some sanity checks against the latest snapshot
       for ((_, raftManager) <- cluster.raftManagers().asScala) {
-        Using(
+        Using.resource(
           RecordsSnapshotReader.of(
             raftManager.replicatedLog.latestSnapshot.get(),
             new MetadataRecordSerde(),

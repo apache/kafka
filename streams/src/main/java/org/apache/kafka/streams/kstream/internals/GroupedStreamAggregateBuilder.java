@@ -73,7 +73,7 @@ class GroupedStreamAggregateBuilder<K, V> {
                                   final Serde<KR> keySerde,
                                   final Serde<VR> valueSerde,
                                   final boolean isOutputVersioned) {
-        assert queryableStoreName == null || queryableStoreName.equals(storeFactory.name());
+        assert queryableStoreName == null || queryableStoreName.equals(storeFactory.storeName());
 
         final String aggFunctionName = functionName.name();
 
@@ -82,7 +82,7 @@ class GroupedStreamAggregateBuilder<K, V> {
 
         if (repartitionRequired) {
             final OptimizableRepartitionNodeBuilder<K, V> repartitionNodeBuilder = optimizableRepartitionNodeBuilder();
-            final String repartitionTopicPrefix = userProvidedRepartitionTopicName != null ? userProvidedRepartitionTopicName : storeFactory.name();
+            final String repartitionTopicPrefix = userProvidedRepartitionTopicName != null ? userProvidedRepartitionTopicName : storeFactory.storeName();
             sourceName = createRepartitionSource(repartitionTopicPrefix, repartitionNodeBuilder);
 
             // First time through we need to create a repartition node.
@@ -101,7 +101,7 @@ class GroupedStreamAggregateBuilder<K, V> {
             new StatefulProcessorNode<>(
                 aggFunctionName,
                 new ProcessorParameters<>(aggregateSupplier, aggFunctionName),
-                storeFactory
+                new String[] {storeFactory.storeName()}
             );
         statefulProcessorNode.setOutputVersioned(isOutputVersioned);
 

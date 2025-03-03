@@ -44,13 +44,9 @@ import java.util.Random;
  *    Follower: After discovering a leader with an equal or larger epoch
  *
  * Unattached transitions to:
- *    Unattached: After learning of a new election with a higher epoch or after voting
+ *    Unattached: After learning of a new election with a higher epoch or after giving a binding vote
  *    Candidate: After expiration of the election timeout
  *    Follower: After discovering a leader with an equal or larger epoch
- *
- * Voted transitions to:
- *    Unattached: After learning of a new election with a higher epoch
- *    Candidate: After expiration of the election timeout
  *
  * Candidate transitions to:
  *    Unattached: After learning of a new election with a higher epoch
@@ -140,7 +136,7 @@ public class QuorumState {
         ElectionState election = readElectionState();
 
         final EpochState initialState;
-        if (election.hasVoted() && !localId.isPresent()) {
+        if (election.hasVoted() && localId.isEmpty()) {
             throw new IllegalStateException(
                 String.format(
                     "Initialized quorum state (%s) with a voted candidate but without a local id",
@@ -332,7 +328,7 @@ public class QuorumState {
     }
 
     public boolean isVoter() {
-        if (!localId.isPresent()) {
+        if (localId.isEmpty()) {
             return false;
         }
 
@@ -425,7 +421,7 @@ public class QuorumState {
                     epoch
                 )
             );
-        } else if (!localId.isPresent()) {
+        } else if (localId.isEmpty()) {
             throw new IllegalStateException("Cannot transition to voted without a replica id");
         } else if (epoch < currentEpoch) {
             throw new IllegalStateException(
@@ -641,8 +637,8 @@ public class QuorumState {
         return electionTimeoutMs + random.nextInt(electionTimeoutMs);
     }
 
-    public boolean canGrantVote(ReplicaKey candidateKey, boolean isLogUpToDate) {
-        return state.canGrantVote(candidateKey, isLogUpToDate);
+    public boolean canGrantVote(ReplicaKey replicaKey, boolean isLogUpToDate, boolean isPreVote) {
+        return state.canGrantVote(replicaKey, isLogUpToDate, isPreVote);
     }
 
     public FollowerState followerStateOrThrow() {
@@ -707,7 +703,7 @@ public class QuorumState {
     }
 
     public boolean isUnattachedNotVoted() {
-        return maybeUnattachedState().filter(unattached -> !unattached.votedKey().isPresent()).isPresent();
+        return maybeUnattachedState().filter(unattached -> unattached.votedKey().isEmpty()).isPresent();
     }
 
     public boolean isUnattachedAndVoted() {

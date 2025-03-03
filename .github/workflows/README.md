@@ -51,6 +51,64 @@ using this for very simple tasks such as applying labels or adding comments to P
 
 _We must never run the untrusted PR code in the elevated `pull_request_target` context_
 
+## Our Workflows
+
+### Trunk Build
+
+The [ci.yml](ci.yml) is run when commits are pushed to trunk. This calls into [build.yml](build.yml)
+to run our main build. In the trunk build, we do not read from the Gradle cache,
+but we do write to it. Also, the test catalog is only updated from trunk builds.
+
+### PR Build
+
+Similar to trunk, this workflow starts in [ci.yml](ci.yml) and calls into [build.yml](build.yml).
+Unlike trunk, the PR builds _will_ utilize the Gradle cache.
+
+### PR Triage
+
+In order to get the attention of committers, we have a triage workflow for Pull Requests
+opened by non-committers. This workflow consists of two files:
+
+* [pr-update.yml](pr-update.yml) When a PR is created, add the `triage` label if the PR
+  was opened by a non-committer.
+* [pr-reviewed.yml](pr-reviewed.yml) Cron job to remove the `triage` label from PRs which have been reviewed
+
+_The pr-update.yml workflow includes pull_request_target!_
+
+For committers to avoid having this label added, their membership in the ASF GitHub
+organization must be public. Here are the steps to take:
+
+* Navigate to the ASF organization's "People" page https://github.com/orgs/apache/people
+* Find yourself
+* Change "Organization Visibility" to Public
+
+Full documentation for this process can be found in GitHub's docs: https://docs.github.com/en/account-and-profile/setting-up-and-managing-your-personal-account-on-github/managing-your-membership-in-organizations/publicizing-or-hiding-organization-membership
+
+If you are a committer and do not want your membership in the ASF org listed as public, 
+you will need to remove the `triage` label manually.
+
+### CI Approved
+
+Due to a combination of GitHub security and ASF's policy, we required explicit
+approval of workflows on PRs submitted by non-committers (and non-contributors).
+To simply this process, we have a `ci-approved` label which automatically approves
+these workflows.
+
+There are two files related to this workflow:
+
+* [pr-labeled.yml](pr-labeled.yml) approves a pending approval for PRs that have
+been labeled with `ci-approved`
+* [ci-requested.yml](ci-requested.yml) approves future workflow requests automatically
+if the PR has the `ci-approved` label
+
+_The pr-labeled.yml workflow includes pull_request_target!_
+
+### Stale PRs
+
+This one is straightforward. Using the "actions/stale" GitHub Action, we automatically
+label and eventually close PRs which have not had activity for some time. See the
+[stale.yml](stale.yml) workflow file for specifics.
+
 ## GitHub Actions Quirks
 
 ### Composite Actions

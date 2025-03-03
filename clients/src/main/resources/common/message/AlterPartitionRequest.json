@@ -27,22 +27,25 @@
   "flexibleVersions": "0+",
   "fields": [
     { "name": "BrokerId", "type": "int32", "versions": "0+", "entityType": "brokerId",
-      "about": "The ID of the requesting broker" },
+      "about": "The ID of the requesting broker." },
     { "name": "BrokerEpoch", "type": "int64", "versions": "0+", "default": "-1",
-      "about": "The epoch of the requesting broker" },
-    { "name": "Topics", "type": "[]TopicData", "versions": "0+", "fields": [
+      "about": "The epoch of the requesting broker." },
+    { "name": "Topics", "type": "[]TopicData", "versions": "0+",
+      "about": "The topics to alter ISRs for.", "fields": [
       { "name":  "TopicName", "type": "string", "versions": "0-1", "ignorable": true, "entityType": "topicName",
-        "about": "The name of the topic to alter ISRs for" },
+        "about": "The name of the topic to alter ISRs for." },
       { "name":  "TopicId", "type": "uuid", "versions": "2+", "ignorable": true,
-        "about": "The ID of the topic to alter ISRs for" },
-      { "name": "Partitions", "type": "[]PartitionData", "versions": "0+", "fields": [
+        "about": "The ID of the topic to alter ISRs for." },
+      { "name": "Partitions", "type": "[]PartitionData", "versions": "0+",
+        "about": "The partitions to alter ISRs for.", "fields": [
         { "name": "PartitionIndex", "type": "int32", "versions": "0+",
-          "about": "The partition index" },
+          "about": "The partition index." },
         { "name": "LeaderEpoch", "type": "int32", "versions": "0+",
-          "about": "The leader epoch of this partition" },
+          "about": "The leader epoch of this partition." },
         { "name": "NewIsr", "type": "[]int32", "versions": "0-2", "entityType": "brokerId",
           "about": "The ISR for this partition. Deprecated since version 3." },
-        { "name": "NewIsrWithEpochs", "type": "[]BrokerState", "versions": "3+", "fields": [
+        { "name": "NewIsrWithEpochs", "type": "[]BrokerState", "versions": "3+",
+          "about":  "The ISR for this partition.", "fields": [
           { "name": "BrokerId", "type": "int32", "versions": "3+", "entityType": "brokerId",
             "about": "The ID of the broker." },
           { "name": "BrokerEpoch", "type": "int64", "versions": "3+", "default": "-1",

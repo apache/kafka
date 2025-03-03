@@ -70,6 +70,7 @@
             <allow pkg="org.apache.kafka.timeline" />
             <allow pkg="org.apache.kafka.coordinator.common" />
             <allow pkg="org.apache.kafka.coordinator.common.runtime" />
+            <allow pkg="com.google.re2j" />
             <subpackage name="metrics">
                 <allow pkg="com.yammer.metrics"/>
                 <allow pkg="org.HdrHistogram" />

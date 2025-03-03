@@ -30,6 +30,7 @@ import org.apache.kafka.streams.kstream.SlidingWindows;
 import org.apache.kafka.streams.kstream.TimeWindowedKStream;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
+import org.apache.kafka.streams.processor.internals.StoreFactory;
 import org.apache.kafka.streams.state.WindowStore;
 
 import java.util.Objects;
@@ -90,11 +91,12 @@ public class SlidingWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
         }
 
         final String aggregateName = new NamedInternal(named).orElseGenerateWithPrefix(builder, AGGREGATE_NAME);
+        final StoreFactory storeFactory = new SlidingWindowStoreMaterializer<>(materializedInternal, windows, emitStrategy);
 
         return aggregateBuilder.build(
                 new NamedInternal(aggregateName),
-                new SlidingWindowStoreMaterializer<>(materializedInternal, windows, emitStrategy),
-                new KStreamSlidingWindowAggregate<>(windows, materializedInternal.storeName(), emitStrategy, aggregateBuilder.countInitializer, aggregateBuilder.countAggregator),
+                storeFactory,
+                new KStreamSlidingWindowAggregate<>(windows, storeFactory, emitStrategy, aggregateBuilder.countInitializer, aggregateBuilder.countAggregator),
                 materializedInternal.queryableStoreName(),
                 materializedInternal.keySerde() != null ? new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.timeDifferenceMs()) : null,
                 materializedInternal.valueSerde(),
@@ -135,11 +137,12 @@ public class SlidingWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
             materializedInternal.withKeySerde(keySerde);
         }
         final String aggregateName = new NamedInternal(named).orElseGenerateWithPrefix(builder, AGGREGATE_NAME);
+        final StoreFactory storeFactory = new SlidingWindowStoreMaterializer<>(materializedInternal, windows, emitStrategy);
 
         return aggregateBuilder.build(
                 new NamedInternal(aggregateName),
-                new SlidingWindowStoreMaterializer<>(materializedInternal, windows, emitStrategy),
-                new KStreamSlidingWindowAggregate<>(windows, materializedInternal.storeName(), emitStrategy, initializer, aggregator),
+                storeFactory,
+                new KStreamSlidingWindowAggregate<>(windows, storeFactory, emitStrategy, initializer, aggregator),
                 materializedInternal.queryableStoreName(),
                 materializedInternal.keySerde() != null ? new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.timeDifferenceMs()) : null,
                 materializedInternal.valueSerde(),
@@ -181,11 +184,12 @@ public class SlidingWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
         }
 
         final String reduceName = new NamedInternal(named).orElseGenerateWithPrefix(builder, REDUCE_NAME);
+        final StoreFactory storeFactory = new SlidingWindowStoreMaterializer<>(materializedInternal, windows, emitStrategy);
 
         return aggregateBuilder.build(
                 new NamedInternal(reduceName),
-                new SlidingWindowStoreMaterializer<>(materializedInternal, windows, emitStrategy),
-                new KStreamSlidingWindowAggregate<>(windows, materializedInternal.storeName(), emitStrategy, aggregateBuilder.reduceInitializer, aggregatorForReducer(reducer)),
+                storeFactory,
+                new KStreamSlidingWindowAggregate<>(windows, storeFactory, emitStrategy, aggregateBuilder.reduceInitializer, aggregatorForReducer(reducer)),
                 materializedInternal.queryableStoreName(),
                 materializedInternal.keySerde() != null ? new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.timeDifferenceMs()) : null,
                 materializedInternal.valueSerde(),

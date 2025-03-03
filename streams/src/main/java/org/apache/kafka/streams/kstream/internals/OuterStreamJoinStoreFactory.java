@@ -18,7 +18,6 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.kstream.JoinWindows;
-import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.StoreFactory;
 import org.apache.kafka.streams.state.DslKeyValueParams;
 import org.apache.kafka.streams.state.DslStoreSuppliers;
@@ -73,7 +72,7 @@ public class OuterStreamJoinStoreFactory<K, V1, V2> extends AbstractConfigurable
     }
 
     @Override
-    public StateStore build() {
+    public StoreBuilder<?> builder() {
         final Duration retentionPeriod = Duration.ofMillis(retentionPeriod());
         final Duration windowSize = Duration.ofMillis(windows.size());
         final String rpMsgPrefix = prepareMillisCheckFailMsgPrefix(retentionPeriod, "retentionPeriod");
@@ -135,7 +134,7 @@ public class OuterStreamJoinStoreFactory<K, V1, V2> extends AbstractConfigurable
             builder.withLoggingDisabled();
         }
 
-        return builder.build();
+        return builder;
     }
 
     @Override
@@ -155,7 +154,7 @@ public class OuterStreamJoinStoreFactory<K, V1, V2> extends AbstractConfigurable
     }
 
     @Override
-    public String name() {
+    public String storeName() {
         return name;
     }
 

@@ -19,7 +19,11 @@ package org.apache.kafka.streams.errors;
 public interface StreamsUncaughtExceptionHandler {
     /**
      * Inspect the exception received in a stream thread and respond with an action.
-     * @param exception the actual exception
+     *
+     * @param exception
+     *     The actual exception.
+     *
+     * @return Whether to replace the failed thread, or to shut down the client or the whole application.
      */
     StreamThreadExceptionResponse handle(final Throwable exception);
 
@@ -27,14 +31,21 @@ public interface StreamsUncaughtExceptionHandler {
      * Enumeration that describes the response from the exception handler.
      */
     enum StreamThreadExceptionResponse {
+        /** Replace the failed thread with a new one. */
         REPLACE_THREAD(0, "REPLACE_THREAD"),
+        /** Shut down the client. */
         SHUTDOWN_CLIENT(1, "SHUTDOWN_KAFKA_STREAMS_CLIENT"),
+        /** Try to shut down the whole application. */
         SHUTDOWN_APPLICATION(2, "SHUTDOWN_KAFKA_STREAMS_APPLICATION");
 
-        /** an english description of the api--this is for debugging and can change */
+        /**
+         * An english description for the used option. This is for debugging only and may change.
+         */
         public final String name;
 
-        /** the permanent and immutable id of an API--this can't change ever */
+        /**
+         * The permanent and immutable id for the used option. This can't change ever.
+         */
         public final int id;
 
         StreamThreadExceptionResponse(final int id, final String name) {

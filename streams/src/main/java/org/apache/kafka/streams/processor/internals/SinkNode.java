@@ -119,11 +119,9 @@ public class SinkNode<KIn, VIn> extends ProcessorNode<KIn, VIn, Void, Void> {
      */
     @Override
     public String toString(final String indent) {
-        final StringBuilder sb = new StringBuilder(super.toString(indent));
-        sb.append(indent).append("\ttopic:\t\t");
-        sb.append(topicExtractor);
-        sb.append("\n");
-        return sb.toString();
+        return super.toString(indent) + indent + "\ttopic:\t\t" +
+                topicExtractor +
+                "\n";
     }
 
 }

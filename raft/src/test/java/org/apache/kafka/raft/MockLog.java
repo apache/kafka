@@ -167,7 +167,7 @@ public class MockLog implements ReplicatedLog {
     }
 
     private void assertValidHighWatermarkMetadata(LogOffsetMetadata offsetMetadata) {
-        if (!offsetMetadata.metadata().isPresent()) {
+        if (offsetMetadata.metadata().isEmpty()) {
             return;
         }
 
@@ -486,6 +486,18 @@ public class MockLog implements ReplicatedLog {
                     "Snapshot id (%s) is not valid according to the log: %s",
                     snapshotId,
                     validOffsetAndEpoch
+                )
+            );
+        }
+
+        long baseOffset = read(snapshotId.offset(), Isolation.COMMITTED).startOffsetMetadata.offset();
+        if (snapshotId.offset() != baseOffset) {
+            throw new IllegalArgumentException(
+                String.format(
+                    "Cannot create snapshot at offset (%s) because it is not batch aligned. " +
+                    "The batch containing the requested offset has a base offset of (%s)",
+                    snapshotId.offset(),
+                    baseOffset
                 )
             );
         }

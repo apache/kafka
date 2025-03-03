@@ -62,7 +62,7 @@ public class TopicBasedRemoteLogMetadataManagerRestartTest {
         // Create topics.
         String leaderTopic = "new-leader";
         String followerTopic = "new-follower";
-        try (Admin admin = clusterInstance.createAdminClient()) {
+        try (Admin admin = clusterInstance.admin()) {
             // Set broker id 0 as the first entry which is taken as the leader.
             NewTopic newLeaderTopic = new NewTopic(leaderTopic, Collections.singletonMap(0, Arrays.asList(0, 1, 2)));
             // Set broker id 1 as the first entry which is taken as the leader.

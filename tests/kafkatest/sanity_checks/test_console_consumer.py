@@ -22,10 +22,8 @@ from ducktape.utils.util import wait_until
 
 from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.services.kafka import KafkaService, quorum
-from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.utils.remote_account import line_count, file_exists
-from kafkatest.version import LATEST_0_8_2
 
 
 class ConsoleConsumerTest(Test):
@@ -77,24 +75,3 @@ class ConsoleConsumerTest(Test):
         assert line_count(node, ConsoleConsumer.STDOUT_CAPTURE) == 0
 
         self.consumer.stop_node(node)
-
-    @cluster(num_nodes=4)
-    def test_version(self):
-        """Check that console consumer v0.8.2.X successfully starts and consumes messages."""
-        self.kafka.start()
-
-        num_messages = 1000
-        self.producer = VerifiableProducer(self.test_context, num_nodes=1, kafka=self.kafka, topic=self.topic,
-                                           max_messages=num_messages, throughput=1000)
-        self.producer.start()
-        self.producer.wait()
-
-        self.consumer.nodes[0].version = LATEST_0_8_2
-        self.consumer.new_consumer = False
-        self.consumer.consumer_timeout_ms = 1000
-        self.consumer.start()
-        self.consumer.wait()
-
-        num_consumed = len(self.consumer.messages_consumed[1])
-        num_produced = self.producer.num_acked
-        assert num_produced == num_consumed, "num_produced: %d, num_consumed: %d" % (num_produced, num_consumed)

@@ -26,7 +26,7 @@ import java.util.Objects;
  * <br>
  * This class requires external synchronization.
  */
-public class TimelineObject<T> implements Revertable {
+public final class TimelineObject<T> implements Revertable {
     static class ObjectContainer<T> implements Delta {
         private T value;
 
@@ -52,7 +52,6 @@ public class TimelineObject<T> implements Revertable {
     private final T initialValue;
     private T value;
 
-    @SuppressWarnings("this-escape")
     public TimelineObject(SnapshotRegistry snapshotRegistry, T initialValue) {
         Objects.requireNonNull(initialValue);
         this.snapshotRegistry = snapshotRegistry;
@@ -110,8 +109,7 @@ public class TimelineObject<T> implements Revertable {
 
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof TimelineObject)) return false;
-        TimelineObject other = (TimelineObject) o;
+        if (!(o instanceof TimelineObject other)) return false;
         return value.equals(other.value);
     }
 

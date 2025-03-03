@@ -22,15 +22,13 @@ from kafkatest.services.trogdor.produce_bench_workload import ProduceBenchWorklo
 from kafkatest.services.trogdor.consume_bench_workload import ConsumeBenchWorkloadService, ConsumeBenchWorkloadSpec
 from kafkatest.services.trogdor.task_spec import TaskSpec
 from kafkatest.services.trogdor.trogdor import TrogdorService
-from kafkatest.services.zookeeper import ZookeeperService
 
 
 class ConsumeBenchTest(Test):
     def __init__(self, test_context):
         """:type test_context: ducktape.tests.test.TestContext"""
         super(ConsumeBenchTest, self).__init__(test_context)
-        self.zk = ZookeeperService(test_context, num_nodes=3) if quorum.for_test(test_context) == quorum.zk else None
-        self.kafka = KafkaService(test_context, num_nodes=3, zk=self.zk)
+        self.kafka = KafkaService(test_context, num_nodes=3, zk=None)
         self.producer_workload_service = ProduceBenchWorkloadService(test_context, self.kafka)
         self.consumer_workload_service = ConsumeBenchWorkloadService(test_context, self.kafka)
         self.consumer_workload_service_2 = ConsumeBenchWorkloadService(test_context, self.kafka)
@@ -42,15 +40,11 @@ class ConsumeBenchTest(Test):
 
     def setUp(self):
         self.trogdor.start()
-        if self.zk:
-            self.zk.start()
         self.kafka.start()
 
     def teardown(self):
         self.trogdor.stop()
         self.kafka.stop()
-        if self.zk:
-            self.zk.stop()
 
     def produce_messages(self, topics, max_messages=10000):
         produce_spec = ProduceBenchWorkloadSpec(0, TaskSpec.MAX_DURATION_MS,
@@ -73,14 +67,6 @@ class ConsumeBenchTest(Test):
             ["consume_bench_topic[0-5]"], # topic subscription
             ["consume_bench_topic[0-5]:[0-4]"] # manual topic assignment
         ],
-        metadata_quorum=[quorum.zk],
-        use_new_coordinator=[False]
-    )
-    @matrix(
-        topics=[
-            ["consume_bench_topic[0-5]"], # topic subscription
-            ["consume_bench_topic[0-5]:[0-4]"] # manual topic assignment
-        ],
         metadata_quorum=[quorum.isolated_kraft],
         use_new_coordinator=[False]
     )
@@ -93,7 +79,7 @@ class ConsumeBenchTest(Test):
         use_new_coordinator=[True],
         group_protocol=consumer_group.all_group_protocols
     )
-    def test_consume_bench(self, topics, metadata_quorum=quorum.zk, use_new_coordinator=False, group_protocol=None):
+    def test_consume_bench(self, topics, metadata_quorum, use_new_coordinator=False, group_protocol=None):
         """
         Runs a ConsumeBench workload to consume messages
         """
@@ -115,10 +101,6 @@ class ConsumeBenchTest(Test):
 
     @cluster(num_nodes=10)
     @matrix(
-        metadata_quorum=[quorum.zk],
-        use_new_coordinator=[False]
-    )
-    @matrix(
         metadata_quorum=[quorum.isolated_kraft],
         use_new_coordinator=[False]
     )
@@ -127,7 +109,7 @@ class ConsumeBenchTest(Test):
         use_new_coordinator=[True],
         group_protocol=consumer_group.all_group_protocols
     )
-    def test_single_partition(self, metadata_quorum=quorum.zk, use_new_coordinator=False, group_protocol=None):
+    def test_single_partition(self, metadata_quorum, use_new_coordinator=False, group_protocol=None):
         """
         Run a ConsumeBench against a single partition
         """
@@ -150,10 +132,6 @@ class ConsumeBenchTest(Test):
 
     @cluster(num_nodes=10)
     @matrix(
-        metadata_quorum=[quorum.zk],
-        use_new_coordinator=[False]
-    )
-    @matrix(
         metadata_quorum=[quorum.isolated_kraft],
         use_new_coordinator=[False]
     )
@@ -162,7 +140,7 @@ class ConsumeBenchTest(Test):
         use_new_coordinator=[True],
         group_protocol=consumer_group.all_group_protocols
     )
-    def test_multiple_consumers_random_group_topics(self, metadata_quorum=quorum.zk, use_new_coordinator=False, group_protocol=None):
+    def test_multiple_consumers_random_group_topics(self, metadata_quorum, use_new_coordinator=False, group_protocol=None):
         """
         Runs multiple consumers group to read messages from topics.
         Since a consumerGroup isn't specified, each consumer should read from all topics independently
@@ -186,10 +164,6 @@ class ConsumeBenchTest(Test):
 
     @cluster(num_nodes=10)
     @matrix(
-        metadata_quorum=[quorum.zk],
-        use_new_coordinator=[False]
-    )
-    @matrix(
         metadata_quorum=[quorum.isolated_kraft],
         use_new_coordinator=[False]
     )
@@ -198,7 +172,7 @@ class ConsumeBenchTest(Test):
         use_new_coordinator=[True],
         group_protocol=consumer_group.all_group_protocols
     )
-    def test_two_consumers_specified_group_topics(self, metadata_quorum=quorum.zk, use_new_coordinator=False, group_protocol=None):
+    def test_two_consumers_specified_group_topics(self, metadata_quorum, use_new_coordinator=False, group_protocol=None):
         """
         Runs two consumers in the same consumer group to read messages from topics.
         Since a consumerGroup is specified, each consumer should dynamically get assigned a partition from group
@@ -223,10 +197,6 @@ class ConsumeBenchTest(Test):
 
     @cluster(num_nodes=10)
     @matrix(
-        metadata_quorum=[quorum.zk],
-        use_new_coordinator=[False]
-    )
-    @matrix(
         metadata_quorum=[quorum.isolated_kraft],
         use_new_coordinator=[False]
     )
@@ -235,7 +205,7 @@ class ConsumeBenchTest(Test):
         use_new_coordinator=[True],
         group_protocol=consumer_group.all_group_protocols
     )
-    def test_multiple_consumers_random_group_partitions(self, metadata_quorum=quorum.zk, use_new_coordinator=False, group_protocol=None):
+    def test_multiple_consumers_random_group_partitions(self, metadata_quorum, use_new_coordinator=False, group_protocol=None):
         """
         Runs multiple consumers in to read messages from specific partitions.
         Since a consumerGroup isn't specified, each consumer will get assigned a random group
@@ -260,10 +230,6 @@ class ConsumeBenchTest(Test):
 
     @cluster(num_nodes=10)
     @matrix(
-        metadata_quorum=[quorum.zk],
-        use_new_coordinator=[False]
-    )
-    @matrix(
         metadata_quorum=[quorum.isolated_kraft],
         use_new_coordinator=[False]
     )
@@ -272,7 +238,7 @@ class ConsumeBenchTest(Test):
         use_new_coordinator=[True],
         group_protocol=consumer_group.all_group_protocols
     )
-    def test_multiple_consumers_specified_group_partitions_should_raise(self, metadata_quorum=quorum.zk, use_new_coordinator=False, group_protocol=None):
+    def test_multiple_consumers_specified_group_partitions_should_raise(self, metadata_quorum, use_new_coordinator=False, group_protocol=None):
         """
         Runs multiple consumers in the same group to read messages from specific partitions.
         It is an invalid configuration to provide a consumer group and specific partitions.

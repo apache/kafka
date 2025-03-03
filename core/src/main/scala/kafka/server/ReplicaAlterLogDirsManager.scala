@@ -17,9 +17,9 @@
 
 package kafka.server
 
-import kafka.cluster.BrokerEndPoint
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.server.common.DirectoryEventHandler
+import org.apache.kafka.server.network.BrokerEndPoint
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 
 class ReplicaAlterLogDirsManager(brokerConfig: KafkaConfig,

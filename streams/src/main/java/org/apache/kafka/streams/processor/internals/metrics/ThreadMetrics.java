@@ -16,8 +16,10 @@
  */
 package org.apache.kafka.streams.processor.internals.metrics;
 
+import org.apache.kafka.common.metrics.Gauge;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
+import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.StreamThreadTotalBlockedTime;
 
 import java.util.Map;
@@ -44,7 +46,9 @@ public class ThreadMetrics {
     private static final String CREATE_TASK = "task-created";
     private static final String CLOSE_TASK = "task-closed";
     private static final String BLOCKED_TIME = "blocked-time-ns-total";
+    private static final String STATE  = "state";
     private static final String THREAD_START_TIME = "thread-start-time";
+    private static final String THREAD_STATE = "thread-state";
 
     private static final String COMMIT_DESCRIPTION = "calls to commit";
     private static final String COMMIT_TOTAL_DESCRIPTION = TOTAL_DESCRIPTION + COMMIT_DESCRIPTION;
@@ -88,6 +92,8 @@ public class ThreadMetrics {
         "The total time the thread spent blocked on kafka in nanoseconds";
     private static final String THREAD_START_TIME_DESCRIPTION =
         "The time that the thread was started";
+    private static final String THREAD_STATE_DESCRIPTION =
+        "The current state of the thread";
 
     public static Sensor createTaskSensor(final String threadId,
                                           final StreamsMetricsImpl streamsMetrics) {
@@ -289,6 +295,30 @@ public class ThreadMetrics {
             startTime
         );
     }
+
+    public static void addThreadStateTelemetryMetric(final String threadId,
+                                                     final StreamsMetricsImpl streamsMetrics,
+                                                     final Gauge<Integer> threadStateProvider) {
+        streamsMetrics.addThreadLevelMutableMetric(
+            THREAD_STATE,
+            THREAD_STATE_DESCRIPTION,
+            threadId,
+            threadStateProvider
+        );
+    }
+
+    public static void addThreadStateMetric(final String threadId,
+                                            final StreamsMetricsImpl streamsMetrics,
+                                            final Gauge<StreamThread.State> threadStateProvider) {
+        streamsMetrics.addThreadLevelMutableMetric(
+            STATE,
+            THREAD_STATE_DESCRIPTION,
+            threadId,
+            threadStateProvider
+        );
+    }
+
+
 
     public static void addThreadBlockedTimeMetric(final String threadId,
                                                   final StreamThreadTotalBlockedTime blockedTime,

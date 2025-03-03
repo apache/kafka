@@ -42,10 +42,13 @@ import org.apache.kafka.coordinator.common.runtime.CoordinatorShardBuilderSuppli
 import org.apache.kafka.coordinator.common.runtime.MultiThreadedEventProcessor;
 import org.apache.kafka.coordinator.common.runtime.PartitionWriter;
 import org.apache.kafka.coordinator.share.metrics.ShareCoordinatorMetrics;
+import org.apache.kafka.image.MetadataDelta;
+import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.config.ShareCoordinatorConfig;
 import org.apache.kafka.server.record.BrokerCompressionType;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.util.timer.Timer;
+import org.apache.kafka.server.util.timer.TimerTask;
 
 import org.slf4j.Logger;
 
@@ -58,6 +61,8 @@ import java.util.Map;
 import java.util.OptionalInt;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.IntSupplier;
 import java.util.stream.Collectors;
@@ -72,6 +77,9 @@ public class ShareCoordinatorService implements ShareCoordinator {
     private final ShareCoordinatorMetrics shareCoordinatorMetrics;
     private volatile int numPartitions = -1; // Number of partitions for __share_group_state. Provided when component is started.
     private final Time time;
+    private final Timer timer;
+    private final PartitionWriter writer;
+    private final Map<TopicPartition, Long> lastPrunedOffsets;
 
     public static class Builder {
         private final int nodeId;
@@ -173,6 +181,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
                     .withSerializer(new ShareCoordinatorRecordSerde())
                     .withCompression(Compression.of(config.shareCoordinatorStateTopicCompressionType()).build())
                     .withAppendLingerMs(config.shareCoordinatorAppendLingerMs())
+                    .withExecutorService(Executors.newSingleThreadExecutor())
                     .build();
 
             return new ShareCoordinatorService(
@@ -180,7 +189,9 @@ public class ShareCoordinatorService implements ShareCoordinator {
                 config,
                 runtime,
                 coordinatorMetrics,
-                time
+                time,
+                timer,
+                writer
             );
         }
     }
@@ -190,17 +201,27 @@ public class ShareCoordinatorService implements ShareCoordinator {
         ShareCoordinatorConfig config,
         CoordinatorRuntime<ShareCoordinatorShard, CoordinatorRecord> runtime,
         ShareCoordinatorMetrics shareCoordinatorMetrics,
-        Time time) {
+        Time time,
+        Timer timer,
+        PartitionWriter writer
+    ) {
         this.log = logContext.logger(ShareCoordinatorService.class);
         this.config = config;
         this.runtime = runtime;
         this.shareCoordinatorMetrics = shareCoordinatorMetrics;
         this.time = time;
+        this.timer = timer;
+        this.writer = writer;
+        this.lastPrunedOffsets = new ConcurrentHashMap<>();
     }
 
     @Override
-    public int partitionFor(String key) {
-        return Utils.abs(key.hashCode()) % numPartitions;
+    public int partitionFor(SharePartitionKey key) {
+        throwIfNotActive();
+        // Call to asCoordinatorKey is necessary as we depend only on topicId (Uuid) and
+        // not topic name. We do not want this calculation to distinguish between 2
+        // SharePartitionKeys where everything except topic name is the same.
+        return Utils.abs(key.asCoordinatorKey().hashCode()) % numPartitions;
     }
 
     @Override
@@ -232,7 +253,80 @@ public class ShareCoordinatorService implements ShareCoordinator {
 
         log.info("Starting up.");
         numPartitions = shareGroupTopicPartitionCount.getAsInt();
+        setupRecordPruning();
         log.info("Startup complete.");
+    }
+
+    private void setupRecordPruning() {
+        log.info("Scheduling share-group state topic prune job.");
+        timer.add(new TimerTask(config.shareCoordinatorTopicPruneIntervalMs()) {
+            @Override
+            public void run() {
+                List<CompletableFuture<Void>> futures = new ArrayList<>();
+                runtime.activeTopicPartitions().forEach(tp -> futures.add(performRecordPruning(tp)));
+
+                CompletableFuture.allOf(futures.toArray(new CompletableFuture[]{}))
+                    .whenComplete((res, exp) -> {
+                        if (exp != null) {
+                            log.error("Received error in share-group state topic prune.", exp);
+                        }
+                        // Perpetual recursion, failure or not.
+                        setupRecordPruning();
+                    });
+            }
+        });
+    }
+
+    private CompletableFuture<Void> performRecordPruning(TopicPartition tp) {
+        // This future will always be completed normally, exception or not.
+        CompletableFuture<Void> fut = new CompletableFuture<>();
+
+        runtime.scheduleWriteOperation(
+            "write-state-record-prune",
+            tp,
+            Duration.ofMillis(config.shareCoordinatorWriteTimeoutMs()),
+            ShareCoordinatorShard::lastRedundantOffset
+        ).whenComplete((result, exception) -> {
+            if (exception != null) {
+                log.debug("Last redundant offset for tp {} lookup threw an error.", tp, exception);
+                Errors error = Errors.forException(exception);
+                // These errors might result from partition metadata not loaded
+                // or shard re-election. Will cause unnecessary noise, hence not logging
+                if (!(error.equals(Errors.COORDINATOR_LOAD_IN_PROGRESS) || error.equals(Errors.NOT_COORDINATOR))) {
+                    log.error("Last redundant offset lookup for tp {} threw an error.", tp, exception);
+                    fut.completeExceptionally(exception);
+                    return;
+                }
+                fut.complete(null);
+                return;
+            }
+            if (result.isPresent()) {
+                Long off = result.get();
+                Long lastPrunedOffset = lastPrunedOffsets.get(tp);
+                if (lastPrunedOffset != null && lastPrunedOffset.longValue() == off) {
+                    log.debug("{} already pruned till offset {}", tp, off);
+                    fut.complete(null);
+                    return;
+                }
+
+                log.info("Pruning records in {} till offset {}.", tp, off);
+                writer.deleteRecords(tp, off)
+                    .whenComplete((res, exp) -> {
+                        if (exp != null) {
+                            log.debug("Exception while deleting records in {} till offset {}.", tp, off, exp);
+                            fut.completeExceptionally(exp);
+                            return;
+                        }
+                        fut.complete(null);
+                        // Best effort prevention of issuing duplicate delete calls.
+                        lastPrunedOffsets.put(tp, off);
+                    });
+            } else {
+                log.debug("No offset value for tp {} found.", tp);
+                fut.complete(null);
+            }
+        });
+        return fut;
     }
 
     @Override
@@ -330,7 +424,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
                 });
         });
 
-        // Combine all futures into a single CompletableFuture<Void>
+        // Combine all futures into a single CompletableFuture<Void>.
         CompletableFuture<Void> combinedFuture = CompletableFuture.allOf(futureMap.values().stream()
             .flatMap(partMap -> partMap.values().stream()).toArray(CompletableFuture[]::new));
 
@@ -341,7 +435,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
                 (topicId, topicEntry) -> {
                     List<WriteShareGroupStateResponseData.PartitionResult> partitionResults = new ArrayList<>(topicEntry.size());
                     topicEntry.forEach(
-                        // map of partition id -> responses from api
+                        // Map of partition id -> responses from api.
                         (partitionId, responseFut) -> {
                             // This is the future returned by runtime.scheduleWriteOperation which returns when the
                             // operation has completed including error information. When this line executes, the future
@@ -355,8 +449,8 @@ public class ShareCoordinatorService implements ShareCoordinator {
                 }
             );
 
-            // time taken for write
-            // at this point all futures are completed written above.
+            // Time taken for write.
+            // At this point all futures are completed written above.
             shareCoordinatorMetrics.record(ShareCoordinatorMetrics.SHARE_COORDINATOR_WRITE_LATENCY_SENSOR_NAME,
                 time.hiResClockMs() - startTimeMs);
 
@@ -371,7 +465,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
         // A map to store the futures for each topicId and partition.
         Map<Uuid, Map<Integer, CompletableFuture<ReadShareGroupStateResponseData>>> futureMap = new HashMap<>();
 
-        // Send an empty response if topic data is empty
+        // Send an empty response if topic data is empty.
         if (isEmpty(request.topics())) {
             log.error("Topic Data is empty: {}", request);
             return CompletableFuture.completedFuture(
@@ -379,7 +473,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
             );
         }
 
-        // Send an empty response if partition data is empty for any topic
+        // Send an empty response if partition data is empty for any topic.
         for (ReadShareGroupStateRequestData.ReadStateData topicData : request.topics()) {
             if (isEmpty(topicData.partitions())) {
                 log.error("Partition Data for topic {} is empty: {}", topicData.topicId(), request);
@@ -389,7 +483,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
             }
         }
 
-        // Send an empty response if groupId is invalid
+        // Send an empty response if groupId is invalid.
         if (isGroupIdEmpty(groupId)) {
             log.error("Group id must be specified and non-empty: {}", request);
             return CompletableFuture.completedFuture(
@@ -397,7 +491,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
             );
         }
 
-        // Send an empty response if the coordinator is not active
+        // Send an empty response if the coordinator is not active.
         if (!isActive.get()) {
             return CompletableFuture.completedFuture(
                 generateErrorReadStateResponse(
@@ -413,43 +507,55 @@ public class ShareCoordinatorService implements ShareCoordinator {
         // be looping over the keys below and constructing new ReadShareGroupStateRequestData objects to pass
         // onto the shard method.
 
-        request.topics().forEach(topicData -> {
+        // It is possible that a read state request contains a leaderEpoch which is the higher than seen so
+        // far, for a specific share partition. Hence, for each read request - we must check for this
+        // and update the state appropriately.
+
+        for (ReadShareGroupStateRequestData.ReadStateData topicData : request.topics()) {
             Uuid topicId = topicData.topicId();
-            topicData.partitions().forEach(partitionData -> {
-                // Request object containing information of a single topic partition
+            for (ReadShareGroupStateRequestData.PartitionData partitionData : topicData.partitions()) {
+                SharePartitionKey coordinatorKey = SharePartitionKey.getInstance(request.groupId(), topicId, partitionData.partition());
+
                 ReadShareGroupStateRequestData requestForCurrentPartition = new ReadShareGroupStateRequestData()
                     .setGroupId(groupId)
                     .setTopics(Collections.singletonList(new ReadShareGroupStateRequestData.ReadStateData()
                         .setTopicId(topicId)
                         .setPartitions(Collections.singletonList(partitionData))));
-                SharePartitionKey coordinatorKey = SharePartitionKey.getInstance(request.groupId(), topicId, partitionData.partition());
-                // Scheduling a runtime read operation to read share partition state from the coordinator in memory state
-                CompletableFuture<ReadShareGroupStateResponseData> future = runtime.scheduleReadOperation(
-                    "read-share-group-state",
-                    topicPartitionFor(coordinatorKey),
-                    (coordinator, offset) -> coordinator.readState(requestForCurrentPartition, offset)
-                ).exceptionally(exception -> handleOperationException(
-                    "read-share-group-state",
-                    request,
-                    exception,
-                    (error, message) -> ReadShareGroupStateResponse.toErrorResponseData(
-                        topicData.topicId(),
-                        partitionData.partition(),
-                        error,
-                        "Unable to read share group state: " + exception.getMessage()
-                    ),
-                    log
-                ));
-                futureMap.computeIfAbsent(topicId, k -> new HashMap<>())
-                    .put(partitionData.partition(), future);
-            });
-        });
 
-        // Combine all futures into a single CompletableFuture<Void>
+                // We are issuing a scheduleWriteOperation even though the request is of read type since
+                // we might want to update the leader epoch, if it is the highest seen so far for the specific
+                // share partition. In that case, we require the strong consistency offered by scheduleWriteOperation.
+                // At the time of writing, read after write consistency for the readState and writeState requests
+                // is not guaranteed.
+                CompletableFuture<ReadShareGroupStateResponseData> readFuture = runtime.scheduleWriteOperation(
+                    "read-update-leader-epoch-state",
+                    topicPartitionFor(coordinatorKey),
+                    Duration.ofMillis(config.shareCoordinatorWriteTimeoutMs()),
+                    coordinator -> coordinator.readStateAndMaybeUpdateLeaderEpoch(requestForCurrentPartition)
+                ).exceptionally(readException ->
+                    handleOperationException(
+                        "read-update-leader-epoch-state",
+                        request,
+                        readException,
+                        (error, message) -> ReadShareGroupStateResponse.toErrorResponseData(
+                            topicData.topicId(),
+                            partitionData.partition(),
+                            error,
+                            "Unable to read share group state: " + readException.getMessage()
+                        ),
+                        log
+                    ));
+
+                futureMap.computeIfAbsent(topicId, k -> new HashMap<>())
+                    .put(partitionData.partition(), readFuture);
+            }
+        }
+
+        // Combine all futures into a single CompletableFuture<Void>.
         CompletableFuture<Void> combinedFuture = CompletableFuture.allOf(futureMap.values().stream()
             .flatMap(map -> map.values().stream()).toArray(CompletableFuture[]::new));
 
-        // Transform the combined CompletableFuture<Void> into CompletableFuture<ReadShareGroupStateResponseData>
+        // Transform the combined CompletableFuture<Void> into CompletableFuture<ReadShareGroupStateResponseData>.
         return combinedFuture.thenApply(v -> {
             List<ReadShareGroupStateResponseData.ReadStateResult> readStateResult = new ArrayList<>(futureMap.size());
             futureMap.forEach(
@@ -457,7 +563,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
                     List<ReadShareGroupStateResponseData.PartitionResult> partitionResults = new ArrayList<>(topicEntry.size());
                     topicEntry.forEach(
                         (partitionId, responseFut) -> {
-                            // responseFut would already be completed by now since we have used
+                            // ResponseFut would already be completed by now since we have used
                             // CompletableFuture::allOf to create a combined future from the future map.
                             partitionResults.add(
                                 responseFut.getNow(null).results().get(0).partitions().get(0)
@@ -513,6 +619,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
 
     @Override
     public void onElection(int partitionIndex, int partitionLeaderEpoch) {
+        throwIfNotActive();
         runtime.scheduleLoadOperation(
             new TopicPartition(Topic.SHARE_GROUP_STATE_TOPIC_NAME, partitionIndex),
             partitionLeaderEpoch
@@ -521,17 +628,32 @@ public class ShareCoordinatorService implements ShareCoordinator {
 
     @Override
     public void onResignation(int partitionIndex, OptionalInt partitionLeaderEpoch) {
+        throwIfNotActive();
+        TopicPartition tp = new TopicPartition(Topic.SHARE_GROUP_STATE_TOPIC_NAME, partitionIndex);
+        lastPrunedOffsets.remove(tp);
         runtime.scheduleUnloadOperation(
-            new TopicPartition(Topic.SHARE_GROUP_STATE_TOPIC_NAME, partitionIndex),
+            tp,
             partitionLeaderEpoch
         );
     }
 
-    private TopicPartition topicPartitionFor(SharePartitionKey key) {
-        return new TopicPartition(Topic.SHARE_GROUP_STATE_TOPIC_NAME, partitionFor(key.toString()));
+    @Override
+    public void onNewMetadataImage(MetadataImage newImage, MetadataDelta delta) {
+        throwIfNotActive();
+        this.runtime.onNewMetadataImage(newImage, delta);
+    }
+
+    TopicPartition topicPartitionFor(SharePartitionKey key) {
+        return new TopicPartition(Topic.SHARE_GROUP_STATE_TOPIC_NAME, partitionFor(key));
     }
 
     private static <P> boolean isEmpty(List<P> list) {
         return list == null || list.isEmpty();
+    }
+
+    private void throwIfNotActive() {
+        if (!isActive.get()) {
+            throw Errors.COORDINATOR_NOT_AVAILABLE.exception();
+        }
     }
 }

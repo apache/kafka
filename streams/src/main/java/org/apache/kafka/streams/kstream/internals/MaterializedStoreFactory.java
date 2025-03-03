@@ -16,8 +16,10 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.StoreFactory;
+import org.apache.kafka.streams.state.StoreSupplier;
 
 import java.util.Map;
 
@@ -39,8 +41,24 @@ public abstract class MaterializedStoreFactory<K, V, S extends StateStore> exten
     }
 
     @Override
-    public String name() {
+    public String storeName() {
         return materialized.storeName();
+    }
+
+    public String queryableStoreName() {
+        return materialized.queryableStoreName();
+    }
+
+    public Serde<K> keySerde() {
+        return materialized.keySerde();
+    }
+
+    public Serde<V> valueSerde() {
+        return materialized.valueSerde();
+    }
+
+    public StoreSupplier<S> storeSupplier() {
+        return materialized.storeSupplier();
     }
 
     @Override

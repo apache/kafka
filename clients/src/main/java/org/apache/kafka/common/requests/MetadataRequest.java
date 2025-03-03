@@ -156,6 +156,7 @@ public class MetadataRequest extends AbstractRequest {
         }
 
         responseData.setThrottleTimeMs(throttleTimeMs);
+        responseData.setErrorCode(error.code());
         return new MetadataResponse(responseData, true);
     }
 

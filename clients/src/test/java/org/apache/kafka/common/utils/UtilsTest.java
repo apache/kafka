@@ -770,9 +770,7 @@ public class UtilsTest {
         when(mockIterator.next()).thenReturn(rootDir.toPath()).thenReturn(subDir.toPath());
         when(mockIterator.hasNext()).thenReturn(true).thenReturn(true).thenReturn(false);
 
-        assertDoesNotThrow(() -> {
-            Utils.delete(spyRootFile);
-        });
+        assertDoesNotThrow(() -> Utils.delete(spyRootFile));
         assertFalse(Files.exists(rootDir.toPath()));
         assertFalse(Files.exists(subDir.toPath()));
     }

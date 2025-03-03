@@ -72,6 +72,7 @@
 
         <subpackage name="common">
             <allow pkg="org.apache.kafka.server.common" />
+            <allow pkg="org.apache.kafka.clients" />
         </subpackage>
 
         <subpackage name="immutable">
@@ -90,6 +91,11 @@
 
         <subpackage name="network">
             <allow pkg="org.apache.kafka.server.authorizer" />
+        </subpackage>
+
+        <subpackage name="purgatory">
+            <allow pkg="org.apache.kafka.server.metrics" />
+            <allow pkg="org.apache.kafka.server.util" />
         </subpackage>
 
         <subpackage name="util">

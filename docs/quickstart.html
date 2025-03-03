@@ -42,15 +42,11 @@ $ cd kafka_{{scalaVersion}}-{{fullDotVersion}}</code></pre>
             <a href="#quickstart_startserver">Step 2: Start the Kafka environment</a>
         </h4>
 
-        <p class="note">NOTE: Your local environment must have Java 11+ installed.</p>
+        <p class="note">NOTE: Your local environment must have Java 17+ installed.</p>
 
-        <p>Apache Kafka can be started using KRaft or ZooKeeper. To get started with either configuration follow one of the sections below but not both.</p>
+        <p>Kafka can be run using local scripts and downloaded files or the docker image.</p>
 
-        <h5>Kafka with KRaft</h5>
-
-        <p>Kafka can be run using KRaft mode using local scripts and downloaded files or the docker image. Follow one of the sections below but not both to start the kafka server.</p>
-
-        <h6>Using downloaded files</h6>
+        <h5>Using downloaded files</h5>
 
         <p>Generate a Cluster UUID</p>
         <pre><code class="language-bash">$ KAFKA_CLUSTER_ID="$(bin/kafka-storage.sh random-uuid)"</code></pre>
@@ -63,7 +59,7 @@ $ cd kafka_{{scalaVersion}}-{{fullDotVersion}}</code></pre>
 
         <p>Once the Kafka server has successfully launched, you will have a basic Kafka environment running and ready to use.</p>
 
-        <h6>Using JVM Based Apache Kafka Docker Image</h6>
+        <h5>Using JVM Based Apache Kafka Docker Image</h5>
 
         <p> Get the Docker image:</p>
         <pre><code class="language-bash">$ docker pull apache/kafka:{{fullDotVersion}}</code></pre>
@@ -71,25 +67,13 @@ $ cd kafka_{{scalaVersion}}-{{fullDotVersion}}</code></pre>
         <p> Start the Kafka Docker container: </p>
         <pre><code class="language-bash">$ docker run -p 9092:9092 apache/kafka:{{fullDotVersion}}</code></pre>
 
-        <h6>Using GraalVM Based Native Apache Kafka Docker Image</h6>
+        <h5>Using GraalVM Based Native Apache Kafka Docker Image</h5>
 
         <p>Get the Docker image:</p>
         <pre><code class="language-bash">$ docker pull apache/kafka-native:{{fullDotVersion}}</code></pre>
 
         <p>Start the Kafka Docker container:</p>
         <pre><code class="language-bash">$ docker run -p 9092:9092 apache/kafka-native:{{fullDotVersion}}</code></pre>
-
-        <h5>Kafka with ZooKeeper</h5>
-
-        <p>Run the following commands in order to start all services in the correct order:</p>
-        <pre><code class="language-bash"># Start the ZooKeeper service
-$ bin/zookeeper-server-start.sh config/zookeeper.properties</code></pre>
-
-        <p>Open another terminal session and run:</p>
-        <pre><code class="language-bash"># Start the Kafka broker service
-$ bin/kafka-server-start.sh config/server.properties</code></pre>
-
-        <p>Once all services have successfully launched, you will have a basic Kafka environment running and ready to use.</p>
 
     </div>
 
@@ -320,9 +304,6 @@ wordCounts.toStream().to("output-topic", Produced.with(Serdes.String(), Serdes.L
             <li>
                 Stop the Kafka broker with <code>Ctrl-C</code>.
             </li>
-            <li>
-                Lastly, if the Kafka with ZooKeeper section was followed, stop the ZooKeeper server with <code>Ctrl-C</code>.
-            </li>
         </ol>
 
         <p>
@@ -330,7 +311,7 @@ wordCounts.toStream().to("output-topic", Produced.with(Serdes.String(), Serdes.L
             along the way, run the command:
         </p>
 
-        <pre><code class="language-bash">$ rm -rf /tmp/kafka-logs /tmp/zookeeper /tmp/kraft-combined-logs</code></pre>
+        <pre><code class="language-bash">$ rm -rf /tmp/kafka-logs /tmp/kraft-combined-logs</code></pre>
 
     </div>
 

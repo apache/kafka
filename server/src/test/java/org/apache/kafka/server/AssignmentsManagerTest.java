@@ -38,7 +38,9 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
+import org.apache.kafka.server.common.ControllerRequestCompletionHandler;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.server.common.NodeToControllerChannelManager;
 import org.apache.kafka.server.common.TopicIdPartition;
 import org.apache.kafka.test.TestUtils;
 
@@ -491,11 +493,11 @@ public class AssignmentsManagerTest {
                             setPartitions(Collections.singletonList(
                                 new AssignReplicasToDirsRequestData.PartitionData().
                                     setPartitionIndex(2))),
-                new AssignReplicasToDirsRequestData.TopicData().
-                    setTopicId(TOPIC_2).
-                    setPartitions(Collections.singletonList(
-                        new AssignReplicasToDirsRequestData.PartitionData().
-                            setPartitionIndex(5))))),
+                        new AssignReplicasToDirsRequestData.TopicData().
+                            setTopicId(TOPIC_2).
+                            setPartitions(Collections.singletonList(
+                                new AssignReplicasToDirsRequestData.PartitionData().
+                                    setPartitionIndex(5))))),
                 new AssignReplicasToDirsRequestData.DirectoryData().
                     setId(DIR_3).
                     setTopics(Collections.singletonList(

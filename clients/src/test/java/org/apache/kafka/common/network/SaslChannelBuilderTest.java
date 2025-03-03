@@ -138,9 +138,8 @@ public class SaslChannelBuilderTest {
      */
     @Test
     public void testClientChannelBuilderWithBrokerConfigs() throws Exception {
-        Map<String, Object> configs = new HashMap<>();
         CertStores certStores = new CertStores(false, "client", "localhost");
-        configs.putAll(certStores.getTrustingConfig(certStores));
+        Map<String, Object> configs = new HashMap<>(certStores.getTrustingConfig(certStores));
         configs.put(SaslConfigs.SASL_KERBEROS_SERVICE_NAME, "kafka");
         configs.putAll(new ConfigDef().withClientSaslSupport().parse(configs));
         for (Field field : BrokerSecurityConfigs.class.getFields()) {

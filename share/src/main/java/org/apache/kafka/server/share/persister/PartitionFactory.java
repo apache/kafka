@@ -26,17 +26,17 @@ import java.util.List;
  */
 public class PartitionFactory {
     public static final int DEFAULT_STATE_EPOCH = 0;
-    public static final int DEFAULT_START_OFFSET = 0;
+    public static final int UNINITIALIZED_START_OFFSET = -1;
     public static final short DEFAULT_ERROR_CODE = Errors.NONE.code();
     public static final int DEFAULT_LEADER_EPOCH = 0;
     public static final String DEFAULT_ERR_MESSAGE = Errors.NONE.message();
 
     public static PartitionIdData newPartitionIdData(int partition) {
-        return new PartitionData(partition, DEFAULT_STATE_EPOCH, DEFAULT_START_OFFSET, DEFAULT_ERROR_CODE, DEFAULT_ERR_MESSAGE, DEFAULT_LEADER_EPOCH, null);
+        return new PartitionData(partition, DEFAULT_STATE_EPOCH, UNINITIALIZED_START_OFFSET, DEFAULT_ERROR_CODE, DEFAULT_ERR_MESSAGE, DEFAULT_LEADER_EPOCH, null);
     }
 
     public static PartitionIdLeaderEpochData newPartitionIdLeaderEpochData(int partition, int leaderEpoch) {
-        return new PartitionData(partition, DEFAULT_STATE_EPOCH, DEFAULT_START_OFFSET, DEFAULT_ERROR_CODE, DEFAULT_ERR_MESSAGE, leaderEpoch, null);
+        return new PartitionData(partition, DEFAULT_STATE_EPOCH, UNINITIALIZED_START_OFFSET, DEFAULT_ERROR_CODE, DEFAULT_ERR_MESSAGE, leaderEpoch, null);
     }
 
     public static PartitionStateData newPartitionStateData(int partition, int stateEpoch, long startOffset) {
@@ -44,7 +44,7 @@ public class PartitionFactory {
     }
 
     public static PartitionErrorData newPartitionErrorData(int partition, short errorCode, String errorMessage) {
-        return new PartitionData(partition, DEFAULT_STATE_EPOCH, DEFAULT_START_OFFSET, errorCode, errorMessage, DEFAULT_LEADER_EPOCH, null);
+        return new PartitionData(partition, DEFAULT_STATE_EPOCH, UNINITIALIZED_START_OFFSET, errorCode, errorMessage, DEFAULT_LEADER_EPOCH, null);
     }
 
     public static PartitionStateErrorData newPartitionStateErrorData(int partition, int stateEpoch, long startOffset, short errorCode, String errorMessage) {

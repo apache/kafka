@@ -238,7 +238,6 @@ public class LogLoader {
                 segments,
                 newLogStartOffset,
                 recoveryOffsets.nextOffset,
-                config.recordVersion(),
                 time,
                 hadCleanShutdown,
                 logPrefix);
@@ -408,7 +407,6 @@ public class LogLoader {
                 segments,
                 logStartOffsetCheckpoint,
                 segment.baseOffset(),
-                config.recordVersion(),
                 time,
                 false,
                 logPrefix);

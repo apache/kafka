@@ -1031,7 +1031,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             // the same order that they were added. Note also that AbstractCoordinator prevents
             // multiple concurrent coordinator lookup requests.
             pendingAsyncCommits.incrementAndGet();
-            lookupCoordinator().addListener(new RequestFutureListener<Void>() {
+            lookupCoordinator().addListener(new RequestFutureListener<>() {
                 @Override
                 public void onSuccess(Void value) {
                     pendingAsyncCommits.decrementAndGet();
@@ -1059,7 +1059,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         RequestFuture<Void> future = sendOffsetCommitRequest(offsets);
         inFlightAsyncCommits.incrementAndGet();
         final OffsetCommitCallback cb = callback == null ? defaultOffsetCommitCallback : callback;
-        future.addListener(new RequestFutureListener<Void>() {
+        future.addListener(new RequestFutureListener<>() {
             @Override
             public void onSuccess(Void value) {
                 inFlightAsyncCommits.decrementAndGet();

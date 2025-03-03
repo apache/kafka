@@ -216,6 +216,14 @@ class BrokerMetadataPublisher(
           s"coordinator with local changes in $deltaName", t)
       }
 
+      try {
+        // Propagate the new image to the share coordinator.
+        shareCoordinator.foreach(coordinator => coordinator.onNewMetadataImage(newImage, delta))
+      } catch {
+        case t: Throwable => metadataPublishingFaultHandler.handleFault("Error updating share " +
+          s"coordinator with local changes in $deltaName", t)
+      }
+
       if (_firstPublish) {
         finishInitializingReplicaManager()
       }

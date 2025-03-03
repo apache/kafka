@@ -122,10 +122,9 @@ public class TopicCreationGroup {
         if (this == o) {
             return true;
         }
-        if (!(o instanceof TopicCreationGroup)) {
+        if (!(o instanceof TopicCreationGroup that)) {
             return false;
         }
-        TopicCreationGroup that = (TopicCreationGroup) o;
         return Objects.equals(name, that.name)
                 && numPartitions == that.numPartitions
                 && replicationFactor == that.replicationFactor

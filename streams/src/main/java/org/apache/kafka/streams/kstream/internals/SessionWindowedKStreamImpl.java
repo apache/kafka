@@ -32,6 +32,7 @@ import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.WindowedSerdes;
 import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
+import org.apache.kafka.streams.processor.internals.StoreFactory;
 import org.apache.kafka.streams.state.SessionStore;
 
 import java.util.Objects;
@@ -108,12 +109,14 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
         }
 
         final String aggregateName = new NamedInternal(named).orElseGenerateWithPrefix(builder, AGGREGATE_NAME);
+        final StoreFactory storeFactory = new SessionStoreMaterializer<>(materializedInternal, windows, emitStrategy);
+
         return aggregateBuilder.build(
             new NamedInternal(aggregateName),
-            new SessionStoreMaterializer<>(materializedInternal, windows, emitStrategy),
+            storeFactory,
             new KStreamSessionWindowAggregate<>(
                 windows,
-                materializedInternal.storeName(),
+                storeFactory,
                 emitStrategy,
                 aggregateBuilder.countInitializer,
                 aggregateBuilder.countAggregator,
@@ -158,12 +161,14 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
         }
 
         final String reduceName = new NamedInternal(named).orElseGenerateWithPrefix(builder, REDUCE_NAME);
+        final StoreFactory storeFactory = new SessionStoreMaterializer<>(materializedInternal, windows, emitStrategy);
+
         return aggregateBuilder.build(
             new NamedInternal(reduceName),
-            new SessionStoreMaterializer<>(materializedInternal, windows, emitStrategy),
+            storeFactory,
             new KStreamSessionWindowAggregate<>(
                 windows,
-                materializedInternal.storeName(),
+                storeFactory,
                 emitStrategy,
                 aggregateBuilder.reduceInitializer,
                 reduceAggregator,
@@ -216,13 +221,14 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
         }
 
         final String aggregateName = new NamedInternal(named).orElseGenerateWithPrefix(builder, AGGREGATE_NAME);
+        final StoreFactory storeFactory = new SessionStoreMaterializer<>(materializedInternal, windows, emitStrategy);
 
         return aggregateBuilder.build(
             new NamedInternal(aggregateName),
-            new SessionStoreMaterializer<>(materializedInternal, windows, emitStrategy),
+            storeFactory,
             new KStreamSessionWindowAggregate<>(
                 windows,
-                materializedInternal.storeName(),
+                storeFactory,
                 emitStrategy,
                 initializer,
                 aggregator,

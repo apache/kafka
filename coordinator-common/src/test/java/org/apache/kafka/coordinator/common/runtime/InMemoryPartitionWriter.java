@@ -37,10 +37,10 @@ import java.util.stream.StreamSupport;
  */
 public class InMemoryPartitionWriter implements PartitionWriter {
 
-    private class PartitionState {
-        private ReentrantLock lock = new ReentrantLock();
-        private List<Listener> listeners = new ArrayList<>();
-        private List<MemoryRecords> entries = new ArrayList<>();
+    private static class PartitionState {
+        private final ReentrantLock lock = new ReentrantLock();
+        private final List<Listener> listeners = new ArrayList<>();
+        private final List<MemoryRecords> entries = new ArrayList<>();
         private long endOffset = 0L;
         private long committedOffset = 0L;
     }
@@ -116,6 +116,14 @@ public class InMemoryPartitionWriter implements PartitionWriter {
     }
 
     @Override
+    public CompletableFuture<Void> deleteRecords(
+        TopicPartition tp,
+        long deleteBeforeOffset
+    ) throws KafkaException {
+        throw new RuntimeException("method not implemented");
+    }
+
+    @Override
     public CompletableFuture<VerificationGuard> maybeStartTransactionVerification(
         TopicPartition tp,
         String transactionalId,
@@ -134,9 +142,8 @@ public class InMemoryPartitionWriter implements PartitionWriter {
         state.lock.lock();
         try {
             state.committedOffset = offset;
-            state.listeners.forEach(listener -> {
-                listener.onHighWatermarkUpdated(tp, state.committedOffset);
-            });
+            state.listeners.forEach(listener ->
+                listener.onHighWatermarkUpdated(tp, state.committedOffset));
         } finally {
             state.lock.unlock();
         }
@@ -149,9 +156,8 @@ public class InMemoryPartitionWriter implements PartitionWriter {
         state.lock.lock();
         try {
             state.committedOffset = state.endOffset;
-            state.listeners.forEach(listener -> {
-                listener.onHighWatermarkUpdated(tp, state.committedOffset);
-            });
+            state.listeners.forEach(listener ->
+                listener.onHighWatermarkUpdated(tp, state.committedOffset));
         } finally {
             state.lock.unlock();
         }

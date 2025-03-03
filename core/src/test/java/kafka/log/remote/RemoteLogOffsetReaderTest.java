@@ -16,7 +16,6 @@
  */
 package kafka.log.remote;
 
-import kafka.log.AsyncOffsetReadFutureHolder;
 import kafka.utils.TestUtils;
 
 import org.apache.kafka.common.TopicPartition;
@@ -28,7 +27,9 @@ import org.apache.kafka.server.log.remote.storage.RemoteStorageException;
 import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile;
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache;
+import org.apache.kafka.storage.internals.log.AsyncOffsetReadFutureHolder;
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel;
+import org.apache.kafka.storage.internals.log.OffsetResultHolder;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 
 import org.junit.jupiter.api.AfterEach;
@@ -49,7 +50,6 @@ import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import scala.Option;
-import scala.util.Either;
 
 import static org.apache.kafka.common.record.FileRecords.TimestampAndOffset;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -81,23 +81,23 @@ class RemoteLogOffsetReaderTest {
 
     @Test
     public void testReadRemoteLog() throws Exception {
-        AsyncOffsetReadFutureHolder<Either<Exception, Option<TimestampAndOffset>>> asyncOffsetReadFutureHolder =
+        AsyncOffsetReadFutureHolder<OffsetResultHolder.FileRecordsOrError> asyncOffsetReadFutureHolder =
                 rlm.asyncOffsetRead(topicPartition, time.milliseconds(), 0L, cache, Option::empty);
         asyncOffsetReadFutureHolder.taskFuture().get(1, TimeUnit.SECONDS);
         assertTrue(asyncOffsetReadFutureHolder.taskFuture().isDone());
 
-        Either<Exception, Option<TimestampAndOffset>> result = asyncOffsetReadFutureHolder.taskFuture().get();
-        assertFalse(result.isLeft());
-        assertTrue(result.isRight());
-        assertEquals(Option.apply(new TimestampAndOffset(100L, 90L, Optional.of(3))),
-                result.right().get());
+        OffsetResultHolder.FileRecordsOrError result = asyncOffsetReadFutureHolder.taskFuture().get();
+        assertFalse(result.hasException());
+        assertTrue(result.hasTimestampAndOffset());
+        assertEquals(new TimestampAndOffset(100L, 90L, Optional.of(3)),
+                result.timestampAndOffset().get());
     }
 
     @Test
     public void testTaskQueueFullAndCancelTask() throws Exception {
         rlm.pause();
 
-        List<AsyncOffsetReadFutureHolder<Either<Exception, Option<TimestampAndOffset>>>> holderList = new ArrayList<>();
+        List<AsyncOffsetReadFutureHolder<OffsetResultHolder.FileRecordsOrError>> holderList = new ArrayList<>();
         // Task queue size is 1 and number of threads is 2, so it can accept at-most 3 items
         for (int i = 0; i < 3; i++) {
             holderList.add(rlm.asyncOffsetRead(topicPartition, time.milliseconds(), 0L, cache, Option::empty));
@@ -111,7 +111,7 @@ class RemoteLogOffsetReaderTest {
         holderList.get(2).jobFuture().cancel(false);
 
         rlm.resume();
-        for (AsyncOffsetReadFutureHolder<Either<Exception, Option<TimestampAndOffset>>> holder : holderList) {
+        for (AsyncOffsetReadFutureHolder<OffsetResultHolder.FileRecordsOrError> holder : holderList) {
             if (!holder.jobFuture().isCancelled()) {
                 holder.taskFuture().get(1, TimeUnit.SECONDS);
             }
@@ -133,13 +133,13 @@ class RemoteLogOffsetReaderTest {
                 throw exception;
             }
         }) {
-            AsyncOffsetReadFutureHolder<Either<Exception, Option<TimestampAndOffset>>> futureHolder
+            AsyncOffsetReadFutureHolder<OffsetResultHolder.FileRecordsOrError> futureHolder
                     = rlm.asyncOffsetRead(topicPartition, time.milliseconds(), 0L, cache, Option::empty);
             futureHolder.taskFuture().get(1, TimeUnit.SECONDS);
 
             assertTrue(futureHolder.taskFuture().isDone());
-            assertTrue(futureHolder.taskFuture().get().isLeft());
-            assertEquals(exception, futureHolder.taskFuture().get().left().get());
+            assertTrue(futureHolder.taskFuture().get().hasException());
+            assertEquals(exception, futureHolder.taskFuture().get().exception().get());
         }
     }
 

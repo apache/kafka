@@ -74,10 +74,9 @@ public class SnapshottableHashTableTest {
 
         @Override
         public boolean equals(Object o) {
-            if (!(o instanceof TestElement)) {
+            if (!(o instanceof TestElement other)) {
                 return false;
             }
-            TestElement other = (TestElement) o;
             return other.i == i;
         }
 

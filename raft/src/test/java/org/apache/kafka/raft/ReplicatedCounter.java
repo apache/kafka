@@ -58,7 +58,7 @@ public class ReplicatedCounter implements RaftClient.Listener<Integer> {
     }
 
     public synchronized void increment() {
-        if (!claimedEpoch.isPresent()) {
+        if (claimedEpoch.isEmpty()) {
             throw new KafkaException("Counter is not currently writable");
         }
 

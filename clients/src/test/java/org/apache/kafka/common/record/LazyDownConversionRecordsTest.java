@@ -86,7 +86,7 @@ public class LazyDownConversionRecordsTest {
      * than the number of bytes we get after conversion. This causes overflow message batch(es) to be appended towards the
      * end of the converted output.
      */
-    @ParameterizedTest(name = "compressionType={0}, toMagic={1}, overflow={2}")
+    @ParameterizedTest
     @MethodSource("parameters")
     public void testConversion(CompressionType compressionType, byte toMagic, boolean overflow) throws IOException {
         doTestConversion(compressionType, toMagic, overflow);

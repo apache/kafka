@@ -144,7 +144,7 @@ public class StreamsBuilder {
      * @return a {@link KStream} for the specified topics
      */
     public synchronized <K, V> KStream<K, V> stream(final Collection<String> topics) {
-        return stream(topics, Consumed.with(null, null, null, null));
+        return stream(topics, Consumed.with(null, null));
     }
 
     /**
@@ -288,7 +288,7 @@ public class StreamsBuilder {
      * @return a {@link KTable} for the specified topic
      */
     public synchronized <K, V> KTable<K, V> table(final String topic) {
-        return table(topic, new ConsumedInternal<>());
+        return table(topic, Consumed.with(null, null));
     }
 
     /**
@@ -384,7 +384,9 @@ public class StreamsBuilder {
         final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal =
             new MaterializedInternal<>(
                 Materialized.with(consumedInternal.keySerde(), consumedInternal.valueSerde()),
-                internalStreamsBuilder, topic + "-");
+                internalStreamsBuilder,
+                topic + "-",
+                true /* force materializing global tables */);
 
         return internalStreamsBuilder.globalTable(topic, consumedInternal, materializedInternal);
     }
@@ -517,7 +519,7 @@ public class StreamsBuilder {
      */
     public synchronized StreamsBuilder addStateStore(final StoreBuilder<?> builder) {
         Objects.requireNonNull(builder, "builder can't be null");
-        internalStreamsBuilder.addStateStore(new StoreBuilderWrapper(builder));
+        internalStreamsBuilder.addStateStore(StoreBuilderWrapper.wrapStoreBuilder(builder));
         return this;
     }
 
@@ -556,7 +558,7 @@ public class StreamsBuilder {
         Objects.requireNonNull(storeBuilder, "storeBuilder can't be null");
         Objects.requireNonNull(consumed, "consumed can't be null");
         internalStreamsBuilder.addGlobalStore(
-            new StoreBuilderWrapper(storeBuilder),
+            StoreBuilderWrapper.wrapStoreBuilder(storeBuilder),
             topic,
             new ConsumedInternal<>(consumed),
             stateUpdateSupplier,

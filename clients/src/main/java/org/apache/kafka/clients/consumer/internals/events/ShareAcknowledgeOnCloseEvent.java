@@ -23,7 +23,7 @@ import java.util.Map;
 
 public class ShareAcknowledgeOnCloseEvent extends CompletableApplicationEvent<Void> {
 
-    private Map<TopicIdPartition, Acknowledgements> acknowledgementsMap;
+    private final Map<TopicIdPartition, Acknowledgements> acknowledgementsMap;
 
     public ShareAcknowledgeOnCloseEvent(final Map<TopicIdPartition, Acknowledgements> acknowledgementsMap, final long deadlineMs) {
         super(Type.SHARE_ACKNOWLEDGE_ON_CLOSE, deadlineMs);

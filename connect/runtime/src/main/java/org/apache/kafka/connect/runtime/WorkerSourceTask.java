@@ -262,11 +262,11 @@ class WorkerSourceTask extends AbstractWorkerSourceTask {
             shouldFlush = offsetWriter.beginFlush(timeout - time.milliseconds(), TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
             log.warn("{} Interrupted while waiting for previous offset flush to complete, cancelling", this);
-            recordCommitFailure(time.milliseconds() - started, e);
+            recordCommitFailure(time.milliseconds() - started);
             return false;
         } catch (TimeoutException e) {
             log.warn("{} Timed out while waiting for previous offset flush to complete, cancelling", this);
-            recordCommitFailure(time.milliseconds() - started, e);
+            recordCommitFailure(time.milliseconds() - started);
             return false;
         }
         if (!shouldFlush) {
@@ -292,7 +292,7 @@ class WorkerSourceTask extends AbstractWorkerSourceTask {
         // any data
         if (flushFuture == null) {
             offsetWriter.cancelFlush();
-            recordCommitFailure(time.milliseconds() - started, null);
+            recordCommitFailure(time.milliseconds() - started);
             return false;
         }
         try {
@@ -304,17 +304,17 @@ class WorkerSourceTask extends AbstractWorkerSourceTask {
         } catch (InterruptedException e) {
             log.warn("{} Flush of offsets interrupted, cancelling", this);
             offsetWriter.cancelFlush();
-            recordCommitFailure(time.milliseconds() - started, e);
+            recordCommitFailure(time.milliseconds() - started);
             return false;
         } catch (ExecutionException e) {
             log.error("{} Flush of offsets threw an unexpected exception: ", this, e);
             offsetWriter.cancelFlush();
-            recordCommitFailure(time.milliseconds() - started, e);
+            recordCommitFailure(time.milliseconds() - started);
             return false;
         } catch (TimeoutException e) {
             log.error("{} Timed out waiting to flush offsets to storage; will try again on next flush interval with latest offsets", this);
             offsetWriter.cancelFlush();
-            recordCommitFailure(time.milliseconds() - started, null);
+            recordCommitFailure(time.milliseconds() - started);
             return false;
         }
 

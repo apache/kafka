@@ -165,7 +165,7 @@ public class SnapshottableCoordinator<S extends CoordinatorShard<U>, U> implemen
 
         if (offset > lastWrittenOffset) {
             throw new IllegalStateException("New committed offset " + offset + " of " + tp +
-                "must be less than or equal to " + lastWrittenOffset + ".");
+                " must be less than or equal to " + lastWrittenOffset + ".");
         }
 
         lastCommittedOffset = offset;
