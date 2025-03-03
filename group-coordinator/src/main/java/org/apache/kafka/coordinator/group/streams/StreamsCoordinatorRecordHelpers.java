@@ -40,7 +40,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * This class contains helper methods to create records stored in the __consumer_offsets topic.
@@ -72,7 +71,7 @@ public class StreamsCoordinatorRecordHelpers {
                         new StreamsGroupMemberMetadataValue.KeyValue()
                             .setKey(e.getKey())
                             .setValue(e.getValue())
-                    ).sorted(Comparator.comparing(StreamsGroupMemberMetadataValue.KeyValue::key)).collect(Collectors.toList())),
+                    ).sorted(Comparator.comparing(StreamsGroupMemberMetadataValue.KeyValue::key)).toList()),
                 (short) 0
             )
         );
@@ -401,12 +400,12 @@ public class StreamsCoordinatorRecordHelpers {
             List<StreamsGroupTopologyValue.TopicInfo> repartitionSourceTopics =
                 subtopology.repartitionSourceTopics().stream()
                     .map(StreamsCoordinatorRecordHelpers::convertToTopicInfo)
-                    .collect(Collectors.toList());
+                    .toList();
 
             List<StreamsGroupTopologyValue.TopicInfo> stateChangelogTopics =
                 subtopology.stateChangelogTopics().stream()
                     .map(StreamsCoordinatorRecordHelpers::convertToTopicInfo)
-                    .collect(Collectors.toList());
+                    .toList();
 
             List<StreamsGroupTopologyValue.CopartitionGroup> copartitionGroups =
                 subtopology.copartitionGroups().stream()
@@ -415,7 +414,7 @@ public class StreamsCoordinatorRecordHelpers {
                         .setSourceTopicRegex(copartitionGroup.sourceTopicRegex())
                         .setRepartitionSourceTopics(copartitionGroup.repartitionSourceTopics())
                     )
-                    .collect(Collectors.toList());
+                    .toList();
 
             value.subtopologies().add(
                 new StreamsGroupTopologyValue.Subtopology()
@@ -434,7 +433,7 @@ public class StreamsCoordinatorRecordHelpers {
     private static StreamsGroupTopologyValue.TopicInfo convertToTopicInfo(StreamsGroupHeartbeatRequestData.TopicInfo topicInfo) {
         List<StreamsGroupTopologyValue.TopicConfig> topicConfigs = topicInfo.topicConfigs() != null ? topicInfo.topicConfigs().stream()
             .map(config -> new StreamsGroupTopologyValue.TopicConfig().setKey(config.key()).setValue(config.value()))
-            .collect(Collectors.toList()) : null;
+            .toList() : null;
         return new StreamsGroupTopologyValue.TopicInfo()
             .setName(topicInfo.name())
             .setTopicConfigs(topicConfigs)
