@@ -479,7 +479,7 @@ public class GroupCoordinatorRecordHelpers {
                     .setGeneration(0)
                     .setLeader(null)
                     .setCurrentStateTimestamp(group.currentStateTimestampOrDefault())
-                    .setMembers(Collections.emptyList()),
+                    .setMembers(List.of()),
                 GROUP_METADATA_VALUE_VERSION
             )
         );

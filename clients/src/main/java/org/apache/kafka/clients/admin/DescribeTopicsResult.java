@@ -20,7 +20,6 @@ package org.apache.kafka.clients.admin;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicCollection;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Collection;
 import java.util.HashMap;
@@ -29,10 +28,7 @@ import java.util.concurrent.ExecutionException;
 
 /**
  * The result of the {@link KafkaAdminClient#describeTopics(Collection)} call.
- *
- * The API of this class is evolving, see {@link Admin} for details.
  */
-@InterfaceStability.Evolving
 public class DescribeTopicsResult {
     private final Map<Uuid, KafkaFuture<TopicDescription>> topicIdFutures;
     private final Map<String, KafkaFuture<TopicDescription>> nameFutures;

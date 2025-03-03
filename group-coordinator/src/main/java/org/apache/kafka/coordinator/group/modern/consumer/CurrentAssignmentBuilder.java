@@ -22,7 +22,6 @@ import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.coordinator.group.modern.Assignment;
 import org.apache.kafka.coordinator.group.modern.MemberState;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -204,7 +203,7 @@ public class CurrentAssignmentBuilder {
 
         for (ConsumerGroupHeartbeatRequestData.TopicPartitions topicPartitions : ownedTopicPartitions) {
             Set<Integer> partitionsPendingRevocation =
-                assignment.getOrDefault(topicPartitions.topicId(), Collections.emptySet());
+                assignment.getOrDefault(topicPartitions.topicId(), Set.of());
 
             for (Integer partitionId : topicPartitions.partitions()) {
                 if (partitionsPendingRevocation.contains(partitionId)) {
@@ -238,9 +237,9 @@ public class CurrentAssignmentBuilder {
 
         for (Uuid topicId : allTopicIds) {
             Set<Integer> target = targetAssignment.partitions()
-                .getOrDefault(topicId, Collections.emptySet());
+                .getOrDefault(topicId, Set.of());
             Set<Integer> currentAssignedPartitions = memberAssignedPartitions
-                .getOrDefault(topicId, Collections.emptySet());
+                .getOrDefault(topicId, Set.of());
 
             // New Assigned Partitions = Previous Assigned Partitions ∩ Target
             Set<Integer> assignedPartitions = new HashSet<>(currentAssignedPartitions);
@@ -295,7 +294,7 @@ public class CurrentAssignmentBuilder {
                 .setState(newState)
                 .updateMemberEpoch(targetAssignmentEpoch)
                 .setAssignedPartitions(newAssignedPartitions)
-                .setPartitionsPendingRevocation(Collections.emptyMap())
+                .setPartitionsPendingRevocation(Map.of())
                 .build();
         } else if (hasUnreleasedPartitions) {
             // If there are no partitions to be revoked nor to be assigned but some
@@ -305,7 +304,7 @@ public class CurrentAssignmentBuilder {
                 .setState(MemberState.UNRELEASED_PARTITIONS)
                 .updateMemberEpoch(targetAssignmentEpoch)
                 .setAssignedPartitions(newAssignedPartitions)
-                .setPartitionsPendingRevocation(Collections.emptyMap())
+                .setPartitionsPendingRevocation(Map.of())
                 .build();
         } else {
             // Otherwise, the member transitions to the target epoch and to the
@@ -314,7 +313,7 @@ public class CurrentAssignmentBuilder {
                 .setState(MemberState.STABLE)
                 .updateMemberEpoch(targetAssignmentEpoch)
                 .setAssignedPartitions(newAssignedPartitions)
-                .setPartitionsPendingRevocation(Collections.emptyMap())
+                .setPartitionsPendingRevocation(Map.of())
                 .build();
         }
     }

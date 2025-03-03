@@ -103,7 +103,6 @@ import org.mockito.Mockito;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -152,7 +151,7 @@ public class GroupCoordinatorShardTest {
         RequestContext context = requestContext(ApiKeys.CONSUMER_GROUP_HEARTBEAT);
         ConsumerGroupHeartbeatRequestData request = new ConsumerGroupHeartbeatRequestData();
         CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> result = new CoordinatorResult<>(
-            Collections.emptyList(),
+            List.of(),
             new ConsumerGroupHeartbeatResponseData()
         );
 
@@ -184,8 +183,8 @@ public class GroupCoordinatorShardTest {
         RequestContext context = requestContext(ApiKeys.STREAMS_GROUP_HEARTBEAT);
         StreamsGroupHeartbeatRequestData request = new StreamsGroupHeartbeatRequestData();
         CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result = new CoordinatorResult<>(
-            Collections.emptyList(),
-            new StreamsGroupHeartbeatResult(new StreamsGroupHeartbeatResponseData(), Collections.emptyMap())
+            List.of(),
+            new StreamsGroupHeartbeatResult(new StreamsGroupHeartbeatResponseData(), Map.of())
         );
 
         when(groupMetadataManager.streamsGroupHeartbeat(
@@ -216,7 +215,7 @@ public class GroupCoordinatorShardTest {
         RequestContext context = requestContext(ApiKeys.OFFSET_COMMIT);
         OffsetCommitRequestData request = new OffsetCommitRequestData();
         CoordinatorResult<OffsetCommitResponseData, CoordinatorRecord> result = new CoordinatorResult<>(
-            Collections.emptyList(),
+            List.of(),
             new OffsetCommitResponseData()
         );
 
@@ -248,7 +247,7 @@ public class GroupCoordinatorShardTest {
         RequestContext context = requestContext(ApiKeys.TXN_OFFSET_COMMIT);
         TxnOffsetCommitRequestData request = new TxnOffsetCommitRequestData();
         CoordinatorResult<TxnOffsetCommitResponseData, CoordinatorRecord> result = new CoordinatorResult<>(
-            Collections.emptyList(),
+            List.of(),
             new TxnOffsetCommitResponseData()
         );
 
@@ -1441,7 +1440,7 @@ public class GroupCoordinatorShardTest {
                 records.add(offsetCommitTombstone);
                 return true;
             });
-        when(offsetMetadataManager.cleanupExpiredOffsets("other-group-id", Collections.emptyList())).thenReturn(false);
+        when(offsetMetadataManager.cleanupExpiredOffsets("other-group-id", List.of())).thenReturn(false);
         doAnswer(invocation -> {
             List<CoordinatorRecord> records = recordsCapture.getValue();
             records.add(groupMetadataTombstone);
@@ -1552,18 +1551,18 @@ public class GroupCoordinatorShardTest {
             metricsShard
         );
 
-        List<CoordinatorRecord> records = Collections.singletonList(GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord(
+        List<CoordinatorRecord> records = List.of(GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord(
             "group",
             "foo",
             0
         ));
 
         when(offsetMetadataManager.onPartitionsDeleted(
-            Collections.singletonList(new TopicPartition("foo", 0))
+            List.of(new TopicPartition("foo", 0))
         )).thenReturn(records);
 
         CoordinatorResult<Void, CoordinatorRecord> result = coordinator.onPartitionsDeleted(
-            Collections.singletonList(new TopicPartition("foo", 0))
+            List.of(new TopicPartition("foo", 0))
         );
 
         assertEquals(records, result.records());
@@ -1615,7 +1614,7 @@ public class GroupCoordinatorShardTest {
             List.of(),
             Map.entry(
                 new ShareGroupHeartbeatResponseData(),
-                Optional.ofNullable(null)
+                Optional.empty()
             )
         );
 
