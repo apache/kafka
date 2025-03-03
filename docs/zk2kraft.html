@@ -232,6 +232,16 @@
             </ul>
         </li>
     </ul>
+    <h2 class="anchor-heading">Behavioral Change Reference</h2>
+    <p>
+        This document catalogs the functional and operational differences between ZooKeeper mode and KRaft mode.
+    </p>
+    <ul>
+        <li>
+            <strong>Configuration Value Size Limitation</strong>: KRaft mode restricts configuration values to a maximum size of <code>Short.MAX_VALUE</code>,
+            which prevents using the append operation to create larger configuration values.
+        </li>
+    </ul>
 </div>
 <!--#include virtual="../includes/_footer.htm" -->
 </div>

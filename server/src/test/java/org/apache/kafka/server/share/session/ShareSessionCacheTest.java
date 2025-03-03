@@ -24,8 +24,8 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.Iterator;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -61,7 +61,7 @@ public class ShareSessionCacheTest {
         assertEquals(0, cache.totalPartitions());
         ShareSessionKey key1 = cache.maybeCreateSession("grp", Uuid.randomUuid(), 0, mockedSharePartitionMap(2));
         assertNotNull(key1);
-        assertShareCacheContains(cache, new ArrayList<>(Collections.singletonList(key1)));
+        assertShareCacheContains(cache, new ArrayList<>(List.of(key1)));
         ShareSession session1 = cache.get(key1);
         assertEquals(2, session1.size());
         assertEquals(2, cache.totalPartitions());
@@ -82,7 +82,7 @@ public class ShareSessionCacheTest {
         assertEquals(6, cache.totalPartitions());
         assertEquals(2, cache.size());
         cache.remove(key1);
-        assertShareCacheContains(cache, new ArrayList<>(Collections.singletonList(key2)));
+        assertShareCacheContains(cache, new ArrayList<>(List.of(key2)));
         assertEquals(1, cache.size());
         assertEquals(4, cache.totalPartitions());
 

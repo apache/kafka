@@ -35,6 +35,7 @@ import java.util.Map;
  * - {@link Errors#INVALID_REQUEST}
  * - {@link Errors#UNKNOWN_MEMBER_ID}
  * - {@link Errors#GROUP_MAX_SIZE_REACHED}
+ * - {@link Errors#TOPIC_AUTHORIZATION_FAILED}
  */
 public class ShareGroupHeartbeatResponse extends AbstractResponse {
     private final ShareGroupHeartbeatResponseData data;
