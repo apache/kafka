@@ -1626,6 +1626,11 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val existingTopic = new ConfigResource(ConfigResource.Type.TOPIC, topic)
     client.describeConfigs(Collections.singletonList(existingTopic)).values.get(existingTopic).get()
 
+    val defaultTopic = new ConfigResource(ConfigResource.Type.TOPIC, "")
+    val describeResult0 = client.describeConfigs(Collections.singletonList(defaultTopic))
+
+    assertTrue(assertThrows(classOf[ExecutionException], () => describeResult0.values.get(defaultTopic).get).getCause.isInstanceOf[InvalidTopicException])
+
     val nonExistentTopic = new ConfigResource(ConfigResource.Type.TOPIC, "unknown")
     val describeResult1 = client.describeConfigs(Collections.singletonList(nonExistentTopic))
 
