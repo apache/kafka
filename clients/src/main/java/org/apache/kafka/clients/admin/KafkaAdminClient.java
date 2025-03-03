@@ -862,7 +862,6 @@ public class KafkaAdminClient extends AdminClient {
         public Node provide() {
             if (metadataManager.isReady()) {
                 if (metadataManager.usingBootstrapControllers()) {
-                    System.err.println(metadataManager.controller().id());
                     return metadataManager.controller();
                 } else {
                     // This may return null if all nodes are busy.
