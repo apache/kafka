@@ -846,7 +846,7 @@ public class RequestResponseTest {
     }
 
     @Test
-    public void testUnregisterBrokerResponseWithNotUnknownServerError() {
+    public void testUnregisterBrokerResponseWithUnknownServerError() {
         UnregisterBrokerRequest request = new UnregisterBrokerRequest.Builder(
             new UnregisterBrokerRequestData()
         ).build((short) 0);
