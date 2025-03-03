@@ -22,6 +22,7 @@ import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.protocol.types.Type;
+import org.apache.kafka.common.utils.ByteUtils;
 
 import org.junit.jupiter.api.Test;
 
@@ -35,7 +36,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 public class EndTransactionMarkerTest {
 
     // Old hard-coded schema, used to validate old hard-coded schema format is exactly the same as new auto generated protocol format
-    private Schema v0Schema = new Schema(
+    private final Schema v0Schema = new Schema(
             new Field("version", Type.INT16),
             new Field("coordinator_epoch", Type.INT32));
 
@@ -93,6 +94,20 @@ public class EndTransactionMarkerTest {
                 EndTransactionMarker deserializedMarker = EndTransactionMarker.deserializeValue(type, buffer);
                 assertEquals(marker, deserializedMarker);
             }
+        }
+    }
+
+    @Test
+    public void testEndTxnMarkerValueSize() {
+        for (ControlRecordType type: VALID_CONTROLLER_RECORD_TYPE) {
+            EndTransactionMarker marker = new EndTransactionMarker(type, 1);
+            int offsetSize = ByteUtils.sizeOfVarint(0);
+            int timestampSize = ByteUtils.sizeOfVarlong(0);
+            int keySize = ControlRecordType.CURRENT_CONTROL_RECORD_KEY_SIZE;
+            int valueSize = marker.serializeValue().remaining();
+            int headerSize = ByteUtils.sizeOfVarint(Record.EMPTY_HEADERS.length);
+            int totalSize = 1 + offsetSize + timestampSize + ByteUtils.sizeOfVarint(keySize) + keySize + ByteUtils.sizeOfVarint(valueSize) + valueSize + headerSize;
+            assertEquals(ByteUtils.sizeOfVarint(totalSize) +  totalSize, marker.endTxnMarkerValueSize());
         }
     }
 
