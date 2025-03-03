@@ -57,7 +57,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
@@ -429,7 +428,7 @@ public class ClassicGroupTest {
 
         group.initNextGeneration();
 
-        assertEquals(Optional.of(Collections.emptySet()), group.subscribedTopics());
+        assertEquals(Optional.of(Set.of()), group.subscribedTopics());
 
         protocols = new JoinGroupRequestProtocolCollection();
         protocols.add(new JoinGroupRequestProtocol()
@@ -852,7 +851,7 @@ public class ClassicGroupTest {
         assertTrue(group.addPendingSyncMember(memberId));
         assertEquals(Set.of(memberId), group.allPendingSyncMembers());
         group.removePendingSyncMember(memberId);
-        assertEquals(Collections.emptySet(), group.allPendingSyncMembers());
+        assertEquals(Set.of(), group.allPendingSyncMembers());
     }
 
     @Test
@@ -877,7 +876,7 @@ public class ClassicGroupTest {
         assertTrue(group.addPendingSyncMember(memberId));
         assertEquals(Set.of(memberId), group.allPendingSyncMembers());
         group.remove(memberId);
-        assertEquals(Collections.emptySet(), group.allPendingSyncMembers());
+        assertEquals(Set.of(), group.allPendingSyncMembers());
     }
 
     @Test
@@ -903,7 +902,7 @@ public class ClassicGroupTest {
         assertTrue(group.addPendingSyncMember(memberId));
         assertEquals(Set.of(memberId), group.allPendingSyncMembers());
         group.initNextGeneration();
-        assertEquals(Collections.emptySet(), group.allPendingSyncMembers());
+        assertEquals(Set.of(), group.allPendingSyncMembers());
     }
 
     @Test
@@ -1251,7 +1250,7 @@ public class ClassicGroupTest {
         group.transitionTo(PREPARING_REBALANCE);
         group.initNextGeneration();
         assertTrue(group.isInState(EMPTY));
-        assertEquals(Optional.of(Collections.emptySet()), group.computeSubscribedTopics());
+        assertEquals(Optional.of(Set.of()), group.computeSubscribedTopics());
         assertTrue(group.usesConsumerGroupProtocol());
         assertFalse(group.isSubscribedToTopic("topic"));
 
@@ -1458,7 +1457,7 @@ public class ClassicGroupTest {
 
         ClassicGroup classicGroup = ClassicGroup.fromConsumerGroup(
             consumerGroup,
-            Collections.emptySet(),
+            Set.of(),
             newMember2,
             logContext,
             time,
