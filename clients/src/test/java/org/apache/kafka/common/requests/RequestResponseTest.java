@@ -846,14 +846,20 @@ public class RequestResponseTest {
     }
 
     @Test
-    public void UnregisterBrokerResponseWithNotUnsupportedError() {
-        UnregisterBrokerRequest request = new UnregisterBrokerRequest.Builder(new UnregisterBrokerRequestData())
-                .build((short) 0);
-        UnregisterBrokerResponse response = request.getErrorResponse(0, Errors.INVALID_REQUEST.exception());
+    public void testUnregisterBrokerResponseWithNotUnknownServerError() {
+        UnregisterBrokerRequest request = new UnregisterBrokerRequest.Builder(
+            new UnregisterBrokerRequestData()
+        ).build((short) 0);
+        String customerErrorMessage = "customer error message";
+        
+        UnregisterBrokerResponse response = request.getErrorResponse(
+            0, 
+            new RuntimeException(customerErrorMessage)
+        );
 
-        assertEquals((short) 0, response.throttleTimeMs());
-        assertEquals(Errors.INVALID_REQUEST.code(), response.data().errorCode());
-        assertEquals(Errors.INVALID_REQUEST.message(), response.data().errorMessage());
+        assertEquals(0, response.throttleTimeMs());
+        assertEquals(Errors.UNKNOWN_SERVER_ERROR.code(), response.data().errorCode());
+        assertEquals(customerErrorMessage, response.data().errorMessage());
     }
 
     private ApiVersionsResponse defaultApiVersionsResponse() {
