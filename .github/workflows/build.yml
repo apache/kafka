@@ -168,23 +168,21 @@ jobs:
           fi
 
   test:
-    needs: [configure, load-catalog]
+    needs: [configure, validate, load-catalog]
     if: ${{ ! needs.configure.outputs.is-draft }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         # If we change these, make sure to adjust ci-complete.yml
-        java: [ 17, 23 ]
+        java: [ 23, 17 ]
         run-flaky: [ true, false ]
         run-new: [ true, false ]
-        foo: [1, 2, 3, 4]
         exclude:
           - run-flaky: true
             run-new: true
-
     env:
-      job-variation: ${{ matrix.java }}-${{ matrix.foo }}-${{ matrix.run-flaky == true && 'flaky' || 'noflaky' }}-${{ matrix.run-new == true && 'new' || 'nonew' }}
+      job-variation: ${{ matrix.java }}-${{ matrix.run-flaky == true && 'flaky' || 'noflaky' }}-${{ matrix.run-new == true && 'new' || 'nonew' }}
     name: JUnit tests Java ${{ matrix.java }}${{ matrix.run-flaky == true && ' (flaky)' || '' }}${{ matrix.run-new == true && ' (new)' || '' }}
     steps:
       - name: Checkout code
@@ -197,8 +195,8 @@ jobs:
         uses: ./.github/actions/setup-gradle
         with:
           java-version: ${{ matrix.java }}
-          gradle-cache-read-only: false
-          gradle-cache-write-only: false
+          gradle-cache-read-only: ${{ !inputs.is-trunk }}
+          gradle-cache-write-only: ${{ inputs.is-trunk }}
           develocity-access-key: ${{ secrets.DEVELOCITY_ACCESS_KEY }}
 
       # If the load-catalog job failed, we won't be able to download the artifact. Since we don't want this to fail
@@ -215,7 +213,7 @@ jobs:
         uses: ./.github/actions/run-gradle
         with:
           test-task: test
-          timeout-minutes: 30  # 3 hours
+          timeout-minutes: 180  # 3 hours
           test-catalog-path: ${{ steps.load-test-catalog.outputs.download-path }}/combined-test-catalog.txt
           build-scan-artifact-name: build-scan-${{ env.job-variation }}
           run-new-tests: ${{ matrix.run-new }}

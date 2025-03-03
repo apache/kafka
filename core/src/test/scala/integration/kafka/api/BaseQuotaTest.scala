@@ -150,7 +150,7 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
     quotaTestClients.overrideQuotas(Long.MaxValue, Long.MaxValue, Long.MaxValue.toDouble)
     quotaTestClients.waitForQuotaUpdate(Long.MaxValue, Long.MaxValue, Long.MaxValue.toDouble)
 
-    val numRecords = 2000
+    val numRecords = 1000
     assertEquals(numRecords, quotaTestClients.produceUntilThrottled(numRecords))
     quotaTestClients.verifyProduceThrottle(expectThrottle = false)
     assertEquals(numRecords, quotaTestClients.consumeUntilThrottled(numRecords))
