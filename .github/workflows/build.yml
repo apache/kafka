@@ -261,7 +261,7 @@ jobs:
           path: |
             heap-dumps/*
           compression-level: 9
-          retention-days: 2
+          retention-days: 5
           if-no-files-found: ignore
 
       - name: Parse JUnit tests
