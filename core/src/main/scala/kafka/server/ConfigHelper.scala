@@ -203,14 +203,14 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
 
   private def createClientMetricsConfigEntry(clientMetricsConfig: ClientMetricsConfigs, clientMetricsProps: Properties, includeSynonyms: Boolean, includeDocumentation: Boolean)
                                             (name: String, value: Any): DescribeConfigsResponseData.DescribeConfigsResourceResult = {
-    val configEntryType = ClientMetricsConfigs.configType(name).asScala
+    val configEntryType = ClientMetricsConfigs.configType(name).toScala
     val valueAsString = ConfigDef.convertToString(value, configEntryType.orNull)
     val allSynonyms = {
       if (!clientMetricsProps.containsKey(name)) {
-        Nil
+        List.empty
       } else {
-        new DescribeConfigsResponseData.DescribeConfigsSynonym().setName(name).setValue(valueAsString)
-          .setSource(ConfigSource.CLIENT_METRICS_CONFIG.id) :: Nil
+        List(new DescribeConfigsResponseData.DescribeConfigsSynonym().setName(name).setValue(valueAsString)
+          .setSource(ConfigSource.CLIENT_METRICS_CONFIG.id))
       }
     }
     val source = if (allSynonyms.isEmpty) ConfigSource.DEFAULT_CONFIG.id else allSynonyms.head.source

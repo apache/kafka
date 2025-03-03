@@ -23,9 +23,7 @@ import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 
-import java.util.Arrays;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -86,26 +84,30 @@ public class ClientMetricsConfigs extends AbstractConfig {
     // '*' in client-metrics resource configs indicates that all the metrics are subscribed.
     public static final String ALL_SUBSCRIBED_METRICS = "*";
 
+    public static final List<String> METRICS_DEFAULT = List.of();
+
     public static final int INTERVAL_MS_DEFAULT = 5 * 60 * 1000; // 5 minutes
     private static final int MIN_INTERVAL_MS = 100; // 100ms
     private static final int MAX_INTERVAL_MS = 3600000; // 1 hour
 
-    private static final Set<String> ALLOWED_MATCH_PARAMS = new HashSet<>(Arrays.asList(
+    public static final List<String> MATCH_DEFAULT = List.of();
+
+    private static final Set<String> ALLOWED_MATCH_PARAMS = Set.of(
         CLIENT_INSTANCE_ID,
         CLIENT_ID,
         CLIENT_SOFTWARE_NAME,
         CLIENT_SOFTWARE_VERSION,
         CLIENT_SOURCE_ADDRESS,
         CLIENT_SOURCE_PORT
-    ));
+    );
 
     private static final ConfigDef CONFIG = new ConfigDef()
-        .define(METRICS_CONFIG, Type.LIST, List.of(), Importance.MEDIUM, "Telemetry metric name prefix list")
+        .define(METRICS_CONFIG, Type.LIST, METRICS_DEFAULT, Importance.MEDIUM, "Telemetry metric name prefix list")
         .define(INTERVAL_MS_CONFIG, Type.INT, INTERVAL_MS_DEFAULT, Importance.MEDIUM, "Metrics push interval in milliseconds")
-        .define(MATCH_CONFIG, Type.LIST, List.of(), Importance.MEDIUM, "Client match criteria");
+        .define(MATCH_CONFIG, Type.LIST, MATCH_DEFAULT, Importance.MEDIUM, "Client match criteria");
 
     public ClientMetricsConfigs(Properties props) {
-        super(CONFIG, props);
+        super(CONFIG, props, false);
     }
 
     public static ConfigDef configDef() {
@@ -118,9 +120,9 @@ public class ClientMetricsConfigs extends AbstractConfig {
 
     public static Map<String, Object> defaultConfigsMap() {
         Map<String, Object> clientMetricsProps = new HashMap<>();
-        clientMetricsProps.put(METRICS_CONFIG, List.of());
+        clientMetricsProps.put(METRICS_CONFIG, METRICS_DEFAULT);
         clientMetricsProps.put(INTERVAL_MS_CONFIG, INTERVAL_MS_DEFAULT);
-        clientMetricsProps.put(MATCH_CONFIG, List.of());
+        clientMetricsProps.put(MATCH_CONFIG, MATCH_DEFAULT);
         return clientMetricsProps;
     }
 
