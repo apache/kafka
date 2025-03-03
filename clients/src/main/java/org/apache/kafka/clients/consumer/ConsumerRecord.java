@@ -28,10 +28,11 @@ import java.util.Optional;
  * A key/value pair to be received from Kafka. This also consists of a topic name and
  * a partition number from which the record is being received, an offset that points
  * to the record in a Kafka partition, and a timestamp as marked by the corresponding ProducerRecord.
+ * <p>
  *
  * <h3>Thread Safety</h3>
- * This class is <b>not thread-safe</b>. Concurrent access to a {@code ConsumerRecord} instance by multiple threads
- * may result in undefined behavior, including but not limited to the following:
+ * This consumer record is <b>not thread-safe</b>. Concurrent access to a {@code ConsumerRecord} instance by
+ * multiple threads may result in undefined behavior, including but not limited to the following:
  * <ul>
  *   <li>Throwing {@link ConcurrentModificationException} (e.g., when concurrently modifying {@link #headers()}).</li>
  *   <li>Data corruption or logical errors (e.g., inconsistent state of {@code headers} or {@code value}).</li>
@@ -44,10 +45,7 @@ import java.util.Optional;
  * states. It is the responsibility of the user to ensure that multi-threaded access is properly synchronized.
  *
  * <p>
- * For a thread-safe processing model, consider using a single consumer per thread (one consumer per
- * thread model) or decoupling consumption and processing into separate threads, where the consumer thread
- * hands off records to a thread pool for processing. Refer to the {@link KafkaConsumer} documentation for
- * more details on multi-threaded consumption and processing strategies.
+ * Refer to the {@link KafkaConsumer} documentation for more details on multi-threaded consumption and processing strategies.
  */
 public class ConsumerRecord<K, V> {
     public static final long NO_TIMESTAMP = RecordBatch.NO_TIMESTAMP;
