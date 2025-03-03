@@ -31,7 +31,7 @@ public class QuorumConfigTest {
     public void testLegalConfig() {
         verifyLegalConfig(Map.of(QuorumConfig.QUORUM_ELECTION_TIMEOUT_MS_CONFIG, "0"));
         verifyLegalConfig(Map.of(QuorumConfig.QUORUM_FETCH_TIMEOUT_MS_CONFIG, "0"));
-        verifyLegalConfig(Map.of(QuorumConfig.QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG, "-1"));
+        verifyLegalConfig(Map.of(QuorumConfig.QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG, "0"));
         verifyLegalConfig(Map.of(QuorumConfig.QUORUM_LINGER_MS_CONFIG, "-1"));
         verifyLegalConfig(Map.of(QuorumConfig.QUORUM_REQUEST_TIMEOUT_MS_CONFIG, "-1"));
         verifyLegalConfig(Map.of(QuorumConfig.QUORUM_RETRY_BACKOFF_MS_CONFIG, "-1"));
