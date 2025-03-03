@@ -567,7 +567,7 @@ public class NetworkClient implements KafkaClient {
                 if (!canSendRequest(nodeId, now))
                     throw new IllegalStateException("Attempt to send a request to node " + nodeId + " which is not ready.");
             } else {
-                if (!canSendRequest(nodeId, now) && !canSendMore(nodeId))
+                if (!canSendRequest(nodeId, now) || !canSendMore(nodeId))
                     throw new IllegalStateException("Attempt to send a request to node " + nodeId + " which is not ready.");
             }
         }
@@ -765,6 +765,7 @@ public class NetworkClient implements KafkaClient {
      *
      * @return The node with the fewest in-flight requests.
      */
+    @SuppressWarnings("CyclomaticComplexity")
     @Override
     public LeastLoadedNode leastLoadedNode(long now) {
         List<Node> nodes = this.metadataUpdater.fetchNodes();
