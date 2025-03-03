@@ -32,7 +32,7 @@ import java.util.stream.Collectors;
  * An immutable assignment for a member.
  */
 public class Assignment implements MemberAssignment {
-    public static final Assignment EMPTY = new Assignment(Collections.emptyMap());
+    public static final Assignment EMPTY = new Assignment(Map.of());
 
     /**
      * The partitions assigned to the member.

@@ -113,7 +113,6 @@ import org.mockito.ArgumentMatchers;
 import java.net.InetAddress;
 import java.time.Duration;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalInt;
@@ -289,7 +288,7 @@ public class GroupCoordinatorServiceTest {
         assertEquals(
             new StreamsGroupHeartbeatResult(
                 new StreamsGroupHeartbeatResponseData().setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code()),
-                Collections.emptyMap()
+                Map.of()
             ),
             future.get()
         );
@@ -314,7 +313,7 @@ public class GroupCoordinatorServiceTest {
         )).thenReturn(CompletableFuture.completedFuture(
             new StreamsGroupHeartbeatResult(
                 new StreamsGroupHeartbeatResponseData(),
-                Collections.emptyMap()
+                Map.of()
             )
         ));
 
@@ -323,7 +322,7 @@ public class GroupCoordinatorServiceTest {
             request
         );
 
-        assertEquals(new StreamsGroupHeartbeatResult(new StreamsGroupHeartbeatResponseData(), Collections.emptyMap()), future.get(5, TimeUnit.SECONDS));
+        assertEquals(new StreamsGroupHeartbeatResult(new StreamsGroupHeartbeatResponseData(), Map.of()), future.get(5, TimeUnit.SECONDS));
     }
 
     private static Stream<Arguments> testStreamsGroupHeartbeatWithExceptionSource() {
@@ -376,7 +375,7 @@ public class GroupCoordinatorServiceTest {
                 new StreamsGroupHeartbeatResponseData()
                     .setErrorCode(expectedErrorCode)
                     .setErrorMessage(expectedErrorMessage),
-                Collections.emptyMap()
+                Map.of()
             ),
             future.get(5, TimeUnit.SECONDS)
         );
@@ -880,9 +879,9 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.eq("list-groups"),
             ArgumentMatchers.any()
         )).thenReturn(Arrays.asList(
-            CompletableFuture.completedFuture(Collections.singletonList(expectedResults.get(0))),
-            CompletableFuture.completedFuture(Collections.singletonList(expectedResults.get(1))),
-            CompletableFuture.completedFuture(Collections.singletonList(expectedResults.get(2)))
+            CompletableFuture.completedFuture(List.of(expectedResults.get(0))),
+            CompletableFuture.completedFuture(List.of(expectedResults.get(1))),
+            CompletableFuture.completedFuture(List.of(expectedResults.get(2)))
         ));
 
         CompletableFuture<ListGroupsResponseData> responseFuture = service.listGroups(
@@ -920,8 +919,8 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.eq("list-groups"),
             ArgumentMatchers.any()
         )).thenReturn(Arrays.asList(
-            CompletableFuture.completedFuture(Collections.singletonList(expectedResults.get(0))),
-            CompletableFuture.completedFuture(Collections.singletonList(expectedResults.get(1))),
+            CompletableFuture.completedFuture(List.of(expectedResults.get(0))),
+            CompletableFuture.completedFuture(List.of(expectedResults.get(1))),
             FutureUtils.failedFuture(new NotCoordinatorException(""))
         ));
 
@@ -947,8 +946,8 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.eq("list-groups"),
             ArgumentMatchers.any()
         )).thenReturn(Arrays.asList(
-            CompletableFuture.completedFuture(Collections.emptyList()),
-            CompletableFuture.completedFuture(Collections.emptyList()),
+            CompletableFuture.completedFuture(List.of()),
+            CompletableFuture.completedFuture(List.of()),
             FutureUtils.failedFuture(new CoordinatorLoadInProgressException(""))
         ));
 
@@ -1033,7 +1032,7 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.eq("describe-groups"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
             ArgumentMatchers.any()
-        )).thenReturn(CompletableFuture.completedFuture(Collections.singletonList(describedGroup1)));
+        )).thenReturn(CompletableFuture.completedFuture(List.of(describedGroup1)));
 
         CompletableFuture<Object> describedGroupFuture = new CompletableFuture<>();
         when(runtime.scheduleReadOperation(
@@ -1046,7 +1045,7 @@ public class GroupCoordinatorServiceTest {
             service.describeGroups(requestContext(ApiKeys.DESCRIBE_GROUPS), Arrays.asList("group-id-1", "group-id-2"));
 
         assertFalse(future.isDone());
-        describedGroupFuture.complete(Collections.singletonList(describedGroup2));
+        describedGroupFuture.complete(List.of(describedGroup2));
         assertEquals(expectedDescribedGroups, future.get());
     }
 
@@ -1074,7 +1073,7 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.eq("describe-groups"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
             ArgumentMatchers.any()
-        )).thenReturn(CompletableFuture.completedFuture(Collections.singletonList(describedGroup)));
+        )).thenReturn(CompletableFuture.completedFuture(List.of(describedGroup)));
 
         CompletableFuture<List<DescribeGroupsResponseData.DescribedGroup>> future =
             service.describeGroups(requestContext(ApiKeys.DESCRIBE_GROUPS), Arrays.asList("", null));
@@ -1102,10 +1101,10 @@ public class GroupCoordinatorServiceTest {
         ));
 
         CompletableFuture<List<DescribeGroupsResponseData.DescribedGroup>> future =
-            service.describeGroups(requestContext(ApiKeys.DESCRIBE_GROUPS), Collections.singletonList("group-id"));
+            service.describeGroups(requestContext(ApiKeys.DESCRIBE_GROUPS), List.of("group-id"));
 
         assertEquals(
-            Collections.singletonList(new DescribeGroupsResponseData.DescribedGroup()
+            List.of(new DescribeGroupsResponseData.DescribedGroup()
                 .setGroupId("group-id")
                 .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code())
             ),
@@ -1123,11 +1122,11 @@ public class GroupCoordinatorServiceTest {
 
         CompletableFuture<List<DescribeGroupsResponseData.DescribedGroup>> future = service.describeGroups(
             requestContext(ApiKeys.DESCRIBE_GROUPS),
-            Collections.singletonList("group-id")
+            List.of("group-id")
         );
 
         assertEquals(
-            Collections.singletonList(new DescribeGroupsResponseData.DescribedGroup()
+            List.of(new DescribeGroupsResponseData.DescribedGroup()
                 .setGroupId("group-id")
                 .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
             ),
@@ -1157,17 +1156,17 @@ public class GroupCoordinatorServiceTest {
                 .setGroupId("group");
         if (!fetchAllOffsets) {
             request
-                .setTopics(Collections.singletonList(new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                .setTopics(List.of(new OffsetFetchRequestData.OffsetFetchRequestTopics()
                     .setName("foo")
-                    .setPartitionIndexes(Collections.singletonList(0))));
+                    .setPartitionIndexes(List.of(0))));
         }
 
         OffsetFetchResponseData.OffsetFetchResponseGroup response =
             new OffsetFetchResponseData.OffsetFetchResponseGroup()
                 .setGroupId("group")
-                .setTopics(Collections.singletonList(new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                .setTopics(List.of(new OffsetFetchResponseData.OffsetFetchResponseTopics()
                     .setName("foo")
-                    .setPartitions(Collections.singletonList(new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                    .setPartitions(List.of(new OffsetFetchResponseData.OffsetFetchResponsePartitions()
                         .setPartitionIndex(0)
                         .setCommittedOffset(100L)))));
 
@@ -1219,9 +1218,9 @@ public class GroupCoordinatorServiceTest {
                 .setGroupId("group");
         if (!fetchAllOffsets) {
             request
-                .setTopics(Collections.singletonList(new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                .setTopics(List.of(new OffsetFetchRequestData.OffsetFetchRequestTopics()
                     .setName("foo")
-                    .setPartitionIndexes(Collections.singletonList(0))));
+                    .setPartitionIndexes(List.of(0))));
         }
 
         TriFunction<RequestContext, OffsetFetchRequestData.OffsetFetchRequestGroup, Boolean, CompletableFuture<OffsetFetchResponseData.OffsetFetchResponseGroup>> fetchOffsets =
@@ -1269,9 +1268,9 @@ public class GroupCoordinatorServiceTest {
                 .setGroupId("group");
         if (!fetchAllOffsets) {
             request
-                .setTopics(Collections.singletonList(new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                .setTopics(List.of(new OffsetFetchRequestData.OffsetFetchRequestTopics()
                     .setName("foo")
-                    .setPartitionIndexes(Collections.singletonList(0))));
+                    .setPartitionIndexes(List.of(0))));
         }
 
         when(runtime.scheduleWriteOperation(
@@ -1422,7 +1421,7 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.eq("consumer-group-describe"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
             ArgumentMatchers.any()
-        )).thenReturn(CompletableFuture.completedFuture(Collections.singletonList(describedGroup1)));
+        )).thenReturn(CompletableFuture.completedFuture(List.of(describedGroup1)));
 
         CompletableFuture<Object> describedGroupFuture = new CompletableFuture<>();
         when(runtime.scheduleReadOperation(
@@ -1435,7 +1434,7 @@ public class GroupCoordinatorServiceTest {
             service.consumerGroupDescribe(requestContext(ApiKeys.CONSUMER_GROUP_DESCRIBE), Arrays.asList("group-id-1", "group-id-2"));
 
         assertFalse(future.isDone());
-        describedGroupFuture.complete(Collections.singletonList(describedGroup2));
+        describedGroupFuture.complete(List.of(describedGroup2));
         assertEquals(expectedDescribedGroups, future.get());
     }
 
@@ -1463,7 +1462,7 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.eq("consumer-group-describe"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
             ArgumentMatchers.any()
-        )).thenReturn(CompletableFuture.completedFuture(Collections.singletonList(describedGroup)));
+        )).thenReturn(CompletableFuture.completedFuture(List.of(describedGroup)));
 
         CompletableFuture<List<ConsumerGroupDescribeResponseData.DescribedGroup>> future =
             service.consumerGroupDescribe(requestContext(ApiKeys.CONSUMER_GROUP_DESCRIBE), Arrays.asList("", null));
@@ -1490,10 +1489,10 @@ public class GroupCoordinatorServiceTest {
         ));
 
         CompletableFuture<List<ConsumerGroupDescribeResponseData.DescribedGroup>> future =
-            service.consumerGroupDescribe(requestContext(ApiKeys.CONSUMER_GROUP_DESCRIBE), Collections.singletonList("group-id"));
+            service.consumerGroupDescribe(requestContext(ApiKeys.CONSUMER_GROUP_DESCRIBE), List.of("group-id"));
 
         assertEquals(
-            Collections.singletonList(new ConsumerGroupDescribeResponseData.DescribedGroup()
+            List.of(new ConsumerGroupDescribeResponseData.DescribedGroup()
                 .setGroupId("group-id")
                 .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code())
             ),
@@ -1517,10 +1516,10 @@ public class GroupCoordinatorServiceTest {
         ));
 
         CompletableFuture<List<ConsumerGroupDescribeResponseData.DescribedGroup>> future =
-            service.consumerGroupDescribe(requestContext(ApiKeys.CONSUMER_GROUP_DESCRIBE), Collections.singletonList("group-id"));
+            service.consumerGroupDescribe(requestContext(ApiKeys.CONSUMER_GROUP_DESCRIBE), List.of("group-id"));
 
         assertEquals(
-            Collections.singletonList(new ConsumerGroupDescribeResponseData.DescribedGroup()
+            List.of(new ConsumerGroupDescribeResponseData.DescribedGroup()
                 .setGroupId("group-id")
                 .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
             ),
@@ -1551,7 +1550,7 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.eq("streams-group-describe"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
             ArgumentMatchers.any()
-        )).thenReturn(CompletableFuture.completedFuture(Collections.singletonList(describedGroup1)));
+        )).thenReturn(CompletableFuture.completedFuture(List.of(describedGroup1)));
 
         CompletableFuture<Object> describedGroupFuture = new CompletableFuture<>();
         when(runtime.scheduleReadOperation(
@@ -1564,7 +1563,7 @@ public class GroupCoordinatorServiceTest {
             service.streamsGroupDescribe(requestContext(ApiKeys.STREAMS_GROUP_DESCRIBE), Arrays.asList("group-id-1", "group-id-2"));
 
         assertFalse(future.isDone());
-        describedGroupFuture.complete(Collections.singletonList(describedGroup2));
+        describedGroupFuture.complete(List.of(describedGroup2));
         assertEquals(expectedDescribedGroups, future.get());
     }
 
@@ -1592,7 +1591,7 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.eq("streams-group-describe"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
             ArgumentMatchers.any()
-        )).thenReturn(CompletableFuture.completedFuture(Collections.singletonList(describedGroup)));
+        )).thenReturn(CompletableFuture.completedFuture(List.of(describedGroup)));
 
         CompletableFuture<List<StreamsGroupDescribeResponseData.DescribedGroup>> future =
             service.streamsGroupDescribe(requestContext(ApiKeys.STREAMS_GROUP_DESCRIBE), Arrays.asList("", null));
@@ -1619,10 +1618,10 @@ public class GroupCoordinatorServiceTest {
         ));
 
         CompletableFuture<List<StreamsGroupDescribeResponseData.DescribedGroup>> future =
-            service.streamsGroupDescribe(requestContext(ApiKeys.STREAMS_GROUP_DESCRIBE), Collections.singletonList("group-id"));
+            service.streamsGroupDescribe(requestContext(ApiKeys.STREAMS_GROUP_DESCRIBE), List.of("group-id"));
 
         assertEquals(
-            Collections.singletonList(new StreamsGroupDescribeResponseData.DescribedGroup()
+            List.of(new StreamsGroupDescribeResponseData.DescribedGroup()
                 .setGroupId("group-id")
                 .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code())
             ),
@@ -1646,10 +1645,10 @@ public class GroupCoordinatorServiceTest {
         ));
 
         CompletableFuture<List<StreamsGroupDescribeResponseData.DescribedGroup>> future =
-            service.streamsGroupDescribe(requestContext(ApiKeys.STREAMS_GROUP_DESCRIBE), Collections.singletonList("group-id"));
+            service.streamsGroupDescribe(requestContext(ApiKeys.STREAMS_GROUP_DESCRIBE), List.of("group-id"));
 
         assertEquals(
-            Collections.singletonList(new StreamsGroupDescribeResponseData.DescribedGroup()
+            List.of(new StreamsGroupDescribeResponseData.DescribedGroup()
                 .setGroupId("group-id")
                 .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
             ),
@@ -1667,10 +1666,10 @@ public class GroupCoordinatorServiceTest {
             .build(true);
 
         OffsetDeleteRequestData.OffsetDeleteRequestTopicCollection requestTopicCollection =
-            new OffsetDeleteRequestData.OffsetDeleteRequestTopicCollection(Collections.singletonList(
+            new OffsetDeleteRequestData.OffsetDeleteRequestTopicCollection(List.of(
                 new OffsetDeleteRequestData.OffsetDeleteRequestTopic()
                     .setName(TOPIC_NAME)
-                    .setPartitions(Collections.singletonList(
+                    .setPartitions(List.of(
                         new OffsetDeleteRequestData.OffsetDeleteRequestPartition().setPartitionIndex(0)
                     ))
             ).iterator());
@@ -1679,11 +1678,11 @@ public class GroupCoordinatorServiceTest {
             .setTopics(requestTopicCollection);
 
         OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection responsePartitionCollection =
-            new OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection(Collections.singletonList(
+            new OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection(List.of(
                 new OffsetDeleteResponseData.OffsetDeleteResponsePartition().setPartitionIndex(0)
             ).iterator());
         OffsetDeleteResponseData.OffsetDeleteResponseTopicCollection responseTopicCollection =
-            new OffsetDeleteResponseData.OffsetDeleteResponseTopicCollection(Collections.singletonList(
+            new OffsetDeleteResponseData.OffsetDeleteResponseTopicCollection(List.of(
                 new OffsetDeleteResponseData.OffsetDeleteResponseTopic().setPartitions(responsePartitionCollection)
             ).iterator());
         OffsetDeleteResponseData response = new OffsetDeleteResponseData()
@@ -1716,10 +1715,10 @@ public class GroupCoordinatorServiceTest {
             .build(true);
 
         OffsetDeleteRequestData.OffsetDeleteRequestTopicCollection requestTopicCollection =
-            new OffsetDeleteRequestData.OffsetDeleteRequestTopicCollection(Collections.singletonList(
+            new OffsetDeleteRequestData.OffsetDeleteRequestTopicCollection(List.of(
                 new OffsetDeleteRequestData.OffsetDeleteRequestTopic()
                     .setName(TOPIC_NAME)
-                    .setPartitions(Collections.singletonList(
+                    .setPartitions(List.of(
                         new OffsetDeleteRequestData.OffsetDeleteRequestPartition().setPartitionIndex(0)
                     ))
             ).iterator());
@@ -1760,10 +1759,10 @@ public class GroupCoordinatorServiceTest {
             .build(true);
 
         OffsetDeleteRequestData.OffsetDeleteRequestTopicCollection requestTopicCollection =
-            new OffsetDeleteRequestData.OffsetDeleteRequestTopicCollection(Collections.singletonList(
+            new OffsetDeleteRequestData.OffsetDeleteRequestTopicCollection(List.of(
                 new OffsetDeleteRequestData.OffsetDeleteRequestTopic()
                     .setName(TOPIC_NAME)
-                    .setPartitions(Collections.singletonList(
+                    .setPartitions(List.of(
                         new OffsetDeleteRequestData.OffsetDeleteRequestPartition().setPartitionIndex(0)
                     ))
             ).iterator());
@@ -2272,12 +2271,12 @@ public class GroupCoordinatorServiceTest {
         CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> future =
             service.deleteGroups(
                 requestContext(ApiKeys.DELETE_GROUPS),
-                Collections.singletonList("group-id"),
+                List.of("group-id"),
                 BufferSupplier.NO_CACHING
             );
 
         assertEquals(
-            new DeleteGroupsResponseData.DeletableGroupResultCollection(Collections.singletonList(
+            new DeleteGroupsResponseData.DeletableGroupResultCollection(List.of(
                 new DeleteGroupsResponseData.DeletableGroupResult()
                     .setGroupId("group-id")
                     .setErrorCode(expectedErrorCode)
@@ -2297,13 +2296,13 @@ public class GroupCoordinatorServiceTest {
 
         CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> future = service.deleteGroups(
             requestContext(ApiKeys.DELETE_GROUPS),
-            Collections.singletonList("foo"),
+            List.of("foo"),
             BufferSupplier.NO_CACHING
         );
 
         assertEquals(
             new DeleteGroupsResponseData.DeletableGroupResultCollection(
-                Collections.singletonList(new DeleteGroupsResponseData.DeletableGroupResult()
+                List.of(new DeleteGroupsResponseData.DeletableGroupResult()
                     .setGroupId("foo")
                     .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
                 ).iterator()
@@ -2325,9 +2324,9 @@ public class GroupCoordinatorServiceTest {
             .setTransactionalId("transactional-id")
             .setMemberId("member-id")
             .setGenerationId(10)
-            .setTopics(Collections.singletonList(new TxnOffsetCommitRequestData.TxnOffsetCommitRequestTopic()
+            .setTopics(List.of(new TxnOffsetCommitRequestData.TxnOffsetCommitRequestTopic()
                 .setName(TOPIC_NAME)
-                .setPartitions(Collections.singletonList(new TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition()
+                .setPartitions(List.of(new TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition()
                     .setPartitionIndex(0)
                     .setCommittedOffset(100)))));
 
@@ -2339,9 +2338,9 @@ public class GroupCoordinatorServiceTest {
 
         assertEquals(
             new TxnOffsetCommitResponseData()
-                .setTopics(Collections.singletonList(new TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic()
+                .setTopics(List.of(new TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic()
                     .setName(TOPIC_NAME)
-                    .setPartitions(Collections.singletonList(new TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition()
+                    .setPartitions(List.of(new TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition()
                         .setPartitionIndex(0)
                         .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code()))))),
             future.get()
@@ -2363,9 +2362,9 @@ public class GroupCoordinatorServiceTest {
             .setTransactionalId("transactional-id")
             .setMemberId("member-id")
             .setGenerationId(10)
-            .setTopics(Collections.singletonList(new TxnOffsetCommitRequestData.TxnOffsetCommitRequestTopic()
+            .setTopics(List.of(new TxnOffsetCommitRequestData.TxnOffsetCommitRequestTopic()
                 .setName(TOPIC_NAME)
-                .setPartitions(Collections.singletonList(new TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition()
+                .setPartitions(List.of(new TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition()
                     .setPartitionIndex(0)
                     .setCommittedOffset(100)))));
 
@@ -2377,9 +2376,9 @@ public class GroupCoordinatorServiceTest {
 
         assertEquals(
             new TxnOffsetCommitResponseData()
-                .setTopics(Collections.singletonList(new TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic()
+                .setTopics(List.of(new TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic()
                     .setName(TOPIC_NAME)
-                    .setPartitions(Collections.singletonList(new TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition()
+                    .setPartitions(List.of(new TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition()
                         .setPartitionIndex(0)
                         .setErrorCode(Errors.INVALID_GROUP_ID.code()))))),
             future.get()
@@ -2402,16 +2401,16 @@ public class GroupCoordinatorServiceTest {
             .setProducerEpoch((short) 5)
             .setMemberId("member-id")
             .setGenerationId(10)
-            .setTopics(Collections.singletonList(new TxnOffsetCommitRequestData.TxnOffsetCommitRequestTopic()
+            .setTopics(List.of(new TxnOffsetCommitRequestData.TxnOffsetCommitRequestTopic()
                 .setName(TOPIC_NAME)
-                .setPartitions(Collections.singletonList(new TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition()
+                .setPartitions(List.of(new TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition()
                     .setPartitionIndex(0)
                     .setCommittedOffset(100)))));
 
         TxnOffsetCommitResponseData response = new TxnOffsetCommitResponseData()
-            .setTopics(Collections.singletonList(new TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic()
+            .setTopics(List.of(new TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic()
                 .setName(TOPIC_NAME)
-                .setPartitions(Collections.singletonList(new TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition()
+                .setPartitions(List.of(new TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition()
                     .setPartitionIndex(0)
                     .setErrorCode(Errors.NONE.code())))));
 
@@ -2457,16 +2456,16 @@ public class GroupCoordinatorServiceTest {
             .setProducerEpoch((short) 5)
             .setMemberId("member-id")
             .setGenerationId(10)
-            .setTopics(Collections.singletonList(new TxnOffsetCommitRequestData.TxnOffsetCommitRequestTopic()
+            .setTopics(List.of(new TxnOffsetCommitRequestData.TxnOffsetCommitRequestTopic()
                 .setName(TOPIC_NAME)
-                .setPartitions(Collections.singletonList(new TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition()
+                .setPartitions(List.of(new TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition()
                     .setPartitionIndex(0)
                     .setCommittedOffset(100)))));
 
         TxnOffsetCommitResponseData response = new TxnOffsetCommitResponseData()
-            .setTopics(Collections.singletonList(new TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic()
+            .setTopics(List.of(new TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic()
                 .setName(TOPIC_NAME)
-                .setPartitions(Collections.singletonList(new TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition()
+                .setPartitions(List.of(new TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition()
                     .setPartitionIndex(0)
                     .setErrorCode(expectedError.code())))));
 
@@ -2582,7 +2581,7 @@ public class GroupCoordinatorServiceTest {
         // The exception is logged and swallowed.
         assertDoesNotThrow(() ->
             service.onPartitionsDeleted(
-                Collections.singletonList(new TopicPartition("foo", 0)),
+                List.of(new TopicPartition("foo", 0)),
                 BufferSupplier.NO_CACHING
             )
         );
@@ -2597,7 +2596,7 @@ public class GroupCoordinatorServiceTest {
             .build();
 
         assertThrows(CoordinatorNotAvailableException.class, () -> service.onPartitionsDeleted(
-            Collections.singletonList(new TopicPartition("foo", 0)),
+            List.of(new TopicPartition("foo", 0)),
             BufferSupplier.NO_CACHING
         ));
     }
@@ -2708,7 +2707,7 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.eq("share-group-describe"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
             ArgumentMatchers.any()
-        )).thenReturn(CompletableFuture.completedFuture(Collections.singletonList(describedGroup1)));
+        )).thenReturn(CompletableFuture.completedFuture(List.of(describedGroup1)));
 
         CompletableFuture<Object> describedGroupFuture = new CompletableFuture<>();
         when(runtime.scheduleReadOperation(
@@ -2721,7 +2720,7 @@ public class GroupCoordinatorServiceTest {
             service.shareGroupDescribe(requestContext(ApiKeys.SHARE_GROUP_DESCRIBE), Arrays.asList("share-group-id-1", "share-group-id-2"));
 
         assertFalse(future.isDone());
-        describedGroupFuture.complete(Collections.singletonList(describedGroup2));
+        describedGroupFuture.complete(List.of(describedGroup2));
         assertEquals(expectedDescribedGroups, future.get());
     }
 
@@ -2749,7 +2748,7 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.eq("share-group-describe"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
             ArgumentMatchers.any()
-        )).thenReturn(CompletableFuture.completedFuture(Collections.singletonList(describedGroup)));
+        )).thenReturn(CompletableFuture.completedFuture(List.of(describedGroup)));
 
         CompletableFuture<List<ShareGroupDescribeResponseData.DescribedGroup>> future =
             service.shareGroupDescribe(requestContext(ApiKeys.SHARE_GROUP_DESCRIBE), Arrays.asList("", null));
@@ -2776,10 +2775,10 @@ public class GroupCoordinatorServiceTest {
         ));
 
         CompletableFuture<List<ShareGroupDescribeResponseData.DescribedGroup>> future =
-            service.shareGroupDescribe(requestContext(ApiKeys.SHARE_GROUP_DESCRIBE), Collections.singletonList("share-group-id"));
+            service.shareGroupDescribe(requestContext(ApiKeys.SHARE_GROUP_DESCRIBE), List.of("share-group-id"));
 
         assertEquals(
-            Collections.singletonList(new ShareGroupDescribeResponseData.DescribedGroup()
+            List.of(new ShareGroupDescribeResponseData.DescribedGroup()
                 .setGroupId("share-group-id")
                 .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code())
             ),
@@ -2803,10 +2802,10 @@ public class GroupCoordinatorServiceTest {
         ));
 
         CompletableFuture<List<ShareGroupDescribeResponseData.DescribedGroup>> future =
-            service.shareGroupDescribe(requestContext(ApiKeys.SHARE_GROUP_DESCRIBE), Collections.singletonList("share-group-id"));
+            service.shareGroupDescribe(requestContext(ApiKeys.SHARE_GROUP_DESCRIBE), List.of("share-group-id"));
 
         assertEquals(
-            Collections.singletonList(new ShareGroupDescribeResponseData.DescribedGroup()
+            List.of(new ShareGroupDescribeResponseData.DescribedGroup()
                 .setGroupId("share-group-id")
                 .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
             ),
