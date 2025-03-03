@@ -148,7 +148,7 @@ public class ConfigCommandIntegrationTest {
     public void testAddConfigKeyValuesUsingCommand() throws Exception {
         try (Admin client = cluster.admin()) {
             NewTopic newTopic = new NewTopic("topic", 1, (short) 1);
-            client.createTopics(Collections.singleton(newTopic)).all().get();
+            client.createTopics(Set.of(newTopic)).all().get();
             cluster.waitForTopic("topic", 1);
             Stream<String> command = Stream.concat(quorumArgs(), Stream.of(
                     "--entity-type", "topics",
