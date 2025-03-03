@@ -52,7 +52,6 @@ public class DeleteShareGroupOffsetsHandler extends AdminApiHandler.Batched<Coor
 
     private final CoordinatorStrategy lookupStrategy;
 
-
     public DeleteShareGroupOffsetsHandler(String groupId, Set<TopicPartition> partitions, LogContext logContext) {
         this.groupId = CoordinatorKey.byGroupId(groupId);
         this.partitions = partitions;

@@ -9515,9 +9515,7 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(new DeleteShareGroupOffsetsResponse(data));
 
             final DeleteShareGroupOffsetsResult result = env.adminClient().deleteShareGroupOffsets(GROUP_ID, Collections.emptySet());
-            final Map<TopicPartition, Errors> partitionResults = result.partitionResults().get();
-
-            assertEquals(0, partitionResults.size());
+            assertDoesNotThrow(() -> result.all().get());
         }
     }
 

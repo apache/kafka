@@ -85,13 +85,4 @@ public class DeleteShareGroupOffsetsResult {
 
         return result;
     }
-
-    /**
-     * Return a future which yields a map of topic partitions to errors
-     *
-     * @return Future which yields a map of topic partitions to errors
-     */
-    public KafkaFuture<Map<TopicPartition, Errors>> partitionResults() {
-        return future;
-    }
 }
