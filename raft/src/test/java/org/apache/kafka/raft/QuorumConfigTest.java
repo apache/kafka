@@ -28,16 +28,16 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class QuorumConfigTest {
     @Test
-    public void testPositiveConfig() {
-        verifyPositiveConfig(Map.of(QuorumConfig.QUORUM_ELECTION_TIMEOUT_MS_CONFIG, "0"));
-        verifyPositiveConfig(Map.of(QuorumConfig.QUORUM_FETCH_TIMEOUT_MS_CONFIG, "0"));
-        verifyPositiveConfig(Map.of(QuorumConfig.QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG, "0"));
-        verifyPositiveConfig(Map.of(QuorumConfig.QUORUM_LINGER_MS_CONFIG, "0"));
-        verifyPositiveConfig(Map.of(QuorumConfig.QUORUM_REQUEST_TIMEOUT_MS_CONFIG, "0"));
-        verifyPositiveConfig(Map.of(QuorumConfig.QUORUM_RETRY_BACKOFF_MS_CONFIG, "0"));
+    public void testLegalConfig() {
+        verifyLegalConfig(Map.of(QuorumConfig.QUORUM_ELECTION_TIMEOUT_MS_CONFIG, "0"));
+        verifyLegalConfig(Map.of(QuorumConfig.QUORUM_FETCH_TIMEOUT_MS_CONFIG, "0"));
+        verifyLegalConfig(Map.of(QuorumConfig.QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG, "-1"));
+        verifyLegalConfig(Map.of(QuorumConfig.QUORUM_LINGER_MS_CONFIG, "-1"));
+        verifyLegalConfig(Map.of(QuorumConfig.QUORUM_REQUEST_TIMEOUT_MS_CONFIG, "-1"));
+        verifyLegalConfig(Map.of(QuorumConfig.QUORUM_RETRY_BACKOFF_MS_CONFIG, "-1"));
     }
 
-    private void verifyPositiveConfig(Map<String, Object> overrideConfig) {
+    private void verifyLegalConfig(Map<String, Object> overrideConfig) {
         Map<String, Object> props = new HashMap<>();
         props.put(QuorumConfig.QUORUM_VOTERS_CONFIG, "1@localhost:9092");
         props.put(QuorumConfig.QUORUM_BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
