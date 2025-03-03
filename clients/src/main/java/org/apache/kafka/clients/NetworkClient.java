@@ -518,7 +518,7 @@ public class NetworkClient implements KafkaClient {
     public boolean isReady(Node node, long now) {
         // if we need to update our metadata now declare all requests unready to make metadata requests first
         // priority
-        return !metadataUpdater.isUpdateDue(now) && canSendRequest(node.idString(), now);
+        return !metadataUpdater.isUpdateDue(now) && canSendRequest(node.idString(), now) && canSendMore(node.idString());
     }
 
     /**
@@ -528,8 +528,11 @@ public class NetworkClient implements KafkaClient {
      * @param now the current timestamp
      */
     private boolean canSendRequest(String node, long now) {
-        return connectionStates.isReady(node, now) && selector.isChannelReady(node) &&
-            inFlightRequests.canSendMore(node);
+        return connectionStates.isReady(node, now) && selector.isChannelReady(node);
+    }
+
+    private boolean canSendMore(String node) {
+        return inFlightRequests.canSendMore(node);
     }
 
     /**
@@ -551,6 +554,8 @@ public class NetworkClient implements KafkaClient {
     private void doSend(ClientRequest clientRequest, boolean isInternalRequest, long now) {
         ensureActive();
         String nodeId = clientRequest.destination();
+        AbstractRequest.Builder<?> builder = clientRequest.requestBuilder();
+
         if (!isInternalRequest) {
             // If this request came from outside the NetworkClient, validate
             // that we can send data.  If the request is internal, we trust
@@ -558,10 +563,15 @@ public class NetworkClient implements KafkaClient {
             // will be slightly different for some internal requests (for
             // example, ApiVersionsRequests can be sent prior to being in
             // READY state.)
-            if (!canSendRequest(nodeId, now))
-                throw new IllegalStateException("Attempt to send a request to node " + nodeId + " which is not ready.");
+            if (builder.apiKey().equals(ApiKeys.LEAVE_GROUP)) {
+                if (!canSendRequest(nodeId, now))
+                    throw new IllegalStateException("Attempt to send a request to node " + nodeId + " which is not ready.");
+            } else {
+                if (!canSendRequest(nodeId, now) && !canSendMore(nodeId))
+                    throw new IllegalStateException("Attempt to send a request to node " + nodeId + " which is not ready.");
+            }
         }
-        AbstractRequest.Builder<?> builder = clientRequest.requestBuilder();
+
         try {
             NodeApiVersions versionInfo = apiVersions.get(nodeId);
             short version;
@@ -779,7 +789,7 @@ public class NetworkClient implements KafkaClient {
                 atLeastOneConnectionReady = true;
             }
 
-            if (canSendRequest(node.idString(), now)) {
+            if (canSendRequest(node.idString(), now) && canSendMore(node.idString())) {
                 int currInflight = this.inFlightRequests.count(node.idString());
                 if (currInflight == 0) {
                     // if we find an established connection with no in-flight requests we can stop right away
@@ -1336,7 +1346,7 @@ public class NetworkClient implements KafkaClient {
         private long maybeUpdate(long now, Node node) {
             String nodeConnectionId = node.idString();
 
-            if (canSendRequest(nodeConnectionId, now)) {
+            if (canSendRequest(nodeConnectionId, now) && canSendMore(nodeConnectionId)) {
                 Metadata.MetadataRequestAndVersion requestAndVersion = metadata.newMetadataRequestAndVersion(now);
                 MetadataRequest.Builder metadataRequest = requestAndVersion.requestBuilder;
                 log.debug("Sending metadata request {} to node {}", metadataRequest, node);
@@ -1408,7 +1418,7 @@ public class NetworkClient implements KafkaClient {
         private long maybeUpdate(long now, Node node) {
             String nodeConnectionId = node.idString();
 
-            if (canSendRequest(nodeConnectionId, now)) {
+            if (canSendRequest(nodeConnectionId, now) && canSendMore(nodeConnectionId)) {
                 Optional<AbstractRequest.Builder<?>> requestOpt = clientTelemetrySender.createRequest();
 
                 if (requestOpt.isEmpty())
