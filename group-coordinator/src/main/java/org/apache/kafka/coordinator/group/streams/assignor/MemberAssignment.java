@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.coordinator.group.streams.assignor;
 
-import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -37,6 +36,6 @@ public record MemberAssignment(Map<String, Set<Integer>> activeTasks,
     }
 
     public static MemberAssignment empty() {
-        return new MemberAssignment(Collections.emptyMap(), Collections.emptyMap(), Collections.emptyMap());
+        return new MemberAssignment(Map.of(), Map.of(), Map.of());
     }
 }
