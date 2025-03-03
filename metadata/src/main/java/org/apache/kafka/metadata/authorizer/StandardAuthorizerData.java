@@ -36,7 +36,6 @@ import org.apache.kafka.server.authorizer.AuthorizationResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collections;
 import java.util.EnumSet;
 import java.util.Iterator;
 import java.util.NavigableSet;
@@ -437,14 +436,14 @@ public class StandardAuthorizerData {
     /**
      * The set of operations which imply DESCRIBE permission, when used in an ALLOW acl.
      */
-    private static final Set<AclOperation> IMPLIES_DESCRIBE = Collections.unmodifiableSet(
-        EnumSet.of(DESCRIBE, READ, WRITE, DELETE, ALTER));
+    private static final Set<AclOperation> IMPLIES_DESCRIBE =
+        EnumSet.of(DESCRIBE, READ, WRITE, DELETE, ALTER);
 
     /**
      * The set of operations which imply DESCRIBE_CONFIGS permission, when used in an ALLOW acl.
      */
-    private static final Set<AclOperation> IMPLIES_DESCRIBE_CONFIGS = Collections.unmodifiableSet(
-        EnumSet.of(DESCRIBE_CONFIGS, ALTER_CONFIGS));
+    private static final Set<AclOperation> IMPLIES_DESCRIBE_CONFIGS =
+        EnumSet.of(DESCRIBE_CONFIGS, ALTER_CONFIGS);
 
     static AuthorizationResult findResult(Action action,
                                           AuthorizableRequestContext requestContext,
