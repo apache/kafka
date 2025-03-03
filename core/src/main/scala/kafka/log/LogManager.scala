@@ -1182,14 +1182,14 @@ class LogManager(logDirs: Seq[File],
   private def findAbandonedFutureLogs(brokerId: Int, newTopicsImage: TopicsImage): Iterable[(UnifiedLog, Option[UnifiedLog])] = {
     futureLogs.values.flatMap { futureLog =>
       val topicId = futureLog.topicId.orElseThrow(() =>
-        throw new RuntimeException(s"The log dir $futureLog does not have a topic ID, " +
+        new RuntimeException(s"The log dir $futureLog does not have a topic ID, " +
           "which is not allowed when running in KRaft mode.")
       )
       val partitionId = futureLog.topicPartition.partition()
       Option(newTopicsImage.getPartition(topicId, partitionId))
         .filter(pr => directoryId(futureLog.parentDir).contains(pr.directory(brokerId)))
         .map(_ => (futureLog, Option(currentLogs.get(futureLog.topicPartition)).filter(currentLog =>
-          currentLog.topicId.isPresent && currentLog.topicId.get.equals(topicId))))
+          currentLog.topicId.filter(_ == topicId).isPresent)))
     }
   }
 
