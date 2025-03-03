@@ -45,7 +45,7 @@ public class ScramCredentialUtilsTest {
 
     @Test
     public void stringConversion() {
-        ScramCredential credential = formatter.generateCredential("password", 1024);
+        ScramCredential credential = formatter.generateCredential("password".toCharArray(), 1024);
         assertTrue(credential.salt().length > 0, "Salt must not be empty");
         assertTrue(credential.storedKey().length > 0, "Stored key must not be empty");
         assertTrue(credential.serverKey().length > 0, "Server key must not be empty");
@@ -58,8 +58,8 @@ public class ScramCredentialUtilsTest {
 
     @Test
     public void generateCredential() {
-        ScramCredential credential1 = formatter.generateCredential("password", 4096);
-        ScramCredential credential2 = formatter.generateCredential("password", 4096);
+        ScramCredential credential1 = formatter.generateCredential("password".toCharArray(), 4096);
+        ScramCredential credential2 = formatter.generateCredential("password".toCharArray(), 4096);
         // Random salt should ensure that the credentials persisted are different every time
         assertNotEquals(ScramCredentialUtils.credentialToString(credential1), ScramCredentialUtils.credentialToString(credential2));
     }
@@ -71,13 +71,13 @@ public class ScramCredentialUtilsTest {
 
     @Test
     public void missingFields() {
-        String cred = ScramCredentialUtils.credentialToString(formatter.generateCredential("password", 2048));
+        String cred = ScramCredentialUtils.credentialToString(formatter.generateCredential("password".toCharArray(), 2048));
         assertThrows(IllegalArgumentException.class, () -> ScramCredentialUtils.credentialFromString(cred.substring(cred.indexOf(','))));
     }
 
     @Test
     public void extraneousFields() {
-        String cred = ScramCredentialUtils.credentialToString(formatter.generateCredential("password", 2048));
+        String cred = ScramCredentialUtils.credentialToString(formatter.generateCredential("password".toCharArray(), 2048));
         assertThrows(IllegalArgumentException.class, () -> ScramCredentialUtils.credentialFromString(cred + ",a=test"));
     }
 
@@ -90,7 +90,7 @@ public class ScramCredentialUtilsTest {
 
         CredentialCache.Cache<ScramCredential> sha512Cache = cache.cache(ScramMechanism.SCRAM_SHA_512.mechanismName(), ScramCredential.class);
         ScramFormatter formatter = new ScramFormatter(ScramMechanism.SCRAM_SHA_512);
-        ScramCredential credentialA = formatter.generateCredential("password", 4096);
+        ScramCredential credentialA = formatter.generateCredential("password".toCharArray(), 4096);
         sha512Cache.put("userA", credentialA);
         assertEquals(credentialA, sha512Cache.get("userA"));
         assertNull(sha512Cache.get("userB"), "Invalid user credential");

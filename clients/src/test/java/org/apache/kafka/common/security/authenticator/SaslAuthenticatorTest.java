@@ -2338,7 +2338,7 @@ public class SaslAuthenticatorTest {
             ScramMechanism scramMechanism = ScramMechanism.forMechanismName(mechanism);
             if (scramMechanism != null) {
                 ScramFormatter formatter = new ScramFormatter(scramMechanism);
-                ScramCredential credential = formatter.generateCredential(password, 4096);
+                ScramCredential credential = formatter.generateCredential(password.toCharArray(), 4096);
                 credentialCache.cache(scramMechanism.mechanismName(), ScramCredential.class).put(username, credential);
             }
         }
@@ -2356,7 +2356,7 @@ public class SaslAuthenticatorTest {
             ScramMechanism scramMechanism = ScramMechanism.forMechanismName(mechanism);
             if (scramMechanism != null) {
                 ScramFormatter formatter = new ScramFormatter(scramMechanism);
-                ScramCredential credential = formatter.generateCredential(password, 4096);
+                ScramCredential credential = formatter.generateCredential(password.toCharArray(), 4096);
                 server.tokenCache().credentialCache(scramMechanism.mechanismName()).put(username, credential);
             }
         }

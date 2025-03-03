@@ -173,7 +173,9 @@ public class ScramParser {
                 return configuredSaltedPassword.get();
             }
             return new ScramFormatter(mechanism).saltedPassword(
-                    configuredPasswordString.get(),
+                    configuredPasswordString
+                            .orElseThrow(() -> new IllegalStateException("configuredPasswordString is missing"))
+                            .toCharArray(),
                     salt,
                     iterations);
         }

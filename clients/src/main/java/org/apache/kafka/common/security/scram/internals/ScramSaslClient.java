@@ -190,7 +190,7 @@ public class ScramSaslClient implements SaslClient {
 
     private ClientFinalMessage handleServerFirstMessage(char[] password) throws SaslException {
         try {
-            byte[] passwordBytes = ScramFormatter.normalize(new String(password));
+            byte[] passwordBytes = ScramFormatter.normalize(new String(password).toCharArray());
             this.saltedPassword = formatter.hi(passwordBytes, serverFirstMessage.salt(), serverFirstMessage.iterations());
 
             ClientFinalMessage clientFinalMessage = new ClientFinalMessage("n,,".getBytes(StandardCharsets.UTF_8), serverFirstMessage.nonce());

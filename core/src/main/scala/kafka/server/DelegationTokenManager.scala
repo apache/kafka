@@ -106,7 +106,7 @@ class DelegationTokenManager(val config: KafkaConfig,
     val scramCredentialMap = mutable.Map[String, ScramCredential]()
 
     def scramCredential(mechanism: ScramMechanism): ScramCredential = {
-      new ScramFormatter(mechanism).generateCredential(hmacString, mechanism.minIterations)
+      new ScramFormatter(mechanism).generateCredential(hmacString.toCharArray, mechanism.minIterations)
     }
 
     for (mechanism <- ScramMechanism.values)

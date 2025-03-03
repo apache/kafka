@@ -38,7 +38,7 @@ public class ScramFormatterTest {
     public void rfc7677Example() throws Exception {
         ScramFormatter formatter = new ScramFormatter(ScramMechanism.SCRAM_SHA_256);
 
-        String password = "pencil";
+        char[] password = "pencil".toCharArray();
         String c1 = "n,,n=user,r=rOprNGfwEbeRWgbNEkqO";
         String s1 = "r=rOprNGfwEbeRWgbNEkqO%hvYDpWUa2RaTCAfuxFIlj)hNlF$k0,s=W22ZaJ0SNY7soEsUEjb6gQ==,i=4096";
         String c2 = "c=biws,r=rOprNGfwEbeRWgbNEkqO%hvYDpWUa2RaTCAfuxFIlj)hNlF$k0,p=dHzbZapWIk4jUhN+Ute9ytag9zjfMHgsqmmiz7AndVQ=";
