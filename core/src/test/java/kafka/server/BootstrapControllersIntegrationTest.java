@@ -44,6 +44,7 @@ import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.InvalidUpdateVersionException;
 import org.apache.kafka.common.errors.MismatchedEndpointTypeException;
 import org.apache.kafka.common.errors.UnsupportedEndpointTypeException;
@@ -340,6 +341,24 @@ public class BootstrapControllersIntegrationTest {
             Collection<AclBinding> deletedAclBindings = admin.deleteAcls(Collections.singleton(AclBindingFilter.ANY)).all().get(1, TimeUnit.MINUTES);
             assertEquals(1, deletedAclBindings.size());
             assertEquals(aclBinding, deletedAclBindings.iterator().next());
+        }
+    }
+
+    @ClusterTest(
+        brokers = 2,
+        serverProperties = {
+            @ClusterConfigProperty(key = TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, value = "2")
+        }
+    )
+    public void testDescribeConfigs(ClusterInstance clusterInstance) throws Exception {
+        try (Admin admin = Admin.create(adminConfig(clusterInstance, true))) {
+            ConfigResource resource = new ConfigResource(BROKER, "");
+            Map<ConfigResource, Config> resourceToConfig = admin.describeConfigs(List.of(resource)).all().get();
+            Config config = resourceToConfig.get(resource);
+            assertNotNull(config);
+            ConfigEntry configEntry = config.get(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG);
+            assertNotNull(configEntry);
+            assertEquals("2", configEntry.value());
         }
     }
 }
