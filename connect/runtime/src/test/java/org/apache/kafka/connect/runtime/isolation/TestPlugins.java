@@ -39,6 +39,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.jar.Attributes;
 import java.util.jar.JarEntry;
@@ -372,6 +373,12 @@ public class TestPlugins {
                 .map(TestPlugin::className)
                 .distinct()
                 .collect(Collectors.toList());
+    }
+
+    public static Function<ClassLoader, LoaderSwap> noOpLoaderSwap() {
+        return classLoader -> {
+            return new LoaderSwap(Thread.currentThread().getContextClassLoader());
+        };
     }
 
     private static TestPlugin[] defaultPlugins() {

@@ -21,6 +21,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TopologyConfig;
 import org.apache.kafka.streams.errors.TopologyException;
@@ -53,6 +54,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -64,12 +66,14 @@ import java.util.TreeSet;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.streams.StreamsConfig.ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.PROCESSOR_WRAPPER_CLASS_CONFIG;
 
 public class InternalTopologyBuilder {
 
     public InternalTopologyBuilder() {
         this.topologyName = null;
+        this.ensureExplicitInternalResourceNaming = false;
         this.processorWrapper = new NoOpProcessorWrapper();
     }
 
@@ -78,7 +82,7 @@ public class InternalTopologyBuilder {
 
         this.topologyConfigs = topologyConfigs;
         this.topologyName = topologyConfigs.topologyName;
-
+        this.ensureExplicitInternalResourceNaming = topologyConfigs.ensureExplicitInternalResourceNaming;
         try {
             processorWrapper = topologyConfigs.getConfiguredInstance(
                 PROCESSOR_WRAPPER_CLASS_CONFIG,
@@ -193,6 +197,10 @@ public class InternalTopologyBuilder {
     private TopologyConfig topologyConfigs;  // the configs for this topology, including overrides and global defaults
 
     private boolean hasPersistentStores = false;
+
+    private final boolean ensureExplicitInternalResourceNaming;
+
+    private final Set<InternalResourcesNaming> implicitInternalNames = new LinkedHashSet<>();
 
     public static class ReprocessFactory<KIn, VIn, KOut, VOut> {
 
@@ -2293,4 +2301,46 @@ public class InternalTopologyBuilder {
             processorWrapper.wrapProcessorSupplier(name, processorSupplier)
         );
     }
+
+    public void addImplicitInternalNames(final InternalResourcesNaming internalResourcesNaming) {
+        implicitInternalNames.add(internalResourcesNaming);
+    }
+
+    public void checkUnprovidedNames() {
+        if (!implicitInternalNames.isEmpty()) {
+            final StringBuilder result = new StringBuilder();
+            final List<String> changelogTopics = new ArrayList<>();
+            final List<String> stateStores = new ArrayList<>();
+            final List<String> repartitionTopics = new ArrayList<>();
+            for (final InternalResourcesNaming internalResourcesNaming : implicitInternalNames) {
+                if (!Utils.isBlank(internalResourcesNaming.changelogTopic())) {
+                    changelogTopics.add(internalResourcesNaming.changelogTopic());
+                }
+                if (!Utils.isBlank(internalResourcesNaming.stateStore())) {
+                    stateStores.add(internalResourcesNaming.stateStore());
+                }
+                if (!Utils.isBlank(internalResourcesNaming.repartitionTopic())) {
+                    repartitionTopics.add(internalResourcesNaming.repartitionTopic());
+                }
+            }
+            if (!changelogTopics.isEmpty()) {
+                result.append(String.format("Following changelog topic(s) has not been named: %s%n", String.join(", ", changelogTopics)));
+            }
+            if (!stateStores.isEmpty()) {
+                result.append(String.format("Following state store(s) has not been named: %s%n", String.join(", ", stateStores)));
+            }
+            if (!repartitionTopics.isEmpty()) {
+                result.append(String.format("Following repartition topic(s) has not been named: %s%n", String.join(", ", repartitionTopics)));
+            }
+            if (ensureExplicitInternalResourceNaming) {
+                throw new TopologyException(result.toString());
+            } else {
+                log.warn("Explicit naming for internal resources is currently disabled. If you want to enforce" +
+                    " user-defined names for all internal resources, set " + ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_CONFIG +
+                    " to true. Note: Changing internal resource names may require a full streams application reset for an" +
+                    " already deployed application. Consult the documentation on naming operators for more details. {}", result);
+            }
+        }
+    }
+
 }

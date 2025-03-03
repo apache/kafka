@@ -18,7 +18,6 @@ package org.apache.kafka.coordinator.group.streams;
 
 import org.apache.kafka.common.errors.FencedMemberEpochException;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -251,8 +250,8 @@ public class CurrentAssignmentBuilder {
         for (String subtopologyId : allSubtopologyIds) {
             hasUnreleasedTasks |= computeAssignmentDifferenceForOneSubtopology(
                 subtopologyId,
-                currentAssignment.getOrDefault(subtopologyId, Collections.emptySet()),
-                targetAssignment.getOrDefault(subtopologyId, Collections.emptySet()),
+                currentAssignment.getOrDefault(subtopologyId, Set.of()),
+                targetAssignment.getOrDefault(subtopologyId, Set.of()),
                 resultAssignedTasks,
                 resultTasksPendingRevocation,
                 resultTasksPendingAssignment,
