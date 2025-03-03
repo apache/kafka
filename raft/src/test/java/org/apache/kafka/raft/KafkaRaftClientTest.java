@@ -356,10 +356,7 @@ class KafkaRaftClientTest {
         assertEquals(0L, context.log.endOffset().offset());
         context.assertElectedLeader(epoch, localId);
         context.client.poll();
-        // Only one method invocation is expected when testing runtime exceptions
-        // so we moved out the data from the `assertThrows`.
-        List<String> data = Arrays.asList("a", "b");
-        assertThrows(NotLeaderException.class, () -> context.client.prepareAppend(epoch, data));
+        assertThrows(NotLeaderException.class, () -> context.client.prepareAppend(epoch, Arrays.asList("a", "b")));
 
         context.pollUntilRequest();
         RaftRequest.Outbound request = context.assertSentEndQuorumEpochRequest(epoch, remoteId);
@@ -391,10 +388,8 @@ class KafkaRaftClientTest {
             .withUnknownLeader(epoch)
             .withKip853Rpc(withKip853Rpc)
             .build();
-        // Only one method invocation is expected when testing runtime exceptions
-        // so we moved out the data from the `assertThrows`.
-        List<String> data = Arrays.asList("a", "b");
-        assertThrows(NotLeaderException.class, () -> context.client.prepareAppend(epoch, data));
+
+        assertThrows(NotLeaderException.class, () -> context.client.prepareAppend(epoch, Arrays.asList("a", "b")));
     }
 
     @ParameterizedTest
@@ -419,10 +414,8 @@ class KafkaRaftClientTest {
         context.unattachedToLeader();
         assertEquals(OptionalInt.of(localId), context.currentLeader());
         int epoch = context.currentEpoch();
-        // Only one method invocation is expected when testing runtime exceptions
-        // so we moved out the data from the `assertThrows`.
-        List<String> data = singletonList("a");
-        assertThrows(BufferAllocationException.class, () -> context.client.prepareAppend(epoch, data));
+
+        assertThrows(BufferAllocationException.class, () -> context.client.prepareAppend(epoch, singletonList("a")));
         Mockito.verify(memoryPool).release(buffer);
     }
 
@@ -442,12 +435,9 @@ class KafkaRaftClientTest {
         int epoch = context.currentEpoch();
 
         // Throws IllegalArgumentException on higher epoch
-        // Only one method invocation is expected when testing runtime exceptions
-        // so we moved out the data from the `assertThrows`.
-        List<String> data = singletonList("a");
-        assertThrows(IllegalArgumentException.class, () -> context.client.prepareAppend(epoch + 1, data));
+        assertThrows(IllegalArgumentException.class, () -> context.client.prepareAppend(epoch + 1, singletonList("a")));
         // Throws NotLeaderException on smaller epoch
-        assertThrows(NotLeaderException.class, () -> context.client.prepareAppend(epoch - 1, data));
+        assertThrows(NotLeaderException.class, () -> context.client.prepareAppend(epoch - 1, singletonList("a")));
     }
 
     @ParameterizedTest
@@ -794,11 +784,9 @@ class KafkaRaftClientTest {
             .withKip853Rpc(withKip853Rpc)
             .build();
         context.unattachedToLeader();
-        // Only one method invocation is expected when testing runtime exceptions
-        // so we moved out the data from the `assertThrows`.
-        int data = context.currentEpoch() + 1;
+
         assertThrows(IllegalArgumentException.class,
-            () -> context.client.resign(data));
+            () -> context.client.resign(context.currentEpoch() + 1));
     }
 
     @ParameterizedTest
