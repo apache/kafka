@@ -86,9 +86,9 @@ runs:
       run: |
         set +e
         ./.github/scripts/thread-dump.sh &
-        timeout ${TIMEOUT_MINUTES}m ./gradlew --continue --no-scan --max-workers 5 \
+        timeout ${TIMEOUT_MINUTES}m ./gradlew --continue --no-scan --max-workers 6 \
         -PtestLoggingEvents=started,passed,skipped,failed \
-        -PmaxParallelForks=3 \
+        -PmaxParallelForks=4 \
         -PmaxTestRetries=$TEST_RETRIES -PmaxTestRetryFailures=10 \
         -Pkafka.test.catalog.file=$TEST_CATALOG \
         -Pkafka.test.run.new=$RUN_NEW_TESTS \
