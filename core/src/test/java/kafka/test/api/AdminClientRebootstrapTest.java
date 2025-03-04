@@ -73,9 +73,8 @@ public class AdminClientRebootstrapTest {
 
     @ClusterTemplate(value = "generator")
     public void testRebootstrap(ClusterInstance clusterInstance) throws ExecutionException, InterruptedException {
-        var topic = "topic";
         try (var admin = clusterInstance.admin()) {
-            admin.createTopics(List.of(new NewTopic(topic, BROKER_COUNT, (short) 2)));
+            admin.createTopics(List.of(new NewTopic("topic", BROKER_COUNT, (short) 2)));
 
             var server0 = clusterInstance.brokers().get(0);
             var server1 = clusterInstance.brokers().get(1);
