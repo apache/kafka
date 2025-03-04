@@ -1372,7 +1372,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         persister.deleteState(DeleteShareGroupStateParameters.from(deleteShareGroupStateRequestData))
             .whenComplete((result, error) -> {
                 if (error != null) {
-                    log.error("Failed to delete share partitions");
+                    log.error("Failed to delete share group state");
                     future.completeExceptionally(error);
                     return;
                 }
