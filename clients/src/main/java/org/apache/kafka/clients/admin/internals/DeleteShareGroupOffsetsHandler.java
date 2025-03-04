@@ -114,21 +114,29 @@ public class DeleteShareGroupOffsetsHandler extends AdminApiHandler.Batched<Coor
         final DeleteShareGroupOffsetsResponse response = (DeleteShareGroupOffsetsResponse) abstractResponse;
 
         final Errors groupError = Errors.forCode(response.data().errorCode());
+        final String groupErrorMessage = response.data().errorMessage();
 
         if (groupError != Errors.NONE) {
             final Set<CoordinatorKey> groupsToUnmap = new HashSet<>();
             final Map<CoordinatorKey, Throwable> groupsFailed = new HashMap<>();
-            handleGroupError(groupId, groupError, groupsFailed, groupsToUnmap);
+            handleGroupError(groupId, groupError, groupErrorMessage, groupsFailed, groupsToUnmap);
 
             return new ApiResult<>(Collections.emptyMap(), groupsFailed, new ArrayList<>(groupsToUnmap));
         } else {
             final Map<TopicPartition, Errors> partitionResults = new HashMap<>();
             response.data().responses().forEach(topic ->
-                topic.partitions().forEach(partition ->
-                    partitionResults.put(
-                        new TopicPartition(topic.topicName(), partition.partitionIndex()),
-                        Errors.forCode(partition.errorCode())
-                    )
+                topic.partitions().forEach(partition -> {
+                    if (partition.errorCode() != Errors.NONE.code()) {
+                        final Errors partitionError = Errors.forCode(partition.errorCode());
+                        final String partitionErrorMessage = partition.errorMessage();
+                        log.debug("DeleteShareGroupOffsets request for group id {}, topic {} and partition {} failed and returned error {}." + partitionErrorMessage,
+                            groupId.idValue, topic.topicName(), partition.partitionIndex(), partitionError);
+                    }
+                        partitionResults.put(
+                            new TopicPartition(topic.topicName(), partition.partitionIndex()),
+                            Errors.forCode(partition.errorCode())
+                        );
+                    }
                 )
             );
 
@@ -139,6 +147,7 @@ public class DeleteShareGroupOffsetsHandler extends AdminApiHandler.Batched<Coor
     private void handleGroupError(
         CoordinatorKey groupId,
         Errors error,
+        String errorMessage,
         Map<CoordinatorKey, Throwable> failed,
         Set<CoordinatorKey> groupsToUnmap
     ) {
@@ -147,13 +156,13 @@ public class DeleteShareGroupOffsetsHandler extends AdminApiHandler.Batched<Coor
             case REBALANCE_IN_PROGRESS:
                 // If the coordinator is in the middle of loading, then we just need to retry
                 log.debug("DeleteShareGroupOffsets request for group id {} failed because the coordinator" +
-                    " is still in the process of loading state. Will retry.", groupId.idValue);
+                    " is still in the process of loading state. Will retry. " + errorMessage, groupId.idValue);
                 break;
             case COORDINATOR_NOT_AVAILABLE:
             case NOT_COORDINATOR:
                 // If the coordinator is unavailable or there was a coordinator change, then we unmap
                 // the key so that we retry the `FindCoordinator` request
-                log.debug("DeleteShareGroupOffsets request for group id {} returned error {}. Will rediscover the coordinator and retry.",
+                log.debug("DeleteShareGroupOffsets request for group id {} returned error {}. Will rediscover the coordinator and retry. " + errorMessage,
                     groupId.idValue, error);
                 groupsToUnmap.add(groupId);
                 break;
@@ -164,11 +173,11 @@ public class DeleteShareGroupOffsetsHandler extends AdminApiHandler.Batched<Coor
             case KAFKA_STORAGE_ERROR:
             case GROUP_AUTHORIZATION_FAILED:
             case TOPIC_AUTHORIZATION_FAILED:
-                log.debug("DeleteShareGroupOffsets request for group id {} failed due to error {}.", groupId.idValue, error);
+                log.debug("DeleteShareGroupOffsets request for group id {} failed due to error {}. " + errorMessage, groupId.idValue, error);
                 failed.put(groupId, error.exception());
                 break;
             default:
-                log.error("DeleteShareGroupOffsets request for group id {} failed due to unexpected error {}.", groupId.idValue, error);
+                log.error("DeleteShareGroupOffsets request for group id {} failed due to unexpected error {}. " + errorMessage, groupId.idValue, error);
                 failed.put(groupId, error.exception());
         }
     }
