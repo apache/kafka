@@ -17,16 +17,19 @@
 
 package kafka.network
 
-import kafka.server.SimpleApiVersionManager
+import kafka.server.metadata.KRaftMetadataCache
+import kafka.server.{DefaultApiVersionManager, ForwardingManager, SimpleApiVersionManager}
 import org.apache.kafka.common.errors.{InvalidRequestException, UnsupportedVersionException}
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.message.RequestHeaderData
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.{RequestHeader, RequestTestUtils}
-import org.apache.kafka.server.common.{FinalizedFeatures, MetadataVersion}
+import org.apache.kafka.server.BrokerFeatures
+import org.apache.kafka.server.common.{FinalizedFeatures, KRaftVersion, MetadataVersion}
 import org.junit.jupiter.api.Assertions.{assertThrows, assertTrue}
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.function.Executable
+import org.mockito.Mockito.mock
 
 import java.util.Collections
 
@@ -54,8 +57,8 @@ class ProcessorTest {
       .setClientId("clientid")
       .setCorrelationId(0);
     val requestHeader = RequestTestUtils.serializeRequestHeader(new RequestHeader(requestHeaderData, headerVersion))
-    val apiVersionManager = new SimpleApiVersionManager(ListenerType.BROKER, true,
-      () => new FinalizedFeatures(MetadataVersion.latestTesting(), Collections.emptyMap[String, java.lang.Short], 0))
+    val apiVersionManager = new DefaultApiVersionManager(ListenerType.BROKER, mock(classOf[ForwardingManager]),
+      BrokerFeatures.createDefault(true), new KRaftMetadataCache(0, () => KRaftVersion.LATEST_PRODUCTION), true)
     val e = assertThrows(classOf[InvalidRequestException],
       (() => Processor.parseRequestHeader(apiVersionManager, requestHeader)): Executable,
       "LEADER_AND_ISR should throw InvalidRequestException exception")
@@ -65,13 +68,31 @@ class ProcessorTest {
   @Test
   def testParseRequestHeaderWithUnsupportedApiVersion(): Unit = {
     val requestHeader = RequestTestUtils.serializeRequestHeader(
-      new RequestHeader(ApiKeys.PRODUCE, 0, "clientid", 0))
-    val apiVersionManager = new SimpleApiVersionManager(ListenerType.BROKER, true,
-      () => new FinalizedFeatures(MetadataVersion.latestTesting(), Collections.emptyMap[String, java.lang.Short], 0))
+      new RequestHeader(ApiKeys.FETCH, 0, "clientid", 0))
+    val apiVersionManager = new DefaultApiVersionManager(ListenerType.BROKER, mock(classOf[ForwardingManager]),
+      BrokerFeatures.createDefault(true), new KRaftMetadataCache(0, () => KRaftVersion.LATEST_PRODUCTION), true)
     val e = assertThrows(classOf[UnsupportedVersionException],
       (() => Processor.parseRequestHeader(apiVersionManager, requestHeader)): Executable,
-      "PRODUCE v0 should throw UnsupportedVersionException exception")
+      "FETCH v0 should throw UnsupportedVersionException exception")
     assertTrue(e.toString.contains("unsupported version"));
+  }
+
+  /**
+   * We do something unusual with these versions of produce, and we want to make sure we don't regress.
+   * See `ApiKeys.PRODUCE_API_VERSIONS_RESPONSE_MIN_VERSION` for details.
+   */
+  @Test
+  def testParseRequestHeaderForProduceV0ToV2(): Unit = {
+    for (version <- 0 to 2) {
+      val requestHeader = RequestTestUtils.serializeRequestHeader(
+        new RequestHeader(ApiKeys.PRODUCE, version.toShort, "clientid", 0))
+      val apiVersionManager = new DefaultApiVersionManager(ListenerType.BROKER, mock(classOf[ForwardingManager]),
+        BrokerFeatures.createDefault(true), new KRaftMetadataCache(0, () => KRaftVersion.LATEST_PRODUCTION), true)
+      val e = assertThrows(classOf[UnsupportedVersionException],
+        (() => Processor.parseRequestHeader(apiVersionManager, requestHeader)): Executable,
+        s"PRODUCE $version should throw UnsupportedVersionException exception")
+      assertTrue(e.toString.contains("unsupported version"));
+    }
   }
 
 }

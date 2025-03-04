@@ -31,7 +31,6 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -91,7 +90,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
     @Test
     public void testTwoMembersNoTopicSubscription() {
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            Collections.singletonMap(
+            Map.of(
                 topic1Uuid,
                 new TopicMetadata(
                     topic1Uuid,
@@ -105,20 +104,20 @@ public class UniformHeterogeneousAssignmentBuilderTest {
         members.put(memberA, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             Optional.empty(),
-            Collections.emptySet(),
+            Set.of(),
             Assignment.EMPTY
         ));
         members.put(memberB, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             Optional.empty(),
-            Collections.emptySet(),
+            Set.of(),
             Assignment.EMPTY
         ));
 
         GroupSpec groupSpec = new TestGroupSpecImpl(
             members,
             HETEROGENEOUS,
-            Collections.emptyMap()
+            Map.of()
         );
 
         GroupAssignment groupAssignment = assignor.assign(
@@ -126,13 +125,13 @@ public class UniformHeterogeneousAssignmentBuilderTest {
             subscribedTopicMetadata
         );
 
-        assertEquals(Collections.emptyMap(), groupAssignment.members());
+        assertEquals(Map.of(), groupAssignment.members());
     }
 
     @Test
     public void testTwoMembersSubscribedToNonexistentTopics() {
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            Collections.singletonMap(
+            Map.of(
                 topic1Uuid,
                 new TopicMetadata(
                     topic1Uuid,
@@ -146,20 +145,20 @@ public class UniformHeterogeneousAssignmentBuilderTest {
         members.put(memberA, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             Optional.empty(),
-            Collections.singleton(topic3Uuid),
+            Set.of(topic3Uuid),
             Assignment.EMPTY
         ));
         members.put(memberB, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             Optional.empty(),
-            Collections.singleton(topic2Uuid),
+            Set.of(topic2Uuid),
             Assignment.EMPTY
         ));
 
         GroupSpec groupSpec = new TestGroupSpecImpl(
             members,
             HETEROGENEOUS,
-            Collections.emptyMap()
+            Map.of()
         );
 
         assertThrows(
@@ -193,14 +192,14 @@ public class UniformHeterogeneousAssignmentBuilderTest {
         members.put(memberB, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             Optional.empty(),
-            Collections.singleton(topic3Uuid),
+            Set.of(topic3Uuid),
             Assignment.EMPTY
         ));
 
         GroupSpec groupSpec = new TestGroupSpecImpl(
             members,
             HETEROGENEOUS,
-            Collections.emptyMap()
+            Map.of()
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(topicMetadata);
 
@@ -240,28 +239,28 @@ public class UniformHeterogeneousAssignmentBuilderTest {
         members.put(memberA, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             Optional.empty(),
-            Collections.singleton(topic3Uuid),
+            Set.of(topic3Uuid),
             Assignment.EMPTY
         ));
 
         members.put(memberB, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             Optional.empty(),
-            Collections.singleton(topic3Uuid),
+            Set.of(topic3Uuid),
             Assignment.EMPTY
         ));
 
         members.put(memberC, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             Optional.empty(),
-            Collections.singleton(topic1Uuid),
+            Set.of(topic1Uuid),
             Assignment.EMPTY
         ));
 
         GroupSpec groupSpec = new TestGroupSpecImpl(
             members,
             HETEROGENEOUS,
-            Collections.emptyMap()
+            Map.of()
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(topicMetadata);
 
@@ -276,7 +275,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
             mkTopicAssignment(topic3Uuid, 0)
         ));
         expectedAssignment.put(memberB,
-            Collections.emptyMap()
+            Map.of()
         );
         expectedAssignment.put(memberC, mkAssignment(
             mkTopicAssignment(topic1Uuid, 0, 1)
@@ -309,7 +308,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
         members.put(memberA, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             Optional.empty(),
-            Collections.singleton(topic1Uuid),
+            Set.of(topic1Uuid),
             new Assignment(mkAssignment(
                 mkTopicAssignment(topic1Uuid, 0, 1, 2)
             ))
@@ -456,7 +455,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
         members.put(memberA, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             Optional.empty(),
-            Collections.singleton(topic1Uuid),
+            Set.of(topic1Uuid),
             new Assignment(mkAssignment(
                 mkTopicAssignment(topic1Uuid, 0, 2),
                 mkTopicAssignment(topic2Uuid, 0)
@@ -542,7 +541,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
         members.put(memberB, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             Optional.empty(),
-            Collections.singleton(topic2Uuid),
+            Set.of(topic2Uuid),
             new Assignment(mkAssignment(
                 mkTopicAssignment(topic2Uuid, 3, 4, 5, 6)
             ))
@@ -594,7 +593,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
         members.put(memberA, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             Optional.empty(),
-            Collections.singleton(topic1Uuid),
+            Set.of(topic1Uuid),
             new Assignment(mkAssignment(
                 mkTopicAssignment(topic1Uuid, 0, 2),
                 mkTopicAssignment(topic2Uuid, 1, 3)
@@ -725,14 +724,14 @@ public class UniformHeterogeneousAssignmentBuilderTest {
         members.put(memberB, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             Optional.empty(),
-            Collections.emptySet(),
+            Set.of(),
             Assignment.EMPTY
         ));
 
         GroupSpec groupSpec = new TestGroupSpecImpl(
             members,
             HETEROGENEOUS,
-            Collections.emptyMap()
+            Map.of()
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(topicMetadata);
 
@@ -745,7 +744,7 @@ public class UniformHeterogeneousAssignmentBuilderTest {
         expectedAssignment.put(memberA, mkAssignment(
             mkTopicAssignment(topic1Uuid, 0, 1, 2)
         ));
-        expectedAssignment.put(memberB, Collections.emptyMap());
+        expectedAssignment.put(memberB, Map.of());
 
         assertAssignment(expectedAssignment, computedAssignment);
     }

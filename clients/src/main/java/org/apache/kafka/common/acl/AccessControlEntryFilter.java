@@ -17,16 +17,11 @@
 
 package org.apache.kafka.common.acl;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
-
 import java.util.Objects;
 
 /**
  * Represents a filter which matches access control entries.
- *
- * The API for this class is still evolving and we may break compatibility in minor releases, if necessary.
  */
-@InterfaceStability.Evolving
 public class AccessControlEntryFilter {
     private final AccessControlEntryData data;
 

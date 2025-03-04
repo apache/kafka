@@ -60,11 +60,11 @@ import java.nio.charset.Charset;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.Deque;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.OptionalInt;
 import java.util.Set;
@@ -237,7 +237,7 @@ public class CoordinatorRuntimeTest {
         }
 
         public MockCoordinatorLoader() {
-            this(null, Collections.emptyList(), Collections.emptyList());
+            this(null, List.of(), List.of());
         }
 
         @Override
@@ -448,7 +448,7 @@ public class CoordinatorRuntimeTest {
 
         Set<String> pendingRecords(long producerId) {
             TimelineHashSet<RecordAndMetadata> pending = pendingRecords.get(producerId);
-            if (pending == null) return Collections.emptySet();
+            if (pending == null) return Set.of();
             return pending.stream().map(record -> record.record).collect(Collectors.toUnmodifiableSet());
         }
 
@@ -1258,9 +1258,9 @@ public class CoordinatorRuntimeTest {
         assertTrue(write1.isDone());
         assertTrue(write2.isDone());
         assertTrue(write3.isDone());
-        assertFutureThrows(write1, NotCoordinatorException.class);
-        assertFutureThrows(write2, NotCoordinatorException.class);
-        assertFutureThrows(write3, NotCoordinatorException.class);
+        assertFutureThrows(NotCoordinatorException.class, write1);
+        assertFutureThrows(NotCoordinatorException.class, write2);
+        assertFutureThrows(NotCoordinatorException.class, write3);
 
         // Verify that onUnloaded is called.
         verify(coordinator, times(1)).onUnloaded();
@@ -1342,7 +1342,7 @@ public class CoordinatorRuntimeTest {
 
         // Write #3 but without any records.
         CompletableFuture<String> write3 = runtime.scheduleWriteOperation("write#3", TP, DEFAULT_WRITE_TIMEOUT,
-            state -> new CoordinatorResult<>(Collections.emptyList(), "response3"));
+            state -> new CoordinatorResult<>(List.of(), "response3"));
 
         // Verify that the write is not committed yet.
         assertFalse(write3.isDone());
@@ -1385,7 +1385,7 @@ public class CoordinatorRuntimeTest {
 
         // Write #4 but without records.
         CompletableFuture<String> write4 = runtime.scheduleWriteOperation("write#4", TP, DEFAULT_WRITE_TIMEOUT,
-            state -> new CoordinatorResult<>(Collections.emptyList(), "response4"));
+            state -> new CoordinatorResult<>(List.of(), "response4"));
 
         // It is completed immediately because the state is fully committed.
         assertTrue(write4.isDone());
@@ -1414,8 +1414,8 @@ public class CoordinatorRuntimeTest {
         // Scheduling a write fails with a NotCoordinatorException because the coordinator
         // does not exist.
         CompletableFuture<String> write = runtime.scheduleWriteOperation("write", TP, DEFAULT_WRITE_TIMEOUT,
-            state -> new CoordinatorResult<>(Collections.emptyList(), "response1"));
-        assertFutureThrows(write, NotCoordinatorException.class);
+            state -> new CoordinatorResult<>(List.of(), "response1"));
+        assertFutureThrows(NotCoordinatorException.class, write);
     }
 
     @Test
@@ -1444,7 +1444,7 @@ public class CoordinatorRuntimeTest {
         CompletableFuture<String> write = runtime.scheduleWriteOperation("write", TP, DEFAULT_WRITE_TIMEOUT, state -> {
             throw new KafkaException("error");
         });
-        assertFutureThrows(write, KafkaException.class);
+        assertFutureThrows(KafkaException.class, write);
     }
 
     @Test
@@ -1497,7 +1497,7 @@ public class CoordinatorRuntimeTest {
         // Write. It should fail.
         CompletableFuture<String> write = runtime.scheduleWriteOperation("write", TP, DEFAULT_WRITE_TIMEOUT,
             state -> new CoordinatorResult<>(List.of("record1", "record2"), "response1"));
-        assertFutureThrows(write, IllegalArgumentException.class);
+        assertFutureThrows(IllegalArgumentException.class, write);
 
         // Verify that the state has not changed.
         assertEquals(0L, ctx.coordinator.lastWrittenOffset());
@@ -1549,7 +1549,7 @@ public class CoordinatorRuntimeTest {
         // accept 1 write.
         CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP, DEFAULT_WRITE_TIMEOUT,
             state -> new CoordinatorResult<>(List.of("record3", "record4", "record5"), "response2"));
-        assertFutureThrows(write2, KafkaException.class);
+        assertFutureThrows(KafkaException.class, write2);
 
         // Verify that the state has not changed.
         assertEquals(2L, ctx.coordinator.lastWrittenOffset());
@@ -1594,7 +1594,7 @@ public class CoordinatorRuntimeTest {
 
         timer.advanceClock(4);
 
-        assertFutureThrows(timedOutWrite, org.apache.kafka.common.errors.TimeoutException.class);
+        assertFutureThrows(org.apache.kafka.common.errors.TimeoutException.class, timedOutWrite);
     }
 
     @Test
@@ -1696,7 +1696,7 @@ public class CoordinatorRuntimeTest {
         verify(writer, times(1)).registerListener(eq(TP), any());
 
         // Prepare the log config.
-        when(writer.config(TP)).thenReturn(new LogConfig(Collections.emptyMap()));
+        when(writer.config(TP)).thenReturn(new LogConfig(Map.of()));
 
         // Prepare the transaction verification.
         VerificationGuard guard = new VerificationGuard();
@@ -1811,7 +1811,7 @@ public class CoordinatorRuntimeTest {
         );
 
         // Verify that the future is failed with the expected exception.
-        assertFutureThrows(future, NotEnoughReplicasException.class);
+        assertFutureThrows(NotEnoughReplicasException.class, future);
 
         // Verify that the writer is not called.
         verify(writer, times(0)).append(
@@ -1910,7 +1910,7 @@ public class CoordinatorRuntimeTest {
             expectedType = ControlRecordType.COMMIT;
         } else {
             // Or they are gone if aborted.
-            assertEquals(Collections.emptySet(), ctx.coordinator.coordinator().records());
+            assertEquals(Set.of(), ctx.coordinator.coordinator().records());
             expectedType = ControlRecordType.ABORT;
         }
 
@@ -1983,7 +1983,7 @@ public class CoordinatorRuntimeTest {
         // Advance clock to timeout Complete #1.
         timer.advanceClock(4);
 
-        assertFutureThrows(timedOutCompletion, org.apache.kafka.common.errors.TimeoutException.class);
+        assertFutureThrows(org.apache.kafka.common.errors.TimeoutException.class, timedOutCompletion);
 
         // Verify that the state is still the same. We don't revert when the
         // operation timeouts because the record has been written to the log.
@@ -2039,7 +2039,7 @@ public class CoordinatorRuntimeTest {
         assertEquals(0L, ctx.coordinator.lastCommittedOffset());
         assertEquals(List.of(0L, 2L), ctx.coordinator.snapshotRegistry().epochsList());
         assertEquals(Set.of("record1", "record2"), ctx.coordinator.coordinator().pendingRecords(100L));
-        assertEquals(Collections.emptySet(), ctx.coordinator.coordinator().records());
+        assertEquals(Set.of(), ctx.coordinator.coordinator().records());
 
         // Complete transaction #1. It should fail.
         CompletableFuture<Void> complete1 = runtime.scheduleTransactionCompletion(
@@ -2051,14 +2051,14 @@ public class CoordinatorRuntimeTest {
             TransactionResult.COMMIT,
             DEFAULT_WRITE_TIMEOUT
         );
-        assertFutureThrows(complete1, KafkaException.class);
+        assertFutureThrows(KafkaException.class, complete1);
 
         // Verify that the state has not changed.
         assertEquals(2L, ctx.coordinator.lastWrittenOffset());
         assertEquals(0L, ctx.coordinator.lastCommittedOffset());
         assertEquals(List.of(0L, 2L), ctx.coordinator.snapshotRegistry().epochsList());
         assertEquals(Set.of("record1", "record2"), ctx.coordinator.coordinator().pendingRecords(100L));
-        assertEquals(Collections.emptySet(), ctx.coordinator.coordinator().records());
+        assertEquals(Set.of(), ctx.coordinator.coordinator().records());
     }
 
     @Test
@@ -2125,7 +2125,7 @@ public class CoordinatorRuntimeTest {
         assertEquals(0L, ctx.coordinator.lastCommittedOffset());
         assertEquals(List.of(0L, 2L), ctx.coordinator.snapshotRegistry().epochsList());
         assertEquals(Set.of("record1", "record2"), ctx.coordinator.coordinator().pendingRecords(100L));
-        assertEquals(Collections.emptySet(), ctx.coordinator.coordinator().records());
+        assertEquals(Set.of(), ctx.coordinator.coordinator().records());
         assertEquals(List.of(
             transactionalRecords(100L, (short) 5, timer.time().milliseconds(), "record1", "record2")
         ), writer.entries(TP));
@@ -2140,14 +2140,14 @@ public class CoordinatorRuntimeTest {
             TransactionResult.COMMIT,
             DEFAULT_WRITE_TIMEOUT
         );
-        assertFutureThrows(complete1, IllegalArgumentException.class);
+        assertFutureThrows(IllegalArgumentException.class, complete1);
 
         // Verify that the state has not changed.
         assertEquals(2L, ctx.coordinator.lastWrittenOffset());
         assertEquals(0L, ctx.coordinator.lastCommittedOffset());
         assertEquals(List.of(0L, 2L), ctx.coordinator.snapshotRegistry().epochsList());
         assertEquals(Set.of("record1", "record2"), ctx.coordinator.coordinator().pendingRecords(100L));
-        assertEquals(Collections.emptySet(), ctx.coordinator.coordinator().records());
+        assertEquals(Set.of(), ctx.coordinator.coordinator().records());
         assertEquals(List.of(
             transactionalRecords(100L, (short) 5, timer.time().milliseconds(), "record1", "record2")
         ), writer.entries(TP));
@@ -2235,7 +2235,7 @@ public class CoordinatorRuntimeTest {
         // Schedule a read. It fails because the coordinator does not exist.
         CompletableFuture<String> read = runtime.scheduleReadOperation("read", TP,
             (state, offset) -> "read-response");
-        assertFutureThrows(read, NotCoordinatorException.class);
+        assertFutureThrows(NotCoordinatorException.class, read);
     }
 
     @Test
@@ -2282,7 +2282,7 @@ public class CoordinatorRuntimeTest {
             assertEquals(ctx.coordinator.lastCommittedOffset(), offset);
             throw new IllegalArgumentException("error");
         });
-        assertFutureThrows(read, IllegalArgumentException.class);
+        assertFutureThrows(IllegalArgumentException.class, read);
     }
 
     @Test
@@ -2393,8 +2393,8 @@ public class CoordinatorRuntimeTest {
         runtime.close();
 
         // All the pending operations are completed with NotCoordinatorException.
-        assertFutureThrows(write1, NotCoordinatorException.class);
-        assertFutureThrows(write2, NotCoordinatorException.class);
+        assertFutureThrows(NotCoordinatorException.class, write1);
+        assertFutureThrows(NotCoordinatorException.class, write2);
 
         // Verify that the loader was closed.
         verify(loader).close();
@@ -2680,7 +2680,7 @@ public class CoordinatorRuntimeTest {
         assertTrue(processor.poll());
 
         // Verify that no operation was executed.
-        assertEquals(Collections.emptySet(), ctx.coordinator.coordinator().records());
+        assertEquals(Set.of(), ctx.coordinator.coordinator().records());
         assertEquals(0, ctx.timer.size());
     }
 
@@ -3010,8 +3010,8 @@ public class CoordinatorRuntimeTest {
                         startTimeMs + 500,
                         30,
                         3000),
-                    Collections.emptyList(),
-                    Collections.emptyList()))
+                    List.of(),
+                    List.of()))
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
                 .withCoordinatorShardBuilderSupplier(supplier)
@@ -3127,8 +3127,8 @@ public class CoordinatorRuntimeTest {
                         1500,
                         30,
                         3000),
-                    Collections.emptyList(),
-                    Collections.emptyList()))
+                    List.of(),
+                    List.of()))
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
                 .withCoordinatorShardBuilderSupplier(supplier)
@@ -3569,7 +3569,7 @@ public class CoordinatorRuntimeTest {
             new MockCoordinatorShard.RecordAndMetadata(0, records.get(0)),
             new MockCoordinatorShard.RecordAndMetadata(1, records.get(1))
         ), ctx.coordinator.coordinator().fullRecords());
-        assertEquals(Collections.emptyList(), writer.entries(TP));
+        assertEquals(List.of(), writer.entries(TP));
 
         // Write #2 with one record.
         CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP, Duration.ofMillis(20),
@@ -3588,7 +3588,7 @@ public class CoordinatorRuntimeTest {
             new MockCoordinatorShard.RecordAndMetadata(1, records.get(1)),
             new MockCoordinatorShard.RecordAndMetadata(2, records.get(2))
         ), ctx.coordinator.coordinator().fullRecords());
-        assertEquals(Collections.emptyList(), writer.entries(TP));
+        assertEquals(List.of(), writer.entries(TP));
 
         // Write #3 with one record. This one cannot go into the existing batch
         // so the existing batch should be flushed and a new one should be created.
@@ -3690,7 +3690,7 @@ public class CoordinatorRuntimeTest {
             state -> new CoordinatorResult<>(records, "response1")
         );
 
-        assertFutureThrows(write, RecordTooLargeException.class);
+        assertFutureThrows(RecordTooLargeException.class, write);
     }
 
     @Test
@@ -3758,7 +3758,7 @@ public class CoordinatorRuntimeTest {
             new MockCoordinatorShard.RecordAndMetadata(1, records.get(1)),
             new MockCoordinatorShard.RecordAndMetadata(2, records.get(2))
         ), ctx.coordinator.coordinator().fullRecords());
-        assertEquals(Collections.emptyList(), writer.entries(TP));
+        assertEquals(List.of(), writer.entries(TP));
 
         // Write #4. This write cannot make it in the current batch. So the current batch
         // is flushed. It will fail. So we expect all writes to fail.
@@ -3766,18 +3766,18 @@ public class CoordinatorRuntimeTest {
             state -> new CoordinatorResult<>(records.subList(3, 4), "response4"));
 
         // Verify the futures.
-        assertFutureThrows(write1, KafkaException.class);
-        assertFutureThrows(write2, KafkaException.class);
-        assertFutureThrows(write3, KafkaException.class);
+        assertFutureThrows(KafkaException.class, write1);
+        assertFutureThrows(KafkaException.class, write2);
+        assertFutureThrows(KafkaException.class, write3);
         // Write #4 is also expected to fail.
-        assertFutureThrows(write4, KafkaException.class);
+        assertFutureThrows(KafkaException.class, write4);
 
         // Verify the state. The state should be reverted to the initial state.
         assertEquals(0L, ctx.coordinator.lastWrittenOffset());
         assertEquals(0L, ctx.coordinator.lastCommittedOffset());
         assertEquals(List.of(0L), ctx.coordinator.snapshotRegistry().epochsList());
-        assertEquals(Collections.emptyList(), ctx.coordinator.coordinator().fullRecords());
-        assertEquals(Collections.emptyList(), writer.entries(TP));
+        assertEquals(List.of(), ctx.coordinator.coordinator().fullRecords());
+        assertEquals(List.of(), writer.entries(TP));
     }
 
     @Test
@@ -3860,22 +3860,22 @@ public class CoordinatorRuntimeTest {
         assertEquals(List.of(
             new MockCoordinatorShard.RecordAndMetadata(0, records.get(0))
         ), ctx.coordinator.coordinator().fullRecords());
-        assertEquals(Collections.emptyList(), writer.entries(TP));
+        assertEquals(List.of(), writer.entries(TP));
 
         // Write #2. It should fail.
         CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP, Duration.ofMillis(20),
             state -> new CoordinatorResult<>(records.subList(1, 2), "response2"));
 
         // Verify the futures.
-        assertFutureThrows(write1, IllegalArgumentException.class);
-        assertFutureThrows(write2, IllegalArgumentException.class);
+        assertFutureThrows(IllegalArgumentException.class, write1);
+        assertFutureThrows(IllegalArgumentException.class, write2);
 
         // Verify the state.
         assertEquals(0L, ctx.coordinator.lastWrittenOffset());
         assertEquals(0L, ctx.coordinator.lastCommittedOffset());
         assertEquals(List.of(0L), ctx.coordinator.snapshotRegistry().epochsList());
-        assertEquals(Collections.emptyList(), ctx.coordinator.coordinator().fullRecords());
-        assertEquals(Collections.emptyList(), writer.entries(TP));
+        assertEquals(List.of(), ctx.coordinator.coordinator().fullRecords());
+        assertEquals(List.of(), writer.entries(TP));
     }
 
     @Test
@@ -3921,9 +3921,9 @@ public class CoordinatorRuntimeTest {
         assertEquals(0L, ctx.coordinator.lastWrittenOffset());
         assertEquals(0L, ctx.coordinator.lastCommittedOffset());
         assertEquals(List.of(0L), ctx.coordinator.snapshotRegistry().epochsList());
-        assertEquals(Collections.emptySet(), ctx.coordinator.coordinator().pendingRecords(100L));
+        assertEquals(Set.of(), ctx.coordinator.coordinator().pendingRecords(100L));
         assertEquals(Set.of("record#1"), ctx.coordinator.coordinator().records());
-        assertEquals(Collections.emptyList(), writer.entries(TP));
+        assertEquals(List.of(), writer.entries(TP));
 
         // Transactional write #2 with one record. This will flush the current batch.
         CompletableFuture<String> write2 = runtime.scheduleTransactionalWriteOperation(
@@ -3989,7 +3989,7 @@ public class CoordinatorRuntimeTest {
         assertEquals(4L, ctx.coordinator.lastWrittenOffset());
         assertEquals(0L, ctx.coordinator.lastCommittedOffset());
         assertEquals(List.of(0L, 1L, 2L, 3L, 4L), ctx.coordinator.snapshotRegistry().epochsList());
-        assertEquals(Collections.emptySet(), ctx.coordinator.coordinator().pendingRecords(100L));
+        assertEquals(Set.of(), ctx.coordinator.coordinator().pendingRecords(100L));
         assertEquals(Set.of("record#1", "record#2", "record#3"), ctx.coordinator.coordinator().records());
         assertEquals(List.of(
             records(timer.time().milliseconds(), "record#1"),
@@ -4086,11 +4086,11 @@ public class CoordinatorRuntimeTest {
             state -> new CoordinatorResult<>(records.subList(3, 4), "response4"));
 
         // Verify the futures.
-        assertFutureThrows(write1, NotCoordinatorException.class);
-        assertFutureThrows(write2, NotCoordinatorException.class);
-        assertFutureThrows(write3, NotCoordinatorException.class);
+        assertFutureThrows(NotCoordinatorException.class, write1);
+        assertFutureThrows(NotCoordinatorException.class, write2);
+        assertFutureThrows(NotCoordinatorException.class, write3);
         // Write #4 is also expected to fail.
-        assertFutureThrows(write4, NotCoordinatorException.class);
+        assertFutureThrows(NotCoordinatorException.class, write4);
 
         // Verify that the state machine was loaded twice.
         verify(loader, times(2)).load(eq(TP), any());
@@ -4168,7 +4168,7 @@ public class CoordinatorRuntimeTest {
 
         // Schedule a write operation that does not generate any records.
         CompletableFuture<String> write = runtime.scheduleWriteOperation("write#1", TP, Duration.ofMillis(20),
-            state -> new CoordinatorResult<>(Collections.emptyList(), "response1"));
+            state -> new CoordinatorResult<>(List.of(), "response1"));
 
         // The write operation should not be done.
         assertFalse(write.isDone());
@@ -4234,7 +4234,7 @@ public class CoordinatorRuntimeTest {
             state -> new CoordinatorResult<>(records, "write#1")
         );
 
-        assertFutureThrows(write1, RecordTooLargeException.class);
+        assertFutureThrows(RecordTooLargeException.class, write1);
 
         // Let's try to write the same records non-atomically.
         CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP, Duration.ofMillis(20),
@@ -4356,7 +4356,7 @@ public class CoordinatorRuntimeTest {
             new MockCoordinatorShard.RecordAndMetadata(1, records.get(1)),
             new MockCoordinatorShard.RecordAndMetadata(2, records.get(2))
         ), ctx.coordinator.coordinator().fullRecords());
-        assertEquals(Collections.emptyList(), writer.entries(TP));
+        assertEquals(List.of(), writer.entries(TP));
 
         // Let's write the 4th record which is too large. This will flush the current
         // pending batch, allocate a new batch, and put the record into it.
@@ -4370,7 +4370,7 @@ public class CoordinatorRuntimeTest {
         timer.advanceClock(11);
 
         // The write should have failed...
-        assertFutureThrows(write2, RecordTooLargeException.class);
+        assertFutureThrows(RecordTooLargeException.class, write2);
 
         // ... but write#1 should be left intact.
         assertFalse(write1.isDone());
@@ -4454,7 +4454,7 @@ public class CoordinatorRuntimeTest {
             new MockCoordinatorShard.RecordAndMetadata(1, records.get(1)),
             new MockCoordinatorShard.RecordAndMetadata(2, records.get(2))
         ), ctx.coordinator.coordinator().fullRecords());
-        assertEquals(Collections.emptyList(), writer.entries(TP));
+        assertEquals(List.of(), writer.entries(TP));
 
         // Write #4. This write cannot make it in the current batch. So the current batch
         // is flushed. It will fail. So we expect all writes to fail.
@@ -4462,18 +4462,18 @@ public class CoordinatorRuntimeTest {
             state -> new CoordinatorResult<>(records.subList(3, 4), "response4", null, true, false));
 
         // Verify the futures.
-        assertFutureThrows(write1, KafkaException.class);
-        assertFutureThrows(write2, KafkaException.class);
-        assertFutureThrows(write3, KafkaException.class);
+        assertFutureThrows(KafkaException.class, write1);
+        assertFutureThrows(KafkaException.class, write2);
+        assertFutureThrows(KafkaException.class, write3);
         // Write #4 is also expected to fail.
-        assertFutureThrows(write4, KafkaException.class);
+        assertFutureThrows(KafkaException.class, write4);
 
         // Verify the state. The state should be reverted to the initial state.
         assertEquals(0L, ctx.coordinator.lastWrittenOffset());
         assertEquals(0L, ctx.coordinator.lastCommittedOffset());
         assertEquals(List.of(0L), ctx.coordinator.snapshotRegistry().epochsList());
-        assertEquals(Collections.emptyList(), ctx.coordinator.coordinator().fullRecords());
-        assertEquals(Collections.emptyList(), writer.entries(TP));
+        assertEquals(List.of(), ctx.coordinator.coordinator().fullRecords());
+        assertEquals(List.of(), writer.entries(TP));
     }
 
     @Test
@@ -4511,12 +4511,12 @@ public class CoordinatorRuntimeTest {
             state -> new CoordinatorResult<>(List.of("1"), "response1"));
 
         // Write #1 should fail and leave an empty batch.
-        assertFutureThrows(write1, BufferOverflowException.class);
+        assertFutureThrows(BufferOverflowException.class, write1);
         assertNotNull(ctx.currentBatch);
 
         // Write #2, with no records.
         CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP, Duration.ofMillis(20),
-            state -> new CoordinatorResult<>(Collections.emptyList(), "response2"));
+            state -> new CoordinatorResult<>(List.of(), "response2"));
 
         // Write #2 should not be attached to the empty batch.
         assertTrue(write2.isDone());
@@ -4601,7 +4601,7 @@ public class CoordinatorRuntimeTest {
         );
 
         // Verify the state. Records are replayed but no batch written.
-        assertEquals(Collections.emptyList(), writer.entries(TP));
+        assertEquals(List.of(), writer.entries(TP));
         verify(runtimeMetrics, times(0)).recordFlushTime(10);
 
         // Write #3 with one record. This one cannot go into the existing batch
@@ -4779,7 +4779,7 @@ public class CoordinatorRuntimeTest {
 
         // Records have been written to the log.
         long writeTimestamp = timer.time().milliseconds();
-        assertEquals(Collections.singletonList(
+        assertEquals(List.of(
             records(writeTimestamp, "record1")
         ), writer.entries(TP));
 
@@ -4923,10 +4923,10 @@ public class CoordinatorRuntimeTest {
                     (result, exception) -> {
                         assertEquals("task result", result);
                         assertNull(exception);
-                        return new CoordinatorResult<>(Collections.singletonList("record2"), null);
+                        return new CoordinatorResult<>(List.of("record2"), null);
                     }
                 );
-                return new CoordinatorResult<>(Collections.singletonList("record1"), "response1");
+                return new CoordinatorResult<>(List.of("record1"), "response1");
             }
         );
 

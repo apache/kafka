@@ -17,6 +17,7 @@
 
 package org.apache.kafka.coordinator.share;
 
+import org.apache.kafka.common.message.InitializeShareGroupStateRequestData;
 import org.apache.kafka.common.message.WriteShareGroupStateRequestData;
 import org.apache.kafka.coordinator.share.generated.ShareSnapshotValue;
 import org.apache.kafka.coordinator.share.generated.ShareUpdateValue;
@@ -94,13 +95,29 @@ public class ShareGroupOffset {
     }
 
     public static ShareGroupOffset fromRequest(WriteShareGroupStateRequestData.PartitionData data, int snapshotEpoch) {
-        return new ShareGroupOffset(snapshotEpoch,
+        return new ShareGroupOffset(
+            snapshotEpoch,
             data.stateEpoch(),
             data.leaderEpoch(),
             data.startOffset(),
             data.stateBatches().stream()
                 .map(PersisterStateBatch::from)
-                .collect(Collectors.toList()));
+                .toList()
+        );
+    }
+
+    public static ShareGroupOffset fromRequest(InitializeShareGroupStateRequestData.PartitionData data) {
+        return fromRequest(data, 0);
+    }
+
+    public static ShareGroupOffset fromRequest(InitializeShareGroupStateRequestData.PartitionData data, int snapshotEpoch) {
+        return new ShareGroupOffset(
+            snapshotEpoch,
+            data.stateEpoch(),
+            -1,
+            data.startOffset(),
+            List.of()
+        );
     }
 
     public LinkedHashSet<PersisterStateBatch> stateBatchAsSet() {

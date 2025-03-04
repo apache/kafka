@@ -16,16 +16,23 @@
  */
 package kafka.docker
 
+import com.fasterxml.jackson.annotation.JsonInclude
+import com.fasterxml.jackson.databind.exc.MismatchedInputException
+import com.fasterxml.jackson.databind.{DeserializationFeature, ObjectMapper}
+import com.fasterxml.jackson.dataformat.yaml.YAMLFactory
+import com.fasterxml.jackson.dataformat.yaml.YAMLGenerator.Feature
 import kafka.Kafka
-import kafka.tools.StorageTool
+import kafka.tools.{StorageTool, TerseFailure}
 import kafka.utils.Logging
 import net.sourceforge.argparse4j.ArgumentParsers
 import net.sourceforge.argparse4j.impl.Arguments.store
 import net.sourceforge.argparse4j.inf.Namespace
 import org.apache.kafka.common.utils.Exit
+import org.apache.kafka.raft.QuorumConfig
 
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path, Paths, StandardCopyOption, StandardOpenOption}
+import scala.jdk.CollectionConverters._
 
 object KafkaDockerWrapper extends Logging {
   def main(args: Array[String]): Unit = {
@@ -46,7 +53,15 @@ object KafkaDockerWrapper extends Logging {
         }
 
         val formatCmd = formatStorageCmd(finalConfigsPath, envVars)
-        StorageTool.main(formatCmd)
+        try {
+          StorageTool.main(formatCmd)
+        } catch {
+          case terseFailure: TerseFailure => if (terseFailure.getMessage.contains(QuorumConfig.QUORUM_VOTERS_CONFIG)) {
+            throw new TerseFailure("To maximize compatibility, the Docker image continues to use static voters, " +
+              "which are supported in 3.7 and later.", terseFailure)
+          } else throw terseFailure
+          case e: Throwable => throw e
+        }
       case "start" =>
         val configFile = namespace.getString("config")
         info("Starting Kafka server in the native mode.")
@@ -79,7 +94,7 @@ object KafkaDockerWrapper extends Logging {
       required(true).
       help(
         """Directory which holds default properties. It should contain the three file:-
-          |server.properties, log4j.properties and tools-log4j.properties.
+          |server.properties, log4j2.yaml and tools-log4j2.yaml.
           |""".stripMargin)
 
     setupParser.addArgument("--mounted-configs-dir", "-M").
@@ -87,7 +102,7 @@ object KafkaDockerWrapper extends Logging {
       required(true).
       help(
         """Directory which holds user mounted properties. It can contain none to all the three files:-
-          |server.properties, log4j.properties and tools-log4j.properties.""".stripMargin)
+          |server.properties, log4j2.yaml and tools-log4j2.yaml.""".stripMargin)
 
     setupParser.addArgument("--final-configs-dir", "-F").
       action(store()).
@@ -104,13 +119,15 @@ object KafkaDockerWrapper extends Logging {
       case Some(str) => str
       case None => throw new RuntimeException("CLUSTER_ID environment variable is not set.")
     }
+    // We maintain static voter configurations in Docker Hub images for better version compatibility and deployment stability,
+    // despite having dynamic voter support in the latest release.
     Array("format", "--cluster-id=" + clusterId, "-c", s"${configsPath.toString}/server.properties")
   }
 
   private def prepareConfigs(defaultConfigsPath: Path, mountedConfigsPath: Path, finalConfigsPath: Path): Unit = {
     prepareServerConfigs(defaultConfigsPath, mountedConfigsPath, finalConfigsPath, envVars)
-    prepareLog4jConfigs(defaultConfigsPath, mountedConfigsPath, finalConfigsPath, envVars)
-    prepareToolsLog4jConfigs(defaultConfigsPath, mountedConfigsPath, finalConfigsPath, envVars)
+    prepareLog4j2Configs(defaultConfigsPath, mountedConfigsPath, finalConfigsPath, envVars)
+    prepareToolsLog4j2Configs(defaultConfigsPath, mountedConfigsPath, finalConfigsPath, envVars)
   }
 
   private[docker] def prepareServerConfigs(defaultConfigsPath: Path,
@@ -137,36 +154,35 @@ object KafkaDockerWrapper extends Logging {
     }
   }
 
-  private[docker] def prepareLog4jConfigs(defaultConfigsPath: Path,
-                                          mountedConfigsPath: Path,
-                                          finalConfigsPath: Path,
-                                          env: Map[String, String]): Unit = {
-    val propsToAdd = getLog4jConfigsFromEnv(env)
+  private[docker] def prepareLog4j2Configs(defaultConfigsPath: Path,
+                                           mountedConfigsPath: Path,
+                                           finalConfigsPath: Path,
+                                           env: Map[String, String]): Unit = {
+    val loggerFromEnv = getLog4j2ConfigsFromEnv(env)
+    val rootOption = getLog4j2RootConfigsFromEnv(env)
 
-    val defaultFilePath = defaultConfigsPath.resolve(s"$Log4jPropsFilename")
-    val mountedFilePath = mountedConfigsPath.resolve(s"$Log4jPropsFilename")
-    val finalFilePath = finalConfigsPath.resolve(s"$Log4jPropsFilename")
+    val defaultFilePath = defaultConfigsPath.resolve(s"$Log4j2PropsFilename")
+    val mountedFilePath = mountedConfigsPath.resolve(s"$Log4j2PropsFilename")
+    val finalFilePath = finalConfigsPath.resolve(s"$Log4j2PropsFilename")
 
     copyFile(defaultFilePath, finalFilePath)
     copyFile(mountedFilePath, finalFilePath)
 
-    addToFile(propsToAdd, finalFilePath, StandardOpenOption.APPEND)
+    addToYaml(loggerFromEnv, rootOption, finalFilePath)
   }
 
-  private[docker] def prepareToolsLog4jConfigs(defaultConfigsPath: Path,
-                                               mountedConfigsPath: Path,
-                                               finalConfigsPath: Path,
-                                               env: Map[String, String]): Unit = {
-    val propToAdd = getToolsLog4jConfigsFromEnv(env)
-
-    val defaultFilePath = defaultConfigsPath.resolve(s"$ToolsLog4jFilename")
-    val mountedFilePath = mountedConfigsPath.resolve(s"$ToolsLog4jFilename")
-    val finalFilePath = finalConfigsPath.resolve(s"$ToolsLog4jFilename")
+  private[docker] def prepareToolsLog4j2Configs(defaultConfigsPath: Path,
+                                                mountedConfigsPath: Path,
+                                                finalConfigsPath: Path,
+                                                env: Map[String, String]): Unit = {
+    val defaultFilePath = defaultConfigsPath.resolve(s"$ToolsLog4j2Filename")
+    val mountedFilePath = mountedConfigsPath.resolve(s"$ToolsLog4j2Filename")
+    val finalFilePath = finalConfigsPath.resolve(s"$ToolsLog4j2Filename")
 
     copyFile(defaultFilePath, finalFilePath)
     copyFile(mountedFilePath, finalFilePath)
 
-    addToFile(propToAdd, finalFilePath, StandardOpenOption.APPEND)
+    addToYaml(Array.empty, getToolsLog4j2ConfigsFromEnv(env), finalFilePath)
   }
 
   private[docker] def getServerConfigsFromEnv(env: Map[String, String]): List[String] = {
@@ -186,29 +202,36 @@ object KafkaDockerWrapper extends Logging {
       .filterNot(_.trim.isEmpty)
   }
 
-  private[docker] def getLog4jConfigsFromEnv(env: Map[String, String]): String = {
-    val kafkaLog4jRootLogLevelProp = env.get(KafkaLog4jRootLoglevelEnv)
+  private[docker] def getLog4j2RootConfigsFromEnv(env: Map[String, String]): Option[Root] = {
+     env.get(KafkaLog4jRootLoglevelEnv)
       .filter(_.nonEmpty)
-      .map(kafkaLog4jRootLogLevel => s"log4j.rootLogger=$kafkaLog4jRootLogLevel, stdout")
-      .getOrElse("")
-
-    val kafkaLog4jLoggersProp = env.get(KafkaLog4JLoggersEnv)
-      .filter(_.nonEmpty)
-      .map {
-        kafkaLog4JLoggersString =>
-          kafkaLog4JLoggersString.split(",")
-            .map(kafkaLog4JLogger => s"log4j.logger.$kafkaLog4JLogger")
-            .mkString(NewlineChar)
-      }.getOrElse("")
-
-    addNewlinePadding(kafkaLog4jRootLogLevelProp) + addNewlinePadding(kafkaLog4jLoggersProp)
+      .map(buildRootLogger).getOrElse(Option.empty)
   }
 
-  private[docker] def getToolsLog4jConfigsFromEnv(env: Map[String, String]): String = {
+  private[docker] def getToolsLog4j2ConfigsFromEnv(env: Map[String, String]): Option[Root] = {
     env.get(KafkaToolsLog4jLoglevelEnv)
       .filter(_.nonEmpty)
-      .map(kafkaToolsLog4jLogLevel => addNewlinePadding(s"log4j.rootLogger=$kafkaToolsLog4jLogLevel, stderr"))
-      .getOrElse("")
+      .map(buildRootLogger).getOrElse(Option.empty)
+  }
+
+  private def buildRootLogger(level: String) = {
+    val root = new Root
+    root.setLevel(level)
+    Option.apply(root)
+  }
+
+  private[docker] def getLog4j2ConfigsFromEnv(env: Map[String, String]): Array[Logger] = {
+    env.get(KafkaLog4JLoggersEnv)
+      .filter(_.nonEmpty)
+      .map { loggersString =>
+        loggersString.split(",").map { e =>
+          val parts = e.split("=")
+          val logger = new Logger()
+          logger.setName(parts(0).trim)
+          logger.setLevel(parts(1).trim)
+          logger
+        }
+      }.getOrElse(Array.empty[Logger])
   }
 
   private def addToFile(properties: String, filepath: Path, mode: StandardOpenOption): Unit = {
@@ -217,6 +240,64 @@ object KafkaDockerWrapper extends Logging {
       Files.createFile(path)
     }
     Files.write(filepath, properties.getBytes(StandardCharsets.UTF_8), mode)
+  }
+
+  private def addToYaml(loggerFromEnv: Array[Logger], rootOption: Option[Root], filepath: Path): Unit = {
+    val path = filepath
+    if (!Files.exists(path)) {
+      Files.createFile(path)
+    }
+
+    val mapper = new ObjectMapper(new YAMLFactory().disable(Feature.WRITE_DOC_START_MARKER))
+      .configure(DeserializationFeature.ACCEPT_EMPTY_STRING_AS_NULL_OBJECT, true)
+      .setSerializationInclusion(JsonInclude.Include.NON_EMPTY)
+      .findAndRegisterModules();
+
+    val yaml = try {
+      mapper.readValue(filepath.toFile, classOf[Log4jConfiguration])
+    } catch {
+      case _: MismatchedInputException => new Log4jConfiguration
+      case e: RuntimeException => throw e
+    }
+    val config = yaml.getConfiguration
+
+    if (config == null) {
+      generateDefaultLog4jConfig(loggerFromEnv, rootOption, filepath, mapper)
+    } else {
+      overrideLog4jConfigByEnv(loggerFromEnv, rootOption, filepath, mapper, yaml, config)
+    }
+  }
+
+  private def generateDefaultLog4jConfig(loggerFromEnv: Array[Logger], rootOption: Option[Root], filepath: Path, mapper: ObjectMapper): Unit = {
+    val log4jYaml = new Log4jConfiguration
+    val configuration = new Configuration
+    val loggers = new Loggers
+    val root = if (rootOption.isEmpty) {
+      val root = new Root
+      // log4j default root logger level
+      root.setLevel("ERROR")
+      root
+    } else rootOption.get
+    log4jYaml.setConfiguration(configuration)
+    configuration.setLoggers(loggers)
+    loggers.setRoot(root)
+    loggers.setLogger(loggerFromEnv.toList.asJava)
+    Files.write(filepath, mapper.writeValueAsString(log4jYaml).getBytes(StandardCharsets.UTF_8), StandardOpenOption.TRUNCATE_EXISTING)
+  }
+
+  private def overrideLog4jConfigByEnv(loggerFromEnv: Array[Logger],
+                                       rootOption: Option[Root],
+                                       filepath: Path,
+                                       mapper: ObjectMapper,
+                                       yaml: Log4jConfiguration,
+                                       config: Configuration): Unit = {
+    val nameToLoggers = config.getLoggers.getLogger.asScala.map(logger => (logger.getName, logger)).to(collection.mutable.Map)
+    loggerFromEnv.foreach(logger => nameToLoggers.put(logger.getName, logger))
+    config.getLoggers.setLogger(nameToLoggers.values.toList.asJava)
+    if (rootOption.isDefined) {
+      config.getLoggers.setRoot(rootOption.get)
+    }
+    Files.write(filepath, mapper.writeValueAsString(yaml).getBytes(StandardCharsets.UTF_8), StandardOpenOption.TRUNCATE_EXISTING)
   }
 
   private def copyFile(source: Path, destination: Path) = {
@@ -238,8 +319,8 @@ object KafkaDockerWrapper extends Logging {
 
 private object Constants {
   val ServerPropsFilename = "server.properties"
-  val Log4jPropsFilename = "log4j.properties"
-  val ToolsLog4jFilename = "tools-log4j.properties"
+  val Log4j2PropsFilename = "log4j2.yaml"
+  val ToolsLog4j2Filename = "tools-log4j2.yaml"
   val KafkaLog4JLoggersEnv = "KAFKA_LOG4J_LOGGERS"
   val KafkaLog4jRootLoglevelEnv = "KAFKA_LOG4J_ROOT_LOGLEVEL"
   val KafkaToolsLog4jLoglevelEnv = "KAFKA_TOOLS_LOG4J_LOGLEVEL"

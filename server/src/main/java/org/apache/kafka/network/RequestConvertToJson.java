@@ -34,6 +34,8 @@ import org.apache.kafka.common.message.AlterPartitionRequestDataJsonConverter;
 import org.apache.kafka.common.message.AlterPartitionResponseDataJsonConverter;
 import org.apache.kafka.common.message.AlterReplicaLogDirsRequestDataJsonConverter;
 import org.apache.kafka.common.message.AlterReplicaLogDirsResponseDataJsonConverter;
+import org.apache.kafka.common.message.AlterShareGroupOffsetsRequestDataJsonConverter;
+import org.apache.kafka.common.message.AlterShareGroupOffsetsResponseDataJsonConverter;
 import org.apache.kafka.common.message.AlterUserScramCredentialsRequestDataJsonConverter;
 import org.apache.kafka.common.message.AlterUserScramCredentialsResponseDataJsonConverter;
 import org.apache.kafka.common.message.ApiVersionsRequestDataJsonConverter;
@@ -66,6 +68,8 @@ import org.apache.kafka.common.message.DeleteGroupsRequestDataJsonConverter;
 import org.apache.kafka.common.message.DeleteGroupsResponseDataJsonConverter;
 import org.apache.kafka.common.message.DeleteRecordsRequestDataJsonConverter;
 import org.apache.kafka.common.message.DeleteRecordsResponseDataJsonConverter;
+import org.apache.kafka.common.message.DeleteShareGroupOffsetsRequestDataJsonConverter;
+import org.apache.kafka.common.message.DeleteShareGroupOffsetsResponseDataJsonConverter;
 import org.apache.kafka.common.message.DeleteShareGroupStateRequestDataJsonConverter;
 import org.apache.kafka.common.message.DeleteShareGroupStateResponseDataJsonConverter;
 import org.apache.kafka.common.message.DeleteTopicsRequestDataJsonConverter;
@@ -212,6 +216,8 @@ import org.apache.kafka.common.requests.AlterPartitionRequest;
 import org.apache.kafka.common.requests.AlterPartitionResponse;
 import org.apache.kafka.common.requests.AlterReplicaLogDirsRequest;
 import org.apache.kafka.common.requests.AlterReplicaLogDirsResponse;
+import org.apache.kafka.common.requests.AlterShareGroupOffsetsRequest;
+import org.apache.kafka.common.requests.AlterShareGroupOffsetsResponse;
 import org.apache.kafka.common.requests.AlterUserScramCredentialsRequest;
 import org.apache.kafka.common.requests.AlterUserScramCredentialsResponse;
 import org.apache.kafka.common.requests.ApiVersionsRequest;
@@ -244,6 +250,8 @@ import org.apache.kafka.common.requests.DeleteGroupsRequest;
 import org.apache.kafka.common.requests.DeleteGroupsResponse;
 import org.apache.kafka.common.requests.DeleteRecordsRequest;
 import org.apache.kafka.common.requests.DeleteRecordsResponse;
+import org.apache.kafka.common.requests.DeleteShareGroupOffsetsRequest;
+import org.apache.kafka.common.requests.DeleteShareGroupOffsetsResponse;
 import org.apache.kafka.common.requests.DeleteShareGroupStateRequest;
 import org.apache.kafka.common.requests.DeleteShareGroupStateResponse;
 import org.apache.kafka.common.requests.DeleteTopicsRequest;
@@ -403,6 +411,8 @@ public class RequestConvertToJson {
                 return AlterPartitionRequestDataJsonConverter.write(((AlterPartitionRequest) request).data(), request.version());
             case ALTER_REPLICA_LOG_DIRS:
                 return AlterReplicaLogDirsRequestDataJsonConverter.write(((AlterReplicaLogDirsRequest) request).data(), request.version());
+            case ALTER_SHARE_GROUP_OFFSETS:
+                return AlterShareGroupOffsetsRequestDataJsonConverter.write(((AlterShareGroupOffsetsRequest) request).data(), request.version());
             case ALTER_USER_SCRAM_CREDENTIALS:
                 return AlterUserScramCredentialsRequestDataJsonConverter.write(((AlterUserScramCredentialsRequest) request).data(), request.version());
             case API_VERSIONS:
@@ -435,6 +445,8 @@ public class RequestConvertToJson {
                 return DeleteGroupsRequestDataJsonConverter.write(((DeleteGroupsRequest) request).data(), request.version());
             case DELETE_RECORDS:
                 return DeleteRecordsRequestDataJsonConverter.write(((DeleteRecordsRequest) request).data(), request.version());
+            case DELETE_SHARE_GROUP_OFFSETS:
+                return DeleteShareGroupOffsetsRequestDataJsonConverter.write(((DeleteShareGroupOffsetsRequest) request).data(), request.version());
             case DELETE_SHARE_GROUP_STATE:
                 return DeleteShareGroupStateRequestDataJsonConverter.write(((DeleteShareGroupStateRequest) request).data(), request.version());
             case DELETE_TOPICS:
@@ -585,6 +597,8 @@ public class RequestConvertToJson {
                 return AlterPartitionResponseDataJsonConverter.write(((AlterPartitionResponse) response).data(), version);
             case ALTER_REPLICA_LOG_DIRS:
                 return AlterReplicaLogDirsResponseDataJsonConverter.write(((AlterReplicaLogDirsResponse) response).data(), version);
+            case ALTER_SHARE_GROUP_OFFSETS:
+                return AlterShareGroupOffsetsResponseDataJsonConverter.write(((AlterShareGroupOffsetsResponse) response).data(), version);
             case ALTER_USER_SCRAM_CREDENTIALS:
                 return AlterUserScramCredentialsResponseDataJsonConverter.write(((AlterUserScramCredentialsResponse) response).data(), version);
             case API_VERSIONS:
@@ -617,6 +631,8 @@ public class RequestConvertToJson {
                 return DeleteGroupsResponseDataJsonConverter.write(((DeleteGroupsResponse) response).data(), version);
             case DELETE_RECORDS:
                 return DeleteRecordsResponseDataJsonConverter.write(((DeleteRecordsResponse) response).data(), version);
+            case DELETE_SHARE_GROUP_OFFSETS:
+                return DeleteShareGroupOffsetsResponseDataJsonConverter.write(((DeleteShareGroupOffsetsResponse) response).data(), version);
             case DELETE_SHARE_GROUP_STATE:
                 return DeleteShareGroupStateResponseDataJsonConverter.write(((DeleteShareGroupStateResponse) response).data(), version);
             case DELETE_TOPICS:

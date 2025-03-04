@@ -20,7 +20,6 @@ package kafka.server
 import java.util
 import java.util.concurrent.TimeUnit
 import java.util.Properties
-import kafka.cluster.EndPoint
 import kafka.utils.{CoreUtils, Logging}
 import kafka.utils.Implicits._
 import org.apache.kafka.common.Reconfigurable
@@ -33,11 +32,12 @@ import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.security.auth.KafkaPrincipalSerde
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.network.EndPoint
 import org.apache.kafka.coordinator.group.Group.GroupType
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig
 import org.apache.kafka.coordinator.group.{GroupConfig, GroupCoordinatorConfig}
 import org.apache.kafka.coordinator.share.ShareCoordinatorConfig
-import org.apache.kafka.coordinator.transaction.{TransactionLogConfig, TransactionStateManagerConfig}
+import org.apache.kafka.coordinator.transaction.{AddPartitionsToTxnConfig, TransactionLogConfig, TransactionStateManagerConfig}
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.security.authorizer.AuthorizerUtils
@@ -206,8 +206,10 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
 
   private val _transactionLogConfig = new TransactionLogConfig(this)
   private val _transactionStateManagerConfig = new TransactionStateManagerConfig(this)
+  private val _addPartitionsToTxnConfig = new AddPartitionsToTxnConfig(this)
   def transactionLogConfig: TransactionLogConfig = _transactionLogConfig
   def transactionStateManagerConfig: TransactionStateManagerConfig = _transactionStateManagerConfig
+  def addPartitionsToTxnConfig: AddPartitionsToTxnConfig = _addPartitionsToTxnConfig
 
   private val _quotaConfig = new QuotaConfig(this)
   def quotaConfig: QuotaConfig = _quotaConfig
@@ -384,33 +386,9 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   val producerPurgatoryPurgeIntervalRequests = getInt(ReplicationConfigs.PRODUCER_PURGATORY_PURGE_INTERVAL_REQUESTS_CONFIG)
   val deleteRecordsPurgatoryPurgeIntervalRequests = getInt(ReplicationConfigs.DELETE_RECORDS_PURGATORY_PURGE_INTERVAL_REQUESTS_CONFIG)
   val autoLeaderRebalanceEnable = getBoolean(ReplicationConfigs.AUTO_LEADER_REBALANCE_ENABLE_CONFIG)
-  val leaderImbalancePerBrokerPercentage = getInt(ReplicationConfigs.LEADER_IMBALANCE_PER_BROKER_PERCENTAGE_CONFIG)
   val leaderImbalanceCheckIntervalSeconds: Long = getLong(ReplicationConfigs.LEADER_IMBALANCE_CHECK_INTERVAL_SECONDS_CONFIG)
   val uncleanLeaderElectionCheckIntervalMs: Long = getLong(ReplicationConfigs.UNCLEAN_LEADER_ELECTION_INTERVAL_MS_CONFIG)
   def uncleanLeaderElectionEnable: java.lang.Boolean = getBoolean(ReplicationConfigs.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG)
-
-  // We keep the user-provided String as `MetadataVersion.fromVersionString` can choose a slightly different version (eg if `0.10.0`
-  // is passed, `0.10.0-IV0` may be picked)
-  val interBrokerProtocolVersionString = getString(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG)
-  val interBrokerProtocolVersion = if (processRoles.isEmpty) {
-    MetadataVersion.fromVersionString(interBrokerProtocolVersionString)
-  } else {
-    if (originals.containsKey(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG)) {
-      // A user-supplied IBP was given
-      val configuredVersion = MetadataVersion.fromVersionString(interBrokerProtocolVersionString)
-      if (!configuredVersion.isKRaftSupported) {
-        throw new ConfigException(s"A non-KRaft version $interBrokerProtocolVersionString given for ${ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG}. " +
-          s"The minimum version is ${MetadataVersion.MINIMUM_KRAFT_VERSION}")
-      } else {
-        warn(s"${ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG} is deprecated in KRaft mode as of 3.3 and will only " +
-          s"be read when first upgrading from a KRaft prior to 3.3. See kafka-storage.sh help for details on setting " +
-          s"the metadata.version for a new KRaft cluster.")
-      }
-    }
-    // In KRaft mode, we pin this value to the minimum KRaft-supported version. This prevents inadvertent usage of
-    // the static IBP config in broker components running in KRaft mode
-    MetadataVersion.MINIMUM_KRAFT_VERSION
-  }
 
   /** ********* Controlled shutdown configuration ***********/
   val controlledShutdownEnable = getBoolean(ServerConfigs.CONTROLLED_SHUTDOWN_ENABLE_CONFIG)
@@ -432,6 +410,13 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
       }
       warn(s"Share groups and the new '${GroupType.SHARE}' rebalance protocol are enabled. " +
         "This is part of the early access of KIP-932 and MUST NOT be used in production.")
+    }
+    if (protocols.contains(GroupType.STREAMS)) {
+      if (processRoles.isEmpty || !isNewGroupCoordinatorEnabled) {
+        throw new ConfigException(s"The new '${GroupType.STREAMS}' rebalance protocol is only supported in KRaft cluster with the new group coordinator.")
+      }
+      warn(s"The new '${GroupType.STREAMS}' rebalance protocol is enabled along with the new group coordinator. " +
+        "This is part of the preview of KIP-1071 and MUST NOT be used in production.")
     }
     protocols
   }
@@ -541,29 +526,44 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   }
 
   def effectiveAdvertisedControllerListeners: Seq[EndPoint] = {
-    val controllerAdvertisedListeners = advertisedListeners.filter(l => controllerListenerNames.contains(l.listenerName.value()))
+    val advertisedListenersProp = getString(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG)
+    val controllerAdvertisedListeners = if (advertisedListenersProp != null) {
+      CoreUtils.listenerListToEndPoints(advertisedListenersProp, effectiveListenerSecurityProtocolMap, requireDistinctPorts=false)
+        .filter(l => controllerListenerNames.contains(l.listenerName.value()))
+    } else {
+      Seq.empty
+    }
     val controllerListenersValue = controllerListeners
 
     controllerListenerNames.flatMap { name =>
       controllerAdvertisedListeners
         .find(endpoint => endpoint.listenerName.equals(ListenerName.normalised(name)))
-        .orElse(controllerListenersValue.find(endpoint => endpoint.listenerName.equals(ListenerName.normalised(name))))
+        .orElse(
+          // If users don't define advertised.listeners, the advertised controller listeners inherit from listeners configuration
+          // which match listener names in controller.listener.names.
+          // Removing "0.0.0.0" host to avoid validation errors. This is to be compatible with the old behavior before 3.9.
+          // The null or "" host does a reverse lookup in ListenerInfo#withWildcardHostnamesResolved.
+          controllerListenersValue
+            .find(endpoint => endpoint.listenerName.equals(ListenerName.normalised(name)))
+            .map(endpoint => if (endpoint.host == "0.0.0.0") {
+              new EndPoint(null, endpoint.port, endpoint.listenerName, endpoint.securityProtocol)
+            } else {
+              endpoint
+            })
+        )
     }
   }
 
   def effectiveAdvertisedBrokerListeners: Seq[EndPoint] = {
-    // Only expose broker listeners
-    advertisedListeners.filterNot(l => controllerListenerNames.contains(l.listenerName.value()))
-  }
-
-  // Use advertised listeners if defined, fallback to listeners otherwise
-  private def advertisedListeners: Seq[EndPoint] = {
+    // Use advertised listeners if defined, fallback to listeners otherwise
     val advertisedListenersProp = getString(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG)
-    if (advertisedListenersProp != null) {
+    val advertisedListeners = if (advertisedListenersProp != null) {
       CoreUtils.listenerListToEndPoints(advertisedListenersProp, effectiveListenerSecurityProtocolMap, requireDistinctPorts=false)
     } else {
       listeners
     }
+    // Only expose broker listeners
+    advertisedListeners.filterNot(l => controllerListenerNames.contains(l.listenerName.value()))
   }
 
   private def getInterBrokerListenerNameAndSecurityProtocol: (ListenerName, SecurityProtocol) = {
@@ -713,15 +713,10 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
       validateControllerQuorumVotersMustContainNodeIdForKRaftController()
       validateAdvertisedControllerListenersNonEmptyForKRaftController()
       validateControllerListenerNamesMustAppearInListenersForKRaftController()
-    } else {
-      // controller listener names must be empty when not in KRaft mode
-      require(controllerListenerNames.isEmpty,
-        s"${KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG} must be empty when not running in KRaft mode: ${controllerListenerNames.asJava}")
     }
 
     val listenerNames = listeners.map(_.listenerName).toSet
-    if (processRoles.isEmpty || processRoles.contains(ProcessRole.BrokerRole)) {
-      // validations for all broker setups (i.e. broker-only and co-located)
+    if (processRoles.contains(ProcessRole.BrokerRole)) {
       validateAdvertisedBrokerListenersNonEmptyForBroker()
       require(advertisedBrokerListenerNames.contains(interBrokerListenerName),
         s"${ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG} must be a listener name defined in ${SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG}. " +

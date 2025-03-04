@@ -17,17 +17,13 @@
 
 package org.apache.kafka.common.acl;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.resource.ResourcePattern;
 
 import java.util.Objects;
 
 /**
  * Represents a binding between a resource pattern and an access control entry.
- *
- * The API for this class is still evolving and we may break compatibility in minor releases, if necessary.
  */
-@InterfaceStability.Evolving
 public class AclBinding {
     private final ResourcePattern pattern;
     private final AccessControlEntry entry;

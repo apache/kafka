@@ -25,7 +25,6 @@ import org.apache.kafka.coordinator.group.modern.MemberSubscriptionAndAssignment
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -108,6 +107,6 @@ public class GroupSpecImplTest {
         ));
 
         assertEquals(topicPartitions, groupSpec.memberAssignment(TEST_MEMBER).partitions());
-        assertEquals(Collections.emptyMap(), groupSpec.memberAssignment("unknown-member").partitions());
+        assertEquals(Map.of(), groupSpec.memberAssignment("unknown-member").partitions());
     }
 }
