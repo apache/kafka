@@ -241,6 +241,13 @@
             <strong>Configuration Value Size Limitation</strong>: KRaft mode restricts configuration values to a maximum size of <code>Short.MAX_VALUE</code>,
             which prevents using the append operation to create larger configuration values.
         </li>
+        <li>
+            <strong>Policy Class Deployment</strong>:
+            In KRaft mode, the <code>CreateTopicPolicy</code> and <code>AlterConfigPolicy</code> plugins run on the Controller instead of the Broker.
+            This requires users to deploy the policy class JAR files on the Controller and configure the parameters
+            (<code>create.topic.policy.class.name</code> and <code>alter.config.policy.class.name</code>) on the Controller.
+            <p>Note: If migrating from ZooKeeper mode, ensure policy JARs are moved from Brokers to Controllers.</p>
+        </li>
     </ul>
 </div>
 <!--#include virtual="../includes/_footer.htm" -->
