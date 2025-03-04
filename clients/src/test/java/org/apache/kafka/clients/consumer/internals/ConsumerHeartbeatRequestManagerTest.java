@@ -20,7 +20,6 @@ import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.SubscriptionPattern;
-import org.apache.kafka.clients.consumer.internals.AbstractHeartbeatRequestManager.HeartbeatRequestState;
 import org.apache.kafka.clients.consumer.internals.AbstractMembershipManager.LocalAssignment;
 import org.apache.kafka.clients.consumer.internals.ConsumerHeartbeatRequestManager.HeartbeatState;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;

@@ -48,7 +48,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.GroupConfig;
 import org.apache.kafka.coordinator.group.GroupConfigManager;
 import org.apache.kafka.coordinator.group.ShareGroupAutoOffsetResetStrategy;
-import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 import org.apache.kafka.server.share.acknowledge.ShareAcknowledgementBatch;
 import org.apache.kafka.server.share.fetch.ShareAcquiredRecords;
 import org.apache.kafka.server.share.metrics.SharePartitionMetrics;
@@ -66,8 +65,6 @@ import org.apache.kafka.server.util.timer.SystemTimerReaper;
 import org.apache.kafka.server.util.timer.Timer;
 import org.apache.kafka.storage.internals.log.OffsetResultHolder;
 import org.apache.kafka.test.TestUtils;
-
-import com.yammer.metrics.core.Gauge;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -91,6 +88,7 @@ import java.util.concurrent.TimeUnit;
 
 import static kafka.server.share.SharePartition.EMPTY_MEMBER_ID;
 import static org.apache.kafka.server.share.fetch.ShareFetchTestUtils.memoryRecordsBuilder;
+import static org.apache.kafka.server.share.fetch.ShareFetchTestUtils.yammerMetricValue;
 import static org.apache.kafka.test.TestUtils.assertFutureThrows;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -6734,19 +6732,6 @@ public class SharePartitionTest {
                         PartitionFactory.newPartitionAllData(0, 0, 0L, Errors.NONE.code(), Errors.NONE.message(),
                                 Collections.emptyList())))));
         Mockito.when(persister.readState(Mockito.any())).thenReturn(CompletableFuture.completedFuture(readShareGroupStateResult));
-    }
-
-    private Number yammerMetricValue(String name) {
-        try {
-            Gauge gauge = (Gauge) KafkaYammerMetrics.defaultRegistry().allMetrics().entrySet().stream()
-                .filter(e -> e.getKey().getMBeanName().contains(name))
-                .findFirst()
-                .orElseThrow()
-                .getValue();
-            return (Number) gauge.value();
-        } catch (Exception e) {
-            return 0;
-        }
     }
 
     private static class SharePartitionBuilder {

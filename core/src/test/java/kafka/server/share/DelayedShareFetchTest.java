@@ -154,6 +154,7 @@ public class DelayedShareFetchTest {
         // Metrics shall not be recorded as no partition is acquired.
         assertNull(shareGroupMetrics.topicPartitionsAcquireTimeMs(groupId));
         assertNull(shareGroupMetrics.topicPartitionsFetchRatio(groupId));
+        assertEquals(0, delayedShareFetch.expiredRequestMeter().count());
 
         delayedShareFetch.lock().unlock();
     }
@@ -1116,6 +1117,23 @@ public class DelayedShareFetchTest {
             ),
             QuotaFactory.UNBOUNDED_QUOTA,
             true);
+    }
+
+    @Test
+    public void testOnCompleteExecutionOnTimeout() {
+        ShareFetch shareFetch = new ShareFetch(
+            FETCH_PARAMS, "grp", Uuid.randomUuid().toString(),
+            new CompletableFuture<>(), new LinkedHashMap<>(), BATCH_SIZE, MAX_FETCH_RECORDS,
+            BROKER_TOPIC_STATS);
+        DelayedShareFetch delayedShareFetch = DelayedShareFetchBuilder.builder()
+            .withShareFetchData(shareFetch)
+            .build();
+        assertFalse(delayedShareFetch.isCompleted());
+        assertFalse(shareFetch.isCompleted());
+        // Call run to execute onComplete and onExpiration.
+        delayedShareFetch.run();
+        assertTrue(shareFetch.isCompleted());
+        assertEquals(1, delayedShareFetch.expiredRequestMeter().count());
     }
 
     static void mockTopicIdPartitionToReturnDataEqualToMinBytes(ReplicaManager replicaManager, TopicIdPartition topicIdPartition, int minBytes) {
