@@ -21,42 +21,29 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Collection;
-import java.util.Objects;
 
 /**
- * Specification of consumer group offsets to list using {@link Admin#listConsumerGroupOffsets(java.util.Map)}.
- *
+ * Specification of Streams group offsets to list using {@link Admin#listStreamsGroupOffsets(Map, ListStreamsGroupOffsetsOptions)}.
+ * <p>
  * The API of this class is evolving, see {@link Admin} for details.
  */
 @InterfaceStability.Evolving
-public class ListStreamsGroupOffsetsSpec extends ListConsumerGroupOffsetsSpec {
+public class ListStreamsGroupOffsetsSpec {
 
-    public ListStreamsGroupOffsetsSpec topicPartitions(Collection<TopicPartition> topicPartitions) {
-        super.topicPartitions(topicPartitions);
+    private Collection<TopicPartition> topicPartitions;
+
+    /**
+     * Set the topic partitions whose offsets are to be listed for a Streams group.
+     */
+    ListStreamsGroupOffsetsSpec topicPartitions(Collection<TopicPartition> topicPartitions) {
+        this.topicPartitions = topicPartitions;
         return this;
     }
 
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) {
-            return true;
-        }
-        if (!(o instanceof ListConsumerGroupOffsetsSpec)) {
-            return false;
-        }
-        ListStreamsGroupOffsetsSpec that = (ListStreamsGroupOffsetsSpec) o;
-        return Objects.equals(topicPartitions(), that.topicPartitions());
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(topicPartitions());
-    }
-
-    @Override
-    public String toString() {
-        return "ListStreamsGroupOffsetsSpec(" +
-            "topicPartitions=" + topicPartitions() +
-            ')';
+    /**
+     * Returns the topic partitions whose offsets are to be listed for a Streams group.
+     */
+    Collection<TopicPartition> topicPartitions() {
+        return topicPartitions;
     }
 }

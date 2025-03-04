@@ -21,7 +21,7 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 
 
 /**
- * Options for {@link Admin#listStreamsGroupOffsets(java.util.Map)}.
+ * Options for {@link Admin#listStreamsGroupOffsets(Map, ListStreamsGroupOffsetsOptions)}.
  * <p>
  * The API of this class is evolving, see {@link Admin} for details.
  */

@@ -3792,7 +3792,7 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public DeleteStreamsGroupsResult deleteStreamsGroups(Collection<String> groupIds, DeleteStreamsGroupsOptions options) {
-        return new DeleteStreamsGroupsResult(deleteConsumerGroups(groupIds, options));
+        return new DeleteStreamsGroupsResult(deleteConsumerGroups(groupIds, new DeleteConsumerGroupsOptions()));
     }
 
     @Override
@@ -3812,7 +3812,7 @@ public class KafkaAdminClient extends AdminClient {
         String groupId,
         Set<TopicPartition> partitions,
         DeleteStreamsGroupOffsetsOptions options) {
-        return new DeleteStreamsGroupOffsetsResult(deleteConsumerGroupOffsets(groupId, partitions, options));
+        return new DeleteStreamsGroupOffsetsResult(deleteConsumerGroupOffsets(groupId, partitions, new DeleteConsumerGroupOffsetsOptions()));
     }
 
     @Override
@@ -4251,7 +4251,7 @@ public class KafkaAdminClient extends AdminClient {
         Map<TopicPartition, OffsetAndMetadata> offsets,
         AlterStreamsGroupOffsetsOptions options
     ) {
-        return new AlterStreamsGroupOffsetsResult(alterConsumerGroupOffsets(groupId, offsets, options));
+        return new AlterStreamsGroupOffsetsResult(alterConsumerGroupOffsets(groupId, offsets, new AlterConsumerGroupOffsetsOptions()));
     }
 
     @Override

@@ -302,10 +302,6 @@ import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
 import static org.apache.kafka.clients.admin.KafkaAdminClient.DEFAULT_LEAVE_GROUP_REASON;
-import static org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignablePartitionResponse;
-import static org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignableTopicResponse;
-import static org.apache.kafka.common.message.ListPartitionReassignmentsResponseData.OngoingPartitionReassignment;
-import static org.apache.kafka.common.message.ListPartitionReassignmentsResponseData.OngoingTopicReassignment;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -315,7 +311,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -4667,7 +4662,7 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(prepareOldFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
             env.kafkaClient().prepareResponse(prepareOldFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
 
-            ListConsumerGroupOffsetsResult result = env.adminClient().listStreamsGroupOffsets(groupSpecs);
+            ListStreamsGroupOffsetsResult result = env.adminClient().listStreamsGroupOffsets(groupSpecs);
 
             // Fail the first request in order to ensure that the group is not batched when retried.
             sendStreamsOffsetFetchResponse(env.kafkaClient(), groupSpecs, false, Errors.COORDINATOR_LOAD_IN_PROGRESS);
@@ -4730,7 +4725,7 @@ public class KafkaAdminClientTest {
             // NoBatchedOffsetFetchRequestException. This triggers creation of non-batched requests.
             env.kafkaClient().prepareResponse(offsetFetchResponse(Errors.COORDINATOR_NOT_AVAILABLE, Collections.emptyMap()));
 
-            ListConsumerGroupOffsetsResult result = env.adminClient().listStreamsGroupOffsets(groupSpecs);
+            ListStreamsGroupOffsetsResult result = env.adminClient().listStreamsGroupOffsets(groupSpecs);
 
             // The request handler attempts both FindCoordinator and OffsetFetch requests. This seems
             // ok since we expect this scenario only during upgrades from versions < 3.0.0 where
@@ -4832,11 +4827,11 @@ public class KafkaAdminClientTest {
     }
 
     private void verifyListStreamsOffsetsForMultipleGroups(Map<String, ListStreamsGroupOffsetsSpec> groupSpecs,
-                                                    ListConsumerGroupOffsetsResult result) throws Exception {
+                                                           ListStreamsGroupOffsetsResult result) throws Exception {
         assertEquals(groupSpecs.size(), result.all().get(10, TimeUnit.SECONDS).size());
         for (Map.Entry<String, ListStreamsGroupOffsetsSpec> entry : groupSpecs.entrySet()) {
             assertEquals(entry.getValue().topicPartitions(),
-                result.partitionsToOffsetAndMetadata(entry.getKey()).get().keySet());
+                result.partitionsToOffset(entry.getKey()).get().keySet());
         }
     }
 
@@ -5134,7 +5129,7 @@ public class KafkaAdminClientTest {
                     .setResults(validResponse)
             ));
 
-            final DeleteConsumerGroupsResult result = env.adminClient().deleteStreamsGroups(groupIds);
+            final DeleteStreamsGroupsResult result = env.adminClient().deleteStreamsGroups(groupIds);
 
             final KafkaFuture<Void> results = result.deletedGroups().get("groupId");
             assertNull(results.get());
@@ -5143,7 +5138,7 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(
                 prepareOldFindCoordinatorResponse(Errors.GROUP_AUTHORIZATION_FAILED, Node.noNode()));
 
-            DeleteConsumerGroupsResult errorResult = env.adminClient().deleteStreamsGroups(groupIds);
+            DeleteStreamsGroupsResult errorResult = env.adminClient().deleteStreamsGroups(groupIds);
             TestUtils.assertFutureThrows(GroupAuthorizationException.class, errorResult.deletedGroups().get("groupId"));
 
             // Retriable errors should be retried
@@ -5288,7 +5283,7 @@ public class KafkaAdminClientTest {
                     .setResults(validResponse)
             ));
 
-            final DeleteConsumerGroupsResult result = env.adminClient()
+            final DeleteStreamsGroupsResult result = env.adminClient()
                 .deleteStreamsGroups(groupIds);
 
             final KafkaFuture<Void> results = result.deletedGroups().get("group1");

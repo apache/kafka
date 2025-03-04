@@ -948,6 +948,8 @@ public interface Admin extends AutoCloseable {
     /**
      * List the Streams group offsets available in the cluster for the specified Streams groups.
      *
+     * <em>Note</em>: this method effectively does the same as the corresponding consumer group method {@link Admin#listConsumerGroupOffsets} does.
+     *
      * @param groupSpecs Map of Streams group ids to a spec that specifies the topic partitions of the group to list offsets for.
      *
      * @param options The options to use when listing the Streams group offsets.
@@ -987,6 +989,8 @@ public interface Admin extends AutoCloseable {
 
     /**
      * Delete Streams groups from the cluster.
+     *
+     * <em>Note</em>: this method effectively does the same as the corresponding consumer group method {@link Admin#deleteConsumerGroups} does.
      *
      * @param options The options to use when deleting a Streams group.
      * @return The DeleteStreamsGroupsResult.
@@ -1029,6 +1033,8 @@ public interface Admin extends AutoCloseable {
      * Delete committed offsets for a set of partitions in a Streams group. This will
      * succeed at the partition level only if the group is not actively subscribed
      * to the corresponding topic.
+     *
+     * <em>Note</em>: this method effectively does the same as the corresponding consumer group method {@link Admin#deleteConsumerGroupOffsets} does.
      *
      * @param options The options to use when deleting offsets in a Streams group.
      * @return The DeleteStreamsGroupOffsetsResult.
@@ -1292,6 +1298,8 @@ public interface Admin extends AutoCloseable {
      * <p>Alters offsets for the specified group. In order to succeed, the group must be empty.
      *
      * <p>This operation is not transactional so it may succeed for some partitions while fail for others.
+     *
+     * <em>Note</em>: this method effectively does the same as the corresponding consumer group method {@link Admin#alterConsumerGroupOffsets} does.
      *
      * @param groupId The group for which to alter offsets.
      * @param offsets A map of offsets by partition with associated metadata. Partitions not specified in the map are ignored.

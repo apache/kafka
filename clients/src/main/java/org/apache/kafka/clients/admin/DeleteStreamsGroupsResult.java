@@ -18,19 +18,40 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Collection;
 import java.util.Map;
 
 /**
- * The result of the {@link Admin#deleteStreamsGroups(Collection <String>, DeleteStreamsGroupsOptions)} call.
+ * The result of the {@link Admin#deleteStreamsGroups(Collection, DeleteStreamsGroupsOptions)} call.
+ * <p>
+ * The API of this class is evolving, see {@link Admin} for details.
  */
-public class DeleteStreamsGroupsResult extends DeleteConsumerGroupsResult {
-    public DeleteStreamsGroupsResult(final Map<String, KafkaFuture<Void>> futures) {
-        super(futures);
+@InterfaceStability.Evolving
+public class DeleteStreamsGroupsResult {
+
+    private final DeleteConsumerGroupsResult delegate;
+
+    DeleteStreamsGroupsResult(final Map<String, KafkaFuture<Void>> futures) {
+        delegate = new DeleteConsumerGroupsResult(futures);
     }
 
-    public DeleteStreamsGroupsResult(final DeleteConsumerGroupsResult parent) {
-        super(parent.futures());
+    DeleteStreamsGroupsResult(final DeleteConsumerGroupsResult delegate) {
+        this.delegate = delegate;
+    }
+
+    /**
+     * Return a future which succeeds only if all the deletions succeed.
+     */
+    public KafkaFuture<Void> all() {
+        return delegate.all();
+    }
+
+    /**
+     * Return a map from group id to futures which can be used to check the status of individual deletions.
+     */
+    public Map<String, KafkaFuture<Void>> deletedGroups() {
+        return delegate.deletedGroups();
     }
 }

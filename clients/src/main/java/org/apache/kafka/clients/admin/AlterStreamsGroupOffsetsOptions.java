@@ -18,13 +18,12 @@ package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
 
-import java.util.Map;
 
 /**
- * Options for the {@link AdminClient#alterStreamsGroupOffsets(String, Map, AlterStreamsGroupOffsetsOptions)} call.
- *
- * The API of this class is evolving, see {@link AdminClient} for details.
+ * Options for the {@link Admin#alterStreamsGroupOffsets(String groupId, Map), AlterStreamsGroupOffsetsOptions)} call.
+ * <p>
+ * The API of this class is evolving, see {@link Admin} for details.
  */
 @InterfaceStability.Evolving
-public class AlterStreamsGroupOffsetsOptions extends AlterConsumerGroupOffsetsOptions {
+public class AlterStreamsGroupOffsetsOptions extends AbstractOptions<AlterStreamsGroupOffsetsOptions> {
 }

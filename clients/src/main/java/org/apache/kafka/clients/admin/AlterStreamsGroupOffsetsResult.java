@@ -19,24 +19,34 @@ package org.apache.kafka.clients.admin;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
-import org.apache.kafka.common.protocol.Errors;
 
 import java.util.Map;
 
 /**
- * The result of the {@link AdminClient#alterConsumerGroupOffsets(String, Map)} call.
+ * The result of the {@link AdminClient#alterStreamsGroupOffsets(String, Map)} call.
  *
  * The API of this class is evolving, see {@link AdminClient} for details.
  */
 @InterfaceStability.Evolving
-public class AlterStreamsGroupOffsetsResult extends AlterConsumerGroupOffsetsResult {
+public class AlterStreamsGroupOffsetsResult {
 
-    AlterStreamsGroupOffsetsResult(KafkaFuture<Map<TopicPartition, Errors>> future) {
-        super(future);
+    private final AlterConsumerGroupOffsetsResult delegate;
+
+    AlterStreamsGroupOffsetsResult(final AlterConsumerGroupOffsetsResult delegate) {
+        this.delegate = delegate;
     }
 
-    AlterStreamsGroupOffsetsResult(AlterConsumerGroupOffsetsResult parent) {
-        super(parent.future());
+    /**
+     * Return a future which can be used to check the result for a given partition.
+     */
+    public KafkaFuture<Void> partitionResult(final TopicPartition partition) {
+        return delegate.partitionResult(partition);
     }
 
+    /**
+     * Return a future which succeeds if all the alter offsets succeed.
+     */
+    public KafkaFuture<Void> all() {
+        return delegate.all();
+    }
 }

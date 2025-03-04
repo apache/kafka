@@ -45,14 +45,6 @@ public class ListConsumerGroupOffsetsResult {
                 .collect(Collectors.toMap(e -> e.getKey().idValue, Entry::getValue));
     }
 
-    ListConsumerGroupOffsetsResult(final Map<String, KafkaFuture<Map<TopicPartition, OffsetAndMetadata>>> futures, boolean dummy) {
-        this.futures = futures;
-    }
-
-    Map<String, KafkaFuture<Map<TopicPartition, OffsetAndMetadata>>> futures() {
-        return futures;
-    }
-
     /**
      * Return a future which yields a map of topic partitions to OffsetAndMetadata objects.
      * If the group does not have a committed offset for this partition, the corresponding value in the returned map will be null.

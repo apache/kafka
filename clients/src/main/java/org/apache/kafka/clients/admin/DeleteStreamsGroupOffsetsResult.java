@@ -25,18 +25,33 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * The result of the {@link Admin#deleteConsumerGroupOffsets(String, Set)} call.
- *
+ * The result of the {@link Admin#deleteStreamsGroupOffsets(String, Set, DeleteStreamsGroupOffsetsOptions)} call.
+ * <p>
  * The API of this class is evolving, see {@link Admin} for details.
  */
 @InterfaceStability.Evolving
-public class DeleteStreamsGroupOffsetsResult extends DeleteConsumerGroupOffsetsResult {
+public class DeleteStreamsGroupOffsetsResult {
+    private final DeleteConsumerGroupOffsetsResult delegate;
 
     DeleteStreamsGroupOffsetsResult(KafkaFuture<Map<TopicPartition, Errors>> future, Set<TopicPartition> partitions) {
-        super(future, partitions);
+        delegate = new DeleteConsumerGroupOffsetsResult(future, partitions);
     }
 
-    DeleteStreamsGroupOffsetsResult(DeleteConsumerGroupOffsetsResult parent) {
-        super(parent.future(), parent.partitions());
+    DeleteStreamsGroupOffsetsResult(final DeleteConsumerGroupOffsetsResult delegate) {
+        this.delegate = delegate;
+    }
+
+    /**
+     * Return a future which succeeds only if all the deletions succeed.
+     */
+    public KafkaFuture<Void> all() {
+        return delegate.all();
+    }
+
+    /**
+     * Return a future which can be used to check the result for a given topic.
+     */
+    public KafkaFuture<Void> partitionResult(final TopicPartition topicPartition) {
+        return delegate.partitionResult(topicPartition);
     }
 }

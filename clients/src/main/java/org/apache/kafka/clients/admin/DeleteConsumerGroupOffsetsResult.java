@@ -41,14 +41,6 @@ public class DeleteConsumerGroupOffsetsResult {
         this.partitions = partitions;
     }
 
-    KafkaFuture<Map<TopicPartition, Errors>> future() {
-        return future;
-    }
-
-    Set<TopicPartition> partitions() {
-        return partitions;
-    }
-
     /**
      * Return a future which can be used to check the result for a given partition.
      */
