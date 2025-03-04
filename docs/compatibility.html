@@ -138,30 +138,26 @@
             </tr>
             <tr>
                 <td>Streams</td>
-                <td>❌ Not Available</td>
+                <td>❌ Not Compatible</td>
                 <td>Kafka Streams introduced in Kafka 0.10.x.</td>
             </tr>
             <tr>
                 <td>Connect</td>
-                <td>⚠️ Limited Compatibility</td>
-                <td>Connect introduced in Kafka 0.9.x but lacks support for modern features like IncrementalAlterConfigs
-                    and dynamic configs.
+                <td>❌ Not Compatible</td>
+                <td>Pre-0.10.x protocols are fully removed in Kafka 4.0 (<a
+                        href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-896">KIP-896</a>).
                 </td>
             </tr>
             <tr>
                 <td rowspan="3">1.x</td>
                 <td>Client</td>
                 <td>⚠️ Limited Compatibility</td>
-                <td>Supports brokers >= 0.10.x. Does not support newer features like idempotent producer or
-                    transactional API.
-                </td>
+                <td>Does not support newer features like idempotent producer or transactional API.</td>
             </tr>
             <tr>
                 <td>Streams</td>
                 <td>⚠️ Limited Compatibility</td>
-                <td>Basic Streams features available. Exactly-once semantics unavailable (requires Kafka 2.4.x or
-                    later).
-                </td>
+                <td>Basic Streams features available. EOSv1 and eager rebalancing unavailable in Kafka 4.0.</td>
             </tr>
             <tr>
                 <td>Connect</td>
@@ -172,16 +168,12 @@
                 <td rowspan="3">2.x</td>
                 <td>Client</td>
                 <td>⚠️ Partially Compatible</td>
-                <td>Compatible with brokers >= 0.10.x but lacks optimizations for Kafka 4.0. Pre-0.10.x protocols
-                    removed in 4.0.
-                </td>
+                <td></td>
             </tr>
             <tr>
                 <td>Streams</td>
                 <td>⚠️ Limited Compatibility</td>
-                <td>Exactly-once semantics unavailable (requires Kafka 2.4.x or later). Pre-2.4.x brokers lack key
-                    Streams features.
-                </td>
+                <td>EOSv1 and eager rebalancing unavailable in Kafka 4.0.</td>
             </tr>
             <tr>
                 <td>Connect</td>
@@ -194,25 +186,23 @@
                 <td rowspan="3">3.x</td>
                 <td>Client</td>
                 <td>✅ Fully Compatible</td>
-                <td>Fully compatible with Kafka 4.0 brokers. Lacks access to optimizations introduced in Kafka 4.0.</td>
+                <td></td>
             </tr>
             <tr>
                 <td>Streams</td>
                 <td>✅ Fully Compatible</td>
-                <td>Supports exactly-once semantics (introduced in Kafka 2.4.x). Topic IDs introduced in Kafka 3.0.</td>
+                <td></td>
             </tr>
             <tr>
                 <td>Connect</td>
                 <td>✅ Fully Compatible</td>
-                <td>MirrorMaker 2 fully supported. Dynamic configuration updates available from Kafka 3.x.</td>
+                <td></td>
             </tr>
         </table>
         <p>
             Note: Starting with Kafka 4.0, the `--zookeeper` option in AdminClient commands has been removed. Users must
-            use
-            the `--bootstrap-server` option to interact with the Kafka cluster. This change aligns with the transition
-            to
-            KRaft mode.
+            use the `--bootstrap-server` option to interact with the Kafka cluster. This change aligns with the transition
+            to KRaft mode.
         </p>
 
     </div>
