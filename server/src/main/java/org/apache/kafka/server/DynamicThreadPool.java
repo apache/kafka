@@ -22,6 +22,7 @@ import org.apache.kafka.server.config.ReplicationConfigs;
 import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.config.ServerLogConfigs;
 
+import java.util.Map;
 import java.util.Set;
 
 public class DynamicThreadPool {
@@ -35,8 +36,10 @@ public class DynamicThreadPool {
     private DynamicThreadPool() {}
 
     public static void validateReconfiguration(AbstractKafkaConfig currentConfig, AbstractKafkaConfig newConfig) {
-        newConfig.values().forEach((key, value) -> {
-            if (RECONFIGURABLE_CONFIGS.contains(key) && value instanceof Integer newValue) {
+        for (Map.Entry<String, ?> entry : newConfig.values().entrySet()) {
+            String key = entry.getKey();
+            if (RECONFIGURABLE_CONFIGS.contains(key)) {
+                int newValue = (int) entry.getValue();
                 int oldValue = getValue(currentConfig, key);
 
                 if (newValue != oldValue) {
@@ -50,7 +53,7 @@ public class DynamicThreadPool {
                         throw new ConfigException(String.format("%s, value should not be greater than double the current value %d", errorMsg, oldValue));
                 }
             }
-        });
+        }
     }
 
     public static int getValue(AbstractKafkaConfig config, String name) {
