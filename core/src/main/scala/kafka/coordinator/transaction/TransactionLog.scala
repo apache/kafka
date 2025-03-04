@@ -92,7 +92,7 @@ object TransactionLog {
     *
     * @return left with the version if the key is not a transaction log key, right with the transactional id otherwise
     */
-  def readTxnRecordKey(buffer: ByteBuffer): Either[Short,String] = {
+  def readTxnRecordKey(buffer: ByteBuffer): Either[Short, String] = {
     val version = buffer.getShort
     Either.cond(
       version == CoordinatorRecordType.TRANSACTION_LOG.id,

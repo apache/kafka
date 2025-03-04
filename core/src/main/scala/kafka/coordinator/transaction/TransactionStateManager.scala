@@ -474,6 +474,7 @@ class TransactionStateManager(brokerId: Int,
                       s" while loading transaction state from $topicPartition. Ignoring it. " +
                       "It could be a left over from an aborted upgrade.")
                   case Right(transactionalId) =>
+                    // load transaction metadata along with transaction state
                     TransactionLog.readTxnRecordValue(transactionalId, record.value) match {
                       case None =>
                         loadedTransactions.remove(transactionalId)

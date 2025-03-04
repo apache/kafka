@@ -237,7 +237,7 @@ class TransactionLogTest {
   def testReadTxnRecordKeyCanReadUnknownMessage(): Unit = {
     val record = new TransactionLogKey()
     val unknownRecord = MessageUtil.toVersionPrefixedBytes(Short.MaxValue, record)
-    TransactionLog.readTxnRecordKey(ByteBuffer.wrap(unknownRecord))match {
+    TransactionLog.readTxnRecordKey(ByteBuffer.wrap(unknownRecord)) match {
       case Left(version) => assertEquals(Short.MaxValue, version)
       case Right(_) => fail("Expected to read unknown message")
     }
