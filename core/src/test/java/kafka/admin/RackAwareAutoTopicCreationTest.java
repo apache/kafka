@@ -16,7 +16,6 @@
  */
 package kafka.admin;
 
-import org.apache.kafka.admin.BrokerMetadata;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.producer.Producer;
@@ -36,7 +35,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -113,12 +111,12 @@ public class RackAwareAutoTopicCreationTest {
                         p -> p.replicas().stream().map(Node::id).collect(Collectors.toList())));
     }
 
-    private static Map<Integer, String> getBrokerToRackMap(ClusterInstance cluster) {
+    private static Map<Integer, String> getBrokerToRackMap(ClusterInstance cluster) throws Exception {
         Map<Integer, String> actualBrokerToRackMap = new HashMap<>();
-        Iterator<BrokerMetadata> iterator = cluster.brokers().get(0).metadataCache().getAliveBrokers().iterator();
-        while (iterator.hasNext()) {
-            BrokerMetadata metadata = iterator.next();
-            actualBrokerToRackMap.put(metadata.id, metadata.rack.get());
+        try (Admin admin = cluster.admin()) {
+            admin.describeCluster().nodes().get().forEach(node -> {
+                actualBrokerToRackMap.put(node.id(), node.rack());
+            });
         }
         return actualBrokerToRackMap;
     }

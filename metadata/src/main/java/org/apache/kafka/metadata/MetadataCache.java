@@ -71,11 +71,7 @@ public interface MetadataCache extends ConfigRepository {
 
     Set<String> getAllTopics();
 
-    Set<TopicPartition> getTopicPartitions(String topicName);
-
     boolean hasAliveBroker(int brokerId);
-
-    List<BrokerMetadata> getAliveBrokers();
 
     Optional<Long> getAliveBrokerEpoch(int brokerId);
 

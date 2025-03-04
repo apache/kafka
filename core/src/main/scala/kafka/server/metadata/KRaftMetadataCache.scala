@@ -323,16 +323,6 @@ class KRaftMetadataCache(
 
   override def getAllTopics(): util.Set[String] = _currentImage.topics().topicsByName().keySet()
 
-  override def getTopicPartitions(topicName: String): util.Set[TopicPartition] = {
-    val topic = _currentImage.topics().getTopic(topicName)
-    if (topic == null) {
-      return util.Set.of()
-    }
-    topic.partitions.keySet.stream()
-      .map(partitionId => new TopicPartition(topicName, partitionId))
-      .collect(Collectors.toSet())
-  }
-
   override def getTopicId(topicName: String): Uuid = util.Optional.ofNullable(_currentImage.topics.topicsByName.get(topicName))
     .map(_.id)
     .orElse(Uuid.ZERO_UUID)
@@ -350,8 +340,6 @@ class KRaftMetadataCache(
   override def isBrokerShuttingDown(brokerId: Int): Boolean = {
     Option(_currentImage.cluster.broker(brokerId)).count(_.inControlledShutdown) == 1
   }
-
-  override def getAliveBrokers(): util.List[BrokerMetadata] = getAliveBrokers(_currentImage)
 
   private def getAliveBrokers(image: MetadataImage): util.List[BrokerMetadata] = {
     image.cluster().brokers().values().stream()

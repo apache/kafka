@@ -802,7 +802,7 @@ object TestUtils extends Logging {
       timeout: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Unit = {
     val expectedBrokerIds = brokers.map(_.config.brokerId).toSet
     waitUntilTrue(() => brokers.forall(server =>
-      expectedBrokerIds == server.dataPlaneRequestProcessor.metadataCache.getAliveBrokers().asScala.map(_.id).toSet
+      expectedBrokerIds.forall(server.dataPlaneRequestProcessor.metadataCache.hasAliveBroker(_))
     ), "Timed out waiting for broker metadata to propagate to all servers", timeout)
   }
 

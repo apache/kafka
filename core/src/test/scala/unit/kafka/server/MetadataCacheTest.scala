@@ -506,10 +506,11 @@ class MetadataCacheTest {
 
     val initialBrokerIds = (0 to 2)
     updateCache(initialBrokerIds)
-    val aliveBrokersFromCache = cache.getAliveBrokers().asScala
     // This should not change `aliveBrokersFromCache`
     updateCache((0 to 3))
-    assertEquals(initialBrokerIds.toSet, aliveBrokersFromCache.map(_.id).toSet)
+    initialBrokerIds.foreach { brokerId =>
+      assertTrue(cache.hasAliveBroker(brokerId))
+    }
   }
 
   @ParameterizedTest
@@ -627,42 +628,6 @@ class MetadataCacheTest {
     metadataCache.setImage(delta.apply(MetadataProvenance.EMPTY))
 
     assertTrue(metadataCache.isBrokerFenced(0))
-  }
-
-  @Test
-  def testGetAliveBrokersWithBrokerFenced(): Unit = {
-    val metadataCache = new KRaftMetadataCache(0, () => KRaftVersion.KRAFT_VERSION_0)
-    val listenerName = "listener"
-    val endpoints = new BrokerEndpointCollection()
-    endpoints.add(new BrokerEndpoint().
-      setName(listenerName).
-      setHost("foo").
-      setPort(123).
-      setSecurityProtocol(0))
-    val delta = new MetadataDelta.Builder().build()
-    delta.replay(new RegisterBrokerRecord()
-      .setBrokerId(0)
-      .setFenced(false)
-      .setEndPoints(endpoints))
-    delta.replay(new RegisterBrokerRecord()
-      .setBrokerId(1)
-      .setFenced(false)
-      .setEndPoints(endpoints))
-    delta.replay(new BrokerRegistrationChangeRecord()
-      .setBrokerId(1)
-      .setFenced(1.toByte))
-
-    val metadataImage = delta.apply(MetadataProvenance.EMPTY)
-
-    metadataCache.setImage(metadataImage)
-    assertFalse(metadataCache.isBrokerFenced(0))
-    assertTrue(metadataCache.isBrokerFenced(1))
-
-    val aliveBrokers = metadataCache.getAliveBrokers().asScala.map(_.id).toSet
-    metadataImage.cluster().brokers().forEach { (brokerId, registration) =>
-      assertEquals(!registration.fenced(), aliveBrokers.contains(brokerId))
-      assertEquals(aliveBrokers.contains(brokerId), metadataCache.getAliveBrokerNode(brokerId, new ListenerName(listenerName)).isPresent())
-    }
   }
 
   @Test
