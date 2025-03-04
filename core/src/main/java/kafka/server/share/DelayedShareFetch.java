@@ -25,6 +25,7 @@ import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.server.metrics.KafkaMetricsGroup;
 import org.apache.kafka.server.purgatory.DelayedOperation;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.share.fetch.DelayedShareFetchGroupKey;
@@ -36,6 +37,8 @@ import org.apache.kafka.server.storage.log.FetchIsolation;
 import org.apache.kafka.storage.internals.log.LogOffsetMetadata;
 import org.apache.kafka.storage.internals.log.LogOffsetSnapshot;
 
+import com.yammer.metrics.core.Meter;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -45,6 +48,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
@@ -61,6 +65,8 @@ public class DelayedShareFetch extends DelayedOperation {
 
     private static final Logger log = LoggerFactory.getLogger(DelayedShareFetch.class);
 
+    private static final String EXPIRES_PER_SEC = "ExpiresPerSec";
+
     private final ShareFetch shareFetch;
     private final ReplicaManager replicaManager;
     private final BiConsumer<SharePartitionKey, Throwable> exceptionHandler;
@@ -70,6 +76,10 @@ public class DelayedShareFetch extends DelayedOperation {
     // The topic partitions that need to be completed for the share fetch request are given by sharePartitions.
     // sharePartitions is a subset of shareFetchData. The order of insertion/deletion of entries in sharePartitions is important.
     private final LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions;
+    /**
+     * Metric for the rate of expired delayed fetch requests.
+     */
+    private final Meter expiredRequestMeter;
     // Tracks the start time to acquire any share partition for a fetch request.
     private long acquireStartTimeMs;
     private LinkedHashMap<TopicIdPartition, Long> partitionsAcquired;
@@ -124,10 +134,14 @@ public class DelayedShareFetch extends DelayedOperation {
         this.shareGroupMetrics = shareGroupMetrics;
         this.time = time;
         this.acquireStartTimeMs = time.hiResClockMs();
+        // Register metrics for DelayedShareFetch.
+        KafkaMetricsGroup metricsGroup = new KafkaMetricsGroup("kafka.server", "DelayedShareFetchMetrics");
+        this.expiredRequestMeter = metricsGroup.newMeter(EXPIRES_PER_SEC, "requests", TimeUnit.SECONDS);
     }
 
     @Override
     public void onExpiration() {
+        expiredRequestMeter.mark();
     }
 
     /**
@@ -513,5 +527,10 @@ public class DelayedShareFetch extends DelayedOperation {
     // Visible for testing.
     Lock lock() {
         return lock;
+    }
+
+    // Visible for testing.
+    Meter expiredRequestMeter() {
+        return expiredRequestMeter;
     }
 }
