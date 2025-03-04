@@ -138,6 +138,24 @@ public class RaftEventSimulationTest {
     }
 
     @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
+    void canRemoveLeader(
+        @ForAll int seed,
+        @ForAll @IntRange(min = 3, max = 5) int numVoters
+    ) {
+        Random random = new Random(seed);
+        Cluster cluster = new Cluster(numVoters, 0, random, true);
+        MessageRouter router = new MessageRouter(cluster);
+        EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
+        Set<Integer> expectedVoterIds = new HashSet<>(cluster.initialVoters.keySet());
+
+        initializeClusterAndStartAppending(cluster, router, scheduler, 2);
+
+        int leaderId = cluster.leaderWithMaxEpoch().get().nodeId;
+        removeVoter(cluster, scheduler, leaderId, expectedVoterIds);
+        runUntilNewHighWatermark(cluster, scheduler);
+    }
+
+    @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
     void canAddAndRemoveVoters(
         @ForAll int seed
     ) {
