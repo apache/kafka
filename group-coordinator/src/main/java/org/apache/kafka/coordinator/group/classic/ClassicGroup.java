@@ -343,6 +343,14 @@ public class ClassicGroup implements Group {
     }
 
     /**
+     * Requests a metadata refresh.
+     */
+    @Override
+    public void requestMetadataRefresh() {
+        // This does not apply to classic groups.
+    }
+
+    /**
      * Used to identify whether the given member is the leader of this group.
      *
      * @param memberId the member id.
