@@ -24,6 +24,7 @@ import org.apache.kafka.common.test.api.ClusterConfig;
 import org.apache.kafka.common.test.api.ClusterTemplate;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
+import org.apache.kafka.test.TestUtils;
 
 import java.util.HashMap;
 import java.util.List;
@@ -73,8 +74,9 @@ public class AdminClientRebootstrapTest {
 
     @ClusterTemplate(value = "generator")
     public void testRebootstrap(ClusterInstance clusterInstance) throws ExecutionException, InterruptedException {
+        var topic = "topic";
         try (var admin = clusterInstance.admin()) {
-            admin.createTopics(List.of(new NewTopic("topic", BROKER_COUNT, (short) 2)));
+            admin.createTopics(List.of(new NewTopic(topic, BROKER_COUNT, (short) 2)));
 
             var server0 = clusterInstance.brokers().get(0);
             var server1 = clusterInstance.brokers().get(1);
@@ -83,7 +85,8 @@ public class AdminClientRebootstrapTest {
             server1.awaitShutdown();
 
             // Only the server 0 is available for the admin client during the bootstrap.
-            admin.listTopics().names().get();
+            TestUtils.waitForCondition(() -> admin.listTopics().names().get().contains(topic),
+                "timed out waiting for topics");
 
             server0.shutdown();
             server0.awaitShutdown();
@@ -92,14 +95,16 @@ public class AdminClientRebootstrapTest {
             // The server 0, originally cached during the bootstrap, is offline.
             // However, the server 1 from the bootstrap list is online.
             // Should be able to list topics again.
-            admin.listTopics().names().get();
+            TestUtils.waitForCondition(() -> admin.listTopics().names().get().contains(topic),
+                "timed out waiting for topics");
 
             server1.shutdown();
             server1.awaitShutdown();
             server0.startup();
 
             // The same situation, but the server 1 has gone and server 0 is back.
-            admin.listTopics().names().get();
+            TestUtils.waitForCondition(() -> admin.listTopics().names().get().contains(topic),
+                "timed out waiting for topics");
         }
     }
 }
