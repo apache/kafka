@@ -49,6 +49,7 @@ import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.config.provider.FileConfigProvider
 import org.apache.kafka.common.errors.{AuthenticationException, InvalidRequestException}
 import org.apache.kafka.common.internals.Topic
+
 import org.apache.kafka.common.metrics.{JmxReporter, KafkaMetric, MetricsContext, MetricsReporter, Quota}
 import org.apache.kafka.common.network.{ConnectionMode, ListenerName}
 import org.apache.kafka.common.network.CertStores.{KEYSTORE_PROPS, TRUSTSTORE_PROPS}
@@ -480,6 +481,30 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     TestUtils.incrementalAlterConfigs(servers, adminClients.head, props2, perBrokerConfig = true).all.get(15, TimeUnit.SECONDS)
     verifySslProduceConsume(sslProperties2, next_group_name())
     waitForAuthenticationFailure(producerBuilder.keyStoreProps(sslProperties1))
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testSocketServerConfigTest(quorum: String, groupProtocol: String): Unit = {
+    val updatedMaxConnections = "20"
+    val ConnectionsIpsOverride = "1.2.3.4:1234,1.2.4.5:2345"
+    val properties = new Properties()
+    properties.setProperty(SocketServerConfigs.MAX_CONNECTIONS_PER_IP_CONFIG, updatedMaxConnections)
+    properties.setProperty(SocketServerConfigs.MAX_CONNECTIONS_PER_IP_OVERRIDES_CONFIG, ConnectionsIpsOverride)
+
+    TestUtils.incrementalAlterConfigs(servers, adminClients.head, properties, true)
+
+    servers.foreach(_.shutdown())
+    servers.foreach(_.awaitShutdown())
+    servers.foreach(_.startup())
+
+    servers.foreach { broker =>
+      assertEquals(updatedMaxConnections, broker.config.originals()
+        .get(SocketServerConfigs.MAX_CONNECTIONS_PER_IP_CONFIG).toString)
+
+      assertEquals(ConnectionsIpsOverride, broker.config.originals()
+        .get(SocketServerConfigs.MAX_CONNECTIONS_PER_IP_OVERRIDES_CONFIG).toString)
+    }
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
