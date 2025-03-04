@@ -1097,7 +1097,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     newBroker.awaitShutdown()
 
     val invalidStaticConfigs = defaultStaticConfig(newBroker.config.brokerId)
-    invalidStaticConfigs.putAll(securityProps(invalidSslKeystoreConfigs, KEYSTORE_PROPS, listenerPrefix(SecureExternal)))
+    invalidStaticConfigs.putAll(securityProps(invalidSslConfigs, KEYSTORE_PROPS, listenerPrefix(SecureExternal)))
     newBroker.config.updateCurrentConfig(KafkaConfig.fromProps(invalidStaticConfigs))
 
     newBroker.startup()
@@ -1289,13 +1289,6 @@ val configEntries = props.asScala.map { case (k, v) => new AlterConfigOp(new Con
     props.put(SSL_KEYSTORE_LOCATION_CONFIG, "invalid/file/path")
     props.put(SSL_KEYSTORE_PASSWORD_CONFIG, new Password("invalid"))
     props.put(SSL_KEY_PASSWORD_CONFIG, new Password("invalid"))
-    props.put(SSL_KEYSTORE_TYPE_CONFIG, "PKCS12")
-    props
-  }
-
-  private def invalidSslKeystoreConfigs: Properties = {
-    val props = new Properties
-    props.put(SSL_KEYSTORE_KEY_CONFIG, "invalid/file/path")
     props.put(SSL_KEYSTORE_TYPE_CONFIG, "PKCS12")
     props
   }

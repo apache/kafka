@@ -29,7 +29,7 @@ import kafka.server.DynamicBrokerConfig._
 import kafka.utils.{CoreUtils, Logging}
 import org.apache.kafka.common.Reconfigurable
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
-import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, SaslConfigs, SslConfigs}
+import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, ConfigResource, SaslConfigs, SslConfigs}
 import org.apache.kafka.common.metadata.{ConfigRecord, MetadataRecordType}
 import org.apache.kafka.common.metrics.{Metrics, MetricsReporter}
 import org.apache.kafka.common.network.{ListenerName, ListenerReconfigurable}
@@ -212,19 +212,27 @@ object DynamicBrokerConfig {
           KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
           true
         )
-        val dynamicBrokerConfigs = new Properties()
+        val dynamicPerBrokerConfigs = new Properties()
+        val dynamicDefaultConfigs = new Properties()
         while (reader.hasNext) {
           val batch = reader.next()
           batch.forEach(record => {
             if (record.message().apiKey() == MetadataRecordType.CONFIG_RECORD.id) {
               val configRecord = record.message().asInstanceOf[ConfigRecord]
-              if (DynamicBrokerConfig.AllDynamicConfigs.contains(configRecord.name())) {
-                dynamicBrokerConfigs.put(configRecord.name(), configRecord.value())
+              if (DynamicBrokerConfig.AllDynamicConfigs.contains(configRecord.name()) &&
+                configRecord.resourceType() == ConfigResource.Type.BROKER.id()) {
+                if (configRecord.resourceName().isEmpty) {
+                  dynamicDefaultConfigs.put(configRecord.name(), configRecord.value())
+                } else if (configRecord.resourceName() == config.brokerId.toString) {
+                  dynamicPerBrokerConfigs.put(configRecord.name(), configRecord.value())
+                }
               }
             }
           })
         }
-        new BrokerConfigHandler(config, quotaManagers).processConfigChanges(config.brokerId.toString, dynamicBrokerConfigs)
+        val configHandler = new BrokerConfigHandler(config, quotaManagers)
+        configHandler.processConfigChanges("", dynamicPerBrokerConfigs)
+        configHandler.processConfigChanges(config.brokerId.toString, dynamicPerBrokerConfigs)
       })
     })
   }
