@@ -666,7 +666,9 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
           if (processRoles.contains(ProcessRole.BrokerRole)) s" Perhaps all listeners appear in ${KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG}?" else ""))
     }
     def warnIfConfigDefinedInWrongRole(expectedRole: ProcessRole, configName: String): Unit = {
-      warn(s"$configName is defined in ${processRoles.mkString(", ")}. It should be defined in the $expectedRole role.")
+      if (originals.containsKey(configName)) {
+        warn(s"$configName is defined in ${processRoles.mkString(", ")}. It should be defined in the $expectedRole role.")
+      }
     }
     if (processRoles == Set(ProcessRole.BrokerRole)) {
       // KRaft broker-only
