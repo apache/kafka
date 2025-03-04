@@ -36,7 +36,8 @@ jobs:
     name: Configure Workflow
     outputs:
       is-draft: ${{ steps.check-draft-pr.outputs.is-draft }}
-      test-catalog-days: ${{ steps.test-catalog.outputs.days }}
+      test-catalog-days: ${{ steps.configure-outputs.outputs.days }}
+      sha: ${{ steps.configure-outputs.outputs.sha }}
     steps:
       - name: Env
         run: printenv
@@ -48,13 +49,15 @@ jobs:
           github.event_name == 'pull_request' && 
           github.event.pull_request.draft
         run: echo "is-draft=true" >> "$GITHUB_OUTPUT"
-      - name: Test Catalog Age
-        id: test-catalog
+      - name: Configure Outputs
+        id: configure-outputs
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             echo "days=0" >> "$GITHUB_OUTPUT"
+            echo "sha=${{ github.event.pull_request.head.sha }}" >> "$GITHUB_OUTPUT"
           else
             echo "days=7" >> "$GITHUB_OUTPUT"
+            echo "sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
           fi
 
   load-catalog:
@@ -108,7 +111,7 @@ jobs:
   validate:
     needs: [configure]
     runs-on: ubuntu-latest
-    name: Compile and Check Java
+    name: Compile and Check (Merge Ref)
     steps:
       - name: Env
         run: printenv
@@ -118,6 +121,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           persist-credentials: false
+          ref: ${{ github.sha }}  # this is the default, just being explicit.
       - name: Setup Python
         uses: ./.github/actions/setup-python
       - name: Setup Gradle
@@ -189,6 +193,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           persist-credentials: false
+          ref: ${{ needs.configure.outputs.sha }}
       - name: Setup Python
         uses: ./.github/actions/setup-python
       - name: Setup Gradle
