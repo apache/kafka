@@ -96,7 +96,7 @@ public class EndTransactionMarker {
         if (version > EndTxnMarker.HIGHEST_SUPPORTED_VERSION)
             log.debug("Received end transaction marker value version {}. Parsing as version {}", version,
                     EndTxnMarker.HIGHEST_SUPPORTED_VERSION);
-        EndTxnMarker marker = new EndTxnMarker(new ByteBufferAccessor(value), version);
+        EndTxnMarker marker = new EndTxnMarker(new ByteBufferAccessor(value), EndTxnMarker.HIGHEST_SUPPORTED_VERSION);
         return new EndTransactionMarker(type, marker.coordinatorEpoch());
     }
 
