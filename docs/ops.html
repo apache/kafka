@@ -3917,7 +3917,7 @@ Feature: metadata.version       SupportedMinVersion: 3.3-IV3    SupportedMaxVers
   After starting the controller, the replication to the new controller can be monitored using the <code>bin/kafka-metadata-quorum.sh describe --replication</code> command. Once the new controller has caught up to the active controller, it can be added to the cluster using the <code>bin/kafka-metadata-quorum.sh add-controller</code> command.
 
   When using broker endpoints use the --bootstrap-server flag:
-  <pre><code class="language-bash">$ bin/kafka-metadata-quorum.sh --command-config controller.properties --bootstrap-server localhost:9092 add-controller</code></pre>
+  <pre><code class="language-bash">$ bin/kafka-metadata-quorum.sh --command-config config/controller.properties --bootstrap-server localhost:9092 add-controller</code></pre>
 
   When using controller endpoints use the --bootstrap-controller flag:
   <pre><code class="language-bash">$ bin/kafka-metadata-quorum.sh --command-config config/controller.properties --bootstrap-controller localhost:9093 add-controller</code></pre>
