@@ -23,10 +23,10 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.security.JaasContext;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenRetriever;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenValidator;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.DefaultAccessTokenRetriever;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.DefaultAccessTokenValidator;
+import org.apache.kafka.common.security.oauthbearer.AccessTokenRetriever;
+import org.apache.kafka.common.security.oauthbearer.AccessTokenValidator;
+import org.apache.kafka.common.security.oauthbearer.DefaultAccessTokenRetriever;
+import org.apache.kafka.common.security.oauthbearer.DefaultAccessTokenValidator;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 

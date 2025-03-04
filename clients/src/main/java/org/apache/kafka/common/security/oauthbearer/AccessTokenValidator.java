@@ -14,9 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.security.oauthbearer.internals.secured;
-
-import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
+package org.apache.kafka.common.security.oauthbearer;
 
 /**
  * An instance of <code>AccessTokenValidator</code> acts as a function object that, given an access
@@ -40,9 +38,9 @@ import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
  * </ul>
  *
  * @see DefaultAccessTokenValidator   Default validator that acts as a wrapper over one of the other validators
- * @see LoginAccessTokenValidator     A basic AccessTokenValidator used by client-side login
+ * @see ClientAccessTokenValidator     A basic AccessTokenValidator used by client-side login
  *                                    authentication
- * @see ValidatorAccessTokenValidator A more robust AccessTokenValidator that is used on the broker
+ * @see BrokerAccessTokenValidator A more robust AccessTokenValidator that is used on the broker
  *                                    to validate the token's contents and verify the signature
  */
 public interface AccessTokenValidator extends OAuthBearerConfigurable {

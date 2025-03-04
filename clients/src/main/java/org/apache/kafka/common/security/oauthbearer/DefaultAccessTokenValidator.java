@@ -14,9 +14,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.security.oauthbearer.internals.secured;
+package org.apache.kafka.common.security.oauthbearer;
 
-import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
 import org.apache.kafka.common.utils.Utils;
 
 import java.util.List;
@@ -61,9 +60,9 @@ public class DefaultAccessTokenValidator implements AccessTokenValidator {
         AccessTokenValidator validator;
 
         if (configs.get(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL) != null)
-            validator = new ValidatorAccessTokenValidator();
+            validator = new BrokerAccessTokenValidator();
         else
-            validator = new LoginAccessTokenValidator();
+            validator = new ClientAccessTokenValidator();
 
         configure(validator, configs, saslMechanism, jaasConfigEntries);
     }

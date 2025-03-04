@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
+import org.apache.kafka.common.security.oauthbearer.InvalidJwtException;
+
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;

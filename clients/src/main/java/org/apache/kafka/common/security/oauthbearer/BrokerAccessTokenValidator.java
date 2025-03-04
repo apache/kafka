@@ -14,10 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.security.oauthbearer.internals.secured;
+package org.apache.kafka.common.security.oauthbearer;
 
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
-import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.BasicOAuthBearerToken;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.ClaimValidationUtils;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.CloseableVerificationKeyResolver;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.DelegatingVerificationKeyResolver;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.RefreshingHttpsJwksVerificationKeyResolver;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.SerializedJwt;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 
@@ -34,6 +40,7 @@ import org.jose4j.lang.UnresolvableKeyException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.security.Key;
 import java.util.Collection;
 import java.util.Collections;
@@ -78,9 +85,9 @@ import static org.jose4j.jwa.AlgorithmConstraints.DISALLOW_NONE;
  *     </li>
  * </ol>
  */
-public class ValidatorAccessTokenValidator implements AccessTokenValidator {
+public class BrokerAccessTokenValidator implements AccessTokenValidator {
 
-    private static final Logger log = LoggerFactory.getLogger(ValidatorAccessTokenValidator.class);
+    private static final Logger log = LoggerFactory.getLogger(BrokerAccessTokenValidator.class);
 
     /**
      * Because a {@link CloseableVerificationKeyResolver} instance can spawn threads and issue
@@ -100,11 +107,11 @@ public class ValidatorAccessTokenValidator implements AccessTokenValidator {
 
     private String subClaimName;
 
-    public ValidatorAccessTokenValidator() {
+    public BrokerAccessTokenValidator() {
         this(Time.SYSTEM);
     }
 
-    public ValidatorAccessTokenValidator(Time time) {
+    public BrokerAccessTokenValidator(Time time) {
         this.time = time;
     }
 
@@ -303,7 +310,7 @@ public class ValidatorAccessTokenValidator implements AccessTokenValidator {
         }
 
         @Override
-        public void close() {
+        public void close() throws IOException {
             if (count.decrementAndGet() == 0)
                 delegate.close();
         }

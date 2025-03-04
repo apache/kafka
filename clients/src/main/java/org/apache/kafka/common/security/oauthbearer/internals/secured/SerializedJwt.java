@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
+import org.apache.kafka.common.security.oauthbearer.InvalidJwtException;
+
 /**
  * SerializedJwt provides a modicum of structure and validation around a JWT's serialized form by
  * splitting and making the three sections (header, payload, and signature) available to the user.

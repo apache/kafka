@@ -20,9 +20,6 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenValidator;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.DefaultAccessTokenValidator;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.InvalidJwtException;
 import org.apache.kafka.common.utils.Utils;
 
 import org.slf4j.Logger;

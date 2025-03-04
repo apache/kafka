@@ -54,7 +54,7 @@ public class DelegatingVerificationKeyResolverTest extends OAuthBearerTest {
     }
 
     @Test
-    public void testConfigureRefreshingFileVerificationKeyResolverWithInvalidDirectory() {
+    public void testConfigureRefreshingFileVerificationKeyResolverWithInvalidDirectory() throws Exception {
         // Should fail because the parent path doesn't exist.
         String file = new File("/tmp/this-directory-does-not-exist/foo.json").toURI().toString();
         System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, file);

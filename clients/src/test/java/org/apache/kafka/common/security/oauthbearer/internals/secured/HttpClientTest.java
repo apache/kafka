@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
+import org.apache.kafka.common.security.oauthbearer.HttpClient;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
