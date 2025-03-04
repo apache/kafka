@@ -37,10 +37,6 @@ public abstract class DeleteGroupsResult {
         this.futures = futures;
     }
 
-    Map<String, KafkaFuture<Void>> futures() {
-        return futures;
-    }
-
     /**
      * Return a map from group id to futures which can be used to check the status of
      * individual deletions.
