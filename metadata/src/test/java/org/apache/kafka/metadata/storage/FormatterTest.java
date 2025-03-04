@@ -40,6 +40,8 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -55,9 +57,11 @@ import java.util.List;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.kafka.metadata.storage.ScramParserTest.TEST_SALT;
 import static org.apache.kafka.metadata.storage.ScramParserTest.TEST_SALTED_PASSWORD;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -144,7 +148,7 @@ public class FormatterTest {
             assertEquals(Optional.of(DEFAULT_CLUSTER_ID.toString()), ensemble.clusterId());
             assertEquals(new HashSet<>(testEnv.directories), ensemble.logDirProps().keySet());
             BootstrapMetadata bootstrapMetadata =
-                new BootstrapDirectory(testEnv.directory(0), Optional.empty()).read();
+                new BootstrapDirectory(testEnv.directory(0)).read();
             assertEquals(MetadataVersion.latestProduction(), bootstrapMetadata.metadataVersion());
         }
     }
@@ -225,7 +229,7 @@ public class FormatterTest {
                 " with metadata.version " + MetadataVersion.IBP_3_5_IV0 + ".",
                     formatter1.output().trim());
             BootstrapMetadata bootstrapMetadata =
-                new BootstrapDirectory(testEnv.directory(0), Optional.empty()).read();
+                new BootstrapDirectory(testEnv.directory(0)).read();
             assertEquals(MetadataVersion.IBP_3_5_IV0, bootstrapMetadata.metadataVersion());
             assertEquals(1, bootstrapMetadata.records().size());
         }
@@ -252,7 +256,7 @@ public class FormatterTest {
                 " with metadata.version " + MetadataVersion.latestTesting() + ".",
                     formatter1.output().trim());
             BootstrapMetadata bootstrapMetadata =
-                    new BootstrapDirectory(testEnv.directory(0), Optional.empty()).read();
+                    new BootstrapDirectory(testEnv.directory(0)).read();
             assertEquals(MetadataVersion.latestTesting(), bootstrapMetadata.metadataVersion());
         }
     }
@@ -302,7 +306,7 @@ public class FormatterTest {
                 " with metadata.version " + MetadataVersion.IBP_3_8_IV0 + ".",
                     formatter1.output().trim());
             BootstrapMetadata bootstrapMetadata =
-                new BootstrapDirectory(testEnv.directory(0), Optional.empty()).read();
+                new BootstrapDirectory(testEnv.directory(0)).read();
             assertEquals(MetadataVersion.IBP_3_8_IV0, bootstrapMetadata.metadataVersion());
             List<ApiMessageAndVersion> scramRecords = bootstrapMetadata.records().stream().
                 filter(r -> r.message() instanceof UserScramCredentialRecord).
@@ -337,15 +341,12 @@ public class FormatterTest {
             formatter1.formatter.setFeatureLevel(TestFeatureVersion.FEATURE_NAME, version);
             formatter1.formatter.run();
             BootstrapMetadata bootstrapMetadata =
-                new BootstrapDirectory(testEnv.directory(0), Optional.empty()).read();
+                new BootstrapDirectory(testEnv.directory(0)).read();
             List<ApiMessageAndVersion> expected = new ArrayList<>();
             expected.add(new ApiMessageAndVersion(new FeatureLevelRecord().
                 setName(MetadataVersion.FEATURE_NAME).
                 setFeatureLevel(MetadataVersion.latestProduction().featureLevel()),
                     (short) 0));
-            expected.add(new ApiMessageAndVersion(new FeatureLevelRecord().
-                setName(EligibleLeaderReplicasVersion.FEATURE_NAME).
-                setFeatureLevel(EligibleLeaderReplicasVersion.ELRV_1.featureLevel()), (short) 0));
             expected.add(new ApiMessageAndVersion(new FeatureLevelRecord().
                 setName(GroupVersion.FEATURE_NAME).
                 setFeatureLevel(GroupVersion.GV_1.featureLevel()), (short) 0));
@@ -454,6 +455,34 @@ public class FormatterTest {
                 "metadata.version level 21",
                     assertThrows(IllegalArgumentException.class,
                         () -> formatter1.formatter.run()).getMessage());
+        }
+    }
+
+    private static Stream<Arguments> elrTestMetadataVersions() {
+        return Stream.of(
+            MetadataVersion.IBP_3_9_IV0,
+            MetadataVersion.IBP_4_0_IV0,
+            MetadataVersion.IBP_4_0_IV1 // ELR minimal MV
+        ).map(Arguments::of);
+    }
+
+    @ParameterizedTest
+    @MethodSource("elrTestMetadataVersions")
+    public void testFormatElrEnabledWithMetadataVersions(MetadataVersion metadataVersion) throws Exception {
+        try (TestEnv testEnv = new TestEnv(2)) {
+            FormatterContext formatter1 = testEnv.newFormatter();
+            formatter1.formatter.setReleaseVersion(metadataVersion);
+            formatter1.formatter.setFeatureLevel(EligibleLeaderReplicasVersion.FEATURE_NAME, (short) 1);
+            formatter1.formatter.setInitialControllers(DynamicVoters.
+                parse("1@localhost:8020:4znU-ou9Taa06bmEJxsjnw"));
+            if (metadataVersion.isAtLeast(MetadataVersion.IBP_4_0_IV1)) {
+                assertDoesNotThrow(() -> formatter1.formatter.run());
+            } else {
+                assertEquals("eligible.leader.replicas.version could not be set to 1 because it depends on " +
+                    "metadata.version level 23",
+                    assertThrows(IllegalArgumentException.class,
+                        () -> formatter1.formatter.run()).getMessage());
+            }
         }
     }
 

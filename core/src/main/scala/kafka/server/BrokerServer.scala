@@ -274,13 +274,12 @@ class BrokerServer(
       clientQuotaMetadataManager = new ClientQuotaMetadataManager(quotaManagers, socketServer.connectionQuotas)
 
       val listenerInfo = ListenerInfo.create(Optional.of(config.interBrokerListenerName.value()),
-          config.effectiveAdvertisedBrokerListeners.map(_.toJava).asJava).
+          config.effectiveAdvertisedBrokerListeners.map(_.toPublic()).asJava).
             withWildcardHostnamesResolved().
             withEphemeralPortsCorrected(name => socketServer.boundPort(new ListenerName(name)))
 
       alterPartitionManager = AlterPartitionManager(
         config,
-        metadataCache,
         scheduler = kafkaScheduler,
         controllerNodeProvider,
         time = time,
@@ -646,6 +645,7 @@ class BrokerServer(
         .withGroupCoordinatorMetrics(new GroupCoordinatorMetrics(KafkaYammerMetrics.defaultRegistry, metrics))
         .withGroupConfigManager(groupConfigManager)
         .withPersister(persister)
+        .withAuthorizer(authorizer.toJava)
         .build()
     } else {
       GroupCoordinatorAdapter(

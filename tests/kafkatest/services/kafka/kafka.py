@@ -1359,22 +1359,6 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.logger.info("Running alter message format command...\n%s" % cmd)
         node.account.ssh(cmd)
 
-    def set_unclean_leader_election(self, topic, value=True, node=None):
-        if node is None:
-            node = self.nodes[0]
-        if value is True:
-            self.logger.info("Enabling unclean leader election for topic %s", topic)
-        else:
-            self.logger.info("Disabling unclean leader election for topic %s", topic)
-
-        force_use_zk_connection = not self.all_nodes_configs_command_uses_bootstrap_server()
-
-        cmd = fix_opts_for_new_jvm(node)
-        cmd += "%s --entity-name %s --entity-type topics --alter --add-config unclean.leader.election.enable=%s" % \
-              (self.kafka_configs_cmd_with_optional_security_settings(node, force_use_zk_connection), topic, str(value).lower())
-        self.logger.info("Running alter unclean leader command...\n%s" % cmd)
-        node.account.ssh(cmd)
-
     def kafka_acls_cmd_with_optional_security_settings(self, node, force_use_zk_connection, kafka_security_protocol = None, override_command_config = None):
         if self.quorum_info.using_kraft and not self.quorum_info.has_brokers:
             raise Exception("Must invoke kafka-acls against a broker, not a KRaft controller")
@@ -1620,11 +1604,14 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             describe_output = self.describe_topic(topic, node, offline_nodes=offline_nodes)
             self.logger.debug(describe_output)
             requested_partition_line = self._describe_topic_line_for_partition(partition, describe_output)
-            # e.g. Topic: test_topic	Partition: 0	Leader: 3	Replicas: 3,2	Isr: 3,2
+            # e.g. Topic: test_topic	Partition: 0	Leader: 3	Replicas: 3,2	Isr: 3,2    Elr: 4  LastKnownElr: 5
             if not requested_partition_line:
                 raise Exception("Error finding partition state for topic %s and partition %d." % (topic, partition))
             isr_csv = requested_partition_line.split()[9] # 10th column from above
-            isr_idx_list = [int(i) for i in isr_csv.split(",")]
+            if isr_csv == "Elr:":
+                isr_idx_list = []
+            else:
+                isr_idx_list = [int(i) for i in isr_csv.split(",")]
 
         self.logger.info("Isr for topic %s and partition %d is now: %s" % (topic, partition, isr_idx_list))
         return isr_idx_list

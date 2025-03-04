@@ -69,6 +69,7 @@ import static org.apache.kafka.common.IsolationLevel.READ_UNCOMMITTED;
 import static org.apache.kafka.streams.StreamsConfig.AT_LEAST_ONCE;
 import static org.apache.kafka.streams.StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.ENABLE_METRICS_PUSH_CONFIG;
+import static org.apache.kafka.streams.StreamsConfig.ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE_V2;
 import static org.apache.kafka.streams.StreamsConfig.MAX_RACK_AWARE_ASSIGNMENT_TAG_KEY_LENGTH;
 import static org.apache.kafka.streams.StreamsConfig.MAX_RACK_AWARE_ASSIGNMENT_TAG_VALUE_LENGTH;
@@ -129,6 +130,7 @@ public class StreamsConfigTest {
                     case "DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DOC":
                     case "DSL_STORE_SUPPLIERS_CLASS_DOC":
                     case "PROCESSOR_WRAPPER_CLASS_DOC":
+                    case "ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_DOC":
                         continue;
 
                     // check for leaking, but already deprecated members
@@ -1580,6 +1582,18 @@ public class StreamsConfigTest {
         props.put(StreamsConfig.DEFAULT_PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG, RecordCollectorTest.ProductionExceptionHandlerMock.class);
         streamsConfig = new StreamsConfig(props);
         assertEquals(RecordCollectorTest.ProductionExceptionHandlerMock.class, streamsConfig.productionExceptionHandler().getClass());
+    }
+
+    @Test
+    public void shouldGetDefaultEnsureExplicitInternalResourceNaming() {
+        assertFalse(streamsConfig.getBoolean(ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_CONFIG));
+    }
+
+    @Test
+    public void shouldEnsureExplicitInternalResourceNaming() {
+        props.put(ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_CONFIG, true);
+        streamsConfig = new StreamsConfig(props);
+        assertTrue(streamsConfig.getBoolean(ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_CONFIG));
     }
 
     static class MisconfiguredSerde implements Serde<Object> {

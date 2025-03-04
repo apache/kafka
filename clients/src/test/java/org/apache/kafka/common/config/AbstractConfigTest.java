@@ -19,6 +19,7 @@ package org.apache.kafka.common.config;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
+import org.apache.kafka.common.config.provider.EnvVarConfigProvider;
 import org.apache.kafka.common.config.provider.FileConfigProvider;
 import org.apache.kafka.common.config.provider.MockFileConfigProvider;
 import org.apache.kafka.common.config.provider.MockVaultConfigProvider;
@@ -448,6 +449,28 @@ public class AbstractConfigTest {
         assertEquals("testKey", config.originals().get("sasl.kerberos.key"));
         assertEquals("randomPassword", config.originals().get("sasl.kerberos.password"));
         MockFileConfigProvider.assertClosed(id);
+    }
+
+    @Test
+    public void testAutomaticConfigProvidersWithFullClassName() {
+        // case0: MockFileConfigProvider is disallowed by org.apache.kafka.automatic.config.providers
+        System.setProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY, "file");
+        assertThrows(ConfigException.class, () -> new TestIndirectConfigResolution(Map.of("config.providers", "file",
+                "config.providers.file.class", MockFileConfigProvider.class.getName()),
+                Map.of()));
+
+        // case1: MockFileConfigProvider is allowed by org.apache.kafka.automatic.config.providers
+        System.setProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY, MockFileConfigProvider.class.getName());
+        Map<String, String> props = Map.of("config.providers", "file",
+                "config.providers.file.class", MockFileConfigProvider.class.getName(),
+                "config.providers.file.param.testId", UUID.randomUUID().toString(),
+                "test.key", "${file:/path:key}");
+        assertEquals("testKey", new TestIndirectConfigResolution(props, Map.of()).originals().get("test.key"));
+
+        // case2: MockFileConfigProvider and EnvVarConfigProvider are allowed by org.apache.kafka.automatic.config.providers
+        System.setProperty(AbstractConfig.AUTOMATIC_CONFIG_PROVIDERS_PROPERTY,
+                MockFileConfigProvider.class.getName() + "," + EnvVarConfigProvider.class.getName());
+        assertEquals("testKey", new TestIndirectConfigResolution(props, Map.of()).originals().get("test.key"));
     }
 
     @Test

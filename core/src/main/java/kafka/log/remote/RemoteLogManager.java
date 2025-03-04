@@ -595,7 +595,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         for (RemoteLogSegmentMetadataUpdate event : events) {
             result.add(remoteLogMetadataManager.updateRemoteLogSegmentMetadata(event));
         }
-        return CompletableFuture.allOf(result.toArray(new CompletableFuture[0]));
+        return CompletableFuture.allOf(result.toArray(new CompletableFuture<?>[0]));
     }
 
     public Optional<RemoteLogSegmentMetadata> fetchRemoteLogSegmentMetadata(TopicPartition topicPartition,
