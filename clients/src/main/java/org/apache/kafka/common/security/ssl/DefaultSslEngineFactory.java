@@ -298,7 +298,7 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
             return kms;
         }
 
-        log.debug("Applying the custom KeyManagers for alias: {}", alias);
+        log.info("Applying the custom KeyManagers for alias: {}", alias);
 
         KeyManager[] updatedKMs = new KeyManager[kms.length];
 
