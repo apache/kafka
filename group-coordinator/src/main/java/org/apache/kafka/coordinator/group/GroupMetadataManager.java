@@ -4308,9 +4308,18 @@ public class GroupMetadataManager {
         String groupId = key.groupId();
         String regex = key.regularExpression();
 
+        ConsumerGroup consumerGroup;
+        try {
+            consumerGroup = getOrMaybeCreatePersistedConsumerGroup(groupId, value != null);
+        } catch (GroupIdNotFoundException ex) {
+            // If the group does not exist and a tombstone is replayed, we can ignore it.
+            return;
+        }
+
+        Set<String> oldSubscribedTopicNames = new HashSet<>(consumerGroup.subscribedTopicNames().keySet());
+
         if (value != null) {
-            ConsumerGroup group = getOrMaybeCreatePersistedConsumerGroup(groupId, true);
-            group.updateResolvedRegularExpression(
+            consumerGroup.updateResolvedRegularExpression(
                 regex,
                 new ResolvedRegularExpression(
                     new HashSet<>(value.topics()),
@@ -4319,13 +4328,10 @@ public class GroupMetadataManager {
                 )
             );
         } else {
-            try {
-                ConsumerGroup group = getOrMaybeCreatePersistedConsumerGroup(groupId, false);
-                group.removeResolvedRegularExpression(regex);
-            } catch (GroupIdNotFoundException ex) {
-                // If the group does not exist, we can ignore the tombstone.
-            }
+            consumerGroup.removeResolvedRegularExpression(regex);
         }
+
+        updateGroupsByTopics(groupId, oldSubscribedTopicNames, consumerGroup.subscribedTopicNames().keySet());
     }
 
     /**
