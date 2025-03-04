@@ -1624,17 +1624,19 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     client = createAdminClient
 
     val existingTopic = new ConfigResource(ConfigResource.Type.TOPIC, topic)
-    client.describeConfigs(Collections.singletonList(existingTopic)).values.get(existingTopic).get()
+    client.describeConfigs(util.List.of(existingTopic)).values.get(existingTopic).get()
+
+    val defaultTopic = new ConfigResource(ConfigResource.Type.TOPIC, "")
+    var describeResult = client.describeConfigs(util.List.of(defaultTopic))
+    assertFutureThrows(classOf[InvalidTopicException], describeResult.all())
 
     val nonExistentTopic = new ConfigResource(ConfigResource.Type.TOPIC, "unknown")
-    val describeResult1 = client.describeConfigs(Collections.singletonList(nonExistentTopic))
-
-    assertTrue(assertThrows(classOf[ExecutionException], () => describeResult1.values.get(nonExistentTopic).get).getCause.isInstanceOf[UnknownTopicOrPartitionException])
+    describeResult = client.describeConfigs(util.List.of(nonExistentTopic))
+    assertFutureThrows(classOf[UnknownTopicOrPartitionException], describeResult.all())
 
     val invalidTopic = new ConfigResource(ConfigResource.Type.TOPIC, "(invalid topic)")
-    val describeResult2 = client.describeConfigs(Collections.singletonList(invalidTopic))
-
-    assertTrue(assertThrows(classOf[ExecutionException], () => describeResult2.values.get(invalidTopic).get).getCause.isInstanceOf[InvalidTopicException])
+    describeResult = client.describeConfigs(util.List.of(invalidTopic))
+    assertFutureThrows(classOf[InvalidTopicException], describeResult.all())
   }
 
   @Test
