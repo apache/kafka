@@ -2664,6 +2664,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestHelper.sendMaybeThrottle(request, streamsGroupHeartbeatRequest.getErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED.exception))
       CompletableFuture.completedFuture[Unit](())
     } else {
+      val requestContext = request.context
+
       if (streamsGroupHeartbeatRequest.data().topology() != null) {
         val requiredTopics: Seq[String] =
           streamsGroupHeartbeatRequest.data().topology().subtopologies().iterator().asScala.flatMap(subtopology =>
@@ -2707,7 +2709,24 @@ class KafkaApis(val requestChannel: RequestChannel,
           val responseData = response.data()
           val topicsToCreate = response.creatableTopics().asScala
           if (topicsToCreate.nonEmpty) {
-            throw new UnsupportedOperationException("Internal topic auto-creation not yet implemented.")
+
+            val createTopicUnauthorized =
+              if(!authHelper.authorize(request.context, CREATE, CLUSTER, CLUSTER_NAME, logIfDenied = false))
+                authHelper.partitionSeqByAuthorized(request.context, CREATE, TOPIC, topicsToCreate.keys.toSeq)(identity[String])._2
+              else Set.empty
+
+            if (createTopicUnauthorized.nonEmpty) {
+              if (responseData.status() == null) {
+                responseData.setStatus(new util.ArrayList());
+              }
+              responseData.status().add(
+                new StreamsGroupHeartbeatResponseData.Status()
+                  .setStatusCode(StreamsGroupHeartbeatResponse.Status.MISSING_INTERNAL_TOPICS.code())
+                  .setStatusDetail("Unauthorized to CREATE on topics " + createTopicUnauthorized.mkString(",") + ".")
+              )
+            } else {
+              autoTopicCreationManager.createStreamsInternalTopics(topicsToCreate, requestContext);
+            }
           }
 
           requestHelper.sendMaybeThrottle(request, new StreamsGroupHeartbeatResponse(responseData))
