@@ -17,17 +17,18 @@
 
 package org.apache.kafka.raft;
 
-import java.util.List;
-import java.util.Set;
-
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.message.BeginQuorumEpochResponseData;
 import org.apache.kafka.common.message.EndQuorumEpochResponseData;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.VoteResponseData;
 import org.apache.kafka.common.protocol.Errors;
+
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+
+import java.util.List;
+import java.util.Set;
 
 import static org.apache.kafka.raft.KafkaRaftClientTest.randomReplicaId;
 import static org.apache.kafka.raft.RaftClientTestContext.Builder.DEFAULT_ELECTION_TIMEOUT_MS;
