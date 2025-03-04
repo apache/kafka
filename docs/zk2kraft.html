@@ -243,10 +243,10 @@
         </li>
         <li>
             <strong>Policy Class Deployment</strong>:
-            In KRaft mode, the <code>CreateTopicPolicy</code> and <code>AlterConfigPolicy</code> plugins run on the Controller instead of the Broker.
-            This requires users to deploy the policy class JAR files on the Controller and configure the parameters
-            (<code>create.topic.policy.class.name</code> and <code>alter.config.policy.class.name</code>) on the Controller.
-            <p>Note: If migrating from ZooKeeper mode, ensure policy JARs are moved from Brokers to Controllers.</p>
+            In KRaft mode, the <code>CreateTopicPolicy</code> and <code>AlterConfigPolicy</code> plugins run on the controller instead of the broker.
+            This requires users to deploy the policy class JAR files on the controller and configure the parameters
+            (<code>create.topic.policy.class.name</code> and <code>alter.config.policy.class.name</code>) on the controller.
+            <p>Note: If migrating from ZooKeeper mode, ensure policy JARs are moved from brokers to controllers.</p>
         </li>
     </ul>
 </div>
