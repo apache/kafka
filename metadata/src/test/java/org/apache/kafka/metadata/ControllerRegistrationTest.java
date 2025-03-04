@@ -29,7 +29,6 @@ import org.apache.kafka.server.common.MetadataVersion;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -45,7 +44,7 @@ public class ControllerRegistrationTest {
         HashMap<K, V> map = new HashMap<>();
         map.put(k1, v1);
         map.put(k2, v2);
-        return Collections.unmodifiableMap(map);
+        return map;
     }
 
     private static final List<ControllerRegistration> REGISTRATIONS = List.of(

@@ -44,7 +44,6 @@ import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -174,7 +173,7 @@ public class ConfigurationControlManager {
         this.validator = validator;
         this.configData = new TimelineHashMap<>(snapshotRegistry, 0);
         this.brokersWithConfigs = new TimelineHashSet<>(snapshotRegistry, 0);
-        this.staticConfig = Collections.unmodifiableMap(new HashMap<>(staticConfig));
+        this.staticConfig = Map.copyOf(staticConfig);
         this.currentController = new ConfigResource(Type.BROKER, Integer.toString(nodeId));
         this.featureControl = featureControl;
     }

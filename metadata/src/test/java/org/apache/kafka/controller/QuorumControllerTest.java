@@ -145,7 +145,6 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import static java.util.Collections.singletonList;
 import static java.util.function.Function.identity;
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET;
 import static org.apache.kafka.common.config.ConfigResource.Type.BROKER;
@@ -431,7 +430,7 @@ public class QuorumControllerTest {
                 .setResourceName("foo")
                 .setName(org.apache.kafka.common.config.TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG)
                 .setValue("2");
-            RecordTestUtils.replayAll(active.configurationControl(), singletonList(new ApiMessageAndVersion(configRecord, (short) 0)));
+            RecordTestUtils.replayAll(active.configurationControl(), List.of(new ApiMessageAndVersion(configRecord, (short) 0)));
 
             // Fence all the brokers
             TestUtils.waitForCondition(() -> {
@@ -493,7 +492,7 @@ public class QuorumControllerTest {
                     setListeners(listeners));
 
             // Unfence the last one in the ELR, it should be elected.
-            sendBrokerHeartbeatToUnfenceBrokers(active, singletonList(brokerToBeTheLeader), brokerEpochs);
+            sendBrokerHeartbeatToUnfenceBrokers(active, List.of(brokerToBeTheLeader), brokerEpochs);
             TestUtils.waitForCondition(() -> active.clusterControl().isUnfenced(brokerToBeTheLeader), sessionTimeoutMillis * 3,
                 "Broker should be unfenced."
             );
@@ -661,7 +660,7 @@ public class QuorumControllerTest {
                 .setResourceName("")
                 .setName(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG)
                 .setValue("2");
-            RecordTestUtils.replayAll(active.configurationControl(), singletonList(new ApiMessageAndVersion(configRecord, (short) 0)));
+            RecordTestUtils.replayAll(active.configurationControl(), List.of(new ApiMessageAndVersion(configRecord, (short) 0)));
 
             // Fence brokers
             TestUtils.waitForCondition(() -> {
@@ -702,8 +701,8 @@ public class QuorumControllerTest {
                     entry(new ConfigResource(TOPIC, "foo"), toMap(entry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, entry(SET, "1"))))),
                 true);
             assertEquals(2, result.records().size(), result.records().toString());
-            RecordTestUtils.replayAll(active.configurationControl(), singletonList(result.records().get(0)));
-            RecordTestUtils.replayAll(active.replicationControl(), singletonList(result.records().get(1)));
+            RecordTestUtils.replayAll(active.configurationControl(), List.of(result.records().get(0)));
+            RecordTestUtils.replayAll(active.replicationControl(), List.of(result.records().get(1)));
 
             partition = active.replicationControl().getPartition(topicIdFoo, 0);
             assertEquals(0, partition.elr.length, partition.toString());
@@ -718,8 +717,8 @@ public class QuorumControllerTest {
                     entry(new ConfigResource(BROKER, ""), toMap(entry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, entry(SET, "1"))))),
                 true);
             assertEquals(2, result.records().size(), result.records().toString());
-            RecordTestUtils.replayAll(active.configurationControl(), singletonList(result.records().get(0)));
-            RecordTestUtils.replayAll(active.replicationControl(), singletonList(result.records().get(1)));
+            RecordTestUtils.replayAll(active.configurationControl(), List.of(result.records().get(0)));
+            RecordTestUtils.replayAll(active.replicationControl(), List.of(result.records().get(1)));
 
             partition = active.replicationControl().getPartition(topicIdBar, 0);
             assertEquals(0, partition.elr.length, partition.toString());
@@ -1068,7 +1067,7 @@ public class QuorumControllerTest {
                         setIncarnationId(new Uuid(3465346L, i)).
                         setZkMigrationReady(false).
                         setListeners(new ControllerRegistrationRequestData.ListenerCollection(
-                            singletonList(
+                            List.of(
                                 new ControllerRegistrationRequestData.Listener().
                                     setName("CONTROLLER").
                                     setHost("localhost").
@@ -1077,7 +1076,7 @@ public class QuorumControllerTest {
                                 ).iterator()
                         )).
                         setFeatures(new ControllerRegistrationRequestData.FeatureCollection(
-                            singletonList(
+                            List.of(
                                 new ControllerRegistrationRequestData.Feature().
                                     setName(MetadataVersion.FEATURE_NAME).
                                     setMinSupportedVersion(MetadataVersion.MINIMUM_VERSION.featureLevel()).
@@ -1093,7 +1092,7 @@ public class QuorumControllerTest {
                         setClusterId(active.clusterId()).
                         setFeatures(brokerFeatures(MetadataVersion.MINIMUM_VERSION, MetadataVersion.IBP_3_7_IV0)).
                         setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB" + i)).
-                        setListeners(new ListenerCollection(singletonList(new Listener().
+                        setListeners(new ListenerCollection(List.of(new Listener().
                             setName("PLAINTEXT").setHost("localhost").
                             setPort(9092 + i)).iterator()))).get();
                 brokerEpochs.put(i, reply.epoch());
@@ -1140,14 +1139,14 @@ public class QuorumControllerTest {
                 setControllerId(0).
                 setIncarnationId(Uuid.fromString("AAAAAAA04IIAAAAAAAAAAA")).
                 setEndPoints(new RegisterControllerRecord.ControllerEndpointCollection(
-                    singletonList(
+                    List.of(
                         new RegisterControllerRecord.ControllerEndpoint().
                             setName("CONTROLLER").
                             setHost("localhost").
                             setPort(8000).
                             setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)).iterator())).
                 setFeatures(new RegisterControllerRecord.ControllerFeatureCollection(
-                    singletonList(
+                    List.of(
                         new RegisterControllerRecord.ControllerFeature().
                             setName(MetadataVersion.FEATURE_NAME).
                             setMinSupportedVersion(MetadataVersion.MINIMUM_VERSION.featureLevel()).
@@ -1157,14 +1156,14 @@ public class QuorumControllerTest {
                 setControllerId(1).
                 setIncarnationId(Uuid.fromString("AAAAAAA04IIAAAAAAAAAAQ")).
                 setEndPoints(new RegisterControllerRecord.ControllerEndpointCollection(
-                    singletonList(
+                    List.of(
                         new RegisterControllerRecord.ControllerEndpoint().
                             setName("CONTROLLER").
                             setHost("localhost").
                             setPort(8001).
                             setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)).iterator())).
                 setFeatures(new RegisterControllerRecord.ControllerFeatureCollection(
-                    singletonList(
+                    List.of(
                         new RegisterControllerRecord.ControllerFeature().
                             setName(MetadataVersion.FEATURE_NAME).
                             setMinSupportedVersion(MetadataVersion.MINIMUM_VERSION.featureLevel()).
@@ -1174,14 +1173,14 @@ public class QuorumControllerTest {
                 setControllerId(2).
                 setIncarnationId(Uuid.fromString("AAAAAAA04IIAAAAAAAAAAg")).
                 setEndPoints(new RegisterControllerRecord.ControllerEndpointCollection(
-                    singletonList(
+                    List.of(
                         new RegisterControllerRecord.ControllerEndpoint().
                             setName("CONTROLLER").
                             setHost("localhost").
                             setPort(8002).
                             setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)).iterator())).
                 setFeatures(new RegisterControllerRecord.ControllerFeatureCollection(
-                    singletonList(
+                    List.of(
                         new RegisterControllerRecord.ControllerFeature().
                             setName(MetadataVersion.FEATURE_NAME).
                             setMinSupportedVersion(MetadataVersion.MINIMUM_VERSION.featureLevel()).
@@ -1191,7 +1190,7 @@ public class QuorumControllerTest {
                 setBrokerId(0).setBrokerEpoch(brokerEpochs.get(0)).
                 setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB0")).
                 setEndPoints(new BrokerEndpointCollection(
-                    singletonList(new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
+                    List.of(new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
                         setPort(9092).setSecurityProtocol((short) 0)).iterator())).
                 setFeatures(registrationFeatures(MetadataVersion.MINIMUM_VERSION, MetadataVersion.IBP_3_7_IV0)).
                 setRack(null).
@@ -1199,7 +1198,7 @@ public class QuorumControllerTest {
             new ApiMessageAndVersion(new RegisterBrokerRecord().
                 setBrokerId(1).setBrokerEpoch(brokerEpochs.get(1)).
                 setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB1")).
-                setEndPoints(new BrokerEndpointCollection(singletonList(
+                setEndPoints(new BrokerEndpointCollection(List.of(
                     new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
                         setPort(9093).setSecurityProtocol((short) 0)).iterator())).
                 setFeatures(registrationFeatures(MetadataVersion.MINIMUM_VERSION, MetadataVersion.IBP_3_7_IV0)).
@@ -1209,7 +1208,7 @@ public class QuorumControllerTest {
                 setBrokerId(2).setBrokerEpoch(brokerEpochs.get(2)).
                 setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB2")).
                 setEndPoints(new BrokerEndpointCollection(
-                    singletonList(new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
+                    List.of(new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
                         setPort(9094).setSecurityProtocol((short) 0)).iterator())).
                 setFeatures(registrationFeatures(MetadataVersion.MINIMUM_VERSION, MetadataVersion.IBP_3_7_IV0)).
                 setRack(null).
@@ -1217,7 +1216,7 @@ public class QuorumControllerTest {
             new ApiMessageAndVersion(new RegisterBrokerRecord().
                 setBrokerId(3).setBrokerEpoch(brokerEpochs.get(3)).
                 setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB3")).
-                setEndPoints(new BrokerEndpointCollection(singletonList(
+                setEndPoints(new BrokerEndpointCollection(List.of(
                     new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
                         setPort(9095).setSecurityProtocol((short) 0)).iterator())).
                 setFeatures(registrationFeatures(MetadataVersion.MINIMUM_VERSION, MetadataVersion.IBP_3_7_IV0)).
@@ -1427,7 +1426,7 @@ public class QuorumControllerTest {
 
     @Test
     public void testFatalMetadataErrorDuringSnapshotLoading() throws Exception {
-        InitialSnapshot invalidSnapshot = new InitialSnapshot(singletonList(
+        InitialSnapshot invalidSnapshot = new InitialSnapshot(List.of(
             new ApiMessageAndVersion(new PartitionRecord(), (short) 0))
         );
 
@@ -1451,7 +1450,7 @@ public class QuorumControllerTest {
     @Test
     public void testFatalMetadataErrorDuringLogLoading() throws Exception {
         try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(3).build()) {
-            logEnv.appendInitialRecords(singletonList(
+            logEnv.appendInitialRecords(List.of(
                     new ApiMessageAndVersion(new PartitionRecord(), (short) 0)));
 
             try (QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).build()) {
