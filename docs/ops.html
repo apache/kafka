@@ -4187,7 +4187,7 @@ $ bin/kafka-topics.sh --create --topic tieredTopic --bootstrap-server localhost:
   <p>The assignment strategy is also controlled by the server. The <code>group.consumer.assignors</code> configuration can be used to specify the list of available
     assignors for <code>Consumer</code> groups. By default, the <code>uniform</code> assignor and the <code>range</code> assignor are configured. The first assignor
     in the list is used by default unless the Consumer selects a different one. It is also possible to implement custom assignment strategies on the server side
-    by implementing the <code style="font-size: 12px;">org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor</code> interface and specifying the full class name in the configuration.</p>
+    by implementing the <code>ConsumerGroupPartitionAssignor</code> interface and specifying the full class name in the configuration.</p>
 
   <h4 class="anchor-heading"><a id="consumer_rebalance_protocol_consumer" class="anchor-link"></a><a href="#consumer_rebalance_protocol_consumer">Consumer</a></h4>
 
