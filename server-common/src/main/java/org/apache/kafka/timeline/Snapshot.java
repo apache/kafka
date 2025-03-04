@@ -19,6 +19,7 @@ package org.apache.kafka.timeline;
 
 import java.util.IdentityHashMap;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * A snapshot of some timeline data structures.
@@ -47,9 +48,8 @@ class Snapshot {
     }
 
     void setDelta(Revertable owner, Delta delta) {
-        if (map != null) {
-            map.put(owner, delta);
-        }
+        Objects.requireNonNull(map,"Snapshot cannot be modified after erase is called.");
+        map.put(owner, delta);
     }
 
     void handleRevert() {
