@@ -127,8 +127,6 @@ jobs:
           gradle-cache-read-only: ${{ !inputs.is-trunk }}
           gradle-cache-write-only: ${{ inputs.is-trunk }}
           develocity-access-key: ${{ secrets.DEVELOCITY_ACCESS_KEY }}
-      - name: Verify license file
-        run: python committer-tools/verify_license.py
       - name: Compile and validate
         env:
           SCAN_ARG: ${{ inputs.is-public-fork && '--no-scan' || '--scan' }}
@@ -168,6 +166,8 @@ jobs:
             find ./site-docs/generated -type f -exec grep -L "." {} \; >&2
             exit 1
           fi
+      - name: Verify license file
+        run: python committer-tools/verify_license.py --skipReleaseTarGz true
 
   test:
     needs: [configure, validate, load-catalog]

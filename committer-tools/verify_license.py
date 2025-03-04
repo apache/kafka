@@ -24,6 +24,7 @@ import sys
 import tarfile
 import tempfile
 import subprocess
+import argparse
 
 # Constant: Regex to extract dependency tokens from the LICENSE file.
 # Matches lines that start with a dash and then a dependency token of the form:
@@ -74,12 +75,20 @@ def get_license_deps(license_text):
     return set(LICENSE_DEP_PATTERN.findall(license_text))
 
 def main():
+    # Argument parser
+    parser = argparse.ArgumentParser(description="Process some integers.")
+    parser.add_argument('--skipReleaseTarGz', type=str, default='false', help='Whether to skip ReleaseTarGz (true/false)')
+    args = parser.parse_args()
+
     # Assume the current working directory is the project root.
     project_dir = os.getcwd()
     print("Using project directory:", project_dir)
-    
+
+    if args.skipReleaseTarGz.lower() == 'true':
+        print("Skip running './gradlew clean releaseTarGz'")
+    else:
+        run_gradlew(project_dir)
     # Build the tarball.
-    run_gradlew(project_dir)
     tarball = get_tarball_path(project_dir)
     print("Tarball created at:", tarball)
     
