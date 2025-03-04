@@ -34,7 +34,7 @@ import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
-import org.apache.kafka.coordinator.transaction.{TransactionLogConfig, TransactionStateManagerConfig, TxnKey, UnknownKey}
+import org.apache.kafka.coordinator.transaction.{TransactionLogConfig, TransactionStateManagerConfig}
 import org.apache.kafka.server.common.{RequestLocal, TransactionVersion}
 import org.apache.kafka.server.config.ServerConfigs
 import org.apache.kafka.server.record.BrokerCompressionType
@@ -465,25 +465,21 @@ class TransactionStateManager(brokerId: Int,
                 fileRecords.readInto(buffer, 0)
                 MemoryRecords.readableRecords(buffer)
             }
-
             memRecords.batches.forEach { batch =>
               for (record <- batch.asScala) {
                 require(record.hasKey, "Transaction state log's key should not be null")
                 TransactionLog.readTxnRecordKey(record.key) match {
-                  case txnKey: TxnKey =>
-                    // load transaction metadata along with transaction state
-                    val transactionalId = txnKey.transactionalId
+                  case Left(version) =>
+                    warn(s"Unknown message key with version $version" +
+                      s" while loading transaction state from $topicPartition. Ignoring it. " +
+                      "It could be a left over from an aborted upgrade.")
+                  case Right(transactionalId) =>
                     TransactionLog.readTxnRecordValue(transactionalId, record.value) match {
                       case None =>
                         loadedTransactions.remove(transactionalId)
                       case Some(txnMetadata) =>
                         loadedTransactions.put(transactionalId, txnMetadata)
                     }
-
-                  case unknownKey: UnknownKey =>
-                    warn(s"Unknown message key with version ${unknownKey.version}" +
-                      s" while loading transaction state from $topicPartition. Ignoring it. " +
-                      "It could be a left over from an aborted upgrade.")
                 }
               }
               currOffset = batch.nextOffset

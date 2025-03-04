@@ -21,7 +21,6 @@ import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.protocol.{ByteBufferAccessor, MessageUtil}
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.coordinator.transaction.{BaseKey, TxnKey, UnknownKey}
 import org.apache.kafka.coordinator.transaction.generated.{CoordinatorRecordType, TransactionLogKey, TransactionLogValue}
 import org.apache.kafka.server.common.TransactionVersion
 
@@ -91,16 +90,15 @@ object TransactionLog {
   /**
     * Decodes the transaction log messages' key
     *
-    * @return the key
+    * @return left with the version if the key is not a transaction log key, right with the transactional id otherwise
     */
-  def readTxnRecordKey(buffer: ByteBuffer): BaseKey = {
+  def readTxnRecordKey(buffer: ByteBuffer): Either[Short,String] = {
     val version = buffer.getShort
-    if (version == CoordinatorRecordType.TRANSACTION_LOG.id) {
-      val value = new TransactionLogKey(new ByteBufferAccessor(buffer), 0.toShort)
-      new TxnKey(version,value.transactionalId)
-    } else {
-      new UnknownKey(version)
-    }
+    Either.cond(
+      version == CoordinatorRecordType.TRANSACTION_LOG.id,
+      new TransactionLogKey(new ByteBufferAccessor(buffer), 0.toShort).transactionalId,
+      version
+    )
   }
 
   /**
