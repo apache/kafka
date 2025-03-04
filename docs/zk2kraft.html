@@ -31,7 +31,7 @@
     <ul>
         <li>
             <p>
-                The password encoder-related configurations have been removed. These configurations were used in
+                Removed password encoder-related configurations. These configurations were used in
                 ZooKeeper mode to define the key and backup key for encrypting sensitive data (e.g., passwords), 
                 specify the algorithm and key generation method for password encryption (e.g., AES, RSA), and control 
                 the key length and encryption strength.
@@ -85,7 +85,7 @@
         </li>
         <li>
             <p>
-                Remove the broker id generation-related configurations. These configurations were used in ZooKeeper mode
+                Removed the broker id generation-related configurations. These configurations were used in ZooKeeper mode
                 to specify the broker id auto generation and control the broker id generation process.
             </p>
             <ul>
@@ -93,7 +93,7 @@
                 <li><code>broker.id.generation.enable</code></li>
             </ul>
             <p>
-                Kafka use the node id in KRaft mode to identify servers.
+                Kafka uses the node id in KRaft mode to identify servers.
             </p>
             <ul>
                 <li><code>node.id</code></li>
@@ -101,7 +101,7 @@
         </li>
         <li>
             <p>
-                Remove broker protocol version-related configurations. These configurations were used in ZooKeeper mode to define communication protocol version between brokers.
+                Removed broker protocol version-related configurations. These configurations were used in ZooKeeper mode to define communication protocol version between brokers.
                 In KRaft mode, Kafka uses <code>metadata.version</code> to control the feature level of the cluster, which can be managed using <code>bin/kafka-features.sh</code>.
             </p>
             <ul>
@@ -110,7 +110,7 @@
         </li>
         <li>
             <p>
-                Removed dynamic configurations which relies on ZooKeeper. In KRaft mode, to change these configurations,
+                Removed dynamic configurations which relied on ZooKeeper. In KRaft mode, to change these configurations,
                 you need to restart the broker/controller.
             </p>
             <ul>
@@ -157,7 +157,7 @@
     <ul>
         <li>
             <p>
-                Remove the following metrics related to ZooKeeper.
+                Removed the following metrics related to ZooKeeper.
                 <code>ControlPlaneNetworkProcessorAvgIdlePercent</code>
                 is to monitor the average fraction of time the network processors are idle. The other <code>ControlPlaneExpiredConnectionsKilledCount</code>
                 is to monitor the total number of connections disconnected, across all processors.
@@ -177,7 +177,7 @@
         </li>
         <li>
             <p>
-                Remove the metrics which are only used in ZooKeeper mode.
+                Removed the metrics which are only used in ZooKeeper mode.
             </p>
             <ul>
                 <li><code>kafka.controller:type=ControllerChannelManager,name=QueueSize</code></li>
