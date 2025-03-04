@@ -35,6 +35,7 @@
   <allow pkg="kafka.common" />
   <allow pkg="kafka.utils" />
   <allow pkg="kafka.serializer" />
+  <allow pkg="org.apache.kafka.clients" class="CommonClientConfigs"/>
   <allow pkg="org.apache.kafka.common" />
   <allow pkg="org.apache.kafka.common.test.api" />
   <allow pkg="org.mockito" class="AssignmentsManagerTest"/>
