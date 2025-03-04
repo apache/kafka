@@ -27,10 +27,10 @@ import java.util.Set;
 
 public class DynamicThreadPool {
     public static final Set<String> RECONFIGURABLE_CONFIGS = Set.of(
-            ServerConfigs.NUM_IO_THREADS_CONFIG,
-            ReplicationConfigs.NUM_REPLICA_FETCHERS_CONFIG,
-            ServerLogConfigs.NUM_RECOVERY_THREADS_PER_DATA_DIR_CONFIG,
-            ServerConfigs.BACKGROUND_THREADS_CONFIG
+        ServerConfigs.NUM_IO_THREADS_CONFIG,
+        ReplicationConfigs.NUM_REPLICA_FETCHERS_CONFIG,
+        ServerLogConfigs.NUM_RECOVERY_THREADS_PER_DATA_DIR_CONFIG,
+        ServerConfigs.BACKGROUND_THREADS_CONFIG
     );
 
     private DynamicThreadPool() {}
