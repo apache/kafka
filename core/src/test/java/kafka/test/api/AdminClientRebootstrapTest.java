@@ -38,14 +38,14 @@ public class AdminClientRebootstrapTest {
     private static List<ClusterConfig> generator() {
         // Enable unclean leader election for the test topic
         Map<String, String> serverProperties = Map.of(
-                TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, "true",
-                GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, String.valueOf(BROKER_COUNT)
+            TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, "true",
+            GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, String.valueOf(BROKER_COUNT)
         );
 
         return Stream.of(false, true)
-                .map(AdminClientRebootstrapTest::getRebootstrapConfig)
-                .map(rebootstrapProperties -> AdminClientRebootstrapTest.buildConfig(serverProperties, rebootstrapProperties))
-                .toList();
+            .map(AdminClientRebootstrapTest::getRebootstrapConfig)
+            .map(rebootstrapProperties -> AdminClientRebootstrapTest.buildConfig(serverProperties, rebootstrapProperties))
+            .toList();
     }
 
     private static Map<String, String> getRebootstrapConfig(boolean useRebootstrapTriggerMs) {
@@ -65,10 +65,10 @@ public class AdminClientRebootstrapTest {
 
     private static ClusterConfig buildConfig(Map<String, String> serverProperties, Map<String, String> rebootstrapProperties) {
         return ClusterConfig.defaultBuilder()
-                .setTypes(Set.of(Type.KRAFT))
-                .setBrokers(BROKER_COUNT)
-                .setAdminClientProperties(rebootstrapProperties)
-                .setServerProperties(serverProperties).build();
+            .setTypes(Set.of(Type.KRAFT))
+            .setBrokers(BROKER_COUNT)
+            .setAdminClientProperties(rebootstrapProperties)
+            .setServerProperties(serverProperties).build();
     }
 
     @ClusterTemplate(value = "generator")
