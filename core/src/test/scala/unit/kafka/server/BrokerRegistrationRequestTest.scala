@@ -17,7 +17,7 @@
 
 package kafka.server
 
-import org.apache.kafka.common.test.api.{ClusterInstance, ClusterTest, ClusterTestExtensions, Type}
+import org.apache.kafka.common.test.api.{ClusterTest, Type}
 import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
 import org.apache.kafka.common.message.{BrokerRegistrationRequestData, CreateTopicsRequestData}
@@ -26,11 +26,11 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{Node, Uuid}
-import org.apache.kafka.server.common.{ControllerRequestCompletionHandler, Feature, MetadataVersion, NodeToControllerChannelManager}
+import org.apache.kafka.server.common.{ControllerRequestCompletionHandler, Feature, MetadataVersion, MetadataVersionTestUtils, NodeToControllerChannelManager}
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.extension.ExtendWith
 
 import java.util
 import java.util.Collections
@@ -39,7 +39,6 @@ import java.util.concurrent.{CompletableFuture, TimeUnit, TimeoutException}
 /**
  * This test simulates a broker registering with the KRaft quorum under different configurations.
  */
-@ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 class BrokerRegistrationRequestTest {
 
   def brokerToControllerChannelManager(clusterInstance: ClusterInstance): NodeToControllerChannelManager = {
@@ -89,16 +88,15 @@ class BrokerRegistrationRequestTest {
     clusterId: String,
     brokerId: Int,
     zkEpoch: Option[Long],
-    ibpToSend: Option[(MetadataVersion, MetadataVersion)]
+    featureLevelToSend: Option[(Short, Short)]
   ): Errors = {
     val features = new BrokerRegistrationRequestData.FeatureCollection()
-    ibpToSend foreach {
-      case (min, max) =>
-        features.add(new BrokerRegistrationRequestData.Feature()
-          .setName(MetadataVersion.FEATURE_NAME)
-          .setMinSupportedVersion(min.featureLevel())
-          .setMaxSupportedVersion(max.featureLevel())
-        )
+    featureLevelToSend.foreach { case (min, max) =>
+      features.add(new BrokerRegistrationRequestData.Feature()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setMinSupportedVersion(min)
+        .setMaxSupportedVersion(max)
+      )
     }
     Feature.PRODUCTION_FEATURES.stream().filter(_.featureName != MetadataVersion.FEATURE_NAME).forEach {
       feature =>
@@ -151,7 +149,7 @@ class BrokerRegistrationRequestTest {
       // Invalid registration (isMigratingZkBroker, but MV does not support migrations)
       assertEquals(
         Errors.BROKER_ID_NOT_REGISTERED,
-        registerBroker(channelManager, clusterId, 100, Some(1), Some((MetadataVersion.IBP_3_3_IV0, MetadataVersion.IBP_3_3_IV3))))
+        registerBroker(channelManager, clusterId, 100, Some(1), Some((MetadataVersionTestUtils.IBP_3_3_IV0_FEATURE_LEVEL, MetadataVersion.IBP_3_3_IV3.featureLevel))))
 
       // No features (MV) sent with registration, controller can't verify
       assertEquals(
@@ -161,12 +159,12 @@ class BrokerRegistrationRequestTest {
       // Given MV is too high for controller to support
       assertEquals(
         Errors.BROKER_ID_NOT_REGISTERED,
-        registerBroker(channelManager, clusterId, 100, Some(1), Some((MetadataVersion.IBP_3_4_IV0, MetadataVersion.IBP_3_4_IV0))))
+        registerBroker(channelManager, clusterId, 100, Some(1), Some((MetadataVersion.IBP_3_4_IV0.featureLevel, MetadataVersion.IBP_3_4_IV0.featureLevel))))
 
       // Controller supports this MV and isMigratingZkBroker is false, so this one works
       assertEquals(
         Errors.NONE,
-        registerBroker(channelManager, clusterId, 100, None, Some((MetadataVersion.IBP_3_3_IV3, MetadataVersion.IBP_3_4_IV0))))
+        registerBroker(channelManager, clusterId, 100, None, Some((MetadataVersion.IBP_3_3_IV3.featureLevel, MetadataVersion.IBP_3_4_IV0.featureLevel))))
     } finally {
       channelManager.shutdown()
     }

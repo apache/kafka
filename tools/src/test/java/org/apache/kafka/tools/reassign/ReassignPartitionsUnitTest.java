@@ -359,7 +359,7 @@ public class ReassignPartitionsUnitTest {
     public void testGenerateAssignmentFailsWithoutEnoughReplicas() {
         try (MockAdminClient adminClient = new MockAdminClient.Builder().numBrokers(4).build()) {
             addTopics(adminClient);
-            assertStartsWith("Replication factor: 3 larger than available brokers: 2",
+            assertStartsWith("The target replication factor of 3 cannot be reached because only 2 broker(s) are registered",
                 assertThrows(InvalidReplicationFactorException.class,
                     () -> generateAssignment(adminClient, "{\"topics\":[{\"topic\":\"foo\"},{\"topic\":\"bar\"}]}", "0,1", false),
                     "Expected generateAssignment to fail").getMessage());

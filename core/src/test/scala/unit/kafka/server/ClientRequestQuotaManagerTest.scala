@@ -30,11 +30,15 @@ class ClientRequestQuotaManagerTest extends BaseClientQuotaManagerTest {
   @Test
   def testRequestPercentageQuotaViolation(): Unit = {
     val clientRequestQuotaManager = new ClientRequestQuotaManager(config, metrics, time, "", Optional.empty())
-    clientRequestQuotaManager.updateQuota(Some("ANONYMOUS"), Some("test-client"), Some("test-client"), Some(Quota.upperBound(1)))
+    clientRequestQuotaManager.updateQuota(
+      Some(ClientQuotaManager.UserEntity("ANONYMOUS")),
+      Some(ClientQuotaManager.ClientIdEntity("test-client")),
+      Some(Quota.upperBound(1))
+    )
     val queueSizeMetric = metrics.metrics().get(metrics.metricName("queue-size", QuotaType.REQUEST.toString, ""))
     def millisToPercent(millis: Double) = millis * 1000 * 1000 * ClientRequestQuotaManager.NANOS_TO_PERCENTAGE_PER_SECOND
     try {
-      // We have 10 second windows. Make sure that there is no quota violation
+      // We have 10 seconds windows. Make sure that there is no quota violation
       // if we are under the quota
       for (_ <- 0 until 10) {
         assertEquals(0, maybeRecord(clientRequestQuotaManager, "ANONYMOUS", "test-client", millisToPercent(4)))

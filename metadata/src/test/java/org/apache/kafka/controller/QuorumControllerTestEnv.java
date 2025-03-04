@@ -105,6 +105,12 @@ public class QuorumControllerTestEnv implements AutoCloseable {
             for (int nodeId = 0; nodeId < numControllers; nodeId++) {
                 QuorumController.Builder builder = new QuorumController.Builder(nodeId, logEnv.clusterId());
                 builder.setRaftClient(logEnv.logManagers().get(nodeId));
+                if (eligibleLeaderReplicasEnabled) {
+                    bootstrapMetadata = bootstrapMetadata.copyWithFeatureRecord(
+                        EligibleLeaderReplicasVersion.FEATURE_NAME,
+                        EligibleLeaderReplicasVersion.ELRV_1.featureLevel()
+                    );
+                }
                 builder.setBootstrapMetadata(bootstrapMetadata);
                 builder.setLeaderImbalanceCheckIntervalNs(leaderImbalanceCheckIntervalNs);
                 builder.setQuorumFeatures(new QuorumFeatures(nodeId, QuorumFeatures.defaultSupportedFeatureMap(true), nodeIds));
@@ -120,11 +126,6 @@ public class QuorumControllerTestEnv implements AutoCloseable {
                 nonFatalFaultHandlers.put(nodeId, fatalFaultHandler);
                 controllerBuilderInitializer.accept(builder);
                 QuorumController controller = builder.build();
-                if (eligibleLeaderReplicasEnabled) {
-                    bootstrapMetadata = bootstrapMetadata.copyWithFeatureRecord(
-                        EligibleLeaderReplicasVersion.FEATURE_NAME,
-                        EligibleLeaderReplicasVersion.ELRV_1.featureLevel());
-                }
                 this.controllers.add(controller);
             }
         } catch (Exception e) {

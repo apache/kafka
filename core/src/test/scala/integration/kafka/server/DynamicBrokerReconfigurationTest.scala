@@ -934,8 +934,11 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     // non-default value to trigger a new metric
     val clientId = "test-client-1"
     servers.foreach { server =>
-      server.quotaManagers.produce.updateQuota(None, Some(clientId), Some(clientId),
-        Some(Quota.upperBound(10000000)))
+      server.quotaManagers.produce.updateQuota(
+        None,
+        Some(ClientQuotaManager.ClientIdEntity(clientId)),
+        Some(Quota.upperBound(10000000))
+      )
     }
     val (producerThread, consumerThread) = startProduceConsume(retries = 0, groupProtocol, clientId)
     TestUtils.waitUntilTrue(() => consumerThread.received >= 5, "Messages not sent")

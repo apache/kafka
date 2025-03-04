@@ -16,7 +16,7 @@
 {
   "apiKey": 28,
   "type": "request",
-  "listeners": ["zkBroker", "broker"],
+  "listeners": ["broker"],
   "name": "TxnOffsetCommitRequest",
   // Version 1 is the same as version 0.
   //

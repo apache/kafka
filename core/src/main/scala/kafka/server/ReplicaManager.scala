@@ -49,16 +49,16 @@ import org.apache.kafka.common.utils.{Exit, Time}
 import org.apache.kafka.common.{IsolationLevel, Node, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.image.{LocalReplicaChanges, MetadataImage, TopicsDelta}
 import org.apache.kafka.metadata.LeaderConstants.NO_LEADER
-import org.apache.kafka.server.{ActionQueue, DelayedActionQueue, common}
+import org.apache.kafka.server.{ActionQueue, DelayedActionQueue, ListOffsetsPartitionStatus, common}
 import org.apache.kafka.server.common.{DirectoryEventHandler, RequestLocal, StopPartition, TopicOptionalIdPartition}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.network.BrokerEndPoint
-import org.apache.kafka.server.purgatory.{DelayedOperationKey, DelayedOperationPurgatory, TopicPartitionOperationKey}
+import org.apache.kafka.server.purgatory.{DelayedOperationPurgatory, TopicPartitionOperationKey}
 import org.apache.kafka.server.share.fetch.{DelayedShareFetchKey, DelayedShareFetchPartitionKey}
 import org.apache.kafka.server.storage.log.{FetchParams, FetchPartitionData}
 import org.apache.kafka.server.util.{Scheduler, ShutdownableThread}
 import org.apache.kafka.storage.internals.checkpoint.{LazyOffsetCheckpoints, OffsetCheckpointFile, OffsetCheckpoints}
-import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, LeaderHwChange, LogAppendInfo, LogConfig, LogDirFailureChannel, LogOffsetMetadata, LogReadInfo, OffsetResultHolder, RecordValidationException, RemoteLogReadResult, RemoteStorageFetchInfo, VerificationGuard}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, LeaderHwChange, LogAppendInfo, LogConfig, LogDirFailureChannel, LogOffsetMetadata, LogReadInfo, OffsetResultHolder, RecordValidationException, RemoteLogReadResult, RemoteStorageFetchInfo, UnifiedLog => JUnifiedLog, VerificationGuard}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 
 import java.io.File
@@ -244,10 +244,10 @@ object ReplicaManager {
   def createLogReadResult(e: Throwable): LogReadResult = {
     LogReadResult(info = new FetchDataInfo(LogOffsetMetadata.UNKNOWN_OFFSET_METADATA, MemoryRecords.EMPTY),
       divergingEpoch = None,
-      highWatermark = UnifiedLog.UnknownOffset,
-      leaderLogStartOffset = UnifiedLog.UnknownOffset,
-      leaderLogEndOffset = UnifiedLog.UnknownOffset,
-      followerLogStartOffset = UnifiedLog.UnknownOffset,
+      highWatermark = JUnifiedLog.UNKNOWN_OFFSET,
+      leaderLogStartOffset = JUnifiedLog.UNKNOWN_OFFSET,
+      leaderLogEndOffset = JUnifiedLog.UNKNOWN_OFFSET,
+      followerLogStartOffset = JUnifiedLog.UNKNOWN_OFFSET,
       fetchTimeMs = -1L,
       lastStableOffset = None,
       exception = Some(e))
@@ -274,7 +274,6 @@ class ReplicaManager(val config: KafkaConfig,
                      delayedProducePurgatoryParam: Option[DelayedOperationPurgatory[DelayedProduce]] = None,
                      delayedFetchPurgatoryParam: Option[DelayedOperationPurgatory[DelayedFetch]] = None,
                      delayedDeleteRecordsPurgatoryParam: Option[DelayedOperationPurgatory[DelayedDeleteRecords]] = None,
-                     delayedElectLeaderPurgatoryParam: Option[DelayedOperationPurgatory[DelayedElectLeader]] = None,
                      delayedRemoteFetchPurgatoryParam: Option[DelayedOperationPurgatory[DelayedRemoteFetch]] = None,
                      delayedRemoteListOffsetsPurgatoryParam: Option[DelayedOperationPurgatory[DelayedRemoteListOffsets]] = None,
                      delayedShareFetchPurgatoryParam: Option[DelayedOperationPurgatory[DelayedShareFetch]] = None,
@@ -298,9 +297,6 @@ class ReplicaManager(val config: KafkaConfig,
     new DelayedOperationPurgatory[DelayedDeleteRecords](
       "DeleteRecords", config.brokerId,
       config.deleteRecordsPurgatoryPurgeIntervalRequests))
-  val delayedElectLeaderPurgatory = delayedElectLeaderPurgatoryParam.getOrElse(
-    new DelayedOperationPurgatory[DelayedElectLeader](
-      "ElectLeader", config.brokerId))
   val delayedRemoteFetchPurgatory = delayedRemoteFetchPurgatoryParam.getOrElse(
     new DelayedOperationPurgatory[DelayedRemoteFetch](
       "RemoteFetch", config.brokerId))
@@ -386,13 +382,6 @@ class ReplicaManager(val config: KafkaConfig,
   }
 
   def getLog(topicPartition: TopicPartition): Option[UnifiedLog] = logManager.getLog(topicPartition)
-
-  def hasDelayedElectionOperations: Boolean = delayedElectLeaderPurgatory.numDelayed != 0
-
-  def tryCompleteElection(key: DelayedOperationKey): Unit = {
-    val completed = delayedElectLeaderPurgatory.checkAndComplete(key)
-    debug("Request key %s unblocked %d ElectLeader.".format(key.keyLabel, completed))
-  }
 
   def startup(): Unit = {
     // start ISR expiration thread
@@ -628,10 +617,6 @@ class ReplicaManager(val config: KafkaConfig,
     onlinePartition(topicPartition).flatMap(_.log)
   }
 
-  def getLogDir(topicPartition: TopicPartition): Option[String] = {
-    localLog(topicPartition).map(_.parentDir)
-  }
-
   def tryCompleteActions(): Unit = defaultActionQueue.tryCompleteActions()
 
   def addToActionQueue(action: Runnable): Unit = defaultActionQueue.add(action)
@@ -753,12 +738,20 @@ class ReplicaManager(val config: KafkaConfig,
               // retry correctly. Translate these to an error which will cause such clients to retry
               // the produce request. We pick `NOT_ENOUGH_REPLICAS` because it does not trigger a
               // metadata refresh.
-              case Errors.CONCURRENT_TRANSACTIONS |
-                   Errors.NETWORK_EXCEPTION |
+              case Errors.NETWORK_EXCEPTION |
                    Errors.COORDINATOR_LOAD_IN_PROGRESS |
                    Errors.COORDINATOR_NOT_AVAILABLE |
                    Errors.NOT_COORDINATOR => Some(new NotEnoughReplicasException(
                 s"Unable to verify the partition has been added to the transaction. Underlying error: ${error.toString}"))
+              case Errors.CONCURRENT_TRANSACTIONS =>
+                if (!transactionSupportedOperation.supportsEpochBump) {
+                  Some(new NotEnoughReplicasException(
+                    s"Unable to verify the partition has been added to the transaction. Underlying error: ${error.toString}"))
+                } else {
+                  // Don't convert the Concurrent Transaction exception for TV2. Because the error is very common during
+                  // the transaction commit phase. Returning Concurrent Transaction is less confusing to the client.
+                  None
+                }
               case _ => None
             }
           topicPartition -> LogAppendResult(
@@ -797,18 +790,49 @@ class ReplicaManager(val config: KafkaConfig,
       return
     }
 
-    maybeStartTransactionVerificationForPartitions(
+    // Wrap the callback to be handled on an arbitrary request handler thread
+    // when transaction verification is complete. The request local passed in
+    // is only used when the callback is executed immediately.
+    val wrappedPostVerificationCallback = KafkaRequestHandler.wrapAsyncCallback(
+      postVerificationCallback,
+      requestLocal
+    )
+
+    val retryTimeoutMs = Math.min(config.addPartitionsToTxnConfig.addPartitionsToTxnRetryBackoffMaxMs(), config.requestTimeoutMs)
+    val addPartitionsRetryBackoffMs = config.addPartitionsToTxnConfig.addPartitionsToTxnRetryBackoffMs
+    val startVerificationTimeMs = time.milliseconds
+    def maybeRetryOnConcurrentTransactions(results: (Map[TopicPartition, Errors], Map[TopicPartition, VerificationGuard])): Unit = {
+      if (time.milliseconds() - startVerificationTimeMs >= retryTimeoutMs) {
+        // We've exceeded the retry timeout, so just call the callback with whatever results we have
+        wrappedPostVerificationCallback(results)
+      } else if (results._1.values.exists(_ == Errors.CONCURRENT_TRANSACTIONS)) {
+        // Retry the verification with backoff
+        scheduler.scheduleOnce("retry-add-partitions-to-txn", () => {
+          maybeSendPartitionsToTransactionCoordinator(
+            topicPartitionBatchInfo,
+            transactionalId,
+            transactionalProducerInfo.head._1,
+            transactionalProducerInfo.head._2,
+            maybeRetryOnConcurrentTransactions,
+            transactionSupportedOperation
+          )
+        }, addPartitionsRetryBackoffMs * 1L)
+      } else {
+        // We don't have concurrent transaction errors, so just call the callback with the results
+        wrappedPostVerificationCallback(results)
+      }
+    }
+
+    maybeSendPartitionsToTransactionCoordinator(
       topicPartitionBatchInfo,
       transactionalId,
       transactionalProducerInfo.head._1,
       transactionalProducerInfo.head._2,
-      // Wrap the callback to be handled on an arbitrary request handler thread
-      // when transaction verification is complete. The request local passed in
-      // is only used when the callback is executed immediately.
-      KafkaRequestHandler.wrapAsyncCallback(
-        postVerificationCallback,
-        requestLocal
-      ),
+      // If we add partition directly from produce request,
+      // we should retry on concurrent transaction error here because:
+      //  - the produce backoff adds too much delay
+      //  - the produce request is expensive to retry
+      if (transactionSupportedOperation.supportsEpochBump) maybeRetryOnConcurrentTransactions else wrappedPostVerificationCallback,
       transactionSupportedOperation
     )
   }
@@ -902,7 +926,7 @@ class ReplicaManager(val config: KafkaConfig,
 
   /**
    *
-   * @param topicPartition                the topic partition to maybe verify
+   * @param topicPartition                the topic partition to maybe verify or add
    * @param transactionalId               the transactional id for the transaction
    * @param producerId                    the producer id for the producer writing to the transaction
    * @param producerEpoch                 the epoch of the producer writing to the transaction
@@ -910,11 +934,15 @@ class ReplicaManager(val config: KafkaConfig,
    * @param callback                      the method to execute once the verification is either completed or returns an error
    * @param transactionSupportedOperation determines the supported operation based on the client's Request API version
    *
-   * When the verification returns, the callback will be supplied the error if it exists or Errors.NONE.
+   * If this is the first time a partition appears in a transaction, it must be verified or added to the partition depending on the
+   * transactionSupported operation.
+   * If verifying, when the verification returns, the callback will be supplied the error if it exists or Errors.NONE.
    * If the verification guard exists, it will also be supplied. Otherwise the SENTINEL verification guard will be returned.
    * This guard can not be used for verification and any appends that attempt to use it will fail.
+   *
+   * If adding, the callback will be supplied the error if it exists or Errors.NONE.
    */
-  def maybeStartTransactionVerificationForPartition(
+  def maybeSendPartitionToTransactionCoordinator(
     topicPartition: TopicPartition,
     transactionalId: String,
     producerId: Long,
@@ -931,7 +959,7 @@ class ReplicaManager(val config: KafkaConfig,
       ))
     }
 
-    maybeStartTransactionVerificationForPartitions(
+    maybeSendPartitionsToTransactionCoordinator(
       Map(topicPartition -> baseSequence),
       transactionalId,
       producerId,
@@ -943,19 +971,23 @@ class ReplicaManager(val config: KafkaConfig,
 
   /**
    *
-   * @param topicPartitionBatchInfo         the topic partitions to maybe verify mapped to the base sequence of their first record batch
+   * @param topicPartitionBatchInfo         the topic partitions to maybe verify or add mapped to the base sequence of their first record batch
    * @param transactionalId                 the transactional id for the transaction
    * @param producerId                      the producer id for the producer writing to the transaction
    * @param producerEpoch                   the epoch of the producer writing to the transaction
    * @param callback                        the method to execute once the verification is either completed or returns an error
    * @param transactionSupportedOperation   determines the supported operation based on the client's Request API version
    *
-   * When the verification returns, the callback will be supplied the errors per topic partition if there were errors.
+   * If this is the first time the partitions appear in a transaction, they must be verified or added to the partition depending on the
+   * transactionSupported operation.
+   * If verifying, when the verification returns, the callback will be supplied the errors per topic partition if there were errors.
    * The callback will also be supplied the verification guards per partition if they exist. It is possible to have an
    * error and a verification guard for a topic partition if the topic partition was unable to be verified by the transaction
    * coordinator. Transaction coordinator errors are mapped to append-friendly errors.
+   *
+   * If adding, the callback will be e supplied the errors per topic partition if there were errors.
    */
-  private def maybeStartTransactionVerificationForPartitions(
+  private def maybeSendPartitionsToTransactionCoordinator(
     topicPartitionBatchInfo: Map[TopicPartition, Int],
     transactionalId: String,
     producerId: Long,
@@ -965,7 +997,7 @@ class ReplicaManager(val config: KafkaConfig,
   ): Unit = {
     // Skip verification if the request is not transactional or transaction verification is disabled.
     if (transactionalId == null ||
-      !config.transactionLogConfig.transactionPartitionVerificationEnable
+      (!config.transactionLogConfig.transactionPartitionVerificationEnable && !transactionSupportedOperation.supportsEpochBump)
       || addPartitionsToTxnManager.isEmpty
     ) {
       callback((Map.empty[TopicPartition, Errors], Map.empty[TopicPartition, VerificationGuard]))
@@ -980,7 +1012,8 @@ class ReplicaManager(val config: KafkaConfig,
         topicPartition,
         producerId,
         producerEpoch,
-        baseSequence
+        baseSequence,
+        transactionSupportedOperation.supportsEpochBump
       )
 
       errorOrGuard match {
@@ -990,7 +1023,6 @@ class ReplicaManager(val config: KafkaConfig,
       }
     }
 
-    // No partitions require verification.
     if (verificationGuards.isEmpty) {
       callback((errors.toMap, Map.empty[TopicPartition, VerificationGuard]))
       return
@@ -1017,11 +1049,12 @@ class ReplicaManager(val config: KafkaConfig,
     topicPartition: TopicPartition,
     producerId: Long,
     producerEpoch: Short,
-    baseSequence: Int
+    baseSequence: Int,
+    supportsEpochBump: Boolean
   ): Either[Errors, VerificationGuard] = {
     try {
       val verificationGuard = getPartitionOrException(topicPartition)
-        .maybeStartTransactionVerification(producerId, baseSequence, producerEpoch)
+        .maybeStartTransactionVerification(producerId, baseSequence, producerEpoch, supportsEpochBump)
       Right(verificationGuard)
     } catch {
       case e: Exception =>
@@ -1082,7 +1115,7 @@ class ReplicaManager(val config: KafkaConfig,
           /* If the topic name is exceptionally long, we can't support altering the log directory.
            * See KAFKA-4893 for details.
            * TODO: fix this by implementing topic IDs. */
-          if (UnifiedLog.logFutureDirName(topicPartition).length > 255)
+          if (JUnifiedLog.logFutureDirName(topicPartition).length > 255)
             throw new InvalidTopicException("The topic name is too long.")
           if (!logManager.isLogDirOnline(destinationDir))
             throw new KafkaStorageException(s"Log directory $destinationDir is offline")
@@ -1381,9 +1414,11 @@ class ReplicaManager(val config: KafkaConfig,
         if (duplicatePartitions.contains(topicPartition)) {
           debug(s"OffsetRequest with correlation id $correlationId from client $clientId on partition $topicPartition " +
             s"failed because the partition is duplicated in the request.")
-          statusByPartition += topicPartition -> ListOffsetsPartitionStatus(Some(buildErrorResponse(Errors.INVALID_REQUEST, partition)))
+          statusByPartition += topicPartition -> 
+            ListOffsetsPartitionStatus.builder().responseOpt(Optional.of(buildErrorResponse(Errors.INVALID_REQUEST, partition))).build()
         } else if (isListOffsetsTimestampUnsupported(partition.timestamp(), version)) {
-          statusByPartition += topicPartition -> ListOffsetsPartitionStatus(Some(buildErrorResponse(Errors.UNSUPPORTED_VERSION, partition)))
+          statusByPartition += topicPartition ->
+            ListOffsetsPartitionStatus.builder().responseOpt(Optional.of(buildErrorResponse(Errors.UNSUPPORTED_VERSION, partition))).build()
         } else {
           try {
             val fetchOnlyFromLeader = replicaId != ListOffsetsRequest.DEBUGGING_REPLICA_ID
@@ -1416,15 +1451,19 @@ class ReplicaManager(val config: KafkaConfig,
                   if (timestampAndOffsetOpt.leaderEpoch.isPresent && version >= 4)
                     partitionResponse.setLeaderEpoch(timestampAndOffsetOpt.leaderEpoch.get)
                 }
-                ListOffsetsPartitionStatus(Some(partitionResponse))
+                ListOffsetsPartitionStatus.builder().responseOpt(Optional.of(partitionResponse)).build()
               } else if (resultHolder.timestampAndOffsetOpt.isEmpty && resultHolder.futureHolderOpt.isEmpty) {
                 // This is an empty offset response scenario
                 resultHolder.maybeOffsetsError.map(e => throw e)
-                ListOffsetsPartitionStatus(Some(buildErrorResponse(Errors.NONE, partition)))
+                ListOffsetsPartitionStatus.builder().responseOpt(Optional.of(buildErrorResponse(Errors.NONE, partition))).build()
               } else if (resultHolder.timestampAndOffsetOpt.isEmpty && resultHolder.futureHolderOpt.isPresent) {
                 // This case is for topic enabled with remote storage and we want to search the timestamp in
                 // remote storage using async fashion.
-                ListOffsetsPartitionStatus(None, resultHolder.futureHolderOpt(), resultHolder.lastFetchableOffset.toScala.map(_.longValue()), resultHolder.maybeOffsetsError.toScala)
+                ListOffsetsPartitionStatus.builder()
+                  .futureHolderOpt(resultHolder.futureHolderOpt())
+                  .lastFetchableOffset(resultHolder.lastFetchableOffset)
+                  .maybeOffsetsError(resultHolder.maybeOffsetsError)
+                  .build()
               } else {
                 throw new IllegalStateException(s"Unexpected result holder state $resultHolder")
               }
@@ -1441,19 +1480,22 @@ class ReplicaManager(val config: KafkaConfig,
                       _ : UnsupportedForMessageFormatException) =>
               debug(s"Offset request with correlation id $correlationId from client $clientId on " +
                 s"partition $topicPartition failed due to ${e.getMessage}")
-              statusByPartition += topicPartition -> ListOffsetsPartitionStatus(Some(buildErrorResponse(Errors.forException(e), partition)))
-
+              statusByPartition += topicPartition -> 
+                ListOffsetsPartitionStatus.builder().responseOpt(Optional.of(buildErrorResponse(Errors.forException(e), partition))).build()
             // Only V5 and newer ListOffset calls should get OFFSET_NOT_AVAILABLE
             case e: OffsetNotAvailableException =>
               if (version >= 5) {
-                statusByPartition += topicPartition -> ListOffsetsPartitionStatus(Some(buildErrorResponse(Errors.forException(e), partition)))
+                statusByPartition += topicPartition ->
+                  ListOffsetsPartitionStatus.builder().responseOpt(Optional.of(buildErrorResponse(Errors.forException(e), partition))).build()
               } else {
-                statusByPartition += topicPartition -> ListOffsetsPartitionStatus(Some(buildErrorResponse(Errors.LEADER_NOT_AVAILABLE, partition)))
+                statusByPartition += topicPartition ->
+                  ListOffsetsPartitionStatus.builder().responseOpt(Optional.of(buildErrorResponse(Errors.LEADER_NOT_AVAILABLE, partition))).build()
               }
 
             case e: Throwable =>
               error("Error while responding to offset request", e)
-              statusByPartition += topicPartition -> ListOffsetsPartitionStatus(Some(buildErrorResponse(Errors.forException(e), partition)))
+              statusByPartition += topicPartition ->
+                ListOffsetsPartitionStatus.builder().responseOpt(Optional.of(buildErrorResponse(Errors.forException(e), partition))).build()
           }
         }
       }
@@ -1471,7 +1513,7 @@ class ReplicaManager(val config: KafkaConfig,
       // we can respond immediately
       val responseTopics = statusByPartition.groupBy(e => e._1.topic()).map {
         case (topic, status) =>
-          new ListOffsetsTopicResponse().setName(topic).setPartitions(status.values.flatMap(s => s.responseOpt).toList.asJava)
+          new ListOffsetsTopicResponse().setName(topic).setPartitions(status.values.flatMap(s => Some(s.responseOpt.get())).toList.asJava)
       }.toList
       responseCallback(responseTopics)
     }
@@ -1488,15 +1530,6 @@ class ReplicaManager(val config: KafkaConfig,
                               fetchOnlyFromLeader: Boolean): OffsetResultHolder = {
     val partition = getPartitionOrException(topicPartition)
     partition.fetchOffsetForTimestamp(timestamp, isolationLevel, currentLeaderEpoch, fetchOnlyFromLeader, remoteLogManager)
-  }
-
-  def legacyFetchOffsetsForTimestamp(topicPartition: TopicPartition,
-                                     timestamp: Long,
-                                     maxNumOffsets: Int,
-                                     isFromConsumer: Boolean,
-                                     fetchOnlyFromLeader: Boolean): Seq[Long] = {
-    val partition = getPartitionOrException(topicPartition)
-    partition.legacyFetchOffsetsForTimestamp(timestamp, maxNumOffsets, isFromConsumer, fetchOnlyFromLeader)
   }
 
   /**
@@ -1753,10 +1786,10 @@ class ReplicaManager(val config: KafkaConfig,
 
           LogReadResult(info = new FetchDataInfo(LogOffsetMetadata.UNKNOWN_OFFSET_METADATA, MemoryRecords.EMPTY),
             divergingEpoch = None,
-            highWatermark = UnifiedLog.UnknownOffset,
-            leaderLogStartOffset = UnifiedLog.UnknownOffset,
-            leaderLogEndOffset = UnifiedLog.UnknownOffset,
-            followerLogStartOffset = UnifiedLog.UnknownOffset,
+            highWatermark = JUnifiedLog.UNKNOWN_OFFSET,
+            leaderLogStartOffset = JUnifiedLog.UNKNOWN_OFFSET,
+            leaderLogEndOffset = JUnifiedLog.UNKNOWN_OFFSET,
+            followerLogStartOffset = JUnifiedLog.UNKNOWN_OFFSET,
             fetchTimeMs = -1L,
             lastStableOffset = None,
             exception = Some(e)
@@ -2525,7 +2558,6 @@ class ReplicaManager(val config: KafkaConfig,
     delayedRemoteListOffsetsPurgatory.shutdown()
     delayedProducePurgatory.shutdown()
     delayedDeleteRecordsPurgatory.shutdown()
-    delayedElectLeaderPurgatory.shutdown()
     delayedShareFetchPurgatory.shutdown()
     if (checkpointHW)
       checkpointHighWatermarks()
@@ -2662,7 +2694,7 @@ class ReplicaManager(val config: KafkaConfig,
   def applyDelta(delta: TopicsDelta, newImage: MetadataImage): Unit = {
     // Before taking the lock, compute the local changes
     val localChanges = delta.localChanges(config.nodeId)
-    val metadataVersion = newImage.features().metadataVersion()
+    val metadataVersion = newImage.features().metadataVersionOrThrow()
 
     replicaStateChangeLock.synchronized {
       // Handle deleted partitions. We need to do this first because we might subsequently

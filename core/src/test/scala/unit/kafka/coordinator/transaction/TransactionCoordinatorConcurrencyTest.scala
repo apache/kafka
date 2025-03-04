@@ -85,9 +85,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
       new FinalizedFeatures(
         MetadataVersion.latestTesting(),
         Collections.singletonMap(TransactionVersion.FEATURE_NAME, TransactionVersion.TV_2.featureLevel()),
-        0,
-        true
-      )
+        0)
     }
 
     when(metadataCache.metadataVersion())

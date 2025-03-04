@@ -55,7 +55,6 @@ import org.apache.kafka.timeline.TimelineHashSet;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -799,7 +798,7 @@ public class OffsetMetadataManager {
         } catch (GroupIdNotFoundException ex) {
             return new OffsetFetchResponseData.OffsetFetchResponseGroup()
                 .setGroupId(request.groupId())
-                .setTopics(Collections.emptyList());
+                .setTopics(List.of());
         }
 
         final List<OffsetFetchResponseData.OffsetFetchResponseTopics> topicResponses = new ArrayList<>();
