@@ -1343,13 +1343,13 @@ NodeId	DirectoryId           	LogEndOffset	Lag	LastFetchTimestamp	LastCaughtUpTi
 
   <p>Check and wait until the <code>Lag</code> is small for a majority of the controllers. If the leader's end offset is not increasing, you can wait until the lag is 0 for a majority; otherwise, you can pick the latest leader end offset and wait until all replicas have reached it. Check and wait until the <code>LastFetchTimestamp</code> and <code>LastCaughtUpTimestamp</code> are close to each other for the majority of the controllers. At this point it is safer to format the controller's metadata log directory. This can be done by running the kafka-storage.sh command.</p>
 
-  <pre><code class="language-bash">$ bin/kafka-storage.sh format --cluster-id uuid --config server_properties</code></pre>
+  <pre><code class="language-bash">$ bin/kafka-storage.sh format --cluster-id uuid --config config/server.properties</code></pre>
 
   <p>It is possible for the <code>bin/kafka-storage.sh format</code> command above to fail with a message like <code>Log directory ... is already formatted</code>. This can happen when combined mode is used and only the metadata log directory was lost but not the others. In that case and only in that case, can you run the <code>bin/kafka-storage.sh format</code> command with the <code>--ignore-formatted</code> option.</p>
 
   <p>Start the KRaft controller after formatting the log directories.</p>
 
-  <pre><code class="language-bash">$ bin/kafka-server-start.sh server_properties</code></pre>
+  <pre><code class="language-bash">$ bin/kafka-server-start.sh config/server.properties</code></pre>
 
   <h3 class="anchor-heading"><a id="monitoring" class="anchor-link"></a><a href="#monitoring">6.7 Monitoring</a></h3>
 
@@ -3827,22 +3827,22 @@ controller.listener.names=CONTROLLER</code></pre>
   <h5 class="anchor-heading"><a id="kraft_storage_standalone" class="anchor-link"></a><a href="#kraft_storage_standalone">Bootstrap a Standalone Controller</a></h5>
   The recommended method for creating a new KRaft controller cluster is to bootstrap it with one voter and dynamically <a href="#kraft_reconfig_add">add the rest of the controllers</a>. Bootstrapping the first controller can be done with the following CLI command:
 
-  <pre><code class="language-bash">$ bin/kafka-storage.sh format --cluster-id &lt;cluster-id&gt; --standalone --config controller.properties</code></pre>
+  <pre><code class="language-bash">$ bin/kafka-storage.sh format --cluster-id &lt;CLUSTER_ID&gt; --standalone --config config/controller.properties</code></pre>
 
   This command will 1) create a meta.properties file in metadata.log.dir with a randomly generated directory.id, 2) create a snapshot at 00000000000000000000-0000000000.checkpoint with the necessary control records (KRaftVersionRecord and VotersRecord) to make this Kafka node the only voter for the quorum.
 
   <h5 class="anchor-heading"><a id="kraft_storage_voters" class="anchor-link"></a><a href="#kraft_storage_voters">Bootstrap with Multiple Controllers</a></h5>
   The KRaft cluster metadata partition can also be bootstrapped with more than one voter. This can be done by using the --initial-controllers flag:
 
-  <pre><code class="language-bash">cluster-id=$(bin/kafka-storage.sh random-uuid)
-controller-0-uuid=$(bin/kafka-storage.sh random-uuid)
-controller-1-uuid=$(bin/kafka-storage.sh random-uuid)
-controller-2-uuid=$(bin/kafka-storage.sh random-uuid)
+  <pre><code class="language-bash">CLUSTER_ID="$(bin/kafka-storage.sh random-uuid)"
+CONTROLLER_0_UUID="$(bin/kafka-storage.sh random-uuid)"
+CONTROLLER_1_UUID="$(bin/kafka-storage.sh random-uuid)"
+CONTROLLER_2_UUID="$(bin/kafka-storage.sh random-uuid)"
 
 # In each controller execute
-bin/kafka-storage.sh format --cluster-id ${cluster-id} \
-                     --initial-controllers "0@controller-0:1234:${controller-0-uuid},1@controller-1:1234:${controller-1-uuid},2@controller-2:1234:${controller-2-uuid}" \
-                     --config controller.properties</code></pre>
+bin/kafka-storage.sh format --cluster-id ${CLUSTER_ID} \
+                     --initial-controllers "0@controller-0:1234:${CONTROLLER_0_UUID},1@controller-1:1234:${CONTROLLER_1_UUID},2@controller-2:1234:${CONTROLLER_2_UUID}" \
+                     --config config/controller.properties</code></pre>
 
 This command is similar to the standalone version but the snapshot at 00000000000000000000-0000000000.checkpoint will instead contain a VotersRecord that includes information for all of the controllers specified in --initial-controllers. It is important that the value of this flag is the same in all of the controllers with the same cluster id.
 
@@ -3851,7 +3851,7 @@ In the replica description 0@controller-0:1234:3Db5QLSqSZieL3rJBUUegA, 0 is the 
   <h5 class="anchor-heading"><a id="kraft_storage_observers" class="anchor-link"></a><a href="#kraft_storage_observers">Formatting Brokers and New Controllers</a></h5>
   When provisioning new broker and controller nodes that we want to add to an existing Kafka cluster, use the <code>kafka-storage.sh format</code> command with the --no-initial-controllers flag.
 
-  <pre><code class="language-bash">$ bin/kafka-storage.sh format --cluster-id &lt;cluster-id&gt; --config server.properties --no-initial-controllers</code></pre>
+  <pre><code class="language-bash">$ bin/kafka-storage.sh format --cluster-id &lt;CLUSTER_ID&gt; --config config/server.properties --no-initial-controllers</code></pre>
 
   <h4 class="anchor-heading"><a id="kraft_reconfig" class="anchor-link"></a><a href="#kraft_reconfig">Controller membership changes</a></h4>
 
@@ -3917,10 +3917,10 @@ Feature: metadata.version       SupportedMinVersion: 3.3-IV3    SupportedMaxVers
   After starting the controller, the replication to the new controller can be monitored using the <code>bin/kafka-metadata-quorum.sh describe --replication</code> command. Once the new controller has caught up to the active controller, it can be added to the cluster using the <code>bin/kafka-metadata-quorum.sh add-controller</code> command.
 
   When using broker endpoints use the --bootstrap-server flag:
-  <pre><code class="language-bash">$ bin/kafka-metadata-quorum.sh --command-config controller.properties --bootstrap-server localhost:9092 add-controller</code></pre>
+  <pre><code class="language-bash">$ bin/kafka-metadata-quorum.sh --command-config config/controller.properties --bootstrap-server localhost:9092 add-controller</code></pre>
 
   When using controller endpoints use the --bootstrap-controller flag:
-  <pre><code class="language-bash">$ bin/kafka-metadata-quorum.sh --command-config controller.properties --bootstrap-controller localhost:9092 add-controller</code></pre>
+  <pre><code class="language-bash">$ bin/kafka-metadata-quorum.sh --command-config config/controller.properties --bootstrap-controller localhost:9093 add-controller</code></pre>
 
   <h5 class="anchor-heading"><a id="kraft_reconfig_remove" class="anchor-link"></a><a href="#kraft_reconfig_remove">Remove Controller</a></h5>
   If the dynamic controller cluster already exists, it can be shrunk using the <code>bin/kafka-metadata-quorum.sh remove-controller</code> command. Until KIP-996: Pre-vote has been implemented and released, it is recommended to shutdown the controller that will be removed before running the remove-controller command.
@@ -4187,7 +4187,7 @@ $ bin/kafka-topics.sh --create --topic tieredTopic --bootstrap-server localhost:
   <p>The assignment strategy is also controlled by the server. The <code>group.consumer.assignors</code> configuration can be used to specify the list of available
     assignors for <code>Consumer</code> groups. By default, the <code>uniform</code> assignor and the <code>range</code> assignor are configured. The first assignor
     in the list is used by default unless the Consumer selects a different one. It is also possible to implement custom assignment strategies on the server side
-    by implementing the <code>org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor</code> interface and specifying the full class name in the configuration.</p>
+    by implementing the <code>ConsumerGroupPartitionAssignor</code> interface and specifying the full class name in the configuration.</p>
 
   <h4 class="anchor-heading"><a id="consumer_rebalance_protocol_consumer" class="anchor-link"></a><a href="#consumer_rebalance_protocol_consumer">Consumer</a></h4>
 
