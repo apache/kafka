@@ -153,7 +153,9 @@ public class RaftEventSimulationTest {
         int leaderId = cluster.leaderWithMaxEpoch().get().nodeId;
         expectedVoterIds.remove(leaderId);
         removeVoter(cluster, scheduler, leaderId, expectedVoterIds);
-        runUntilNewHighWatermark(cluster, scheduler);
+
+        long highWatermark = cluster.maxHighWatermarkReached();
+        scheduler.runUntil(() -> cluster.allReachedHighWatermark(highWatermark + 10));
     }
 
     @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
@@ -175,14 +177,16 @@ public class RaftEventSimulationTest {
             expectedVoterIds.add(voterIdToAdd);
             addVoter(cluster, scheduler, voterIdToAdd, expectedVoterIds);
         }
-        runUntilNewHighWatermark(cluster, scheduler);
+        long highWatermark = cluster.maxHighWatermarkReached();
+        scheduler.runUntil(() -> cluster.allReachedHighWatermark(highWatermark + 10));
 
         // Remove all added observers from voter set one by one
         for (int voterIdToRemove = numVoters + numObservers - 1; voterIdToRemove >= numVoters; voterIdToRemove--) {
             expectedVoterIds.remove(voterIdToRemove);
             removeVoter(cluster, scheduler, voterIdToRemove, expectedVoterIds);
         }
-        runUntilNewHighWatermark(cluster, scheduler);
+        long newHighWatermark = cluster.maxHighWatermarkReached();
+        scheduler.runUntil(() -> cluster.allReachedHighWatermark(newHighWatermark + 10));
     }
 
     @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
@@ -581,7 +585,8 @@ public class RaftEventSimulationTest {
         // Remove the partitioned voter
         expectedVoterIds.remove(voterIdToRemove);
         removeVoter(cluster, scheduler, voterIdToRemove, expectedVoterIds);
-        runUntilNewHighWatermarkOnVoterNodes(cluster, scheduler, expectedVoterIds);
+        long highWatermark = cluster.maxHighWatermarkReached();
+        scheduler.runUntil(() -> cluster.allReachedHighWatermark(highWatermark + 10, expectedVoterIds));
     }
 
     @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
@@ -608,7 +613,9 @@ public class RaftEventSimulationTest {
         router.filter(voterId, new PermitAllTraffic());
         expectedVoterIds.add(voterId);
         addVoter(cluster, scheduler, voterId, expectedVoterIds);
-        runUntilNewHighWatermark(cluster, scheduler);
+
+        long highWatermark = cluster.maxHighWatermarkReached();
+        scheduler.runUntil(() -> cluster.allReachedHighWatermark(highWatermark + 10));
     }
 
     /**
@@ -625,16 +632,6 @@ public class RaftEventSimulationTest {
         scheduler.schedule(new SequentialAppendAction(cluster), 0, appendActionPeriodMs, 3);
         scheduler.runUntil(cluster::hasConsistentLeader);
         scheduler.runUntil(() -> cluster.anyReachedHighWatermark(10));
-    }
-
-    private void runUntilNewHighWatermark(Cluster cluster, EventScheduler scheduler) {
-        long highWatermark = cluster.maxHighWatermarkReached();
-        scheduler.runUntil(() -> cluster.allReachedHighWatermark(highWatermark + 10));
-    }
-
-    private void runUntilNewHighWatermarkOnVoterNodes(Cluster cluster, EventScheduler scheduler, Set<Integer> voterNodes) {
-        long highWatermark = cluster.maxHighWatermarkReached();
-        scheduler.runUntil(() -> cluster.allReachedHighWatermark(highWatermark + 10, voterNodes));
     }
 
     private void addVoter(Cluster cluster, EventScheduler scheduler, int idToAdd, Set<Integer> expectedVoterIds) {
