@@ -22,7 +22,7 @@ import java.util.Map;
 
 
 /**
- * * Options for the {@link Admin#alterStreamsGroupOffsets(String, Map, AlterStreamsGroupOffsetsOptions)} (String groupId, Map), AlterStreamsGroupOffsetsOptions)} call.
+ * Options for the {@link Admin#alterStreamsGroupOffsets(String, Map, AlterStreamsGroupOffsetsOptions)} call.
  * The API of this class is evolving, see {@link Admin} for details.
  */
 @InterfaceStability.Evolving
