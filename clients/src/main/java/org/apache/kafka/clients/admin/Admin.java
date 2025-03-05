@@ -941,31 +941,6 @@ public interface Admin extends AutoCloseable {
     }
 
     /**
-     * List the Streams group offsets available in the cluster for the specified Streams groups.
-     *
-     * <em>Note</em>: this method effectively does the same as the corresponding consumer group method {@link Admin#listConsumerGroupOffsets} does.
-     *
-     * @param groupSpecs Map of Streams group ids to a spec that specifies the topic partitions of the group to list offsets for.
-     *
-     * @param options The options to use when listing the Streams group offsets.
-     * @return The ListStreamsGroupOffsetsResult
-     */
-    ListStreamsGroupOffsetsResult listStreamsGroupOffsets(Map<String, ListStreamsGroupOffsetsSpec> groupSpecs, ListStreamsGroupOffsetsOptions options);
-
-    /**
-     * List the Streams group offsets available in the cluster for the specified groups with the default options.
-     * <p>
-     * This is a convenience method for
-     * {@link #listStreamsGroupOffsets(Map, ListStreamsGroupOffsetsOptions)} with default options.
-     *
-     * @param groupSpecs Map of Streams group ids to a spec that specifies the topic partitions of the group to list offsets for.
-     * @return The ListStreamsGroupOffsetsResult.
-     */
-    default ListStreamsGroupOffsetsResult listStreamsGroupOffsets(Map<String, ListStreamsGroupOffsetsSpec> groupSpecs) {
-        return listStreamsGroupOffsets(groupSpecs, new ListStreamsGroupOffsetsOptions());
-    }
-
-    /**
      * Delete consumer groups from the cluster.
      *
      * @param options The options to use when deleting a consumer group.
@@ -980,25 +955,6 @@ public interface Admin extends AutoCloseable {
      */
     default DeleteConsumerGroupsResult deleteConsumerGroups(Collection<String> groupIds) {
         return deleteConsumerGroups(groupIds, new DeleteConsumerGroupsOptions());
-    }
-
-    /**
-     * Delete Streams groups from the cluster.
-     *
-     * <em>Note</em>: this method effectively does the same as the corresponding consumer group method {@link Admin#deleteConsumerGroups} does.
-     *
-     * @param options The options to use when deleting a Streams group.
-     * @return The DeleteStreamsGroupsResult.
-     */
-    DeleteStreamsGroupsResult deleteStreamsGroups(Collection<String> groupIds, DeleteStreamsGroupsOptions options);
-
-    /**
-     * Delete Streams groups from the cluster with the default options.
-     *
-     * @return The DeleteStreamsGroupResult.
-     */
-    default DeleteStreamsGroupsResult deleteStreamsGroups(Collection<String> groupIds) {
-        return deleteStreamsGroups(groupIds, new DeleteStreamsGroupsOptions());
     }
 
     /**
@@ -1022,31 +978,6 @@ public interface Admin extends AutoCloseable {
      */
     default DeleteConsumerGroupOffsetsResult deleteConsumerGroupOffsets(String groupId, Set<TopicPartition> partitions) {
         return deleteConsumerGroupOffsets(groupId, partitions, new DeleteConsumerGroupOffsetsOptions());
-    }
-
-    /**
-     * Delete committed offsets for a set of partitions in a Streams group. This will
-     * succeed at the partition level only if the group is not actively subscribed
-     * to the corresponding topic.
-     *
-     * <em>Note</em>: this method effectively does the same as the corresponding consumer group method {@link Admin#deleteConsumerGroupOffsets} does.
-     *
-     * @param options The options to use when deleting offsets in a Streams group.
-     * @return The DeleteStreamsGroupOffsetsResult.
-     */
-    DeleteStreamsGroupOffsetsResult deleteStreamsGroupOffsets(String groupId,
-                                                                Set<TopicPartition> partitions,
-                                                                DeleteStreamsGroupOffsetsOptions options);
-
-    /**
-     * Delete committed offsets for a set of partitions in a Streams group with the default
-     * options. This will succeed at the partition level only if the group is not actively
-     * subscribed to the corresponding topic.
-     *
-     * @return The DeleteStreamsGroupOffsetsResult.
-     */
-    default DeleteStreamsGroupOffsetsResult deleteStreamsGroupOffsets(String groupId, Set<TopicPartition> partitions) {
-        return deleteStreamsGroupOffsets(groupId, partitions, new DeleteStreamsGroupOffsetsOptions());
     }
 
     /**
@@ -1281,34 +1212,6 @@ public interface Admin extends AutoCloseable {
      * @return The AlterOffsetsResult.
      */
     AlterConsumerGroupOffsetsResult alterConsumerGroupOffsets(String groupId, Map<TopicPartition, OffsetAndMetadata> offsets, AlterConsumerGroupOffsetsOptions options);
-
-    /**
-     * <p>Alters offsets for the specified group. In order to succeed, the group must be empty.
-     *
-     * <p>This is a convenience method for {@link #alterStreamsGroupOffsets(String, Map, AlterStreamsGroupOffsetsOptions)} with default options.
-     * See the overload for more details.
-     *
-     * @param groupId The group for which to alter offsets.
-     * @param offsets A map of offsets by partition with associated metadata.
-     * @return The AlterOffsetsResult.
-     */
-    default AlterStreamsGroupOffsetsResult alterStreamsGroupOffsets(String groupId, Map<TopicPartition, OffsetAndMetadata> offsets) {
-        return alterStreamsGroupOffsets(groupId, offsets, new AlterStreamsGroupOffsetsOptions());
-    }
-
-    /**
-     * <p>Alters offsets for the specified group. In order to succeed, the group must be empty.
-     *
-     * <p>This operation is not transactional so it may succeed for some partitions while fail for others.
-     *
-     * <em>Note</em>: this method effectively does the same as the corresponding consumer group method {@link Admin#alterConsumerGroupOffsets} does.
-     *
-     * @param groupId The group for which to alter offsets.
-     * @param offsets A map of offsets by partition with associated metadata. Partitions not specified in the map are ignored.
-     * @param options The options to use when altering the offsets.
-     * @return The AlterOffsetsResult.
-     */
-    AlterStreamsGroupOffsetsResult alterStreamsGroupOffsets(String groupId, Map<TopicPartition, OffsetAndMetadata> offsets, AlterStreamsGroupOffsetsOptions options);
 
     /**
      * <p>List offset for the specified partitions and OffsetSpec. This operation enables to find
