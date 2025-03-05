@@ -48,6 +48,7 @@ import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockReducer;
 import org.apache.kafka.test.NoOpValueTransformerWithKeySupplier;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -411,7 +412,7 @@ public class KTableTransformValuesTest {
         final KeyValueStore<String, Integer> keyValueStore = driver.getKeyValueStore(QUERYABLE_NAME);
         assertThat(keyValueStore.get("A"), is(3));
         assertThat(driver.getAllStateStores().keySet(),
-            equalTo(Set.of("queryable-store", "KTABLE-AGGREGATE-STATE-STORE-0000000005")));
+            equalTo(Set.of(QUERYABLE_NAME, "KTABLE-AGGREGATE-STATE-STORE-0000000005")));
     }
 
     @Test
