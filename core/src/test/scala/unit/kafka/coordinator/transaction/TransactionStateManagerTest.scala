@@ -894,7 +894,7 @@ class TransactionStateManagerTest {
               assertNull(record.value)
               expiredTransactionalIds += transactionalId
               assertEquals(Right(None), transactionManager.getTransactionState(transactionalId))
-            case Left(value) => fail("Failed to read transactional id from tombstone: " + value)
+            case Left(value) => fail(s"Failed to read transactional id from tombstone: $value")
           }
         }
       }
