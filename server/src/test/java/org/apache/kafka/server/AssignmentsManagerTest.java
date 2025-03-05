@@ -58,7 +58,6 @@ import org.slf4j.LoggerFactory;
 import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -490,25 +489,25 @@ public class AssignmentsManagerTest {
                     setTopics(Arrays.asList(
                         new AssignReplicasToDirsRequestData.TopicData().
                             setTopicId(TOPIC_1).
-                            setPartitions(Collections.singletonList(
+                            setPartitions(List.of(
                                 new AssignReplicasToDirsRequestData.PartitionData().
                                     setPartitionIndex(2))),
                         new AssignReplicasToDirsRequestData.TopicData().
                             setTopicId(TOPIC_2).
-                            setPartitions(Collections.singletonList(
+                            setPartitions(List.of(
                                 new AssignReplicasToDirsRequestData.PartitionData().
                                     setPartitionIndex(5))))),
                 new AssignReplicasToDirsRequestData.DirectoryData().
                     setId(DIR_3).
-                    setTopics(Collections.singletonList(
+                    setTopics(List.of(
                         new AssignReplicasToDirsRequestData.TopicData().
                             setTopicId(TOPIC_1).
-                            setPartitions(Collections.singletonList(
+                            setPartitions(List.of(
                                 new AssignReplicasToDirsRequestData.PartitionData().
                                     setPartitionIndex(3))))),
                 new AssignReplicasToDirsRequestData.DirectoryData().
                     setId(DIR_1).
-                    setTopics(Collections.singletonList(
+                    setTopics(List.of(
                         new AssignReplicasToDirsRequestData.TopicData().
                             setTopicId(TOPIC_1).
                             setPartitions(Arrays.asList(
