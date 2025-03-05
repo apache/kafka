@@ -18,9 +18,11 @@ package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
 
+import java.util.Map;
+
 
 /**
- * Options for the {@link Admin#alterStreamsGroupOffsets(String groupId, Map), AlterStreamsGroupOffsetsOptions)} call.
+ * Options for the {@link Admin#alterStreamsGroupOffsets(String, Map, AlterStreamsGroupOffsetsOptions)} call.
  * <p>
  * The API of this class is evolving, see {@link Admin} for details.
  */
