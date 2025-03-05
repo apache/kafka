@@ -1249,7 +1249,7 @@ sasl.mechanism.inter.broker.protocol=GSSAPI (or one of the other enabled mechani
     You can read more about the ACL structure in <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-11+-+Authorization+Interface">KIP-11</a> and
     resource patterns in <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-290%3A+Support+for+Prefixed+ACLs">KIP-290</a>.
     In order to add, remove, or list ACLs, you can use the Kafka ACL CLI <code>kafka-acls.sh</code>. 
-    <h5><u>Behavior Without ACLs:</u> </h5>
+    <h5><u>Behavior Without ACLs:</u></h5>
     <p>If a resource (R) does not have any ACLs defined, meaning that no ACL matches the resource, Kafka will restrict
         access to that resource. In this situation, only super users are allowed to access it.</p>
     <h5><u>Changing the Default Behavior:</u></h5>
