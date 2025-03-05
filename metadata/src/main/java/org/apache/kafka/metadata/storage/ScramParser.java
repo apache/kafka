@@ -74,7 +74,7 @@ public class ScramParser {
         private final String configuredName;
         private final Optional<byte[]> configuredSalt;
         private final OptionalInt configuredIterations;
-        private final Optional<String> configuredPasswordString;
+        private final Optional<char[]> configuredPassword;
         private final Optional<byte[]> configuredSaltedPassword;
 
         PerMechanismData(
@@ -82,14 +82,14 @@ public class ScramParser {
             String configuredName,
             Optional<byte[]> configuredSalt,
             OptionalInt configuredIterations,
-            Optional<String> configuredPasswordString,
+            Optional<char[]> configuredPassword,
             Optional<byte[]> configuredSaltedPassword
         ) {
             this.mechanism = mechanism;
             this.configuredName = configuredName;
             this.configuredSalt = configuredSalt;
             this.configuredIterations = configuredIterations;
-            this.configuredPasswordString = configuredPasswordString;
+            this.configuredPassword = configuredPassword;
             this.configuredSaltedPassword = configuredSaltedPassword;
         }
 
@@ -139,14 +139,14 @@ public class ScramParser {
                     throw new FormatterException("You must supply 'salt' with 'saltedpassword' to add-scram");
                 }
                 try {
-                    this.configuredPasswordString = Optional.empty();
+                    this.configuredPassword = Optional.empty();
                     this.configuredSaltedPassword = Optional.of(Base64.getDecoder().decode(saltedPasswordString));
                 } catch (IllegalArgumentException e) {
                     throw new FormatterException("Failed to decode given saltedPassword: " +
                             saltedPasswordString, e);
                 }
             } else {
-                this.configuredPasswordString = Optional.of(passwordString);
+                this.configuredPassword = Optional.of(passwordString.toCharArray());
                 this.configuredSaltedPassword = Optional.empty();
             }
             if (!components.isEmpty()) {
@@ -173,9 +173,8 @@ public class ScramParser {
                 return configuredSaltedPassword.get();
             }
             return new ScramFormatter(mechanism).saltedPassword(
-                    configuredPasswordString
-                            .orElseThrow(() -> new IllegalStateException("configuredPasswordString is missing"))
-                            .toCharArray(),
+                    configuredPassword
+                            .orElseThrow(() -> new IllegalStateException("configuredPassword is missing")),
                     salt,
                     iterations);
         }
@@ -211,7 +210,8 @@ public class ScramParser {
                 Arrays.equals(configuredSalt.orElse(null),
                     other.configuredSalt.orElse(null)) &&
                 configuredIterations.equals(other.configuredIterations) &&
-                configuredPasswordString.equals(other.configuredPasswordString) &&
+                Arrays.equals(configuredPassword.orElse(null),
+                    other.configuredPassword.orElse(null)) &&
                 Arrays.equals(configuredSaltedPassword.orElse(null),
                     other.configuredSaltedPassword.orElse(null));
         }
@@ -222,7 +222,7 @@ public class ScramParser {
                 configuredName,
                 configuredSalt,
                 configuredIterations,
-                configuredPasswordString,
+                configuredPassword,
                 configuredSaltedPassword);
         }
 
@@ -233,7 +233,7 @@ public class ScramParser {
                 ", configuredName=" + configuredName +
                 ", configuredSalt=" + configuredSalt.map(Arrays::toString) +
                 ", configuredIterations=" + configuredIterations +
-                ", configuredPasswordString=" + configuredPasswordString +
+                ", configuredPassword=" + configuredPassword +
                 ", configuredSaltedPassword=" + configuredSaltedPassword.map(Arrays::toString) +
                 ")";
         }

@@ -85,7 +85,7 @@ public class ScramParserTest {
             "bob",
             Optional.empty(),
             OptionalInt.empty(),
-            Optional.of("my pass"),
+            Optional.of("my pass".toCharArray()),
             Optional.empty());
         TestUtils.retryOnExceptionWithTimeout(10_000, () ->
             assertNotEquals(data.salt().toString(), data.salt().toString())
@@ -98,7 +98,7 @@ public class ScramParserTest {
             "bob",
             Optional.of(TEST_SALT),
             OptionalInt.empty(),
-            Optional.of("my pass"),
+            Optional.of("my pass".toCharArray()),
             Optional.empty()).salt());
     }
 
@@ -108,7 +108,7 @@ public class ScramParserTest {
             "bob",
             Optional.empty(),
             OptionalInt.empty(),
-            Optional.of("my pass"),
+            Optional.of("my pass".toCharArray()),
             Optional.empty()).iterations());
     }
 
@@ -118,7 +118,7 @@ public class ScramParserTest {
             "bob",
             Optional.empty(),
             OptionalInt.of(8192),
-            Optional.of("my pass"),
+            Optional.of("my pass".toCharArray()),
             Optional.empty()).iterations());
     }
     @Test
@@ -168,7 +168,7 @@ public class ScramParserTest {
             "bob",
             Optional.empty(),
             OptionalInt.empty(),
-            Optional.of("mypass"),
+            Optional.of("mypass".toCharArray()),
             Optional.empty()),
                 new PerMechanismData(ScramMechanism.SCRAM_SHA_256, "name=bob,password=mypass"));
     }
@@ -206,7 +206,7 @@ public class ScramParserTest {
             "bob",
             Optional.empty(),
             OptionalInt.of(8192),
-            Optional.of("my pass"),
+            Optional.of("my pass".toCharArray()),
             Optional.empty()),
                 new PerMechanismData(ScramMechanism.SCRAM_SHA_256,
                     "name=bob,password=my pass,iterations=8192"));
@@ -218,7 +218,7 @@ public class ScramParserTest {
             "bob",
             Optional.of(TEST_SALT),
             OptionalInt.empty(),
-            Optional.of("my pass"),
+            Optional.of("my pass".toCharArray()),
             Optional.empty()),
                 new PerMechanismData(ScramMechanism.SCRAM_SHA_512,
                     "name=bob,password=my pass,salt=\"MWx2NHBkbnc0ZndxN25vdGN4bTB5eTFrN3E=\""));
@@ -230,7 +230,7 @@ public class ScramParserTest {
             "bob",
             Optional.of(TEST_SALT),
             OptionalInt.of(8192),
-            Optional.of("my pass"),
+            Optional.of("my pass".toCharArray()),
             Optional.empty()),
                 new PerMechanismData(ScramMechanism.SCRAM_SHA_256,
                     "name=bob,password=my pass,iterations=8192,salt=\"MWx2NHBkbnc0ZndxN25vdGN4bTB5eTFrN3E=\""));
