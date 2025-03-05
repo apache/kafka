@@ -448,8 +448,12 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             valueSerde = materializedInternal.valueSerde();
             queryableStoreName = materializedInternal.queryableStoreName();
             // only materialize if materialized is specified and it has queryable name
-            final StoreFactory storeFactory = queryableStoreName != null ? (new KeyValueStoreMaterializer<>(materializedInternal)) : null;
-            storeBuilder = Collections.singleton(new FactoryWrappingStoreBuilder<>(storeFactory));
+            if (queryableStoreName != null) {
+                final StoreFactory storeFactory = new KeyValueStoreMaterializer<>(materializedInternal);
+                storeBuilder = Collections.singleton(new FactoryWrappingStoreBuilder<>(storeFactory));
+            } else {
+                storeBuilder = null;
+            }
         } else {
             keySerde = this.keySerde;
             valueSerde = null;
