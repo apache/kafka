@@ -4831,7 +4831,7 @@ public class KafkaAdminClientTest {
         assertEquals(groupSpecs.size(), result.all().get(10, TimeUnit.SECONDS).size());
         for (Map.Entry<String, ListStreamsGroupOffsetsSpec> entry : groupSpecs.entrySet()) {
             assertEquals(entry.getValue().topicPartitions(),
-                result.partitionsToOffset(entry.getKey()).get().keySet());
+                result.partitionsToOffsetAndMetadata(entry.getKey()).get().keySet());
         }
     }
 

@@ -45,31 +45,14 @@ public class ListStreamsGroupOffsetsResult {
     /**
      * Return a future which yields all Map<String, Map<TopicPartition, Long> objects, if requests for all the groups succeed.
      */
-    public KafkaFuture<Map<String, Map<TopicPartition, Long>>> all() {
-        return delegate.all().thenApply(offsets -> {
-            Map<String, Map<TopicPartition, Long>> result = new java.util.HashMap<>();
-            for (Map.Entry<String, Map<TopicPartition, OffsetAndMetadata>> entry : offsets.entrySet()) {
-                Map<TopicPartition, OffsetAndMetadata> value = entry.getValue();
-                Map<TopicPartition, Long> newMap = new java.util.HashMap<>();
-                for (Map.Entry<TopicPartition, OffsetAndMetadata> innerEntry : value.entrySet()) {
-                    newMap.put(innerEntry.getKey(), innerEntry.getValue().offset());
-                }
-                result.put(entry.getKey(), newMap);
-            }
-            return result;
-        });
+    public KafkaFuture<Map<String, Map<TopicPartition, OffsetAndMetadata>>> all() {
+        return delegate.all();
     }
 
     /**
      * Return a future which yields a map of topic partitions to offsets for the specified group.
      */
-    public KafkaFuture<Map<TopicPartition, Long>> partitionsToOffset(String groupId) {
-        return delegate.partitionsToOffsetAndMetadata(groupId).thenApply(offsets -> {
-            Map<TopicPartition, Long> result = new java.util.HashMap<>();
-            for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsets.entrySet()) {
-                result.put(entry.getKey(), entry.getValue().offset());
-            }
-            return result;
-        });
+    public KafkaFuture<Map<TopicPartition, OffsetAndMetadata>> partitionsToOffsetAndMetadata(String groupId) {
+        return delegate.partitionsToOffsetAndMetadata(groupId);
     }
 }
