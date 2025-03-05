@@ -1933,17 +1933,17 @@ public class ReplicationControlManagerTest {
         ControllerResult<AlterPartitionReassignmentsResponseData> alterResult =
                 replication.alterPartitionReassignments(
                         new AlterPartitionReassignmentsRequestData().setTopics(List.of(
-                                new ReassignableTopic().setName("foo").setPartitions(asList(
+                                new ReassignableTopic().setName("foo").setPartitions(List.of(
                                         new ReassignablePartition().setPartitionIndex(0).
-                                                setReplicas(asList(1, 2, 3)),
+                                                setReplicas(List.of(1, 2, 3)),
                                         new ReassignablePartition().setPartitionIndex(1).
-                                                setReplicas(asList(0, 1)),
+                                                setReplicas(List.of(0, 1)),
                                         new ReassignablePartition().setPartitionIndex(2).
-                                                setReplicas(asList(0, 1, 2, 3)))))).
+                                                setReplicas(List.of(0, 1, 2, 3)))))).
                                 setAllowReplicationFactorChange(false));
         assertEquals(new AlterPartitionReassignmentsResponseData().
                         setErrorMessage(null).setAllowReplicationFactorChange(false).setResponses(List.of(
-                                new ReassignableTopicResponse().setName("foo").setPartitions(asList(
+                                new ReassignableTopicResponse().setName("foo").setPartitions(List.of(
                                         new ReassignablePartitionResponse().setPartitionIndex(0).
                                                 setErrorMessage(null),
                                         new ReassignablePartitionResponse().setPartitionIndex(1).
@@ -1961,17 +1961,17 @@ public class ReplicationControlManagerTest {
                                         new OngoingPartitionReassignment().setPartitionIndex(0).
                                                 setRemovingReplicas(List.of(0)).
                                                 setAddingReplicas(List.of(3)).
-                                                setReplicas(asList(1, 2, 3, 0))))));
+                                                setReplicas(List.of(1, 2, 3, 0))))));
         assertEquals(currentReassigning, replication.listPartitionReassignments(List.of(
                 new ListPartitionReassignmentsTopics().setName("foo").
-                        setPartitionIndexes(asList(0, 1, 2))), Long.MAX_VALUE));
+                        setPartitionIndexes(List.of(0, 1, 2))), Long.MAX_VALUE));
 
         // test alter replica factor not allow to change when partition reassignment is ongoing
         ControllerResult<AlterPartitionReassignmentsResponseData> alterReassigningResult =
                 replication.alterPartitionReassignments(
                         new AlterPartitionReassignmentsRequestData().setTopics(List.of(
                                 new ReassignableTopic().setName("foo").setPartitions(List.of(
-                                        new ReassignablePartition().setPartitionIndex(0).setReplicas(asList(0, 1)))))).
+                                        new ReassignablePartition().setPartitionIndex(0).setReplicas(List.of(0, 1)))))).
                                 setAllowReplicationFactorChange(false));
         assertEquals(new AlterPartitionReassignmentsResponseData().
                         setErrorMessage(null).setAllowReplicationFactorChange(false).setResponses(List.of(
@@ -1985,7 +1985,7 @@ public class ReplicationControlManagerTest {
                 replication.alterPartitionReassignments(
                         new AlterPartitionReassignmentsRequestData().setTopics(List.of(
                                         new ReassignableTopic().setName("foo").setPartitions(List.of(
-                                                new ReassignablePartition().setPartitionIndex(0).setReplicas(asList(0, 2, 3)))))).
+                                                new ReassignablePartition().setPartitionIndex(0).setReplicas(List.of(0, 2, 3)))))).
                                 setAllowReplicationFactorChange(false));
         assertEquals(new AlterPartitionReassignmentsResponseData().
                         setErrorMessage(null).setAllowReplicationFactorChange(false).setResponses(List.of(
@@ -2012,7 +2012,7 @@ public class ReplicationControlManagerTest {
                         new AlterPartitionReassignmentsRequestData().setTopics(List.of(
                                         new ReassignableTopic().setName("foo").setPartitions(List.of(
                                                 new ReassignablePartition().setPartitionIndex(0).
-                                                        setReplicas(asList(1, 2, 3)))))));
+                                                        setReplicas(List.of(1, 2, 3)))))));
         assertEquals(new AlterPartitionReassignmentsResponseData().
                         setErrorMessage(null).setResponses(List.of(
                                 new ReassignableTopicResponse().setName("foo").setPartitions(List.of(
@@ -2026,10 +2026,10 @@ public class ReplicationControlManagerTest {
                                         new OngoingPartitionReassignment().setPartitionIndex(0).
                                                 setRemovingReplicas(List.of(0)).
                                                 setAddingReplicas(List.of(3)).
-                                                setReplicas(asList(1, 2, 3, 0))))));
+                                                setReplicas(List.of(1, 2, 3, 0))))));
         assertEquals(currentReassigning, replication.listPartitionReassignments(List.of(
                 new ListPartitionReassignmentsTopics().setName("foo").
-                        setPartitionIndexes(asList(0, 1, 2))), Long.MAX_VALUE));
+                        setPartitionIndexes(List.of(0, 1, 2))), Long.MAX_VALUE));
 
         // test replica factor change check takes no effect when partition reassignment is ongoing
         ControllerResult<AlterPartitionReassignmentsResponseData> cancelResult =
