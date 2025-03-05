@@ -84,13 +84,13 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
     private final ObjectMapper mapper = new ObjectMapper();
     private final PrintStream out;
     private final KafkaShareConsumer<String, String> consumer;
+    private final Admin adminClient;
     private final String topic;
     private final AcknowledgementMode acknowledgementMode;
     private final String offsetResetStrategy;
     private final Boolean verbose;
     private final int maxMessages;
     private Integer totalAcknowledged = 0;
-    private final String brokerHostandPort;
     private final String groupId;
     private final CountDownLatch shutdownLatch = new CountDownLatch(1);
 
@@ -317,22 +317,22 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
     }
 
     public VerifiableShareConsumer(KafkaShareConsumer<String, String> consumer,
+                                   Admin adminClient,
                                    PrintStream out,
                                    Integer maxMessages,
                                    String topic,
                                    AcknowledgementMode acknowledgementMode,
                                    String offsetResetStrategy,
-                                   String brokerHostandPort,
                                    String groupId,
                                    Boolean verbose) {
         this.out = out;
         this.consumer = consumer;
+        this.adminClient = adminClient;
         this.topic = topic;
         this.acknowledgementMode = acknowledgementMode;
         this.offsetResetStrategy = offsetResetStrategy;
         this.verbose = verbose;
         this.maxMessages = maxMessages;
-        this.brokerHostandPort = brokerHostandPort;
         this.groupId = groupId;
         addKafkaSerializerModule();
     }
@@ -406,11 +406,6 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
             if (!Objects.equals(offsetResetStrategy, "")) {
                 ShareGroupAutoOffsetResetStrategy offsetResetStrategy =
                     ShareGroupAutoOffsetResetStrategy.fromString(this.offsetResetStrategy);
-
-                Properties adminClientProps = new Properties();
-                adminClientProps.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, brokerHostandPort);
-
-                Admin adminClient = Admin.create(adminClientProps);
 
                 ConfigResource configResource = new ConfigResource(ConfigResource.Type.GROUP, groupId);
                 Map<ConfigResource, Collection<AlterConfigOp>> alterEntries = new HashMap<>();
@@ -562,6 +557,13 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
             .metavar("CONFIG_FILE")
             .help("Consumer config properties file (config options shared with command line parameters will be overridden).");
 
+        parser.addArgument("--command.config")
+            .action(store())
+            .required(false)
+            .type(String.class)
+            .metavar("COMMAND_CONFIG_FILE")
+            .help("Property file containing configs to be passed to Admin Client. ");
+
         return parser;
     }
 
@@ -572,6 +574,7 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
             AcknowledgementMode.valueOf(res.getString("acknowledgementMode").toUpperCase(Locale.ROOT));
         String offsetResetStrategy = res.getString("offsetResetStrategy").toLowerCase(Locale.ROOT);
         String configFile = res.getString("consumer.config");
+        String commandConfigFile = res.getString("command.config");
         String brokerHostandPort = res.getString("bootstrapServer");
 
         Properties consumerProps = new Properties();
@@ -596,14 +599,26 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
         StringDeserializer deserializer = new StringDeserializer();
         KafkaShareConsumer<String, String> consumer = new KafkaShareConsumer<>(consumerProps, deserializer, deserializer);
 
+        Properties adminClientProps = new Properties();
+        if (commandConfigFile != null) {
+            try {
+                adminClientProps.putAll(Utils.loadProps(commandConfigFile));
+            } catch (IOException e) {
+                throw new ArgumentParserException(e.getMessage(), parser);
+            }
+        }
+
+        adminClientProps.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, brokerHostandPort);
+        Admin adminClient = Admin.create(adminClientProps);
+
         return new VerifiableShareConsumer(
             consumer,
+            adminClient,
             System.out,
             maxMessages,
             topic,
             acknowledgementMode,
             offsetResetStrategy,
-            brokerHostandPort,
             groupId,
             verbose);
     }
