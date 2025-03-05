@@ -32,8 +32,8 @@
         <li>
             <p>
                 Removed password encoder-related configurations. These configurations were used in
-                ZooKeeper mode to define the key and backup key for encrypting sensitive data (e.g., passwords), 
-                specify the algorithm and key generation method for password encryption (e.g., AES, RSA), and control 
+                ZooKeeper mode to define the key and backup key for encrypting sensitive data (e.g., passwords),
+                specify the algorithm and key generation method for password encryption (e.g., AES, RSA), and control
                 the key length and encryption strength.
             </p>
             <ul>
@@ -57,7 +57,7 @@
             <p>
                 In KRaft mode, Kafka eliminates its dependency on ZooKeeper, and the control plane functionality is
                 fully integrated into Kafka itself. The process roles are clearly separated: brokers handle data-related
-                requests, while the controllers (a.k.a., quorum controller) manages metadata-related requests. The controllers 
+                requests, while the controllers (a.k.a., quorum controller) manages metadata-related requests. The controllers
                 use the Raft protocol for internal communication, which operates differently from the ZooKeeper model. Use the
                 following parameters to configure the control plane listener:
             </p>
@@ -240,6 +240,10 @@
         <li>
             <strong>Configuration Value Size Limitation</strong>: KRaft mode restricts configuration values to a maximum size of <code>Short.MAX_VALUE</code>,
             which prevents using the append operation to create larger configuration values.
+        </li>
+        <li>
+            KRaft mode requires custom implementations of <code>KafkaPrincipalBuilder</code> to implement <code>KafkaPrincipalSerde</code>; otherwise brokers will not be able to
+            forward requests to the controller.
         </li>
     </ul>
 </div>

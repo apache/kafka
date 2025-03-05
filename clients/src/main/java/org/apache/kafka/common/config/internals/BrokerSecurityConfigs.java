@@ -79,7 +79,9 @@ public class BrokerSecurityConfigs {
             "name from the client certificate if one is provided; otherwise, if client authentication is not required, " +
             "the principal name will be ANONYMOUS. For SASL authentication, the principal will be derived using the " +
             "rules defined by <code>" + SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES_CONFIG + "</code> if GSSAPI is in use, " +
-            "and the SASL authentication ID for other mechanisms. For PLAINTEXT, the principal will be ANONYMOUS.";
+            "and the SASL authentication ID for other mechanisms. For PLAINTEXT, the principal will be ANONYMOUS. " +
+            "Note that custom implementations of KafkaPrincipalBuilder is required to implement KafkaPrincipalSerde " +
+            "interface, otherwise brokers will not be able to forward requests to the controller.";
 
     public static final String SSL_CLIENT_AUTH_CONFIG = "ssl.client.auth";
     public static final String SSL_CLIENT_AUTH_DEFAULT = SslClientAuth.NONE.toString();

@@ -24,7 +24,7 @@ package org.apache.kafka.common.security.auth;
  * interfaces are respected if implemented. Additionally, implementations must provide a
  * default no-arg constructor.
  *
- * Note that when running in KRaft mode, custom implementations of {@code KafkaPrincipalBuilder}
+ * Note that custom implementations of {@link KafkaPrincipalBuilder}
  * must also implement {@link KafkaPrincipalSerde}, otherwise brokers will not be able to
  * forward requests to the controller.
  */
