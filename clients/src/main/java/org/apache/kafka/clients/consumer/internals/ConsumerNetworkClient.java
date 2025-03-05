@@ -294,8 +294,6 @@ public class ConsumerNetworkClient implements Closeable {
                 // to be fired on the next call to poll()
                 maybeTriggerWakeup();
             }
-            // throw InterruptException if this thread is interrupted
-            maybeThrowInterruptException();
 
             // try again to send requests since buffer space may have been
             // cleared or a connect finished in the poll
@@ -306,6 +304,9 @@ public class ConsumerNetworkClient implements Closeable {
 
             // clean unsent requests collection to keep the map from growing indefinitely
             unsent.clean();
+
+            // throw InterruptException if this thread is interrupted
+            maybeThrowInterruptException();
         } finally {
             lock.unlock();
         }

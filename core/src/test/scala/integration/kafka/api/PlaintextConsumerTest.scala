@@ -27,7 +27,6 @@ import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.{InterruptException, InvalidGroupIdException, InvalidTopicException, TimeoutException, WakeupException}
 import org.apache.kafka.common.record.{CompressionType, TimestampType}
 import org.apache.kafka.common.serialization._
-import org.apache.kafka.common.test.api.Flaky
 import org.apache.kafka.common.{MetricName, TopicPartition}
 import org.apache.kafka.server.quota.QuotaType
 import org.apache.kafka.test.{MockConsumerInterceptor, MockProducerInterceptor}
@@ -828,12 +827,18 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertThrows(classOf[WakeupException], () => consumer.position(topicPartition, Duration.ofSeconds(100)))
   }
 
-  @Flaky("KAFKA-18031")
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testCloseLeavesGroupOnInterrupt(quorum: String, groupProtocol: String): Unit = {
     val adminClient = createAdminClient()
     val consumer = createConsumer()
+    val config = new ConsumerConfig(consumerConfig)
+
+    // Set the wait timeout to be only *half* the configured session timeout. This way we can make sure that the
+    // consumer explicitly left the group as opposed to being kicked out by the broker.
+    val leaveGroupTimeoutMs = config.getInt(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG) / 2
+    val closeTimeoutMs = Duration.ofMillis(leaveGroupTimeoutMs)
+
     val listener = new TestConsumerReassignmentListener()
     consumer.subscribe(List(topic).asJava, listener)
     awaitRebalance(consumer, listener)
@@ -843,7 +848,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     try {
       Thread.currentThread().interrupt()
-      assertThrows(classOf[InterruptException], () => consumer.close())
+      assertThrows(classOf[InterruptException], () => consumer.close(closeTimeoutMs))
     } finally {
       // Clear the interrupted flag so we don't create problems for subsequent tests.
       Thread.interrupted()
@@ -851,12 +856,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     assertEquals(1, listener.callsToAssigned)
     assertEquals(1, listener.callsToRevoked)
-
-    val config = new ConsumerConfig(consumerConfig)
-
-    // Set the wait timeout to be only *half* the configured session timeout. This way we can make sure that the
-    // consumer explicitly left the group as opposed to being kicked out by the broker.
-    val leaveGroupTimeoutMs = config.getInt(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG) / 2
 
     TestUtils.waitUntilTrue(
       () => {
