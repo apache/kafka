@@ -104,7 +104,7 @@ public class EndTransactionMarker {
 
     public int endTxnMarkerValueSize() {
         return DefaultRecord.sizeInBytes(0, 0L,
-                ControlRecordType.CURRENT_CONTROL_RECORD_KEY_SIZE,
+                type.controlRecordKeySize(),
                 buffer.remaining(),
                 Record.EMPTY_HEADERS);
     }
