@@ -49,7 +49,7 @@ github:
   protected_branches:
     trunk:
       required_status_checks:
-        strict: true
+        strict: false
         contexts:
           - build / CI checks completed
       required_pull_request_reviews:
