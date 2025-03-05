@@ -698,7 +698,7 @@ public class ConsumerConfig extends AbstractConfig {
                                 .define(ConsumerConfig.INTERNAL_SHARE_ACKNOWLEDGEMENT_MODE_CONFIG,
                                         Type.STRING,
                                         null,
-                                        in("implicit", "explicit"),
+                                        in(null, "implicit", "explicit"),
                                         Importance.MEDIUM,
                                         ConsumerConfig.INTERNAL_SHARE_ACKNOWLEDGEMENT_MODE_DOC);
     }
