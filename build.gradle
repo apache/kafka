@@ -1075,7 +1075,6 @@ project(':core') {
     from (configurations.runtimeClasspath) {
       exclude('kafka-clients*')
     }
-    from (configurations.releaseOnly)
     into "${layout.buildDirectory.get().asFile.path}/dependant-libs-${versions.scala}"
     duplicatesStrategy 'exclude'
   }
@@ -1242,6 +1241,7 @@ project(':core') {
     from (configurations.testRuntimeClasspath) {
       include('*.jar')
     }
+    from (configurations.releaseOnly)
     into "${layout.buildDirectory.get().asFile.path}/dependant-testlibs"
     //By default gradle does not handle test dependencies between the sub-projects
     //This line is to include clients project test jar to dependant-testlibs
