@@ -54,8 +54,26 @@ public final class ClientQuotasImage {
 
     private final Map<ClientQuotaEntity, ClientQuotaImage> entities;
 
+    // Map from entity type to entity name to set of entries. The entity type could be "user", "client-id", and "ip".
+    // {
+    //   "user": { "user1": [entry1, entry2], "user2": [entry3] },
+    //   "client-id": { "client-id1": [entry4], "client-id2": [entry5] },
+    //   "ip": { "ip1": [entry6], "ip2": [entry7] }
+    // }
+    private final Map<String, Map<String, Set<Entry<ClientQuotaEntity, ClientQuotaImage>>>> entitiesByType;
+
     public ClientQuotasImage(Map<ClientQuotaEntity, ClientQuotaImage> entities) {
         this.entities = Collections.unmodifiableMap(entities);
+        Map<String, Map<String, Set<Entry<ClientQuotaEntity, ClientQuotaImage>>>> entitiesByType = new HashMap<>();
+        for (Entry<ClientQuotaEntity, ClientQuotaImage> entry : entities.entrySet()) {
+            ClientQuotaEntity entity = entry.getKey();
+            for (Entry<String, String> entityEntry : entity.entries().entrySet()) {
+                entitiesByType.putIfAbsent(entityEntry.getKey(), new HashMap<>());
+                entitiesByType.get(entityEntry.getKey()).putIfAbsent(entityEntry.getValue(), new HashSet<>());
+                entitiesByType.get(entityEntry.getKey()).get(entityEntry.getValue()).add(entry);
+            }
+        }
+        this.entitiesByType = Collections.unmodifiableMap(entitiesByType);
     }
 
     public boolean isEmpty() {
@@ -126,40 +144,45 @@ public final class ClientQuotasImage {
                     "user or clientId filter component.");
             }
         }
-        // TODO: this is O(N). We should add indexing here to speed it up. See KAFKA-13022.
-        for (Entry<ClientQuotaEntity, ClientQuotaImage> entry : entities.entrySet()) {
-            ClientQuotaEntity entity = entry.getKey();
-            ClientQuotaImage quotaImage = entry.getValue();
-            if (matches(entity, exactMatch, typeMatch, request.strict())) {
-                response.entries().add(toDescribeEntry(entity, quotaImage));
+
+        Set<ClientQuotaEntity> addedEntities = new HashSet<>();
+        for (Entry<String, String> exactMatchEntry : exactMatch.entrySet()) {
+            if (entitiesByType.containsKey(exactMatchEntry.getKey()) &&
+                entitiesByType.get(exactMatchEntry.getKey()).containsKey(exactMatchEntry.getValue())) {
+                for (Entry<ClientQuotaEntity, ClientQuotaImage> entry : entitiesByType.get(exactMatchEntry.getKey()).get(exactMatchEntry.getValue())) {
+                    if (request.strict() && !entry.getKey().entries().equals(exactMatch)) {
+                        continue;
+                    }
+                    if (!addedEntities.contains(entry.getKey())) {
+                        addedEntities.add(entry.getKey());
+                        response.entries().add(toDescribeEntry(entry.getKey(), entry.getValue()));
+                    }
+                }
+            }
+        }
+
+        for (String type : typeMatch) {
+            if (entitiesByType.containsKey(type)) {
+                for (Set<Entry<ClientQuotaEntity, ClientQuotaImage>> entrySet : entitiesByType.get(type).values()) {
+                    for (Entry<ClientQuotaEntity, ClientQuotaImage> entry : entrySet) {
+                        if (request.strict() && entry.getKey().entries().size() != typeMatch.size()) {
+                            continue;
+                        }
+                        if (!addedEntities.contains(entry.getKey())) {
+                            addedEntities.add(entry.getKey());
+                            response.entries().add(toDescribeEntry(entry.getKey(), entry.getValue()));
+                        }
+                    }
+                }
+            }
+        }
+
+        if (!request.strict() && exactMatch.isEmpty() && typeMatch.isEmpty()) {
+            for (Entry<ClientQuotaEntity, ClientQuotaImage> entry : entities.entrySet()) {
+                response.entries().add(toDescribeEntry(entry.getKey(), entry.getValue()));
             }
         }
         return response;
-    }
-
-    private static boolean matches(ClientQuotaEntity entity,
-                                   Map<String, String> exactMatch,
-                                   Set<String> typeMatch,
-                                   boolean strict) {
-        if (strict) {
-            if (entity.entries().size() != exactMatch.size() + typeMatch.size()) {
-                return false;
-            }
-        }
-        for (Entry<String, String> entry : exactMatch.entrySet()) {
-            if (!entity.entries().containsKey(entry.getKey())) {
-                return false;
-            }
-            if (!Objects.equals(entity.entries().get(entry.getKey()), entry.getValue())) {
-                return false;
-            }
-        }
-        for (String type : typeMatch) {
-            if (!entity.entries().containsKey(type)) {
-                return false;
-            }
-        }
-        return true;
     }
 
     private static EntryData toDescribeEntry(ClientQuotaEntity entity,
