@@ -18,6 +18,8 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
+import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.clients.consumer.internals.metrics.HeartbeatMetricsManager;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
@@ -28,6 +30,7 @@ import org.apache.kafka.common.requests.StreamsGroupHeartbeatRequest;
 import org.apache.kafka.common.requests.StreamsGroupHeartbeatResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Timer;
 
 import org.slf4j.Logger;
 
@@ -40,9 +43,21 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+/**
+ * <p>Manages the request creation and response handling for the Streams group heartbeat. The class creates a
+ * heartbeat request using the state stored in the membership manager. The requests can be retrieved
+ * by calling {@link StreamsGroupHeartbeatRequestManager#poll(long)}. Once the response is received, it updates the
+ * state in the membership manager and handles any errors.
+ *
+ * <p>The heartbeat manager generates heartbeat requests based on the member state. It's also responsible
+ * for the timing of the heartbeat requests to ensure they are sent according to the heartbeat interval
+ * (while the member state is stable) or on demand (while the member is acknowledging an assignment or
+ * leaving the group).
+ */
 public class StreamsGroupHeartbeatRequestManager implements RequestManager {
 
     static class HeartbeatState {
@@ -57,6 +72,9 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
             this.membershipManager = membershipManager;
             this.streamsRebalanceData = streamsRebalanceData;
             this.rebalanceTimeoutMs = rebalanceTimeoutMs;
+        }
+
+        public void reset() {
         }
 
         public StreamsGroupHeartbeatRequestData buildRequestData() {
@@ -205,7 +223,6 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         }
     }
 
-
     private final Logger logger;
 
     private final int maxPollIntervalMs;
@@ -218,15 +235,24 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
 
     private final StreamsMembershipManager membershipManager;
 
+    private final BackgroundEventHandler backgroundEventHandler;
+
     private final HeartbeatMetricsManager metricsManager;
 
     private StreamsRebalanceData streamsRebalanceData;
+
+    /**
+     * Timer for tracking the time since the last consumer poll.  If the timer expires, the consumer will stop
+     * sending heartbeat until the next poll.
+     */
+    private final Timer pollTimer;
 
     public StreamsGroupHeartbeatRequestManager(final LogContext logContext,
                                                final Time time,
                                                final ConsumerConfig config,
                                                final CoordinatorRequestManager coordinatorRequestManager,
                                                final StreamsMembershipManager membershipManager,
+                                               final BackgroundEventHandler backgroundEventHandler,
                                                final Metrics metrics,
                                                final StreamsRebalanceData streamsRebalanceData) {
         this.logger = logContext.logger(getClass());
@@ -237,6 +263,10 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         this.membershipManager = Objects.requireNonNull(
             membershipManager,
             "Streams membership manager cannot be null"
+        );
+        this.backgroundEventHandler = Objects.requireNonNull(
+            backgroundEventHandler,
+            "Background event handler cannot be null"
         );
         this.metricsManager = new HeartbeatMetricsManager(
             Objects.requireNonNull(metrics, "Metrics cannot be null")
@@ -254,21 +284,105 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
             retryBackoffMaxMs,
             maxPollIntervalMs
         );
+        this.pollTimer = time.timer(maxPollIntervalMs);
     }
 
+    /**
+     * This will build a heartbeat request if one must be sent, determined based on the member
+     * state. A heartbeat is sent in the following situations:
+     * <ol>
+     *     <li>Member is part of the consumer group or wants to join it.</li>
+     *     <li>The heartbeat interval has expired, or the member is in a state that indicates
+     *     that it should heartbeat without waiting for the interval.</li>
+     * </ol>
+     * This will also determine the maximum wait time until the next poll based on the member's
+     * state.
+     * <ol>
+     *     <li>If the member is without a coordinator or is in a failed state, the timer is set
+     *     to Long.MAX_VALUE, as there's no need to send a heartbeat.</li>
+     *     <li>If the member cannot send a heartbeat due to either exponential backoff, it will
+     *     return the remaining time left on the backoff timer.</li>
+     *     <li>If the member's heartbeat timer has not expired, It will return the remaining time
+     *     left on the heartbeat timer.</li>
+     *     <li>If the member can send a heartbeat, the timer is set to the current heartbeat interval.</li>
+     * </ol>
+     *
+     * @return {@link org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult} that includes a
+     *         heartbeat request if one must be sent, and the time to wait until the next poll.
+     */
     @Override
     public NetworkClientDelegate.PollResult poll(long currentTimeMs) {
-        return new NetworkClientDelegate.PollResult(
-            heartbeatRequestState.heartbeatIntervalMs(),
-            Collections.singletonList(makeHeartbeatRequest(currentTimeMs))
-        );
+        if (coordinatorRequestManager.coordinator().isEmpty() || membershipManager.shouldSkipHeartbeat()) {
+            membershipManager.onHeartbeatRequestSkipped();
+            maybePropagateCoordinatorFatalErrorEvent();
+            return NetworkClientDelegate.PollResult.EMPTY;
+        }
+        pollTimer.update(currentTimeMs);
+        if (pollTimer.isExpired() && !membershipManager.isLeavingGroup()) {
+            logger.warn("Consumer poll timeout has expired. This means the time between " +
+                "subsequent calls to poll() was longer than the configured max.poll.interval.ms, " +
+                "which typically implies that the poll loop is spending too much time processing " +
+                "messages. You can address this either by increasing max.poll.interval.ms or by " +
+                "reducing the maximum size of batches returned in poll() with max.poll.records.");
+
+            membershipManager.onPollTimerExpired();
+            NetworkClientDelegate.UnsentRequest leaveHeartbeat = makeHeartbeatRequestOnlyLogResponse(currentTimeMs);
+
+            // We can ignore the leave response because we can join before or after receiving the response.
+            heartbeatRequestState.reset();
+            heartbeatState.reset();
+            return new NetworkClientDelegate.PollResult(heartbeatRequestState.heartbeatIntervalMs(), Collections.singletonList(leaveHeartbeat));
+        }
+        if (shouldHeartbeatBeforeIntervalExpires() || heartbeatRequestState.canSendRequest(currentTimeMs)) {
+            NetworkClientDelegate.UnsentRequest request = makeHeartbeatRequest(currentTimeMs);
+            return new NetworkClientDelegate.PollResult(heartbeatRequestState.heartbeatIntervalMs(), Collections.singletonList(request));
+        } else {
+            return new NetworkClientDelegate.PollResult(heartbeatRequestState.timeToNextHeartbeatMs(currentTimeMs));
+        }
+    }
+
+    /**
+     * A heartbeat should be sent without waiting for the heartbeat interval to expire if:
+     * - the member is leaving the group
+     * or
+     * - the member is joining the group or acknowledging the assignment and for both cases there is no heartbeat request
+     *   in flight.
+     * @return
+     */
+    private boolean shouldHeartbeatBeforeIntervalExpires() {
+        return membershipManager.state() == MemberState.LEAVING
+            ||
+            (membershipManager.state() == MemberState.JOINING || membershipManager.state() == MemberState.ACKNOWLEDGING)
+                && !heartbeatRequestState.requestInFlight();
+    }
+
+    private void maybePropagateCoordinatorFatalErrorEvent() {
+        coordinatorRequestManager.getAndClearFatalError()
+            .ifPresent(fatalError -> backgroundEventHandler.add(new ErrorEvent(fatalError)));
+    }
+
+    private NetworkClientDelegate.UnsentRequest makeHeartbeatRequestOnlyLogResponse(final long currentTimeMs) {
+        return makeHeartbeatRequest(currentTimeMs, this::logResponse);
     }
 
     private NetworkClientDelegate.UnsentRequest makeHeartbeatRequest(final long currentTimeMs) {
-        NetworkClientDelegate.UnsentRequest request = new NetworkClientDelegate.UnsentRequest(
+        return makeHeartbeatRequest(currentTimeMs, this::handleResponse);
+    }
+
+    private NetworkClientDelegate.UnsentRequest makeHeartbeatRequest(final long currentTimeMs,
+                                                                     final Function<NetworkClientDelegate.UnsentRequest, NetworkClientDelegate.UnsentRequest> addCompletionCallback) {
+        NetworkClientDelegate.UnsentRequest request = addCompletionCallback.apply(new NetworkClientDelegate.UnsentRequest(
             new StreamsGroupHeartbeatRequest.Builder(this.heartbeatState.buildRequestData()),
             coordinatorRequestManager.coordinator()
-        );
+        ));
+        heartbeatRequestState.onSendAttempt(currentTimeMs);
+        membershipManager.onHeartbeatRequestGenerated();
+        metricsManager.recordHeartbeatSentMs(currentTimeMs);
+        heartbeatRequestState.resetTimer();
+        return request;
+    }
+
+    private NetworkClientDelegate.UnsentRequest handleResponse(final NetworkClientDelegate.UnsentRequest request) {
         request.whenComplete((response, exception) -> {
             long completionTimeMs = request.handler().completionTimeMs();
             if (response != null) {
@@ -276,11 +390,24 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
                 onResponse((StreamsGroupHeartbeatResponse) response.responseBody(), completionTimeMs);
             }
         });
-        heartbeatRequestState.onSendAttempt(currentTimeMs);
-        membershipManager.onHeartbeatRequestGenerated();
-        metricsManager.recordHeartbeatSentMs(currentTimeMs);
         return request;
     }
+
+    private NetworkClientDelegate.UnsentRequest logResponse(final NetworkClientDelegate.UnsentRequest request) {
+        return request.whenComplete((response, exception) -> {
+            if (response != null) {
+                metricsManager.recordRequestLatency(response.requestLatencyMs());
+                Errors error = Errors.forCode(((StreamsGroupHeartbeatResponse) response.responseBody()).data().errorCode());
+                if (error == Errors.NONE)
+                    logger.debug("StreamsGroupHeartbeatRequest responded successfully: {}", response);
+                else
+                    logger.error("StreamsGroupHeartbeatRequest failed because of {}: {}", error, response);
+            } else {
+                logger.error("StreamsGroupHeartbeatRequest failed because of unexpected exception.", exception);
+            }
+        });
+    }
+
 
     private void onResponse(final StreamsGroupHeartbeatResponse response, long currentTimeMs) {
         if (Errors.forCode(response.data().errorCode()) == Errors.NONE) {
@@ -290,17 +417,14 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
 
     private void onSuccessResponse(final StreamsGroupHeartbeatResponse response, final long currentTimeMs) {
         final StreamsGroupHeartbeatResponseData data = response.data();
-
         heartbeatRequestState.updateHeartbeatIntervalMs(data.heartbeatIntervalMs());
         heartbeatRequestState.onSuccessfulAttempt(currentTimeMs);
-        heartbeatRequestState.resetTimer();
 
         if (data.partitionsByUserEndpoint() != null) {
             streamsRebalanceData.setPartitionsByHost(convertHostInfoMap(data));
         }
 
         List<StreamsGroupHeartbeatResponseData.Status> statuses = data.status();
-
         if (statuses != null && !statuses.isEmpty()) {
             String statusDetails = statuses.stream()
                 .map(status -> "(" + status.statusCode() + ") " + status.statusDetail())
