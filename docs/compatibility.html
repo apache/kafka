@@ -168,18 +168,27 @@
                 <td rowspan="3">2.x</td>
                 <td>Client</td>
                 <td>⚠️ Partially Compatible</td>
-                <td></td>
+                <td>
+                    Multiple Admin API methods removed/renamed: alterConfigs → incrementalAlterConfigs<br>
+                    UniformStickyPartitioner removed
+                </td>
             </tr>
             <tr>
                 <td>Streams</td>
                 <td>⚠️ Limited Compatibility</td>
-                <td>EOSv1 and eager rebalancing unavailable in Kafka 4.0.</td>
+                <td>
+                    EOSv1 and eager rebalancing unavailable in Kafka 4.0.<br>
+                    All public API, deprecated in Apache Kafka 3.6 or an earlier release, have been removed,
+                    with the exception of <code>JoinWindows.of()</code> and <code>JoinWindows#grace().</code>
+                </td>
             </tr>
             <tr>
                 <td>Connect</td>
                 <td>⚠️ Limited Compatibility</td>
-                <td>MirrorMaker 1 supported in 2.x but removed in 4.0. IncrementalAlterConfigs unsupported before Kafka
-                    2.3.x.
+                <td>
+                    MirrorMaker 1 supported in 2.x but removed in 4.0.<br> 
+                    IncrementalAlterConfigs unsupported before Kafka 2.3.x.<br>
+                    whitelist/blacklist configurations renamed to include/exclude
                 </td>
             </tr>
             <tr>
@@ -191,12 +200,19 @@
             <tr>
                 <td>Streams</td>
                 <td>✅ Fully Compatible</td>
-                <td></td>
+                <td>
+                    EOSv1 and eager rebalancing unavailable in Kafka 4.0.<br>
+                    All public API, deprecated in Apache Kafka 3.6 or an earlier release, have been removed, 
+                    with the exception of <code>JoinWindows.of()</code> and <code>JoinWindows#grace().</code>
+                </td>
             </tr>
             <tr>
                 <td>Connect</td>
                 <td>✅ Fully Compatible</td>
-                <td></td>
+                <td>
+                    SinkTask/SourceTask methods removed. <br>
+                    ReplaceField transform configuration renamed. <br>
+                </td>
             </tr>
         </table>
         <p>
