@@ -151,6 +151,7 @@ public class RaftEventSimulationTest {
         initializeClusterAndStartAppending(cluster, router, scheduler, 2);
 
         int leaderId = cluster.leaderWithMaxEpoch().get().nodeId;
+        expectedVoterIds.remove(leaderId);
         removeVoter(cluster, scheduler, leaderId, expectedVoterIds);
         runUntilNewHighWatermark(cluster, scheduler);
     }
@@ -171,12 +172,14 @@ public class RaftEventSimulationTest {
 
         // Add all observers to voter set one by one
         for (int voterIdToAdd = numVoters; voterIdToAdd < numVoters + numObservers; voterIdToAdd++) {
+            expectedVoterIds.add(voterIdToAdd);
             addVoter(cluster, scheduler, voterIdToAdd, expectedVoterIds);
         }
         runUntilNewHighWatermark(cluster, scheduler);
 
         // Remove all added observers from voter set one by one
         for (int voterIdToRemove = numVoters + numObservers - 1; voterIdToRemove >= numVoters; voterIdToRemove--) {
+            expectedVoterIds.remove(voterIdToRemove);
             removeVoter(cluster, scheduler, voterIdToRemove, expectedVoterIds);
         }
         runUntilNewHighWatermark(cluster, scheduler);
@@ -374,6 +377,7 @@ public class RaftEventSimulationTest {
         );
 
         // Verify we can add a voter, since a majority is still reachable
+        expectedVoterIds.add(firstObserverId);
         addVoter(cluster, scheduler, firstObserverId, expectedVoterIds);
 
         // Now restore the partition and verify everyone catches up
@@ -568,13 +572,15 @@ public class RaftEventSimulationTest {
 
         initializeClusterAndStartAppending(cluster, router, scheduler, 10);
 
-        // Partition a random voter, and add an observer to replace it
-        RaftNode voterToRemove = cluster.running.get(random.nextInt(numVoters));
-        router.filter(voterToRemove.id(), new DropAllTraffic());
+        // Partition a random voter. Add first observer as new voter
+        int voterIdToRemove = cluster.running.get(random.nextInt(numVoters)).id();
+        router.filter(voterIdToRemove, new DropAllTraffic());
+        expectedVoterIds.add(numVoters);
         addVoter(cluster, scheduler, numVoters, expectedVoterIds);
 
         // Remove the partitioned voter
-        removeVoter(cluster, scheduler, voterToRemove.id(), expectedVoterIds);
+        expectedVoterIds.remove(voterIdToRemove);
+        removeVoter(cluster, scheduler, voterIdToRemove, expectedVoterIds);
         runUntilNewHighWatermarkOnVoterNodes(cluster, scheduler, expectedVoterIds);
     }
 
@@ -593,13 +599,15 @@ public class RaftEventSimulationTest {
         initializeClusterAndStartAppending(cluster, router, scheduler, 10);
 
         // Partition a random voter and remove it
-        RaftNode voterToRemove = cluster.running.get(random.nextInt(numVoters));
-        router.filter(voterToRemove.id(), new DropAllTraffic());
-        removeVoter(cluster, scheduler, voterToRemove.id(), expectedVoterIds);
+        int voterId = cluster.running.get(random.nextInt(numVoters)).id();
+        router.filter(voterId, new DropAllTraffic());
+        expectedVoterIds.remove(voterId);
+        removeVoter(cluster, scheduler, voterId, expectedVoterIds);
 
         // Restore the network and add the voter back
-        router.filter(voterToRemove.id(), new PermitAllTraffic());
-        addVoter(cluster, scheduler, voterToRemove.id(), expectedVoterIds);
+        router.filter(voterId, new PermitAllTraffic());
+        expectedVoterIds.add(voterId);
+        addVoter(cluster, scheduler, voterId, expectedVoterIds);
         runUntilNewHighWatermark(cluster, scheduler);
     }
 
@@ -630,7 +638,6 @@ public class RaftEventSimulationTest {
     }
 
     private void addVoter(Cluster cluster, EventScheduler scheduler, int idToAdd, Set<Integer> expectedVoterIds) {
-        expectedVoterIds.add(idToAdd);
         scheduler.scheduleUntil(
             new AddVoterAction(cluster, cluster.running.get(idToAdd)),
             () -> cluster.leaderHasCommittedVoterSet(expectedVoterIds),
@@ -642,7 +649,6 @@ public class RaftEventSimulationTest {
     }
 
     private void removeVoter(Cluster cluster, EventScheduler scheduler, int idToRemove, Set<Integer> expectedVoterIds) {
-        expectedVoterIds.remove(idToRemove);
         scheduler.scheduleUntil(
             new RemoveVoterAction(cluster, cluster.running.get(idToRemove)),
             () -> cluster.leaderHasCommittedVoterSet(expectedVoterIds),
@@ -881,7 +887,6 @@ public class RaftEventSimulationTest {
             int eventId = eventIdGenerator.incrementAndGet();
             ScheduledUntilConditionMetEvent event = new ScheduledUntilConditionMetEvent(action, eventId, random, initialDeadlineMs, periodMs, jitterMs, exitCondition);
             queue.offer(event);
-
         }
 
         void runUntil(Supplier<Boolean> exitCondition) {
@@ -1538,16 +1543,16 @@ public class RaftEventSimulationTest {
         public void verify() {
             cluster.leaderWithMaxEpoch().ifPresent(leaderNode -> {
                 leaderNode.log.readBatches(leaderNode.highWatermark(), OptionalLong.of(leaderNode.logEndOffset())).forEach(batch -> {
-                    Optional<LogEntry> uncommittedVotersEntry = Optional.empty();
+                    boolean seenUncommittedVotersRecord = false;
                     if (batch.isControlBatch) {
                         for (LogEntry entry : batch.entries) {
                             short typeId = ControlRecordType.parseTypeId(entry.record.key());
                             ControlRecordType type = ControlRecordType.fromTypeId(typeId);
                             if (type == ControlRecordType.KRAFT_VOTERS) {
-                                if (uncommittedVotersEntry.isPresent()) {
+                                if (seenUncommittedVotersRecord) {
                                     fail("More than one uncommitted voters record found in the log");
                                 }
-                                uncommittedVotersEntry = Optional.of(entry);
+                                seenUncommittedVotersRecord = true;
                             }
                         }
                     }
