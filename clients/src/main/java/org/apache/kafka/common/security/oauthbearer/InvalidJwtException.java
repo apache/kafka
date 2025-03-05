@@ -19,12 +19,12 @@ package org.apache.kafka.common.security.oauthbearer;
 import org.apache.kafka.common.KafkaException;
 
 import javax.security.auth.callback.Callback;
+import javax.security.auth.callback.CallbackHandler;
 
 /**
- * ValidateException is thrown in cases where a JWT access token cannot be determined to be
- * valid for one reason or another. It is intended to be used when errors arise within the
- * processing of a {@link javax.security.auth.callback.CallbackHandler#handle(Callback[])}.
- * This error, however, is not thrown from that method directly.
+ * An {@code InvalidJwtException} is thrown in cases where the validity of a JWT access token
+ * cannot be determined. It is intended to be used when errors arise within the processing of a
+ * {@link CallbackHandler#handle(Callback[])}. This error, however, is not thrown from that method directly.
  *
  * @see AccessTokenValidator#validate(String)
  */

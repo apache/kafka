@@ -76,7 +76,7 @@ import static org.jose4j.jwa.AlgorithmConstraints.DISALLOW_NONE;
  *     </li>
  *     <li>Basic conversion of the token into an in-memory data structure</li>
  *     <li>
- *         Presence of scope, <code>exp</code>, subject, <code>iss</code>, and
+ *         Presence of scope, <code>exp</code>, <code>sub</code>, <code>iss</code>, and
  *         <code>iat</code> claims
  *     </li>
  *     <li>
@@ -131,10 +131,10 @@ public class BrokerAccessTokenValidator implements AccessTokenValidator {
         configure(resolver, configs, saslMechanism, jaasConfigEntries);
     }
 
-    void configure(CloseableVerificationKeyResolver verificationKeyResolver,
-                   Map<String, ?> configs,
-                   String saslMechanism,
-                   List<AppConfigurationEntry> jaasConfigEntries) {
+    public void configure(CloseableVerificationKeyResolver verificationKeyResolver,
+                          Map<String, ?> configs,
+                          String saslMechanism,
+                          List<AppConfigurationEntry> jaasConfigEntries) {
         this.verificationKeyResolver = verificationKeyResolver;
         this.verificationKeyResolver.configure(configs, saslMechanism, jaasConfigEntries);
 

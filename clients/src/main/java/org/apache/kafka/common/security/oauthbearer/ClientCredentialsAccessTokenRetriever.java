@@ -19,7 +19,6 @@ package org.apache.kafka.common.security.oauthbearer;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ClientCredentialsRequestFormatter;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpRequestFormatter;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.JaasOptionsUtils;
 
 import java.util.List;
@@ -32,16 +31,14 @@ import static org.apache.kafka.common.config.SaslConfigs.DEFAULT_SASL_OAUTHBEARE
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_HEADER_URLENCODE;
 
 /**
- * <code>HttpAccessTokenRetriever</code> is an {@link AccessTokenRetriever} that will
- * communicate with an OAuth/OIDC provider directly via HTTP to post client credentials
- * ({@link #CLIENT_ID_CONFIG}/{@link #CLIENT_SECRET_CONFIG})
- * to a publicized token endpoint URL
+ * {@code ClientCredentialsAccessTokenRetriever} is an {@link AccessTokenRetriever} that will
+ * communicate with an OAuth/OIDC provider directly via HTTP to post client credentials using
+ * the JAAS {@code clientId} and {@code clientSecret} values to a publicized token endpoint URL
  * ({@link SaslConfigs#SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL}).
  *
  * @see AccessTokenRetriever
  * @see SaslConfigs#SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL
  */
-
 public class ClientCredentialsAccessTokenRetriever extends HttpAccessTokenRetriever {
 
     private static final String CLIENT_ID_CONFIG = "clientId";

@@ -163,7 +163,7 @@ public class HttpClient implements Closeable {
         return new HttpResponse(responseCode, responseBodyOpt, errorResponseBodyOpt);
     }
 
-    static void copy(InputStream is, OutputStream os) throws IOException {
+    public static void copy(InputStream is, OutputStream os) throws IOException {
         byte[] buf = new byte[4096];
         int b;
 

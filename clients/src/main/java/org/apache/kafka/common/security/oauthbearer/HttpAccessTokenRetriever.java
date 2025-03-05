@@ -18,7 +18,6 @@ package org.apache.kafka.common.security.oauthbearer;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpRequestFormatter;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.JaasOptionsUtils;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.Retry;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.SslResource;
@@ -166,7 +165,7 @@ public abstract class HttpAccessTokenRetriever implements AccessTokenRetriever {
         return parseAccessToken(responseBody);
     }
 
-    static String handleOutput(String url, HttpClient.HttpResponse httpResponse) throws IOException {
+    public static String handleOutput(String url, HttpClient.HttpResponse httpResponse) throws IOException {
         int responseCode = httpResponse.responseCode;
         Optional<String> responseBodyOpt = httpResponse.responseBody.map(b -> new String(b, StandardCharsets.UTF_8));
         String errorMessage = formatErrorMessage(
@@ -237,7 +236,7 @@ public abstract class HttpAccessTokenRetriever implements AccessTokenRetriever {
         return String.format("{%s}", errorResponseBody);
     }
 
-    static String parseAccessToken(String responseBody) throws IOException {
+    public static String parseAccessToken(String responseBody) throws IOException {
         ObjectMapper mapper = new ObjectMapper();
         JsonNode rootNode = mapper.readTree(responseBody);
         JsonNode accessTokenNode = rootNode.at("/access_token");

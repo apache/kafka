@@ -40,7 +40,7 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SCOPE_
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SUB_CLAIM_NAME;
 
 /**
- * LoginAccessTokenValidator is an implementation of {@link AccessTokenValidator} that is used
+ * {@code ClientAccessTokenValidator} is an implementation of {@link AccessTokenValidator} that is used
  * by the client to perform some rudimentary validation of the JWT access token that is received
  * as part of the response from posting the client credentials to the OAuth/OIDC provider's
  * token endpoint.
@@ -53,7 +53,7 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SUB_CL
  *         <a href="https://tools.ietf.org/html/rfc6750#section-2.1">RFC 6750 Section 2.1</a>
  *     </li>
  *     <li>Basic conversion of the token into an in-memory map</li>
- *     <li>Presence of scope, <code>exp</code>, subject, and <code>iat</code> claims</li>
+ *     <li>Presence of scope, <code>exp</code>, <code>sub</code>, and <code>iat</code> claims</li>
  * </ol>
  */
 public class ClientAccessTokenValidator implements AccessTokenValidator {

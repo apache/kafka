@@ -25,7 +25,7 @@ import java.util.Map;
 import javax.security.auth.login.AppConfigurationEntry;
 
 /**
- * Analogue to {@link Configurable} for SASL-based authentication.
+ * Analogue to {@link Configurable} for OAuth-based authentication.
  *
  * Any resources created in {@link #configure(Map, String, List)} should be cleaned up and released in
  * the call to {@link #close()}.
@@ -57,6 +57,4 @@ public interface OAuthBearerConfigurable extends Closeable {
      *        in `jaasConfigEntries`.
      */
     void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries);
-
-//    void close();
 }
