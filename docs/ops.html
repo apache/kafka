@@ -3965,7 +3965,7 @@ CurrentObservers:       [{"id": 0, "directoryId": "3Db5QLSqSZieL3rJBUUegA"},
 
   <p>The kafka-metadata-shell.sh tool can be used to interactively inspect the state of the cluster metadata partition:</p>
 
-  <pre><code class="language-bash">$ bin/kafka-metadata-shell.sh --snapshot metadata_log_dir/__cluster_metadata-0/00000000000000000000.log
+  <pre><code class="language-bash">$ bin/kafka-metadata-shell.sh --snapshot metadata_log_dir/__cluster_metadata-0/00000000000000000000.checkpoint
 &gt;&gt; ls /
 brokers  local  metadataQuorum  topicIds  topics
 &gt;&gt; ls /topics
