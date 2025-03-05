@@ -214,11 +214,11 @@ public class UnifiedLog implements AutoCloseable {
         this.remoteStorageSystemEnable = remoteStorageSystemEnable;
         this.logOffsetsListener = logOffsetsListener;
 
-        this.logIdent = "[UnifiedLog partition=" + localLog.topicPartition() + ", dir=" + localLog.parentDir() + "] ";
+        this.logIdent = "[UnifiedLog partition=" + topicPartition() + ", dir=" + parentDir() + "] ";
         this.logger = new LogContext(logIdent).logger(UnifiedLog.class);
         this.highWatermarkMetadata = new LogOffsetMetadata(logStartOffset);
         this.localLogStartOffset = logStartOffset;
-        this.producerExpireCheck = localLog.scheduler().schedule("PeriodicProducerExpirationCheck", () -> removeExpiredProducers(localLog.time().milliseconds()),
+        this.producerExpireCheck = scheduler().schedule("PeriodicProducerExpirationCheck", () -> removeExpiredProducers(time().milliseconds()),
                 producerIdExpirationCheckIntervalMs, producerIdExpirationCheckIntervalMs);
         this.validatorMetricsRecorder = UnifiedLog.newValidatorMetricsRecorder(brokerTopicStats.allTopicsStats());
 
@@ -451,6 +451,7 @@ public class UnifiedLog implements AutoCloseable {
         maybeIncrementLogStartOffset(remoteLogStartOffset, LogStartOffsetIncrementReason.SegmentDeletion);
     }
 
+    // visible for testing
     public void updateLocalLogStartOffset(long offset) throws IOException {
         localLogStartOffset = offset;
         if (highWatermark() < offset) {
@@ -648,8 +649,7 @@ public class UnifiedLog implements AutoCloseable {
             if (lom.messageOffsetOnly()) {
                 synchronized (lock) {
                     LogOffsetMetadata fullOffset = maybeConvertToOffsetMetadata(lom.messageOffset);
-                    if (firstUnstableOffsetMetadata.get().equals(lom))
-                        firstUnstableOffsetMetadata = Optional.of(fullOffset);
+                    firstUnstableOffsetMetadata = Optional.of(fullOffset);
                     return fullOffset;
                 }
             } else {
@@ -878,6 +878,7 @@ public class UnifiedLog implements AutoCloseable {
      * If an VerificationStateEntry is present for the given producer ID, return its VerificationGuard, otherwise, return the
      * sentinel VerificationGuard.
      */
+    // visible for testing
     public VerificationGuard verificationGuard(long producerId) {
         synchronized (lock) {
             VerificationStateEntry entry = producerStateManager.verificationStateEntry(producerId);
@@ -891,6 +892,7 @@ public class UnifiedLog implements AutoCloseable {
      * Return true if the given producer ID has a transaction ongoing.
      * Note, if the incoming producer epoch is newer than the stored one, the transaction may have finished.
      */
+    // visible for testing
     public boolean hasOngoingTransaction(long producerId, short producerEpoch) {
         synchronized (lock) {
             ProducerStateEntry entry = producerStateManager.activeProducers().get(producerId);
@@ -900,7 +902,6 @@ public class UnifiedLog implements AutoCloseable {
 
     /**
      * The number of segments in the log.
-     * Take care! this is an O(n) operation.
      */
     public int numberOfSegments() {
         return localLog.segments().numberOfSegments();
@@ -1079,14 +1080,14 @@ public class UnifiedLog implements AutoCloseable {
         if (appendInfo.validBytes() <= 0) {
             return appendInfo;
         } else {
+            // trim any invalid bytes or partial messages before appending it to the on-disk log
+            final MemoryRecords trimmedRecords = trimInvalidBytes(records, appendInfo);
             // they are valid, insert them in the log
             synchronized (lock)  {
                 return maybeHandleIOException(
                         "Error while appending records to " + topicPartition() + " in dir " + dir().getParent(),
                         () -> {
-                            // trim any invalid bytes or partial messages before appending it to the on-disk log
-                            MemoryRecords validRecords = trimInvalidBytes(records, appendInfo);
-
+                            MemoryRecords validRecords = trimmedRecords;
                             localLog.checkIfMemoryMappedBufferClosed();
                             if (validateAndAssignOffsets) {
                                 // assign offsets to the message set
@@ -1653,8 +1654,9 @@ public class UnifiedLog implements AutoCloseable {
                         }
                     } else if (targetTimestamp == ListOffsetsRequest.MAX_TIMESTAMP) {
                         // Cache to avoid race conditions.
+                        List<LogSegment> segments = List.copyOf(logSegments());
                         LogSegment latestTimestampSegment = null;
-                        for (LogSegment segment : logSegments()) {
+                        for (LogSegment segment : segments) {
                             if (latestTimestampSegment == null) {
                                 latestTimestampSegment = segment;
                             } else if (segment.maxTimestampSoFar() > latestTimestampSegment.maxTimestampSoFar()) {
@@ -1832,7 +1834,7 @@ public class UnifiedLog implements AutoCloseable {
      * @param iterator the iterator
      * @return Optional of the next element if it exists otherwise Optional.empty()
      */
-    private <T> Optional<T> nextOption(Iterator<T> iterator) {
+    private static <T> Optional<T> nextOption(Iterator<T> iterator) {
         return iterator.hasNext()
             ? Optional.of(iterator.next())
             : Optional.empty();
@@ -2205,6 +2207,7 @@ public class UnifiedLog implements AutoCloseable {
         }
     }
 
+    // visible for testing
     public void flushProducerStateSnapshot(Path snapshot) {
         maybeHandleIOException(
                 "Error while deleting producer state snapshot " + snapshot + " for " + topicPartition() + " in dir " + dir().getParent(),
@@ -2364,7 +2367,7 @@ public class UnifiedLog implements AutoCloseable {
     }
 
     /**
-     * remove deleted log metrics
+     * Remove deleted log metrics
      */
     public void removeLogMetrics() {
         metricNames.forEach(metricsGroup::removeMetric);
