@@ -54,7 +54,6 @@ import java.io.IOException;
 import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -107,7 +106,7 @@ public final class TieredStorageTestContext implements AutoCloseable {
 
         producer = harness.createProducer(ser, ser, producerOverrideProps);
         consumer = harness.createConsumer(de, de, commonOverrideProps,
-                CollectionConverters.asScala(Collections.<String>emptyList()).toList());
+                CollectionConverters.asScala(List.<String>of()).toList());
         admin = harness.createAdminClient(listenerName, commonOverrideProps);
     }
 
