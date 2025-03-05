@@ -29,7 +29,6 @@ import org.apache.kafka.timeline.TimelineLong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicLong;
@@ -112,10 +111,10 @@ public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
         numOffsetsTimelineGaugeCounter = new TimelineGaugeCounter(new TimelineLong(snapshotRegistry), new AtomicLong(0));
         numClassicGroupsTimelineCounter = new TimelineGaugeCounter(new TimelineLong(snapshotRegistry), new AtomicLong(0));
 
-        this.classicGroupGauges = Collections.emptyMap();
-        this.consumerGroupGauges = Collections.emptyMap();
-        this.streamsGroupGauges = Collections.emptyMap();
-        this.shareGroupGauges = Collections.emptyMap();
+        this.classicGroupGauges = Map.of();
+        this.consumerGroupGauges = Map.of();
+        this.streamsGroupGauges = Map.of();
+        this.shareGroupGauges = Map.of();
 
         this.globalSensors = Objects.requireNonNull(globalSensors);
         this.topicPartition = Objects.requireNonNull(topicPartition);

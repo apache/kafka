@@ -28,6 +28,7 @@ import org.apache.kafka.common.test.ClusterInstance
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals, assertNotNull, assertNull, assertTrue}
 import org.junit.jupiter.api.{Tag, Timeout}
 
+import java.util
 import scala.jdk.CollectionConverters._
 
 @Timeout(120)
@@ -216,17 +217,11 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       assertNotEquals(memberId1, memberId2)
 
       // Create the topic.
-      val topicId = TestUtils.createTopicWithAdminRaw(
+      TestUtils.createTopicWithAdminRaw(
         admin = admin,
         topic = "foo",
         numPartitions = 3
       )
-
-      // This is the expected assignment.
-      val expectedAssignment = new ShareGroupHeartbeatResponseData.Assignment()
-        .setTopicPartitions(List(new ShareGroupHeartbeatResponseData.TopicPartitions()
-          .setTopicId(topicId)
-          .setPartitions(List[Integer](0, 1, 2).asJava)).asJava)
 
       // Prepare the next heartbeat for member 1.
       shareGroupHeartbeatRequest = new ShareGroupHeartbeatRequest.Builder(
@@ -241,10 +236,10 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       shareGroupHeartbeatResponse = null
       TestUtils.waitUntilTrue(() => {
         shareGroupHeartbeatResponse = connectAndReceive(shareGroupHeartbeatRequest)
-        shareGroupHeartbeatResponse.data.errorCode == Errors.NONE.code &&
-          shareGroupHeartbeatResponse.data.assignment == expectedAssignment
+        shareGroupHeartbeatResponse.data.errorCode == Errors.NONE.code && shareGroupHeartbeatResponse.data.assignment != null
       }, msg = s"Could not get partitions assigned. Last response $shareGroupHeartbeatResponse.")
 
+      val topicPartitionsAssignedToMember1 = shareGroupHeartbeatResponse.data.assignment.topicPartitions()
       // Verify the response.
       assertEquals(3, shareGroupHeartbeatResponse.data.memberEpoch)
 
@@ -261,12 +256,22 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       shareGroupHeartbeatResponse = null
       TestUtils.waitUntilTrue(() => {
         shareGroupHeartbeatResponse = connectAndReceive(shareGroupHeartbeatRequest)
-        shareGroupHeartbeatResponse.data.errorCode == Errors.NONE.code &&
-          shareGroupHeartbeatResponse.data.assignment == expectedAssignment
+        shareGroupHeartbeatResponse.data.errorCode == Errors.NONE.code && shareGroupHeartbeatResponse.data.assignment !=  null
       }, msg = s"Could not get partitions assigned. Last response $shareGroupHeartbeatResponse.")
 
+      val topicPartitionsAssignedToMember2 = shareGroupHeartbeatResponse.data.assignment.topicPartitions()
       // Verify the response.
       assertEquals(3, shareGroupHeartbeatResponse.data.memberEpoch)
+
+      val partitionsAssigned: util.Set[Integer] = new util.HashSet[Integer]()
+      topicPartitionsAssignedToMember1.forEach(topicPartition => {
+        partitionsAssigned.addAll(topicPartition.partitions())
+      })
+      topicPartitionsAssignedToMember2.forEach(topicPartition => {
+        partitionsAssigned.addAll(topicPartition.partitions())
+      })
+      // Verify all the 3 topic partitions for "foo" have been assigned to at least 1 member.
+      assertEquals(util.Set.of(0, 1, 2), partitionsAssigned)
 
       // Verify the assignments are not changed for member 1.
       // Prepare another heartbeat for member 1 with latest received epoch 3 for member 1.
