@@ -86,7 +86,7 @@ runs:
       run: |
         set +e
         ./.github/scripts/thread-dump.sh &
-        timeout ${TIMEOUT_MINUTES}m ./gradlew --continue --no-scan \
+        timeout ${TIMEOUT_MINUTES}m ./gradlew --build-cache --continue --no-scan \
         -PtestLoggingEvents=started,passed,skipped,failed \
         -PmaxParallelForks=4 \
         -PmaxTestRetries=$TEST_RETRIES -PmaxTestRetryFailures=10 \
