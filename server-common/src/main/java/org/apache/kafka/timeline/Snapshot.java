@@ -48,7 +48,7 @@ class Snapshot {
     }
 
     void setDelta(Revertable owner, Delta delta) {
-        Objects.requireNonNull(map, "Snapshot cannot be modified after erase is called.");
+        Objects.requireNonNull(map, "Snapshot cannot be accessed after erase is called.");
         map.put(owner, delta);
     }
 
