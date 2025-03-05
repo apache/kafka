@@ -103,7 +103,7 @@ public class ProducerConfig extends AbstractConfig {
     public static final String PARTITIONER_ADPATIVE_PARTITIONING_ENABLE_CONFIG = "partitioner.adaptive.partitioning.enable";
     private static final String PARTITIONER_ADPATIVE_PARTITIONING_ENABLE_DOC =
             "When set to 'true', the producer will try to adapt to broker performance and produce more messages to partitions hosted on faster brokers. "
-            + "If 'false', producer will try to distribute messages uniformly. Note: this setting has no effect if a custom partitioner is used.";
+            + "If 'false', the producer will try to distribute messages uniformly. Note: this setting has no effect if a custom partitioner is used.";
 
     /** <code>partitioner.availability.timeout.ms</code> */
     public static final String PARTITIONER_AVAILABILITY_TIMEOUT_MS_CONFIG = "partitioner.availability.timeout.ms";
