@@ -522,7 +522,7 @@ subprojects {
   }
 
   test {
-    maxParallelForks = project.name == 'core' ? maxTestForks + 2 : maxTestForks
+    maxParallelForks = maxTestForks
     ignoreFailures = userIgnoreFailures
 
     maxHeapSize = "3g"
