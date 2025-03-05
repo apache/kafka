@@ -378,7 +378,10 @@ jobs:
           exit 1
       - name: Check Dependency Outcomes
         run: |
-          if [[ ! ( "${{ needs.validate.result }}" == "success" && "${{ needs.test.result }}" == "success" ) ]]; then
+          if [[ "${{ needs.validate.result }}" == "success" && "${{ needs.test.result }}" == "success" ]]; then
+            echo "Required jobs completed successfully!"
+            exit 0
+          else
             echo "Required jobs did not complete successfully"
             exit 1
           fi
