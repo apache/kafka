@@ -557,11 +557,11 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
             .metavar("CONFIG_FILE")
             .help("Consumer config properties file (config options shared with command line parameters will be overridden).");
 
-        parser.addArgument("--command.config")
+        parser.addArgument("--admin.client.config")
             .action(store())
             .required(false)
             .type(String.class)
-            .metavar("COMMAND_CONFIG_FILE")
+            .metavar("ADMIN_CLIENT_CONFIG_FILE")
             .help("Property file containing configs to be passed to Admin Client. ");
 
         return parser;
@@ -574,7 +574,7 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
             AcknowledgementMode.valueOf(res.getString("acknowledgementMode").toUpperCase(Locale.ROOT));
         String offsetResetStrategy = res.getString("offsetResetStrategy").toLowerCase(Locale.ROOT);
         String configFile = res.getString("consumer.config");
-        String commandConfigFile = res.getString("command.config");
+        String adminClientConfigFile = res.getString("admin.client.config");
         String brokerHostandPort = res.getString("bootstrapServer");
 
         Properties consumerProps = new Properties();
@@ -600,9 +600,9 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
         KafkaShareConsumer<String, String> consumer = new KafkaShareConsumer<>(consumerProps, deserializer, deserializer);
 
         Properties adminClientProps = new Properties();
-        if (commandConfigFile != null) {
+        if (adminClientConfigFile != null) {
             try {
-                adminClientProps.putAll(Utils.loadProps(commandConfigFile));
+                adminClientProps.putAll(Utils.loadProps(adminClientConfigFile));
             } catch (IOException e) {
                 throw new ArgumentParserException(e.getMessage(), parser);
             }
@@ -622,7 +622,6 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
             groupId,
             verbose);
     }
-
     public static void main(String[] args) {
         ArgumentParser parser = argParser();
         if (args.length == 0) {
