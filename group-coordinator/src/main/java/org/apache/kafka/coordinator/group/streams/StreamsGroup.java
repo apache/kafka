@@ -356,6 +356,32 @@ public class StreamsGroup implements Group {
     }
 
     /**
+     * Gets or creates a new member but without adding it to the group. Adding a member is done via the
+     * {@link StreamsGroup#updateMember(StreamsGroupMember)} method.
+     *
+     * @param memberId          The member ID.
+     * @param createIfNotExists Booleans indicating whether the member must be created if it does not exist.
+     * @return A StreamsGroupMember.
+     */
+    public StreamsGroupMember getOrMaybeCreateDefaultMember(
+        String memberId,
+        boolean createIfNotExists
+    ) throws UnknownMemberIdException {
+        StreamsGroupMember member = members.get(memberId);
+        if (member != null) {
+            return member;
+        }
+
+        if (!createIfNotExists) {
+            throw new UnknownMemberIdException(
+                String.format("Member %s is not a member of group %s.", memberId, groupId)
+            );
+        }
+
+        return StreamsGroupMember.Builder.withDefaults(memberId).build();
+    }
+
+    /**
      * Gets a static member.
      *
      * @param instanceId The group instance ID.

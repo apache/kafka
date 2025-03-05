@@ -278,6 +278,21 @@ public record StreamsGroupMember(String memberId,
                 taskIds -> Set.copyOf(taskIds.partitions())));
         }
 
+        public static Builder withDefaults(String memberId) {
+            return new Builder(memberId)
+                .setRebalanceTimeoutMs(-1)
+                .setTopologyEpoch(-1)
+                .setInstanceId(null)
+                .setRackId(null)
+                .setProcessId("")
+                .setClientTags(Collections.emptyMap())
+                .setState(MemberState.STABLE)
+                .setMemberEpoch(0)
+                .setAssignedTasks(TasksTuple.EMPTY)
+                .setTasksPendingRevocation(TasksTuple.EMPTY)
+                .setUserEndpoint(null);
+        }
+
         public StreamsGroupMember build() {
             return new StreamsGroupMember(
                 memberId,
