@@ -20,13 +20,33 @@ package org.apache.kafka.clients.admin;
 import org.apache.kafka.common.KafkaFuture;
 
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.Map;
 
 /**
  * The result of the {@link Admin#deleteShareGroups(Collection <String>, DeleteShareGroupsOptions)} call.
  */
-public class DeleteShareGroupsResult extends DeleteGroupsResult {
+public class DeleteShareGroupsResult {
+    private final Map<String, KafkaFuture<Void>> futures;
+
     DeleteShareGroupsResult(final Map<String, KafkaFuture<Void>> futures) {
-        super(futures);
+        this.futures = futures;
+    }
+
+    /**
+     * Return a map from group id to futures which can be used to check the status of
+     * individual deletions.
+     */
+    public Map<String, KafkaFuture<Void>> deletedGroups() {
+        Map<String, KafkaFuture<Void>> deletedGroups = new HashMap<>(futures.size());
+        deletedGroups.putAll(futures);
+        return deletedGroups;
+    }
+
+    /**
+     * Return a future which succeeds only if all the share group deletions succeed.
+     */
+    public KafkaFuture<Void> all() {
+        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture<?>[0]));
     }
 }
