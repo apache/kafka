@@ -23,7 +23,6 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.To
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -198,7 +197,7 @@ public class RepartitionTopicsTest {
 
         final Map<String, Integer> setup = repartitionTopics.setup();
 
-        assertEquals(Collections.emptyMap(), setup);
+        assertEquals(Map.of(), setup);
     }
 
 }

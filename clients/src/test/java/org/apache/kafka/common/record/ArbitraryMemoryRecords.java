@@ -16,21 +16,24 @@
  */
 package org.apache.kafka.common.record;
 
-public class ConvertedRecords<T extends Records> {
+import net.jqwik.api.Arbitraries;
+import net.jqwik.api.Arbitrary;
+import net.jqwik.api.ArbitrarySupplier;
 
-    private final T records;
-    private final RecordValidationStats recordValidationStats;
+import java.nio.ByteBuffer;
+import java.util.Random;
 
-    public ConvertedRecords(T records, RecordValidationStats recordValidationStats) {
-        this.records = records;
-        this.recordValidationStats = recordValidationStats;
+public final class ArbitraryMemoryRecords implements ArbitrarySupplier<MemoryRecords> {
+    @Override
+    public Arbitrary<MemoryRecords> get() {
+        return Arbitraries.randomValue(ArbitraryMemoryRecords::buildRandomRecords);
     }
 
-    public T records() {
-        return records;
-    }
+    private static MemoryRecords buildRandomRecords(Random random) {
+        int size = random.nextInt(128) + 1;
+        byte[] bytes = new byte[size];
+        random.nextBytes(bytes);
 
-    public RecordValidationStats recordConversionStats() {
-        return recordValidationStats;
+        return MemoryRecords.readableRecords(ByteBuffer.wrap(bytes));
     }
 }

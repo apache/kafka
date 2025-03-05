@@ -66,6 +66,7 @@ import org.apache.kafka.streams.kstream.internals.suppress.NamedSuppressed;
 import org.apache.kafka.streams.kstream.internals.suppress.SuppressedInternal;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
+import org.apache.kafka.streams.processor.internals.InternalResourcesNaming;
 import org.apache.kafka.streams.processor.internals.InternalTopicProperties;
 import org.apache.kafka.streams.processor.internals.StaticTopicNameExtractor;
 import org.apache.kafka.streams.processor.internals.StoreDelegatingProcessorSupplier;
@@ -447,8 +448,12 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             valueSerde = materializedInternal.valueSerde();
             queryableStoreName = materializedInternal.queryableStoreName();
             // only materialize if materialized is specified and it has queryable name
-            final StoreFactory storeFactory = queryableStoreName != null ? (new KeyValueStoreMaterializer<>(materializedInternal)) : null;
-            storeBuilder = Collections.singleton(new FactoryWrappingStoreBuilder<>(storeFactory));
+            if (queryableStoreName != null) {
+                final StoreFactory storeFactory = new KeyValueStoreMaterializer<>(materializedInternal);
+                storeBuilder = Collections.singleton(new FactoryWrappingStoreBuilder<>(storeFactory));
+            } else {
+                storeBuilder = null;
+            }
         } else {
             keySerde = this.keySerde;
             valueSerde = null;
@@ -549,8 +554,15 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
         final SuppressedInternal<K> suppressedInternal = buildSuppress(suppressed, name);
 
-        final String storeName =
-            suppressedInternal.name() != null ? suppressedInternal.name() + "-store" : builder.newStoreName(SUPPRESS_NAME);
+        final String storeName;
+        if (suppressedInternal.name() != null) {
+            storeName = suppressedInternal.name() + "-store";
+        } else {
+            storeName = builder.newStoreName(SUPPRESS_NAME);
+            if (suppressedInternal.bufferConfig().isLoggingEnabled()) {
+                internalTopologyBuilder().addImplicitInternalNames(InternalResourcesNaming.builder().withChangelogTopic(storeName + "-changelog").build());
+            }
+        }
 
         final StoreBuilder<InMemoryTimeOrderedKeyValueChangeBuffer<K, V, Change<V>>> storeBuilder;
 

@@ -94,7 +94,7 @@ public enum MetadataVersion {
     // Bootstrap metadata version for version 1 of the GroupVersion feature (KIP-848).
     IBP_4_0_IV0(22, "4.0", "IV0", false),
 
-    // Add ELR related supports (KIP-966).
+    // Add ELR related metadata records (KIP-966). Note, ELR is for preview only in 4.0.
     // PartitionRecord and PartitionChangeRecord are updated.
     // ClearElrRecord is added.
     IBP_4_0_IV1(23, "4.0", "IV1", true),
@@ -111,7 +111,7 @@ public enum MetadataVersion {
     // Please move this comment when updating the LATEST_PRODUCTION constant.
     //
 
-    // Not used by anything yet.
+    // Enables ELR by default for new clusters (KIP-966).
     IBP_4_1_IV0(26, "4.1", "IV0", false);
 
     // NOTES when adding a new version:
