@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.raft.internals;
 
-import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -49,7 +48,7 @@ public interface LogHistory<T> {
      *
      * @return the value if it exists, otherwise {@code Optional.empty()}
      */
-    Optional<Map.Entry<Long, T>> lastEntry();
+    Optional<Entry<T>> lastEntry();
 
     /**
      * Removes all entries with an offset greater than or equal to {@code endOffset}.
@@ -75,4 +74,6 @@ public interface LogHistory<T> {
      * Removes all of the values from this object.
      */
     void clear();
+
+    record Entry<T>(long offset, T value) { }
 }
