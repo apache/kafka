@@ -2734,7 +2734,7 @@ public class SharePartitionManagerTest {
 
         SharePartition sp1 = mock(SharePartition.class);
         // Do not make the share partition acquirable hence it shouldn't be removed from the cache,
-        // as it won't be part of replica manger readFromLog request.
+        // as it won't be part of replica manager readFromLog request.
         when(sp1.maybeAcquireFetchLock()).thenReturn(false);
         when(sp1.maybeInitialize()).thenReturn(CompletableFuture.completedFuture(null));
 
