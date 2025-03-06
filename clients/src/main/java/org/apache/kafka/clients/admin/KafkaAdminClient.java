@@ -3843,7 +3843,7 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public DescribeStreamsGroupsResult describeStreamsGroups(final Collection<String> groupIds,
-                                                         final DescribeStreamsGroupsOptions options) {
+                                                             final DescribeStreamsGroupsOptions options) {
         SimpleAdminApiFuture<CoordinatorKey, StreamsGroupDescription> future =
             DescribeStreamsGroupsHandler.newFuture(groupIds);
         DescribeStreamsGroupsHandler handler = new DescribeStreamsGroupsHandler(options.includeAuthorizedOperations(), logContext);
