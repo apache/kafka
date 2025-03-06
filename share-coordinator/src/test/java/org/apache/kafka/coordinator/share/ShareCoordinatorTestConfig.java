@@ -29,7 +29,7 @@ import java.util.Map;
 
 public class ShareCoordinatorTestConfig {
 
-    private static final List<ConfigDef> CONFIG_DEF_LIST = Collections.singletonList(
+    private static final List<ConfigDef> CONFIG_DEF_LIST = List.of(
         ShareCoordinatorConfig.CONFIG_DEF
     );
 

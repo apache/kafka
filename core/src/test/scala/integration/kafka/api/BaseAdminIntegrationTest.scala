@@ -33,9 +33,7 @@ import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.test.TestUtils.assertFutureThrows
 import org.apache.kafka.server.config.{ReplicationConfigs, ServerConfigs, ServerLogConfigs}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo, Timeout}
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo, Timeout}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.Seq
@@ -71,9 +69,8 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
     super.tearDown()
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testCreateDeleteTopics(quorum: String): Unit = {
+  @Test
+  def testCreateDeleteTopics(): Unit = {
     client = createAdminClient
     val topics = Seq("mytopic", "mytopic2", "mytopic3")
     val newTopics = Seq(
@@ -164,9 +161,8 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
     waitForTopics(client, List(), topics)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testAuthorizedOperations(quorum: String): Unit = {
+  @Test
+  def testAuthorizedOperations(): Unit = {
     client = createAdminClient
 
     // without includeAuthorizedOperations flag

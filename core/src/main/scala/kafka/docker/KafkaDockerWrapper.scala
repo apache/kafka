@@ -22,12 +22,13 @@ import com.fasterxml.jackson.databind.{DeserializationFeature, ObjectMapper}
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory
 import com.fasterxml.jackson.dataformat.yaml.YAMLGenerator.Feature
 import kafka.Kafka
-import kafka.tools.StorageTool
+import kafka.tools.{StorageTool, TerseFailure}
 import kafka.utils.Logging
 import net.sourceforge.argparse4j.ArgumentParsers
 import net.sourceforge.argparse4j.impl.Arguments.store
 import net.sourceforge.argparse4j.inf.Namespace
 import org.apache.kafka.common.utils.Exit
+import org.apache.kafka.raft.QuorumConfig
 
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path, Paths, StandardCopyOption, StandardOpenOption}
@@ -52,7 +53,15 @@ object KafkaDockerWrapper extends Logging {
         }
 
         val formatCmd = formatStorageCmd(finalConfigsPath, envVars)
-        StorageTool.main(formatCmd)
+        try {
+          StorageTool.main(formatCmd)
+        } catch {
+          case terseFailure: TerseFailure => if (terseFailure.getMessage.contains(QuorumConfig.QUORUM_VOTERS_CONFIG)) {
+            throw new TerseFailure("To maximize compatibility, the Docker image continues to use static voters, " +
+              "which are supported in 3.7 and later.", terseFailure)
+          } else throw terseFailure
+          case e: Throwable => throw e
+        }
       case "start" =>
         val configFile = namespace.getString("config")
         info("Starting Kafka server in the native mode.")
@@ -110,7 +119,9 @@ object KafkaDockerWrapper extends Logging {
       case Some(str) => str
       case None => throw new RuntimeException("CLUSTER_ID environment variable is not set.")
     }
-    Array("format", "--cluster-id=" + clusterId, "-c", s"${configsPath.toString}/server.properties", "--standalone")
+    // We maintain static voter configurations in Docker Hub images for better version compatibility and deployment stability,
+    // despite having dynamic voter support in the latest release.
+    Array("format", "--cluster-id=" + clusterId, "-c", s"${configsPath.toString}/server.properties")
   }
 
   private def prepareConfigs(defaultConfigsPath: Path, mountedConfigsPath: Path, finalConfigsPath: Path): Unit = {

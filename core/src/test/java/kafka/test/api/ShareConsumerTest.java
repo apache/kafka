@@ -61,7 +61,6 @@ import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
-import org.apache.kafka.common.test.api.Flaky;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.GroupConfig;
@@ -390,7 +389,6 @@ public class ShareConsumerTest {
         }
     }
 
-    @Flaky("KAFKA-18033")
     @ClusterTest
     public void testAcknowledgementCommitCallbackInvalidRecordStateException() throws Exception {
         setup();
@@ -1079,7 +1077,6 @@ public class ShareConsumerTest {
         }
     }
 
-    @Flaky("KAFKA-18033")
     @ClusterTest
     public void testMultipleConsumersInGroupConcurrentConsumption()
             throws InterruptedException, ExecutionException, TimeoutException {
@@ -2027,7 +2024,6 @@ public class ShareConsumerTest {
         }
     )
     @Timeout(150)
-    @Flaky("KAFKA-18665")
     public void testComplexShareConsumer() throws Exception {
         setup();
         String topicName = "multipart";

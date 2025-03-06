@@ -510,7 +510,7 @@ public class Formatter {
                 Snapshots.BOOTSTRAP_SNAPSHOT_ID)).
             setKraftVersion(KRaftVersion.fromFeatureLevel(kraftVersion)).
             setVoterSet(Optional.of(voterSet));
-        try (RecordsSnapshotWriter writer = builder.build(new MetadataRecordSerde())) {
+        try (RecordsSnapshotWriter<ApiMessageAndVersion> writer = builder.build(new MetadataRecordSerde())) {
             writer.freeze();
         }
     }

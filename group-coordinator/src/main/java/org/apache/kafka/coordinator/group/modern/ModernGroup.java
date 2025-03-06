@@ -270,7 +270,7 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
     public void updateTargetAssignment(String memberId, Assignment newTargetAssignment) {
         updateInvertedTargetAssignment(
             memberId,
-            targetAssignment.getOrDefault(memberId, new Assignment(Collections.emptyMap())),
+            targetAssignment.getOrDefault(memberId, new Assignment(Map.of())),
             newTargetAssignment
         );
         targetAssignment.put(memberId, newTargetAssignment);
@@ -294,8 +294,8 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
         allTopicIds.addAll(newTargetAssignment.partitions().keySet());
 
         for (Uuid topicId : allTopicIds) {
-            Set<Integer> oldPartitions = oldTargetAssignment.partitions().getOrDefault(topicId, Collections.emptySet());
-            Set<Integer> newPartitions = newTargetAssignment.partitions().getOrDefault(topicId, Collections.emptySet());
+            Set<Integer> oldPartitions = oldTargetAssignment.partitions().getOrDefault(topicId, Set.of());
+            Set<Integer> newPartitions = newTargetAssignment.partitions().getOrDefault(topicId, Set.of());
 
             TimelineHashMap<Integer, String> topicPartitionAssignment = invertedTargetAssignment.computeIfAbsent(
                 topicId, k -> new TimelineHashMap<>(snapshotRegistry, Math.max(oldPartitions.size(), newPartitions.size()))
@@ -414,6 +414,7 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
     /**
      * Requests a metadata refresh.
      */
+    @Override
     public void requestMetadataRefresh() {
         this.metadataRefreshDeadline = DeadlineAndEpoch.EMPTY;
     }

@@ -18,12 +18,9 @@ package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.compress.Compression;
-import org.apache.kafka.common.compress.GzipCompression;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.network.TransferableChannel;
-import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
@@ -40,18 +37,14 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
-import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.stream.IntStream;
 
 import static java.util.Arrays.asList;
-import static org.apache.kafka.common.utils.Utils.utf8;
 import static org.apache.kafka.test.TestUtils.tempFile;
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -74,12 +67,10 @@ public class FileRecordsTest {
             "ijkl".getBytes()
     };
     private FileRecords fileRecords;
-    private Time time;
 
     @BeforeEach
     public void setup() throws IOException {
         this.fileRecords = createFileRecords(values);
-        this.time = new MockTime();
     }
 
     @AfterEach
@@ -417,17 +408,6 @@ public class FileRecordsTest {
     }
 
     @Test
-    public void testFormatConversionWithPartialMessage() throws IOException {
-        RecordBatch batch = batches(fileRecords).get(1);
-        int start = fileRecords.searchForOffsetWithSize(1, 0).position;
-        int size = batch.sizeInBytes();
-        FileRecords slice = fileRecords.slice(start, size - 1);
-        Records messageV0 = slice.downConvert(RecordBatch.MAGIC_VALUE_V0, 0, time).records();
-        assertTrue(batches(messageV0).isEmpty(), "No message should be there");
-        assertEquals(size - 1, messageV0.sizeInBytes(), "There should be " + (size - 1) + " bytes");
-    }
-
-    @Test
     public void testSearchForTimestamp() throws IOException {
         for (RecordVersion version : RecordVersion.values()) {
             testSearchForTimestamp(version);
@@ -510,39 +490,6 @@ public class FileRecordsTest {
     }
 
     @Test
-    public void testDownconversionAfterMessageFormatDowngrade() throws IOException {
-        // random bytes
-        Random random = new Random();
-        byte[] bytes = new byte[3000];
-        random.nextBytes(bytes);
-
-        // records
-        GzipCompression compression = Compression.gzip().build();
-        List<Long> offsets = asList(0L, 1L);
-        List<Byte> magic = asList(RecordBatch.MAGIC_VALUE_V2, RecordBatch.MAGIC_VALUE_V1);  // downgrade message format from v2 to v1
-        List<SimpleRecord> records = asList(
-                new SimpleRecord(1L, "k1".getBytes(), bytes),
-                new SimpleRecord(2L, "k2".getBytes(), bytes));
-        byte toMagic = 1;
-
-        // create MemoryRecords
-        ByteBuffer buffer = ByteBuffer.allocate(8000);
-        for (int i = 0; i < records.size(); i++) {
-            MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic.get(i), compression, TimestampType.CREATE_TIME, 0L);
-            builder.appendWithOffset(offsets.get(i), records.get(i));
-            builder.close();
-        }
-        buffer.flip();
-
-        // create FileRecords, down-convert and verify
-        try (FileRecords fileRecords = FileRecords.open(tempFile())) {
-            fileRecords.append(MemoryRecords.readableRecords(buffer));
-            fileRecords.flush();
-            downConvertAndVerifyRecords(records, offsets, fileRecords, compression, toMagic, 0L, time);
-        }
-    }
-
-    @Test
     public void testConversion() throws IOException {
         doTestConversion(Compression.NONE, RecordBatch.MAGIC_VALUE_V0);
         doTestConversion(Compression.gzip().build(), RecordBatch.MAGIC_VALUE_V0);
@@ -614,7 +561,6 @@ public class FileRecordsTest {
         try (FileRecords fileRecords = FileRecords.open(tempFile())) {
             fileRecords.append(MemoryRecords.readableRecords(buffer));
             fileRecords.flush();
-            downConvertAndVerifyRecords(records, offsets, fileRecords, compression, toMagic, 0L, time);
 
             if (toMagic <= RecordBatch.MAGIC_VALUE_V1 && compression.type() == CompressionType.NONE) {
                 long firstOffset;
@@ -627,75 +573,8 @@ public class FileRecordsTest {
                 int index = filteredOffsets.indexOf(firstOffset) - 1;
                 filteredRecords.remove(index);
                 filteredOffsets.remove(index);
-                downConvertAndVerifyRecords(filteredRecords, filteredOffsets, fileRecords, compression, toMagic, firstOffset, time);
-            } else {
-                // firstOffset doesn't have any effect in this case
-                downConvertAndVerifyRecords(records, offsets, fileRecords, compression, toMagic, 10L, time);
             }
         }
-    }
-
-    private void downConvertAndVerifyRecords(List<SimpleRecord> initialRecords,
-                                             List<Long> initialOffsets,
-                                             FileRecords fileRecords,
-                                             Compression compression,
-                                             byte toMagic,
-                                             long firstOffset,
-                                             Time time) {
-        long minBatchSize = Long.MAX_VALUE;
-        long maxBatchSize = Long.MIN_VALUE;
-        for (RecordBatch batch : fileRecords.batches()) {
-            minBatchSize = Math.min(minBatchSize, batch.sizeInBytes());
-            maxBatchSize = Math.max(maxBatchSize, batch.sizeInBytes());
-        }
-
-        // Test the normal down-conversion path
-        List<Records> convertedRecords = new ArrayList<>();
-        convertedRecords.add(fileRecords.downConvert(toMagic, firstOffset, time).records());
-        verifyConvertedRecords(initialRecords, initialOffsets, convertedRecords, compression, toMagic);
-        convertedRecords.clear();
-    }
-
-    private void verifyConvertedRecords(List<SimpleRecord> initialRecords,
-                                        List<Long> initialOffsets,
-                                        List<Records> convertedRecordsList,
-                                        Compression compression,
-                                        byte magicByte) {
-        int i = 0;
-
-        for (Records convertedRecords : convertedRecordsList) {
-            for (RecordBatch batch : convertedRecords.batches()) {
-                assertTrue(batch.magic() <= magicByte, "Magic byte should be lower than or equal to " + magicByte);
-                if (batch.magic() == RecordBatch.MAGIC_VALUE_V0)
-                    assertEquals(TimestampType.NO_TIMESTAMP_TYPE, batch.timestampType());
-                else
-                    assertEquals(TimestampType.CREATE_TIME, batch.timestampType());
-                assertEquals(compression.type(), batch.compressionType(), "Compression type should not be affected by conversion");
-                for (Record record : batch) {
-                    assertTrue(record.hasMagic(batch.magic()), "Inner record should have magic " + magicByte);
-                    assertEquals(initialOffsets.get(i).longValue(), record.offset(), "Offset should not change");
-                    assertEquals(utf8(initialRecords.get(i).key()), utf8(record.key()), "Key should not change");
-                    assertEquals(utf8(initialRecords.get(i).value()), utf8(record.value()), "Value should not change");
-                    assertFalse(record.hasTimestampType(TimestampType.LOG_APPEND_TIME));
-                    if (batch.magic() == RecordBatch.MAGIC_VALUE_V0) {
-                        assertEquals(RecordBatch.NO_TIMESTAMP, record.timestamp());
-                        assertFalse(record.hasTimestampType(TimestampType.CREATE_TIME));
-                        assertTrue(record.hasTimestampType(TimestampType.NO_TIMESTAMP_TYPE));
-                    } else if (batch.magic() == RecordBatch.MAGIC_VALUE_V1) {
-                        assertEquals(initialRecords.get(i).timestamp(), record.timestamp(), "Timestamp should not change");
-                        assertTrue(record.hasTimestampType(TimestampType.CREATE_TIME));
-                        assertFalse(record.hasTimestampType(TimestampType.NO_TIMESTAMP_TYPE));
-                    } else {
-                        assertEquals(initialRecords.get(i).timestamp(), record.timestamp(), "Timestamp should not change");
-                        assertFalse(record.hasTimestampType(TimestampType.CREATE_TIME));
-                        assertFalse(record.hasTimestampType(TimestampType.NO_TIMESTAMP_TYPE));
-                        assertArrayEquals(initialRecords.get(i).headers(), record.headers(), "Headers should not change");
-                    }
-                    i += 1;
-                }
-            }
-        }
-        assertEquals(initialOffsets.size(), i);
     }
 
     private static List<RecordBatch> batches(Records buffer) {
