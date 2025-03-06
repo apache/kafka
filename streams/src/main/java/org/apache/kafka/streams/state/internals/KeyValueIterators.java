@@ -52,8 +52,8 @@ class KeyValueIterators {
         implements WindowStoreIterator<V> {
     }
 
-    private static final KeyValueIterator EMPTY_ITERATOR = new EmptyKeyValueIterator();
-    private static final WindowStoreIterator EMPTY_WINDOW_STORE_ITERATOR = new EmptyWindowStoreIterator();
+    private static final KeyValueIterator<?, ?> EMPTY_ITERATOR = new EmptyKeyValueIterator<>();
+    private static final WindowStoreIterator<?> EMPTY_WINDOW_STORE_ITERATOR = new EmptyWindowStoreIterator<>();
 
 
     @SuppressWarnings("unchecked")

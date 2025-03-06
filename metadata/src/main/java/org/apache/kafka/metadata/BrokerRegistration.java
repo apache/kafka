@@ -294,15 +294,8 @@ public class BrokerRegistration {
             setRack(rack.orElse(null)).
             setBrokerEpoch(epoch).
             setIncarnationId(incarnationId).
-            setFenced(fenced);
-
-        if (inControlledShutdown) {
-            if (options.metadataVersion().isInControlledShutdownStateSupported()) {
-                registrationRecord.setInControlledShutdown(true);
-            } else {
-                options.handleLoss("the inControlledShutdown state of one or more brokers");
-            }
-        }
+            setFenced(fenced).
+            setInControlledShutdown(inControlledShutdown);
 
         if (isMigratingZkBroker) {
             if (options.metadataVersion().isMigrationSupported()) {

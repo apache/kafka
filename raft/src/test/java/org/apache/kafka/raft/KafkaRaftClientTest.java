@@ -3663,7 +3663,7 @@ class KafkaRaftClientTest {
         context.client.poll();
         assertFalse(context.client.isRunning());
         assertTrue(shutdownFuture.isCompletedExceptionally());
-        assertFutureThrows(shutdownFuture, TimeoutException.class);
+        assertFutureThrows(TimeoutException.class, shutdownFuture);
     }
 
     @ParameterizedTest

@@ -394,7 +394,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             this.valueSerializerPlugin = Plugin.wrapInstance(valueSerializer, metrics, ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG);
 
 
-            List<ProducerInterceptor<K, V>> interceptorList = ClientUtils.configuredInterceptors(config,
+            List<ProducerInterceptor<K, V>> interceptorList = (List<ProducerInterceptor<K, V>>) ClientUtils.configuredInterceptors(config,
                     ProducerConfig.INTERCEPTOR_CLASSES_CONFIG,
                     ProducerInterceptor.class);
             if (interceptors != null)

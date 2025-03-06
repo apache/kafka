@@ -123,8 +123,7 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
     private final Optional<String> serverAssignor;
 
     /**
-     * Manager to perform commit requests needed before revoking partitions (if auto-commit is
-     * enabled)
+     * Manager to perform commit requests needed before rebalance (if auto-commit is enabled)
      */
     private final CommitRequestManager commitRequestManager;
 
@@ -145,7 +144,8 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
                                      LogContext logContext,
                                      BackgroundEventHandler backgroundEventHandler,
                                      Time time,
-                                     Metrics metrics) {
+                                     Metrics metrics,
+                                     boolean autoCommitEnabled) {
         this(groupId,
             groupInstanceId,
             rebalanceTimeoutMs,
@@ -156,7 +156,8 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
             logContext,
             backgroundEventHandler,
             time,
-            new ConsumerRebalanceMetricsManager(metrics));
+            new ConsumerRebalanceMetricsManager(metrics),
+            autoCommitEnabled);
     }
 
     // Visible for testing
@@ -170,13 +171,15 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
                               LogContext logContext,
                               BackgroundEventHandler backgroundEventHandler,
                               Time time,
-                              RebalanceMetricsManager metricsManager) {
+                              RebalanceMetricsManager metricsManager,
+                              boolean autoCommitEnabled) {
         super(groupId,
             subscriptions,
             metadata,
             logContext.logger(ConsumerMembershipManager.class),
             time,
-            metricsManager);
+            metricsManager,
+            autoCommitEnabled);
         this.groupInstanceId = groupInstanceId;
         this.rebalanceTimeoutMs = rebalanceTimeoutMs;
         this.serverAssignor = serverAssignor;
@@ -252,7 +255,7 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
         // best effort to commit the offsets in the case where the epoch might have changed while
         // the current reconciliation is in process. Note this is using the rebalance timeout as
         // it is the limit enforced by the broker to complete the reconciliation process.
-        return commitRequestManager.maybeAutoCommitSyncBeforeRevocation(getDeadlineMsForTimeout(rebalanceTimeoutMs));
+        return commitRequestManager.maybeAutoCommitSyncBeforeRebalance(getDeadlineMsForTimeout(rebalanceTimeoutMs));
     }
 
     /**

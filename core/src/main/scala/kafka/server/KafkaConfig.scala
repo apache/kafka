@@ -20,7 +20,6 @@ package kafka.server
 import java.util
 import java.util.concurrent.TimeUnit
 import java.util.Properties
-import kafka.cluster.EndPoint
 import kafka.utils.{CoreUtils, Logging}
 import kafka.utils.Implicits._
 import org.apache.kafka.common.Reconfigurable
@@ -33,11 +32,12 @@ import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.security.auth.KafkaPrincipalSerde
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.network.EndPoint
 import org.apache.kafka.coordinator.group.Group.GroupType
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig
 import org.apache.kafka.coordinator.group.{GroupConfig, GroupCoordinatorConfig}
 import org.apache.kafka.coordinator.share.ShareCoordinatorConfig
-import org.apache.kafka.coordinator.transaction.{TransactionLogConfig, TransactionStateManagerConfig}
+import org.apache.kafka.coordinator.transaction.{AddPartitionsToTxnConfig, TransactionLogConfig, TransactionStateManagerConfig}
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.security.authorizer.AuthorizerUtils
@@ -206,8 +206,10 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
 
   private val _transactionLogConfig = new TransactionLogConfig(this)
   private val _transactionStateManagerConfig = new TransactionStateManagerConfig(this)
+  private val _addPartitionsToTxnConfig = new AddPartitionsToTxnConfig(this)
   def transactionLogConfig: TransactionLogConfig = _transactionLogConfig
   def transactionStateManagerConfig: TransactionStateManagerConfig = _transactionStateManagerConfig
+  def addPartitionsToTxnConfig: AddPartitionsToTxnConfig = _addPartitionsToTxnConfig
 
   private val _quotaConfig = new QuotaConfig(this)
   def quotaConfig: QuotaConfig = _quotaConfig
@@ -409,6 +411,13 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
       warn(s"Share groups and the new '${GroupType.SHARE}' rebalance protocol are enabled. " +
         "This is part of the early access of KIP-932 and MUST NOT be used in production.")
     }
+    if (protocols.contains(GroupType.STREAMS)) {
+      if (processRoles.isEmpty || !isNewGroupCoordinatorEnabled) {
+        throw new ConfigException(s"The new '${GroupType.STREAMS}' rebalance protocol is only supported in KRaft cluster with the new group coordinator.")
+      }
+      warn(s"The new '${GroupType.STREAMS}' rebalance protocol is enabled along with the new group coordinator. " +
+        "This is part of the preview of KIP-1071 and MUST NOT be used in production.")
+    }
     protocols
   }
 
@@ -517,29 +526,44 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   }
 
   def effectiveAdvertisedControllerListeners: Seq[EndPoint] = {
-    val controllerAdvertisedListeners = advertisedListeners.filter(l => controllerListenerNames.contains(l.listenerName.value()))
+    val advertisedListenersProp = getString(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG)
+    val controllerAdvertisedListeners = if (advertisedListenersProp != null) {
+      CoreUtils.listenerListToEndPoints(advertisedListenersProp, effectiveListenerSecurityProtocolMap, requireDistinctPorts=false)
+        .filter(l => controllerListenerNames.contains(l.listenerName.value()))
+    } else {
+      Seq.empty
+    }
     val controllerListenersValue = controllerListeners
 
     controllerListenerNames.flatMap { name =>
       controllerAdvertisedListeners
         .find(endpoint => endpoint.listenerName.equals(ListenerName.normalised(name)))
-        .orElse(controllerListenersValue.find(endpoint => endpoint.listenerName.equals(ListenerName.normalised(name))))
+        .orElse(
+          // If users don't define advertised.listeners, the advertised controller listeners inherit from listeners configuration
+          // which match listener names in controller.listener.names.
+          // Removing "0.0.0.0" host to avoid validation errors. This is to be compatible with the old behavior before 3.9.
+          // The null or "" host does a reverse lookup in ListenerInfo#withWildcardHostnamesResolved.
+          controllerListenersValue
+            .find(endpoint => endpoint.listenerName.equals(ListenerName.normalised(name)))
+            .map(endpoint => if (endpoint.host == "0.0.0.0") {
+              new EndPoint(null, endpoint.port, endpoint.listenerName, endpoint.securityProtocol)
+            } else {
+              endpoint
+            })
+        )
     }
   }
 
   def effectiveAdvertisedBrokerListeners: Seq[EndPoint] = {
-    // Only expose broker listeners
-    advertisedListeners.filterNot(l => controllerListenerNames.contains(l.listenerName.value()))
-  }
-
-  // Use advertised listeners if defined, fallback to listeners otherwise
-  private def advertisedListeners: Seq[EndPoint] = {
+    // Use advertised listeners if defined, fallback to listeners otherwise
     val advertisedListenersProp = getString(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG)
-    if (advertisedListenersProp != null) {
+    val advertisedListeners = if (advertisedListenersProp != null) {
       CoreUtils.listenerListToEndPoints(advertisedListenersProp, effectiveListenerSecurityProtocolMap, requireDistinctPorts=false)
     } else {
       listeners
     }
+    // Only expose broker listeners
+    advertisedListeners.filterNot(l => controllerListenerNames.contains(l.listenerName.value()))
   }
 
   private def getInterBrokerListenerNameAndSecurityProtocol: (ListenerName, SecurityProtocol) = {
@@ -641,6 +665,11 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
         "There must be at least one broker advertised listener." + (
           if (processRoles.contains(ProcessRole.BrokerRole)) s" Perhaps all listeners appear in ${KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG}?" else ""))
     }
+    def warnIfConfigDefinedInWrongRole(expectedRole: ProcessRole, configName: String): Unit = {
+      if (originals.containsKey(configName)) {
+        warn(s"$configName is defined in ${processRoles.mkString(", ")}. It should be defined in the $expectedRole role.")
+      }
+    }
     if (processRoles == Set(ProcessRole.BrokerRole)) {
       // KRaft broker-only
       validateQuorumVotersAndQuorumBootstrapServerForKRaft()
@@ -665,6 +694,9 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
       if (controllerListenerNames.size > 1) {
         warn(s"${KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG} has multiple entries; only the first will be used since ${KRaftConfigs.PROCESS_ROLES_CONFIG}=broker: ${controllerListenerNames.asJava}")
       }
+      // warn if create.topic.policy.class.name or alter.config.policy.class.name is defined in the broker role
+      warnIfConfigDefinedInWrongRole(ProcessRole.ControllerRole, ServerLogConfigs.CREATE_TOPIC_POLICY_CLASS_NAME_CONFIG)
+      warnIfConfigDefinedInWrongRole(ProcessRole.ControllerRole, ServerLogConfigs.ALTER_CONFIG_POLICY_CLASS_NAME_CONFIG)
     } else if (processRoles == Set(ProcessRole.ControllerRole)) {
       // KRaft controller-only
       validateQuorumVotersAndQuorumBootstrapServerForKRaft()

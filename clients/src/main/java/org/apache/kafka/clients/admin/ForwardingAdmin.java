@@ -299,8 +299,18 @@ public class ForwardingAdmin implements Admin {
     }
 
     @Override
+    public AlterShareGroupOffsetsResult alterShareGroupOffsets(String groupId, Map<TopicPartition, Long> offsets, AlterShareGroupOffsetsOptions options) {
+        return delegate.alterShareGroupOffsets(groupId, offsets, options);
+    }
+
+    @Override
     public ListShareGroupOffsetsResult listShareGroupOffsets(Map<String, ListShareGroupOffsetsSpec> groupSpecs, ListShareGroupOffsetsOptions options) {
         return delegate.listShareGroupOffsets(groupSpecs, options);
+    }
+
+    @Override
+    public DeleteShareGroupsResult deleteShareGroups(Collection<String> groupIds, DeleteShareGroupsOptions options) {
+        return delegate.deleteShareGroups(groupIds, options);
     }
 
     @Override
