@@ -175,6 +175,7 @@ jobs:
     needs: [configure, validate, load-catalog]
     if: ${{ ! needs.configure.outputs.is-draft }}
     runs-on: ubuntu-latest
+    timeout-minutes: 1440
     strategy:
       fail-fast: false
       matrix:
