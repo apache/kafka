@@ -1968,12 +1968,11 @@ project(':clients:integration-tests') {
   dependencies {
     testImplementation libs.slf4jApi
     testImplementation project(':clients')
-    testImplementation project(':group-coordinator:group-coordinator-api')
     testImplementation project(':test-common:test-common-internal-api')
     testImplementation project(':test-common:test-common-runtime')
 
     testImplementation libs.junitJupiter
-    testImplementation libs.junitPlatformSuiteEngine // supports suite test
+    testImplementation libs.junitPlatformSuiteEngine
 
     testRuntimeOnly runtimeTestLibs
   }
