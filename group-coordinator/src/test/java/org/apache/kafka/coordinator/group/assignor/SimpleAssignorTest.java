@@ -391,7 +391,7 @@ public class SimpleAssignorTest {
         List<TopicIdPartition> partitions = List.of(partition1, partition2, partition3);
 
         Map<TopicIdPartition, List<String>> computedAssignment = new HashMap<>();
-        assignor.memberHashAssignment(partitions, members, computedAssignment);
+        assignor.memberHashAssignment(members, partitions, computedAssignment);
 
         Map<TopicIdPartition, List<String>> expectedAssignment = new HashMap<>();
         expectedAssignment.put(partition1, List.of(member3));
