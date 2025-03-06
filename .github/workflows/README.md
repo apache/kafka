@@ -101,7 +101,7 @@ There are two files related to this workflow:
 
 * [pr-labeled.yml](pr-labeled.yml) approves a pending approval for PRs that have
 been labeled with `ci-approved`
-* [ci-requested.yml](ci-requested.yml) approves future workflow requests automatically
+* [workflow-requested.yml](workflow-requested.yml) approves future workflow requests automatically
 if the PR has the `ci-approved` label
 
 _The pr-labeled.yml workflow includes pull_request_target!_
@@ -118,6 +118,9 @@ or body edited. This workflow simply captures the PR number into a text file
 * [pr-linter.yml](pr-linter.yml) runs after pr-reviewed.yml and loads the PR
 using the saved text file. This workflow runs the linter script that checks the
 structure of the PR
+
+Note that the pr-reviewed.yml workflow uses the `ci-approved` mechanism described
+above.
 
 ### Stale PRs
 

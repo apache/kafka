@@ -414,6 +414,7 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
     /**
      * Requests a metadata refresh.
      */
+    @Override
     public void requestMetadataRefresh() {
         this.metadataRefreshDeadline = DeadlineAndEpoch.EMPTY;
     }
