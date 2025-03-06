@@ -57,7 +57,6 @@ jmh-benchmarks/src/main/generated
 **/src/generated
 **/src/generated-test
 storage/kafka-tiered-storage/
-storage/*.log
 
 docker/test/report_*.html
 kafka.Kafka
