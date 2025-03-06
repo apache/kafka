@@ -2326,7 +2326,7 @@ class KafkaApisTest extends Logging {
     checkInvalidPartition(-1)
     checkInvalidPartition(1) // topic has only one partition
   }
-  
+
   @Test
   def requiredAclsNotPresentWriteTxnMarkersThrowsAuthorizationException(): Unit = {
     val topicPartition = new TopicPartition("t", 0)
@@ -10717,7 +10717,7 @@ class KafkaApisTest extends Logging {
   }
 
   @Test
-  def testShareGroupHeartbeatRequestAuthorizationFailed(): Unit = {
+  def testShareGroupHeartbeatRequestGroupAuthorizationFailed(): Unit = {
     val shareGroupHeartbeatRequest = new ShareGroupHeartbeatRequestData().setGroupId("group")
 
     val requestChannelRequest = buildRequest(new ShareGroupHeartbeatRequest.Builder(shareGroupHeartbeatRequest, true).build())
@@ -10734,6 +10734,46 @@ class KafkaApisTest extends Logging {
 
     val response = verifyNoThrottling[ShareGroupHeartbeatResponse](requestChannelRequest)
     assertEquals(Errors.GROUP_AUTHORIZATION_FAILED.code, response.data.errorCode)
+  }
+
+  @Test
+  def testShareGroupHeartbeatRequestTopicAuthorizationFailed(): Unit = {
+    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    val groupId = "group"
+    val fooTopicName = "foo"
+    val barTopicName = "bar"
+    val zarTopicName = "zar"
+
+    val shareGroupHeartbeatRequest = new ShareGroupHeartbeatRequestData()
+      .setGroupId(groupId)
+      .setSubscribedTopicNames(List(fooTopicName, barTopicName, zarTopicName).asJava)
+
+    val requestChannelRequest = buildRequest(new ShareGroupHeartbeatRequest.Builder(shareGroupHeartbeatRequest).build())
+
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+    val acls = Map(
+      groupId -> AuthorizationResult.ALLOWED,
+      fooTopicName -> AuthorizationResult.ALLOWED,
+      barTopicName -> AuthorizationResult.DENIED,
+    )
+    when(authorizer.authorize(
+      any[RequestContext],
+      any[util.List[Action]]
+    )).thenAnswer { invocation =>
+      val actions = invocation.getArgument(1, classOf[util.List[Action]])
+      actions.asScala.map { action =>
+        acls.getOrElse(action.resourcePattern.name, AuthorizationResult.DENIED)
+      }.asJava
+    }
+
+    kafkaApis = createKafkaApis(
+      overrideProperties = Map(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
+      authorizer = Some(authorizer),
+    )
+    kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
+
+    val response = verifyNoThrottling[ShareGroupHeartbeatResponse](requestChannelRequest)
+    assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED.code, response.data.errorCode)
   }
 
   @Test
@@ -10760,10 +10800,34 @@ class KafkaApisTest extends Logging {
 
   @Test
   def testShareGroupDescribeSuccess(): Unit = {
-    val groupIds = List("share-group-id-0", "share-group-id-1").asJava
+    val fooTopicName = "foo"
+    val barTopicName = "bar"
+
+    val groupIds = List("share-group-id-0", "share-group-id-1", "share-group_id-2").asJava
+
+    val member0 = new ShareGroupDescribeResponseData.Member()
+      .setMemberId("member0")
+      .setAssignment(new ShareGroupDescribeResponseData.Assignment()
+        .setTopicPartitions(List(
+          new ShareGroupDescribeResponseData.TopicPartitions().setTopicName(fooTopicName)).asJava))
+
+    val member1 = new ShareGroupDescribeResponseData.Member()
+      .setMemberId("member1")
+      .setAssignment(new ShareGroupDescribeResponseData.Assignment()
+        .setTopicPartitions(List(
+          new ShareGroupDescribeResponseData.TopicPartitions().setTopicName(fooTopicName),
+          new ShareGroupDescribeResponseData.TopicPartitions().setTopicName(barTopicName)).asJava))
+
+    val member2 = new ShareGroupDescribeResponseData.Member()
+      .setMemberId("member2")
+      .setAssignment(new ShareGroupDescribeResponseData.Assignment()
+        .setTopicPartitions(List(
+          new ShareGroupDescribeResponseData.TopicPartitions().setTopicName(barTopicName)).asJava))
+
     val describedGroups: util.List[ShareGroupDescribeResponseData.DescribedGroup] = List(
-      new ShareGroupDescribeResponseData.DescribedGroup().setGroupId(groupIds.get(0)),
-      new ShareGroupDescribeResponseData.DescribedGroup().setGroupId(groupIds.get(1))
+      new ShareGroupDescribeResponseData.DescribedGroup().setGroupId(groupIds.get(0)).setMembers(List(member0).asJava),
+      new ShareGroupDescribeResponseData.DescribedGroup().setGroupId(groupIds.get(1)).setMembers(List(member1).asJava),
+      new ShareGroupDescribeResponseData.DescribedGroup().setGroupId(groupIds.get(2)).setMembers(List(member2).asJava)
     ).asJava
     getShareGroupDescribeResponse(groupIds, Map(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true")
       , true, null, describedGroups)
@@ -10814,6 +10878,73 @@ class KafkaApisTest extends Logging {
     assertEquals(2, response.data.groups.size)
     assertEquals(Errors.GROUP_AUTHORIZATION_FAILED.code(), response.data.groups.get(0).errorCode())
     assertEquals(Errors.NONE.code(), response.data.groups.get(1).errorCode())
+  }
+
+  @Test
+  def testShareGroupDescribeFilterUnauthorizedTopics(): Unit = {
+    val fooTopicName = "foo"
+    val barTopicName = "bar"
+    val errorMessage = "The group has described topic(s) that the client is not authorized to describe."
+
+    val groupIds = List("share-group-id-0", "share-group-id-1", "share-group_id-2").asJava
+
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+    val acls = Map(
+      groupIds.get(0) -> AuthorizationResult.ALLOWED,
+      groupIds.get(1) -> AuthorizationResult.ALLOWED,
+      groupIds.get(2) -> AuthorizationResult.ALLOWED,
+      fooTopicName    -> AuthorizationResult.ALLOWED,
+      barTopicName    -> AuthorizationResult.DENIED,
+    )
+    when(authorizer.authorize(
+      any[RequestContext],
+      any[util.List[Action]]
+    )).thenAnswer { invocation =>
+      val actions = invocation.getArgument(1, classOf[util.List[Action]])
+      actions.asScala.map { action =>
+        acls.getOrElse(action.resourcePattern.name, AuthorizationResult.DENIED)
+      }.asJava
+    }
+     val member0 = new ShareGroupDescribeResponseData.Member()
+      .setMemberId("member0")
+      .setAssignment(new ShareGroupDescribeResponseData.Assignment()
+        .setTopicPartitions(List(
+          new ShareGroupDescribeResponseData.TopicPartitions().setTopicName(fooTopicName)).asJava))
+
+    val member1 = new ShareGroupDescribeResponseData.Member()
+      .setMemberId("member1")
+      .setAssignment(new ShareGroupDescribeResponseData.Assignment()
+        .setTopicPartitions(List(
+          new ShareGroupDescribeResponseData.TopicPartitions().setTopicName(fooTopicName),
+          new ShareGroupDescribeResponseData.TopicPartitions().setTopicName(barTopicName)).asJava))
+
+    val member2 = new ShareGroupDescribeResponseData.Member()
+      .setMemberId("member2")
+      .setAssignment(new ShareGroupDescribeResponseData.Assignment()
+        .setTopicPartitions(List(
+          new ShareGroupDescribeResponseData.TopicPartitions().setTopicName(barTopicName)).asJava))
+
+    val describedGroups: util.List[ShareGroupDescribeResponseData.DescribedGroup] = List(
+      new ShareGroupDescribeResponseData.DescribedGroup()
+        .setGroupId(groupIds.get(0))
+        .setMembers(List(member0).asJava),
+      new ShareGroupDescribeResponseData.DescribedGroup()
+        .setGroupId(groupIds.get(1))
+        .setMembers(List(member1).asJava),
+      new ShareGroupDescribeResponseData.DescribedGroup()
+        .setGroupId(groupIds.get(2))
+        .setMembers(List(member2).asJava)).asJava
+
+    val response = getShareGroupDescribeResponse(groupIds, Map(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true")
+      , false, authorizer, describedGroups)
+
+    assertNotNull(response.data)
+    assertEquals(3, response.data.groups.size)
+    assertEquals(Errors.NONE.code(), response.data.groups.get(0).errorCode())
+    assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED.code(), response.data.groups.get(1).errorCode())
+    assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED.code(), response.data.groups.get(2).errorCode())
+    assertEquals(errorMessage, response.data.groups.get(1).errorMessage())
+    assertEquals(errorMessage, response.data.groups.get(2).errorMessage())
   }
 
   @Test
