@@ -28,7 +28,6 @@ import org.apache.kafka.common.requests.StreamsGroupHeartbeatRequest;
 import org.apache.kafka.common.requests.StreamsGroupHeartbeatResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Timer;
 
 import org.slf4j.Logger;
 
@@ -207,64 +206,6 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
     }
 
 
-    /**
-     * Represents the state of a heartbeat request, including logic for timing, retries, and exponential backoff. The object extends
-     * {@link RequestState} to enable exponential backoff and duplicated request handling. The two fields that it holds are:
-     */
-    static class HeartbeatRequestState extends RequestState {
-
-        /**
-         * The heartbeat timer tracks the time since the last heartbeat was sent
-         */
-        private final Timer heartbeatTimer;
-
-        /**
-         * The heartbeat interval which is acquired/updated through the heartbeat request
-         */
-        private long heartbeatIntervalMs;
-
-        public HeartbeatRequestState(final LogContext logContext,
-                                     final Time time,
-                                     final long heartbeatIntervalMs,
-                                     final long retryBackoffMs,
-                                     final long retryBackoffMaxMs,
-                                     final double jitter) {
-            super(
-                logContext,
-                StreamsGroupHeartbeatRequestManager.HeartbeatRequestState.class.getName(),
-                retryBackoffMs,
-                2,
-                retryBackoffMaxMs,
-                jitter
-            );
-            this.heartbeatIntervalMs = heartbeatIntervalMs;
-            this.heartbeatTimer = time.timer(heartbeatIntervalMs);
-        }
-
-        private void update(final long currentTimeMs) {
-            this.heartbeatTimer.update(currentTimeMs);
-        }
-
-        public void resetTimer() {
-            this.heartbeatTimer.reset(heartbeatIntervalMs);
-        }
-
-        @Override
-        public boolean canSendRequest(final long currentTimeMs) {
-            update(currentTimeMs);
-            return heartbeatTimer.isExpired() && super.canSendRequest(currentTimeMs);
-        }
-
-        private void updateHeartbeatIntervalMs(final long heartbeatIntervalMs) {
-            if (this.heartbeatIntervalMs == heartbeatIntervalMs) {
-                // no need to update the timer if the interval hasn't changed
-                return;
-            }
-            this.heartbeatIntervalMs = heartbeatIntervalMs;
-            this.heartbeatTimer.updateAndReset(heartbeatIntervalMs);
-        }
-    }
-
     private final Logger logger;
 
     private final int maxPollIntervalMs;
@@ -318,7 +259,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
     @Override
     public NetworkClientDelegate.PollResult poll(long currentTimeMs) {
         return new NetworkClientDelegate.PollResult(
-            heartbeatRequestState.heartbeatIntervalMs,
+            heartbeatRequestState.heartbeatIntervalMs(),
             Collections.singletonList(makeHeartbeatRequest(currentTimeMs))
         );
     }

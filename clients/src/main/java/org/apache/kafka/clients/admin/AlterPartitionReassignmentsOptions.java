@@ -23,4 +23,25 @@ import java.util.Map;
  * Options for {@link AdminClient#alterPartitionReassignments(Map, AlterPartitionReassignmentsOptions)}
  */
 public class AlterPartitionReassignmentsOptions extends AbstractOptions<AlterPartitionReassignmentsOptions> {
+
+    private boolean allowReplicationFactorChange = true;
+
+    /**
+     * Set the option indicating if the alter partition reassignments call should be
+     * allowed to alter the replication factor of a partition.
+     * In cases where it is not allowed, any replication factor change will result in an exception thrown by the API.
+     */
+    public AlterPartitionReassignmentsOptions allowReplicationFactorChange(boolean allow) {
+        this.allowReplicationFactorChange = allow;
+        return this;
+    }
+
+    /**
+     * A boolean indicating if the alter partition reassignments should be
+     * allowed to alter the replication factor of a partition.
+     * In cases where it is not allowed, any replication factor change will result in an exception thrown by the API.
+     */
+    public boolean allowReplicationFactorChange() {
+        return this.allowReplicationFactorChange;
+    }
 }
