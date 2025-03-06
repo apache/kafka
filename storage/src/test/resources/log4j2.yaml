@@ -28,7 +28,7 @@ Configuration:
         pattern: "${logPattern}"
     RollingFile:
       - name: FileAppender
-        fileName: storage.log
+        fileName: /tmp/kafka-storage-test/storage.log
         filePattern: "storage-%d{yyyy-MM-dd}.log"
         PatternLayout:
           pattern: "${fileLogPattern}"
