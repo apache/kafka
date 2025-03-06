@@ -68,9 +68,9 @@ class PeriodicTask {
     PeriodicTask(
         String name,
         Supplier<ControllerResult<Boolean>> op,
-        long immediatePeriodNs,
         long periodNs,
-        EnumSet<PeriodicTaskFlag> flags
+        EnumSet<PeriodicTaskFlag> flags,
+        long immediatePeriodNs
     ) {
         this.name = name;
         this.op = op;
