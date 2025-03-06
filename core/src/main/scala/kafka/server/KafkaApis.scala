@@ -3526,7 +3526,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           deleteShareGroupOffsetsResponseTopics.add(topic)
         }}
         val deleteShareGroupStateResponse = new DeleteShareGroupOffsetsResponse(new DeleteShareGroupOffsetsResponseData()
-        .setResponses(deleteShareGroupOffsetsResponseTopics))
+          .setResponses(deleteShareGroupOffsetsResponseTopics))
         requestHelper.sendMaybeThrottle(request, deleteShareGroupStateResponse)
       }
     }}

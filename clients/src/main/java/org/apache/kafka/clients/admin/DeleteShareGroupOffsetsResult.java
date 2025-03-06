@@ -19,8 +19,8 @@ package org.apache.kafka.clients.admin;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
-import org.apache.kafka.common.protocol.Errors;
 
 import java.util.List;
 import java.util.Map;
@@ -35,9 +35,9 @@ import java.util.stream.Collectors;
 @InterfaceStability.Evolving
 public class DeleteShareGroupOffsetsResult {
 
-    private final KafkaFuture<Map<TopicPartition, Errors>> future;
+    private final KafkaFuture<Map<TopicPartition, ApiException>> future;
 
-    DeleteShareGroupOffsetsResult(KafkaFuture<Map<TopicPartition, Errors>> future) {
+    DeleteShareGroupOffsetsResult(KafkaFuture<Map<TopicPartition, ApiException>> future) {
         this.future = future;
     }
 
@@ -48,13 +48,12 @@ public class DeleteShareGroupOffsetsResult {
         return this.future.thenApply(topicPartitionErrorsMap ->  {
             List<TopicPartition> partitionsFailed = topicPartitionErrorsMap.entrySet()
                 .stream()
-                .filter(e -> e.getValue() != Errors.NONE)
+                .filter(e -> e.getValue() != null)
                 .map(Map.Entry::getKey)
                 .collect(Collectors.toList());
-            for (Errors error : topicPartitionErrorsMap.values()) {
-                if (error != Errors.NONE) {
-                    throw error.exception(
-                        "Failed deleting share group offsets for the following partitions: " + partitionsFailed);
+            for (ApiException error : topicPartitionErrorsMap.values()) {
+                if (error != null) {
+                    throw error;
                 }
             }
             return null;
@@ -74,11 +73,11 @@ public class DeleteShareGroupOffsetsResult {
                 result.completeExceptionally(new IllegalArgumentException(
                     "Delete offset for partition \"" + partition + "\" was not attempted"));
             } else {
-                final Errors error = topicPartitions.get(partition);
-                if (error == Errors.NONE) {
+                final ApiException error = topicPartitions.get(partition);
+                if (error == null) {
                     result.complete(null);
                 } else {
-                    result.completeExceptionally(error.exception());
+                    result.completeExceptionally(error);
                 }
             }
         });

@@ -3819,7 +3819,7 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public DeleteShareGroupOffsetsResult deleteShareGroupOffsets(String groupId, Set<TopicPartition> partitions, DeleteShareGroupOffsetsOptions options) {
-        SimpleAdminApiFuture<CoordinatorKey, Map<TopicPartition, Errors>> future = DeleteShareGroupOffsetsHandler.newFuture(groupId);
+        SimpleAdminApiFuture<CoordinatorKey, Map<TopicPartition, ApiException>> future = DeleteShareGroupOffsetsHandler.newFuture(groupId);
         DeleteShareGroupOffsetsHandler handler = new DeleteShareGroupOffsetsHandler(groupId, partitions, logContext);
         invokeDriver(handler, future, options.timeoutMs);
         return new DeleteShareGroupOffsetsResult(future.get(CoordinatorKey.byGroupId(groupId)));

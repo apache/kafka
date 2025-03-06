@@ -20,6 +20,7 @@ import org.apache.kafka.clients.admin.DeleteShareGroupOffsetsOptions;
 import org.apache.kafka.clients.admin.KafkaAdminClient;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.message.DeleteShareGroupOffsetsRequestData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractResponse;
@@ -42,7 +43,7 @@ import java.util.stream.Collectors;
 /**
  * This class is the handler for {@link KafkaAdminClient#deleteShareGroupOffsets(String, Set, DeleteShareGroupOffsetsOptions)} call
  */
-public class DeleteShareGroupOffsetsHandler extends AdminApiHandler.Batched<CoordinatorKey, Map<TopicPartition, Errors>> {
+public class DeleteShareGroupOffsetsHandler extends AdminApiHandler.Batched<CoordinatorKey, Map<TopicPartition, ApiException>> {
 
     private final CoordinatorKey groupId;
 
@@ -69,7 +70,7 @@ public class DeleteShareGroupOffsetsHandler extends AdminApiHandler.Batched<Coor
         return lookupStrategy;
     }
 
-    public static AdminApiFuture.SimpleAdminApiFuture<CoordinatorKey, Map<TopicPartition, Errors>> newFuture(String groupId) {
+    public static AdminApiFuture.SimpleAdminApiFuture<CoordinatorKey, Map<TopicPartition, ApiException>> newFuture(String groupId) {
         return AdminApiFuture.forKeys(Collections.singleton(CoordinatorKey.byGroupId(groupId)));
     }
 
@@ -104,7 +105,7 @@ public class DeleteShareGroupOffsetsHandler extends AdminApiHandler.Batched<Coor
     }
 
     @Override
-    public ApiResult<CoordinatorKey, Map<TopicPartition, Errors>> handleResponse(
+    public ApiResult<CoordinatorKey, Map<TopicPartition, ApiException>> handleResponse(
         Node coordinator,
         Set<CoordinatorKey> groupIds,
         AbstractResponse abstractResponse
@@ -123,7 +124,7 @@ public class DeleteShareGroupOffsetsHandler extends AdminApiHandler.Batched<Coor
 
             return new ApiResult<>(Collections.emptyMap(), groupsFailed, new ArrayList<>(groupsToUnmap));
         } else {
-            final Map<TopicPartition, Errors> partitionResults = new HashMap<>();
+            final Map<TopicPartition, ApiException> partitionResults = new HashMap<>();
             response.data().responses().forEach(topic ->
                 topic.partitions().forEach(partition -> {
                     if (partition.errorCode() != Errors.NONE.code()) {
@@ -132,12 +133,11 @@ public class DeleteShareGroupOffsetsHandler extends AdminApiHandler.Batched<Coor
                         log.debug("DeleteShareGroupOffsets request for group id {}, topic {} and partition {} failed and returned error {}." + partitionErrorMessage,
                             groupId.idValue, topic.topicName(), partition.partitionIndex(), partitionError);
                     }
-                        partitionResults.put(
-                            new TopicPartition(topic.topicName(), partition.partitionIndex()),
-                            Errors.forCode(partition.errorCode())
-                        );
-                    }
-                )
+                    partitionResults.put(
+                        new TopicPartition(topic.topicName(), partition.partitionIndex()),
+                        Errors.forCode(partition.errorCode()).exception(partition.errorMessage())
+                    );
+                })
             );
 
             return ApiResult.completed(groupId, partitionResults);
