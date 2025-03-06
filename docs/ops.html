@@ -468,7 +468,7 @@ Updated config for entity: client-id 'clientA'.</code></pre>
 
   It is possible to set default quotas for each (user, client-id), user or client-id group by specifying <i>--entity-default</i> option instead of <i>--entity-name</i>.
   <p>
-  Configure default client-id quota for user=userA:
+  Configure default client-id quota for user=user1:
   <pre><code class="language-bash">$ bin/kafka-configs.sh --bootstrap-server localhost:9092 --alter --add-config 'producer_byte_rate=1024,consumer_byte_rate=2048,request_percentage=200' --entity-type users --entity-name user1 --entity-type clients --entity-default
 Updated config for entity: user-principal 'user1', default client-id.</code></pre>
 
