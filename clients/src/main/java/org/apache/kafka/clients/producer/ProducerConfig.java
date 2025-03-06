@@ -95,7 +95,7 @@ public class ProducerConfig extends AbstractConfig {
                                                  + "for this partition, we will 'linger' for the <code>linger.ms</code> time waiting for more records to show up. "
                                                  + "This <code>linger.ms</code> setting defaults to 5, which means the producer will wait for 5ms or until the record batch is "
                                                  + "of <code>batch.size</code> (whichever happens first) before sending the record batch. Note that broker backpressure can "
-                                                 + " result in a higher effective linger time than this setting."
+                                                 + " result in a higher effective linger time than this setting. "
                                                  + "The default changed from 0 to 5 in Apache Kafka 4.0 as the efficiency gains from larger batches typically result in "
                                                  + "similar or lower producer latency despite the increased linger.";
 
