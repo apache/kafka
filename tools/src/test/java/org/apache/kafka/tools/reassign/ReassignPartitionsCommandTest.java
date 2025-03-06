@@ -93,6 +93,7 @@ import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.verifyAs
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ClusterTestDefaults(brokers = 5, disksPerBroker = 3, serverProperties = {
@@ -432,6 +433,23 @@ public class ReassignPartitionsCommandTest {
         }
     }
 
+    @ClusterTest
+    public void testDisallowReplicationFactorChange() {
+        createTopics();
+        String assignment = "{\"version\":1,\"partitions\":" +
+                "[{\"topic\":\"foo\",\"partition\":0,\"replicas\":[0,1],\"log_dirs\":[\"any\",\"any\"]}," +
+                "{\"topic\":\"foo\",\"partition\":1,\"replicas\":[0,1,2,3],\"log_dirs\":[\"any\",\"any\",\"any\",\"any\"]}," +
+                "{\"topic\":\"bar\",\"partition\":0,\"replicas\":[3],\"log_dirs\":[\"any\"]}" +
+                "]}";
+        try (Admin admin = clusterInstance.admin()) {
+            assertEquals("Error reassigning partition(s):\n" +
+                            "bar-0: The replication factor is changed from 3 to 1\n" +
+                            "foo-0: The replication factor is changed from 3 to 2\n" +
+                            "foo-1: The replication factor is changed from 3 to 4",
+                    assertThrows(TerseException.class, () -> executeAssignment(admin, false, assignment, -1L, -1L, 10000L, Time.SYSTEM, true)).getMessage());
+        }
+    }
+
     private void createTopics() {
         try (Admin admin = Admin.create(Collections.singletonMap(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
             Map<Integer, List<Integer>> fooReplicasAssignments = new HashMap<>();
@@ -654,7 +672,7 @@ public class ReassignPartitionsCommandTest {
                                       Long replicaAlterLogDirsThrottle) throws RuntimeException {
         try (Admin admin = Admin.create(Collections.singletonMap(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
             executeAssignment(admin, additional, reassignmentJson,
-                    interBrokerThrottle, replicaAlterLogDirsThrottle, 10000L, Time.SYSTEM);
+                    interBrokerThrottle, replicaAlterLogDirsThrottle, 10000L, Time.SYSTEM, false);
         } catch (ExecutionException | InterruptedException | JsonProcessingException | TerseException e) {
             throw new RuntimeException(e);
         }
