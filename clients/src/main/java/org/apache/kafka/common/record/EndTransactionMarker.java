@@ -93,10 +93,12 @@ public class EndTransactionMarker {
             throw new InvalidRecordException("Invalid version found for end transaction marker: " + version +
                     ". May indicate data corruption");
 
-        if (version > EndTxnMarker.HIGHEST_SUPPORTED_VERSION)
+        if (version > EndTxnMarker.HIGHEST_SUPPORTED_VERSION) {
             log.debug("Received end transaction marker value version {}. Parsing as version {}", version,
                     EndTxnMarker.HIGHEST_SUPPORTED_VERSION);
-        EndTxnMarker marker = new EndTxnMarker(new ByteBufferAccessor(value), EndTxnMarker.HIGHEST_SUPPORTED_VERSION);
+            version = EndTxnMarker.HIGHEST_SUPPORTED_VERSION;
+        }
+        EndTxnMarker marker = new EndTxnMarker(new ByteBufferAccessor(value), version);
         return new EndTransactionMarker(type, marker.coordinatorEpoch());
     }
 
