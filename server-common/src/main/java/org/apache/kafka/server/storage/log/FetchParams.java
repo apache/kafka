@@ -85,7 +85,7 @@ public class FetchParams {
     }
 
     public boolean hardMaxBytesLimit() {
-        return requestVersion <= 2;
+        return requestVersion <= 2 && !shareFetchRequest;
     }
 
     @Override
