@@ -15,18 +15,23 @@
  limitations under the License.
 -->
 
-<script><!--#include virtual="js/templateData.js" --></script>
-
-<script id="zk2kraft-template" type="text/x-handlebars-template"></script>
-
+<!--#include virtual="../includes/_header.htm" -->
+<!--#include virtual="../includes/_top.htm" -->
+<div class="content">
 <div class="p-zk2kraft">
-    <h4 class="anchor-heading">Significant Changes in Kafka 4.0 Release</h4>
-    <p>The following are some of the updates in Kafka 4.0 release:</p>
-    <h5 class="anchor-heading">Removal Zookeeper configs</h5>
+    <h1>Differences Between KRaft mode and ZooKeeper mode</h1>
+    <h2 class="anchor-heading">Removed ZooKeeper Features</h2>
+    <p>
+        This section documents differences in behavior between KRaft mode and ZooKeeper mode.
+        Specifically, several configurations, metrics and features have changed or are no longer required in KRaft mode.
+        To migrate an existing cluster from ZooKeeper mode to KRaft mode, please refer to the
+        <a href="/39/documentation.html#kraft_zk_migration">ZooKeeper to KRaft Migration</a> section.
+    </p>
+    <h3 class="anchor-heading">Configurations</h3>
     <ul>
         <li>
             <p>
-                The password encoder-related configurations have been removed. These configurations were used in
+                Removed password encoder-related configurations. These configurations were used in
                 ZooKeeper mode to define the key and backup key for encrypting sensitive data (e.g., passwords), 
                 specify the algorithm and key generation method for password encryption (e.g., AES, RSA), and control 
                 the key length and encryption strength.
@@ -40,7 +45,7 @@
                 <li><code>password.encoder.iterations</code></li>
             </ul>
             <p>
-                In Kraft mode, Kafka stores sensitive data in records, and the data is not encrypted in Kafka.
+                In KRaft mode, Kafka stores sensitive data in records, and the data is not encrypted in Kafka.
             </p>
         </li>
         <li>
@@ -80,7 +85,7 @@
         </li>
         <li>
             <p>
-                Remove the broker id generation-related configurations. These configurations were used in ZooKeeper mode
+                Removed the broker id generation-related configurations. These configurations were used in ZooKeeper mode
                 to specify the broker id auto generation and control the broker id generation process.
             </p>
             <ul>
@@ -88,7 +93,7 @@
                 <li><code>broker.id.generation.enable</code></li>
             </ul>
             <p>
-                Kafka use the node id in Kraft mode to identify servers.
+                Kafka uses the node id in KRaft mode to identify servers.
             </p>
             <ul>
                 <li><code>node.id</code></li>
@@ -96,7 +101,7 @@
         </li>
         <li>
             <p>
-                Remove broker protocol version-related configurations. These configurations were used in ZooKeeper mode to define communication protocol version between brokers.
+                Removed broker protocol version-related configurations. These configurations were used in ZooKeeper mode to define communication protocol version between brokers.
                 In KRaft mode, Kafka uses <code>metadata.version</code> to control the feature level of the cluster, which can be managed using <code>bin/kafka-features.sh</code>.
             </p>
             <ul>
@@ -105,7 +110,7 @@
         </li>
         <li>
             <p>
-                Removed dynamic configurations which relies on ZooKeeper. In KRaft mode, to change these configurations,
+                Removed dynamic configurations which relied on ZooKeeper. In KRaft mode, to change these configurations,
                 you need to restart the broker/controller.
             </p>
             <ul>
@@ -123,7 +128,7 @@
         </li>
         <li>
             <p>
-                Removed Zookeeper related configurations.
+                Removed ZooKeeper related configurations.
             </p>
             <ul>
                 <li><code>zookeeper.connect</code></li>
@@ -148,11 +153,11 @@
             </ul>
         </li>
     </ul>
-    <h5 class="anchor-heading">Removal metrics</h5>
+    <h2 class="anchor-heading">Metrics</h2>
     <ul>
         <li>
             <p>
-                Remove the following metrics related to ZooKeeper.
+                Removed the following metrics related to ZooKeeper.
                 <code>ControlPlaneNetworkProcessorAvgIdlePercent</code>
                 is to monitor the average fraction of time the network processors are idle. The other <code>ControlPlaneExpiredConnectionsKilledCount</code>
                 is to monitor the total number of connections disconnected, across all processors.
@@ -162,7 +167,7 @@
                 <li><code>ControlPlaneExpiredConnectionsKilledCount</code></li>
             </ul>
             <p>
-                In Kraft mode, Kafka also provides metrics to monitor the network processors and expired connections.
+                In KRaft mode, Kafka also provides metrics to monitor the network processors and expired connections.
                 Use the following metrics to monitor the network processors and expired connections:
             </p>
             <ul>
@@ -172,7 +177,7 @@
         </li>
         <li>
             <p>
-                Remove the metrics which are only used in ZooKeeper mode.
+                Removed the metrics which are only used in ZooKeeper mode.
             </p>
             <ul>
                 <li><code>kafka.controller:type=ControllerChannelManager,name=QueueSize</code></li>
@@ -227,4 +232,28 @@
             </ul>
         </li>
     </ul>
+    <h2 class="anchor-heading">Behavioral Change Reference</h2>
+    <p>
+        This document catalogs the functional and operational differences between ZooKeeper mode and KRaft mode.
+    </p>
+    <ul>
+        <li>
+            <strong>Configuration Value Size Limitation</strong>: KRaft mode restricts configuration values to a maximum size of <code>Short.MAX_VALUE</code>,
+            which prevents using the append operation to create larger configuration values.
+        </li>
+        <li>
+            <strong>Policy Class Deployment</strong>:
+            In KRaft mode, the <code>CreateTopicPolicy</code> and <code>AlterConfigPolicy</code> plugins run on the controller instead of the broker.
+            This requires users to deploy the policy class JAR files on the controller and configure the parameters
+            (<code>create.topic.policy.class.name</code> and <code>alter.config.policy.class.name</code>) on the controller.
+            <p>Note: If migrating from ZooKeeper mode, ensure policy JARs are moved from brokers to controllers.</p>
+        </li>
+        <li>
+            <strong>Custom implementations of <code>KafkaPrincipalBuilder</code></strong>:
+            In KRaft mode, custom implementations of <code>KafkaPrincipalBuilder</code> must also implement <code>KafkaPrincipalSerde</code>; otherwise brokers will not be able to
+            forward requests to the controller.
+        </li>
+    </ul>
+</div>
+<!--#include virtual="../includes/_footer.htm" -->
 </div>

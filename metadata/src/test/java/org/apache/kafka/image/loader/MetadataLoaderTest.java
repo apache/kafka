@@ -344,15 +344,16 @@ public class MetadataLoaderTest {
                 setHighWaterMarkAccessor(() -> OptionalLong.of(0L)).
                 build()) {
             loader.installPublishers(publishers).get();
-            loader.handleCommit(
-                MockBatchReader.newSingleBatchReader(400, 50, List.of(
-                    new ApiMessageAndVersion(new FeatureLevelRecord()
-                        .setName(MetadataVersion.FEATURE_NAME)
-                        .setFeatureLevel(MINIMUM_VERSION.featureLevel()), (short) 0)))
-            );
             loadEmptySnapshot(loader, 200);
+            loader.waitForAllEventsToBeHandled();
+            assertFalse(publishers.get(0).firstPublish.isDone());
+            loader.handleCommit(MockBatchReader.newSingleBatchReader(250, 50, List.of(
+                new ApiMessageAndVersion(new FeatureLevelRecord()
+                    .setName(MetadataVersion.FEATURE_NAME)
+                    .setFeatureLevel(MINIMUM_VERSION.featureLevel()), (short) 0)))
+            );
             publishers.get(0).firstPublish.get(10, TimeUnit.SECONDS);
-            assertEquals(200L, loader.lastAppliedOffset());
+            assertEquals(250L, loader.lastAppliedOffset());
             loadEmptySnapshot(loader, 300);
             assertEquals(300L, loader.lastAppliedOffset());
             assertEquals(new SnapshotManifest(new MetadataProvenance(300, 100, 4000, true), 3000000L),

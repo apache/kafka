@@ -19,9 +19,12 @@ package org.apache.kafka.raft;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
+import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 import org.apache.kafka.common.message.LeaderChangeMessage;
+import org.apache.kafka.common.record.ArbitraryMemoryRecords;
 import org.apache.kafka.common.record.ControlRecordUtils;
+import org.apache.kafka.common.record.InvalidMemoryRecordsProvider;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
@@ -32,9 +35,16 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
 
+import net.jqwik.api.AfterFailureMode;
+import net.jqwik.api.ForAll;
+import net.jqwik.api.Property;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.function.Executable;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ArgumentsSource;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -44,6 +54,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -169,14 +180,17 @@ public class MockLogTest {
         assertThrows(
             RuntimeException.class,
             () -> log.appendAsLeader(
-                    MemoryRecords.withRecords(initialOffset, Compression.NONE, currentEpoch, recordFoo),
-                    currentEpoch)
+                MemoryRecords.withRecords(initialOffset, Compression.NONE, currentEpoch, recordFoo),
+                currentEpoch
+            )
         );
 
         assertThrows(
             RuntimeException.class,
             () -> log.appendAsFollower(
-                    MemoryRecords.withRecords(initialOffset, Compression.NONE, currentEpoch, recordFoo))
+                MemoryRecords.withRecords(initialOffset, Compression.NONE, currentEpoch, recordFoo),
+                currentEpoch
+            )
         );
     }
 
@@ -187,7 +201,13 @@ public class MockLogTest {
         LeaderChangeMessage messageData =  new LeaderChangeMessage().setLeaderId(0);
         ByteBuffer buffer = ByteBuffer.allocate(256);
         log.appendAsLeader(
-            MemoryRecords.withLeaderChangeMessage(initialOffset, 0L, 2, buffer, messageData),
+            MemoryRecords.withLeaderChangeMessage(
+                initialOffset,
+                0L,
+                currentEpoch,
+                buffer,
+                messageData
+            ),
             currentEpoch
         );
 
@@ -221,7 +241,10 @@ public class MockLogTest {
         }
         log.truncateToLatestSnapshot();
 
-        log.appendAsFollower(MemoryRecords.withRecords(initialOffset, Compression.NONE, epoch, recordFoo));
+        log.appendAsFollower(
+            MemoryRecords.withRecords(initialOffset, Compression.NONE, epoch, recordFoo),
+            epoch
+        );
 
         assertEquals(initialOffset, log.startOffset());
         assertEquals(initialOffset + 1, log.endOffset().offset());
@@ -368,8 +391,80 @@ public class MockLogTest {
 
     @Test
     public void testEmptyAppendNotAllowed() {
-        assertThrows(IllegalArgumentException.class, () -> log.appendAsFollower(MemoryRecords.EMPTY));
+        assertThrows(IllegalArgumentException.class, () -> log.appendAsFollower(MemoryRecords.EMPTY, 1));
         assertThrows(IllegalArgumentException.class, () -> log.appendAsLeader(MemoryRecords.EMPTY, 1));
+    }
+
+    @ParameterizedTest
+    @ArgumentsSource(InvalidMemoryRecordsProvider.class)
+    void testInvalidMemoryRecords(MemoryRecords records, Optional<Class<Exception>> expectedException) {
+        long previousEndOffset = log.endOffset().offset();
+
+        Executable action = () -> log.appendAsFollower(records, Integer.MAX_VALUE);
+        if (expectedException.isPresent()) {
+            assertThrows(expectedException.get(), action);
+        } else {
+            assertThrows(CorruptRecordException.class, action);
+        }
+
+        assertEquals(previousEndOffset, log.endOffset().offset());
+    }
+
+    @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
+    void testRandomRecords(
+        @ForAll(supplier = ArbitraryMemoryRecords.class) MemoryRecords records
+    ) {
+        try (MockLog log = new MockLog(topicPartition, topicId, new LogContext())) {
+            long previousEndOffset = log.endOffset().offset();
+
+            assertThrows(
+                CorruptRecordException.class,
+                () -> log.appendAsFollower(records, Integer.MAX_VALUE)
+            );
+
+            assertEquals(previousEndOffset, log.endOffset().offset());
+        }
+    }
+
+    @Test
+    void testInvalidLeaderEpoch() {
+        var previousEndOffset = log.endOffset().offset();
+        var epoch = log.lastFetchedEpoch() + 1;
+        var numberOfRecords = 10;
+
+        MemoryRecords batchWithValidEpoch = MemoryRecords.withRecords(
+            previousEndOffset,
+            Compression.NONE,
+            epoch,
+            IntStream
+                .range(0, numberOfRecords)
+                .mapToObj(number -> new SimpleRecord(Integer.toString(number).getBytes()))
+                .toArray(SimpleRecord[]::new)
+        );
+
+        MemoryRecords batchWithInvalidEpoch = MemoryRecords.withRecords(
+            previousEndOffset + numberOfRecords,
+            Compression.NONE,
+            epoch + 1,
+            IntStream
+                .range(0, numberOfRecords)
+                .mapToObj(number -> new SimpleRecord(Integer.toString(number).getBytes()))
+                .toArray(SimpleRecord[]::new)
+        );
+
+        var buffer = ByteBuffer.allocate(batchWithValidEpoch.sizeInBytes() + batchWithInvalidEpoch.sizeInBytes());
+        buffer.put(batchWithValidEpoch.buffer());
+        buffer.put(batchWithInvalidEpoch.buffer());
+        buffer.flip();
+
+        var records = MemoryRecords.readableRecords(buffer);
+
+        log.appendAsFollower(records, epoch);
+
+        // Check that only the first batch was appended
+        assertEquals(previousEndOffset + numberOfRecords, log.endOffset().offset());
+        // Check that the last fetched epoch matches the first batch
+        assertEquals(epoch, log.lastFetchedEpoch());
     }
 
     @Test
@@ -383,12 +478,19 @@ public class MockLogTest {
         }
         log.truncateToLatestSnapshot();
 
-        log.appendAsFollower(MemoryRecords.withRecords(initialOffset, Compression.NONE, epoch, recordFoo));
+        log.appendAsFollower(
+            MemoryRecords.withRecords(initialOffset, Compression.NONE, epoch, recordFoo),
+            epoch
+        );
 
-        assertThrows(OffsetOutOfRangeException.class, () -> log.read(log.startOffset() - 1,
-            Isolation.UNCOMMITTED));
-        assertThrows(OffsetOutOfRangeException.class, () -> log.read(log.endOffset().offset() + 1,
-            Isolation.UNCOMMITTED));
+        assertThrows(
+            OffsetOutOfRangeException.class,
+            () -> log.read(log.startOffset() - 1, Isolation.UNCOMMITTED)
+        );
+        assertThrows(
+            OffsetOutOfRangeException.class,
+            () -> log.read(log.endOffset().offset() + 1, Isolation.UNCOMMITTED)
+        );
     }
 
     @Test
@@ -958,6 +1060,7 @@ public class MockLogTest {
             MemoryRecords.withRecords(
                 log.endOffset().offset(),
                 Compression.NONE,
+                epoch,
                 records.toArray(new SimpleRecord[records.size()])
             ),
             epoch

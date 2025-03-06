@@ -19,11 +19,14 @@ package org.apache.kafka.server.log.remote.metadata.storage;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
 
 import java.util.AbstractMap;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -36,6 +39,7 @@ import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemo
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_REPLICATION_FACTOR_PROP;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_RETENTION_MS_PROP;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TopicBasedRemoteLogMetadataManagerConfigTest {
     private static final String BOOTSTRAP_SERVERS = "localhost:2222";
@@ -107,6 +111,35 @@ public class TopicBasedRemoteLogMetadataManagerConfigTest {
         assertEquals(overriddenConsumerPropValue, rlmmConfig.consumerProperties().get(overrideEntry.getKey()));
     }
 
+    @Test
+    void verifyToStringRedactsSensitiveConfigurations() {
+        Map<String, Object> commonClientConfig = new HashMap<>();
+        commonClientConfig.put(CommonClientConfigs.RETRIES_CONFIG, 10);
+        commonClientConfig.put(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG, 1000L);
+        commonClientConfig.put(CommonClientConfigs.METADATA_MAX_AGE_CONFIG, 60000L);
+        addPasswordTypeConfigurationProperties(commonClientConfig);
+
+        Map<String, Object> producerConfig = new HashMap<>();
+        producerConfig.put(ProducerConfig.ACKS_CONFIG, "all");
+        addPasswordTypeConfigurationProperties(producerConfig);
+
+        Map<String, Object> consumerConfig = new HashMap<>();
+        consumerConfig.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
+        addPasswordTypeConfigurationProperties(consumerConfig);
+
+        Map<String, Object> props = createValidConfigProps(commonClientConfig, producerConfig, consumerConfig);
+
+        // Check for topic properties
+        TopicBasedRemoteLogMetadataManagerConfig rlmmConfig = new TopicBasedRemoteLogMetadataManagerConfig(props);
+
+        String configString = rlmmConfig.toString();
+        assertMaskedSensitiveConfigurations(configString);
+        //verify not redacted properties present
+        assertTrue(configString.contains("retries=10"));
+        assertTrue(configString.contains("acks=\"all\""));
+        assertTrue(configString.contains("enable.auto.commit=false"));
+    }
+
     private Map<String, Object> createValidConfigProps(Map<String, Object> commonClientConfig,
                                                        Map<String, Object> producerConfig,
                                                        Map<String, Object> consumerConfig) {
@@ -131,5 +164,32 @@ public class TopicBasedRemoteLogMetadataManagerConfigTest {
             props.put(REMOTE_LOG_METADATA_CONSUMER_PREFIX + entry.getKey(), entry.getValue());
         }
         return props;
+    }
+
+    /**
+     * Sample properties marked with {@link org.apache.kafka.common.config.ConfigDef.Type#PASSWORD} in the configuration.
+     */
+    private void addPasswordTypeConfigurationProperties(Map<String, Object> config) {
+        config.put(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, "keystorePassword");
+        config.put(SslConfigs.SSL_KEY_PASSWORD_CONFIG, "keyPassword");
+        config.put(SslConfigs.SSL_KEYSTORE_KEY_CONFIG, "keystoreKey");
+        config.put(SslConfigs.SSL_KEYSTORE_CERTIFICATE_CHAIN_CONFIG, "keystoreCertificate");
+        config.put(SslConfigs.SSL_TRUSTSTORE_CERTIFICATES_CONFIG, "truststoreCertificate");
+        config.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, "truststorePassword");
+        config.put(SaslConfigs.SASL_JAAS_CONFIG, "saslJaas");
+    }
+
+    private void assertMaskedSensitiveConfigurations(String configString) {
+        String[] sensitiveConfigKeys = {
+            SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG,
+            SslConfigs.SSL_KEY_PASSWORD_CONFIG,
+            SslConfigs.SSL_KEYSTORE_KEY_CONFIG,
+            SslConfigs.SSL_KEYSTORE_CERTIFICATE_CHAIN_CONFIG,
+            SslConfigs.SSL_TRUSTSTORE_CERTIFICATES_CONFIG,
+            SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG,
+            SaslConfigs.SASL_JAAS_CONFIG
+        };
+        Arrays.stream(sensitiveConfigKeys)
+                .forEach(config -> assertTrue(configString.contains(config + "=(redacted)")));
     }
 }
