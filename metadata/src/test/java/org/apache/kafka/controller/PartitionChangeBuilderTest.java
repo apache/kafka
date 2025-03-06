@@ -580,7 +580,7 @@ public class PartitionChangeBuilderTest {
             .setLeaderRecoveryState(LeaderRecoveryState.RECOVERING.value());
 
         if (version >= 2) {
-            // The test partition has ELR, so unclean election will clear these fiedls.
+            // The test partition has ELR, so unclean election will clear these fields.
             record.setEligibleLeaderReplicas(Collections.emptyList())
                 .setLastKnownElr(Collections.emptyList());
         }

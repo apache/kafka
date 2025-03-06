@@ -145,6 +145,6 @@ public class ShareGroupConfigTest {
 
     private static ShareGroupConfig createConfig(Map<String, Object> configs) {
         return new ShareGroupConfig(
-            new AbstractConfig(Utils.mergeConfigs(Arrays.asList(ShareGroupConfig.CONFIG_DEF, GroupCoordinatorConfig.GROUP_COORDINATOR_CONFIG_DEF)), configs, false));
+            new AbstractConfig(Utils.mergeConfigs(Arrays.asList(ShareGroupConfig.CONFIG_DEF, GroupCoordinatorConfig.CONFIG_DEF)), configs, false));
     }
 }
