@@ -1976,6 +1976,10 @@ project(':clients:integration-tests') {
 
     testRuntimeOnly runtimeTestLibs
   }
+
+  checkstyle {
+    configProperties = checkstyleConfigProperties("import-control-clients-integration-tests.xml")
+  }
 }
 
 
