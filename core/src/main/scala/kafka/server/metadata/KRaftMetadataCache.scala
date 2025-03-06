@@ -529,7 +529,7 @@ class KRaftMetadataCache(
     new FinalizedFeatures(
       metadataVersion,
       finalizedFeatures,
-      image.highestOffsetAndEpoch().offset)
+      image.highestOffsetAndEpoch().epoch())
   }
 }
 
