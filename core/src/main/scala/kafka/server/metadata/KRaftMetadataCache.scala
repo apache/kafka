@@ -522,8 +522,12 @@ class KRaftMetadataCache(
     if (kraftVersionLevel > 0) {
       finalizedFeatures.put(KRaftVersion.FEATURE_NAME, kraftVersionLevel)
     }
+    var metadataVersion = MetadataVersion.MINIMUM_VERSION
+    if (!image.features().metadataVersion().isEmpty) {
+      metadataVersion = image.features().metadataVersionOrThrow()
+    }
     new FinalizedFeatures(
-      image.features().metadataVersionOrThrow(),
+      metadataVersion,
       finalizedFeatures,
       image.highestOffsetAndEpoch().offset)
   }
