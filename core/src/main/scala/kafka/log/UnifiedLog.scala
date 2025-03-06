@@ -1522,6 +1522,9 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     val startMs = time.milliseconds
 
     def shouldDelete(segment: LogSegment, nextSegmentOpt: Option[LogSegment]): Boolean = {
+      if (startMs < segment.largestTimestamp()) {
+        warn(s"Segment with base offset $segment contains future timestamp")
+      }
       val shouldDelete = startMs - segment.largestTimestamp > retentionMs
       debug(s"$segment retentionMs breached: $shouldDelete, startMs=$startMs, retentionMs=$retentionMs")
       shouldDelete
