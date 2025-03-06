@@ -3944,6 +3944,7 @@ public class KafkaAdminClient extends AdminClient {
                     data.topics().add(reassignableTopic);
                 }
                 data.setTimeoutMs(timeoutMs);
+                data.setAllowReplicationFactorChange(options.allowReplicationFactorChange());
                 return new AlterPartitionReassignmentsRequest.Builder(data);
             }
 
@@ -4729,7 +4730,7 @@ public class KafkaAdminClient extends AdminClient {
         final KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
         final long now = time.milliseconds();
         final Call call = new Call("unregisterBroker", calcDeadlineMs(now, options.timeoutMs()),
-                new LeastLoadedNodeProvider()) {
+                new LeastLoadedBrokerOrActiveKController()) {
 
             @Override
             UnregisterBrokerRequest.Builder createRequest(int timeoutMs) {

@@ -493,7 +493,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         final MemoryRecordsBuilder builder;
 
         /**
-         * The timer used to enfore the append linger time if
+         * The timer used to enforce the append linger time if
          * it is non-zero.
          */
         final Optional<TimerTask> lingerTimeoutTask;

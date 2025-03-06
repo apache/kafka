@@ -52,7 +52,6 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorResult;
 import org.apache.kafka.coordinator.common.runtime.MockCoordinatorExecutor;
@@ -169,13 +168,7 @@ public class GroupMetadataManagerTestContext {
         ) {
             return new GroupCoordinatorConfigContext(
                 new AbstractConfig(
-                    Utils.mergeConfigs(List.of(
-                        GroupCoordinatorConfig.CLASSIC_GROUP_CONFIG_DEF,
-                        GroupCoordinatorConfig.GROUP_COORDINATOR_CONFIG_DEF,
-                        GroupCoordinatorConfig.OFFSET_MANAGEMENT_CONFIG_DEF,
-                        GroupCoordinatorConfig.CONSUMER_GROUP_CONFIG_DEF,
-                        GroupCoordinatorConfig.SHARE_GROUP_CONFIG_DEF
-                    )),
+                    GroupCoordinatorConfig.CONFIG_DEF,
                     props
                 )
             );
@@ -406,7 +399,7 @@ public class GroupMetadataManagerTestContext {
         String protocolType = "consumer";
         String protocolName = "range";
         int generationId = 0;
-        List<SyncGroupRequestData.SyncGroupRequestAssignment> assignment = Collections.emptyList();
+        List<SyncGroupRequestData.SyncGroupRequestAssignment> assignment = List.of();
 
         SyncGroupRequestBuilder withGroupId(String groupId) {
             this.groupId = groupId;
@@ -1131,7 +1124,7 @@ public class GroupMetadataManagerTestContext {
         SyncResult followerSyncResult = sendClassicGroupSync(
             syncRequest.setGroupInstanceId(followerInstanceId)
                        .setMemberId(followerId)
-                       .setAssignments(Collections.emptyList())
+                       .setAssignments(List.of())
         );
 
         assertTrue(followerSyncResult.records.isEmpty());
@@ -1273,7 +1266,7 @@ public class GroupMetadataManagerTestContext {
         List<CoordinatorRecord> expectedRecords = List.of(newGroupMetadataRecord(
             group.groupId(),
             new GroupMetadataValue()
-                .setMembers(Collections.emptyList())
+                .setMembers(List.of())
                 .setGeneration(group.generationId())
                 .setLeader(null)
                 .setProtocolType("consumer")
@@ -1498,10 +1491,10 @@ public class GroupMetadataManagerTestContext {
 
     public void verifyDescribeGroupsBeforeV6ReturnsDeadGroup(String groupId) {
         List<DescribeGroupsResponseData.DescribedGroup> describedGroups =
-            describeGroups(Collections.singletonList(groupId), (short) 5);
+            describeGroups(List.of(groupId), (short) 5);
 
         assertEquals(
-            Collections.singletonList(new DescribeGroupsResponseData.DescribedGroup()
+            List.of(new DescribeGroupsResponseData.DescribedGroup()
                 .setGroupId(groupId)
                 .setGroupState(DEAD.toString())
             ),
@@ -1527,7 +1520,7 @@ public class GroupMetadataManagerTestContext {
                 .withProtocolType(protocolType)
                 .build()
         );
-        assertEquals(Collections.emptyList(), syncResult.records);
+        assertEquals(List.of(), syncResult.records);
         assertFalse(syncResult.syncFuture.isDone());
 
         // Simulate a successful write to log.

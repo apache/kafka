@@ -94,7 +94,7 @@ public class ShareHeartbeatRequestManagerTest {
     private Metadata metadata;
     private ShareHeartbeatRequestManager heartbeatRequestManager;
     private ShareMembershipManager membershipManager;
-    private ShareHeartbeatRequestManager.HeartbeatRequestState heartbeatRequestState;
+    private HeartbeatRequestState heartbeatRequestState;
     private ShareHeartbeatRequestManager.HeartbeatState heartbeatState;
     private BackgroundEventHandler backgroundEventHandler;
     private Metrics metrics;
@@ -114,7 +114,7 @@ public class ShareHeartbeatRequestManagerTest {
         logContext = new LogContext();
         ConsumerConfig config = mock(ConsumerConfig.class);
 
-        heartbeatRequestState = spy(new ShareHeartbeatRequestManager.HeartbeatRequestState(
+        heartbeatRequestState = spy(new HeartbeatRequestState(
                 logContext,
                 time,
                 DEFAULT_HEARTBEAT_INTERVAL_MS,
@@ -137,7 +137,7 @@ public class ShareHeartbeatRequestManagerTest {
     }
 
     private void createHeartbeatRequestStateWithZeroHeartbeatInterval() {
-        heartbeatRequestState = spy(new ShareHeartbeatRequestManager.HeartbeatRequestState(logContext,
+        heartbeatRequestState = spy(new HeartbeatRequestState(logContext,
                 time,
                 0,
                 DEFAULT_RETRY_BACKOFF_MS,
@@ -730,7 +730,7 @@ public class ShareHeartbeatRequestManagerTest {
             final CoordinatorRequestManager coordinatorRequestManager,
             final ShareMembershipManager membershipManager,
             final ShareHeartbeatRequestManager.HeartbeatState heartbeatState,
-            final ShareHeartbeatRequestManager.HeartbeatRequestState heartbeatRequestState,
+            final HeartbeatRequestState heartbeatRequestState,
             final BackgroundEventHandler backgroundEventHandler) {
         LogContext logContext = new LogContext();
         pollTimer = time.timer(DEFAULT_MAX_POLL_INTERVAL_MS);
