@@ -889,10 +889,13 @@ class TransactionStateManagerTest {
     appendedRecords.values.foreach { batches =>
       batches.foreach { records =>
         records.records.forEach { record =>
-          val transactionalId = TransactionLog.readTxnRecordKey(record.key).transactionalId
-          assertNull(record.value)
-          expiredTransactionalIds += transactionalId
-          assertEquals(Right(None), transactionManager.getTransactionState(transactionalId))
+          TransactionLog.readTxnRecordKey(record.key) match {
+            case Right(transactionalId) =>
+              assertNull(record.value)
+              expiredTransactionalIds += transactionalId
+              assertEquals(Right(None), transactionManager.getTransactionState(transactionalId))
+            case Left(value) => fail(s"Failed to read transactional id from tombstone: $value")
+          }
         }
       }
     }

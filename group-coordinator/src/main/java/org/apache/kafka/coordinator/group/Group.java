@@ -195,4 +195,9 @@ public interface Group {
      * @return The number of members.
      */
     int numMembers();
+
+    /**
+     * Requests a metadata refresh.
+     */
+    void requestMetadataRefresh();
 }

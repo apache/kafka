@@ -250,7 +250,7 @@ public enum Feature {
      *     - The feature X has default version = XV_10 (dependency = {}), latest production = XV_10 (dependency = {})
      *     - The feature X has default version = XV_10 (dependency = {Y: YV_3}), latest production = XV_11 (dependency = {Y: YV_4})
      *       The feature Y has default version = YV_3 (dependency = {}), latest production = YV_4 (dependency = {})
-     *     - The feature X has default version = XV_10 (dependency = {MetadataVersion: IBP_4_0_IV0}), boostrap MV = IBP_4_0_IV0,
+     *     - The feature X has default version = XV_10 (dependency = {MetadataVersion: IBP_4_0_IV0}), bootstrap MV = IBP_4_0_IV0,
      *                       latest production = XV_11 (dependency = {MetadataVersion: IBP_4_0_IV1}), MV latest production = IBP_4_0_IV1
      *
      * @param feature the feature to validate.

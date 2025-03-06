@@ -23,7 +23,10 @@ import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 import org.apache.kafka.test.TestUtils;
+
+import com.yammer.metrics.core.Gauge;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -143,6 +146,34 @@ public class ShareFetchTestUtils {
     public static ShareAcquiredRecords createShareAcquiredRecords(AcquiredRecords acquiredRecords) {
         return new ShareAcquiredRecords(
             List.of(acquiredRecords), (int) (acquiredRecords.lastOffset() - acquiredRecords.firstOffset() + 1)
+        );
+    }
+
+    /**
+     * Fetch the gauge value from the yammer metrics.
+     *
+     * @param name The name of the metric.
+     * @return The gauge value as a number.
+     */
+    public static Number yammerMetricValue(String name) {
+        try {
+            Gauge gauge = (Gauge) KafkaYammerMetrics.defaultRegistry().allMetrics().entrySet().stream()
+                .filter(e -> e.getKey().getMBeanName().contains(name))
+                .findFirst()
+                .orElseThrow()
+                .getValue();
+            return (Number) gauge.value();
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
+    /**
+     * Clear all the yammer metrics.
+     */
+    public static void clearYammerMetrics() {
+        KafkaYammerMetrics.defaultRegistry().allMetrics().keySet().forEach(
+            metricName -> KafkaYammerMetrics.defaultRegistry().removeMetric(metricName)
         );
     }
 }
