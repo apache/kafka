@@ -135,7 +135,7 @@ public abstract class KafkaFuture<T> implements Future<T> {
      * The action may be invoked by the thread that calls {@code whenComplete} or it may be invoked by the thread that
      * completes the future.
      *
-     * @param action the action to preform
+     * @param action the action to perform
      * @return the new future
      */
     public abstract KafkaFuture<T> whenComplete(BiConsumer<? super T, ? super Throwable> action);

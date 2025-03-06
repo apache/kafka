@@ -300,7 +300,7 @@ public class SharePartition {
     private long endOffset;
 
     /**
-     * The initial read gap offset tracks if there are any gaps in the in-flight batch during intial
+     * The initial read gap offset tracks if there are any gaps in the in-flight batch during initial
      * read of the share partition state from the persister.
      */
     private InitialReadGapOffset initialReadGapOffset;

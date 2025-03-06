@@ -45,6 +45,12 @@ trait AutoTopicCreationManager {
     controllerMutationQuota: ControllerMutationQuota,
     metadataRequestContext: Option[RequestContext]
   ): Seq[MetadataResponseTopic]
+
+  def createStreamsInternalTopics(
+    topics: Map[String, CreatableTopic],
+    requestContext: RequestContext
+  ): Unit
+
 }
 
 class DefaultAutoTopicCreationManager(
@@ -83,9 +89,30 @@ class DefaultAutoTopicCreationManager(
     uncreatableTopicResponses ++ creatableTopicResponses
   }
 
+  override def createStreamsInternalTopics(
+    topics: Map[String, CreatableTopic],
+    requestContext: RequestContext
+  ): Unit = {
+
+    for ((_, creatableTopic) <- topics) {
+      if (creatableTopic.numPartitions() == -1) {
+        creatableTopic
+          .setNumPartitions(config.numPartitions)
+      }
+      if (creatableTopic.replicationFactor() == -1) {
+        creatableTopic
+          .setReplicationFactor(config.defaultReplicationFactor.shortValue)
+      }
+    }
+
+    if (topics.nonEmpty) {
+      sendCreateTopicRequest(topics, Some(requestContext))
+    }
+  }
+
   private def sendCreateTopicRequest(
     creatableTopics: Map[String, CreatableTopic],
-    metadataRequestContext: Option[RequestContext]
+    requestContext: Option[RequestContext]
   ): Seq[MetadataResponseTopic] = {
     val topicsToCreate = new CreateTopicsRequestData.CreatableTopicCollection(creatableTopics.size)
     topicsToCreate.addAll(creatableTopics.values.asJavaCollection)
@@ -114,7 +141,7 @@ class DefaultAutoTopicCreationManager(
       }
     }
 
-    val request = metadataRequestContext.map { context =>
+    val request = requestContext.map { context =>
       val requestVersion =
         channelManager.controllerApiVersions.toScala match {
           case None =>
