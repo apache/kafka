@@ -35,12 +35,10 @@ import org.junit.jupiter.params.provider.CsvSource;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 
-import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.streams.tests.SmokeTestDriver.generate;
 import static org.apache.kafka.streams.tests.SmokeTestDriver.verify;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -48,10 +46,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Timeout(600)
 @Tag("integration")
 public class SmokeTestDriverIntegrationTest {
-    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(
-            3,
-            mkProperties(
-                    Collections.singletonMap("log.message.timestamp.after.max.ms", String.valueOf(Long.MAX_VALUE))));
+    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(3);
 
     @BeforeAll
     public static void startCluster() throws IOException {
@@ -82,7 +77,7 @@ public class SmokeTestDriverIntegrationTest {
             try {
                 final Map<String, Set<Integer>> allData =
                     generate(bootstrapServers, numKeys, maxRecordsPerKey, Duration.ofSeconds(20));
-                result = verify(bootstrapServers, allData, maxRecordsPerKey);
+                result = verify(bootstrapServers, allData, maxRecordsPerKey, false);
 
             } catch (final Exception ex) {
                 this.exception = ex;

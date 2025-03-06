@@ -20,17 +20,13 @@ package org.apache.kafka.clients.admin;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicCollection;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Collection;
 import java.util.Map;
 
 /**
  * The result of the {@link Admin#deleteTopics(Collection)} call.
- *
- * The API of this class is evolving, see {@link Admin} for details.
  */
-@InterfaceStability.Evolving
 public class DeleteTopicsResult {
     private final Map<Uuid, KafkaFuture<Void>> topicIdFutures;
     private final Map<String, KafkaFuture<Void>> nameFutures;
@@ -74,7 +70,7 @@ public class DeleteTopicsResult {
      * @return a future which succeeds only if all the topic deletions succeed.
      */
     public KafkaFuture<Void> all() {
-        return (topicIdFutures == null) ? KafkaFuture.allOf(nameFutures.values().toArray(new KafkaFuture[0])) :
-            KafkaFuture.allOf(topicIdFutures.values().toArray(new KafkaFuture[0]));
+        return (topicIdFutures == null) ? KafkaFuture.allOf(nameFutures.values().toArray(new KafkaFuture<?>[0])) :
+            KafkaFuture.allOf(topicIdFutures.values().toArray(new KafkaFuture<?>[0]));
     }
 }

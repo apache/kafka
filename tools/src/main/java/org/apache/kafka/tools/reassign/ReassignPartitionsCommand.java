@@ -16,26 +16,34 @@
  */
 package org.apache.kafka.tools.reassign;
 
-import org.apache.kafka.admin.AdminUtils;
 import org.apache.kafka.admin.BrokerMetadata;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.AlterConfigOp;
+import org.apache.kafka.clients.admin.AlterPartitionReassignmentsOptions;
 import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.DescribeReplicaLogDirsResult;
 import org.apache.kafka.clients.admin.NewPartitionReassignment;
 import org.apache.kafka.clients.admin.PartitionReassignment;
 import org.apache.kafka.clients.admin.TopicDescription;
+import org.apache.kafka.common.DirectoryId;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionReplica;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.ReplicaNotAvailableException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.metadata.placement.ClusterDescriber;
+import org.apache.kafka.metadata.placement.PlacementSpec;
+import org.apache.kafka.metadata.placement.ReplicaPlacer;
+import org.apache.kafka.metadata.placement.StripedReplicaPlacer;
+import org.apache.kafka.metadata.placement.TopicAssignment;
+import org.apache.kafka.metadata.placement.UsableBroker;
 import org.apache.kafka.server.common.AdminCommandFailedException;
 import org.apache.kafka.server.common.AdminOperationException;
 import org.apache.kafka.server.config.QuotaConfig;
@@ -67,6 +75,7 @@ import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Random;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.ExecutionException;
@@ -74,7 +83,7 @@ import java.util.stream.Collectors;
 
 import joptsimple.OptionSpec;
 
-@SuppressWarnings("ClassDataAbstractionCoupling")
+@SuppressWarnings({"ClassDataAbstractionCoupling", "ClassFanOutComplexity"})
 public class ReassignPartitionsCommand {
     private static final String ANY_LOG_DIR = "any";
 
@@ -87,6 +96,8 @@ public class ReassignPartitionsCommand {
     private static final DecodeJson<List<Integer>> INT_LIST = DecodeJson.decodeList(INT);
 
     private static final DecodeJson<List<String>> STRING_LIST = DecodeJson.decodeList(STRING);
+
+    private static final ReplicaPlacer REPLICA_PLACER = new StripedReplicaPlacer(new Random());
 
     /**
      * The earliest version of the partition reassignment JSON.  We will default to this
@@ -172,7 +183,8 @@ public class ReassignPartitionsCommand {
                 opts.options.valueOf(opts.interBrokerThrottleOpt),
                 opts.options.valueOf(opts.replicaAlterLogDirsThrottleOpt),
                 opts.options.valueOf(opts.timeoutOpt),
-                Time.SYSTEM);
+                Time.SYSTEM,
+                opts.options.has(opts.disallowReplicationFactorChangeOpt));
         } else if (opts.options.has(opts.cancelOpt)) {
             cancelAssignment(adminClient,
                 Utils.readFileAsString(opts.options.valueOf(opts.reassignmentJsonFileOpt)),
@@ -582,10 +594,29 @@ public class ReassignPartitionsCommand {
         Map<TopicPartition, List<Integer>> proposedAssignments = new HashMap<>();
         groupedByTopic.forEach((topic, assignment) -> {
             List<Integer> replicas = assignment.get(0).getValue();
-            Map<Integer, List<Integer>> assignedReplicas = AdminUtils.
-                assignReplicasToBrokers(brokerMetadatas, assignment.size(), replicas.size());
-            assignedReplicas.forEach((partition, replicas0) ->
-                proposedAssignments.put(new TopicPartition(topic, partition), replicas0));
+            int partitionNum = assignment.size();
+            // generate topic assignments
+            TopicAssignment topicAssignment = REPLICA_PLACER.place(
+                    new PlacementSpec(0, partitionNum, (short) replicas.size()),
+                    new ClusterDescriber() {
+                        @Override
+                        public Iterator<UsableBroker> usableBrokers() {
+                            return brokerMetadatas.stream().map(brokerMetadata -> new UsableBroker(
+                                    brokerMetadata.id,
+                                    brokerMetadata.rack,
+                                    false
+                            )).iterator();
+                        }
+
+                        @Override
+                        public Uuid defaultDir(int brokerId) {
+                            return DirectoryId.MIGRATING;
+                        }
+                    });
+
+            for (int i = 0; i < topicAssignment.assignments().size(); i++) {
+                proposedAssignments.put(new TopicPartition(topic, i), topicAssignment.assignments().get(i).replicas());
+            }
         });
         return proposedAssignments;
     }
@@ -732,7 +763,8 @@ public class ReassignPartitionsCommand {
                                   Long interBrokerThrottle,
                                   Long logDirThrottle,
                                   Long timeoutMs,
-                                  Time time
+                                  Time time,
+                                  boolean disallowReplicationFactorChange
     ) throws ExecutionException, InterruptedException, JsonProcessingException, TerseException {
         Entry<Map<TopicPartition, List<Integer>>, Map<TopicPartitionReplica, String>> t0 = parseExecuteAssignmentArgs(reassignmentJson);
 
@@ -767,7 +799,7 @@ public class ReassignPartitionsCommand {
         }
 
         // Execute the partition reassignments.
-        Map<TopicPartition, Throwable> errors = alterPartitionReassignments(adminClient, proposedParts);
+        Map<TopicPartition, Throwable> errors = alterPartitionReassignments(adminClient, proposedParts, disallowReplicationFactorChange);
         if (!errors.isEmpty()) {
             throw new TerseException(
                 String.format("Error reassigning partition(s):%n%s",
@@ -912,15 +944,19 @@ public class ReassignPartitionsCommand {
     /**
      * Execute the given partition reassignments.
      *
-     * @param adminClient       The admin client object to use.
-     * @param reassignments     A map from topic names to target replica assignments.
-     * @return                  A map from partition objects to error strings.
+     * @param adminClient                        The admin client object to use.
+     * @param reassignments                      A map from topic names to target replica assignments.
+     * @param disallowReplicationFactorChange    Disallow replication factor change or not.
+     * @return                                   A map from partition objects to error strings.
      */
     static Map<TopicPartition, Throwable> alterPartitionReassignments(Admin adminClient,
-                                                                      Map<TopicPartition, List<Integer>> reassignments) throws InterruptedException {
+                                                                      Map<TopicPartition, List<Integer>> reassignments,
+                                                                      boolean disallowReplicationFactorChange) throws InterruptedException {
         Map<TopicPartition, Optional<NewPartitionReassignment>> args = new HashMap<>();
         reassignments.forEach((part, replicas) -> args.put(part, Optional.of(new NewPartitionReassignment(replicas))));
-        Map<TopicPartition, KafkaFuture<Void>> results = adminClient.alterPartitionReassignments(args).values();
+        AlterPartitionReassignmentsOptions options = new AlterPartitionReassignmentsOptions();
+        options.allowReplicationFactorChange(!disallowReplicationFactorChange);
+        Map<TopicPartition, KafkaFuture<Void>> results = adminClient.alterPartitionReassignments(args, options).values();
         Map<TopicPartition, Throwable> errors = new HashMap<>();
         for (Entry<TopicPartition, KafkaFuture<Void>> e :  results.entrySet()) {
             try {
@@ -1435,7 +1471,7 @@ public class ReassignPartitionsCommand {
         ));
         requiredArgs.put(opts.listOpt, Collections.emptyList());
 
-        CommandLineUtils.checkRequiredArgs(opts.parser, opts.options, requiredArgs.get(action).toArray(new OptionSpec[0]));
+        CommandLineUtils.checkRequiredArgs(opts.parser, opts.options, requiredArgs.get(action).toArray(new OptionSpec<?>[0]));
 
         Map<OptionSpec<?>, List<OptionSpec<?>>> permittedArgs = new HashMap<>();
 
@@ -1456,7 +1492,8 @@ public class ReassignPartitionsCommand {
             opts.commandConfigOpt,
             opts.interBrokerThrottleOpt,
             opts.replicaAlterLogDirsThrottleOpt,
-            opts.timeoutOpt
+            opts.timeoutOpt,
+            opts.disallowReplicationFactorChangeOpt
         ));
         permittedArgs.put(opts.cancelOpt, Arrays.asList(
             isBootstrapServer ? opts.bootstrapServerOpt : opts.bootstrapControllerOpt,

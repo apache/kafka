@@ -420,11 +420,24 @@ object QuorumTestHarness {
     )
   }
 
+  def getTestGroupProtocolParametersAll: java.util.stream.Stream[Arguments] = {
+    stream.Stream.of(
+      Arguments.of(GroupProtocol.CLASSIC.name.toLowerCase(Locale.ROOT)),
+      Arguments.of(GroupProtocol.CONSUMER.name.toLowerCase(Locale.ROOT))
+    )
+  }
+
   // For tests that only work with the classic group protocol, we want to test the following combinations:
   // * KRaft and the classic group protocol
   def getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly: java.util.stream.Stream[Arguments] = {
     stream.Stream.of(
       Arguments.of("kraft", GroupProtocol.CLASSIC.name.toLowerCase(Locale.ROOT))
+    )
+  }
+
+  def getTestGroupProtocolParametersClassicGroupProtocolOnly: java.util.stream.Stream[Arguments] = {
+    stream.Stream.of(
+      Arguments.of(GroupProtocol.CLASSIC.name.toLowerCase(Locale.ROOT))
     )
   }
 

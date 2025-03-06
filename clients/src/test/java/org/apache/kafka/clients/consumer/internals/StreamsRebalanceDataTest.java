@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -26,9 +25,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -272,8 +273,17 @@ public class StreamsRebalanceDataTest {
     }
 
     @Test
-    public void streamsRebalanceDataShouldNotHaveModifiableSubtopologies() {
-        final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(new HashMap<>());
+    public void streamsRebalanceDataShouldNotHaveModifiableSubtopologiesAndClientTags() {
+        final UUID processId = UUID.randomUUID();
+        final Optional<StreamsRebalanceData.HostInfo> endpoint = Optional.of(new StreamsRebalanceData.HostInfo("localhost", 9090));
+        final Map<String, StreamsRebalanceData.Subtopology> subtopologies = new HashMap<>();
+        final Map<String, String> clientTags = Map.of("clientTag1", "clientTagValue1");
+        final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
+            processId,
+            endpoint,
+            subtopologies,
+            clientTags
+        );
 
         assertThrows(
             UnsupportedOperationException.class,
@@ -285,21 +295,129 @@ public class StreamsRebalanceDataTest {
                 List.of()
             ))
         );
+        assertThrows(
+            UnsupportedOperationException.class,
+            () -> streamsRebalanceData.clientTags().put("clientTag1", "clientTagValue2")
+        );
     }
 
     @Test
-    public void streamsRebalanceDataShouldNotAcceptNulls() {
+    public void streamsRebalanceDataShouldNotAcceptNullProcessId() {
+        final Optional<StreamsRebalanceData.HostInfo> endpoint = Optional.of(new StreamsRebalanceData.HostInfo("localhost", 9090));
+        final Map<String, StreamsRebalanceData.Subtopology> subtopologies = new HashMap<>();
+        final Map<String, String> clientTags = Map.of("clientTag1", "clientTagValue1");
+
         final Exception exception = assertThrows(
             NullPointerException.class,
-            () -> new StreamsRebalanceData(null)
+            () -> new StreamsRebalanceData(
+                null,
+                endpoint,
+                subtopologies,
+                clientTags
+            )
+        );
+        assertEquals("Process ID cannot be null", exception.getMessage());
+    }
+
+    @Test
+    public void streamsRebalanceDataShouldNotAcceptNullHostInfo() {
+        final UUID processId = UUID.randomUUID();
+        final Map<String, StreamsRebalanceData.Subtopology> subtopologies = new HashMap<>();
+        final Map<String, String> clientTags = Map.of("clientTag1", "clientTagValue1");
+
+        final Exception exception = assertThrows(
+            NullPointerException.class,
+            () -> new StreamsRebalanceData(
+                processId,
+                null,
+                subtopologies,
+                clientTags
+            )
+        );
+        assertEquals("Endpoint cannot be null", exception.getMessage());
+    }
+
+    @Test
+    public void streamsRebalanceDataShouldNotAcceptNullSubtopologies() {
+        final UUID processId = UUID.randomUUID();
+        final Optional<StreamsRebalanceData.HostInfo> endpoint = Optional.of(new StreamsRebalanceData.HostInfo("localhost", 9090));
+        final Map<String, String> clientTags = Map.of("clientTag1", "clientTagValue1");
+
+        final Exception exception = assertThrows(
+            NullPointerException.class,
+            () -> new StreamsRebalanceData(
+                processId,
+                endpoint,
+                null,
+                clientTags
+            )
         );
         assertEquals("Subtopologies cannot be null", exception.getMessage());
     }
 
     @Test
+    public void streamsRebalanceDataShouldNotAcceptNullClientTags() {
+        final UUID processId = UUID.randomUUID();
+        final Optional<StreamsRebalanceData.HostInfo> endpoint = Optional.of(new StreamsRebalanceData.HostInfo("localhost", 9090));
+        final Map<String, StreamsRebalanceData.Subtopology> subtopologies = new HashMap<>();
+
+        final Exception exception = assertThrows(
+            NullPointerException.class,
+            () -> new StreamsRebalanceData(
+                processId,
+                endpoint,
+                subtopologies,
+                null
+            )
+        );
+        assertEquals("Client tags cannot be null", exception.getMessage());
+    }
+
+    @Test
     public void streamsRebalanceDataShouldBeConstructedWithEmptyAssignment() {
-        final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(new HashMap<>());
+        final UUID processId = UUID.randomUUID();
+        final Optional<StreamsRebalanceData.HostInfo> endpoint = Optional.of(new StreamsRebalanceData.HostInfo("localhost", 9090));
+        final Map<String, StreamsRebalanceData.Subtopology> subtopologies = new HashMap<>();
+        final Map<String, String> clientTags = Map.of("clientTag1", "clientTagValue1");
+        final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
+            processId,
+            endpoint,
+            subtopologies,
+            clientTags
+        );
 
         assertEquals(StreamsRebalanceData.Assignment.EMPTY, streamsRebalanceData.reconciledAssignment());
+    }
+
+    @Test
+    public void streamsRebalanceDataShouldBeConstructedWithEmptyPartitionsByHost() {
+        final UUID processId = UUID.randomUUID();
+        final Optional<StreamsRebalanceData.HostInfo> endpoint = Optional.of(new StreamsRebalanceData.HostInfo("localhost", 9090));
+        final Map<String, StreamsRebalanceData.Subtopology> subtopologies = new HashMap<>();
+        final Map<String, String> clientTags = Map.of("clientTag1", "clientTagValue1");
+        final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
+            processId,
+            endpoint,
+            subtopologies,
+            clientTags
+        );
+
+        assertTrue(streamsRebalanceData.partitionsByHost().isEmpty());
+    }
+
+    @Test
+    public void streamsRebalanceDataShouldBeConstructedWithShutDownRequestedSetFalse() {
+        final UUID processId = UUID.randomUUID();
+        final Optional<StreamsRebalanceData.HostInfo> endpoint = Optional.of(new StreamsRebalanceData.HostInfo("localhost", 9090));
+        final Map<String, StreamsRebalanceData.Subtopology> subtopologies = new HashMap<>();
+        final Map<String, String> clientTags = Map.of("clientTag1", "clientTagValue1");
+        final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
+            processId,
+            endpoint,
+            subtopologies,
+            clientTags
+        );
+
+        assertFalse(streamsRebalanceData.shutdownRequested());
     }
 }

@@ -352,7 +352,7 @@ public class ProducerBatchTest {
 
         for (int i = 0; i < futures.size(); i++) {
             FutureRecordMetadata future = futures.get(i);
-            RuntimeException caughtException = TestUtils.assertFutureThrows(future, RuntimeException.class);
+            RuntimeException caughtException = TestUtils.assertFutureThrows(RuntimeException.class, future);
             RuntimeException expectedException = recordExceptions.apply(i);
             assertEquals(expectedException, caughtException);
         }
