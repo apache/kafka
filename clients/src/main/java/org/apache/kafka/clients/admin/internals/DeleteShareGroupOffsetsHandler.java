@@ -166,6 +166,7 @@ public class DeleteShareGroupOffsetsHandler extends AdminApiHandler.Batched<Coor
                     groupId.idValue, error);
                 groupsToUnmap.add(groupId);
                 break;
+            case INVALID_GROUP_ID:
             case GROUP_ID_NOT_FOUND:
             case NON_EMPTY_GROUP:
             case INVALID_REQUEST:
