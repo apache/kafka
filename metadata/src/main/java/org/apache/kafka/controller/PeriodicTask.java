@@ -65,6 +65,20 @@ class PeriodicTask {
         this.flags = flags;
     }
 
+    PeriodicTask(
+        String name,
+        Supplier<ControllerResult<Boolean>> op,
+        long immediatePeriodNs,
+        long periodNs,
+        EnumSet<PeriodicTaskFlag> flags
+    ) {
+        this.name = name;
+        this.op = op;
+        this.immediatePeriodNs = immediatePeriodNs;
+        this.periodNs = periodNs;
+        this.flags = flags;
+    }
+
     String name() {
         return name;
     }
