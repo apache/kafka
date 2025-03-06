@@ -45,7 +45,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 @ExtendWith(value = ClusterTestExtensions.class)
 public class StaticBrokerConfigTest {
     private static final String TOPIC = "topic";
-    private static final String CUSTOM_VALUE = "12345";
+    private static final String CUSTOM_VALUE = "1048576";
 
     /**
      * synonyms of `segment.bytes`
@@ -80,7 +80,7 @@ public class StaticBrokerConfigTest {
             assertNotNull(config, "Create Topic result should include static topic config");
             assertEquals(CUSTOM_VALUE, config.value(), "Config value should be custom value since controller have related static config");
 
-            ConfigResource resource = new ConfigResource(ConfigResource.Type.BROKER, "0");
+            ConfigResource resource = new ConfigResource(ConfigResource.Type.BROKER, "3000");
             Config keyToConfigEntry = adminUsingBootstrapController.describeConfigs(List.of(resource)).all().get().get(resource);
             assertEquals(CUSTOM_VALUE, keyToConfigEntry.get(LOG_SEGMENT_BYTES).value(),
                 "Config value should be custom value since controller have related static config");
@@ -120,7 +120,7 @@ public class StaticBrokerConfigTest {
             assertNotEquals(CUSTOM_VALUE, config.value(),
                 "Config value should not be custom value since controller don't have static config");
 
-            ConfigResource resource = new ConfigResource(ConfigResource.Type.BROKER, "0");
+            ConfigResource resource = new ConfigResource(ConfigResource.Type.BROKER, "3000");
             Config configResourceConfigMap = adminUsingBootstrapController.describeConfigs(List.of(resource)).all().get().get(resource);
             ConfigEntry configValue = configResourceConfigMap.get(LOG_SEGMENT_BYTES);
             assertNotNull(configValue);
