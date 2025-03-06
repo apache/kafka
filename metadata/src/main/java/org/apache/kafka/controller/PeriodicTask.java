@@ -50,7 +50,7 @@ class PeriodicTask {
      */
     private final EnumSet<PeriodicTaskFlag> flags;
 
-    private static final long IMMEDIATE_PERIOD_NS = MILLISECONDS.toNanos(10);
+    private static final long DEFAULT_IMMEDIATE_PERIOD_NS = MILLISECONDS.toNanos(10);
 
     PeriodicTask(
         String name,
@@ -60,7 +60,7 @@ class PeriodicTask {
     ) {
         this.name = name;
         this.op = op;
-        this.immediatePeriodNs = IMMEDIATE_PERIOD_NS;
+        this.immediatePeriodNs = DEFAULT_IMMEDIATE_PERIOD_NS;
         this.periodNs = periodNs;
         this.flags = flags;
     }
