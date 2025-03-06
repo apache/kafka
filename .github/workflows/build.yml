@@ -167,7 +167,7 @@ jobs:
             exit 1
           fi
       - name: Verify license file
-        run: python committer-tools/verify_license.py --skipReleaseTarGz true
+        run: python committer-tools/verify_license.py --skip-build
 
   test:
     needs: [configure, validate, load-catalog]

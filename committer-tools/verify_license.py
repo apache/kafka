@@ -77,14 +77,14 @@ def get_license_deps(license_text):
 def main():
     # Argument parser
     parser = argparse.ArgumentParser(description="Whether to skip executing ReleaseTarGz.")
-    parser.add_argument('--skipReleaseTarGz', type=str, default=False, help='Whether to skip ReleaseTarGz (true/false)')
+    parser.add_argument('--skip-build', action="store_true", help='Whether to skip ReleaseTarGz (true/false)')
     args = parser.parse_args()
 
     # Assume the current working directory is the project root.
     project_dir = os.getcwd()
     print("Using project directory:", project_dir)
 
-    if args.skipReleaseTarGz:
+    if args.skip_build:
         print("Skip running './gradlew clean releaseTarGz'")
     else:
         # Build the tarball.
