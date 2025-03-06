@@ -88,9 +88,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SuppressWarnings({"ClassDataAbstractionCoupling", "ClassFanOutComplexity"})
 public class KafkaRaftClientTest {
-    private static final String KIP_595_PROTOCOL_NAME = "KIP_595_PROTOCOL";
-    private static final String KIP_853_PROTOCOL_NAME = "KIP_853_PROTOCOL";
-
     @Test
     public void testNodeDirectoryId() {
         int localId = randomReplicaId();
@@ -101,7 +98,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testInitializeSingleMemberQuorum(RaftProtocol raftProtocol) throws IOException {
         int localId = randomReplicaId();
         RaftClientTestContext context = new Builder(localId, Collections.singleton(localId))
@@ -112,7 +109,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testInitializeAsLeaderFromStateStoreSingleMemberQuorum(RaftProtocol raftProtocol) throws Exception {
         // Start off as leader. We should still bump the epoch after initialization
         int localId = randomReplicaId();
@@ -132,7 +129,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testRejectVotesFromSameEpochAfterResigningLeadership(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int remoteId = localId + 1;
@@ -164,7 +161,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testRejectVotesFromSameEpochAfterResigningCandidacy(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int remoteId = localId + 1;
@@ -196,7 +193,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testGrantVotesFromHigherEpochAfterResigningLeadership(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int remoteId = localId + 1;
@@ -233,7 +230,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testGrantVotesFromHigherEpochAfterResigningCandidacy(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int remoteId = localId + 1;
@@ -270,7 +267,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testGrantVotesWhenShuttingDown(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int remoteId = localId + 1;
@@ -312,7 +309,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testInitializeAsResignedAndUnableToContactQuorum(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int remoteId = localId + 1;
@@ -350,7 +347,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testInitializeAsResignedLeaderFromStateStore(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int remoteId = localId + 1;
@@ -389,7 +386,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testAppendFailedWithNotLeaderException(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int remoteId = localId + 1;
@@ -405,7 +402,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testAppendFailedWithBufferAllocationException(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
@@ -432,7 +429,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testAppendFailedWithFencedEpoch(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
@@ -453,7 +450,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testAppendFailedWithRecordBatchTooLargeException(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
@@ -479,7 +476,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testEndQuorumEpochRetriesWhileResigned(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int voter1 = localId + 1;
@@ -525,7 +522,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testResignWillCompleteFetchPurgatory(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int remoteId = localId + 1;
@@ -564,7 +561,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testResignInOlderEpochIgnored(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
@@ -588,7 +585,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testHandleBeginQuorumEpochAfterUserInitiatedResign(
         RaftProtocol raftProtocol
     ) throws Exception {
@@ -618,7 +615,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testBeginQuorumEpochHeartbeat(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int remoteId1 = localId + 1;
@@ -649,7 +646,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testLeaderShouldResignLeadershipIfNotGetFetchRequestFromMajorityVoters(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int remoteId1 = localId + 1;
@@ -710,7 +707,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testLeaderShouldNotResignLeadershipIfOnlyOneVoters(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         Set<Integer> voters = Set.of(localId);
@@ -729,7 +726,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testElectionTimeoutAfterUserInitiatedResign(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
@@ -787,7 +784,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testCannotResignWithLargerEpochThanCurrentEpoch(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
@@ -803,7 +800,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testCannotResignIfNotLeader(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
@@ -820,7 +817,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testCannotResignIfObserver(RaftProtocol raftProtocol) throws Exception {
         int leaderId = randomReplicaId();
         int otherNodeId = randomReplicaId() + 1;
@@ -848,7 +845,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testInitializeAsCandidateFromStateStore(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         // Need 3 node to require a 2-node majority
@@ -868,7 +865,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testInitializeAsUnattachedAndBecomeLeader(RaftProtocol raftProtocol) throws Exception {
         final int localId = randomReplicaId();
         final int otherNodeId = localId + 1;
@@ -937,7 +934,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testInitializeAsCandidateAndBecomeLeaderQuorumOfThree(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         final int firstNodeId = localId + 1;
@@ -986,7 +983,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testInitializeAsOnlyVoterWithEmptyElectionState(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         RaftClientTestContext context = new Builder(localId, Set.of(localId))
@@ -1032,7 +1029,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testHandleBeginQuorumRequest(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         ReplicaKey otherNodeKey = replicaKey(localId + 1, raftProtocol.isReconfigSupported());
@@ -1096,7 +1093,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testHandleBeginQuorumResponse(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
@@ -1115,7 +1112,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testEndQuorumIgnoredAsCandidateIfOlderEpoch(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
@@ -1160,7 +1157,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testEndQuorumIgnoredAsLeaderIfOlderEpoch(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int voter2 = localId + 1;
@@ -1189,7 +1186,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testEndQuorumStartsNewElectionImmediatelyIfFollowerUnattached(
         RaftProtocol raftProtocol
     ) throws Exception {
@@ -1221,7 +1218,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testAccumulatorClearedAfterBecomingFollower(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
@@ -1254,7 +1251,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testAccumulatorClearedAfterBecomingVoted(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         ReplicaKey otherNodeKey = replicaKey(localId + 1, raftProtocol.isReconfigSupported());
@@ -1288,7 +1285,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testAccumulatorClearedAfterBecomingUnattached(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         ReplicaKey otherNodeKey = replicaKey(localId + 1, raftProtocol.isReconfigSupported());
@@ -1321,7 +1318,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testChannelWokenUpIfLingerTimeoutReachedWithoutAppend(RaftProtocol raftProtocol) throws Exception {
         // This test verifies that the client will set its poll timeout accounting
         // for the lingerMs of a pending append
@@ -1357,7 +1354,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testChannelWokenUpIfLingerTimeoutReachedDuringAppend(RaftProtocol raftProtocol) throws Exception {
         // This test verifies that the client will get woken up immediately
         // if the linger timeout has expired during an append
@@ -1394,7 +1391,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testHandleEndQuorumRequest(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int oldLeaderId = localId + 1;
@@ -1423,7 +1420,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testHandleEndQuorumRequestWithLowerPriorityToBecomeLeader(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         boolean reconfigSupported = raftProtocol.isReconfigSupported();
@@ -1467,7 +1464,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testVoteRequestTimeout(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
@@ -1509,7 +1506,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testHandleValidVoteRequestAsFollower(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int epoch = 2;
@@ -1530,7 +1527,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testHandleVoteRequestAsFollowerWithElectedLeader(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int epoch = 2;
@@ -1552,7 +1549,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testHandleVoteRequestAsFollowerWithVotedCandidate(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int epoch = 2;
@@ -1574,7 +1571,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testHandleVoteRequestAsProspective(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int epoch = 2;
@@ -1602,7 +1599,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testHandleVoteRequestAsProspectiveWithVotedCandidate(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int epoch = 2;
@@ -1630,7 +1627,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testHandleInvalidVoteRequestWithOlderEpoch(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int epoch = 2;
@@ -1650,7 +1647,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testHandleVoteRequestAsObserver(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int epoch = 2;
@@ -1671,7 +1668,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testLeaderIgnoreVoteRequestOnSameEpoch(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         ReplicaKey otherNodeKey = replicaKey(localId + 1, raftProtocol.isReconfigSupported());
@@ -1694,7 +1691,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testListenerCommitCallbackAfterLeaderWrite(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         ReplicaKey otherNodeKey = replicaKey(localId + 1, raftProtocol.isReconfigSupported());
@@ -1740,7 +1737,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testLeaderImmediatelySendsDivergingEpoch(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         ReplicaKey otherNodeKey = replicaKey(localId + 1, raftProtocol.isReconfigSupported());
@@ -1772,7 +1769,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testCandidateIgnoreVoteRequestOnSameEpoch(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         ReplicaKey otherNodeKey = replicaKey(localId + 1, raftProtocol.isReconfigSupported());
@@ -1793,7 +1790,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testCandidateBackoffElection(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
@@ -1869,7 +1866,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testCandidateElectionTimeout(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
@@ -1912,7 +1909,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testInitializeAsFollowerEmptyLog(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
@@ -1932,7 +1929,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testInitializeAsFollowerNonEmptyLog(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
@@ -1953,7 +1950,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testVoterBecomeProspectiveAfterFetchTimeout(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
@@ -1979,7 +1976,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testFollowerAsObserverDoesNotBecomeProspectiveAfterFetchTimeout(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
@@ -2009,7 +2006,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testUnattachedAsObserverDoesNotBecomeProspectiveAfterElectionTimeout(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
@@ -2046,7 +2043,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testUnattachedAsVoterCanBecomeFollowerAfterFindingLeader(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
@@ -2077,7 +2074,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testInitializeObserverNoPreviousState(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int leaderId = localId + 1;
@@ -2105,7 +2102,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testObserverQuorumDiscoveryFailure(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int leaderId = localId + 1;
@@ -2151,7 +2148,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testObserverSendDiscoveryFetchAfterFetchTimeout(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int leaderId = localId + 1;
@@ -2192,7 +2189,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testObserverHandleRetryFetchToBootstrapServer(RaftProtocol raftProtocol) throws Exception {
         // This test tries to check that KRaft is able to handle a retrying Fetch request to
         // a boostrap server after a Fetch request to the leader.
@@ -2266,7 +2263,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testObserverHandleRetryFetchToLeader(RaftProtocol raftProtocol) throws Exception {
         // This test tries to check that KRaft is able to handle a retrying Fetch request to
         // the leader after a Fetch request to the bootstrap server.
@@ -2325,7 +2322,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testInvalidFetchRequest(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         ReplicaKey otherNodeKey = replicaKey(localId + 1, raftProtocol.isReconfigSupported());
@@ -2401,7 +2398,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testFetchRequestClusterIdValidation(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         ReplicaKey otherNodeKey = replicaKey(localId + 1, raftProtocol.isReconfigSupported());
@@ -2437,7 +2434,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testVoteRequestClusterIdValidation(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         ReplicaKey otherNodeKey = replicaKey(localId + 1, raftProtocol.isReconfigSupported());
@@ -2569,7 +2566,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testBeginQuorumEpochRequestClusterIdValidation(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
@@ -2605,7 +2602,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testEndQuorumEpochRequestClusterIdValidation(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         ReplicaKey otherNodeKey = replicaKey(localId + 1, raftProtocol.isReconfigSupported());
@@ -2641,7 +2638,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testLeaderAcceptVoteFromObserver(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
@@ -2666,7 +2663,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testInvalidVoteRequest(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         ReplicaKey otherNodeKey = replicaKey(localId + 1, raftProtocol.isReconfigSupported());
@@ -2711,7 +2708,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testPurgatoryFetchTimeout(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         ReplicaKey otherNodeKey = replicaKey(localId + 1, raftProtocol.isReconfigSupported());
@@ -2739,7 +2736,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testPurgatoryFetchSatisfiedByWrite(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         ReplicaKey otherNodeKey = replicaKey(localId + 1, raftProtocol.isReconfigSupported());
@@ -2769,7 +2766,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testPurgatoryFetchCompletedByFollowerTransition(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         ReplicaKey voterKey2 = replicaKey(localId + 1, raftProtocol.isReconfigSupported());
@@ -2805,7 +2802,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testFetchResponseIgnoredAfterBecomingProspective(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
@@ -2842,7 +2839,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testFetchResponseIgnoredAfterBecomingFollowerOfDifferentLeader(
         RaftProtocol raftProtocol
     ) throws Exception {
@@ -2883,7 +2880,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testVoteResponseIgnoredAfterBecomingFollower(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int voter2 = localId + 1;
@@ -2937,7 +2934,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testFollowerLeaderRediscoveryAfterBrokerNotAvailableError(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int leaderId = localId + 1;
@@ -2976,7 +2973,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testFollowerLeaderRediscoveryAfterRequestTimeout(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int leaderId = localId + 1;
@@ -3011,7 +3008,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testObserverLeaderRediscoveryAfterBrokerNotAvailableError(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int leaderId = localId + 1;
@@ -3060,7 +3057,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testObserverLeaderRediscoveryAfterRequestTimeout(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int leaderId = localId + 1;
@@ -3105,7 +3102,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testLeaderGracefulShutdown(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         ReplicaKey otherNodeKey = replicaKey(localId + 1, raftProtocol.isReconfigSupported());
@@ -3152,7 +3149,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testEndQuorumEpochSentBasedOnFetchOffset(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         boolean reconfigSupported = raftProtocol.isReconfigSupported();
@@ -3204,7 +3201,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testDescribeQuorumNonLeader(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         boolean reconfigSupported = raftProtocol.isReconfigSupported();
@@ -3236,7 +3233,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testDescribeQuorumWithOnlyStaticVoters(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         ReplicaKey local = replicaKey(localId, true);
@@ -3604,7 +3601,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testStaticVotersIgnoredWithBootstrapSnapshot(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         ReplicaKey local = replicaKey(localId, true);
@@ -3650,7 +3647,7 @@ public class KafkaRaftClientTest {
 
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testLeaderGracefulShutdownTimeout(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
@@ -3688,7 +3685,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testFollowerGracefulShutdown(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
@@ -3715,7 +3712,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testObserverGracefulShutdown(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int voter1 = localId + 1;
@@ -3742,7 +3739,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testGracefulShutdownSingleMemberQuorum(RaftProtocol raftProtocol) throws IOException {
         int localId = randomReplicaId();
         RaftClientTestContext context = new Builder(localId, Collections.singleton(localId))
@@ -3760,7 +3757,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testFollowerReplication(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
@@ -3822,7 +3819,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testEmptyRecordSetInFetchResponse(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
@@ -3889,7 +3886,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testFetchShouldBeTreatedAsLeaderAcknowledgement(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         ReplicaKey otherNodeKey = replicaKey(localId + 1, raftProtocol.isReconfigSupported());
@@ -3925,7 +3922,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testLeaderAppendSingleMemberQuorum(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         Set<Integer> voters = Collections.singleton(localId);
@@ -4002,7 +3999,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testFollowerLogReconciliation(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
@@ -4039,7 +4036,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testMetrics(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int epoch = 1;
@@ -4090,7 +4087,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testClusterAuthorizationFailedInFetch(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
@@ -4118,7 +4115,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testClusterAuthorizationFailedInBeginQuorumEpoch(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
@@ -4148,7 +4145,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testClusterAuthorizationFailedInVote(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
@@ -4174,7 +4171,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testClusterAuthorizationFailedInEndQuorumEpoch(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
@@ -4200,7 +4197,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testHandleLeaderChangeFiresAfterListenerReachesEpochStartOffsetOnEmptyLog(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         ReplicaKey otherNodeKey = replicaKey(localId + 1, raftProtocol.isReconfigSupported());
@@ -4245,7 +4242,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testHandleLeaderChangeFiresAfterListenerReachesEpochStartOffset(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         ReplicaKey otherNodeKey = replicaKey(localId + 1, raftProtocol.isReconfigSupported());
@@ -4312,7 +4309,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testLateRegisteredListenerCatchesUp(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         ReplicaKey otherNodeKey = replicaKey(localId + 1, raftProtocol.isReconfigSupported());
@@ -4355,7 +4352,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testReregistrationChangesListenerContext(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
@@ -4399,7 +4396,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testHandleCommitCallbackFiresAfterFollowerHighWatermarkAdvances(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
@@ -4458,7 +4455,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testHandleCommitCallbackFiresInVotedState(RaftProtocol raftProtocol) throws Exception {
         // This test verifies that the state machine can still catch up even while
         // an election is in progress as long as the high watermark is known.
@@ -4505,7 +4502,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testHandleCommitCallbackFiresInCandidateState(RaftProtocol raftProtocol) throws Exception {
         // This test verifies that the state machine can still catch up even while
         // an election is in progress as long as the high watermark is known.
@@ -4560,7 +4557,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testHandleLeaderChangeFiresAfterUnattachedRegistration(
         RaftProtocol raftProtocol
     ) throws Exception {
@@ -4598,7 +4595,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testHandleLeaderChangeFiresAfterFollowerRegistration(RaftProtocol raftProtocol) throws Exception {
         // When registering a listener while the replica is a follower, it should get notified with
         // the current leader and epoch
@@ -4624,7 +4621,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testHandleLeaderChangeFiresAfterResignRegistration(RaftProtocol raftProtocol) throws Exception {
         // When registering a listener while the replica is resigned, it should not get notified with
         // the current leader and epoch
@@ -4654,7 +4651,7 @@ public class KafkaRaftClientTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
+    @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testObserverFetchWithNoLocalId(RaftProtocol raftProtocol) throws Exception {
         // When no `localId` is defined, the client will behave as an observer.
         // This is designed for tooling/debugging use cases.
