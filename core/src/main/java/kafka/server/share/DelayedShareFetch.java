@@ -277,9 +277,9 @@ public class DelayedShareFetch extends DelayedOperation {
             return false;
         } catch (Exception e) {
             log.error("Error processing delayed share fetch request", e);
+            releasePartitionLocks(topicPartitionData.keySet());
             partitionsAcquired.clear();
             partitionsAlreadyFetched.clear();
-            releasePartitionLocks(topicPartitionData.keySet());
             return forceComplete();
         }
     }
