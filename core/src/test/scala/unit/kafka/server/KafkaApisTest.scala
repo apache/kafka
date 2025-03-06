@@ -10738,7 +10738,7 @@ class KafkaApisTest extends Logging {
 
   @Test
   def testShareGroupHeartbeatRequestTopicAuthorizationFailed(): Unit = {
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     val groupId = "group"
     val fooTopicName = "foo"
     val barTopicName = "bar"
