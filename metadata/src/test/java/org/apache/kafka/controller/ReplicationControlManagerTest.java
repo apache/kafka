@@ -1924,6 +1924,135 @@ public class ReplicationControlManagerTest {
 
     @ParameterizedTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.ALTER_PARTITION)
+    public void testAlterPartitionDisallowReplicationFactorChange(short version) {
+        MetadataVersion metadataVersion = MetadataVersion.latestTesting();
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder()
+                .setMetadataVersion(metadataVersion)
+                .build();
+        ReplicationControlManager replication = ctx.replicationControl;
+        ctx.registerBrokers(0, 1, 2, 3);
+        ctx.unfenceBrokers(0, 1, 2, 3);
+        ctx.createTestTopic("foo", new int[][] {new int[] {0, 1, 2}, new int[] {0, 1, 2}, new int[] {0, 1, 2}});
+
+        ControllerResult<AlterPartitionReassignmentsResponseData> alterResult =
+                replication.alterPartitionReassignments(
+                        new AlterPartitionReassignmentsRequestData().setTopics(singletonList(
+                                new ReassignableTopic().setName("foo").setPartitions(asList(
+                                        new ReassignablePartition().setPartitionIndex(0).
+                                                setReplicas(asList(1, 2, 3)),
+                                        new ReassignablePartition().setPartitionIndex(1).
+                                                setReplicas(asList(0, 1)),
+                                        new ReassignablePartition().setPartitionIndex(2).
+                                                setReplicas(asList(0, 1, 2, 3)))))).
+                                setAllowReplicationFactorChange(false));
+        assertEquals(new AlterPartitionReassignmentsResponseData().
+                        setErrorMessage(null).setAllowReplicationFactorChange(false).setResponses(singletonList(
+                                new ReassignableTopicResponse().setName("foo").setPartitions(asList(
+                                        new ReassignablePartitionResponse().setPartitionIndex(0).
+                                                setErrorMessage(null),
+                                        new ReassignablePartitionResponse().setPartitionIndex(1).
+                                                setErrorCode(INVALID_REPLICATION_FACTOR.code()).
+                                                setErrorMessage("The replication factor is changed from 3 to 2"),
+                                        new ReassignablePartitionResponse().setPartitionIndex(2).
+                                                setErrorCode(INVALID_REPLICATION_FACTOR.code()).
+                                                setErrorMessage("The replication factor is changed from 3 to 4"))))),
+                alterResult.response());
+        ctx.replay(alterResult.records());
+        ListPartitionReassignmentsResponseData currentReassigning =
+                new ListPartitionReassignmentsResponseData().setErrorMessage(null).
+                        setTopics(singletonList(new OngoingTopicReassignment().
+                                setName("foo").setPartitions(singletonList(
+                                        new OngoingPartitionReassignment().setPartitionIndex(0).
+                                                setRemovingReplicas(singletonList(0)).
+                                                setAddingReplicas(singletonList(3)).
+                                                setReplicas(asList(1, 2, 3, 0))))));
+        assertEquals(currentReassigning, replication.listPartitionReassignments(singletonList(
+                new ListPartitionReassignmentsTopics().setName("foo").
+                        setPartitionIndexes(asList(0, 1, 2))), Long.MAX_VALUE));
+
+        // test alter replica factor not allow to change when partition reassignment is ongoing
+        ControllerResult<AlterPartitionReassignmentsResponseData> alterReassigningResult =
+                replication.alterPartitionReassignments(
+                        new AlterPartitionReassignmentsRequestData().setTopics(singletonList(
+                                new ReassignableTopic().setName("foo").setPartitions(singletonList(
+                                        new ReassignablePartition().setPartitionIndex(0).setReplicas(asList(0, 1)))))).
+                                setAllowReplicationFactorChange(false));
+        assertEquals(new AlterPartitionReassignmentsResponseData().
+                        setErrorMessage(null).setAllowReplicationFactorChange(false).setResponses(singletonList(
+                                new ReassignableTopicResponse().setName("foo").setPartitions(singletonList(
+                                        new ReassignablePartitionResponse().setPartitionIndex(0).
+                                                setErrorCode(INVALID_REPLICATION_FACTOR.code()).
+                                                setErrorMessage("The replication factor is changed from 3 to 2"))))),
+                alterReassigningResult.response());
+
+        ControllerResult<AlterPartitionReassignmentsResponseData> alterReassigningResult2 =
+                replication.alterPartitionReassignments(
+                        new AlterPartitionReassignmentsRequestData().setTopics(singletonList(
+                                        new ReassignableTopic().setName("foo").setPartitions(singletonList(
+                                                new ReassignablePartition().setPartitionIndex(0).setReplicas(asList(0, 2, 3)))))).
+                                setAllowReplicationFactorChange(false));
+        assertEquals(new AlterPartitionReassignmentsResponseData().
+                        setErrorMessage(null).setAllowReplicationFactorChange(false).setResponses(singletonList(
+                                new ReassignableTopicResponse().setName("foo").setPartitions(singletonList(
+                                        new ReassignablePartitionResponse().setPartitionIndex(0).
+                                                setErrorMessage(null))))),
+                alterReassigningResult2.response());
+    }
+
+    @ParameterizedTest
+    @ApiKeyVersionsSource(apiKey = ApiKeys.ALTER_PARTITION)
+    public void testDisallowReplicationFactorChangeNoEffectWhenCancelAlterPartition(short version) {
+        MetadataVersion metadataVersion = MetadataVersion.latestTesting();
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder()
+                .setMetadataVersion(metadataVersion)
+                .build();
+        ReplicationControlManager replication = ctx.replicationControl;
+        ctx.registerBrokers(0, 1, 2, 3);
+        ctx.unfenceBrokers(0, 1, 2, 3);
+        ctx.createTestTopic("foo", new int[][] {new int[] {0, 1, 2}}).topicId();
+
+        ControllerResult<AlterPartitionReassignmentsResponseData> alterResult =
+                replication.alterPartitionReassignments(
+                        new AlterPartitionReassignmentsRequestData().setTopics(singletonList(
+                                        new ReassignableTopic().setName("foo").setPartitions(singletonList(
+                                                new ReassignablePartition().setPartitionIndex(0).
+                                                        setReplicas(asList(1, 2, 3)))))));
+        assertEquals(new AlterPartitionReassignmentsResponseData().
+                        setErrorMessage(null).setResponses(singletonList(
+                                new ReassignableTopicResponse().setName("foo").setPartitions(singletonList(
+                                        new ReassignablePartitionResponse().setPartitionIndex(0).setErrorMessage(null))))),
+                alterResult.response());
+        ctx.replay(alterResult.records());
+        ListPartitionReassignmentsResponseData currentReassigning =
+                new ListPartitionReassignmentsResponseData().setErrorMessage(null).
+                        setTopics(singletonList(new OngoingTopicReassignment().
+                                setName("foo").setPartitions(singletonList(
+                                        new OngoingPartitionReassignment().setPartitionIndex(0).
+                                                setRemovingReplicas(singletonList(0)).
+                                                setAddingReplicas(singletonList(3)).
+                                                setReplicas(asList(1, 2, 3, 0))))));
+        assertEquals(currentReassigning, replication.listPartitionReassignments(singletonList(
+                new ListPartitionReassignmentsTopics().setName("foo").
+                        setPartitionIndexes(asList(0, 1, 2))), Long.MAX_VALUE));
+
+        // test replica factor change check takes no effect when partition reassignment is ongoing
+        ControllerResult<AlterPartitionReassignmentsResponseData> cancelResult =
+                replication.alterPartitionReassignments(
+                        new AlterPartitionReassignmentsRequestData().setTopics(singletonList(
+                                new ReassignableTopic().setName("foo").setPartitions(singletonList(
+                                        new ReassignablePartition().setPartitionIndex(0).setReplicas(null))))).
+                                setAllowReplicationFactorChange(false));
+        assertEquals(new AlterPartitionReassignmentsResponseData().setAllowReplicationFactorChange(false).setErrorMessage(null).
+                        setResponses(singletonList(
+                                new ReassignableTopicResponse().setName("foo").setPartitions(singletonList(
+                                        new ReassignablePartitionResponse().setPartitionIndex(0).setErrorMessage(null))))),
+                cancelResult.response());
+        ctx.replay(cancelResult.records());
+        assertEquals(NONE_REASSIGNING, replication.listPartitionReassignments(null, Long.MAX_VALUE));
+    }
+
+    @ParameterizedTest
+    @ApiKeyVersionsSource(apiKey = ApiKeys.ALTER_PARTITION)
     public void testAlterPartitionShouldRejectFencedBrokers(short version) {
         ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().build();
         ReplicationControlManager replication = ctx.replicationControl;
