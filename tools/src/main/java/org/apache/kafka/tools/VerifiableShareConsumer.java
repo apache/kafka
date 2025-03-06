@@ -550,11 +550,11 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
             .dest("offsetResetStrategy")
             .help("Set share group reset strategy (must be either 'earliest' or 'latest')");
 
-        parser.addArgument("--client-config")
+        parser.addArgument("--command-config")
             .action(store())
             .required(false)
             .type(String.class)
-            .dest("clientConfig")
+            .dest("commandConfig")
             .metavar("CONFIG_FILE")
             .help("Config properties file (config options shared with command line parameters will be overridden).");
 
@@ -567,8 +567,8 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
         AcknowledgementMode acknowledgementMode =
             AcknowledgementMode.valueOf(res.getString("acknowledgementMode").toUpperCase(Locale.ROOT));
         String offsetResetStrategy = res.getString("offsetResetStrategy").toLowerCase(Locale.ROOT);
-        String configFile = res.getString("clientConfig");
-        String brokerHostandPort = res.getString("bootstrapServer");
+        String configFile = res.getString("commandConfig");
+        String brokerHostAndPort = res.getString("bootstrapServer");
 
         Properties consumerProps = new Properties();
         if (configFile != null) {
@@ -583,7 +583,7 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
 
         consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
 
-        consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerHostandPort);
+        consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerHostAndPort);
 
         String topic = res.getString("topic");
         int maxMessages = res.getInt("maxMessages");
@@ -601,7 +601,7 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
             }
         }
 
-        adminClientProps.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, brokerHostandPort);
+        adminClientProps.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, brokerHostAndPort);
         Admin adminClient = Admin.create(adminClientProps);
 
         return new VerifiableShareConsumer(
