@@ -3965,7 +3965,7 @@ CurrentObservers:       [{"id": 0, "directoryId": "3Db5QLSqSZieL3rJBUUegA"},
 
   <p>The kafka-metadata-shell.sh tool can be used to interactively inspect the state of the cluster metadata partition:</p>
 
-  <pre><code class="language-bash">$ bin/kafka-metadata-shell.sh --snapshot metadata_log_dir/__cluster_metadata-0/00000000000000000000.checkpoint
+  <pre><code class="language-bash">$ bin/kafka-metadata-shell.sh --snapshot metadata_log_dir/__cluster_metadata-0/00000000000000007228-0000000001.checkpoint
 &gt;&gt; ls /
 brokers  local  metadataQuorum  topicIds  topics
 &gt;&gt; ls /topics
@@ -3983,7 +3983,7 @@ foo
   "partitionEpoch" : 0
 }
 &gt;&gt; exit</code></pre>
-
+  Note: <code>00000000000000000000-0000000000.checkpoint</code> does not contain cluster metadata. Use a valid snapshot file when examining metadata with the <code>kafka-metadata-shell.sh</code> tool.
   <h4 class="anchor-heading"><a id="kraft_deployment" class="anchor-link"></a><a href="#kraft_deployment">Deploying Considerations</a></h4>
 
   <ul>
