@@ -4786,11 +4786,8 @@ public class GroupMetadataManager {
         });
         allGroupIds.forEach(groupId -> {
             Group group = groups.get(groupId);
-            if (group != null && (group.type() == CONSUMER || group.type() == SHARE)) {
-                ((ModernGroup<?>) group).requestMetadataRefresh();
-            }
-            if (group != null && (group.type() == STREAMS)) {
-                ((StreamsGroup) group).requestMetadataRefresh();
+            if (group != null) {
+                group.requestMetadataRefresh();
             }
         });
     }
