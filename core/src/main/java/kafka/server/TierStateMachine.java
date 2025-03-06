@@ -187,7 +187,7 @@ public class TierStateMachine {
                                         Long leaderLogStartOffset,
                                         UnifiedLog unifiedLog) throws IOException, RemoteStorageException {
 
-        if (!unifiedLog.remoteLogEnabled() || !unifiedLog.config().remoteStorageEnable()) {
+        if (!unifiedLog.remoteLogEnabled()) {
             // If the tiered storage is not enabled throw an exception back so that it will retry until the tiered storage
             // is set as expected.
             throw new RemoteStorageException("Couldn't build the state from remote store for partition " + topicPartition + ", as remote log storage is not yet enabled");

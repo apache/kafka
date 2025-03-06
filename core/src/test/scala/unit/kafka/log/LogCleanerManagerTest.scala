@@ -128,7 +128,6 @@ class LogCleanerManagerTest extends Logging {
       new ConcurrentHashMap[String, Integer],
       false
     ).load()
-    // the exception should be caught and the partition that caused it marked as uncleanable
     val localLog = new LocalLog(tpDir, config, segments, offsets.recoveryPoint,
       offsets.nextOffsetMetadata, time.scheduler, time, tp, logDirFailureChannel)
     // the exception should be caught and the partition that caused it marked as uncleanable

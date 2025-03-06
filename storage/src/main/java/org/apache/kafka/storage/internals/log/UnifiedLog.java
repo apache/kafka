@@ -1093,7 +1093,6 @@ public class UnifiedLog implements AutoCloseable {
                                 // assign offsets to the message set
                                 PrimitiveRef.LongRef offset = PrimitiveRef.ofLong(localLog.logEndOffset());
                                 appendInfo.setFirstOffset(offset.value);
-
                                 Compression targetCompression = BrokerCompressionType.targetCompression(config().compression, appendInfo.sourceCompression());
                                 LogValidator validator = new LogValidator(validRecords,
                                         topicPartition(),
@@ -1654,7 +1653,10 @@ public class UnifiedLog implements AutoCloseable {
                         }
                     } else if (targetTimestamp == ListOffsetsRequest.MAX_TIMESTAMP) {
                         // Cache to avoid race conditions.
-                        List<LogSegment> segments = List.copyOf(logSegments());
+                        List<LogSegment> segments;
+                        synchronized (lock) {
+                            segments = List.copyOf(logSegments());
+                        }
                         LogSegment latestTimestampSegment = null;
                         for (LogSegment segment : segments) {
                             if (latestTimestampSegment == null) {
@@ -1704,7 +1706,10 @@ public class UnifiedLog implements AutoCloseable {
 
     private Optional<FileRecords.TimestampAndOffset> searchOffsetInLocalLog(long targetTimestamp, long startOffset) {
         // Cache to avoid race conditions.
-        List<LogSegment> segmentsCopy = List.copyOf(logSegments());
+        List<LogSegment> segmentsCopy;
+        synchronized (lock) {
+            segmentsCopy = List.copyOf(logSegments());
+        }
         Optional<LogSegment> targetSeg = findFirst(
             segmentsCopy,
             item -> {

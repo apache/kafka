@@ -635,16 +635,14 @@ class LogCleanerTest extends Logging {
 
     // [{Producer1: 2, 3}], [{Producer2: 2, 3}, {Producer2: Commit}]
     producer2(Seq(2, 3)) // offsets 2, 3
-    log.appendAsLeader(commitMarker(2L, producerEpoch), 0,
-      AppendOrigin.COORDINATOR) // offset 4
+    log.appendAsLeader(commitMarker(2L, producerEpoch), 0, AppendOrigin.COORDINATOR) // offset 4
     log.roll()
 
     // [{Producer1: 2, 3}], [{Producer2: 2, 3}, {Producer2: Commit}], [{2}, {3}, {Producer1: Commit}]
     //  {0, 1},              {2, 3},            {4},                   {5}, {6}, {7} ==> Offsets
     log.appendAsLeader(record(2, 2), 0) // offset 5
     log.appendAsLeader(record(3, 3), 0) // offset 6
-    log.appendAsLeader(commitMarker(1L, producerEpoch), 0,
-      AppendOrigin.COORDINATOR) // offset 7
+    log.appendAsLeader(commitMarker(1L, producerEpoch), 0, AppendOrigin.COORDINATOR) // offset 7
     log.roll()
 
     // first time through the records are removed
@@ -665,8 +663,7 @@ class LogCleanerTest extends Logging {
     // [{Producer1: EmptyBatch}, {Producer2: EmptyBatch}, {Producer2: Commit}, {2}, {3}, {Producer1: Commit}, {Producer2: 1}, {Producer2: Commit}]
     //  {1},                     {3},                     {4},                 {5}, {6}, {7},                 {8},            {9} ==> Offsets
     producer2(Seq(1)) // offset 8
-    log.appendAsLeader(commitMarker(2L, producerEpoch), 0,
-      AppendOrigin.COORDINATOR) // offset 9
+    log.appendAsLeader(commitMarker(2L, producerEpoch), 0, AppendOrigin.COORDINATOR) // offset 9
     log.roll()
 
     // Expected State: [{Producer1: EmptyBatch}, {Producer2: Commit}, {2}, {3}, {Producer1: Commit}, {Producer2: 1}, {Producer2: Commit}]
@@ -695,8 +692,7 @@ class LogCleanerTest extends Logging {
     val producerEpoch = 0.toShort
 
     // [{Producer1: Commit}, {2}, {3}]
-    log.appendAsLeader(commitMarker(1L, producerEpoch), 0,
-      AppendOrigin.COORDINATOR) // offset 1
+    log.appendAsLeader(commitMarker(1L, producerEpoch), 0, AppendOrigin.COORDINATOR) // offset 1
     log.appendAsLeader(record(2, 2), 0) // offset 2
     log.appendAsLeader(record(3, 3), 0) // offset 3
     log.roll()

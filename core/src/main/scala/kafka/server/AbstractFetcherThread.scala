@@ -643,7 +643,6 @@ abstract class AbstractFetcherThread(name: String,
     }
   }
 
-
   /**
    * Handle a partition whose offset is out of range and return a new fetch offset.
    */
