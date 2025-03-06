@@ -1772,7 +1772,7 @@ public class ReplicationControlManager {
     }
 
     /**
-     * Trigger unclean leader election for partitions without leader (visiable for testing)
+     * Trigger unclean leader election for partitions without leader (visible for testing)
      *
      * @param records       The record list to append to.
      * @param maxElections  The maximum number of elections to perform.
