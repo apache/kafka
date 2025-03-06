@@ -210,6 +210,15 @@ public class ConfigurationControlManagerTest {
                         setName("abc").setValue(null), CONFIG_RECORD.highestSupportedVersion())),
                 ApiError.NONE),
             manager.incrementalAlterConfig(MYTOPIC, toMap(entry("abc", entry(DELETE, "xyz"))), true));
+
+        // The configuration value exceeding the maximum size is not allowed to be added.
+        String largeValue = new String(new char[Short.MAX_VALUE - APPEND.id() - 1]);
+        Map<String, Entry<AlterConfigOp.OpType, String>> largeValueOfOps = toMap(entry("abc", entry(APPEND, largeValue)));
+
+        ControllerResult<ApiError> invalidConfigValueResult = manager.incrementalAlterConfig(MYTOPIC, largeValueOfOps, true);
+        assertEquals(Errors.INVALID_CONFIG, invalidConfigValueResult.response().error());
+        assertEquals("The configuration value cannot be added because it exceeds the maximum value size of " + Short.MAX_VALUE + " bytes.",
+                invalidConfigValueResult.response().message());
     }
 
     @Test

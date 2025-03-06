@@ -2728,7 +2728,7 @@ public class KafkaProducerTest {
                     props, new StringSerializer(), new StringSerializer())) {
                 KafkaMetric existingMetric = (KafkaMetric) producer.metrics().entrySet().iterator().next().getValue();
                 producer.registerMetricForSubscription(existingMetric);
-                // This test would fail without the check as the exising metric is registered in the producer on startup
+                // This test would fail without the check as the existing metric is registered in the producer on startup
                 Mockito.verify(clientTelemetryReporter, atMostOnce()).metricChange(existingMetric);
             }
         }
@@ -2747,7 +2747,7 @@ public class KafkaProducerTest {
                     props, new StringSerializer(), new StringSerializer())) {
                 KafkaMetric existingMetric = (KafkaMetric) producer.metrics().entrySet().iterator().next().getValue();
                 producer.unregisterMetricFromSubscription(existingMetric);
-                // This test would fail without the check as the exising metric is registered in the consumer on startup
+                // This test would fail without the check as the existing metric is registered in the consumer on startup
                 Mockito.verify(clientTelemetryReporter, never()).metricRemoval(existingMetric);
             }
         }
