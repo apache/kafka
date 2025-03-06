@@ -933,7 +933,7 @@ private[group] class GroupCoordinator(
           }
         }
         val transactionSupportedOperation = AddPartitionsToTxnManager.txnOffsetCommitRequestVersionToTransactionSupportedOperation(apiVersion)
-        groupManager.replicaManager.maybeStartTransactionVerificationForPartition(
+        groupManager.replicaManager.maybeSendPartitionToTransactionCoordinator(
           topicPartition = offsetTopicPartition,
           transactionalId,
           producerId,

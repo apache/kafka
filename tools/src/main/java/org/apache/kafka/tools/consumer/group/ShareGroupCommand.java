@@ -17,13 +17,14 @@
 package org.apache.kafka.tools.consumer.group;
 
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.admin.AbstractOptions;
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.DeleteShareGroupsOptions;
 import org.apache.kafka.clients.admin.DescribeShareGroupsOptions;
 import org.apache.kafka.clients.admin.GroupListing;
 import org.apache.kafka.clients.admin.ListGroupsOptions;
 import org.apache.kafka.clients.admin.ListGroupsResult;
-import org.apache.kafka.clients.admin.ListOffsetsResult;
-import org.apache.kafka.clients.admin.OffsetSpec;
+import org.apache.kafka.clients.admin.ListShareGroupOffsetsSpec;
 import org.apache.kafka.clients.admin.ShareGroupDescription;
 import org.apache.kafka.clients.admin.ShareMemberAssignment;
 import org.apache.kafka.clients.admin.ShareMemberDescription;
@@ -31,6 +32,7 @@ import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.GroupNotEmptyException;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.CommandLineUtils;
 
@@ -41,6 +43,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -55,6 +58,8 @@ import java.util.stream.Stream;
 import joptsimple.OptionException;
 
 public class ShareGroupCommand {
+
+    static final String MISSING_COLUMN_VALUE = "-";
 
     public static void main(String[] args) {
         ShareGroupCommandOptions opts = new ShareGroupCommandOptions(args);
@@ -80,7 +85,7 @@ public class ShareGroupCommand {
             } else if (opts.options.has(opts.describeOpt)) {
                 shareGroupService.describeGroups();
             } else if (opts.options.has(opts.deleteOpt)) {
-                throw new UnsupportedOperationException("--delete option is not yet implemented");
+                shareGroupService.deleteShareGroups();
             } else if (opts.options.has(opts.resetOffsetsOpt)) {
                 throw new UnsupportedOperationException("--reset-offsets option is not yet implemented");
             } else if (opts.options.has(opts.deleteOffsetsOpt)) {
@@ -153,6 +158,18 @@ public class ShareGroupCommand {
             }
         }
 
+        List<GroupListing> listDetailedShareGroups() {
+            try {
+                ListGroupsResult result = adminClient.listGroups(new ListGroupsOptions()
+                    .timeoutMs(opts.options.valueOf(opts.timeoutMsOpt).intValue())
+                    .withTypes(Set.of(GroupType.SHARE)));
+                Collection<GroupListing> listings = result.all().get();
+                return listings.stream().toList();
+            } catch (InterruptedException | ExecutionException e) {
+                throw new RuntimeException(e);
+            }
+        }
+
         List<GroupListing> listShareGroupsInStates(Set<GroupState> states) throws ExecutionException, InterruptedException {
             ListGroupsResult result = adminClient.listGroups(new ListGroupsOptions()
                 .timeoutMs(opts.options.valueOf(opts.timeoutMsOpt).intValue())
@@ -203,8 +220,74 @@ public class ShareGroupCommand {
             } else {
                 TreeMap<String, Entry<ShareGroupDescription, Collection<SharePartitionOffsetInformation>>> offsets
                     = collectGroupsOffsets(groupIds);
-                printOffsets(offsets);
+                printOffsets(offsets, opts.options.has(opts.verboseOpt));
             }
+        }
+
+        Map<String, Throwable> deleteShareGroups() {
+            List<GroupListing> shareGroupIds = listDetailedShareGroups();
+            List<String> groupIds = opts.options.has(opts.allGroupsOpt)
+                ? shareGroupIds.stream().map(GroupListing::groupId).toList()
+                : opts.options.valuesOf(opts.groupOpt);
+
+            // Pre admin call checks
+            LinkedHashSet<String> groupIdSet = new LinkedHashSet<>(groupIds);
+            Map<String, Exception> errGroups = new HashMap<>();
+            for (String groupId : groupIdSet) {
+                Optional<GroupListing> listing = shareGroupIds.stream().filter(item -> item.groupId().equals(groupId)).findAny();
+                if (listing.isEmpty()) {
+                    errGroups.put(groupId, new IllegalArgumentException("Group '" + groupId + "' is not a share group."));
+                } else {
+                    Optional<GroupState> groupState = listing.get().groupState();
+                    groupState.ifPresent(state -> {
+                        if (state == GroupState.DEAD) {
+                            errGroups.put(groupId, new IllegalStateException("Share group '" + groupId + "' group state is DEAD."));
+                        } else if (state != GroupState.EMPTY) {
+                            errGroups.put(groupId, new GroupNotEmptyException("Share group '" + groupId + "' is not EMPTY."));
+                        }
+                    });
+                }
+            }
+
+            groupIdSet.removeAll(errGroups.keySet());
+
+            Map<String, KafkaFuture<Void>> groupsToDelete = groupIdSet.isEmpty() ? Map.of() : adminClient.deleteShareGroups(
+                groupIdSet.stream().toList(),
+                withTimeoutMs(new DeleteShareGroupsOptions())
+            ).deletedGroups();
+
+            Map<String, Throwable> success = new HashMap<>();
+            Map<String, Throwable> failed = new HashMap<>(errGroups);
+
+            groupsToDelete.forEach((g, f) -> {
+                try {
+                    f.get();
+                    success.put(g, null);
+                } catch (InterruptedException ie) {
+                    failed.put(g, ie);
+                } catch (ExecutionException e) {
+                    failed.put(g, e.getCause());
+                }
+            });
+
+            if (failed.isEmpty())
+                System.out.println("Deletion of requested share groups (" + success.keySet().stream().map(group -> "'" + group + "'").collect(Collectors.joining(", ")) + ") was successful.");
+            else {
+                printError("Deletion of some share groups failed:", Optional.empty());
+                failed.forEach((group, error) -> System.out.println("* Share group '" + group + "' could not be deleted due to: " + error));
+
+                if (!success.isEmpty())
+                    System.out.println("\nThese share groups were deleted successfully: " + success.keySet().stream().map(group -> "'" + group + "'").collect(Collectors.joining(",")));
+            }
+
+            failed.putAll(success);
+
+            return failed;
+        }
+
+        private <T extends AbstractOptions<T>> T withTimeoutMs(T options) {
+            int t = opts.options.valueOf(opts.timeoutMsOpt).intValue();
+            return options.timeoutMs(t);
         }
 
         Map<String, ShareGroupDescription> describeShareGroups(Collection<String> groupIds) throws ExecutionException, InterruptedException {
@@ -237,28 +320,21 @@ public class ShareGroupCommand {
                     allTp.addAll(memberDescription.assignment().topicPartitions());
                 }
 
-                // Fetch latest and earliest offsets
-                Map<TopicPartition, OffsetSpec> earliest = new HashMap<>();
-                Map<TopicPartition, OffsetSpec> latest = new HashMap<>();
+                ListShareGroupOffsetsSpec offsetsSpec = new ListShareGroupOffsetsSpec().topicPartitions(allTp);
+                Map<String, ListShareGroupOffsetsSpec> groupSpecs = new HashMap<>();
+                groupSpecs.put(groupId, offsetsSpec);
 
-                for (TopicPartition tp : allTp) {
-                    earliest.put(tp, OffsetSpec.earliest());
-                    latest.put(tp, OffsetSpec.latest());
-                }
-
-                // This call to obtain the earliest offsets will be replaced once adminClient.listShareGroupOffsets is implemented
                 try {
-                    Map<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> earliestResult = adminClient.listOffsets(earliest).all().get();
-                    Map<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> latestResult = adminClient.listOffsets(latest).all().get();
+                    Map<TopicPartition, Long> earliestResult = adminClient.listShareGroupOffsets(groupSpecs).all().get().get(groupId);
 
                     Set<SharePartitionOffsetInformation> partitionOffsets = new HashSet<>();
 
-                    for (Entry<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> tp : earliestResult.entrySet()) {
+                    for (Entry<TopicPartition, Long> tp : earliestResult.entrySet()) {
                         SharePartitionOffsetInformation partitionOffsetInfo = new SharePartitionOffsetInformation(
                             groupId,
                             tp.getKey().topic(),
                             tp.getKey().partition(),
-                            latestResult.get(tp.getKey()).offset() - earliestResult.get(tp.getKey()).offset()
+                            Optional.ofNullable(earliestResult.get(tp.getKey()))
                         );
                         partitionOffsets.add(partitionOffsetInfo);
                     }
@@ -271,34 +347,53 @@ public class ShareGroupCommand {
             return groupOffsets;
         }
 
-        private void printOffsets(TreeMap<String, Entry<ShareGroupDescription, Collection<SharePartitionOffsetInformation>>> offsets) {
+        private void printOffsets(TreeMap<String, Entry<ShareGroupDescription, Collection<SharePartitionOffsetInformation>>> offsets, boolean verbose) {
             offsets.forEach((groupId, tuple) -> {
                 ShareGroupDescription description = tuple.getKey();
                 Collection<SharePartitionOffsetInformation> offsetsInfo = tuple.getValue();
                 if (maybePrintEmptyGroupState(groupId, description.groupState(), offsetsInfo.size())) {
-                    String fmt = printOffsetFormat(groupId, offsetsInfo);
-                    System.out.printf(fmt, "GROUP", "TOPIC", "PARTITION", "START-OFFSET");
+                    String fmt = printOffsetFormat(groupId, offsetsInfo, verbose);
+
+                    if (verbose) {
+                        System.out.printf(fmt, "GROUP", "TOPIC", "PARTITION", "LEADER-EPOCH", "START-OFFSET");
+                    } else {
+                        System.out.printf(fmt, "GROUP", "TOPIC", "PARTITION", "START-OFFSET");
+                    }
 
                     for (SharePartitionOffsetInformation info : offsetsInfo) {
-                        System.out.printf(fmt,
-                            groupId,
-                            info.topic,
-                            info.partition,
-                            info.offset
-                        );
+                        if (verbose) {
+                            System.out.printf(fmt,
+                                groupId,
+                                info.topic,
+                                info.partition,
+                                MISSING_COLUMN_VALUE, // Temporary
+                                info.offset.map(Object::toString).orElse(MISSING_COLUMN_VALUE)
+                            );
+                        } else {
+                            System.out.printf(fmt,
+                                groupId,
+                                info.topic,
+                                info.partition,
+                                info.offset.map(Object::toString).orElse(MISSING_COLUMN_VALUE)
+                            );
+                        }
                     }
                     System.out.println();
                 }
             });
         }
 
-        private static String printOffsetFormat(String groupId, Collection<SharePartitionOffsetInformation> offsetsInfo) {
+        private static String printOffsetFormat(String groupId, Collection<SharePartitionOffsetInformation> offsetsInfo, boolean verbose) {
             int groupLen = Math.max(15, groupId.length());
             int maxTopicLen = 15;
             for (SharePartitionOffsetInformation info : offsetsInfo) {
                 maxTopicLen = Math.max(maxTopicLen, info.topic.length());
             }
-            return "\n%" + (-groupLen) + "s %" + (-maxTopicLen) + "s %-10s %s";
+            if (verbose) {
+                return "\n%" + (-groupLen) + "s %" + (-maxTopicLen) + "s %-10s %-13s %s";
+            } else {
+                return "\n%" + (-groupLen) + "s %" + (-maxTopicLen) + "s %-10s %s";
+            }
         }
 
         private void printStates(Map<String, ShareGroupDescription> descriptions, boolean verbose) {
@@ -388,13 +483,13 @@ public class ShareGroupCommand {
         final String group;
         final String topic;
         final int partition;
-        final long offset;
+        final Optional<Long> offset;
 
         SharePartitionOffsetInformation(
             String group,
             String topic,
             int partition,
-            long offset
+            Optional<Long> offset
         ) {
             this.group = group;
             this.topic = topic;

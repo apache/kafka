@@ -37,6 +37,7 @@ public interface Group {
         CONSUMER("consumer"),
         CLASSIC("classic"),
         SHARE("share"),
+        STREAMS("streams"),
         UNKNOWN("unknown");
 
         private final String name;
@@ -194,4 +195,9 @@ public interface Group {
      * @return The number of members.
      */
     int numMembers();
+
+    /**
+     * Requests a metadata refresh.
+     */
+    void requestMetadataRefresh();
 }

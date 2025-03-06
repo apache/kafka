@@ -51,7 +51,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -107,7 +106,7 @@ public class StateDirectory implements AutoCloseable {
     private final boolean hasPersistentStores;
     private final boolean hasNamedTopologies;
 
-    private final HashMap<TaskId, Thread> lockedTasksToOwner = new HashMap<>();
+    private final ConcurrentMap<TaskId, Thread> lockedTasksToOwner = new ConcurrentHashMap<>();
 
     private FileChannel stateDirLockChannel;
     private FileLock stateDirLock;
@@ -286,7 +285,7 @@ public class StateDirectory implements AutoCloseable {
             // "drain" Tasks first to ensure that we don't try to close Tasks that another thread is attempting to close
             final Set<Task> drainedTasks = new HashSet<>(tasksForLocalState.size());
             for (final Map.Entry<TaskId, Task> entry : tasksForLocalState.entrySet()) {
-                if (predicate.test(entry.getValue()) && tasksForLocalState.remove(entry.getKey()) != null) {
+                if (predicate.test(entry.getValue()) && removeStartupTask(entry.getKey()) != null) {
                     // only add to our list of drained Tasks if we exclusively "claimed" a Task from tasksForLocalState
                     // to ensure we don't accidentally try to drain the same Task multiple times from concurrent threads
                     drainedTasks.add(entry.getValue());

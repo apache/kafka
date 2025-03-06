@@ -712,7 +712,7 @@ public class FetchCollectorTest {
             mock(ConsumerMetadata.class),
             subscriptions,
             new FetchConfig(new ConsumerConfig(consumerProps)),
-            new Deserializers<>(new StringDeserializer(), new StringDeserializer()),
+            new Deserializers<>(new StringDeserializer(), new StringDeserializer(), null),
             mock(FetchMetricsManager.class),
             new MockTime()
         );
@@ -741,12 +741,11 @@ public class FetchCollectorTest {
         Properties p = consumerProperties(maxPollRecords);
         ConsumerConfig config = new ConsumerConfig(p);
 
-        deserializers = new Deserializers<>(new StringDeserializer(), new StringDeserializer());
-
         subscriptions = createSubscriptionState(config, logContext);
         fetchConfig = createFetchConfig(config, isolationLevel);
         Metrics metrics = createMetrics(config, time);
         metricsManager = createFetchMetricsManager(metrics);
+        deserializers = new Deserializers<>(new StringDeserializer(), new StringDeserializer(), metrics);
         metadata = new ConsumerMetadata(
                 0,
                 1000,

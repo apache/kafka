@@ -18,17 +18,13 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.config.ConfigResource;
 
 import java.util.Map;
 
 /**
  * The result of the {@link Admin#incrementalAlterConfigs(Map, AlterConfigsOptions)} call.
- *
- * The API of this class is evolving, see {@link Admin} for details.
  */
-@InterfaceStability.Evolving
 public class AlterConfigsResult {
 
     private final Map<ConfigResource, KafkaFuture<Void>> futures;
@@ -48,7 +44,7 @@ public class AlterConfigsResult {
      * Return a future which succeeds only if all the alter configs operations succeed.
      */
     public KafkaFuture<Void> all() {
-        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0]));
+        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture<?>[0]));
     }
 
 }

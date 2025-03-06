@@ -32,7 +32,6 @@ import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsem
 import org.apache.kafka.metadata.storage.{Formatter, FormatterException}
 import org.apache.kafka.raft.{DynamicVoters, QuorumConfig}
 import org.apache.kafka.server.ProcessRole
-import org.apache.kafka.server.config.ReplicationConfigs
 
 import java.util
 import scala.collection.mutable
@@ -129,11 +128,9 @@ object StorageTool extends Logging {
       setIgnoreFormatted(namespace.getBoolean("ignore_formatted")).
       setControllerListenerName(config.controllerListenerNames.head).
       setMetadataLogDirectory(config.metadataLogDir)
-    Option(namespace.getString("release_version")) match {
-      case Some(releaseVersion) => formatter.setReleaseVersion(MetadataVersion.fromVersionString(releaseVersion))
-      case None => Option(config.originals.get(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG)).
-        foreach(v => formatter.setReleaseVersion(MetadataVersion.fromVersionString(v.toString)))
-    }
+    Option(namespace.getString("release_version")).foreach(
+      releaseVersion => formatter.
+        setReleaseVersion(MetadataVersion.fromVersionString(releaseVersion)))
     Option(namespace.getList[String]("feature")).foreach(
       featureNamesAndLevels(_).foreachEntry {
         (k, v) => formatter.setFeatureLevel(k, v)
@@ -187,7 +184,7 @@ object StorageTool extends Logging {
     } catch {
       case e: IllegalArgumentException =>
         throw new TerseFailure(s"Unknown release version '$releaseVersion'. Supported versions are: " +
-          s"${MetadataVersion.MINIMUM_BOOTSTRAP_VERSION.version} to ${MetadataVersion.LATEST_PRODUCTION.version}")
+          s"${MetadataVersion.MINIMUM_VERSION.version} to ${MetadataVersion.LATEST_PRODUCTION.version}")
     }
   }
 
@@ -314,7 +311,7 @@ object StorageTool extends Logging {
     formatParser.addArgument("--release-version", "-r")
       .action(store())
       .help(s"The release version to use for the initial feature settings. The minimum is " +
-        s"${MetadataVersion.IBP_3_0_IV1}; the default is ${MetadataVersion.LATEST_PRODUCTION}")
+        s"${MetadataVersion.MINIMUM_VERSION}; the default is ${MetadataVersion.LATEST_PRODUCTION}")
 
     formatParser.addArgument("--feature", "-f")
       .help("The setting to use for a specific feature, in feature=level format. For example: `kraft.version=1`.")
@@ -347,7 +344,7 @@ object StorageTool extends Logging {
     versionMappingParser.addArgument("--release-version", "-r")
       .action(store())
       .help(s"The release version to use for the corresponding feature mapping. The minimum is " +
-        s"${MetadataVersion.IBP_3_0_IV1}; the default is ${MetadataVersion.LATEST_PRODUCTION}")
+        s"${MetadataVersion.MINIMUM_VERSION}; the default is ${MetadataVersion.LATEST_PRODUCTION}")
   }
 
   private def addFeatureDependenciesParser(subparsers: Subparsers): Unit = {

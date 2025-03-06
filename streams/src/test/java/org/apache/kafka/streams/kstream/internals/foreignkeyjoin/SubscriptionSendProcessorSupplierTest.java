@@ -44,7 +44,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 public class SubscriptionSendProcessorSupplierTest {
 
     private final Processor<String, Change<LeftValue>, String, SubscriptionWrapper<String>> leftJoinProcessor =
-        new SubscriptionSendProcessorSupplier<String, String, LeftValue>(
+        new SubscriptionSendProcessorSupplier<String, LeftValue, String>(
             ForeignKeyExtractor.fromFunction(LeftValue::getForeignKey),
             () -> "subscription-topic-fk",
             () -> "value-serde-topic",
@@ -54,7 +54,7 @@ public class SubscriptionSendProcessorSupplierTest {
         ).get();
 
     private final Processor<String, Change<LeftValue>, String, SubscriptionWrapper<String>> innerJoinProcessor =
-        new SubscriptionSendProcessorSupplier<String, String, LeftValue>(
+        new SubscriptionSendProcessorSupplier<String, LeftValue, String>(
             ForeignKeyExtractor.fromFunction(LeftValue::getForeignKey),
             () -> "subscription-topic-fk",
             () -> "value-serde-topic",
@@ -329,7 +329,7 @@ public class SubscriptionSendProcessorSupplierTest {
 
     // Bi-function tests: inner join, left join
     private final Processor<String, Change<LeftValue>, String, SubscriptionWrapper<String>> biFunctionLeftJoinProcessor =
-        new SubscriptionSendProcessorSupplier<String, String, LeftValue>(
+        new SubscriptionSendProcessorSupplier<String, LeftValue, String>(
             ForeignKeyExtractor.fromBiFunction((key, value) -> value.getForeignKey() == null ? null : key + value.getForeignKey()),
             () -> "subscription-topic-fk",
             () -> "value-serde-topic",
@@ -339,7 +339,7 @@ public class SubscriptionSendProcessorSupplierTest {
         ).get();
 
     private final Processor<String, Change<LeftValue>, String, SubscriptionWrapper<String>> biFunctionInnerJoinProcessor =
-        new SubscriptionSendProcessorSupplier<String, String, LeftValue>(
+        new SubscriptionSendProcessorSupplier<String, LeftValue, String>(
             ForeignKeyExtractor.fromBiFunction((key, value) -> value.getForeignKey() == null ? null : key + value.getForeignKey()),
             () -> "subscription-topic-fk",
             () -> "value-serde-topic",
@@ -628,6 +628,7 @@ public class SubscriptionSendProcessorSupplierTest {
     }
 
     private static class LeftValueSerializer implements Serializer<LeftValue> {
+        @SuppressWarnings("resource")
         @Override
         public byte[] serialize(final String topic, final LeftValue data) {
             if (data == null) return null;
@@ -648,6 +649,7 @@ public class SubscriptionSendProcessorSupplierTest {
         }
     }
 
+    @SuppressWarnings("resource")
     private static long[] hash(final LeftValue value) {
         return Murmur3.hash128(new LeftValueSerializer().serialize("value-serde-topic", value));
     }

@@ -22,14 +22,17 @@
   "flexibleVersions": "0+",
   "latestVersionUnstable": true,
   "fields": [
-    { "name": "GroupId", "type": "string", "versions": "0+", "entityType": "groupId",
-      "about": "The group identifier." },
-    { "name": "Topics", "type": "[]DescribeShareGroupOffsetsRequestTopic", "versions": "0+",
-      "about": "The topics to describe offsets for.",  "fields": [
-      { "name": "TopicName", "type": "string", "versions": "0+", "entityType": "topicName",
-        "about": "The topic name." },
-      { "name": "Partitions", "type": "[]int32", "versions": "0+",
-        "about": "The partitions." }
+    { "name": "Groups", "type": "[]DescribeShareGroupOffsetsRequestGroup", "versions": "0+",
+      "about": "The groups to describe offsets for.", "fields": [
+      { "name": "GroupId", "type": "string", "versions": "0+", "entityType": "groupId",
+        "about": "The group identifier." },
+      { "name": "Topics", "type": "[]DescribeShareGroupOffsetsRequestTopic", "versions": "0+",
+        "about": "The topics to describe offsets for.", "fields": [
+        { "name": "TopicName", "type": "string", "versions": "0+", "entityType": "topicName",
+          "about": "The topic name." },
+        { "name": "Partitions", "type": "[]int32", "versions": "0+",
+          "about": "The partitions." }
+      ]}
     ]}
   ]
 }

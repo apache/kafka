@@ -17,7 +17,6 @@
 package org.apache.kafka.server.log.remote.storage;
 
 import org.apache.kafka.common.TopicIdPartition;
-import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -35,7 +34,6 @@ import java.util.TreeMap;
  * updated by applying {@link RemoteLogSegmentMetadataUpdate} for the respective {@link RemoteLogSegmentId} of the
  * {@code RemoteLogSegmentMetadata}.
  */
-@InterfaceStability.Evolving
 public class RemoteLogSegmentMetadata extends RemoteLogMetadata {
 
     /**

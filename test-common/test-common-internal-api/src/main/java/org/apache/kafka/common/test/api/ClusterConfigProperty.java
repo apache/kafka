@@ -33,11 +33,11 @@ public @interface ClusterConfigProperty {
      * The id can vary depending on the different {@link org.apache.kafka.common.test.api.Type}.
      * <ul>
      *  <li> Under {@link org.apache.kafka.common.test.api.Type#KRAFT}, the broker id starts from
-     *  {@link org.apache.kafka.common.test.TestKitNodes#BROKER_ID_OFFSET 0}, the controller id
-     *  starts from {@link org.apache.kafka.common.test.TestKitNodes#CONTROLLER_ID_OFFSET 3000}
+     *  {@link org.apache.kafka.common.test.api.TestKitDefaults#BROKER_ID_OFFSET 0}, the controller id
+     *  starts from {@link org.apache.kafka.common.test.api.TestKitDefaults#CONTROLLER_ID_OFFSET 3000}
      *  and increases by 1 with each addition broker/controller.</li>
      *  <li> Under {@link org.apache.kafka.common.test.api.Type#CO_KRAFT}, the broker id and controller id both start from
-     *  {@link org.apache.kafka.common.test.TestKitNodes#BROKER_ID_OFFSET 0}
+     *  {@link org.apache.kafka.common.test.api.TestKitDefaults#BROKER_ID_OFFSET 0}
      *  and increases by 1 with each additional broker/controller.</li>
      * </ul>
      *

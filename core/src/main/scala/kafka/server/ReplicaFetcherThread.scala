@@ -98,9 +98,12 @@ class ReplicaFetcherThread(name: String,
   }
 
   // process fetched data
-  override def processPartitionData(topicPartition: TopicPartition,
-                                    fetchOffset: Long,
-                                    partitionData: FetchData): Option[LogAppendInfo] = {
+  override def processPartitionData(
+    topicPartition: TopicPartition,
+    fetchOffset: Long,
+    partitionLeaderEpoch: Int,
+    partitionData: FetchData
+  ): Option[LogAppendInfo] = {
     val logTrace = isTraceEnabled
     val partition = replicaMgr.getPartitionOrException(topicPartition)
     val log = partition.localLogOrException
@@ -117,7 +120,7 @@ class ReplicaFetcherThread(name: String,
         .format(log.logEndOffset, topicPartition, records.sizeInBytes, partitionData.highWatermark))
 
     // Append the leader's messages to the log
-    val logAppendInfo = partition.appendRecordsToFollowerOrFutureReplica(records, isFuture = false)
+    val logAppendInfo = partition.appendRecordsToFollowerOrFutureReplica(records, isFuture = false, partitionLeaderEpoch)
 
     if (logTrace)
       trace("Follower has replica log end offset %d after appending %d bytes of messages for partition %s"

@@ -71,6 +71,7 @@ class BrokerMetadataPublisher(
   shareCoordinator: Option[ShareCoordinator],
   var dynamicConfigPublisher: DynamicConfigPublisher,
   dynamicClientQuotaPublisher: DynamicClientQuotaPublisher,
+  dynamicTopicClusterQuotaPublisher: DynamicTopicClusterQuotaPublisher,
   scramPublisher: ScramPublisher,
   delegationTokenPublisher: DelegationTokenPublisher,
   aclPublisher: AclPublisher,
@@ -118,7 +119,7 @@ class BrokerMetadataPublisher(
       // Publish the new metadata image to the metadata cache.
       metadataCache.setImage(newImage)
 
-      val metadataVersionLogMsg = s"metadata.version ${newImage.features().metadataVersion()}"
+      def metadataVersionLogMsg = s"metadata.version ${newImage.features().metadataVersion()}"
 
       if (_firstPublish) {
         info(s"Publishing initial metadata at offset $highestOffsetAndEpoch with $metadataVersionLogMsg.")
@@ -198,6 +199,9 @@ class BrokerMetadataPublisher(
 
       // Apply client quotas delta.
       dynamicClientQuotaPublisher.onMetadataUpdate(delta, newImage)
+
+      // Apply topic or cluster quotas delta.
+      dynamicTopicClusterQuotaPublisher.onMetadataUpdate(delta, newImage)
 
       // Apply SCRAM delta.
       scramPublisher.onMetadataUpdate(delta, newImage)

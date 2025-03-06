@@ -17,11 +17,13 @@
 package org.apache.kafka.raft;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.raft.internals.BatchAccumulator;
 import org.apache.kafka.raft.internals.KRaftControlRecordStateMachine;
+import org.apache.kafka.raft.internals.KafkaRaftMetrics;
 import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.KRaftVersion;
 
@@ -86,7 +88,8 @@ public class QuorumStateTest {
             store,
             time,
             new LogContext(),
-            random
+            random,
+            new KafkaRaftMetrics(new Metrics(), "raft")
         );
     }
 
