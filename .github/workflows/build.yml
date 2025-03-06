@@ -360,3 +360,28 @@ jobs:
           git add test-catalog
           git diff --quiet && git diff --staged --quiet || git commit -m "$COMMIT_MSG"
           git push
+
+  checks-complete:
+    name: "CI checks completed"
+    needs: [configure, validate, test]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Env
+        run: printenv
+        env:
+          GITHUB_CONTEXT: ${{ toJson(github) }}
+      - name: Fail if Draft
+        if: ${{ needs.configure.outputs.is-draft }}
+        run: |
+          echo "Cannot merge a draft PR"
+          exit 1
+      - name: Check Dependency Outcomes
+        run: |
+          if [[ "${{ needs.validate.result }}" == "success" && "${{ needs.test.result }}" == "success" ]]; then
+            echo "Required jobs completed successfully!"
+            exit 0
+          else
+            echo "Required jobs did not complete successfully"
+            exit 1
+          fi
