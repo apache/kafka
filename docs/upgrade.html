@@ -37,9 +37,9 @@
     <li>Upgrade the brokers one at a time: shut down the broker, update the code, and restart it. Once you have done so, the
         brokers will be running the latest version and you can verify that the cluster's behavior and performance meets expectations.
     </li>
-    <li>Once the cluster's behavior and performance has been verified, bump the metadata.version by running
+    <li>Once the cluster's behavior and performance has been verified, finalize the upgrade by running
         <code>
-            bin/kafka-features.sh upgrade --metadata 4.0
+            bin/kafka-features.sh upgrade --release-version 4.0
         </code>
     </li>
     <li>Note that cluster metadata downgrade is not supported in this version since it has metadata changes.
