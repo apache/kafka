@@ -44,6 +44,7 @@ LOG_SEGMENT_BYTES = "log.segment.bytes"
 LOG_RETENTION_CHECK_INTERVAL_MS = "log.retention.check.interval.ms"
 LOG_RETENTION_MS = "log.retention.ms"
 LOG_CLEANER_ENABLE = "log.cleaner.enable"
+LOG_INITIAL_TASK_DELAY = "log.initial.task.delay.ms"
 
 METADATA_LOG_DIR = "metadata.log.dir"
 METADATA_LOG_SEGMENT_BYTES = "metadata.log.segment.bytes"
@@ -76,6 +77,11 @@ SASL_ENABLED_MECHANISMS="sasl.enabled.mechanisms"
 NEW_GROUP_COORDINATOR_ENABLE="group.coordinator.new.enable"
 GROUP_COORDINATOR_REBALANCE_PROTOCOLS="group.coordinator.rebalance.protocols"
 CONSUMER_GROUP_MIGRATION_POLICY = "group.consumer.migration.policy"
+
+UNSTABLE_API_VERSIONS_ENABLE = "unstable.api.versions.enable"
+SHARE_COORDINATOR_STATE_TOPIC_REPLICATION_FACTOR ="share.coordinator.state.topic.replication.factor"
+SHARE_COORDINATOR_STATE_TOPIC_MIN_ISR = "share.coordinator.state.topic.min.isr"
+SHARE_GROUP_ENABLE = "group.share.enable"
 
 """
 From KafkaConfig.scala

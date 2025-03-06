@@ -30,6 +30,7 @@ import java.util.Optional;
  * Represents changes to the cluster in the metadata image.
  */
 public final class FeaturesDelta {
+    private static final short MINIMUM_PERSISTED_FEATURE_LEVEL = 4;
     private final FeaturesImage image;
 
     private final Map<String, Optional<Short>> changes = new HashMap<>();
@@ -58,7 +59,13 @@ public final class FeaturesDelta {
 
     public void replay(FeatureLevelRecord record) {
         if (record.name().equals(MetadataVersion.FEATURE_NAME)) {
-            metadataVersionChange = MetadataVersion.fromFeatureLevel(record.featureLevel());
+            try {
+                metadataVersionChange = MetadataVersion.fromFeatureLevel(record.featureLevel());
+            } catch (IllegalArgumentException e) {
+                throw new IllegalArgumentException("Unsupported metadata version - if you are currently upgrading your cluster, "
+                        + "please ensure the metadata version is set to " + MetadataVersion.MINIMUM_VERSION + " (or higher) before "
+                        + "updating the software version. The metadata version can be updated via the `kafka-features` command-line tool.", e);
+            }
         } else {
             if (record.featureLevel() == 0) {
                 changes.put(record.name(), Optional.empty());
@@ -90,11 +97,11 @@ public final class FeaturesDelta {
             }
         }
 
-        final MetadataVersion metadataVersion;
+        final Optional<MetadataVersion> metadataVersion;
         if (metadataVersionChange == null) {
             metadataVersion = image.metadataVersion();
         } else {
-            metadataVersion = metadataVersionChange;
+            metadataVersion = Optional.of(metadataVersionChange);
         }
 
         return new FeaturesImage(newFinalizedVersions, metadataVersion);

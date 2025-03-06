@@ -25,7 +25,7 @@ import org.apache.kafka.coordinator.group.api.assignor.SubscribedTopicDescriber;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collections;
+import java.util.Map;
 
 import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HOMOGENEOUS;
 
@@ -52,11 +52,11 @@ import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.H
  */
 public class UniformAssignor implements ConsumerGroupPartitionAssignor {
     private static final Logger LOG = LoggerFactory.getLogger(UniformAssignor.class);
-    public static final String UNIFORM_ASSIGNOR_NAME = "uniform";
+    public static final String NAME = "uniform";
 
     @Override
     public String name() {
-        return UNIFORM_ASSIGNOR_NAME;
+        return NAME;
     }
 
     /**
@@ -73,7 +73,7 @@ public class UniformAssignor implements ConsumerGroupPartitionAssignor {
         SubscribedTopicDescriber subscribedTopicDescriber
     ) throws PartitionAssignorException {
         if (groupSpec.memberIds().isEmpty())
-            return new GroupAssignment(Collections.emptyMap());
+            return new GroupAssignment(Map.of());
 
         if (groupSpec.subscriptionType().equals(HOMOGENEOUS)) {
             LOG.debug("Detected that all members are subscribed to the same set of topics, invoking the "

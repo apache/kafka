@@ -70,9 +70,7 @@ class TransactionStateManagerTest {
     new FinalizedFeatures(
       MetadataVersion.latestTesting(),
       Collections.singletonMap(TransactionVersion.FEATURE_NAME, TransactionVersion.TV_2.featureLevel()),
-      0,
-      true
-    )
+      0)
   }
   
   val metrics = new Metrics()
@@ -891,10 +889,13 @@ class TransactionStateManagerTest {
     appendedRecords.values.foreach { batches =>
       batches.foreach { records =>
         records.records.forEach { record =>
-          val transactionalId = TransactionLog.readTxnRecordKey(record.key).transactionalId
-          assertNull(record.value)
-          expiredTransactionalIds += transactionalId
-          assertEquals(Right(None), transactionManager.getTransactionState(transactionalId))
+          TransactionLog.readTxnRecordKey(record.key) match {
+            case Right(transactionalId) =>
+              assertNull(record.value)
+              expiredTransactionalIds += transactionalId
+              assertEquals(Right(None), transactionManager.getTransactionState(transactionalId))
+            case Left(value) => fail(s"Failed to read transactional id from tombstone: $value")
+          }
         }
       }
     }
@@ -1332,9 +1333,7 @@ class TransactionStateManagerTest {
       new FinalizedFeatures(
         MetadataVersion.latestTesting(),
         Collections.singletonMap(TransactionVersion.FEATURE_NAME, transactionVersion.featureLevel()),
-        0,
-        true
-      )
+        0)
     }
     val transactionManager = new TransactionStateManager(0, scheduler,
       replicaManager, metadataCache, txnConfig, time, metrics)

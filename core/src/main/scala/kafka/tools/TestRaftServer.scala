@@ -22,7 +22,7 @@ import java.util.concurrent.atomic.{AtomicInteger, AtomicLong}
 import java.util.concurrent.{CompletableFuture, CountDownLatch, LinkedBlockingDeque, TimeUnit}
 import joptsimple.{OptionException, OptionSpec}
 import kafka.network.{DataPlaneAcceptor, SocketServer}
-import kafka.raft.{KafkaRaftManager, RaftManager}
+import kafka.raft.{DefaultExternalKRaftMetrics, KafkaRaftManager, RaftManager}
 import kafka.server.{KafkaConfig, KafkaRequestHandlerPool, SimpleApiVersionManager}
 import kafka.utils.{CoreUtils, Logging}
 import org.apache.kafka.common.errors.InvalidConfigurationException
@@ -36,7 +36,7 @@ import org.apache.kafka.common.security.token.delegation.internals.DelegationTok
 import org.apache.kafka.common.utils.{Exit, Time, Utils}
 import org.apache.kafka.common.{TopicPartition, Uuid, protocol}
 import org.apache.kafka.raft.errors.NotLeaderException
-import org.apache.kafka.raft.{Batch, BatchReader, Endpoints, LeaderAndEpoch, RaftClient, QuorumConfig}
+import org.apache.kafka.raft.{Batch, BatchReader, Endpoints, LeaderAndEpoch, QuorumConfig, RaftClient}
 import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.common.{FinalizedFeatures, MetadataVersion}
 import org.apache.kafka.server.common.serialization.RecordSerde
@@ -81,7 +81,7 @@ class TestRaftServer(
     val apiVersionManager = new SimpleApiVersionManager(
       ListenerType.CONTROLLER,
       true,
-      () => FinalizedFeatures.fromKRaftVersion(MetadataVersion.MINIMUM_KRAFT_VERSION))
+      () => FinalizedFeatures.fromKRaftVersion(MetadataVersion.MINIMUM_VERSION))
     socketServer = new SocketServer(config, metrics, time, credentialProvider, apiVersionManager)
 
     val endpoints = Endpoints.fromInetSocketAddresses(
@@ -102,6 +102,7 @@ class TestRaftServer(
       topicId,
       time,
       metrics,
+      new DefaultExternalKRaftMetrics(None, None),
       Some(threadNamePrefix),
       CompletableFuture.completedFuture(QuorumConfig.parseVoterConnections(config.quorumConfig.voters)),
       QuorumConfig.parseBootstrapServers(config.quorumConfig.bootstrapServers),

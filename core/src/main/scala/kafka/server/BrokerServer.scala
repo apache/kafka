@@ -24,7 +24,7 @@ import kafka.log.remote.RemoteLogManager
 import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.raft.KafkaRaftManager
 import kafka.server.metadata._
-import kafka.server.share.SharePartitionManager
+import kafka.server.share.{ShareCoordinatorMetadataCacheHelperImpl, SharePartitionManager}
 import kafka.utils.CoreUtils
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
@@ -49,7 +49,7 @@ import org.apache.kafka.server.config.ConfigType
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.{ClientMetricsReceiverPlugin, KafkaYammerMetrics}
 import org.apache.kafka.server.network.{EndpointReadyFutures, KafkaAuthorizerServerInfo}
-import org.apache.kafka.server.share.persister.{DefaultStatePersister, NoOpShareStatePersister, Persister, PersisterStateManager}
+import org.apache.kafka.server.share.persister.{DefaultStatePersister, NoOpStatePersister, Persister, PersisterStateManager}
 import org.apache.kafka.server.share.session.ShareSessionCache
 import org.apache.kafka.server.util.timer.{SystemTimer, SystemTimerReaper}
 import org.apache.kafka.server.util.{Deadline, FutureUtils, KafkaScheduler}
@@ -274,13 +274,12 @@ class BrokerServer(
       clientQuotaMetadataManager = new ClientQuotaMetadataManager(quotaManagers, socketServer.connectionQuotas)
 
       val listenerInfo = ListenerInfo.create(Optional.of(config.interBrokerListenerName.value()),
-          config.effectiveAdvertisedBrokerListeners.map(_.toJava).asJava).
+          config.effectiveAdvertisedBrokerListeners.map(_.toPublic()).asJava).
             withWildcardHostnamesResolved().
             withEphemeralPortsCorrected(name => socketServer.boundPort(new ListenerName(name)))
 
       alterPartitionManager = AlterPartitionManager(
         config,
-        metadataCache,
         scheduler = kafkaScheduler,
         controllerNodeProvider,
         time = time,
@@ -355,7 +354,6 @@ class BrokerServer(
 
       /* start token manager */
       tokenManager = new DelegationTokenManager(config, tokenCache, time)
-      tokenManager.startup()
 
       /* initializing the groupConfigManager */
       groupConfigManager = new GroupConfigManager(config.groupCoordinatorConfig.extractGroupConfigMap(config.shareGroupConfig))
@@ -441,7 +439,7 @@ class BrokerServer(
         config.shareGroupConfig.shareFetchMaxFetchRecords,
         persister,
         groupConfigManager,
-        metrics
+        brokerTopicStats
       )
 
       dataPlaneRequestProcessor = new KafkaApis(
@@ -507,7 +505,15 @@ class BrokerServer(
           config,
           sharedServer.metadataPublishingFaultHandler,
           "broker",
-          clientQuotaMetadataManager),
+          clientQuotaMetadataManager,
+        ),
+        new DynamicTopicClusterQuotaPublisher(
+          clusterId,
+          config,
+          sharedServer.metadataPublishingFaultHandler,
+          "broker",
+          quotaManagers,
+        ),
         new ScramPublisher(
           config,
           sharedServer.metadataPublishingFaultHandler,
@@ -534,7 +540,7 @@ class BrokerServer(
       })
       metadataPublishers.add(brokerMetadataPublisher)
       brokerRegistrationTracker = new BrokerRegistrationTracker(config.brokerId,
-        () => lifecycleManager.resendBrokerRegistrationUnlessZkMode())
+        () => lifecycleManager.resendBrokerRegistration())
       metadataPublishers.add(brokerRegistrationTracker)
 
 
@@ -638,6 +644,8 @@ class BrokerServer(
         .withCoordinatorRuntimeMetrics(new GroupCoordinatorRuntimeMetrics(metrics))
         .withGroupCoordinatorMetrics(new GroupCoordinatorMetrics(KafkaYammerMetrics.defaultRegistry, metrics))
         .withGroupConfigManager(groupConfigManager)
+        .withPersister(persister)
+        .withAuthorizer(authorizer.toJava)
         .build()
     } else {
       GroupCoordinatorAdapter(
@@ -699,18 +707,17 @@ class BrokerServer(
               )
             )
           )
-      } else if (klass.getName.equals(classOf[NoOpShareStatePersister].getName)) {
-        info("Using no op persister")
-        new NoOpShareStatePersister()
+      } else if (klass.getName.equals(classOf[NoOpStatePersister].getName)) {
+        info("Using no-op persister")
+        new NoOpStatePersister()
       } else {
-        error("Unknown persister specified. Persister is only factory pluggable!")
-        throw new IllegalArgumentException("Unknown persiser specified " + config.shareGroupConfig.shareGroupPersisterClassName)
+        error("Unknown persister specified. Persister is only factory-pluggable!")
+        throw new IllegalArgumentException("Unknown persister specified " + config.shareGroupConfig.shareGroupPersisterClassName)
       }
     } else {
-      // in case share coordinator not enabled or
-      // persister class name deliberately empty (key=)
-      info("Using no op persister")
-      new NoOpShareStatePersister()
+      // in case share coordinator not enabled or persister class name deliberately empty (key=)
+      info("Using no-op persister")
+      new NoOpStatePersister()
     }
   }
 
@@ -739,18 +746,22 @@ class BrokerServer(
         if (replicaManager != null)
           replicaManager.beginControlledShutdown()
 
-        lifecycleManager.beginControlledShutdown()
-        try {
-          val controlledShutdownTimeoutMs = deadline - time.milliseconds()
-          lifecycleManager.controlledShutdownFuture.get(controlledShutdownTimeoutMs, TimeUnit.MILLISECONDS)
-        } catch {
-          case _: TimeoutException =>
-            error("Timed out waiting for the controller to approve controlled shutdown")
-          case e: Throwable =>
-            error("Got unexpected exception waiting for controlled shutdown future", e)
+        if (lifecycleManager != null) {
+          lifecycleManager.beginControlledShutdown()
+          try {
+            val controlledShutdownTimeoutMs = deadline - time.milliseconds()
+            lifecycleManager.controlledShutdownFuture.get(controlledShutdownTimeoutMs, TimeUnit.MILLISECONDS)
+          } catch {
+            case _: TimeoutException =>
+              error("Timed out waiting for the controller to approve controlled shutdown")
+            case e: Throwable =>
+              error("Got unexpected exception waiting for controlled shutdown future", e)
+          }
         }
       }
-      lifecycleManager.beginShutdown()
+      if (lifecycleManager != null)
+        lifecycleManager.beginShutdown()
+
       // Stop socket server to stop accepting any more connections and requests.
       // Socket server will be shutdown towards the end of the sequence.
       if (socketServer != null) {
@@ -787,9 +798,6 @@ class BrokerServer(
       if (shareCoordinator.isDefined)
         CoreUtils.swallow(shareCoordinator.get.shutdown(), this)
 
-      if (tokenManager != null)
-        CoreUtils.swallow(tokenManager.shutdown(), this)
-
       if (assignmentsManager != null)
         CoreUtils.swallow(assignmentsManager.close(), this)
 
@@ -805,8 +813,10 @@ class BrokerServer(
       if (clientToControllerChannelManager != null)
         CoreUtils.swallow(clientToControllerChannelManager.shutdown(), this)
 
-      if (logManager != null)
-        CoreUtils.swallow(logManager.shutdown(lifecycleManager.brokerEpoch), this)
+      if (logManager != null) {
+        val brokerEpoch = if (lifecycleManager != null) lifecycleManager.brokerEpoch else -1
+        CoreUtils.swallow(logManager.shutdown(brokerEpoch), this)
+      }
 
       // Close remote log manager to give a chance to any of its underlying clients
       // (especially in RemoteStorageManager and RemoteLogMetadataManager) to close gracefully.
@@ -826,7 +836,9 @@ class BrokerServer(
 
       isShuttingDown.set(false)
 
-      CoreUtils.swallow(lifecycleManager.close(), this)
+      if (lifecycleManager != null)
+        CoreUtils.swallow(lifecycleManager.close(), this)
+
       CoreUtils.swallow(config.dynamicConfig.clear(), this)
       Utils.closeQuietly(clientMetricsManager, "client metrics manager")
       sharedServer.stopForBroker()

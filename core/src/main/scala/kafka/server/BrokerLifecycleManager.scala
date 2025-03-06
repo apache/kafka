@@ -93,7 +93,7 @@ class BrokerLifecycleManager(
    * The exponential backoff to use for resending communication.
    */
   private val resendExponentialBackoff =
-    new ExponentialBackoff(100, 2, config.brokerSessionTimeoutMs.toLong, 0.02)
+    new ExponentialBackoff(100, 2, config.brokerSessionTimeoutMs.toLong / 2, 0.02)
 
   /**
    * The number of times we've tried and failed to communicate.  This variable can only be
@@ -260,11 +260,11 @@ class BrokerLifecycleManager(
       new OfflineDirBrokerFailureEvent(directory))
   }
 
-  def resendBrokerRegistrationUnlessZkMode(): Unit = {
-    eventQueue.append(new ResendBrokerRegistrationUnlessZkModeEvent())
+  def resendBrokerRegistration(): Unit = {
+    eventQueue.append(new ResendBrokerRegistrationEvent())
   }
 
-  private class ResendBrokerRegistrationUnlessZkModeEvent extends EventQueue.Event {
+  private class ResendBrokerRegistrationEvent extends EventQueue.Event {
     override def run(): Unit = {
       registered = false
       scheduleNextCommunicationImmediately()

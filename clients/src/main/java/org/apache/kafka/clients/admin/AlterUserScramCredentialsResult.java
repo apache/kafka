@@ -18,7 +18,6 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
-import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Collections;
 import java.util.List;
@@ -27,10 +26,7 @@ import java.util.Objects;
 
 /**
  * The result of the {@link Admin#alterUserScramCredentials(List)} call.
- *
- * The API of this class is evolving, see {@link Admin} for details.
  */
-@InterfaceStability.Evolving
 public class AlterUserScramCredentialsResult {
     private final Map<String, KafkaFuture<Void>> futures;
 
@@ -55,6 +51,6 @@ public class AlterUserScramCredentialsResult {
      * Return a future which succeeds only if all the user SCRAM credential alterations succeed.
      */
     public KafkaFuture<Void> all() {
-        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0]));
+        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture<?>[0]));
     }
 }

@@ -24,10 +24,10 @@ import org.apache.kafka.streams.processor.api.FixedKeyRecord;
 
 class KStreamFilter<K, V> implements FixedKeyProcessorSupplier<K, V, V> {
 
-    private final Predicate<K, V> predicate;
+    private final Predicate<? super K, ? super V> predicate;
     private final boolean filterNot;
 
-    public KStreamFilter(final Predicate<K, V> predicate, final boolean filterNot) {
+    public KStreamFilter(final Predicate<? super K, ? super V> predicate, final boolean filterNot) {
         this.predicate = predicate;
         this.filterNot = filterNot;
     }
