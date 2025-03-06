@@ -23,7 +23,7 @@ import org.apache.kafka.server.util.FutureUtils;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
-import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.RejectedExecutionException;
@@ -71,7 +71,7 @@ public class CoordinatorExecutorImplTest {
             CoordinatorRuntime.CoordinatorWriteOperation<CoordinatorShard<String>, Void, String> op =
                 args.getArgument(3);
             assertEquals(
-                new CoordinatorResult<>(Collections.singletonList("record"), null),
+                new CoordinatorResult<>(List.of("record"), null),
                 op.generateRecordsAndResult(coordinatorShard)
             );
             return CompletableFuture.completedFuture(null);
@@ -95,7 +95,7 @@ public class CoordinatorExecutorImplTest {
             operationCalled.set(true);
             assertEquals("Hello!", result);
             assertNull(exception);
-            return new CoordinatorResult<>(Collections.singletonList("record"), null);
+            return new CoordinatorResult<>(List.of("record"), null);
         };
 
         executor.schedule(
@@ -130,7 +130,7 @@ public class CoordinatorExecutorImplTest {
             CoordinatorRuntime.CoordinatorWriteOperation<CoordinatorShard<String>, Void, String> op =
                 args.getArgument(3);
             assertEquals(
-                new CoordinatorResult<>(Collections.emptyList(), null),
+                new CoordinatorResult<>(List.of(), null),
                 op.generateRecordsAndResult(coordinatorShard)
             );
             return CompletableFuture.completedFuture(null);
@@ -154,7 +154,7 @@ public class CoordinatorExecutorImplTest {
             assertNull(result);
             assertNotNull(exception);
             assertEquals("Oh no!", exception.getMessage());
-            return new CoordinatorResult<>(Collections.emptyList(), null);
+            return new CoordinatorResult<>(List.of(), null);
         };
 
         executor.schedule(
@@ -301,7 +301,7 @@ public class CoordinatorExecutorImplTest {
         AtomicBoolean operationCalled = new AtomicBoolean(false);
         CoordinatorExecutor.TaskOperation<String, String> taskOperation = (result, exception) -> {
             operationCalled.set(true);
-            return new CoordinatorResult<>(Collections.emptyList(), null);
+            return new CoordinatorResult<>(List.of(), null);
         };
 
         executor.schedule(

@@ -20,8 +20,11 @@ package org.apache.kafka.connect.runtime;
 import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.ConnectRecord;
+import org.apache.kafka.connect.runtime.isolation.LoaderSwap;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.predicates.Predicate;
+
+import java.util.function.Function;
 
 /**
  * Wrapper for a {@link Transformation} and corresponding optional {@link Predicate}
@@ -36,15 +39,18 @@ public class TransformationStage<R extends ConnectRecord<R>> implements AutoClos
     private final Plugin<Predicate<R>> predicatePlugin;
     private final Plugin<Transformation<R>> transformationPlugin;
     private final boolean negate;
+    private final Function<ClassLoader, LoaderSwap> pluginLoaderSwapper;
 
-    TransformationStage(Plugin<Transformation<R>> transformationPlugin) {
-        this(null, false, transformationPlugin);
+
+    TransformationStage(Plugin<Transformation<R>> transformationPlugin, Function<ClassLoader, LoaderSwap> pluginLoaderSwapper) {
+        this(null, false, transformationPlugin, pluginLoaderSwapper);
     }
 
-    TransformationStage(Plugin<Predicate<R>> predicatePlugin, boolean negate, Plugin<Transformation<R>> transformationPlugin) {
+    TransformationStage(Plugin<Predicate<R>> predicatePlugin, boolean negate, Plugin<Transformation<R>> transformationPlugin, Function<ClassLoader, LoaderSwap> pluginLoaderSwapper) {
         this.predicatePlugin = predicatePlugin;
         this.negate = negate;
         this.transformationPlugin = transformationPlugin;
+        this.pluginLoaderSwapper = pluginLoaderSwapper;
     }
 
     public Class<? extends Transformation<R>> transformClass() {
@@ -54,8 +60,17 @@ public class TransformationStage<R extends ConnectRecord<R>> implements AutoClos
     }
 
     public R apply(R record) {
-        if (predicatePlugin == null || predicatePlugin.get() == null || negate ^ predicatePlugin.get().test(record)) {
-            return transformationPlugin.get().apply(record);
+        Predicate<R> predicate = predicatePlugin != null ? predicatePlugin.get() : null;
+        boolean shouldTransform = predicate == null;
+        if (predicate != null) {
+            try (LoaderSwap swap = pluginLoaderSwapper.apply(predicate.getClass().getClassLoader())) {
+                shouldTransform = negate ^ predicate.test(record);
+            }
+        }
+        if (shouldTransform) {
+            try (LoaderSwap swap = pluginLoaderSwapper.apply(transformationPlugin.get().getClass().getClassLoader())) {
+                record = transformationPlugin.get().apply(record);
+            }
         }
         return record;
     }

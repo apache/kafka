@@ -19,12 +19,11 @@ package org.apache.kafka.coordinator.group.streams.topics;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
 import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 
-import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.SortedMap;
-import java.util.stream.Collectors;
 
 /**
  * This class captures the result of taking a topology definition sent by the client and using the current state of the topics inside the
@@ -68,7 +67,7 @@ public record ConfiguredTopology(int topologyEpoch,
             .setSubtopologies(
                 subtopologies.map(stringConfiguredSubtopologyMap -> stringConfiguredSubtopologyMap.entrySet().stream().map(
                     entry -> entry.getValue().asStreamsGroupDescribeSubtopology(entry.getKey())
-                ).collect(Collectors.toList())).orElse(Collections.emptyList())
+                ).toList()).orElse(List.of())
             );
     }
 

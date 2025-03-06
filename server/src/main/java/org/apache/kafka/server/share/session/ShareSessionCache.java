@@ -20,11 +20,15 @@ package org.apache.kafka.server.share.session;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.requests.ShareRequestMetadata;
 import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
+import org.apache.kafka.server.metrics.KafkaMetricsGroup;
 import org.apache.kafka.server.share.CachedSharePartition;
+
+import com.yammer.metrics.core.Meter;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Caches share sessions.
@@ -37,6 +41,17 @@ import java.util.TreeMap;
  * must never be acquired while an individual ShareSession lock is already held.
  */
 public class ShareSessionCache {
+    // Visible for testing.
+    static final String SHARE_SESSIONS_COUNT = "ShareSessionsCount";
+    // Visible for testing.
+    static final String SHARE_PARTITIONS_COUNT = "SharePartitionsCount";
+    private static final String SHARE_SESSION_EVICTIONS_PER_SEC = "ShareSessionEvictionsPerSec";
+
+    /**
+     * Metric for the rate of eviction of share sessions.
+     */
+    private final Meter evictionsMeter;
+
     private final int maxEntries;
     private final long evictionMs;
     private long numPartitions = 0;
@@ -47,9 +62,15 @@ public class ShareSessionCache {
     // Maps last used times to sessions.
     private final TreeMap<LastUsedKey, ShareSession> lastUsed = new TreeMap<>();
 
+    @SuppressWarnings("this-escape")
     public ShareSessionCache(int maxEntries, long evictionMs) {
         this.maxEntries = maxEntries;
         this.evictionMs = evictionMs;
+        // Register metrics for ShareSessionCache.
+        KafkaMetricsGroup metricsGroup = new KafkaMetricsGroup("kafka.server", "ShareSessionCache");
+        metricsGroup.newGauge(SHARE_SESSIONS_COUNT, this::size);
+        metricsGroup.newGauge(SHARE_PARTITIONS_COUNT, this::totalPartitions);
+        this.evictionsMeter = metricsGroup.newMeter(SHARE_SESSION_EVICTIONS_PER_SEC, "evictions", TimeUnit.SECONDS);
     }
 
     /**
@@ -136,6 +157,7 @@ public class ShareSessionCache {
         } else if (now - lastUsedEntry.getKey().lastUsedMs() > evictionMs) {
             ShareSession session = lastUsedEntry.getValue();
             remove(session);
+            evictionsMeter.mark();
             return true;
         }
         return false;
@@ -158,5 +180,10 @@ public class ShareSessionCache {
             return session.key();
         }
         return null;
+    }
+
+    // Visible for testing.
+    Meter evictionsMeter() {
+        return evictionsMeter;
     }
 }

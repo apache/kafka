@@ -32,7 +32,6 @@ import org.apache.kafka.coordinator.group.modern.TopicMetadata;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -62,7 +61,7 @@ public class RangeAssignorTest {
     @Test
     public void testOneMemberNoTopic() {
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            Collections.singletonMap(
+            Map.of(
                 topic1Uuid,
                 new TopicMetadata(
                     topic1Uuid,
@@ -72,12 +71,12 @@ public class RangeAssignorTest {
             )
         );
 
-        Map<String, MemberSubscriptionAndAssignmentImpl> members = Collections.singletonMap(
+        Map<String, MemberSubscriptionAndAssignmentImpl> members = Map.of(
             memberA,
             new MemberSubscriptionAndAssignmentImpl(
                 Optional.empty(),
                 Optional.empty(),
-                Collections.emptySet(),
+                Set.of(),
                 Assignment.EMPTY
             )
         );
@@ -85,7 +84,7 @@ public class RangeAssignorTest {
         GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HOMOGENEOUS,
-            Collections.emptyMap()
+            Map.of()
         );
 
         GroupAssignment groupAssignment = assignor.assign(
@@ -93,9 +92,9 @@ public class RangeAssignorTest {
             subscribedTopicMetadata
         );
 
-        Map<String, MemberAssignment> expectedAssignment = Collections.singletonMap(
+        Map<String, MemberAssignment> expectedAssignment = Map.of(
             memberA,
-            new MemberAssignmentImpl(Collections.emptyMap())
+            new MemberAssignmentImpl(Map.of())
         );
 
         assertEquals(expectedAssignment, groupAssignment.members());
@@ -104,7 +103,7 @@ public class RangeAssignorTest {
     @Test
     public void testOneMemberSubscribedToNonExistentTopic() {
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            Collections.singletonMap(
+            Map.of(
                 topic1Uuid,
                 new TopicMetadata(
                     topic1Uuid,
@@ -114,7 +113,7 @@ public class RangeAssignorTest {
             )
         );
 
-        Map<String, MemberSubscriptionAndAssignmentImpl> members = Collections.singletonMap(
+        Map<String, MemberSubscriptionAndAssignmentImpl> members = Map.of(
             memberA,
             new MemberSubscriptionAndAssignmentImpl(
                 Optional.empty(),
@@ -127,7 +126,7 @@ public class RangeAssignorTest {
         GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HOMOGENEOUS,
-            Collections.emptyMap()
+            Map.of()
         );
 
         assertThrows(PartitionAssignorException.class,
@@ -328,7 +327,7 @@ public class RangeAssignorTest {
     @Test
     public void testStaticMembership() throws PartitionAssignorException {
         SubscribedTopicDescriber subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            Collections.singletonMap(
+            Map.of(
                 topic1Uuid,
                 new TopicMetadata(
                     topic1Uuid,
@@ -342,13 +341,13 @@ public class RangeAssignorTest {
         members.put(memberA, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             Optional.of("instanceA"),
-            Collections.singleton(topic1Uuid),
+            Set.of(topic1Uuid),
             Assignment.EMPTY
         ));
         members.put(memberB, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             Optional.of("instanceB"),
-            Collections.singleton(topic1Uuid),
+            Set.of(topic1Uuid),
             Assignment.EMPTY
         ));
 
@@ -368,7 +367,7 @@ public class RangeAssignorTest {
         members.put("memberA1", new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             Optional.of("instanceA"),
-            Collections.singleton(topic1Uuid),
+            Set.of(topic1Uuid),
             Assignment.EMPTY
         ));
 
@@ -398,7 +397,7 @@ public class RangeAssignorTest {
     @Test
     public void testMixedStaticMembership() throws PartitionAssignorException {
         SubscribedTopicDescriber subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            Collections.singletonMap(
+            Map.of(
                 topic1Uuid,
                 new TopicMetadata(
                     topic1Uuid,
@@ -413,13 +412,13 @@ public class RangeAssignorTest {
         members.put(memberA, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             Optional.of("instanceA"),
-            Collections.singleton(topic1Uuid),
+            Set.of(topic1Uuid),
             Assignment.EMPTY
         ));
         members.put(memberC, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             Optional.of("instanceC"),
-            Collections.singleton(topic1Uuid),
+            Set.of(topic1Uuid),
             Assignment.EMPTY
         ));
 
@@ -427,7 +426,7 @@ public class RangeAssignorTest {
         members.put(memberB, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             Optional.empty(),
-            Collections.singleton(topic1Uuid),
+            Set.of(topic1Uuid),
             Assignment.EMPTY
         ));
 
@@ -447,7 +446,7 @@ public class RangeAssignorTest {
         members.put("memberA1", new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             Optional.of("instanceA"),
-            Collections.singleton(topic1Uuid),
+            Set.of(topic1Uuid),
             Assignment.EMPTY
         ));
 
@@ -545,7 +544,7 @@ public class RangeAssignorTest {
             mkTopicAssignment(topic2Uuid, 1)
         ));
         // Member C shouldn't get any assignment.
-        expectedAssignment.put(memberC, Collections.emptyMap());
+        expectedAssignment.put(memberC, Map.of());
 
         assertAssignment(expectedAssignment, computedAssignment);
     }
