@@ -224,7 +224,7 @@ class CachedPartition(var topic: String,
   * fields are read or modified.  This includes modification of the session partition map.
   *
   * @param id                 The unique fetch session ID.
-  * @param privileged         True if this session is privileged.  Sessions crated by followers
+  * @param privileged         True if this session is privileged.  Sessions created by followers
   *                           are privileged; session created by consumers are not.
   * @param partitionMap       The CachedPartitionMap.
   * @param usesTopicIds       True if this session is using topic IDs
