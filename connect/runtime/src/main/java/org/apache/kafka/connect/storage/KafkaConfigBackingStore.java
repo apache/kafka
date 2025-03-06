@@ -1258,7 +1258,7 @@ public final class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore i
         } else {
             // TRACE level since there may be many of these records in the config topic
             log.trace(
-                    "Ignoring old logging level {} for namespace {} that was writen to the config topic before this worker completed startup",
+                    "Ignoring old logging level {} for namespace {} that was written to the config topic before this worker completed startup",
                     level,
                     namespace
             );

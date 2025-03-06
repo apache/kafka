@@ -48,40 +48,22 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 public class ImageWriterOptionsTest {
     @Test
     public void testDefaultLossHandler() {
-        ImageWriterOptions options = new ImageWriterOptions.Builder().build();
+        ImageWriterOptions options = new ImageWriterOptions.Builder(MetadataVersion.latestProduction()).build();
         assertEquals("stuff", assertThrows(UnwritableMetadataException.class,
                 () -> options.handleLoss("stuff")).loss());
-    }
-
-    @Test
-    public void testSetMetadataVersion() {
-        for (int i = MetadataVersion.MINIMUM_KRAFT_VERSION.ordinal();
-                 i < MetadataVersion.VERSIONS.length;
-                 i++) {
-            MetadataVersion version = MetadataVersion.VERSIONS[i];
-            ImageWriterOptions.Builder options = new ImageWriterOptions.Builder().
-                    setMetadataVersion(version);
-            if (i < MetadataVersion.MINIMUM_BOOTSTRAP_VERSION.ordinal()) {
-                assertEquals(MetadataVersion.MINIMUM_KRAFT_VERSION, options.metadataVersion());
-                assertEquals(version, options.requestedMetadataVersion());
-            } else {
-                assertEquals(version, options.metadataVersion());
-            }
-        }
     }
 
     @Test
     public void testHandleLoss() {
         String expectedMessage = "stuff";
 
-        for (int i = MetadataVersion.MINIMUM_KRAFT_VERSION.ordinal();
+        for (int i = MetadataVersion.MINIMUM_VERSION.ordinal();
              i < MetadataVersion.VERSIONS.length;
              i++) {
             MetadataVersion version = MetadataVersion.VERSIONS[i];
             String formattedMessage = String.format("Metadata has been lost because the following could not be represented in metadata.version %s: %s", version, expectedMessage);
             Consumer<UnwritableMetadataException> customLossHandler = e -> assertEquals(formattedMessage, e.getMessage());
-            ImageWriterOptions options = new ImageWriterOptions.Builder()
-                    .setMetadataVersion(version)
+            ImageWriterOptions options = new ImageWriterOptions.Builder(version)
                     .setLossHandler(customLossHandler)
                     .build();
             options.handleLoss(expectedMessage);
@@ -90,14 +72,12 @@ public class ImageWriterOptionsTest {
 
     @Test
     public void testSetEligibleLeaderReplicasEnabled() {
-        MetadataVersion version = MetadataVersion.MINIMUM_BOOTSTRAP_VERSION;
-        ImageWriterOptions options = new ImageWriterOptions.Builder().
-            setMetadataVersion(version).
+        MetadataVersion version = MetadataVersion.MINIMUM_VERSION;
+        ImageWriterOptions options = new ImageWriterOptions.Builder(version).
             setEligibleLeaderReplicasEnabled(true).build();
         assertEquals(true, options.isEligibleLeaderReplicasEnabled());
 
-        options = new ImageWriterOptions.Builder().
-            setMetadataVersion(version).build();
+        options = new ImageWriterOptions.Builder(version).build();
         assertEquals(false, options.isEligibleLeaderReplicasEnabled());
     }
 

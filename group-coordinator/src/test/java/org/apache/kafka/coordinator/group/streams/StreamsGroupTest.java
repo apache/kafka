@@ -68,7 +68,6 @@ import java.util.OptionalLong;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static java.util.Collections.emptyMap;
 import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasks;
 import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasksPerSubtopology;
 import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.mkTasksTuple;
@@ -84,8 +83,6 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class StreamsGroupTest {
@@ -223,19 +220,19 @@ public class StreamsGroupTest {
         streamsGroup.updateMember(member);
 
         assertEquals("process", streamsGroup.currentActiveTaskProcessId(fooSubtopology, 1));
-        assertEquals(Collections.singleton("process"),
+        assertEquals(Set.of("process"),
             streamsGroup.currentStandbyTaskProcessIds(fooSubtopology, 2));
-        assertEquals(Collections.singleton("process"),
+        assertEquals(Set.of("process"),
             streamsGroup.currentWarmupTaskProcessIds(fooSubtopology, 3));
         assertEquals("process", streamsGroup.currentActiveTaskProcessId(barSubtopology, 4));
-        assertEquals(Collections.singleton("process"),
+        assertEquals(Set.of("process"),
             streamsGroup.currentStandbyTaskProcessIds(barSubtopology, 5));
-        assertEquals(Collections.singleton("process"),
+        assertEquals(Set.of("process"),
             streamsGroup.currentWarmupTaskProcessIds(barSubtopology, 6));
         assertNull(streamsGroup.currentActiveTaskProcessId(zarSubtopology, 7));
-        assertEquals(Collections.emptySet(),
+        assertEquals(Set.of(),
             streamsGroup.currentStandbyTaskProcessIds(zarSubtopology, 8));
-        assertEquals(Collections.emptySet(),
+        assertEquals(Set.of(),
             streamsGroup.currentWarmupTaskProcessIds(zarSubtopology, 9));
 
         member = new StreamsGroupMember.Builder(member)
@@ -259,19 +256,19 @@ public class StreamsGroupTest {
         streamsGroup.updateMember(member);
 
         assertEquals("process1", streamsGroup.currentActiveTaskProcessId(fooSubtopology, 1));
-        assertEquals(Collections.singleton("process1"),
+        assertEquals(Set.of("process1"),
             streamsGroup.currentStandbyTaskProcessIds(fooSubtopology, 2));
-        assertEquals(Collections.singleton("process1"),
+        assertEquals(Set.of("process1"),
             streamsGroup.currentWarmupTaskProcessIds(fooSubtopology, 3));
         assertEquals("process1", streamsGroup.currentActiveTaskProcessId(barSubtopology, 4));
-        assertEquals(Collections.singleton("process1"),
+        assertEquals(Set.of("process1"),
             streamsGroup.currentStandbyTaskProcessIds(barSubtopology, 5));
-        assertEquals(Collections.singleton("process1"),
+        assertEquals(Set.of("process1"),
             streamsGroup.currentWarmupTaskProcessIds(barSubtopology, 6));
         assertNull(streamsGroup.currentActiveTaskProcessId(zarSubtopology, 7));
-        assertEquals(Collections.emptySet(),
+        assertEquals(Set.of(),
             streamsGroup.currentStandbyTaskProcessIds(zarSubtopology, 8));
-        assertEquals(Collections.emptySet(),
+        assertEquals(Set.of(),
             streamsGroup.currentWarmupTaskProcessIds(zarSubtopology, 9));
     }
 
@@ -286,9 +283,9 @@ public class StreamsGroupTest {
             .setProcessId("process")
             .setAssignedTasks(
                 new TasksTuple(
-                    emptyMap(),
-                    emptyMap(),
-                    emptyMap()
+                    Map.of(),
+                    Map.of(),
+                    Map.of()
                 )
             )
             .setTasksPendingRevocation(
@@ -331,8 +328,8 @@ public class StreamsGroupTest {
             .setAssignedTasks(
                 new TasksTuple(
                     mkTasksPerSubtopology(mkTasks(fooSubtopologyId, 1)),
-                    emptyMap(),
-                    emptyMap()
+                    Map.of(),
+                    Map.of()
                 )
             )
             .build();
@@ -344,8 +341,8 @@ public class StreamsGroupTest {
             .setAssignedTasks(
                 new TasksTuple(
                     mkTasksPerSubtopology(mkTasks(fooSubtopologyId, 1)),
-                    emptyMap(),
-                    emptyMap()
+                    Map.of(),
+                    Map.of()
                 )
             )
             .build();
@@ -438,26 +435,26 @@ public class StreamsGroupTest {
         streamsGroup.updateMember(member);
 
         assertEquals("process", streamsGroup.currentActiveTaskProcessId(fooSubtopology, 1));
-        assertEquals(Collections.singleton("process"), streamsGroup.currentStandbyTaskProcessIds(fooSubtopology, 2));
-        assertEquals(Collections.singleton("process"), streamsGroup.currentWarmupTaskProcessIds(fooSubtopology, 3));
+        assertEquals(Set.of("process"), streamsGroup.currentStandbyTaskProcessIds(fooSubtopology, 2));
+        assertEquals(Set.of("process"), streamsGroup.currentWarmupTaskProcessIds(fooSubtopology, 3));
         assertEquals("process", streamsGroup.currentActiveTaskProcessId(barSubtopology, 4));
-        assertEquals(Collections.singleton("process"), streamsGroup.currentStandbyTaskProcessIds(barSubtopology, 5));
-        assertEquals(Collections.singleton("process"), streamsGroup.currentWarmupTaskProcessIds(barSubtopology, 6));
+        assertEquals(Set.of("process"), streamsGroup.currentStandbyTaskProcessIds(barSubtopology, 5));
+        assertEquals(Set.of("process"), streamsGroup.currentWarmupTaskProcessIds(barSubtopology, 6));
         assertNull(streamsGroup.currentActiveTaskProcessId(zarSubtopology, 7));
-        assertEquals(Collections.emptySet(), streamsGroup.currentStandbyTaskProcessIds(zarSubtopology, 8));
-        assertEquals(Collections.emptySet(), streamsGroup.currentWarmupTaskProcessIds(zarSubtopology, 9));
+        assertEquals(Set.of(), streamsGroup.currentStandbyTaskProcessIds(zarSubtopology, 8));
+        assertEquals(Set.of(), streamsGroup.currentWarmupTaskProcessIds(zarSubtopology, 9));
 
         streamsGroup.removeMember(member.memberId());
 
         assertNull(streamsGroup.currentActiveTaskProcessId(zarSubtopology, 1));
-        assertEquals(Collections.emptySet(), streamsGroup.currentStandbyTaskProcessIds(zarSubtopology, 2));
-        assertEquals(Collections.emptySet(), streamsGroup.currentWarmupTaskProcessIds(zarSubtopology, 3));
+        assertEquals(Set.of(), streamsGroup.currentStandbyTaskProcessIds(zarSubtopology, 2));
+        assertEquals(Set.of(), streamsGroup.currentWarmupTaskProcessIds(zarSubtopology, 3));
         assertNull(streamsGroup.currentActiveTaskProcessId(zarSubtopology, 3));
-        assertEquals(Collections.emptySet(), streamsGroup.currentStandbyTaskProcessIds(zarSubtopology, 4));
-        assertEquals(Collections.emptySet(), streamsGroup.currentWarmupTaskProcessIds(zarSubtopology, 5));
+        assertEquals(Set.of(), streamsGroup.currentStandbyTaskProcessIds(zarSubtopology, 4));
+        assertEquals(Set.of(), streamsGroup.currentWarmupTaskProcessIds(zarSubtopology, 5));
         assertNull(streamsGroup.currentActiveTaskProcessId(zarSubtopology, 7));
-        assertEquals(Collections.emptySet(), streamsGroup.currentStandbyTaskProcessIds(zarSubtopology, 8));
-        assertEquals(Collections.emptySet(), streamsGroup.currentWarmupTaskProcessIds(zarSubtopology, 9));
+        assertEquals(Set.of(), streamsGroup.currentStandbyTaskProcessIds(zarSubtopology, 8));
+        assertEquals(Set.of(), streamsGroup.currentWarmupTaskProcessIds(zarSubtopology, 9));
     }
 
     @Test
@@ -477,7 +474,7 @@ public class StreamsGroupTest {
         assertEquals(MemberState.STABLE, member1.state());
         assertEquals(StreamsGroup.StreamsGroupState.NOT_READY, streamsGroup.state());
 
-        streamsGroup.setTopology(new StreamsTopology(1, Collections.emptyMap()));
+        streamsGroup.setTopology(new StreamsTopology(1, Map.of()));
 
         assertEquals(MemberState.STABLE, member1.state());
         assertEquals(StreamsGroup.StreamsGroupState.ASSIGNING, streamsGroup.state());
@@ -674,7 +671,7 @@ public class StreamsGroupTest {
             mock(GroupCoordinatorMetricsShard.class)
         );
         group.setGroupEpoch(1);
-        group.setTopology(new StreamsTopology(1, Collections.emptyMap()));
+        group.setTopology(new StreamsTopology(1, Map.of()));
         group.setTargetAssignmentEpoch(1);
         group.updateMember(new StreamsGroupMember.Builder("member1")
             .setMemberEpoch(1)
@@ -739,7 +736,7 @@ public class StreamsGroupTest {
         assertEquals(StreamsGroup.StreamsGroupState.NOT_READY, streamsGroup.state());
         assertThrows(GroupNotEmptyException.class, streamsGroup::validateDeleteGroup);
 
-        streamsGroup.setTopology(new StreamsTopology(1, Collections.emptyMap()));
+        streamsGroup.setTopology(new StreamsTopology(1, Map.of()));
 
         assertEquals(StreamsGroup.StreamsGroupState.RECONCILING, streamsGroup.state());
         assertThrows(GroupNotEmptyException.class, streamsGroup::validateDeleteGroup);
@@ -783,7 +780,7 @@ public class StreamsGroupTest {
         assertEquals(StreamsGroup.StreamsGroupState.EMPTY.toString(), group.stateAsString(0));
 
         group.setGroupEpoch(1);
-        group.setTopology(new StreamsTopology(1, Collections.emptyMap()));
+        group.setTopology(new StreamsTopology(1, Map.of()));
         group.setTargetAssignmentEpoch(1);
         group.updateMember(new StreamsGroupMember.Builder("member1")
             .setMemberEpoch(1)
@@ -797,9 +794,9 @@ public class StreamsGroupTest {
             .setTopologyEpoch(1)
             .setProcessId("process1")
             .setUserEndpoint(new StreamsGroupMemberMetadataValue.Endpoint().setHost("host1").setPort(9092))
-            .setClientTags(Collections.singletonMap("tag1", "value1"))
-            .setAssignedTasks(new TasksTuple(Collections.emptyMap(), Collections.emptyMap(), Collections.emptyMap()))
-            .setTasksPendingRevocation(new TasksTuple(Collections.emptyMap(), Collections.emptyMap(), Collections.emptyMap()))
+            .setClientTags(Map.of("tag1", "value1"))
+            .setAssignedTasks(new TasksTuple(Map.of(), Map.of(), Map.of()))
+            .setTasksPendingRevocation(new TasksTuple(Map.of(), Map.of(), Map.of()))
             .build());
         group.updateMember(new StreamsGroupMember.Builder("member2")
             .setMemberEpoch(1)
@@ -813,9 +810,9 @@ public class StreamsGroupTest {
             .setTopologyEpoch(1)
             .setProcessId("process2")
             .setUserEndpoint(new StreamsGroupMemberMetadataValue.Endpoint().setHost("host2").setPort(9092))
-            .setClientTags(Collections.singletonMap("tag2", "value2"))
-            .setAssignedTasks(new TasksTuple(Collections.emptyMap(), Collections.emptyMap(), Collections.emptyMap()))
-            .setTasksPendingRevocation(new TasksTuple(Collections.emptyMap(), Collections.emptyMap(), Collections.emptyMap()))
+            .setClientTags(Map.of("tag2", "value2"))
+            .setAssignedTasks(new TasksTuple(Map.of(), Map.of(), Map.of()))
+            .setTasksPendingRevocation(new TasksTuple(Map.of(), Map.of(), Map.of()))
             .build());
         snapshotRegistry.idempotentCreateSnapshot(1);
 
@@ -823,7 +820,7 @@ public class StreamsGroupTest {
             .setGroupId("group-id-1")
             .setGroupState(StreamsGroup.StreamsGroupState.STABLE.toString())
             .setGroupEpoch(1)
-            .setTopology(new StreamsGroupDescribeResponseData.Topology().setEpoch(1).setSubtopologies(Collections.emptyList()))
+            .setTopology(new StreamsGroupDescribeResponseData.Topology().setEpoch(1).setSubtopologies(List.of()))
             .setAssignmentEpoch(1)
             .setMembers(Arrays.asList(
                 new StreamsGroupDescribeResponseData.Member()
@@ -836,7 +833,7 @@ public class StreamsGroupTest {
                     .setTopologyEpoch(1)
                     .setProcessId("process1")
                     .setUserEndpoint(new StreamsGroupDescribeResponseData.Endpoint().setHost("host1").setPort(9092))
-                    .setClientTags(Collections.singletonList(new StreamsGroupDescribeResponseData.KeyValue().setKey("tag1").setValue("value1")))
+                    .setClientTags(List.of(new StreamsGroupDescribeResponseData.KeyValue().setKey("tag1").setValue("value1")))
                     .setAssignment(new StreamsGroupDescribeResponseData.Assignment())
                     .setTargetAssignment(new StreamsGroupDescribeResponseData.Assignment()),
                 new StreamsGroupDescribeResponseData.Member()
@@ -849,7 +846,7 @@ public class StreamsGroupTest {
                     .setTopologyEpoch(1)
                     .setProcessId("process2")
                     .setUserEndpoint(new StreamsGroupDescribeResponseData.Endpoint().setHost("host2").setPort(9092))
-                    .setClientTags(Collections.singletonList(new StreamsGroupDescribeResponseData.KeyValue().setKey("tag2").setValue("value2")))
+                    .setClientTags(List.of(new StreamsGroupDescribeResponseData.KeyValue().setKey("tag2").setValue("value2")))
                     .setAssignment(new StreamsGroupDescribeResponseData.Assignment())
                     .setTargetAssignment(new StreamsGroupDescribeResponseData.Assignment())
             ));
@@ -859,71 +856,24 @@ public class StreamsGroupTest {
     }
 
     @Test
-    public void testStateTransitionMetrics() {
-        // Confirm metrics is not updated when a new StreamsGroup is created but only when the group transitions
-        // its state.
-        GroupCoordinatorMetricsShard metrics = mock(GroupCoordinatorMetricsShard.class);
-        StreamsGroup streamsGroup = new StreamsGroup(
-            LOG_CONTEXT,
-            new SnapshotRegistry(new LogContext()),
-            "group-id",
-            metrics
-        );
-
-        assertEquals(StreamsGroup.StreamsGroupState.EMPTY, streamsGroup.state());
-        verify(metrics, times(0)).onStreamsGroupStateTransition(null, StreamsGroup.StreamsGroupState.EMPTY);
-
-        StreamsGroupMember member = new StreamsGroupMember.Builder("member")
-            .setMemberEpoch(1)
-            .setPreviousMemberEpoch(0)
-            .setState(MemberState.STABLE)
-            .build();
-
-        streamsGroup.updateMember(member);
-
-        assertEquals(StreamsGroup.StreamsGroupState.NOT_READY, streamsGroup.state());
-        verify(metrics, times(1)).onStreamsGroupStateTransition(StreamsGroup.StreamsGroupState.EMPTY, StreamsGroup.StreamsGroupState.NOT_READY);
-
-        streamsGroup.setTopology(new StreamsTopology(1, Collections.emptyMap()));
-
-        assertEquals(StreamsGroup.StreamsGroupState.RECONCILING, streamsGroup.state());
-        verify(metrics, times(1)).onStreamsGroupStateTransition(StreamsGroup.StreamsGroupState.NOT_READY, StreamsGroup.StreamsGroupState.RECONCILING);
-
-        streamsGroup.setGroupEpoch(1);
-
-        assertEquals(StreamsGroup.StreamsGroupState.ASSIGNING, streamsGroup.state());
-        verify(metrics, times(1)).onStreamsGroupStateTransition(StreamsGroup.StreamsGroupState.RECONCILING, StreamsGroup.StreamsGroupState.ASSIGNING);
-
-        streamsGroup.setTargetAssignmentEpoch(1);
-
-        assertEquals(StreamsGroup.StreamsGroupState.STABLE, streamsGroup.state());
-        verify(metrics, times(1)).onStreamsGroupStateTransition(StreamsGroup.StreamsGroupState.ASSIGNING, StreamsGroup.StreamsGroupState.STABLE);
-
-        streamsGroup.removeMember("member");
-
-        assertEquals(StreamsGroup.StreamsGroupState.EMPTY, streamsGroup.state());
-        verify(metrics, times(1)).onStreamsGroupStateTransition(StreamsGroup.StreamsGroupState.STABLE, StreamsGroup.StreamsGroupState.EMPTY);
-    }
-
-    @Test
     public void testIsInStatesCaseInsensitiveAndUnderscored() {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(LOG_CONTEXT);
         GroupCoordinatorMetricsShard metricsShard = new GroupCoordinatorMetricsShard(
             snapshotRegistry,
-            emptyMap(),
+            Map.of(),
             new TopicPartition("__consumer_offsets", 0)
         );
         StreamsGroup group = new StreamsGroup(LOG_CONTEXT, snapshotRegistry, "group-foo", metricsShard);
         snapshotRegistry.idempotentCreateSnapshot(0);
-        assertTrue(group.isInStates(Collections.singleton("empty"), 0));
-        assertFalse(group.isInStates(Collections.singleton("Empty"), 0));
+        assertTrue(group.isInStates(Set.of("empty"), 0));
+        assertFalse(group.isInStates(Set.of("Empty"), 0));
 
         group.updateMember(new StreamsGroupMember.Builder("member1")
             .build());
         snapshotRegistry.idempotentCreateSnapshot(1);
-        assertTrue(group.isInStates(Collections.singleton("empty"), 0));
-        assertTrue(group.isInStates(Collections.singleton("not_ready"), 1));
-        assertFalse(group.isInStates(Collections.singleton("empty"), 1));
+        assertTrue(group.isInStates(Set.of("empty"), 0));
+        assertTrue(group.isInStates(Set.of("not_ready"), 1));
+        assertFalse(group.isInStates(Set.of("empty"), 1));
     }
 
     @Test
@@ -932,7 +882,7 @@ public class StreamsGroupTest {
         GroupCoordinatorMetricsShard metricsShard = mock(GroupCoordinatorMetricsShard.class);
         StreamsGroup streamsGroup = new StreamsGroup(LOG_CONTEXT, snapshotRegistry, "test-group", metricsShard);
 
-        StreamsTopology topology = new StreamsTopology(1, Collections.emptyMap());
+        StreamsTopology topology = new StreamsTopology(1, Map.of());
 
         ConfiguredTopology topo = mock(ConfiguredTopology.class);
         when(topo.isReady()).thenReturn(true);
@@ -955,6 +905,36 @@ public class StreamsGroupTest {
     }
 
     @Test
+    public void testSetTopologyUpdatesStateAndConfiguredTopologyWithPreviousCallToSetMetadata() {
+        Uuid topicUuid = Uuid.randomUuid();
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(LOG_CONTEXT);
+        GroupCoordinatorMetricsShard metricsShard = mock(GroupCoordinatorMetricsShard.class);
+        StreamsGroup streamsGroup = new StreamsGroup(LOG_CONTEXT, snapshotRegistry, "test-group", metricsShard);
+
+        assertEquals(StreamsGroup.StreamsGroupState.EMPTY, streamsGroup.state());
+
+        Map<String, TopicMetadata> partitionMetadata = new HashMap<>();
+        partitionMetadata.put("topic1", new TopicMetadata(topicUuid, "topic1", 1));
+
+        try (MockedStatic<InternalTopicManager> mocked = mockStatic(InternalTopicManager.class)) {
+            streamsGroup.setPartitionMetadata(partitionMetadata);
+            mocked.verify(() -> InternalTopicManager.configureTopics(any(), any(), any()), never());
+        }
+
+        assertTrue(streamsGroup.configuredTopology().isEmpty(), "Configured topology should not be present");
+        assertEquals(partitionMetadata, streamsGroup.partitionMetadata());
+
+        StreamsTopology topology = new StreamsTopology(1, Map.of());
+        ConfiguredTopology topo = mock(ConfiguredTopology.class);
+        when(topo.isReady()).thenReturn(true);
+        try (MockedStatic<InternalTopicManager> mocked = mockStatic(InternalTopicManager.class)) {
+            mocked.when(() -> InternalTopicManager.configureTopics(any(), eq(topology), eq(partitionMetadata))).thenReturn(topo);
+            streamsGroup.setTopology(topology);
+            mocked.verify(() -> InternalTopicManager.configureTopics(any(), eq(topology), eq(partitionMetadata)));
+        }
+    }
+
+    @Test
     public void testSetPartitionMetadataUpdatesStateAndConfiguredTopology() {
         Uuid topicUuid = Uuid.randomUuid();
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(LOG_CONTEXT);
@@ -974,7 +954,7 @@ public class StreamsGroupTest {
         assertTrue(streamsGroup.configuredTopology().isEmpty(), "Configured topology should not be present");
         assertEquals(partitionMetadata, streamsGroup.partitionMetadata());
 
-        StreamsTopology topology = new StreamsTopology(1, Collections.emptyMap());
+        StreamsTopology topology = new StreamsTopology(1, Map.of());
         streamsGroup.setTopology(topology);
         ConfiguredTopology topo = mock(ConfiguredTopology.class);
         when(topo.isReady()).thenReturn(true);
@@ -1014,7 +994,7 @@ public class StreamsGroupTest {
         when(topicImage.partitions()).thenReturn(Collections.singletonMap(0, null));
         when(topicsImage.getTopic("topic1")).thenReturn(topicImage);
         StreamsTopology topology = mock(StreamsTopology.class);
-        when(topology.requiredTopics()).thenReturn(Collections.singleton("topic1"));
+        when(topology.requiredTopics()).thenReturn(Set.of("topic1"));
 
         Map<String, TopicMetadata> partitionMetadata = streamsGroup.computePartitionMetadata(topicsImage, topology);
 

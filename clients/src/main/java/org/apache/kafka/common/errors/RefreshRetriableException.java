@@ -14,23 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.record;
+package org.apache.kafka.common.errors;
 
-public class ConvertedRecords<T extends Records> {
-
-    private final T records;
-    private final RecordValidationStats recordValidationStats;
-
-    public ConvertedRecords(T records, RecordValidationStats recordValidationStats) {
-        this.records = records;
-        this.recordValidationStats = recordValidationStats;
-    }
-
-    public T records() {
-        return records;
-    }
-
-    public RecordValidationStats recordConversionStats() {
-        return recordValidationStats;
+/**
+ * Indicates that an operation failed due to outdated or invalid metadata,
+ * requiring a refresh (e.g., refreshing producer metadata) before retrying the request.
+ * The request can be modified or updated with fresh metadata before being retried.
+ */
+public abstract class RefreshRetriableException extends RetriableException {
+    public RefreshRetriableException(String message) {
+        super(message);
     }
 }

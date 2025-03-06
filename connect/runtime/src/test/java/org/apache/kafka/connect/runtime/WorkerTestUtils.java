@@ -20,6 +20,7 @@ import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.runtime.distributed.ExtendedAssignment;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
+import org.apache.kafka.connect.runtime.isolation.TestPlugins;
 import org.apache.kafka.connect.storage.AppliedConnectorConfig;
 import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.transforms.Transformation;
@@ -195,7 +196,8 @@ public class WorkerTestUtils {
         TransformationStage<R> stage = new TransformationStage<>(
                 predicatePlugin,
                 false,
-                transformationPlugin);
+                transformationPlugin,
+                TestPlugins.noOpLoaderSwap());
         TransformationChain<T, R> realTransformationChainRetriableException = new TransformationChain(List.of(stage), toleranceOperator);
         TransformationChain<T, R> transformationChainRetriableException = Mockito.spy(realTransformationChainRetriableException);
         return transformationChainRetriableException;

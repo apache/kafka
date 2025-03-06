@@ -14,12 +14,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.common.record;
 
-package org.apache.kafka.common.test.api;
+import net.jqwik.api.Arbitraries;
+import net.jqwik.api.Arbitrary;
+import net.jqwik.api.ArbitrarySupplier;
 
-import java.util.function.Consumer;
+import java.nio.ByteBuffer;
+import java.util.Random;
 
-@FunctionalInterface
-public interface ClusterGenerator extends Consumer<ClusterConfig> {
+public final class ArbitraryMemoryRecords implements ArbitrarySupplier<MemoryRecords> {
+    @Override
+    public Arbitrary<MemoryRecords> get() {
+        return Arbitraries.randomValue(ArbitraryMemoryRecords::buildRandomRecords);
+    }
 
+    private static MemoryRecords buildRandomRecords(Random random) {
+        int size = random.nextInt(128) + 1;
+        byte[] bytes = new byte[size];
+        random.nextBytes(bytes);
+
+        return MemoryRecords.readableRecords(ByteBuffer.wrap(bytes));
+    }
 }
