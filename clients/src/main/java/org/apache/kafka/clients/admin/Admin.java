@@ -120,12 +120,7 @@ import java.util.Set;
  * The minimum broker version required is 0.10.0.0. Methods with stricter requirements will specify the minimum broker
  * version required.
  * <p>
- * This client was introduced in 0.11.0.0 and the API is still evolving. We will try to evolve the API in a compatible
- * manner, but we reserve the right to make breaking changes in minor releases, if necessary. We will update the
- * {@code InterfaceStability} annotation and this notice once the API is considered stable.
- * <p>
  */
-@InterfaceStability.Evolving
 public interface Admin extends AutoCloseable {
 
     /**
@@ -1088,6 +1083,13 @@ public interface Admin extends AutoCloseable {
      *   if the request timed out before the controller could record the new assignments.</li>
      *   <li>{@link org.apache.kafka.common.errors.InvalidReplicaAssignmentException}
      *   If the specified assignment was not valid.</li>
+     *   <li>{@link org.apache.kafka.common.errors.InvalidReplicationFactorException}
+     *   If the replication factor was changed in an invalid way.
+     *   Only thrown when {@link AlterPartitionReassignmentsOptions#allowReplicationFactorChange()} is set to false and
+     *   the request is attempting to alter reassignments (not cancel)</li>
+     *   <li>{@link org.apache.kafka.common.errors.UnsupportedVersionException}
+     *   If {@link AlterPartitionReassignmentsOptions#allowReplicationFactorChange()} was changed outside the default
+     *   and the server does not support the option (e.g due to an old Kafka version).</li>
      *   <li>{@link org.apache.kafka.common.errors.NoReassignmentInProgressException}
      *   If there was an attempt to cancel a reassignment for a partition which was not being reassigned.</li>
      * </ul>
@@ -1844,6 +1846,7 @@ public interface Admin extends AutoCloseable {
     /**
      * Delete share groups from the cluster with the default options.
      *
+     * @param groupIds Collection of share group ids which are to be deleted.
      * @return The DeleteShareGroupsResult.
      */
     default DeleteShareGroupsResult deleteShareGroups(Collection<String> groupIds) {
@@ -1853,6 +1856,7 @@ public interface Admin extends AutoCloseable {
     /**
      * Delete share groups from the cluster.
      *
+     * @param groupIds Collection of share group ids which are to be deleted.
      * @param options The options to use when deleting a share group.
      * @return The DeleteShareGroupsResult.
      */
