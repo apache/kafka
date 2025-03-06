@@ -65,7 +65,7 @@ class DelegationTokenEndToEndAuthorizationWithOwnerTest extends DelegationTokenE
   private val describeTokenFailPassword = "describe-token-fail-password"
 
   override def configureSecurityAfterServersStart(): Unit = {
-    // Create the Acls before calling super which will create the additiona tokens
+    // Create the Acls before calling super which will create the additional tokens
     Using.resource(createPrivilegedAdminClient()) { superuserAdminClient =>
       superuserAdminClient.createAcls(List(AclTokenOtherDescribe, AclTokenCreate, AclTokenDescribe).asJava).values
 

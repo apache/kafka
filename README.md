@@ -42,6 +42,7 @@ Follow instructions in https://kafka.apache.org/quickstart
     ./gradlew test  # runs both unit and integration tests
     ./gradlew unitTest
     ./gradlew integrationTest
+    ./gradlew test -Pkafka.test.run.flaky=true  # runs tests that are marked as flaky
 
     
 ### Force re-running tests without code change ###
