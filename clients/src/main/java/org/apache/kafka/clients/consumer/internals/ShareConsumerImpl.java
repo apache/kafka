@@ -54,9 +54,11 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
@@ -92,6 +94,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_JMX_PREFIX;
@@ -914,7 +917,10 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         ShareUnsubscribeEvent unsubscribeEvent = new ShareUnsubscribeEvent(calculateDeadlineMs(timer));
         applicationEventHandler.add(unsubscribeEvent);
         try {
-            processBackgroundEvents(unsubscribeEvent.future(), timer);
+            // If users have fatal error, they will get some exceptions in the background queue.
+            // When running unsubscribe, these exceptions should be ignored, or users can't unsubscribe successfully.
+            processBackgroundEvents(unsubscribeEvent.future(), timer, e -> (e instanceof GroupAuthorizationException
+                || e instanceof TopicAuthorizationException));
             log.info("Completed releasing assignment and leaving group to close consumer.");
         } catch (TimeoutException e) {
             log.warn("Consumer triggered an unsubscribe event to leave the group but couldn't " +
@@ -1107,18 +1113,27 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
      * Each iteration gives the application thread an opportunity to process background events, which may be
      * necessary to complete the overall processing.
      *
-     * @param future         Event that contains a {@link CompletableFuture}; it is on this future that the
-     *                       application thread will wait for completion
-     * @param timer          Overall timer that bounds how long to wait for the event to complete
+     * @param future                    Event that contains a {@link CompletableFuture}; it is on this future that the
+     *                                  application thread will wait for completion
+     * @param timer                     Overall timer that bounds how long to wait for the event to complete
+     * @param ignoreErrorEventException Predicate to ignore background errors.
+     *                                  Any exceptions found while processing background events that match the predicate won't be propagated.
      * @return {@code true} if the event completed within the timeout, {@code false} otherwise
      */
     // Visible for testing
     <T> T processBackgroundEvents(final Future<T> future,
-                                  final Timer timer) {
+                                  final Timer timer,
+                                  final Predicate<Exception> ignoreErrorEventException) {
         log.trace("Will wait up to {} ms for future {} to complete", timer.remainingMs(), future);
 
         do {
-            boolean hadEvents = processBackgroundEvents();
+            boolean hadEvents = false;
+            try {
+                hadEvents = processBackgroundEvents();
+            } catch (Exception e) {
+                if (!ignoreErrorEventException.test(e))
+                    throw e;
+            }
 
             try {
                 if (future.isDone()) {
