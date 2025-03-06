@@ -98,7 +98,6 @@ class ControllerServer(
   val metadataPublishers: util.List[MetadataPublisher] = new util.ArrayList[MetadataPublisher]()
   @volatile var metadataCache : KRaftMetadataCache = _
   @volatile var metadataCachePublisher: KRaftMetadataCachePublisher = _
-  @volatile var featuresPublisher: FeaturesPublisher = _
   @volatile var registrationsPublisher: ControllerRegistrationsPublisher = _
   @volatile var incarnationId: Uuid = _
   @volatile var registrationManager: ControllerRegistrationManager = _
@@ -143,8 +142,6 @@ class ControllerServer(
       metadataCache = MetadataCache.kRaftMetadataCache(config.nodeId, () => raftManager.client.kraftVersion())
 
       metadataCachePublisher = new KRaftMetadataCachePublisher(metadataCache)
-
-      featuresPublisher = new FeaturesPublisher(logContext)
 
       registrationsPublisher = new ControllerRegistrationsPublisher()
 
@@ -288,9 +285,6 @@ class ControllerServer(
 
       // Set up the metadata cache publisher.
       metadataPublishers.add(metadataCachePublisher)
-
-      // Set up the metadata features publisher.
-      metadataPublishers.add(featuresPublisher)
 
       // Set up the controller registrations publisher.
       metadataPublishers.add(registrationsPublisher)
@@ -447,8 +441,6 @@ class ControllerServer(
       }
       Utils.closeQuietly(metadataCachePublisher, "metadata cache publisher")
       metadataCachePublisher = null
-      Utils.closeQuietly(featuresPublisher, "features publisher")
-      featuresPublisher = null
       Utils.closeQuietly(registrationsPublisher, "registrations publisher")
       registrationsPublisher = null
       if (socketServer != null)
