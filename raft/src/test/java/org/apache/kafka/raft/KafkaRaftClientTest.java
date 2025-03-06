@@ -136,7 +136,7 @@ public class KafkaRaftClientTest {
     public void testRejectVotesFromSameEpochAfterResigningLeadership(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int remoteId = localId + 1;
-        ReplicaKey remoteKey = replicaKey(remoteId, isSupport853(raftProtocol));
+        ReplicaKey remoteKey = replicaKey(remoteId, raftProtocol.isReconfigSupported());
         Set<Integer> voters = Set.of(localId, remoteKey.id());
         int epoch = 2;
 
@@ -168,7 +168,7 @@ public class KafkaRaftClientTest {
     public void testRejectVotesFromSameEpochAfterResigningCandidacy(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int remoteId = localId + 1;
-        ReplicaKey remoteKey = replicaKey(remoteId, isSupport853(raftProtocol));
+        ReplicaKey remoteKey = replicaKey(remoteId, raftProtocol.isReconfigSupported());
         Set<Integer> voters = Set.of(localId, remoteKey.id());
         int epoch = 2;
 
@@ -200,7 +200,7 @@ public class KafkaRaftClientTest {
     public void testGrantVotesFromHigherEpochAfterResigningLeadership(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int remoteId = localId + 1;
-        ReplicaKey remoteKey = replicaKey(remoteId, isSupport853(raftProtocol));
+        ReplicaKey remoteKey = replicaKey(remoteId, raftProtocol.isReconfigSupported());
         Set<Integer> voters = Set.of(localId, remoteKey.id());
         int epoch = 2;
 
@@ -237,7 +237,7 @@ public class KafkaRaftClientTest {
     public void testGrantVotesFromHigherEpochAfterResigningCandidacy(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int remoteId = localId + 1;
-        ReplicaKey remoteKey = replicaKey(remoteId, isSupport853(raftProtocol));
+        ReplicaKey remoteKey = replicaKey(remoteId, raftProtocol.isReconfigSupported());
         Set<Integer> voters = Set.of(localId, remoteKey.id());
         int epoch = 2;
 
@@ -274,7 +274,7 @@ public class KafkaRaftClientTest {
     public void testGrantVotesWhenShuttingDown(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int remoteId = localId + 1;
-        ReplicaKey remoteKey = replicaKey(remoteId, isSupport853(raftProtocol));
+        ReplicaKey remoteKey = replicaKey(remoteId, raftProtocol.isReconfigSupported());
         Set<Integer> voters = Set.of(localId, remoteKey.id());
 
         RaftClientTestContext context = new Builder(localId, voters)
@@ -529,7 +529,7 @@ public class KafkaRaftClientTest {
     public void testResignWillCompleteFetchPurgatory(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int remoteId = localId + 1;
-        ReplicaKey otherNodeKey = replicaKey(remoteId, isSupport853(raftProtocol));
+        ReplicaKey otherNodeKey = replicaKey(remoteId, raftProtocol.isReconfigSupported());
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
         RaftClientTestContext context = new Builder(localId, voters)
@@ -655,9 +655,10 @@ public class KafkaRaftClientTest {
         int remoteId1 = localId + 1;
         int remoteId2 = localId + 2;
         int observerId = localId + 3;
-        ReplicaKey remoteKey1 = replicaKey(remoteId1, isSupport853(raftProtocol));
-        ReplicaKey remoteKey2 = replicaKey(remoteId2, isSupport853(raftProtocol));
-        ReplicaKey observerKey3 = replicaKey(observerId, isSupport853(raftProtocol));
+        boolean reconfigSupported = raftProtocol.isReconfigSupported();
+        ReplicaKey remoteKey1 = replicaKey(remoteId1, reconfigSupported);
+        ReplicaKey remoteKey2 = replicaKey(remoteId2, reconfigSupported);
+        ReplicaKey observerKey3 = replicaKey(observerId, reconfigSupported);
         Set<Integer> voters = Set.of(localId, remoteKey1.id(), remoteKey2.id());
 
         RaftClientTestContext context = new Builder(localId, voters)
@@ -763,7 +764,7 @@ public class KafkaRaftClientTest {
         assertFalse(context.channel.hasSentRequests());
 
         // Any `Fetch` received in the resigned state should result in a NOT_LEADER error.
-        ReplicaKey observer = replicaKey(-1, isSupport853(raftProtocol));
+        ReplicaKey observer = replicaKey(-1, raftProtocol.isReconfigSupported());
         context.deliverRequest(context.fetchRequest(1, observer, 0, 0, 0));
         context.pollUntilResponse();
         context.assertSentFetchPartitionResponse(
@@ -1034,7 +1035,7 @@ public class KafkaRaftClientTest {
     @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
     public void testHandleBeginQuorumRequest(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
-        ReplicaKey otherNodeKey = replicaKey(localId + 1, isSupport853(raftProtocol));
+        ReplicaKey otherNodeKey = replicaKey(localId + 1, raftProtocol.isReconfigSupported());
         int votedCandidateEpoch = 2;
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
@@ -1163,7 +1164,7 @@ public class KafkaRaftClientTest {
     public void testEndQuorumIgnoredAsLeaderIfOlderEpoch(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int voter2 = localId + 1;
-        ReplicaKey voter3 = replicaKey(localId + 2, isSupport853(raftProtocol));
+        ReplicaKey voter3 = replicaKey(localId + 2, raftProtocol.isReconfigSupported());
         Set<Integer> voters = Set.of(localId, voter2, voter3.id());
 
         RaftClientTestContext context = new Builder(localId, voters)
@@ -1194,7 +1195,7 @@ public class KafkaRaftClientTest {
     ) throws Exception {
         int localId = randomReplicaId();
         int voter2 = localId + 1;
-        ReplicaKey voter3 = replicaKey(localId + 2, isSupport853(raftProtocol));
+        ReplicaKey voter3 = replicaKey(localId + 2, raftProtocol.isReconfigSupported());
         int epoch = 2;
         Set<Integer> voters = Set.of(localId, voter2, voter3.id());
 
@@ -1256,7 +1257,7 @@ public class KafkaRaftClientTest {
     @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
     public void testAccumulatorClearedAfterBecomingVoted(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
-        ReplicaKey otherNodeKey = replicaKey(localId + 1, isSupport853(raftProtocol));
+        ReplicaKey otherNodeKey = replicaKey(localId + 1, raftProtocol.isReconfigSupported());
         int lingerMs = 50;
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
@@ -1290,7 +1291,7 @@ public class KafkaRaftClientTest {
     @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
     public void testAccumulatorClearedAfterBecomingUnattached(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
-        ReplicaKey otherNodeKey = replicaKey(localId + 1, isSupport853(raftProtocol));
+        ReplicaKey otherNodeKey = replicaKey(localId + 1, raftProtocol.isReconfigSupported());
         int lingerMs = 50;
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
@@ -1425,9 +1426,10 @@ public class KafkaRaftClientTest {
     @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
     public void testHandleEndQuorumRequestWithLowerPriorityToBecomeLeader(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
-        ReplicaKey oldLeaderKey = replicaKey(localId + 1, isSupport853(raftProtocol));
+        boolean reconfigSupported = raftProtocol.isReconfigSupported();
+        ReplicaKey oldLeaderKey = replicaKey(localId + 1, reconfigSupported);
         int leaderEpoch = 2;
-        ReplicaKey preferredNextLeader = replicaKey(localId + 2, isSupport853(raftProtocol));
+        ReplicaKey preferredNextLeader = replicaKey(localId + 2, reconfigSupported);
         Set<Integer> voters = Set.of(localId, oldLeaderKey.id(), preferredNextLeader.id());
 
         RaftClientTestContext context = new Builder(localId, voters)
@@ -1511,7 +1513,7 @@ public class KafkaRaftClientTest {
     public void testHandleValidVoteRequestAsFollower(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int epoch = 2;
-        ReplicaKey otherNodeKey = replicaKey(localId + 1, isSupport853(raftProtocol));
+        ReplicaKey otherNodeKey = replicaKey(localId + 1, raftProtocol.isReconfigSupported());
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
         RaftClientTestContext context = new Builder(localId, voters)
@@ -1532,7 +1534,7 @@ public class KafkaRaftClientTest {
     public void testHandleVoteRequestAsFollowerWithElectedLeader(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int epoch = 2;
-        ReplicaKey otherNodeKey = replicaKey(localId + 1, isSupport853(raftProtocol));
+        ReplicaKey otherNodeKey = replicaKey(localId + 1, raftProtocol.isReconfigSupported());
         int electedLeaderId = localId + 2;
         Set<Integer> voters = Set.of(localId, otherNodeKey.id(), electedLeaderId);
 
@@ -1554,8 +1556,9 @@ public class KafkaRaftClientTest {
     public void testHandleVoteRequestAsFollowerWithVotedCandidate(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int epoch = 2;
-        ReplicaKey otherNodeKey = replicaKey(localId + 1, isSupport853(raftProtocol));
-        ReplicaKey votedCandidateKey = replicaKey(localId + 2, isSupport853(raftProtocol));
+        boolean reconfigSupported = raftProtocol.isReconfigSupported();
+        ReplicaKey otherNodeKey = replicaKey(localId + 1, reconfigSupported);
+        ReplicaKey votedCandidateKey = replicaKey(localId + 2, reconfigSupported);
         Set<Integer> voters = Set.of(localId, otherNodeKey.id(), votedCandidateKey.id());
 
         RaftClientTestContext context = new Builder(localId, voters)
@@ -1575,7 +1578,7 @@ public class KafkaRaftClientTest {
     public void testHandleVoteRequestAsProspective(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int epoch = 2;
-        ReplicaKey otherNodeKey = replicaKey(localId + 1, isSupport853(raftProtocol));
+        ReplicaKey otherNodeKey = replicaKey(localId + 1, raftProtocol.isReconfigSupported());
         int electedLeaderId = localId + 2;
         Set<Integer> voters = Set.of(localId, otherNodeKey.id(), electedLeaderId);
 
@@ -1603,8 +1606,9 @@ public class KafkaRaftClientTest {
     public void testHandleVoteRequestAsProspectiveWithVotedCandidate(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int epoch = 2;
-        ReplicaKey otherNodeKey = replicaKey(localId + 1, isSupport853(raftProtocol));
-        ReplicaKey votedCandidateKey = replicaKey(localId + 2, isSupport853(raftProtocol));
+        boolean reconfigSupported = raftProtocol.isReconfigSupported();
+        ReplicaKey otherNodeKey = replicaKey(localId + 1, reconfigSupported);
+        ReplicaKey votedCandidateKey = replicaKey(localId + 2, reconfigSupported);
         Set<Integer> voters = Set.of(localId, otherNodeKey.id(), votedCandidateKey.id());
 
         RaftClientTestContext context = new Builder(localId, voters)
@@ -1630,7 +1634,7 @@ public class KafkaRaftClientTest {
     public void testHandleInvalidVoteRequestWithOlderEpoch(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int epoch = 2;
-        ReplicaKey otherNodeKey = replicaKey(localId + 1, isSupport853(raftProtocol));
+        ReplicaKey otherNodeKey = replicaKey(localId + 1, raftProtocol.isReconfigSupported());
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
         RaftClientTestContext context = new Builder(localId, voters)
@@ -1650,7 +1654,7 @@ public class KafkaRaftClientTest {
     public void testHandleVoteRequestAsObserver(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int epoch = 2;
-        ReplicaKey otherNodeKey = replicaKey(localId + 1, isSupport853(raftProtocol));
+        ReplicaKey otherNodeKey = replicaKey(localId + 1, raftProtocol.isReconfigSupported());
         int otherNodeId2 = localId + 2;
         Set<Integer> voters = Set.of(otherNodeKey.id(), otherNodeId2);
 
@@ -1670,7 +1674,7 @@ public class KafkaRaftClientTest {
     @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
     public void testLeaderIgnoreVoteRequestOnSameEpoch(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
-        ReplicaKey otherNodeKey = replicaKey(localId + 1, isSupport853(raftProtocol));
+        ReplicaKey otherNodeKey = replicaKey(localId + 1, raftProtocol.isReconfigSupported());
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
         RaftClientTestContext context = new Builder(localId, voters)
@@ -1693,7 +1697,7 @@ public class KafkaRaftClientTest {
     @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
     public void testListenerCommitCallbackAfterLeaderWrite(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
-        ReplicaKey otherNodeKey = replicaKey(localId + 1, isSupport853(raftProtocol));
+        ReplicaKey otherNodeKey = replicaKey(localId + 1, raftProtocol.isReconfigSupported());
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
         RaftClientTestContext context = new Builder(localId, voters)
@@ -1739,7 +1743,7 @@ public class KafkaRaftClientTest {
     @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
     public void testLeaderImmediatelySendsDivergingEpoch(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
-        ReplicaKey otherNodeKey = replicaKey(localId + 1, isSupport853(raftProtocol));
+        ReplicaKey otherNodeKey = replicaKey(localId + 1, raftProtocol.isReconfigSupported());
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
         RaftClientTestContext context = new Builder(localId, voters)
@@ -1771,7 +1775,7 @@ public class KafkaRaftClientTest {
     @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
     public void testCandidateIgnoreVoteRequestOnSameEpoch(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
-        ReplicaKey otherNodeKey = replicaKey(localId + 1, isSupport853(raftProtocol));
+        ReplicaKey otherNodeKey = replicaKey(localId + 1, raftProtocol.isReconfigSupported());
         int leaderEpoch = 2;
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
@@ -1998,7 +2002,7 @@ public class KafkaRaftClientTest {
         assertTrue(context.client.quorum().isFollower());
 
         // transitions to unattached
-        context.deliverRequest(context.voteRequest(epoch + 1, replicaKey(otherNodeId, isSupport853(raftProtocol)), epoch, 1));
+        context.deliverRequest(context.voteRequest(epoch + 1, replicaKey(otherNodeId, raftProtocol.isReconfigSupported()), epoch, 1));
         context.pollUntilResponse();
         context.assertSentVoteResponse(Errors.NONE, epoch + 1, OptionalInt.empty(), true);
         assertTrue(context.client.quorum().isUnattached());
@@ -2028,7 +2032,7 @@ public class KafkaRaftClientTest {
         // confirm no vote request was sent
         assertEquals(0, context.channel.drainSendQueue().size());
 
-        context.deliverRequest(context.voteRequest(epoch + 1, replicaKey(otherNodeId, isSupport853(raftProtocol)), epoch, 0));
+        context.deliverRequest(context.voteRequest(epoch + 1, replicaKey(otherNodeId, raftProtocol.isReconfigSupported()), epoch, 0));
         context.pollUntilResponse();
         // observer can vote
         context.assertSentVoteResponse(Errors.NONE, epoch + 1, OptionalInt.empty(), true);
@@ -2324,7 +2328,7 @@ public class KafkaRaftClientTest {
     @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
     public void testInvalidFetchRequest(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
-        ReplicaKey otherNodeKey = replicaKey(localId + 1, isSupport853(raftProtocol));
+        ReplicaKey otherNodeKey = replicaKey(localId + 1, raftProtocol.isReconfigSupported());
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
         RaftClientTestContext context = new Builder(localId, voters)
@@ -2400,7 +2404,7 @@ public class KafkaRaftClientTest {
     @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
     public void testFetchRequestClusterIdValidation(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
-        ReplicaKey otherNodeKey = replicaKey(localId + 1, isSupport853(raftProtocol));
+        ReplicaKey otherNodeKey = replicaKey(localId + 1, raftProtocol.isReconfigSupported());
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
         RaftClientTestContext context = new Builder(localId, voters)
@@ -2436,7 +2440,7 @@ public class KafkaRaftClientTest {
     @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
     public void testVoteRequestClusterIdValidation(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
-        ReplicaKey otherNodeKey = replicaKey(localId + 1, isSupport853(raftProtocol));
+        ReplicaKey otherNodeKey = replicaKey(localId + 1, raftProtocol.isReconfigSupported());
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
         RaftClientTestContext context = new Builder(localId, voters)
@@ -2604,7 +2608,7 @@ public class KafkaRaftClientTest {
     @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
     public void testEndQuorumEpochRequestClusterIdValidation(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
-        ReplicaKey otherNodeKey = replicaKey(localId + 1, isSupport853(raftProtocol));
+        ReplicaKey otherNodeKey = replicaKey(localId + 1, raftProtocol.isReconfigSupported());
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
         RaftClientTestContext context = new Builder(localId, voters)
@@ -2651,7 +2655,7 @@ public class KafkaRaftClientTest {
         context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
-        ReplicaKey observerKey = replicaKey(localId + 2, isSupport853(raftProtocol));
+        ReplicaKey observerKey = replicaKey(localId + 2, raftProtocol.isReconfigSupported());
         context.deliverRequest(context.voteRequest(epoch - 1, observerKey, 0, 0));
         context.client.poll();
         context.assertSentVoteResponse(Errors.FENCED_LEADER_EPOCH, epoch, OptionalInt.of(localId), false);
@@ -2665,7 +2669,7 @@ public class KafkaRaftClientTest {
     @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
     public void testInvalidVoteRequest(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
-        ReplicaKey otherNodeKey = replicaKey(localId + 1, isSupport853(raftProtocol));
+        ReplicaKey otherNodeKey = replicaKey(localId + 1, raftProtocol.isReconfigSupported());
         int epoch = 5;
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
@@ -2710,7 +2714,7 @@ public class KafkaRaftClientTest {
     @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
     public void testPurgatoryFetchTimeout(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
-        ReplicaKey otherNodeKey = replicaKey(localId + 1, isSupport853(raftProtocol));
+        ReplicaKey otherNodeKey = replicaKey(localId + 1, raftProtocol.isReconfigSupported());
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
         RaftClientTestContext context = new Builder(localId, voters)
@@ -2738,7 +2742,7 @@ public class KafkaRaftClientTest {
     @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
     public void testPurgatoryFetchSatisfiedByWrite(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
-        ReplicaKey otherNodeKey = replicaKey(localId + 1, isSupport853(raftProtocol));
+        ReplicaKey otherNodeKey = replicaKey(localId + 1, raftProtocol.isReconfigSupported());
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
         RaftClientTestContext context = new Builder(localId, voters)
@@ -2768,7 +2772,7 @@ public class KafkaRaftClientTest {
     @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
     public void testPurgatoryFetchCompletedByFollowerTransition(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
-        ReplicaKey voterKey2 = replicaKey(localId + 1, isSupport853(raftProtocol));
+        ReplicaKey voterKey2 = replicaKey(localId + 1, raftProtocol.isReconfigSupported());
         int voter3 = localId + 2;
         Set<Integer> voters = Set.of(localId, voterKey2.id(), voter3);
 
@@ -3104,7 +3108,7 @@ public class KafkaRaftClientTest {
     @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
     public void testLeaderGracefulShutdown(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
-        ReplicaKey otherNodeKey = replicaKey(localId + 1, isSupport853(raftProtocol));
+        ReplicaKey otherNodeKey = replicaKey(localId + 1, raftProtocol.isReconfigSupported());
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
         RaftClientTestContext context = new Builder(localId, voters)
@@ -3151,8 +3155,9 @@ public class KafkaRaftClientTest {
     @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
     public void testEndQuorumEpochSentBasedOnFetchOffset(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
-        ReplicaKey closeFollower = replicaKey(localId + 2, isSupport853(raftProtocol));
-        ReplicaKey laggingFollower = replicaKey(localId + 1, isSupport853(raftProtocol));
+        boolean reconfigSupported = raftProtocol.isReconfigSupported();
+        ReplicaKey closeFollower = replicaKey(localId + 2, reconfigSupported);
+        ReplicaKey laggingFollower = replicaKey(localId + 1, reconfigSupported);
         Set<Integer> voters = Set.of(localId, closeFollower.id(), laggingFollower.id());
 
         RaftClientTestContext context = new Builder(localId, voters)
@@ -3202,8 +3207,9 @@ public class KafkaRaftClientTest {
     @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
     public void testDescribeQuorumNonLeader(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
-        ReplicaKey voter2 = replicaKey(localId + 1, isSupport853(raftProtocol));
-        ReplicaKey voter3 = replicaKey(localId + 2, isSupport853(raftProtocol));
+        boolean reconfigSupported = raftProtocol.isReconfigSupported();
+        ReplicaKey voter2 = replicaKey(localId + 1, reconfigSupported);
+        ReplicaKey voter3 = replicaKey(localId + 2, reconfigSupported);
         int epoch = 2;
         Set<Integer> voters = Set.of(localId, voter2.id(), voter3.id());
 
@@ -3270,16 +3276,16 @@ public class KafkaRaftClientTest {
         int localId = randomReplicaId();
         int followerId1 = localId + 1;
         int followerId2 = localId + 2;
-        boolean support853 = isSupport853(raftProtocol);
+        boolean reconfigSupported = raftProtocol.isReconfigSupported();
         ReplicaKey local = replicaKey(localId, withBootstrapSnapshot);
         // local directory id must exist
         Uuid localDirectoryId = local.directoryId().orElse(Uuid.randomUuid());
         ReplicaKey bootstrapFollower1 = replicaKey(followerId1, withBootstrapSnapshot);
         // if withBootstrapSnapshot is false, directory ids are still needed by the static voter set
-        Uuid followerDirectoryId1 = bootstrapFollower1.directoryId().orElse(support853 ? Uuid.randomUuid() : ReplicaKey.NO_DIRECTORY_ID);
+        Uuid followerDirectoryId1 = bootstrapFollower1.directoryId().orElse(reconfigSupported ? Uuid.randomUuid() : ReplicaKey.NO_DIRECTORY_ID);
         ReplicaKey follower1 = ReplicaKey.of(followerId1, followerDirectoryId1);
         ReplicaKey bootstrapFollower2 = replicaKey(followerId2, withBootstrapSnapshot);
-        Uuid followerDirectoryId2 = bootstrapFollower2.directoryId().orElse(support853 ? Uuid.randomUuid() : ReplicaKey.NO_DIRECTORY_ID);
+        Uuid followerDirectoryId2 = bootstrapFollower2.directoryId().orElse(reconfigSupported ? Uuid.randomUuid() : ReplicaKey.NO_DIRECTORY_ID);
         ReplicaKey follower2 = ReplicaKey.of(followerId2, followerDirectoryId2);
 
         Builder builder = new Builder(localId, localDirectoryId)
@@ -3385,8 +3391,8 @@ public class KafkaRaftClientTest {
         ReplicaKey local = replicaKey(localId, withBootstrapSnapshot);
         Uuid localDirectoryId = local.directoryId().orElse(Uuid.randomUuid());
         ReplicaKey bootstrapFollower = replicaKey(followerId, withBootstrapSnapshot);
-        boolean support853 = isSupport853(raftProtocol);
-        Uuid followerDirectoryId = bootstrapFollower.directoryId().orElse(support853 ? Uuid.randomUuid() : ReplicaKey.NO_DIRECTORY_ID);
+        boolean reconfigSupported = raftProtocol.isReconfigSupported();
+        Uuid followerDirectoryId = bootstrapFollower.directoryId().orElse(reconfigSupported ? Uuid.randomUuid() : ReplicaKey.NO_DIRECTORY_ID);
         ReplicaKey follower = ReplicaKey.of(followerId, followerDirectoryId);
 
         Builder builder = new Builder(localId, localDirectoryId)
@@ -3414,7 +3420,7 @@ public class KafkaRaftClientTest {
         context.assertSentFetchPartitionResponse(expectedHW, epoch);
 
         // Create observer
-        ReplicaKey observer = replicaKey(localId + 2, support853);
+        ReplicaKey observer = replicaKey(localId + 2, reconfigSupported);
         Uuid observerDirectoryId = observer.directoryId().orElse(ReplicaKey.NO_DIRECTORY_ID);
         context.time.sleep(100);
         long observerFetchTime = context.time.milliseconds();
@@ -3529,7 +3535,7 @@ public class KafkaRaftClientTest {
         Uuid localDirectoryId = local.directoryId().orElse(Uuid.randomUuid());
         int followerId = localId + 1;
         ReplicaKey bootstrapFollower = replicaKey(followerId, withBootstrapSnapshot);
-        Uuid followerDirectoryId = bootstrapFollower.directoryId().orElse(isSupport853(raftProtocol) ? Uuid.randomUuid() : ReplicaKey.NO_DIRECTORY_ID);
+        Uuid followerDirectoryId = bootstrapFollower.directoryId().orElse(raftProtocol.isReconfigSupported() ? Uuid.randomUuid() : ReplicaKey.NO_DIRECTORY_ID);
         ReplicaKey follower = ReplicaKey.of(followerId, followerDirectoryId);
 
         Builder builder = new Builder(localId, localDirectoryId)
@@ -3619,23 +3625,23 @@ public class KafkaRaftClientTest {
         // check describe quorum response has both followers
         context.deliverRequest(context.describeQuorumRequest());
         context.pollUntilResponse();
-        boolean support853 = isSupport853(raftProtocol);
+        boolean reconfigSupported = raftProtocol.isReconfigSupported();
         List<ReplicaState> expectedVoterStates = Arrays.asList(
             new ReplicaState()
                 .setReplicaId(localId)
-                .setReplicaDirectoryId(support853 ? local.directoryId().get() : ReplicaKey.NO_DIRECTORY_ID)
+                .setReplicaDirectoryId(reconfigSupported ? local.directoryId().get() : ReplicaKey.NO_DIRECTORY_ID)
                 .setLogEndOffset(3L)
                 .setLastFetchTimestamp(context.time.milliseconds())
                 .setLastCaughtUpTimestamp(context.time.milliseconds()),
             new ReplicaState()
                 .setReplicaId(follower.id())
-                .setReplicaDirectoryId(support853 ? follower.directoryId().get() : ReplicaKey.NO_DIRECTORY_ID)
+                .setReplicaDirectoryId(reconfigSupported ? follower.directoryId().get() : ReplicaKey.NO_DIRECTORY_ID)
                 .setLogEndOffset(-1L)
                 .setLastFetchTimestamp(-1)
                 .setLastCaughtUpTimestamp(-1),
             new ReplicaState()
                 .setReplicaId(follower2.id())
-                .setReplicaDirectoryId(support853 ? follower2.directoryId().get() : ReplicaKey.NO_DIRECTORY_ID)
+                .setReplicaDirectoryId(reconfigSupported ? follower2.directoryId().get() : ReplicaKey.NO_DIRECTORY_ID)
                 .setLogEndOffset(-1L)
                 .setLastFetchTimestamp(-1)
                 .setLastCaughtUpTimestamp(-1));
@@ -3886,7 +3892,7 @@ public class KafkaRaftClientTest {
     @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
     public void testFetchShouldBeTreatedAsLeaderAcknowledgement(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
-        ReplicaKey otherNodeKey = replicaKey(localId + 1, isSupport853(raftProtocol));
+        ReplicaKey otherNodeKey = replicaKey(localId + 1, raftProtocol.isReconfigSupported());
         int epoch = 5;
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
@@ -3949,7 +3955,7 @@ public class KafkaRaftClientTest {
         assertEquals(OptionalLong.of(4L), context.client.highWatermark());
 
         // Now try reading it
-        ReplicaKey otherNodeKey = replicaKey(localId + 1, isSupport853(raftProtocol));
+        ReplicaKey otherNodeKey = replicaKey(localId + 1, raftProtocol.isReconfigSupported());
         List<MutableRecordBatch> batches = new ArrayList<>(2);
         boolean appended = true;
 
@@ -4197,7 +4203,7 @@ public class KafkaRaftClientTest {
     @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
     public void testHandleLeaderChangeFiresAfterListenerReachesEpochStartOffsetOnEmptyLog(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
-        ReplicaKey otherNodeKey = replicaKey(localId + 1, isSupport853(raftProtocol));
+        ReplicaKey otherNodeKey = replicaKey(localId + 1, raftProtocol.isReconfigSupported());
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
         RaftClientTestContext context = new Builder(localId, voters)
@@ -4242,7 +4248,7 @@ public class KafkaRaftClientTest {
     @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
     public void testHandleLeaderChangeFiresAfterListenerReachesEpochStartOffset(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
-        ReplicaKey otherNodeKey = replicaKey(localId + 1, isSupport853(raftProtocol));
+        ReplicaKey otherNodeKey = replicaKey(localId + 1, raftProtocol.isReconfigSupported());
         int epoch = 5;
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
@@ -4309,7 +4315,7 @@ public class KafkaRaftClientTest {
     @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {KIP_595_PROTOCOL_NAME, KIP_853_PROTOCOL_NAME})
     public void testLateRegisteredListenerCatchesUp(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
-        ReplicaKey otherNodeKey = replicaKey(localId + 1, isSupport853(raftProtocol));
+        ReplicaKey otherNodeKey = replicaKey(localId + 1, raftProtocol.isReconfigSupported());
         int epoch = 5;
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
@@ -4457,7 +4463,7 @@ public class KafkaRaftClientTest {
         // This test verifies that the state machine can still catch up even while
         // an election is in progress as long as the high watermark is known.
         int localId = randomReplicaId();
-        ReplicaKey otherNodeKey = replicaKey(localId + 1, isSupport853(raftProtocol));
+        ReplicaKey otherNodeKey = replicaKey(localId + 1, raftProtocol.isReconfigSupported());
         int epoch = 7;
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
@@ -4504,7 +4510,7 @@ public class KafkaRaftClientTest {
         // This test verifies that the state machine can still catch up even while
         // an election is in progress as long as the high watermark is known.
         int localId = randomReplicaId();
-        ReplicaKey otherNodeKey = replicaKey(localId + 1, isSupport853(raftProtocol));
+        ReplicaKey otherNodeKey = replicaKey(localId + 1, raftProtocol.isReconfigSupported());
         int epoch = 7;
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
@@ -4698,10 +4704,6 @@ public class KafkaRaftClientTest {
         context.client.poll();
         assertEquals(3L, context.log.endOffset().offset());
         assertEquals(3, context.log.lastFetchedEpoch());
-    }
-
-    private boolean isSupport853(RaftProtocol raftProtocol) {
-        return raftProtocol == KIP_853_PROTOCOL;
     }
 
     private static KafkaMetric getMetric(final Metrics metrics, final String name) {
