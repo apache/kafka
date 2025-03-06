@@ -550,13 +550,13 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
             .dest("offsetResetStrategy")
             .help("Set share group reset strategy (must be either 'earliest' or 'latest')");
 
-        parser.addArgument("--command-config")
+        parser.addArgument("--client-config")
             .action(store())
             .required(false)
             .type(String.class)
-            .dest("commandConfig")
+            .dest("clientConfig")
             .metavar("CONFIG_FILE")
-            .help("config properties file (config options shared with command line parameters will be overridden).");
+            .help("Config properties file (config options shared with command line parameters will be overridden).");
 
         return parser;
     }
@@ -567,7 +567,7 @@ public class VerifiableShareConsumer implements Closeable, AcknowledgementCommit
         AcknowledgementMode acknowledgementMode =
             AcknowledgementMode.valueOf(res.getString("acknowledgementMode").toUpperCase(Locale.ROOT));
         String offsetResetStrategy = res.getString("offsetResetStrategy").toLowerCase(Locale.ROOT);
-        String configFile = res.getString("commandConfig");
+        String configFile = res.getString("clientConfig");
         String brokerHostandPort = res.getString("bootstrapServer");
 
         Properties consumerProps = new Properties();
