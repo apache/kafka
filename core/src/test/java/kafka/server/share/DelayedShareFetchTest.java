@@ -86,6 +86,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
@@ -725,6 +726,7 @@ public class DelayedShareFetchTest {
         Mockito.verify(replicaManager, times(1)).readFromLog(
             any(), any(), any(ReplicaQuota.class), anyBoolean());
         Mockito.verify(delayedShareFetch, times(1)).releasePartitionLocks(any());
+        Mockito.verify(sp0, times(1)).releaseFetchLock();
 
         // Force complete the request as it's still pending. Return false from the share partition lock acquire.
         when(sp0.maybeAcquireFetchLock()).thenReturn(false);
@@ -745,6 +747,44 @@ public class DelayedShareFetchTest {
 
         delayedShareFetch.lock().unlock();
         Mockito.verify(exceptionHandler, times(1)).accept(any(), any());
+    }
+
+    @Test
+    public void testTryCompleteLocksReleasedOnCompleteException() {
+        ReplicaManager replicaManager = mock(ReplicaManager.class);
+        TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
+        LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes = orderedMap(PARTITION_MAX_BYTES, tp0);
+
+        SharePartition sp0 = mock(SharePartition.class);
+        when(sp0.maybeAcquireFetchLock()).thenReturn(true);
+        when(sp0.canAcquireRecords()).thenReturn(true);
+        when(sp0.fetchOffsetMetadata(anyLong())).thenReturn(Optional.of(new LogOffsetMetadata(0, 1, 0)));
+
+        LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions = new LinkedHashMap<>();
+        sharePartitions.put(tp0, sp0);
+
+        ShareFetch shareFetch = new ShareFetch(FETCH_PARAMS, "grp", Uuid.randomUuid().toString(),
+            new CompletableFuture<>(), partitionMaxBytes, BATCH_SIZE, MAX_FETCH_RECORDS,
+            BROKER_TOPIC_STATS);
+
+        doAnswer(invocation -> buildLogReadResult(Collections.singleton(tp0))).when(replicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
+        mockTopicIdPartitionToReturnDataEqualToMinBytes(replicaManager, tp0, 1);
+
+        PartitionMaxBytesStrategy partitionMaxBytesStrategy = mockPartitionMaxBytes(Collections.singleton(tp0));
+        DelayedShareFetch delayedShareFetch = spy(DelayedShareFetchBuilder.builder()
+            .withShareFetchData(shareFetch)
+            .withSharePartitions(sharePartitions)
+            .withReplicaManager(replicaManager)
+            .withPartitionMaxBytesStrategy(partitionMaxBytesStrategy)
+            .build());
+        assertFalse(delayedShareFetch.isCompleted());
+        // Throw exception for onComplete.
+        doThrow(new RuntimeException()).when(delayedShareFetch).onComplete();
+        // Try to complete the request.
+        assertFalse(delayedShareFetch.tryComplete());
+
+        Mockito.verify(delayedShareFetch, times(1)).releasePartitionLocks(any());
+        Mockito.verify(sp0, times(1)).releaseFetchLock();
     }
 
     @Test
