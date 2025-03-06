@@ -23,7 +23,6 @@ import org.apache.kafka.coordinator.group.api.assignor.MemberSubscription;
 import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
 
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
 
@@ -104,7 +103,7 @@ public class GroupSpecImpl implements GroupSpec {
     public MemberAssignment memberAssignment(String memberId) {
         MemberSubscriptionAndAssignmentImpl member = members.get(memberId);
         if (member == null) {
-            return new MemberAssignmentImpl(Collections.emptyMap());
+            return new MemberAssignmentImpl(Map.of());
         }
         return member;
     }
