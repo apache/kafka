@@ -19,10 +19,8 @@ package org.apache.kafka.coordinator.group;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.AbstractConfig;
-import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.record.CompressionType;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
@@ -44,13 +42,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class GroupCoordinatorConfigTest {
-    private static final List<ConfigDef> GROUP_COORDINATOR_CONFIG_DEFS = List.of(
-        GroupCoordinatorConfig.CLASSIC_GROUP_CONFIG_DEF,
-        GroupCoordinatorConfig.GROUP_COORDINATOR_CONFIG_DEF,
-        GroupCoordinatorConfig.OFFSET_MANAGEMENT_CONFIG_DEF,
-        GroupCoordinatorConfig.CONSUMER_GROUP_CONFIG_DEF,
-        GroupCoordinatorConfig.SHARE_GROUP_CONFIG_DEF
-    );
 
     public static class CustomAssignor implements ConsumerGroupPartitionAssignor, Configurable {
         public Map<String, ?> configs;
@@ -318,7 +309,10 @@ public class GroupCoordinatorConfigTest {
     }
 
     public static GroupCoordinatorConfig createConfig(Map<String, Object> configs) {
-        return new GroupCoordinatorConfig(
-                new AbstractConfig(Utils.mergeConfigs(GROUP_COORDINATOR_CONFIG_DEFS), configs, false));
+        return new GroupCoordinatorConfig(new AbstractConfig(
+            GroupCoordinatorConfig.CONFIG_DEF,
+            configs,
+            false
+        ));
     }
 }

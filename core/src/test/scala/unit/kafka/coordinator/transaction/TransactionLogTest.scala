@@ -25,7 +25,7 @@ import org.apache.kafka.common.protocol.types.{CompactArrayOf, Field, Schema, St
 import org.apache.kafka.common.record.{MemoryRecords, RecordBatch, SimpleRecord}
 import org.apache.kafka.coordinator.transaction.generated.{TransactionLogKey, TransactionLogValue}
 import org.apache.kafka.server.common.TransactionVersion.{TV_0, TV_2}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue, fail}
 import org.junit.jupiter.api.Test
 
 import java.nio.ByteBuffer
@@ -89,21 +89,23 @@ class TransactionLogTest {
 
     var count = 0
     for (record <- records.records.asScala) {
-      val txnKey = TransactionLog.readTxnRecordKey(record.key)
-      val transactionalId = txnKey.transactionalId
-      val txnMetadata = TransactionLog.readTxnRecordValue(transactionalId, record.value).get
+      TransactionLog.readTxnRecordKey(record.key) match {
+        case Left(version) => fail(s"Unexpected record version: $version")
+        case Right(transactionalId) =>
+          val txnMetadata = TransactionLog.readTxnRecordValue(transactionalId, record.value).get
 
-      assertEquals(pidMappings(transactionalId), txnMetadata.producerId)
-      assertEquals(producerEpoch, txnMetadata.producerEpoch)
-      assertEquals(transactionTimeoutMs, txnMetadata.txnTimeoutMs)
-      assertEquals(transactionStates(txnMetadata.producerId), txnMetadata.state)
+          assertEquals(pidMappings(transactionalId), txnMetadata.producerId)
+          assertEquals(producerEpoch, txnMetadata.producerEpoch)
+          assertEquals(transactionTimeoutMs, txnMetadata.txnTimeoutMs)
+          assertEquals(transactionStates(txnMetadata.producerId), txnMetadata.state)
 
-      if (txnMetadata.state.equals(Empty))
-        assertEquals(Set.empty[TopicPartition], txnMetadata.topicPartitions)
-      else
-        assertEquals(topicPartitions, txnMetadata.topicPartitions)
+          if (txnMetadata.state.equals(Empty))
+            assertEquals(Set.empty[TopicPartition], txnMetadata.topicPartitions)
+          else
+            assertEquals(topicPartitions, txnMetadata.topicPartitions)
 
-      count = count + 1
+          count = count + 1
+      }
     }
 
     assertEquals(pidMappings.size, count)
@@ -235,7 +237,9 @@ class TransactionLogTest {
   def testReadTxnRecordKeyCanReadUnknownMessage(): Unit = {
     val record = new TransactionLogKey()
     val unknownRecord = MessageUtil.toVersionPrefixedBytes(Short.MaxValue, record)
-    val key = TransactionLog.readTxnRecordKey(ByteBuffer.wrap(unknownRecord))
-    assertEquals(UnknownKey(Short.MaxValue), key)
+    TransactionLog.readTxnRecordKey(ByteBuffer.wrap(unknownRecord)) match {
+      case Left(version) => assertEquals(Short.MaxValue, version)
+      case Right(_) => fail("Expected to read unknown message")
+    }
   }
 }
