@@ -36,8 +36,8 @@ import java.util.stream.Collectors;
  *     </thead>
  *     <tbody>
  *         <tr><td>UNKNOWN</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Yes</td></tr>
- *         <tr><td>PREPARING_REBALANCE</td><td>Yes</td><td>Yes</td><td></td><td>No</td></tr>
- *         <tr><td>COMPLETING_REBALANCE</td><td>Yes</td><td>Yes</td><td></td><td>No</td></tr>
+ *         <tr><td>PREPARING_REBALANCE</td><td>Yes</td><td>Yes</td><td></td><td></td></tr>
+ *         <tr><td>COMPLETING_REBALANCE</td><td>Yes</td><td>Yes</td><td></td><td></td></tr>
  *         <tr><td>STABLE</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Yes</td></tr>
  *         <tr><td>DEAD</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Yes</td></tr>
  *         <tr><td>EMPTY</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Yes</td></tr>
