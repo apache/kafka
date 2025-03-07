@@ -188,14 +188,14 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
             }
         });
 
-        // Finally, round-robin assignment for unassignment partitions which do not already have members assigned.
+        // Finally, round-robin assignment for unassigned partitions which do not already have members assigned.
         // The order of steps differs slightly from KIP-932 because the desired assignment count has been taken into
         // account when copying partitions across from the current assignment, and this is more convenient.
-        List<TopicIdPartition> unassignedPartitions2 = targetPartitions.stream()
+        List<TopicIdPartition> unassignedPartitions = targetPartitions.stream()
             .filter(targetPartition -> !finalAssignmentByPartition.containsKey(targetPartition))
             .toList();
 
-        roundRobinAssignmentWithCount(groupSpec.memberIds(), unassignedPartitions2, finalAssignment, desiredAssignmentCount);
+        roundRobinAssignmentWithCount(groupSpec.memberIds(), unassignedPartitions, finalAssignment, desiredAssignmentCount);
 
         return groupAssignment(finalAssignment, groupSpec.memberIds());
     }
