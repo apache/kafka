@@ -3819,13 +3819,15 @@ public class GroupMetadataManagerTest {
             .setState(org.apache.kafka.coordinator.group.streams.MemberState.STABLE)
             .setRackId(null)
             .setInstanceId(null)
-            .setRebalanceTimeoutMs(1000)
+            .setRebalanceTimeoutMs(1500)
             .setAssignedTasks(TasksTuple.EMPTY)
             .setTasksPendingRevocation(TasksTuple.EMPTY)
-            .setTopologyEpoch(1)
+            .setTopologyEpoch(0)
             .setClientTags(Map.of())
-            .setProcessId("process-id")
-            .setUserEndpoint(new Endpoint().setHost("localhost").setPort(1500));
+            .setClientId(DEFAULT_CLIENT_ID)
+            .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
+            .setProcessId(DEFAULT_PROCESS_ID)
+            .setUserEndpoint(null);
     }
     
     @Test
