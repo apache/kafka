@@ -43,7 +43,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -289,7 +288,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
 
     /**
      * This will build a heartbeat request if one must be sent, determined based on the member
-     * state. A heartbeat is sent in the following situations:
+     * state. A heartbeat is sent when all of the following applies:
      * <ol>
      *     <li>Member is part of the consumer group or wants to join it.</li>
      *     <li>The heartbeat interval has expired, or the member is in a state that indicates
@@ -326,7 +325,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
                 "reducing the maximum size of batches returned in poll() with max.poll.records.");
 
             membershipManager.onPollTimerExpired();
-            NetworkClientDelegate.UnsentRequest leaveHeartbeat = makeHeartbeatRequestOnlyLogResponse(currentTimeMs);
+            NetworkClientDelegate.UnsentRequest leaveHeartbeat = makeHeartbeatRequestAndLogResponse(currentTimeMs);
 
             // We can ignore the leave response because we can join before or after receiving the response.
             heartbeatRequestState.reset();
@@ -334,7 +333,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
             return new NetworkClientDelegate.PollResult(heartbeatRequestState.heartbeatIntervalMs(), Collections.singletonList(leaveHeartbeat));
         }
         if (shouldHeartbeatBeforeIntervalExpires() || heartbeatRequestState.canSendRequest(currentTimeMs)) {
-            NetworkClientDelegate.UnsentRequest request = makeHeartbeatRequest(currentTimeMs);
+            NetworkClientDelegate.UnsentRequest request = makeHeartbeatRequestAndHandleResponse(currentTimeMs);
             return new NetworkClientDelegate.PollResult(heartbeatRequestState.heartbeatIntervalMs(), Collections.singletonList(request));
         } else {
             return new NetworkClientDelegate.PollResult(heartbeatRequestState.timeToNextHeartbeatMs(currentTimeMs));
@@ -347,7 +346,8 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
      * or
      * - the member is joining the group or acknowledging the assignment and for both cases there is no heartbeat request
      *   in flight.
-     * @return
+     *
+     * @return true if a heartbeat should be sent before the interval expires, false otherwise
      */
     private boolean shouldHeartbeatBeforeIntervalExpires() {
         return membershipManager.state() == MemberState.LEAVING
@@ -361,40 +361,8 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
             .ifPresent(fatalError -> backgroundEventHandler.add(new ErrorEvent(fatalError)));
     }
 
-    private NetworkClientDelegate.UnsentRequest makeHeartbeatRequestOnlyLogResponse(final long currentTimeMs) {
-        return makeHeartbeatRequest(currentTimeMs, this::logResponse);
-    }
-
-    private NetworkClientDelegate.UnsentRequest makeHeartbeatRequest(final long currentTimeMs) {
-        return makeHeartbeatRequest(currentTimeMs, this::handleResponse);
-    }
-
-    private NetworkClientDelegate.UnsentRequest makeHeartbeatRequest(final long currentTimeMs,
-                                                                     final Function<NetworkClientDelegate.UnsentRequest, NetworkClientDelegate.UnsentRequest> addCompletionCallback) {
-        NetworkClientDelegate.UnsentRequest request = addCompletionCallback.apply(new NetworkClientDelegate.UnsentRequest(
-            new StreamsGroupHeartbeatRequest.Builder(this.heartbeatState.buildRequestData()),
-            coordinatorRequestManager.coordinator()
-        ));
-        heartbeatRequestState.onSendAttempt(currentTimeMs);
-        membershipManager.onHeartbeatRequestGenerated();
-        metricsManager.recordHeartbeatSentMs(currentTimeMs);
-        heartbeatRequestState.resetTimer();
-        return request;
-    }
-
-    private NetworkClientDelegate.UnsentRequest handleResponse(final NetworkClientDelegate.UnsentRequest request) {
-        request.whenComplete((response, exception) -> {
-            long completionTimeMs = request.handler().completionTimeMs();
-            if (response != null) {
-                metricsManager.recordRequestLatency(response.requestLatencyMs());
-                onResponse((StreamsGroupHeartbeatResponse) response.responseBody(), completionTimeMs);
-            }
-        });
-        return request;
-    }
-
-    private NetworkClientDelegate.UnsentRequest logResponse(final NetworkClientDelegate.UnsentRequest request) {
-        return request.whenComplete((response, exception) -> {
+    private NetworkClientDelegate.UnsentRequest makeHeartbeatRequestAndLogResponse(final long currentTimeMs) {
+        return makeHeartbeatRequest(currentTimeMs).whenComplete((response, exception) -> {
             if (response != null) {
                 metricsManager.recordRequestLatency(response.requestLatencyMs());
                 Errors error = Errors.forCode(((StreamsGroupHeartbeatResponse) response.responseBody()).data().errorCode());
@@ -408,6 +376,28 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         });
     }
 
+    private NetworkClientDelegate.UnsentRequest makeHeartbeatRequestAndHandleResponse(final long currentTimeMs) {
+        NetworkClientDelegate.UnsentRequest request = makeHeartbeatRequest(currentTimeMs);
+        return request.whenComplete((response, exception) -> {
+            long completionTimeMs = request.handler().completionTimeMs();
+            if (response != null) {
+                metricsManager.recordRequestLatency(response.requestLatencyMs());
+                onResponse((StreamsGroupHeartbeatResponse) response.responseBody(), completionTimeMs);
+            }
+        });
+    }
+
+    private NetworkClientDelegate.UnsentRequest makeHeartbeatRequest(final long currentTimeMs) {
+        NetworkClientDelegate.UnsentRequest request = new NetworkClientDelegate.UnsentRequest(
+            new StreamsGroupHeartbeatRequest.Builder(this.heartbeatState.buildRequestData()),
+            coordinatorRequestManager.coordinator()
+        );
+        heartbeatRequestState.onSendAttempt(currentTimeMs);
+        membershipManager.onHeartbeatRequestGenerated();
+        metricsManager.recordHeartbeatSentMs(currentTimeMs);
+        heartbeatRequestState.resetTimer();
+        return request;
+    }
 
     private void onResponse(final StreamsGroupHeartbeatResponse response, long currentTimeMs) {
         if (Errors.forCode(response.data().errorCode()) == Errors.NONE) {
