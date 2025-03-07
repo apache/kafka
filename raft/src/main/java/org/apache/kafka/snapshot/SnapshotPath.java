@@ -20,4 +20,4 @@ import org.apache.kafka.raft.OffsetAndEpoch;
 
 import java.nio.file.Path;
 
-public record SnapshotPath(Path path, OffsetAndEpoch snapshotId, boolean partial, boolean deleted) {}
+public record SnapshotPath(Path path, OffsetAndEpoch snapshotId, boolean partial, boolean deleted) { }
