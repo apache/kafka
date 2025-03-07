@@ -2098,10 +2098,7 @@ public class GroupMetadataManager {
         if (topology != null) {
             StreamsGroupTopologyValue recordValue = convertToStreamsGroupTopologyRecord(topology);
 
-            final Map<String, StreamsGroupTopologyValue.Subtopology> subtopologyMap = recordValue.subtopologies().stream()
-                .collect(Collectors.toMap(StreamsGroupTopologyValue.Subtopology::subtopologyId, x -> x));
-
-            updatedTopology = new StreamsTopology(topology.epoch(), subtopologyMap);
+            updatedTopology = StreamsTopology.fromRequest(topology);
 
             if (group.topology().isEmpty()) {
                 log.info("[GroupId {}][MemberId {}] Member initialized the topology with epoch {}", groupId, memberId, topology.epoch());
