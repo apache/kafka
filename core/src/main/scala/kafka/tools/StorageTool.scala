@@ -170,7 +170,7 @@ object StorageTool extends Logging {
     printStream: PrintStream,
     validFeatures: java.util.List[Feature]
   ): Unit = {
-    val releaseVersion = Option(namespace.getString("release_version")).getOrElse(MetadataVersion.LATEST_PRODUCTION.toString)
+    val releaseVersion = Option(namespace.getString("release_version")).getOrElse(MetadataVersion.latestTesting().version())
     try {
       val metadataVersion = MetadataVersion.fromVersionString(releaseVersion)
 
@@ -184,7 +184,7 @@ object StorageTool extends Logging {
     } catch {
       case e: IllegalArgumentException =>
         throw new TerseFailure(s"Unknown release version '$releaseVersion'. Supported versions are: " +
-          s"${MetadataVersion.MINIMUM_VERSION.version} to ${MetadataVersion.LATEST_PRODUCTION.version}")
+          s"${MetadataVersion.MINIMUM_VERSION.version} to ${MetadataVersion.latestTesting().version()}")
     }
   }
 
@@ -311,7 +311,7 @@ object StorageTool extends Logging {
     formatParser.addArgument("--release-version", "-r")
       .action(store())
       .help(s"The release version to use for the initial feature settings. The minimum is " +
-        s"${MetadataVersion.MINIMUM_VERSION}; the default is ${MetadataVersion.LATEST_PRODUCTION}")
+        s"${MetadataVersion.MINIMUM_VERSION}; the default is ${MetadataVersion.latestTesting().version()}")
 
     formatParser.addArgument("--feature", "-f")
       .help("The setting to use for a specific feature, in feature=level format. For example: `kraft.version=1`.")
@@ -344,7 +344,7 @@ object StorageTool extends Logging {
     versionMappingParser.addArgument("--release-version", "-r")
       .action(store())
       .help(s"The release version to use for the corresponding feature mapping. The minimum is " +
-        s"${MetadataVersion.MINIMUM_VERSION}; the default is ${MetadataVersion.LATEST_PRODUCTION}")
+        s"${MetadataVersion.MINIMUM_VERSION}; the default is ${MetadataVersion.latestTesting().version()}")
   }
 
   private def addFeatureDependenciesParser(subparsers: Subparsers): Unit = {
