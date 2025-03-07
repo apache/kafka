@@ -6083,8 +6083,8 @@ class ReplicaManagerTest {
     try {
       val groupId = "grp"
       val tp1 = new TopicIdPartition(Uuid.randomUuid, new TopicPartition("foo1", 0))
-      val partitionMaxBytes = new util.LinkedHashMap[TopicIdPartition, Integer]
-      partitionMaxBytes.put(tp1, 1000)
+      val topicPartitions = new util.LinkedHashSet[TopicIdPartition]
+      topicPartitions.add(tp1)
 
       val sp1 = mock(classOf[SharePartition])
       val sharePartitions = new util.LinkedHashMap[TopicIdPartition, SharePartition]
@@ -6096,7 +6096,7 @@ class ReplicaManagerTest {
         groupId,
         Uuid.randomUuid.toString,
         future,
-        partitionMaxBytes,
+        topicPartitions,
         500,
         100,
         brokerTopicStats)
@@ -6110,7 +6110,7 @@ class ReplicaManagerTest {
         time))
 
       val delayedShareFetchWatchKeys : util.List[DelayedShareFetchKey] = new util.ArrayList[DelayedShareFetchKey]
-      partitionMaxBytes.keySet.forEach((topicIdPartition: TopicIdPartition) => delayedShareFetchWatchKeys.add(new DelayedShareFetchGroupKey(groupId, topicIdPartition.topicId, topicIdPartition.partition)))
+      topicPartitions.forEach((topicIdPartition: TopicIdPartition) => delayedShareFetchWatchKeys.add(new DelayedShareFetchGroupKey(groupId, topicIdPartition.topicId, topicIdPartition.partition)))
 
       // You cannot acquire records for sp1, so request will be stored in purgatory waiting for timeout.
       when(sp1.maybeAcquireFetchLock).thenReturn(false)

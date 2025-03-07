@@ -30,15 +30,14 @@ import com.yammer.metrics.core.Gauge;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.LinkedHashMap;
+import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Set;
 
 import static org.apache.kafka.test.TestUtils.tempFile;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * Helper functions for writing share fetch unit tests.
@@ -46,18 +45,15 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 public class ShareFetchTestUtils {
 
     /**
-     * Create an ordered map of TopicIdPartition to partition max bytes.
+     * Create an ordered set of topic partitions.
      *
-     * @param partitionMaxBytes The maximum number of bytes that can be fetched for each partition.
-     * @param topicIdPartitions The topic partitions to create the map for.
-     * @return The ordered map of TopicIdPartition to partition max bytes.
+     * @param topicIdPartitions The topic partitions to create the set for.
+     * @return The ordered set of topic partitions.
      */
-    public static LinkedHashMap<TopicIdPartition, Integer> orderedMap(int partitionMaxBytes, TopicIdPartition... topicIdPartitions) {
-        LinkedHashMap<TopicIdPartition, Integer> map = new LinkedHashMap<>();
-        for (TopicIdPartition tp : topicIdPartitions) {
-            map.put(tp, partitionMaxBytes);
-        }
-        return map;
+    public static LinkedHashSet<TopicIdPartition> orderedSet(TopicIdPartition... topicIdPartitions) {
+        LinkedHashSet<TopicIdPartition> set = new LinkedHashSet<>();
+        Collections.addAll(set, topicIdPartitions);
+        return set;
     }
 
     /**
@@ -68,27 +64,22 @@ public class ShareFetchTestUtils {
      * @param rotationAt The position to rotate the keys at.
      */
     public static void validateRotatedMapEquals(
-        LinkedHashMap<TopicIdPartition, Integer> original,
-        LinkedHashMap<TopicIdPartition, Integer> result,
+        LinkedHashSet<TopicIdPartition> original,
+        LinkedHashSet<TopicIdPartition> result,
         int rotationAt
     ) {
-        Set<TopicIdPartition> originalKeys = original.keySet();
-        Set<TopicIdPartition> resultKeys = result.keySet();
 
-        TopicIdPartition[] originalKeysArray = new TopicIdPartition[originalKeys.size()];
+        TopicIdPartition[] originalKeysArray = new TopicIdPartition[original.size()];
         int i = 0;
-        for (TopicIdPartition key : originalKeys) {
+        for (TopicIdPartition key : original) {
             if (i < rotationAt) {
-                originalKeysArray[originalKeys.size() - rotationAt + i] = key;
+                originalKeysArray[original.size() - rotationAt + i] = key;
             } else {
                 originalKeysArray[i - rotationAt] = key;
             }
             i++;
         }
-        assertArrayEquals(originalKeysArray, resultKeys.toArray());
-        for (TopicIdPartition key : originalKeys) {
-            assertEquals(original.get(key), result.get(key));
-        }
+        assertArrayEquals(originalKeysArray, result.toArray());
     }
 
     /**

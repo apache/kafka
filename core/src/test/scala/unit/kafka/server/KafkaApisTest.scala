@@ -3918,10 +3918,8 @@ class KafkaApisTest extends Logging {
     )
 
     when(sharePartitionManager.newContext(any(), any(), any(), any(), any())).thenReturn(
-      new ShareSessionContext(new ShareRequestMetadata(memberId, shareSessionEpoch), Map(
-        new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)) ->
-          new ShareFetchRequest.SharePartitionData(topicId, partitionMaxBytes)
-      ).asJava)
+      new ShareSessionContext(new ShareRequestMetadata(memberId, shareSessionEpoch), Set(
+        new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex))).asJava)
     )
 
     when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
@@ -3991,7 +3989,7 @@ class KafkaApisTest extends Logging {
 
     val cachedSharePartitions = new ImplicitLinkedHashCollection[CachedSharePartition]
     cachedSharePartitions.mustAdd(new CachedSharePartition(
-      new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)), new ShareFetchRequest.SharePartitionData(topicId, partitionMaxBytes), false))
+      new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)), false))
 
     when(sharePartitionManager.newContext(any(), any(), any(), any(), any())).thenThrow(
       Errors.INVALID_REQUEST.exception()
@@ -4095,9 +4093,8 @@ class KafkaApisTest extends Logging {
     )
 
     when(sharePartitionManager.newContext(any(), any(), any(), any(), any())).thenReturn(
-      new ShareSessionContext(new ShareRequestMetadata(memberId, 0), Map(
-        new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)) ->
-          new ShareFetchRequest.SharePartitionData(topicId, partitionMaxBytes)
+      new ShareSessionContext(new ShareRequestMetadata(memberId, 0), Set(
+        new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex))
       ).asJava)
     ).thenThrow(Errors.INVALID_REQUEST.exception)
 
@@ -4187,9 +4184,8 @@ class KafkaApisTest extends Logging {
     )
 
     when(sharePartitionManager.newContext(any(), any(), any(), any(), any())).thenReturn(
-      new ShareSessionContext(new ShareRequestMetadata(memberId, 0), Map(
-        new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)) ->
-          new ShareFetchRequest.SharePartitionData(topicId, partitionMaxBytes)
+      new ShareSessionContext(new ShareRequestMetadata(memberId, 0), Set(
+        new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex))
       ).asJava)
     )
 
@@ -4255,7 +4251,7 @@ class KafkaApisTest extends Logging {
 
     val cachedSharePartitions = new ImplicitLinkedHashCollection[CachedSharePartition]
     cachedSharePartitions.mustAdd(new CachedSharePartition(
-      new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)), new ShareFetchRequest.SharePartitionData(topicId, partitionMaxBytes), false))
+      new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)), false))
 
     when(sharePartitionManager.newContext(any(), any(), any(), any(), any()))
       .thenReturn(new ShareSessionContext(new ShareRequestMetadata(memberId, 1), new ShareSession(
@@ -4319,7 +4315,7 @@ class KafkaApisTest extends Logging {
 
     val cachedSharePartitions = new ImplicitLinkedHashCollection[CachedSharePartition]
     cachedSharePartitions.mustAdd(new CachedSharePartition(
-      new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)), new ShareFetchRequest.SharePartitionData(topicId, partitionMaxBytes), false))
+      new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)), false))
 
     when(sharePartitionManager.newContext(any(), any(), any(), any(), any()))
       .thenReturn(new ShareSessionContext(new ShareRequestMetadata(memberId, 1), new ShareSession(
@@ -4384,9 +4380,8 @@ class KafkaApisTest extends Logging {
     )
 
     when(sharePartitionManager.newContext(any(), any(), any(), any(), any())).thenReturn(
-      new ShareSessionContext(new ShareRequestMetadata(memberId, 0), Map(
-        new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)) ->
-          new ShareFetchRequest.SharePartitionData(topicId, partitionMaxBytes)
+      new ShareSessionContext(new ShareRequestMetadata(memberId, 0), Set(
+        new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex))
       ).asJava)
     )
 
@@ -4454,9 +4449,8 @@ class KafkaApisTest extends Logging {
     )
 
     when(sharePartitionManager.newContext(any(), any(), any(), any(), any())).thenReturn(
-      new ShareSessionContext(new ShareRequestMetadata(memberId, 0), Map(
-        new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)) ->
-          new ShareFetchRequest.SharePartitionData(topicId, partitionMaxBytes)
+      new ShareSessionContext(new ShareRequestMetadata(memberId, 0), Set(
+        new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex))
       ).asJava)
     ).thenThrow(Errors.SHARE_SESSION_NOT_FOUND.exception)
 
@@ -4547,9 +4541,8 @@ class KafkaApisTest extends Logging {
     )
 
     when(sharePartitionManager.newContext(any(), any(), any(), any(), any())).thenReturn(
-      new ShareSessionContext(new ShareRequestMetadata(memberId, 0), Map(
-        new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)) ->
-          new ShareFetchRequest.SharePartitionData(topicId, partitionMaxBytes)
+      new ShareSessionContext(new ShareRequestMetadata(memberId, 0), Set(
+        new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex))
       ).asJava)
     ).thenThrow(Errors.INVALID_SHARE_SESSION_EPOCH.exception)
 
@@ -4685,13 +4678,12 @@ class KafkaApisTest extends Logging {
 
     val cachedSharePartitions = new ImplicitLinkedHashCollection[CachedSharePartition]
     cachedSharePartitions.mustAdd(new CachedSharePartition(
-      new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)), new ShareFetchRequest.SharePartitionData(topicId, partitionMaxBytes), false)
+      new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)), false)
     )
 
     when(sharePartitionManager.newContext(any(), any(), any(), any(), any())).thenReturn(
-      new ShareSessionContext(new ShareRequestMetadata(memberId, 0), Map(
-        new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)) ->
-          new ShareFetchRequest.SharePartitionData(topicId, partitionMaxBytes)
+      new ShareSessionContext(new ShareRequestMetadata(memberId, 0), Set(
+        new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex))
       ).asJava)
     ).thenReturn(new ShareSessionContext(new ShareRequestMetadata(memberId, 1), new ShareSession(
       new ShareSessionKey(groupId, memberId), cachedSharePartitions, 0L, 0L, 2))
@@ -4935,39 +4927,35 @@ class KafkaApisTest extends Logging {
 
     val cachedSharePartitions1 = new ImplicitLinkedHashCollection[CachedSharePartition]
     cachedSharePartitions1.mustAdd(new CachedSharePartition(
-      new TopicIdPartition(topicId1, new TopicPartition(topicName1, 0)), new ShareFetchRequest.SharePartitionData(topicId1, partitionMaxBytes), false
+      new TopicIdPartition(topicId1, new TopicPartition(topicName1, 0)), false
     ))
     cachedSharePartitions1.mustAdd(new CachedSharePartition(
-      new TopicIdPartition(topicId1, new TopicPartition(topicName1, 1)), new ShareFetchRequest.SharePartitionData(topicId1, partitionMaxBytes), false
+      new TopicIdPartition(topicId1, new TopicPartition(topicName1, 1)), false
     ))
     cachedSharePartitions1.mustAdd(new CachedSharePartition(
-      new TopicIdPartition(topicId2, new TopicPartition(topicName2, 0)), new ShareFetchRequest.SharePartitionData(topicId2, partitionMaxBytes), false
+      new TopicIdPartition(topicId2, new TopicPartition(topicName2, 0)), false
     ))
     cachedSharePartitions1.mustAdd(new CachedSharePartition(
-      new TopicIdPartition(topicId2, new TopicPartition(topicName2, 1)), new ShareFetchRequest.SharePartitionData(topicId2, partitionMaxBytes), false
+      new TopicIdPartition(topicId2, new TopicPartition(topicName2, 1)), false
     ))
     cachedSharePartitions1.mustAdd(new CachedSharePartition(
-      new TopicIdPartition(topicId3, new TopicPartition(topicName3, 0)), new ShareFetchRequest.SharePartitionData(topicId3, partitionMaxBytes), false
+      new TopicIdPartition(topicId3, new TopicPartition(topicName3, 0)), false
     ))
 
     val cachedSharePartitions2 = new ImplicitLinkedHashCollection[CachedSharePartition]
     cachedSharePartitions2.mustAdd(new CachedSharePartition(
-      new TopicIdPartition(topicId3, new TopicPartition(topicName3, 0)), new ShareFetchRequest.SharePartitionData(topicId3, partitionMaxBytes), false
+      new TopicIdPartition(topicId3, new TopicPartition(topicName3, 0)), false
     ))
     cachedSharePartitions2.mustAdd(new CachedSharePartition(
-      new TopicIdPartition(topicId4, new TopicPartition(topicName4, 0)), new ShareFetchRequest.SharePartitionData(topicId4, partitionMaxBytes), false
+      new TopicIdPartition(topicId4, new TopicPartition(topicName4, 0)), false
     ))
 
     when(sharePartitionManager.newContext(any(), any(), any(), any(), any())).thenReturn(
-      new ShareSessionContext(new ShareRequestMetadata(memberId, 0), Map(
-        new TopicIdPartition(topicId1, new TopicPartition(topicName1, 0)) ->
-          new ShareFetchRequest.SharePartitionData(topicId1, partitionMaxBytes),
-        new TopicIdPartition(topicId1, new TopicPartition(topicName1, 1)) ->
-          new ShareFetchRequest.SharePartitionData(topicId1, partitionMaxBytes),
-        new TopicIdPartition(topicId2, new TopicPartition(topicName2, 0)) ->
-          new ShareFetchRequest.SharePartitionData(topicId2, partitionMaxBytes),
-        new TopicIdPartition(topicId2, new TopicPartition(topicName2, 1)) ->
-          new ShareFetchRequest.SharePartitionData(topicId2, partitionMaxBytes)
+      new ShareSessionContext(new ShareRequestMetadata(memberId, 0), Set(
+        new TopicIdPartition(topicId1, new TopicPartition(topicName1, 0)),
+        new TopicIdPartition(topicId1, new TopicPartition(topicName1, 1)),
+        new TopicIdPartition(topicId2, new TopicPartition(topicName2, 0)),
+        new TopicIdPartition(topicId2, new TopicPartition(topicName2, 1))
       ).asJava)
     ).thenReturn(new ShareSessionContext(new ShareRequestMetadata(memberId, 1), new ShareSession(
       new ShareSessionKey(groupId, memberId), cachedSharePartitions1, 0L, 0L, 2))
@@ -5367,19 +5355,10 @@ class KafkaApisTest extends Logging {
 
     val erroneousPartitions: util.Map[TopicIdPartition, ShareFetchResponseData.PartitionData] = new util.HashMap()
 
-    val validPartitions: util.Map[TopicIdPartition, ShareFetchRequest.SharePartitionData] = new util.HashMap()
-    validPartitions.put(
-      tp1,
-      new ShareFetchRequest.SharePartitionData(topicId1, partitionMaxBytes)
-    )
-    validPartitions.put(
-      tp2,
-      new ShareFetchRequest.SharePartitionData(topicId2, partitionMaxBytes)
-    )
-    validPartitions.put(
-      tp3,
-      new ShareFetchRequest.SharePartitionData(topicId2, partitionMaxBytes)
-    )
+    val validPartitions: util.Set[TopicIdPartition] = new util.HashSet()
+    validPartitions.add(tp1)
+    validPartitions.add(tp2)
+    validPartitions.add(tp3)
 
     val erroneousAndValidPartitionData: ErroneousAndValidPartitionData =
       new ErroneousAndValidPartitionData(erroneousPartitions, validPartitions)
@@ -5522,11 +5501,8 @@ class KafkaApisTest extends Logging {
         .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
     )
 
-    val validPartitions: util.Map[TopicIdPartition, ShareFetchRequest.SharePartitionData] = new util.HashMap()
-    validPartitions.put(
-      tp1,
-      new ShareFetchRequest.SharePartitionData(topicId1, partitionMaxBytes)
-    )
+    val validPartitions: util.Set[TopicIdPartition] = new util.HashSet()
+    validPartitions.add(tp1)
 
     val erroneousAndValidPartitionData: ErroneousAndValidPartitionData =
       new ErroneousAndValidPartitionData(erroneousPartitions, validPartitions)
@@ -5658,19 +5634,10 @@ class KafkaApisTest extends Logging {
 
     val erroneousPartitions: util.Map[TopicIdPartition, ShareFetchResponseData.PartitionData] = new util.HashMap()
 
-    val validPartitions: util.Map[TopicIdPartition, ShareFetchRequest.SharePartitionData] = new util.HashMap()
-    validPartitions.put(
-      tp1,
-      new ShareFetchRequest.SharePartitionData(topicId1, partitionMaxBytes)
-    )
-    validPartitions.put(
-      tp2,
-      new ShareFetchRequest.SharePartitionData(topicId2, partitionMaxBytes)
-    )
-    validPartitions.put(
-      tp3,
-      new ShareFetchRequest.SharePartitionData(topicId2, partitionMaxBytes)
-    )
+    val validPartitions: util.Set[TopicIdPartition] = new util.HashSet()
+    validPartitions.add(tp1)
+    validPartitions.add(tp2)
+    validPartitions.add(tp3)
 
     val erroneousAndValidPartitionData: ErroneousAndValidPartitionData =
       new ErroneousAndValidPartitionData(erroneousPartitions, validPartitions)
@@ -5817,23 +5784,11 @@ class KafkaApisTest extends Logging {
 
     val erroneousPartitions: util.Map[TopicIdPartition, ShareFetchResponseData.PartitionData] = new util.HashMap()
 
-    val validPartitions: util.Map[TopicIdPartition, ShareFetchRequest.SharePartitionData] = new util.HashMap()
-    validPartitions.put(
-      tp1,
-      new ShareFetchRequest.SharePartitionData(topicId1, partitionMaxBytes)
-    )
-    validPartitions.put(
-      tp2,
-      new ShareFetchRequest.SharePartitionData(topicId2, partitionMaxBytes)
-    )
-    validPartitions.put(
-      tp3,
-      new ShareFetchRequest.SharePartitionData(topicId2, partitionMaxBytes)
-    )
-    validPartitions.put(
-      tp4,
-      new ShareFetchRequest.SharePartitionData(topicId3, partitionMaxBytes)
-    )
+    val validPartitions: util.Set[TopicIdPartition] = new util.HashSet()
+    validPartitions.add(tp1)
+    validPartitions.add(tp2)
+    validPartitions.add(tp3)
+    validPartitions.add(tp4)
 
     val erroneousAndValidPartitionData: ErroneousAndValidPartitionData =
       new ErroneousAndValidPartitionData(erroneousPartitions, validPartitions)
@@ -6013,13 +5968,12 @@ class KafkaApisTest extends Logging {
 
     val cachedSharePartitions = new ImplicitLinkedHashCollection[CachedSharePartition]
     cachedSharePartitions.mustAdd(new CachedSharePartition(
-      new TopicIdPartition(topicId, new TopicPartition(topicName, 0)), new ShareFetchRequest.SharePartitionData(topicId, partitionMaxBytes), false
+      new TopicIdPartition(topicId, new TopicPartition(topicName, 0)), false
     ))
 
     when(sharePartitionManager.newContext(any(), any(), any(), any(), any())).thenReturn(
-      new ShareSessionContext(new ShareRequestMetadata(memberId, 0), Map(
-        new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)) ->
-          new ShareFetchRequest.SharePartitionData(topicId, partitionMaxBytes)
+      new ShareSessionContext(new ShareRequestMetadata(memberId, 0), Set(
+        new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex))
       ).asJava)
     ).thenReturn(new ShareSessionContext(new ShareRequestMetadata(memberId, 1), new ShareSession(
       new ShareSessionKey(groupId, memberId), cachedSharePartitions, 0L, 0L, 2))

@@ -24,7 +24,7 @@ import org.apache.kafka.server.share.fetch.PartitionRotateStrategy.StrategyType;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 
 import static org.apache.kafka.server.share.fetch.ShareFetchTestUtils.validateRotatedMapEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -35,9 +35,9 @@ public class PartitionRotateStrategyTest {
     @Test
     public void testRoundRobinStrategy() {
         PartitionRotateStrategy strategy = PartitionRotateStrategy.type(StrategyType.ROUND_ROBIN);
-        LinkedHashMap<TopicIdPartition, Integer> partitions = createPartitions(3);
+        LinkedHashSet<TopicIdPartition> partitions = createPartitions(3);
 
-        LinkedHashMap<TopicIdPartition, Integer> result = strategy.rotate(partitions, new PartitionRotateMetadata(1));
+        LinkedHashSet<TopicIdPartition> result = strategy.rotate(partitions, new PartitionRotateMetadata(1));
         assertEquals(3, result.size());
         validateRotatedMapEquals(partitions, result, 1);
 
@@ -61,8 +61,8 @@ public class PartitionRotateStrategyTest {
     public void testRoundRobinStrategyWithSpecialSessionEpochs() {
         PartitionRotateStrategy strategy = PartitionRotateStrategy.type(StrategyType.ROUND_ROBIN);
 
-        LinkedHashMap<TopicIdPartition, Integer> partitions = createPartitions(3);
-        LinkedHashMap<TopicIdPartition, Integer> result = strategy.rotate(
+        LinkedHashSet<TopicIdPartition> partitions = createPartitions(3);
+        LinkedHashSet<TopicIdPartition> result = strategy.rotate(
             partitions,
             new PartitionRotateMetadata(ShareRequestMetadata.INITIAL_EPOCH));
         assertEquals(3, result.size());
@@ -79,20 +79,20 @@ public class PartitionRotateStrategyTest {
     public void testRoundRobinStrategyWithEmptyPartitions() {
         PartitionRotateStrategy strategy = PartitionRotateStrategy.type(StrategyType.ROUND_ROBIN);
         // Empty partitions.
-        LinkedHashMap<TopicIdPartition, Integer> result = strategy.rotate(new LinkedHashMap<>(), new PartitionRotateMetadata(5));
+        LinkedHashSet<TopicIdPartition> result = strategy.rotate(new LinkedHashSet<>(), new PartitionRotateMetadata(5));
         // The result should be empty.
         assertTrue(result.isEmpty());
     }
 
     /**
-     * Create an ordered map of TopicIdPartition to partition max bytes.
+     * Create an ordered map of topic partitions.
      * @param size The number of topic-partitions to create.
-     * @return The ordered map of TopicIdPartition to partition max bytes.
+     * @return The ordered set of topic partitions.
      */
-    private LinkedHashMap<TopicIdPartition, Integer> createPartitions(int size) {
-        LinkedHashMap<TopicIdPartition, Integer> partitions = new LinkedHashMap<>();
+    private LinkedHashSet<TopicIdPartition> createPartitions(int size) {
+        LinkedHashSet<TopicIdPartition> partitions = new LinkedHashSet<>();
         for (int i = 0; i < size; i++) {
-            partitions.put(new TopicIdPartition(Uuid.randomUuid(), i, "foo" + i), 1 /* partition max bytes*/);
+            partitions.add(new TopicIdPartition(Uuid.randomUuid(), i, "foo" + i));
         }
         return partitions;
     }

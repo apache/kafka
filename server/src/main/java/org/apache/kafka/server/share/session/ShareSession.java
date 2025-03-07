@@ -18,7 +18,6 @@
 package org.apache.kafka.server.share.session;
 
 import org.apache.kafka.common.TopicIdPartition;
-import org.apache.kafka.common.requests.ShareFetchRequest;
 import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
 import org.apache.kafka.server.share.CachedSharePartition;
 
@@ -27,6 +26,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public class ShareSession {
 
@@ -110,25 +110,20 @@ public class ShareSession {
         return new LastUsedKey(key, lastUsedMs);
     }
 
-    // Visible for testing
-    public synchronized long creationMs() {
-        return creationMs;
-    }
-
     // Update the cached partition data based on the request.
-    public synchronized Map<ModifiedTopicIdPartitionType, List<TopicIdPartition>> update(Map<TopicIdPartition,
-            ShareFetchRequest.SharePartitionData> shareFetchData, List<TopicIdPartition> toForget) {
+    public synchronized Map<ModifiedTopicIdPartitionType, List<TopicIdPartition>> update(
+        Set<TopicIdPartition> shareFetchData,
+        List<TopicIdPartition> toForget) {
         List<TopicIdPartition> added = new ArrayList<>();
         List<TopicIdPartition> updated = new ArrayList<>();
         List<TopicIdPartition> removed = new ArrayList<>();
-        shareFetchData.forEach((topicIdPartition, sharePartitionData) -> {
-            CachedSharePartition cachedSharePartitionKey = new CachedSharePartition(topicIdPartition, sharePartitionData, true);
+        shareFetchData.forEach(topicIdPartition -> {
+            CachedSharePartition cachedSharePartitionKey = new CachedSharePartition(topicIdPartition, true);
             CachedSharePartition cachedPart = partitionMap.find(cachedSharePartitionKey);
             if (cachedPart == null) {
                 partitionMap.mustAdd(cachedSharePartitionKey);
                 added.add(topicIdPartition);
             } else {
-                cachedPart.updateRequestParams(sharePartitionData);
                 updated.add(topicIdPartition);
             }
         });

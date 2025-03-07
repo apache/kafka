@@ -18,9 +18,8 @@ package org.apache.kafka.server.share.fetch;
 
 import org.apache.kafka.common.TopicIdPartition;
 
-import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.Locale;
-import java.util.Map;
 
 /**
  * The PartitionRotateStrategy is used to rotate the partitions based on the respective strategy.
@@ -48,7 +47,7 @@ public interface PartitionRotateStrategy {
      *
      * @return the rotated topicIdPartitions
      */
-    LinkedHashMap<TopicIdPartition, Integer> rotate(LinkedHashMap<TopicIdPartition, Integer> topicIdPartitions, PartitionRotateMetadata metadata);
+    LinkedHashSet<TopicIdPartition> rotate(LinkedHashSet<TopicIdPartition> topicIdPartitions, PartitionRotateMetadata metadata);
 
     static PartitionRotateStrategy type(StrategyType type) {
         return switch (type) {
@@ -64,8 +63,8 @@ public interface PartitionRotateStrategy {
      *
      * @return the rotated topicIdPartitions
      */
-    static LinkedHashMap<TopicIdPartition, Integer> rotateRoundRobin(
-        LinkedHashMap<TopicIdPartition, Integer> topicIdPartitions,
+    static LinkedHashSet<TopicIdPartition> rotateRoundRobin(
+        LinkedHashSet<TopicIdPartition> topicIdPartitions,
         PartitionRotateMetadata metadata
     ) {
         if (topicIdPartitions.isEmpty() || topicIdPartitions.size() == 1 || metadata.sessionEpoch < 1) {
@@ -82,18 +81,18 @@ public interface PartitionRotateStrategy {
 
         // TODO: Once the partition max bytes is removed then the partition will be a linked list and rotation
         //  will be a simple operation. Else consider using ImplicitLinkedHashCollection.
-        LinkedHashMap<TopicIdPartition, Integer> suffixPartitions = new LinkedHashMap<>(rotateAt);
-        LinkedHashMap<TopicIdPartition, Integer> rotatedPartitions = new LinkedHashMap<>(topicIdPartitions.size());
+        LinkedHashSet<TopicIdPartition> suffixPartitions = new LinkedHashSet<>(rotateAt);
+        LinkedHashSet<TopicIdPartition> rotatedPartitions = new LinkedHashSet<>(topicIdPartitions.size());
         int i = 0;
-        for (Map.Entry<TopicIdPartition, Integer> entry : topicIdPartitions.entrySet()) {
+        for (TopicIdPartition topicIdPartition : topicIdPartitions) {
             if (i < rotateAt) {
-                suffixPartitions.put(entry.getKey(), entry.getValue());
+                suffixPartitions.add(topicIdPartition);
             } else {
-                rotatedPartitions.put(entry.getKey(), entry.getValue());
+                rotatedPartitions.add(topicIdPartition);
             }
             i++;
         }
-        rotatedPartitions.putAll(suffixPartitions);
+        rotatedPartitions.addAll(suffixPartitions);
         return rotatedPartitions;
     }
 

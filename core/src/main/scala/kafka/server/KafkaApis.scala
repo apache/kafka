@@ -2997,12 +2997,8 @@ class KafkaApis(val requestChannel: RequestChannel,
     erroneousAndValidPartitionData.erroneous.forEach {
       case(tp, _) => if (!topicIdPartitionSeq.contains(tp)) topicIdPartitionSeq += tp
     }
-    erroneousAndValidPartitionData.validTopicIdPartitions.forEach {
-      case(tp, _) => if (!topicIdPartitionSeq.contains(tp)) topicIdPartitionSeq += tp
-    }
-    shareFetchData.forEach {
-      case(tp, _) => if (!topicIdPartitionSeq.contains(tp)) topicIdPartitionSeq += tp
-    }
+    erroneousAndValidPartitionData.validTopicIdPartitions.forEach(tp => if (!topicIdPartitionSeq.contains(tp)) topicIdPartitionSeq += tp)
+    shareFetchData.forEach { tp => if (!topicIdPartitionSeq.contains(tp)) topicIdPartitionSeq += tp}
 
     // Kafka share consumers need READ permission on each topic they are fetching.
     val authorizedTopics = authHelper.filterByAuthorized(
@@ -3139,15 +3135,15 @@ class KafkaApis(val requestChannel: RequestChannel,
     val erroneous = mutable.Map.empty[TopicIdPartition, ShareFetchResponseData.PartitionData]
     erroneousAndValidPartitionData.erroneous.forEach { (topicIdPartition, partitionData) => erroneous.put(topicIdPartition, partitionData) }
 
-    val interestedWithMaxBytes = new util.LinkedHashMap[TopicIdPartition, Integer]
+    val interestedTopicPartitions = new util.LinkedHashSet[TopicIdPartition]
 
-    erroneousAndValidPartitionData.validTopicIdPartitions.forEach { case (topicIdPartition, sharePartitionData) =>
+    erroneousAndValidPartitionData.validTopicIdPartitions.forEach { case topicIdPartition =>
       if (!authorizedTopics.contains(topicIdPartition.topicPartition.topic))
         erroneous += topicIdPartition -> ShareFetchResponse.partitionResponse(topicIdPartition, Errors.TOPIC_AUTHORIZATION_FAILED)
       else if (!metadataCache.contains(topicIdPartition.topicPartition))
         erroneous += topicIdPartition -> ShareFetchResponse.partitionResponse(topicIdPartition, Errors.UNKNOWN_TOPIC_OR_PARTITION)
       else
-        interestedWithMaxBytes.put(topicIdPartition, sharePartitionData.maxBytes)
+        interestedTopicPartitions.add(topicIdPartition)
     }
 
     val shareFetchRequest = request.body[ShareFetchRequest]
@@ -3156,7 +3152,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val versionId = request.header.apiVersion
     val groupId = shareFetchRequest.data.groupId
 
-    if (interestedWithMaxBytes.isEmpty) {
+    if (interestedTopicPartitions.isEmpty) {
       CompletableFuture.completedFuture(erroneous)
     } else {
       // for share fetch from consumer, cap fetchMaxBytes to the maximum bytes that could be fetched without being
@@ -3194,7 +3190,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         params,
         shareSessionEpoch,
         shareFetchRequest.data.batchSize,
-        interestedWithMaxBytes
+        interestedTopicPartitions
       ).thenApply{ result =>
         val combinedResult = mutable.Map.empty[TopicIdPartition, ShareFetchResponseData.PartitionData]
         result.asScala.foreach { case (tp, data) =>
