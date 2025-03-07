@@ -18,7 +18,6 @@
 package org.apache.kafka.common.test;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.test.api.TestKitDefaults;
@@ -27,7 +26,6 @@ import org.apache.kafka.metadata.properties.MetaProperties;
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble;
 import org.apache.kafka.metadata.properties.MetaPropertiesVersion;
 import org.apache.kafka.server.common.Feature;
-import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 
 import java.io.File;
@@ -229,7 +227,6 @@ public class TestKitNodes {
     private final String baseDirectory;
     private final String clusterId;
     private final BootstrapMetadata bootstrapMetadata;
-    private final Short kraftVersion;
     private final SortedMap<Integer, TestKitNode> controllerNodes;
     private final SortedMap<Integer, TestKitNode> brokerNodes;
     private final ListenerName brokerListenerName;
@@ -250,22 +247,7 @@ public class TestKitNodes {
     ) {
         this.baseDirectory = Objects.requireNonNull(baseDirectory);
         this.clusterId = Objects.requireNonNull(clusterId);
-        this.kraftVersion = Objects.requireNonNull(bootstrapMetadata).featureLevel(KRaftVersion.FEATURE_NAME);
-        // In real cluster, the kraft.version is in KRaftVersionRecord, not in FeatureLevelRecord.
-        // Remove kraft.version from the bootstrap metadata to match the real cluster.
-        this.bootstrapMetadata = BootstrapMetadata.fromRecords(
-            bootstrapMetadata.records().stream()
-                .filter(record -> {
-                    if (record.message() instanceof FeatureLevelRecord message) {
-                        if (message.name().equals(KRaftVersion.FEATURE_NAME)) {
-                            return false;
-                        }
-                    }
-                    return true;
-                })
-                .collect(Collectors.toList()),
-            bootstrapMetadata.source()
-        );
+        this.bootstrapMetadata = Objects.requireNonNull(bootstrapMetadata);
         this.controllerNodes = Collections.unmodifiableSortedMap(new TreeMap<>(Objects.requireNonNull(controllerNodes)));
         this.brokerNodes = Collections.unmodifiableSortedMap(new TreeMap<>(Objects.requireNonNull(brokerNodes)));
         this.brokerListenerName = Objects.requireNonNull(brokerListenerName);
@@ -292,10 +274,6 @@ public class TestKitNodes {
 
     public BootstrapMetadata bootstrapMetadata() {
         return bootstrapMetadata;
-    }
-
-    public Short kraftVersion() {
-        return kraftVersion;
     }
 
     public SortedMap<Integer, TestKitNode> brokerNodes() {

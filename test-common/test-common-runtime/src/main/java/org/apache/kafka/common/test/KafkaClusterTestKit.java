@@ -432,7 +432,8 @@ public class KafkaClusterTestKit implements AutoCloseable {
                 return;
             }
             formatter.setReleaseVersion(nodes.bootstrapMetadata().metadataVersion());
-            formatter.setFeatureLevel(KRaftVersion.FEATURE_NAME, nodes.kraftVersion());
+            formatter.setFeatureLevel(KRaftVersion.FEATURE_NAME,
+                nodes.bootstrapMetadata().featureLevel(KRaftVersion.FEATURE_NAME));
             formatter.setUnstableFeatureVersionsEnabled(true);
             formatter.setIgnoreFormatted(false);
             formatter.setControllerListenerName(controllerListenerName);
@@ -441,7 +442,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
             } else {
                 formatter.setMetadataLogDirectory(Optional.empty());
             }
-            if (nodes.kraftVersion() > 0) {
+            if (nodes.bootstrapMetadata().featureLevel(KRaftVersion.FEATURE_NAME) > 0) {
                 StringBuilder dynamicVotersBuilder = new StringBuilder();
                 String prefix = "";
                 for (TestKitNode controllerNode : nodes.controllerNodes().values()) {
