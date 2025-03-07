@@ -129,6 +129,7 @@ public class UnifiedLog implements AutoCloseable {
     private final int producerIdExpirationCheckIntervalMs;
     private final String logIdent;
     private final Logger logger;
+    private final Logger futureTimestampLogger;
     private final LogValidator.MetricsRecorder validatorMetricsRecorder;
 
     /* The earliest offset which is part of an incomplete transaction. This is used to compute the
@@ -216,6 +217,7 @@ public class UnifiedLog implements AutoCloseable {
 
         this.logIdent = "[UnifiedLog partition=" + topicPartition() + ", dir=" + parentDir() + "] ";
         this.logger = new LogContext(logIdent).logger(UnifiedLog.class);
+        this.futureTimestampLogger = new LogContext(logIdent).logger("LogFutureTimestampLogger");
         this.highWatermarkMetadata = new LogOffsetMetadata(logStartOffset);
         this.localLogStartOffset = logStartOffset;
         this.producerExpireCheck = scheduler().schedule("PeriodicProducerExpirationCheck", () -> removeExpiredProducers(time().milliseconds()),
@@ -1903,6 +1905,9 @@ public class UnifiedLog implements AutoCloseable {
         long startMs = time().milliseconds();
 
         DeletionCondition shouldDelete = (segment, nextSegmentOpt) -> {
+            if (startMs < segment.largestTimestamp()) {
+                futureTimestampLogger.warn("{} contains future timestamp(s), making it ineligible to be deleted", segment);
+            }
             boolean delete = startMs - segment.largestTimestamp() > retentionMs;
             logger.debug("{} retentionMs breached: {}, startMs={}, retentionMs={}",
                     segment, delete, startMs, retentionMs);
