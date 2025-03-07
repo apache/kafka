@@ -330,7 +330,6 @@ import static org.mockito.Mockito.when;
  */
 @Timeout(120)
 public class KafkaAdminClientTest {
-
     private static final Logger log = LoggerFactory.getLogger(KafkaAdminClientTest.class);
     private static final String GROUP_ID = "group-0";
     private static final int THROTTLE = 10;
