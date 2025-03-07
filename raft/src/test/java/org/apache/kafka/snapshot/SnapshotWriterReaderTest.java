@@ -56,8 +56,8 @@ public final class SnapshotWriterReaderTest {
         int recordsPerBatch = 1;
         int batches = 0;
         int delimiterCount = 2;
-        long magicTimestamp = 0xDEADBEEF;
-        OffsetAndEpoch id = new OffsetAndEpoch(recordsPerBatch * batches, 3);
+        long magicTimestamp = 0xDEADBEEFL;
+        OffsetAndEpoch id = new OffsetAndEpoch(0, 3);
 
         RaftClientTestContext.Builder contextBuilder = new RaftClientTestContext.Builder(localId, voters);
         RaftClientTestContext context = contextBuilder.build();
@@ -77,7 +77,7 @@ public final class SnapshotWriterReaderTest {
 
             RawSnapshotReader snapshot = context.log.readSnapshot(id).get();
             int recordCount = validateDelimiters(snapshot, magicTimestamp);
-            assertEquals((recordsPerBatch * batches) + delimiterCount, recordCount);
+            assertEquals((0) + delimiterCount, recordCount);
         }
     }
 
