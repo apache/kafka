@@ -30,6 +30,7 @@ import org.apache.kafka.common.network.DefaultChannelMetadataRegistry;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.network.TransportLayer;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.ApiVersionsRequest;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
@@ -354,7 +355,7 @@ public class SaslServerAuthenticatorTest {
     private void mockRequest(RequestHeader header, AbstractRequest request, TransportLayer transportLayer) throws IOException {
         ByteBuffer headerBuffer = RequestTestUtils.serializeRequestHeader(header);
 
-        ByteBuffer requestBuffer = request.serialize();
+        ByteBuffer requestBuffer = ((ByteBufferAccessor) request.serialize()).buffer();
         requestBuffer.rewind();
 
         when(transportLayer.read(any(ByteBuffer.class))).then(invocation -> {

@@ -28,7 +28,7 @@ import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.message.ProduceRequestData
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.types.Type
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.protocol.{ApiKeys, ByteBufferAccessor, Errors}
 import org.apache.kafka.common.record.{MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.{ProduceResponse, ResponseHeader}
 import org.apache.kafka.common.security.auth.SecurityProtocol
@@ -144,7 +144,7 @@ class EdgeCaseRequestTest extends KafkaServerTestHarness {
       val bodyBytes = request.serialize
       val byteBuffer = ByteBuffer.allocate(headerBytes.length + bodyBytes.remaining())
       byteBuffer.put(headerBytes)
-      byteBuffer.put(bodyBytes)
+      byteBuffer.put(bodyBytes.asInstanceOf[ByteBufferAccessor].buffer())
       (byteBuffer.array(), request.apiKey.responseHeaderVersion(version))
     }
 

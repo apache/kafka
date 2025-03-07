@@ -124,8 +124,8 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
     }
 
     // Visible for testing
-    public final ByteBuffer serialize() {
-        return MessageUtil.toByteBuffer(data(), version);
+    public final Readable serialize() {
+        return MessageUtil.toReadable(data(), version);
     }
 
     // Visible for testing

@@ -9042,7 +9042,7 @@ class KafkaApisTest extends Logging {
     })
 
     val data = new ListOffsetsRequestData().setTopics(targetTimes).setReplicaId(ListOffsetsRequest.CONSUMER_REPLICA_ID)
-    val listOffsetRequest = ListOffsetsRequest.parse(MessageUtil.toByteBuffer(data, version), version)
+    val listOffsetRequest = ListOffsetsRequest.parse(MessageUtil.toReadable(data, version), version)
     val request = buildRequest(listOffsetRequest)
 
     kafkaApis = createKafkaApis()

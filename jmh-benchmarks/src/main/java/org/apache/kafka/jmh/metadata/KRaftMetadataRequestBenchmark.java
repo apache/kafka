@@ -44,6 +44,7 @@ import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.network.ClientInformation;
 import org.apache.kafka.common.network.ListenerName;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.RequestHeader;
@@ -218,7 +219,7 @@ public class KRaftMetadataRequestBenchmark {
     private RequestChannel.Request buildAllTopicMetadataRequest() {
         MetadataRequest metadataRequest = MetadataRequest.Builder.allTopics().build();
         RequestHeader header = new RequestHeader(metadataRequest.apiKey(), metadataRequest.version(), "", 0);
-        ByteBuffer bodyBuffer = metadataRequest.serialize();
+        ByteBuffer bodyBuffer = ((ByteBufferAccessor) metadataRequest.serialize()).buffer();
 
         RequestContext context = new RequestContext(header, "1", null, principal,
                 ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),

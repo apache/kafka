@@ -251,6 +251,7 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
+import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.common.protocol.types.RawTaggedField;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
@@ -1937,11 +1938,14 @@ public class RequestResponseTest {
         // Check for equality of the ByteBuffer only if indicated (it is likely to fail if any of the fields
         // in the request is a HashMap with multiple elements since ordering of the elements may vary)
         try {
-            ByteBuffer serializedBytes = req.serialize();
-            AbstractRequest deserialized = AbstractRequest.parseRequest(req.apiKey(), req.version(), serializedBytes).request;
-            ByteBuffer serializedBytes2 = deserialized.serialize();
-            serializedBytes.rewind();
-            assertEquals(serializedBytes, serializedBytes2, "Request " + req + "failed equality test");
+            Readable readable = req.serialize();
+            AbstractRequest deserialized = AbstractRequest.parseRequest(req.apiKey(), req.version(), readable).request;
+            Readable readable2 = deserialized.serialize();
+
+            ByteBufferAccessor buffer = (ByteBufferAccessor) readable;
+            ByteBufferAccessor buffer2 = (ByteBufferAccessor) readable2;
+            buffer.buffer().rewind();
+            assertEquals(buffer.buffer(), buffer2.buffer(), "Request " + req + "failed equality test");
         } catch (Exception e) {
             throw new RuntimeException("Failed to deserialize request " + req + " with type " + req.getClass(), e);
         }
@@ -3816,12 +3820,12 @@ public class RequestResponseTest {
     public void testInvalidSaslHandShakeRequest() {
         AbstractRequest request = new SaslHandshakeRequest.Builder(
                 new SaslHandshakeRequestData().setMechanism("PLAIN")).build();
-        ByteBuffer serializedBytes = request.serialize();
+        Readable readable = request.serialize();
         // corrupt the length of the sasl mechanism string
-        serializedBytes.putShort(0, Short.MAX_VALUE);
+        ((ByteBufferAccessor) readable).buffer().putShort(0, Short.MAX_VALUE);
 
         String msg = assertThrows(RuntimeException.class, () -> AbstractRequest.
-            parseRequest(request.apiKey(), request.version(), serializedBytes)).getMessage();
+            parseRequest(request.apiKey(), request.version(), readable)).getMessage();
         assertEquals("Error reading byte array of 32767 byte(s): only 5 byte(s) available", msg);
     }
 
@@ -3837,13 +3841,13 @@ public class RequestResponseTest {
         };
         SaslAuthenticateRequestData data = new SaslAuthenticateRequestData().setAuthBytes(b);
         AbstractRequest request = new SaslAuthenticateRequest(data, version);
-        ByteBuffer serializedBytes = request.serialize();
+        Readable readable = request.serialize();
 
         // corrupt the length of the bytes array
-        serializedBytes.putInt(0, Integer.MAX_VALUE);
+        ((ByteBufferAccessor) readable).buffer().putInt(0, Integer.MAX_VALUE);
 
         String msg = assertThrows(RuntimeException.class, () -> AbstractRequest.
-                parseRequest(request.apiKey(), request.version(), serializedBytes)).getMessage();
+                parseRequest(request.apiKey(), request.version(), readable)).getMessage();
         assertEquals("Error reading byte array of 2147483647 byte(s): only 20 byte(s) available", msg);
     }
 
