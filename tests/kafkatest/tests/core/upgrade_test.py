@@ -22,7 +22,7 @@ from kafkatest.services.kafka.quorum import isolated_kraft, combined_kraft
 from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
 from kafkatest.utils import is_int
-from kafkatest.version import LATEST_3_3, LATEST_3_4, LATEST_3_5, \
+from kafkatest.version import LATEST_3_4, LATEST_3_5, \
     LATEST_3_6, LATEST_3_7, LATEST_3_8, LATEST_3_9, DEV_BRANCH, KafkaVersion, LATEST_STABLE_METADATA_VERSION
 
 #
@@ -137,14 +137,6 @@ class TestUpgrade(ProduceConsumeValidateTest):
         - Perform rolling downgrade.
         - Finally, validate that every message acked by the producer was consumed by the consumer.
         """
-
-        # Due to compatability issue with version 3.3, we need to use a single folder. Using multiple folders
-        # will cause broker to throw InconsistentBrokerMetadataException during startup.
-        # see https://github.com/apache/kafka/pull/13130
-        server_prop_overrides = None
-        if starting_kafka_version == str(LATEST_3_3):
-            server_prop_overrides = [[config_property.LOG_DIRS, "/mnt/kafka/kafka-metadata-logs"], [config_property.METADATA_LOG_DIR, ""]]
-
         fromKafkaVersion = KafkaVersion(starting_kafka_version)
         self.kafka = KafkaService(self.test_context,
                                   num_nodes=3,
@@ -152,8 +144,7 @@ class TestUpgrade(ProduceConsumeValidateTest):
                                   version=fromKafkaVersion,
                                   topics={self.topic: {"partitions": self.partitions,
                                                        "replication-factor": self.replication_factor,
-                                                       'configs': {"min.insync.replicas": 2}}},
-                                  server_prop_overrides = server_prop_overrides)
+                                                       'configs': {"min.insync.replicas": 2}}})
         self.kafka.start()
         self.producer = VerifiableProducer(self.test_context, self.num_producers, self.kafka,
                                            self.topic, throughput=self.producer_throughput,
@@ -172,25 +163,25 @@ class TestUpgrade(ProduceConsumeValidateTest):
         assert self.kafka.check_protocol_errors(self)
 
     @cluster(num_nodes=5)
-    @matrix(from_kafka_version=[str(LATEST_3_3), str(LATEST_3_4), str(LATEST_3_5), str(LATEST_3_6), str(LATEST_3_7), str(LATEST_3_8), str(LATEST_3_9), str(DEV_BRANCH)],
+    @matrix(from_kafka_version=[str(LATEST_3_4), str(LATEST_3_5), str(LATEST_3_6), str(LATEST_3_7), str(LATEST_3_8), str(LATEST_3_9), str(DEV_BRANCH)],
             metadata_quorum=[combined_kraft])
     def test_combined_mode_upgrade(self, from_kafka_version, metadata_quorum, use_new_coordinator=False):
         self.run_upgrade(from_kafka_version)
 
     @cluster(num_nodes=8)
-    @matrix(from_kafka_version=[str(LATEST_3_3), str(LATEST_3_4), str(LATEST_3_5), str(LATEST_3_6), str(LATEST_3_7), str(LATEST_3_8), str(LATEST_3_9), str(DEV_BRANCH)],
+    @matrix(from_kafka_version=[str(LATEST_3_4), str(LATEST_3_5), str(LATEST_3_6), str(LATEST_3_7), str(LATEST_3_8), str(LATEST_3_9), str(DEV_BRANCH)],
             metadata_quorum=[isolated_kraft])
     def test_isolated_mode_upgrade(self, from_kafka_version, metadata_quorum, use_new_coordinator=False):
         self.run_upgrade(from_kafka_version)
 
     @cluster(num_nodes=5)
-    @matrix(from_kafka_version=[str(LATEST_3_3), str(LATEST_3_4), str(LATEST_3_5), str(LATEST_3_6), str(LATEST_3_7), str(LATEST_3_8), str(LATEST_3_9), str(DEV_BRANCH)],
+    @matrix(from_kafka_version=[str(LATEST_3_4), str(LATEST_3_5), str(LATEST_3_6), str(LATEST_3_7), str(LATEST_3_8), str(LATEST_3_9), str(DEV_BRANCH)],
             metadata_quorum=[combined_kraft])
     def test_combined_mode_upgrade_downgrade(self, from_kafka_version, metadata_quorum, use_new_coordinator=False):
         self.run_upgrade_downgrade(from_kafka_version)
 
     @cluster(num_nodes=8)
-    @matrix(from_kafka_version=[str(LATEST_3_3), str(LATEST_3_4), str(LATEST_3_5), str(LATEST_3_6), str(LATEST_3_7), str(LATEST_3_8), str(LATEST_3_9), str(DEV_BRANCH)],
+    @matrix(from_kafka_version=[str(LATEST_3_4), str(LATEST_3_5), str(LATEST_3_6), str(LATEST_3_7), str(LATEST_3_8), str(LATEST_3_9), str(DEV_BRANCH)],
             metadata_quorum=[isolated_kraft])
     def test_isolated_mode_upgrade_downgrade(self, from_kafka_version, metadata_quorum, use_new_coordinator=False):
         self.run_upgrade_downgrade(from_kafka_version)
