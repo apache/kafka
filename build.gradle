@@ -56,7 +56,7 @@ ext {
   heapDumpPath = project.hasProperty('heapDumpPath') ? heapDumpPath : "/tmp"
   heapDumpPathArg = "-XX:HeapDumpPath=$heapDumpPath".toString()
   defaultMaxHeapSize = "2g"
-  defaultJvmArgs = ["-Xss4m", "-XX:+UseParallelGC", "-XX:+UseGCOverheadLimit", "-XX:+ExitOnOutOfMemoryError", "-XX:+HeapDumpOnOutOfMemoryError", heapDumpPathArg]
+  defaultJvmArgs = ["-Xss4m", "-XX:+UseParallelGC", "-XX:+ExitOnOutOfMemoryError", "-XX:+HeapDumpOnOutOfMemoryError", heapDumpPathArg]
 
   // "JEP 403: Strongly Encapsulate JDK Internals" causes some tests to fail when they try
   // to access internals (often via mocking libraries). We use `--add-opens` as a workaround

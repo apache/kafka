@@ -89,7 +89,7 @@ runs:
         mkdir -p heap-dumps
         HEAP_DUMP_DIR=$(readlink -f heap-dumps)
         timeout ${TIMEOUT_MINUTES}m ./gradlew --continue --no-scan \
-        -Dorg.gradle.jvmargs="-Xmx4g -Xss4m -XX:+UseParallelGC -XX:+UseGCOverheadLimit -XX:+ExitOnOutOfMemoryError -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=$HEAP_DUMP_DIR" \
+        -Dorg.gradle.jvmargs="-Xmx4g -Xss4m -XX:+UseParallelGC -XX:+ExitOnOutOfMemoryError -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=$HEAP_DUMP_DIR" \
         -PtestLoggingEvents=started,passed,skipped,failed \
         -PmaxParallelForks=2 \
         -PmaxTestRetries=$TEST_RETRIES -PmaxTestRetryFailures=10 \
