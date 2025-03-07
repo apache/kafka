@@ -218,7 +218,7 @@ jobs:
         id: junit-test
         uses: ./.github/actions/run-gradle
         with:
-          test-task: test
+          test-task: ':streams:integration-tests:test'
           timeout-minutes: 1440  # 3 hours
           test-catalog-path: ${{ steps.load-test-catalog.outputs.download-path }}/combined-test-catalog.txt
           build-scan-artifact-name: build-scan-${{ env.job-variation }}
