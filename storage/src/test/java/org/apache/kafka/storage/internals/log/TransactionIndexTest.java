@@ -228,6 +228,7 @@ public class TransactionIndexTest {
         assertFalse(index.isEmpty());
     }
 
+    @Test
     public void testDoNotCreateFileUntilNeeded() throws IOException {
         // Given that index file does not exist yet
         file.delete();
@@ -245,7 +246,7 @@ public class TransactionIndexTest {
     }
 
     @Test
-    void testAppendAndCollectAfterClose() throws IOException {
+    public void testAppendAndCollectAfterClose() throws IOException {
         // Given the index
         // When closed
         index.close();
@@ -272,7 +273,7 @@ public class TransactionIndexTest {
     }
 
     @Test
-    void testAppendAndCollectAfterInterrupted() throws Exception {
+    public void testAppendAndCollectAfterInterrupted() throws Exception {
         // Given the index
         // When closed
         index.close();
