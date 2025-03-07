@@ -21,36 +21,37 @@ import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.Map;
 
 /**
- * The result of the {@link Admin#deleteShareGroups(Collection <String>, DeleteShareGroupsOptions)} call.
- * <p></p>
+ * The result of the {@link Admin#deleteStreamsGroups(Collection, DeleteStreamsGroupsOptions)} call.
+ * <p>
  * The API of this class is evolving, see {@link Admin} for details.
  */
 @InterfaceStability.Evolving
-public class DeleteShareGroupsResult {
-    private final Map<String, KafkaFuture<Void>> futures;
+public class DeleteStreamsGroupsResult {
 
-    DeleteShareGroupsResult(final Map<String, KafkaFuture<Void>> futures) {
-        this.futures = futures;
+    private final DeleteConsumerGroupsResult delegate;
+
+    DeleteStreamsGroupsResult(final Map<String, KafkaFuture<Void>> futures) {
+        delegate = new DeleteConsumerGroupsResult(futures);
+    }
+
+    DeleteStreamsGroupsResult(final DeleteConsumerGroupsResult delegate) {
+        this.delegate = delegate;
     }
 
     /**
-     * Return a map from group id to futures which can be used to check the status of
-     * individual deletions.
-     */
-    public Map<String, KafkaFuture<Void>> deletedGroups() {
-        Map<String, KafkaFuture<Void>> deletedGroups = new HashMap<>(futures.size());
-        deletedGroups.putAll(futures);
-        return deletedGroups;
-    }
-
-    /**
-     * Return a future which succeeds only if all the share group deletions succeed.
+     * Return a future which succeeds only if all the deletions succeed.
      */
     public KafkaFuture<Void> all() {
-        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture<?>[0]));
+        return delegate.all();
+    }
+
+    /**
+     * Return a map from group id to futures which can be used to check the status of individual deletions.
+     */
+    public Map<String, KafkaFuture<Void>> deletedGroups() {
+        return delegate.deletedGroups();
     }
 }
