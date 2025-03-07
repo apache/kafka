@@ -1295,14 +1295,14 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
     }
 
     /**
-     * Returns the epoch a member uses to join the group. This is group-type specific.
+     * Returns the epoch a member uses to join the group. This is group-type-specific.
      *
      * @return the epoch to join the group
      */
     abstract int joinGroupEpoch();
 
     /**
-     * Returns the epoch a member uses to leave the group. This is group-type specific.
+     * Returns the epoch a member uses to leave the group. This is group-type-specific.
      *
      * @return the epoch to leave the group
      */

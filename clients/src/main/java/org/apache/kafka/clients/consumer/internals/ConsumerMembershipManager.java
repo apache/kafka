@@ -46,6 +46,9 @@ import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.DEFAULT;
+import static org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.LEAVE_GROUP;
+import static org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP;
 import static org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerMethodName.ON_PARTITIONS_ASSIGNED;
 import static org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerMethodName.ON_PARTITIONS_LOST;
 import static org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerMethodName.ON_PARTITIONS_REVOKED;
@@ -402,7 +405,7 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
     @Override
     public boolean isLeavingGroup() {
         CloseOptions.GroupMembershipOperation leaveGroupOperation = leaveGroupOperation();
-        if (CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP == leaveGroupOperation) {
+        if (REMAIN_IN_GROUP == leaveGroupOperation) {
             return false;
         }
 
@@ -410,9 +413,9 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
         boolean isLeavingState = state == MemberState.PREPARE_LEAVING || state == MemberState.LEAVING;
 
         // Default operation: both static and dynamic consumers will send a leave heartbeat
-        boolean hasLeaveOperation = CloseOptions.GroupMembershipOperation.DEFAULT == leaveGroupOperation ||
+        boolean hasLeaveOperation = DEFAULT == leaveGroupOperation ||
             // Leave operation: both static and dynamic consumers will send a leave heartbeat
-            CloseOptions.GroupMembershipOperation.LEAVE_GROUP == leaveGroupOperation ||
+            LEAVE_GROUP == leaveGroupOperation ||
             // Remain in group: only static consumers will send a leave heartbeat, while dynamic members will not
             groupInstanceId().isPresent();
 
@@ -490,13 +493,16 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
      */
     @Override
     public int leaveGroupEpoch() {
-        if (CloseOptions.GroupMembershipOperation.LEAVE_GROUP.equals(leaveGroupOperation)) {
-            return ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
-        } else if (CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP.equals(leaveGroupOperation)) {
+        boolean isStaticMember = groupInstanceId.isPresent();
+        if (REMAIN_IN_GROUP == leaveGroupOperation && isStaticMember) {
             return ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH;
         }
 
-        return groupInstanceId.isPresent() ?
+        if (LEAVE_GROUP == leaveGroupOperation) {
+            return ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
+        }
+
+        return isStaticMember ?
             ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH :
             ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
     }
