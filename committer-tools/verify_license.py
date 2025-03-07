@@ -77,7 +77,7 @@ def get_license_deps(license_text):
 def main():
     # Argument parser
     parser = argparse.ArgumentParser(description="Whether to skip executing ReleaseTarGz.")
-    parser.add_argument('--skip-build', action="store_true", help='Whether to skip ReleaseTarGz (true/false)')
+    parser.add_argument("--skip-build", action="store_true", help="skip the build")
     args = parser.parse_args()
 
     # Assume the current working directory is the project root.
