@@ -4670,7 +4670,7 @@ public class TaskManagerTest {
         verifyNoMoreInteractions(activeTaskCreator);
         verifyNoMoreInteractions(standbyTaskCreator);
 
-        // verify the recycled task is now being used as an assiged Active
+        // verify the recycled task is now being used as an assigned Active
         assertEquals(Collections.singletonMap(taskId00, activeTask), taskManager.activeTaskMap());
         assertEquals(Collections.emptyMap(), taskManager.standbyTaskMap());
     }
@@ -4731,7 +4731,7 @@ public class TaskManagerTest {
         verifyNoMoreInteractions(activeTaskCreator);
         verifyNoMoreInteractions(standbyTaskCreator);
 
-        // verify the recycled task is now being used as an assiged Active
+        // verify the recycled task is now being used as an assigned Active
         assertEquals(Collections.singletonMap(taskId00, activeTask), taskManager.activeTaskMap());
         assertEquals(Collections.emptyMap(), taskManager.standbyTaskMap());
     }
