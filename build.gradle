@@ -1960,14 +1960,13 @@ project(':clients') {
   }
 }
 
-project(':clients:integration-tests') {
+project(':clients:clients-integration-tests') {
   base {
     archivesName = "kafka-clients-integration-tests"
   }
 
   dependencies {
     testImplementation libs.slf4jApi
-    testImplementation project(':clients')
     testImplementation project(':test-common:test-common-internal-api')
     testImplementation project(':test-common:test-common-runtime')
 

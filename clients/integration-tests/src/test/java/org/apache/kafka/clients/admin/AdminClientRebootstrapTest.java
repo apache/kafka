@@ -29,10 +29,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.stream.Stream;
+
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+
 
 public class AdminClientRebootstrapTest {
     private static final int BROKER_COUNT = 2;
@@ -74,11 +75,8 @@ public class AdminClientRebootstrapTest {
     }
 
     private boolean containsTopic(Admin admin, String topic) {
-        try {
-            return admin.listTopics().names().get(60, TimeUnit.SECONDS).contains(topic);
-        } catch (InterruptedException | ExecutionException | TimeoutException e) {
-            throw new RuntimeException(e);
-        }
+        return assertDoesNotThrow(() ->
+            admin.listTopics().names().get(60, TimeUnit.SECONDS).contains(topic));
     }
 
     @ClusterTemplate(value = "generator")
