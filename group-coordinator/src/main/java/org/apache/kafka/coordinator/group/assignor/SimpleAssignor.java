@@ -148,6 +148,9 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
         List<TopicIdPartition> targetPartitions,
         Map<TopicIdPartition, List<String>> currentAssignment
     ) {
+        // For entirely balanced assignment, we would expect (numTargetPartitions / numGroupMembers) partitions per member, rounded upwards.
+        // That can be expressed as         Math.ceil(numTargetPartitions / (double) numGroupMembers)
+        // Using integer arithmetic, as     (numTargetPartitions + numGroupMembers - 1) / numGroupMembers
         int numGroupMembers = groupSpec.memberIds().size();
         int numTargetPartitions = targetPartitions.size();
         int desiredAssignmentCount = (numTargetPartitions + numGroupMembers - 1) / numGroupMembers;
@@ -158,7 +161,7 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
         // might have been assigned to more than one member.
         memberHashAssignment(groupSpec.memberIds(), targetPartitions, newAssignment);
 
-        // Combine current and new hashed assignments.
+        // Combine current and new hashed assignments, sized to accommodate the expected number of mappings.
         Map<String, Set<TopicIdPartition>> finalAssignment = new HashMap<>((int) ((numGroupMembers / 0.75f) + 1));
         Map<TopicIdPartition, Set<String>> finalAssignmentByPartition = new HashMap<>((int) (((numTargetPartitions + 1) / 0.75f) + 1));
 
