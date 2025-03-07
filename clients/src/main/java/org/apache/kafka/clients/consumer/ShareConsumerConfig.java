@@ -24,9 +24,9 @@ import java.util.Map;
 import java.util.Properties;
 
 /**
- * The share consumer configuration keys
+ * The consumer configuration behavior specific to share groups.
  */
-public class ShareConsumerConfig extends ConsumerConfig {
+class ShareConsumerConfig extends ConsumerConfig {
     /**
      * A list of configuration keys not supported for SHARE consumer.
      */
@@ -43,11 +43,11 @@ public class ShareConsumerConfig extends ConsumerConfig {
             ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG
     );
 
-    public ShareConsumerConfig(Properties props) {
+    ShareConsumerConfig(Properties props) {
         super(props);
     }
 
-    public ShareConsumerConfig(Map<String, Object> props) {
+    ShareConsumerConfig(Map<String, Object> props) {
         super(props);
     }
 
@@ -57,11 +57,11 @@ public class ShareConsumerConfig extends ConsumerConfig {
 
     @Override
     protected Map<String, Object> preProcessParsedConfig(final Map<String, Object> parsedValues) {
-        checkUnsupportedConfigs(parsedValues);
+        checkUnsupportedConfigsPreProcess(parsedValues);
         return parsedValues;
     }
 
-    private void checkUnsupportedConfigs(Map<String, Object> parsedValues) {
+    private void checkUnsupportedConfigsPreProcess(Map<String, Object> parsedValues) {
         List<String> invalidConfigs = new ArrayList<>();
         SHARE_GROUP_UNSUPPORTED_CONFIGS.forEach(configName -> {
             if (parsedValues.containsKey(configName)) {
@@ -74,4 +74,7 @@ public class ShareConsumerConfig extends ConsumerConfig {
         }
     }
 
+    @Override
+    protected void checkUnsupportedConfigsPostProcess() {
+    }
 }
