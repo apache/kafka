@@ -85,7 +85,7 @@ public class PartitionRotateStrategyTest {
     }
 
     /**
-     * Create an ordered map of topic partitions.
+     * Create an ordered set of topic partitions.
      * @param size The number of topic-partitions to create.
      * @return The ordered set of topic partitions.
      */

@@ -480,7 +480,7 @@ public class SharePartitionManagerTest {
         TopicIdPartition tp1 = new TopicIdPartition(fooId, new TopicPartition("foo", 1));
         TopicIdPartition tp2 = new TopicIdPartition(barId, new TopicPartition("bar", 0));
 
-        // Create a new share session with tp0 and tp1
+        // Create a new share session with foo-0 and foo-1
         Set<TopicIdPartition> reqData1 = orderedSet(tp0, tp1);
 
         String groupId = "grp";

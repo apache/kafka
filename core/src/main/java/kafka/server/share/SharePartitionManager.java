@@ -427,7 +427,7 @@ public class SharePartitionManager implements AutoCloseable {
     /**
      * The newContext method is used to create a new share fetch context for every share fetch request.
      * @param groupId The group id in the share fetch request.
-     * @param shareFetchData The topic-partitions and their corresponding maxBytes data in the share fetch request.
+     * @param shareFetchData The topic-partitions in the share fetch request.
      * @param toForget The topic-partitions to forget present in the share fetch request.
      * @param reqMetadata The metadata in the share fetch request.
      * @param isAcknowledgeDataPresent This tells whether the fetch request received includes piggybacked acknowledgements or not

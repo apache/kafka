@@ -79,8 +79,6 @@ public interface PartitionRotateStrategy {
             return topicIdPartitions;
         }
 
-        // TODO: Once the partition max bytes is removed then the partition will be a linked list and rotation
-        //  will be a simple operation. Else consider using ImplicitLinkedHashCollection.
         LinkedHashSet<TopicIdPartition> suffixPartitions = new LinkedHashSet<>(rotateAt);
         LinkedHashSet<TopicIdPartition> rotatedPartitions = new LinkedHashSet<>(topicIdPartitions.size());
         int i = 0;
