@@ -91,7 +91,7 @@ runs:
         timeout ${TIMEOUT_MINUTES}m ./gradlew --continue --no-scan \
         -Dorg.gradle.jvmargs="-Xmx4g -Xss4m -XX:+UseParallelGC -XX:+ExitOnOutOfMemoryError -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=$HEAP_DUMP_DIR" \
         -PtestLoggingEvents=started,passed,skipped,failed \
-        -PmaxParallelForks=2 \
+        -PmaxParallelForks=4 \
         -PmaxTestRetries=$TEST_RETRIES -PmaxTestRetryFailures=10 \
         -Pkafka.test.catalog.file=$TEST_CATALOG \
         -Pkafka.test.run.new=$RUN_NEW_TESTS \
