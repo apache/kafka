@@ -3802,7 +3802,7 @@ controller.listener.names=CONTROLLER</code></pre>
   <h5 class="anchor-heading"><a id="kraft_storage_standalone" class="anchor-link"></a><a href="#kraft_storage_standalone">Bootstrap a Standalone Controller</a></h5>
   The recommended method for creating a new KRaft controller cluster is to bootstrap it with one voter and dynamically <a href="#kraft_reconfig_add">add the rest of the controllers</a>. Bootstrapping the first controller can be done with the following CLI command:
 
-  <pre><code class="language-bash">$ bin/kafka-storage format --cluster-id &lt;cluster-id&gt; --standalone --config controller.properties</code></pre>
+  <pre><code class="language-bash">$ bin/kafka-storage.sh format --cluster-id &lt;cluster-id&gt; --standalone --config controller.properties</code></pre>
 
   This command will 1) create a meta.properties file in metadata.log.dir with a randomly generated directory.id, 2) create a snapshot at 00000000000000000000-0000000000.checkpoint with the necessary control records (KRaftVersionRecord and VotersRecord) to make this Kafka node the only voter for the quorum.
 
@@ -4026,7 +4026,7 @@ foo
   <pre><code class="language-text">log4j.logger.org.apache.kafka.metadata.migration=TRACE</code></pre>
 
   <p>
-    It is generally useful to enable DEBUG logging on the KRaft controllers and the ZK brokers during the migration.
+    It is generally useful to enable DEBUG level logging on the KRaft controllers and the ZK brokers during the migration.
   </p>
 
   <h3>Provisioning the KRaft controller quorum</h3>
@@ -4071,7 +4071,13 @@ inter.broker.listener.name=PLAINTEXT
 
 # Other configs ...</code></pre>
 
-  <p>The new standalone controller in the example configuration above should be formatted using the <code>kafka-storage format --standalone</code>command.</p>
+  <p>
+    Follow these steps to format and start a new standalone controller:
+  </p>
+  <pre><code class="language-bash"># Save the previously retrieved cluster ID from ZooKeeper
+    $ bin/kafka-storage.sh format --standalone -t &lt;zk-cluster-id&gt; -c config/kraft/controller.properties
+    $ bin/kafka-server-start.sh config/kraft/controller.properties
+  </code></pre>
 
   <p><em>Note: The KRaft cluster <code>node.id</code> values must be different from any existing ZK broker <code>broker.id</code>.
   In KRaft-mode, the brokers and controllers share the same Node ID namespace.</em></p>
