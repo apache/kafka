@@ -45,3 +45,13 @@ github:
     squash_commit_message: PR_TITLE_AND_DESC
     merge: false
     rebase: false
+
+  protected_branches:
+    trunk: {}
+
+    # Disable force push on release branches
+    4.0: {}
+    3.9: {}
+    3.8: {}
+    3.7: {}
+    3.6: {}
