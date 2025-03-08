@@ -192,7 +192,7 @@ public class FetchBufferTest {
         FetchResponseData.PartitionData partitionData = new FetchResponseData.PartitionData();
         FetchMetricsAggregator metricsAggregator = new FetchMetricsAggregator(metricsManager, allPartitions);
         return new CompletedFetch(
-                logContext,
+                logContext.logger(CompletedFetch.class),
                 subscriptions,
                 BufferSupplier.create(),
                 tp,
