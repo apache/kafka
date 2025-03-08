@@ -1430,6 +1430,11 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
+    public synchronized DescribeStreamsGroupsResult describeStreamsGroups(Collection<String> groupIds, DescribeStreamsGroupsOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+    
+    @Override
     public synchronized DescribeClassicGroupsResult describeClassicGroups(Collection<String> groupIds, DescribeClassicGroupsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
