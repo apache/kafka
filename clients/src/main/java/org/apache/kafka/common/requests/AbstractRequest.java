@@ -129,6 +129,11 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
     }
 
     // Visible for testing
+    public final ByteBuffer serializeToByteBuffer() {
+        return MessageUtil.toByteBuffer(data(), version);
+    }
+
+    // Visible for testing
     final int sizeInBytes() {
         return data().size(new ObjectSerializationCache(), version);
     }
