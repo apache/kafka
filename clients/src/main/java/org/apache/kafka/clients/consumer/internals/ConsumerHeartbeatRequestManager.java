@@ -227,10 +227,9 @@ public class ConsumerHeartbeatRequestManager extends AbstractHeartbeatRequestMan
     public NetworkClientDelegate.PollResult pollOnClose(long currentTimeMs) {
         // If the consumer has dynamic membership,
         // we should skip the leaving heartbeat when leaveGroupOperation is REMAIN_IN_GROUP
-        if (membershipManager.groupInstanceId().isEmpty() && REMAIN_IN_GROUP == membershipManager.leaveGroupOperation())
-            return EMPTY;
-
-        if (membershipManager().isLeavingGroup()) {
+        boolean shouldPassIfDynamicMemberRemainInGroup = membershipManager.groupInstanceId().isEmpty()
+            && REMAIN_IN_GROUP == membershipManager.leaveGroupOperation();
+        if (membershipManager().isLeavingGroup() && !shouldPassIfDynamicMemberRemainInGroup) {
             NetworkClientDelegate.UnsentRequest request = makeHeartbeatRequest(currentTimeMs, true);
             return new NetworkClientDelegate.PollResult(heartbeatRequestState.heartbeatIntervalMs(), Collections.singletonList(request));
         }
