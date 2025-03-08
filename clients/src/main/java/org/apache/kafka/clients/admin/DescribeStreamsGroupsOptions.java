@@ -17,40 +17,25 @@
 
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Collection;
-import java.util.HashMap;
-import java.util.Map;
 
 /**
- * The result of the {@link Admin#deleteShareGroups(Collection <String>, DeleteShareGroupsOptions)} call.
- * <p></p>
+ * Options for {@link Admin#describeStreamsGroups(Collection, DescribeStreamsGroupsOptions)}.
+ * <p>
  * The API of this class is evolving, see {@link Admin} for details.
  */
 @InterfaceStability.Evolving
-public class DeleteShareGroupsResult {
-    private final Map<String, KafkaFuture<Void>> futures;
+public class DescribeStreamsGroupsOptions extends AbstractOptions<DescribeStreamsGroupsOptions> {
+    private boolean includeAuthorizedOperations;
 
-    DeleteShareGroupsResult(final Map<String, KafkaFuture<Void>> futures) {
-        this.futures = futures;
+    public DescribeStreamsGroupsOptions includeAuthorizedOperations(boolean includeAuthorizedOperations) {
+        this.includeAuthorizedOperations = includeAuthorizedOperations;
+        return this;
     }
 
-    /**
-     * Return a map from group id to futures which can be used to check the status of
-     * individual deletions.
-     */
-    public Map<String, KafkaFuture<Void>> deletedGroups() {
-        Map<String, KafkaFuture<Void>> deletedGroups = new HashMap<>(futures.size());
-        deletedGroups.putAll(futures);
-        return deletedGroups;
-    }
-
-    /**
-     * Return a future which succeeds only if all the share group deletions succeed.
-     */
-    public KafkaFuture<Void> all() {
-        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture<?>[0]));
+    public boolean includeAuthorizedOperations() {
+        return includeAuthorizedOperations;
     }
 }
