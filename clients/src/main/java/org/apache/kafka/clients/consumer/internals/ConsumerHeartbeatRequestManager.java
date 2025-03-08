@@ -32,6 +32,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -40,6 +41,7 @@ import java.util.TreeSet;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP;
+import static org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult.EMPTY;
 import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.REGEX_RESOLUTION_NOT_SUPPORTED_MSG;
 
 /**
@@ -214,10 +216,25 @@ public class ConsumerHeartbeatRequestManager extends AbstractHeartbeatRequestMan
 
     @Override
     protected boolean isLeavingGroup() {
-        return membershipManager().state() == MemberState.LEAVING &&
-               // If the consumer has dynamic membership,
-               // we should skip the leaving heartbeat when leaveGroupOperation is REMAIN_IN_GROUP
-               (membershipManager.groupInstanceId().isEmpty() && membershipManager.leaveGroupOperation() != REMAIN_IN_GROUP);
+        // If the consumer has dynamic membership,
+        // we should skip the leaving heartbeat when leaveGroupOperation is REMAIN_IN_GROUP
+        if (membershipManager.groupInstanceId().isEmpty() && REMAIN_IN_GROUP == membershipManager.leaveGroupOperation())
+            return false;
+        return membershipManager().state() == MemberState.LEAVING;
+    }
+
+    @Override
+    public NetworkClientDelegate.PollResult pollOnClose(long currentTimeMs) {
+        // If the consumer has dynamic membership,
+        // we should skip the leaving heartbeat when leaveGroupOperation is REMAIN_IN_GROUP
+        if (membershipManager.groupInstanceId().isEmpty() && REMAIN_IN_GROUP == membershipManager.leaveGroupOperation())
+            return EMPTY;
+
+        if (membershipManager().isLeavingGroup()) {
+            NetworkClientDelegate.UnsentRequest request = makeHeartbeatRequest(currentTimeMs, true);
+            return new NetworkClientDelegate.PollResult(heartbeatRequestState.heartbeatIntervalMs(), Collections.singletonList(request));
+        }
+        return EMPTY;
     }
 
     /**

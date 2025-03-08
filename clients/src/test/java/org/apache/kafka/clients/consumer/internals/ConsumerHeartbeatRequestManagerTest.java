@@ -65,7 +65,11 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.SortedSet;
+import java.util.stream.Stream;
 
+import static org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.DEFAULT;
+import static org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.LEAVE_GROUP;
+import static org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP;
 import static org.apache.kafka.clients.consumer.internals.AbstractHeartbeatRequestManager.CONSUMER_PROTOCOL_NOT_SUPPORTED_MSG;
 import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.REGEX_RESOLUTION_NOT_SUPPORTED_MSG;
 import static org.apache.kafka.common.utils.Utils.mkSortedSet;
@@ -80,7 +84,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.clearInvocations;
-import static org.mockito.Mockito.doCallRealMethod;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -779,6 +782,40 @@ public class ConsumerHeartbeatRequestManagerTest {
         assertHeartbeat(heartbeatRequestManager, DEFAULT_HEARTBEAT_INTERVAL_MS);
     }
 
+    @ParameterizedTest
+    @MethodSource("pollOnLeavingMatrix")
+    public void testPollOnLeaving(Optional<String> groupInstanceId, CloseOptions.GroupMembershipOperation operation) {
+        heartbeatRequestManager = createHeartbeatRequestManager(
+            coordinatorRequestManager,
+            membershipManager,
+            heartbeatState,
+            heartbeatRequestState,
+            backgroundEventHandler);
+        when(membershipManager.state()).thenReturn(MemberState.LEAVING);
+        when(membershipManager.groupInstanceId()).thenReturn(groupInstanceId);
+        when(membershipManager.leaveGroupOperation()).thenReturn(operation);
+
+        if (groupInstanceId.isEmpty() && REMAIN_IN_GROUP == operation) {
+            assertNoHeartbeat(heartbeatRequestManager);
+            verify(membershipManager, never()).onHeartbeatRequestGenerated();
+        } else {
+            assertHeartbeat(heartbeatRequestManager, DEFAULT_HEARTBEAT_INTERVAL_MS);
+            verify(membershipManager).onHeartbeatRequestGenerated();
+        }
+
+    }
+
+    private static Stream<Arguments> pollOnLeavingMatrix() {
+        return Stream.of(
+            Arguments.of(Optional.empty(), DEFAULT),
+            Arguments.of(Optional.empty(), LEAVE_GROUP),
+            Arguments.of(Optional.empty(), REMAIN_IN_GROUP),
+            Arguments.of(Optional.of("groupInstanceId"), DEFAULT),
+            Arguments.of(Optional.of("groupInstanceId"), LEAVE_GROUP),
+            Arguments.of(Optional.of("groupInstanceId"), REMAIN_IN_GROUP)
+        );
+    }
+
     /**
      * This is expected to be the case where a member is already leaving the group and the poll
      * timer expires. The poll timer expiration should not transition the member to STALE, and
@@ -917,55 +954,23 @@ public class ConsumerHeartbeatRequestManagerTest {
         assertEquals(Collections.singletonList(partition), topicPartitions.partitions());
     }
 
-    @Test
-    public void testPollOnCloseGeneratesRequestIfNeeded() {
-        // static member
+    @ParameterizedTest
+    @MethodSource("pollOnLeavingMatrix")
+    public void testPollOnCloseGeneratesRequestIfNeeded(Optional<String> groupInstanceId, CloseOptions.GroupMembershipOperation operation) {
         when(membershipManager.isLeavingGroup()).thenReturn(true);
-        when(membershipManager.groupInstanceId()).thenReturn(Optional.of("instanceId"));
-        when(membershipManager.leaveGroupOperation()).thenReturn(CloseOptions.GroupMembershipOperation.DEFAULT);
+        when(membershipManager.groupInstanceId()).thenReturn(groupInstanceId);
+        when(membershipManager.leaveGroupOperation()).thenReturn(operation);
+        String membership = groupInstanceId.isEmpty() ? "dynamic" : "static";
         NetworkClientDelegate.PollResult pollResult = heartbeatRequestManager.pollOnClose(time.milliseconds());
-        assertEquals(1, pollResult.unsentRequests.size(),
-            "A request to leave the group should be generated if the static member is still leaving when closing the manager " +
-                "and GroupMembershipOperation is DEFAULT");
-
-        when(membershipManager.leaveGroupOperation()).thenReturn(CloseOptions.GroupMembershipOperation.LEAVE_GROUP);
-        pollResult = heartbeatRequestManager.pollOnClose(time.milliseconds());
-        assertEquals(1, pollResult.unsentRequests.size(),
-            "A request to leave the group should be generated if the static member is still leaving when closing the manager " +
-                "and GroupMembershipOperation is LEAVE_GROUP");
-
-        when(membershipManager.leaveGroupOperation()).thenReturn(CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP);
-        pollResult = heartbeatRequestManager.pollOnClose(time.milliseconds());
-        assertEquals(1, pollResult.unsentRequests.size(),
-            "A request to leave the group should be generated if the static member is still leaving when closing the manager " +
-                "and GroupMembershipOperation is REMAIN_IN_GROUP");
-
-        // dynamic member
-        when(membershipManager.groupInstanceId()).thenReturn(Optional.empty());
-        when(membershipManager.leaveGroupOperation()).thenReturn(CloseOptions.GroupMembershipOperation.DEFAULT);
-        pollResult = heartbeatRequestManager.pollOnClose(time.milliseconds());
-        assertEquals(1, pollResult.unsentRequests.size(),
-            "A request to leave the group should be generated if the dynamic member is still leaving when closing the manager " +
-                "and GroupMembershipOperation is DEFAULT");
-
-        when(membershipManager.leaveGroupOperation()).thenReturn(CloseOptions.GroupMembershipOperation.LEAVE_GROUP);
-        pollResult = heartbeatRequestManager.pollOnClose(time.milliseconds());
-        assertEquals(1, pollResult.unsentRequests.size(),
-            "A request to leave the group should be generated if the dynamic member is still leaving when closing the manager " +
-                "and GroupMembershipOperation is LEAVE_GROUP");
-
-        // not leaving group
-        when(membershipManager.isLeavingGroup()).thenReturn(false);
-        pollResult = heartbeatRequestManager.pollOnClose(time.milliseconds());
-        assertTrue(pollResult.unsentRequests.isEmpty(),
-            "No requests should be generated on close if the member is not leaving when closing the manager");
-
-        doCallRealMethod().when(membershipManager).isLeavingGroup();
-        when(membershipManager.leaveGroupOperation()).thenReturn(CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP);
-        pollResult = heartbeatRequestManager.pollOnClose(time.milliseconds());
-        assertTrue(pollResult.unsentRequests.isEmpty(),
-            "No requests should be generated on close if the dynamic member is leaving when closing the manager " +
-                "but GroupMembershipOperation is REMAIN_IN_GROUP");
+        if (groupInstanceId.isEmpty() && REMAIN_IN_GROUP == operation) {
+            assertTrue(pollResult.unsentRequests.isEmpty(),
+                "A request to leave the group should not be generated if the " + membership + " is still leaving when closing the manager " +
+                    "and GroupMembershipOperation is " + operation.name());
+        } else {
+            assertEquals(1, pollResult.unsentRequests.size(),
+                "A request to leave the group should be generated if the " + membership + " is still leaving when closing the manager " +
+                    "and GroupMembershipOperation is " + operation.name());
+        }
     }
 
     @Test
