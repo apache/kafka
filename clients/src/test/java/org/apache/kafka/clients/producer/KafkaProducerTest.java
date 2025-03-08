@@ -471,8 +471,7 @@ public class KafkaProducerTest {
         assertThrows(
             ConfigException.class,
             () -> new ProducerConfig(invalidProps4),
-            "Must set max.in.flight.requests.per.connection to at most 5 when using the \n" +
-                    "transactional producer.");
+            "Must set max.in.flight.requests.per.connection to at most 5 when using the transactional producer.");
     }
 
     @Test
