@@ -30,8 +30,8 @@ import com.yammer.metrics.core.Gauge;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Collections;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -45,15 +45,15 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 public class ShareFetchTestUtils {
 
     /**
-     * Create an ordered set of topic partitions.
+     * Create an ArrayList of topic partitions.
      *
-     * @param topicIdPartitions The topic partitions to create the set for.
-     * @return The ordered set of topic partitions.
+     * @param topicIdPartitions The topic partitions to create the list for.
+     * @return The list of topic partitions.
      */
-    public static LinkedHashSet<TopicIdPartition> orderedSet(TopicIdPartition... topicIdPartitions) {
-        LinkedHashSet<TopicIdPartition> set = new LinkedHashSet<>();
-        Collections.addAll(set, topicIdPartitions);
-        return set;
+    public static ArrayList<TopicIdPartition> arrayList(TopicIdPartition... topicIdPartitions) {
+        ArrayList<TopicIdPartition> list = new ArrayList<>();
+        Collections.addAll(list, topicIdPartitions);
+        return list;
     }
 
     /**
@@ -64,8 +64,8 @@ public class ShareFetchTestUtils {
      * @param rotationAt The position to rotate the keys at.
      */
     public static void validateRotatedMapEquals(
-        LinkedHashSet<TopicIdPartition> original,
-        LinkedHashSet<TopicIdPartition> result,
+        ArrayList<TopicIdPartition> original,
+        ArrayList<TopicIdPartition> result,
         int rotationAt
     ) {
 

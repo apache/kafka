@@ -67,7 +67,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -258,12 +257,12 @@ public class SharePartitionManager implements AutoCloseable {
         FetchParams fetchParams,
         int sessionEpoch,
         int batchSize,
-        LinkedHashSet<TopicIdPartition> topicPartitions
+        ArrayList<TopicIdPartition> topicPartitions
     ) {
         log.trace("Fetch request for topicIdPartitions: {} with groupId: {} fetch params: {}",
             topicPartitions, groupId, fetchParams);
 
-        LinkedHashSet<TopicIdPartition> topicIdPartitions = PartitionRotateStrategy
+        ArrayList<TopicIdPartition> topicIdPartitions = PartitionRotateStrategy
             .type(PartitionRotateStrategy.StrategyType.ROUND_ROBIN)
             .rotate(topicPartitions, new PartitionRotateMetadata(sessionEpoch));
 
@@ -433,7 +432,7 @@ public class SharePartitionManager implements AutoCloseable {
      * @param isAcknowledgeDataPresent This tells whether the fetch request received includes piggybacked acknowledgements or not
      * @return The new share fetch context object
      */
-    public ShareFetchContext newContext(String groupId, Set<TopicIdPartition> shareFetchData,
+    public ShareFetchContext newContext(String groupId, List<TopicIdPartition> shareFetchData,
                                         List<TopicIdPartition> toForget, ShareRequestMetadata reqMetadata, Boolean isAcknowledgeDataPresent) {
         ShareFetchContext context;
         // If the request's epoch is FINAL_EPOCH or INITIAL_EPOCH, we should remove the existing sessions. Also, start a

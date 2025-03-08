@@ -28,10 +28,8 @@ import org.apache.kafka.common.protocol.Errors;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 public class ShareFetchRequest extends AbstractRequest {
 
@@ -151,7 +149,7 @@ public class ShareFetchRequest extends AbstractRequest {
     }
 
     private final ShareFetchRequestData data;
-    private volatile LinkedHashSet<TopicIdPartition> shareFetchData = null;
+    private volatile ArrayList<TopicIdPartition> shareFetchData = null;
     private volatile List<TopicIdPartition> toForget = null;
 
     public ShareFetchRequest(ShareFetchRequestData data, short version) {
@@ -191,13 +189,13 @@ public class ShareFetchRequest extends AbstractRequest {
         return data.maxWaitMs();
     }
 
-    public Set<TopicIdPartition> shareFetchData(Map<Uuid, String> topicNames) {
+    public List<TopicIdPartition> shareFetchData(Map<Uuid, String> topicNames) {
         if (shareFetchData == null) {
             synchronized (this) {
                 if (shareFetchData == null) {
                     // Assigning the lazy-initialized `shareFetchData` in the last step
                     // to avoid other threads accessing a half-initialized object.
-                    final LinkedHashSet<TopicIdPartition> shareFetchDataTmp = new LinkedHashSet<>();
+                    final ArrayList<TopicIdPartition> shareFetchDataTmp = new ArrayList<>();
                     data.topics().forEach(shareFetchTopic -> {
                         String name = topicNames.get(shareFetchTopic.topicId());
                         shareFetchTopic.partitions().forEach(shareFetchPartition -> {

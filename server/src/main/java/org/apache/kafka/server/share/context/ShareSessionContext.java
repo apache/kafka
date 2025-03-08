@@ -32,16 +32,15 @@ import org.apache.kafka.server.share.session.ShareSession;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.NoSuchElementException;
-import java.util.Set;
 
 /**
  * The context for a share session fetch request.
@@ -52,7 +51,7 @@ public class ShareSessionContext extends ShareFetchContext {
 
     private final ShareRequestMetadata reqMetadata;
     private final boolean isSubsequent;
-    private Set<TopicIdPartition> shareFetchData;
+    private List<TopicIdPartition> shareFetchData;
     private ShareSession session;
 
     /**
@@ -62,7 +61,7 @@ public class ShareSessionContext extends ShareFetchContext {
      * @param shareFetchData     The share partition data from the share fetch request.
      */
     public ShareSessionContext(ShareRequestMetadata reqMetadata,
-                               Set<TopicIdPartition> shareFetchData) {
+                               List<TopicIdPartition> shareFetchData) {
         this.reqMetadata = reqMetadata;
         this.shareFetchData = shareFetchData;
         this.isSubsequent = false;
@@ -81,7 +80,7 @@ public class ShareSessionContext extends ShareFetchContext {
     }
 
     // Visible for testing
-    public Set<TopicIdPartition> shareFetchData() {
+    public List<TopicIdPartition> shareFetchData() {
         return shareFetchData;
     }
 
@@ -229,7 +228,7 @@ public class ShareSessionContext extends ShareFetchContext {
             return new ErroneousAndValidPartitionData(shareFetchData);
         }
         Map<TopicIdPartition, PartitionData> erroneous = new HashMap<>();
-        Set<TopicIdPartition> valid = new HashSet<>();
+        List<TopicIdPartition> valid = new ArrayList<>();
         // Take the session lock and iterate over all the cached partitions.
         synchronized (session) {
             session.partitionMap().forEach(cachedSharePartition -> {

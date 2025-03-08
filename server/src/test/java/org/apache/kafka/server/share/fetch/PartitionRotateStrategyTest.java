@@ -24,7 +24,7 @@ import org.apache.kafka.server.share.fetch.PartitionRotateStrategy.StrategyType;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.LinkedHashSet;
+import java.util.ArrayList;
 
 import static org.apache.kafka.server.share.fetch.ShareFetchTestUtils.validateRotatedMapEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -35,9 +35,9 @@ public class PartitionRotateStrategyTest {
     @Test
     public void testRoundRobinStrategy() {
         PartitionRotateStrategy strategy = PartitionRotateStrategy.type(StrategyType.ROUND_ROBIN);
-        LinkedHashSet<TopicIdPartition> partitions = createPartitions(3);
+        ArrayList<TopicIdPartition> partitions = createPartitions(3);
 
-        LinkedHashSet<TopicIdPartition> result = strategy.rotate(partitions, new PartitionRotateMetadata(1));
+        ArrayList<TopicIdPartition> result = strategy.rotate(partitions, new PartitionRotateMetadata(1));
         assertEquals(3, result.size());
         validateRotatedMapEquals(partitions, result, 1);
 
@@ -61,8 +61,8 @@ public class PartitionRotateStrategyTest {
     public void testRoundRobinStrategyWithSpecialSessionEpochs() {
         PartitionRotateStrategy strategy = PartitionRotateStrategy.type(StrategyType.ROUND_ROBIN);
 
-        LinkedHashSet<TopicIdPartition> partitions = createPartitions(3);
-        LinkedHashSet<TopicIdPartition> result = strategy.rotate(
+        ArrayList<TopicIdPartition> partitions = createPartitions(3);
+        ArrayList<TopicIdPartition> result = strategy.rotate(
             partitions,
             new PartitionRotateMetadata(ShareRequestMetadata.INITIAL_EPOCH));
         assertEquals(3, result.size());
@@ -79,7 +79,7 @@ public class PartitionRotateStrategyTest {
     public void testRoundRobinStrategyWithEmptyPartitions() {
         PartitionRotateStrategy strategy = PartitionRotateStrategy.type(StrategyType.ROUND_ROBIN);
         // Empty partitions.
-        LinkedHashSet<TopicIdPartition> result = strategy.rotate(new LinkedHashSet<>(), new PartitionRotateMetadata(5));
+        ArrayList<TopicIdPartition> result = strategy.rotate(new ArrayList<>(), new PartitionRotateMetadata(5));
         // The result should be empty.
         assertTrue(result.isEmpty());
     }
@@ -89,8 +89,8 @@ public class PartitionRotateStrategyTest {
      * @param size The number of topic-partitions to create.
      * @return The ordered set of topic partitions.
      */
-    private LinkedHashSet<TopicIdPartition> createPartitions(int size) {
-        LinkedHashSet<TopicIdPartition> partitions = new LinkedHashSet<>();
+    private ArrayList<TopicIdPartition> createPartitions(int size) {
+        ArrayList<TopicIdPartition> partitions = new ArrayList<>();
         for (int i = 0; i < size; i++) {
             partitions.add(new TopicIdPartition(Uuid.randomUuid(), i, "foo" + i));
         }

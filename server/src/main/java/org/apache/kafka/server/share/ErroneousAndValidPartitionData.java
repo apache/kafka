@@ -22,27 +22,27 @@ import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ShareFetchResponse;
 
+import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 /**
  * Helper class to return the erroneous partitions and valid partition data
  */
 public class ErroneousAndValidPartitionData {
     private final Map<TopicIdPartition, ShareFetchResponseData.PartitionData> erroneous;
-    private final Set<TopicIdPartition> validTopicIdPartitions;
+    private final List<TopicIdPartition> validTopicIdPartitions;
 
     public ErroneousAndValidPartitionData(Map<TopicIdPartition, ShareFetchResponseData.PartitionData> erroneous,
-                                          Set<TopicIdPartition> validTopicIdPartitions) {
+                                          List<TopicIdPartition> validTopicIdPartitions) {
         this.erroneous = erroneous;
         this.validTopicIdPartitions = validTopicIdPartitions;
     }
 
-    public ErroneousAndValidPartitionData(Set<TopicIdPartition> shareFetchData) {
+    public ErroneousAndValidPartitionData(List<TopicIdPartition> shareFetchData) {
         erroneous = new HashMap<>();
-        validTopicIdPartitions = new HashSet<>();
+        validTopicIdPartitions = new ArrayList<>();
         shareFetchData.forEach(topicIdPartition -> {
             if (topicIdPartition.topic() == null) {
                 erroneous.put(topicIdPartition, ShareFetchResponse.partitionResponse(topicIdPartition, Errors.UNKNOWN_TOPIC_ID));
@@ -54,14 +54,14 @@ public class ErroneousAndValidPartitionData {
 
     public ErroneousAndValidPartitionData() {
         this.erroneous = new HashMap<>();
-        this.validTopicIdPartitions = new HashSet<>();
+        this.validTopicIdPartitions = new ArrayList<>();
     }
 
     public Map<TopicIdPartition, ShareFetchResponseData.PartitionData> erroneous() {
         return erroneous;
     }
 
-    public Set<TopicIdPartition> validTopicIdPartitions() {
+    public List<TopicIdPartition> validTopicIdPartitions() {
         return validTopicIdPartitions;
     }
 }

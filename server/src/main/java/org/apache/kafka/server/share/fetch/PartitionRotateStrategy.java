@@ -18,7 +18,7 @@ package org.apache.kafka.server.share.fetch;
 
 import org.apache.kafka.common.TopicIdPartition;
 
-import java.util.LinkedHashSet;
+import java.util.ArrayList;
 import java.util.Locale;
 
 /**
@@ -47,7 +47,7 @@ public interface PartitionRotateStrategy {
      *
      * @return the rotated topicIdPartitions
      */
-    LinkedHashSet<TopicIdPartition> rotate(LinkedHashSet<TopicIdPartition> topicIdPartitions, PartitionRotateMetadata metadata);
+    ArrayList<TopicIdPartition> rotate(ArrayList<TopicIdPartition> topicIdPartitions, PartitionRotateMetadata metadata);
 
     static PartitionRotateStrategy type(StrategyType type) {
         return switch (type) {
@@ -63,8 +63,8 @@ public interface PartitionRotateStrategy {
      *
      * @return the rotated topicIdPartitions
      */
-    static LinkedHashSet<TopicIdPartition> rotateRoundRobin(
-        LinkedHashSet<TopicIdPartition> topicIdPartitions,
+    static ArrayList<TopicIdPartition> rotateRoundRobin(
+        ArrayList<TopicIdPartition> topicIdPartitions,
         PartitionRotateMetadata metadata
     ) {
         if (topicIdPartitions.isEmpty() || topicIdPartitions.size() == 1 || metadata.sessionEpoch < 1) {
@@ -79,8 +79,8 @@ public interface PartitionRotateStrategy {
             return topicIdPartitions;
         }
 
-        LinkedHashSet<TopicIdPartition> suffixPartitions = new LinkedHashSet<>(rotateAt);
-        LinkedHashSet<TopicIdPartition> rotatedPartitions = new LinkedHashSet<>(topicIdPartitions.size());
+        ArrayList<TopicIdPartition> suffixPartitions = new ArrayList<>(rotateAt);
+        ArrayList<TopicIdPartition> rotatedPartitions = new ArrayList<>(topicIdPartitions.size());
         int i = 0;
         for (TopicIdPartition topicIdPartition : topicIdPartitions) {
             if (i < rotateAt) {

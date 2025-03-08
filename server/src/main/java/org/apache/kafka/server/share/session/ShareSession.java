@@ -26,7 +26,6 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 public class ShareSession {
 
@@ -112,7 +111,7 @@ public class ShareSession {
 
     // Update the cached partition data based on the request.
     public synchronized Map<ModifiedTopicIdPartitionType, List<TopicIdPartition>> update(
-        Set<TopicIdPartition> shareFetchData,
+        List<TopicIdPartition> shareFetchData,
         List<TopicIdPartition> toForget) {
         List<TopicIdPartition> added = new ArrayList<>();
         List<TopicIdPartition> updated = new ArrayList<>();

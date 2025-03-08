@@ -3135,7 +3135,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val erroneous = mutable.Map.empty[TopicIdPartition, ShareFetchResponseData.PartitionData]
     erroneousAndValidPartitionData.erroneous.forEach { (topicIdPartition, partitionData) => erroneous.put(topicIdPartition, partitionData) }
 
-    val interestedTopicPartitions = new util.LinkedHashSet[TopicIdPartition]
+    val interestedTopicPartitions = new util.ArrayList[TopicIdPartition]
 
     erroneousAndValidPartitionData.validTopicIdPartitions.forEach { case topicIdPartition =>
       if (!authorizedTopics.contains(topicIdPartition.topicPartition.topic))

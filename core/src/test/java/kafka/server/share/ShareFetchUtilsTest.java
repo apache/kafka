@@ -59,10 +59,10 @@ import java.util.OptionalLong;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BiConsumer;
 
+import static org.apache.kafka.server.share.fetch.ShareFetchTestUtils.arrayList;
 import static org.apache.kafka.server.share.fetch.ShareFetchTestUtils.createFileRecords;
 import static org.apache.kafka.server.share.fetch.ShareFetchTestUtils.createShareAcquiredRecords;
 import static org.apache.kafka.server.share.fetch.ShareFetchTestUtils.memoryRecordsBuilder;
-import static org.apache.kafka.server.share.fetch.ShareFetchTestUtils.orderedSet;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -113,7 +113,7 @@ public class ShareFetchUtilsTest {
         sharePartitions.put(tp1, sp1);
 
         ShareFetch shareFetch = new ShareFetch(FETCH_PARAMS, groupId, memberId,
-            new CompletableFuture<>(), orderedSet(tp0, tp1), BATCH_SIZE, 100, BROKER_TOPIC_STATS);
+            new CompletableFuture<>(), arrayList(tp0, tp1), BATCH_SIZE, 100, BROKER_TOPIC_STATS);
 
         MemoryRecords records = MemoryRecords.withRecords(Compression.NONE,
             new SimpleRecord("0".getBytes(), "v".getBytes()),
@@ -174,7 +174,7 @@ public class ShareFetchUtilsTest {
         sharePartitions.put(tp1, sp1);
 
         ShareFetch shareFetch = new ShareFetch(FETCH_PARAMS, groupId, memberId,
-            new CompletableFuture<>(), orderedSet(tp0, tp1), BATCH_SIZE, 100, BROKER_TOPIC_STATS);
+            new CompletableFuture<>(), arrayList(tp0, tp1), BATCH_SIZE, 100, BROKER_TOPIC_STATS);
 
         List<ShareFetchPartitionData> responseData = List.of(
             new ShareFetchPartitionData(tp0, 0, new FetchPartitionData(Errors.NONE, 0L, 0L,
@@ -213,7 +213,7 @@ public class ShareFetchUtilsTest {
         sharePartitions.put(tp1, sp1);
 
         ShareFetch shareFetch = new ShareFetch(FETCH_PARAMS, groupId, Uuid.randomUuid().toString(),
-            new CompletableFuture<>(), orderedSet(tp0, tp1), BATCH_SIZE, 100, BROKER_TOPIC_STATS);
+            new CompletableFuture<>(), arrayList(tp0, tp1), BATCH_SIZE, 100, BROKER_TOPIC_STATS);
 
         ReplicaManager replicaManager = mock(ReplicaManager.class);
 
@@ -305,7 +305,7 @@ public class ShareFetchUtilsTest {
         sharePartitions.put(tp0, sp0);
 
         ShareFetch shareFetch = new ShareFetch(FETCH_PARAMS, groupId, Uuid.randomUuid().toString(),
-            new CompletableFuture<>(), orderedSet(tp0), BATCH_SIZE, 100, BROKER_TOPIC_STATS);
+            new CompletableFuture<>(), arrayList(tp0), BATCH_SIZE, 100, BROKER_TOPIC_STATS);
 
         ReplicaManager replicaManager = mock(ReplicaManager.class);
 
@@ -373,7 +373,7 @@ public class ShareFetchUtilsTest {
         Uuid memberId = Uuid.randomUuid();
         // Set max fetch records to 10
         ShareFetch shareFetch = new ShareFetch(FETCH_PARAMS, groupId, memberId.toString(),
-            new CompletableFuture<>(), orderedSet(tp0, tp1), BATCH_SIZE, 10, BROKER_TOPIC_STATS);
+            new CompletableFuture<>(), arrayList(tp0, tp1), BATCH_SIZE, 10, BROKER_TOPIC_STATS);
 
         LinkedHashMap<Long, Integer> recordsPerOffset = new LinkedHashMap<>();
         recordsPerOffset.put(0L, 1);
