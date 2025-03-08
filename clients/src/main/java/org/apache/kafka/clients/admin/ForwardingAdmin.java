@@ -334,6 +334,11 @@ public class ForwardingAdmin implements Admin {
     }
 
     @Override
+    public DescribeStreamsGroupsResult describeStreamsGroups(Collection<String> groupIds, DescribeStreamsGroupsOptions options) {
+        return delegate.describeStreamsGroups(groupIds, options);
+    }
+
+    @Override
     public ListGroupsResult listGroups(ListGroupsOptions options) {
         return delegate.listGroups(options);
     }
