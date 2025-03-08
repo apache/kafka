@@ -217,7 +217,7 @@ public class ConsumerHeartbeatRequestManager extends AbstractHeartbeatRequestMan
         return membershipManager().state() == MemberState.LEAVING &&
                // If the consumer has dynamic membership,
                // we should skip the leaving heartbeat when leaveGroupOperation is REMAIN_IN_GROUP
-               (membershipManager.groupInstanceId.isEmpty() && membershipManager.leaveGroupOperation() != REMAIN_IN_GROUP);
+               (membershipManager.groupInstanceId().isEmpty() && membershipManager.leaveGroupOperation() != REMAIN_IN_GROUP);
     }
 
     /**

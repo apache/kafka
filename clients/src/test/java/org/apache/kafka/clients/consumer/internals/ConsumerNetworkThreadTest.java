@@ -51,7 +51,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -70,25 +69,17 @@ public class ConsumerNetworkThreadTest {
     private final AsyncConsumerMetrics asyncConsumerMetrics;
 
     ConsumerNetworkThreadTest() {
-        LogContext logContext = new LogContext();
-        this.time = new MockTime();
         this.networkClientDelegate = mock(NetworkClientDelegate.class);
+        this.requestManagers = mock(RequestManagers.class);
         this.offsetsRequestManager = mock(OffsetsRequestManager.class);
         this.heartbeatRequestManager = mock(ConsumerHeartbeatRequestManager.class);
         this.coordinatorRequestManager = mock(CoordinatorRequestManager.class);
         this.applicationEventProcessor = mock(ApplicationEventProcessor.class);
         this.applicationEventReaper = mock(CompletableEventReaper.class);
+        this.time = new MockTime();
         this.applicationEventQueue = new LinkedBlockingQueue<>();
         this.asyncConsumerMetrics = mock(AsyncConsumerMetrics.class);
-        this.requestManagers = spy(new RequestManagers(logContext,
-                offsetsRequestManager,
-                mock(TopicMetadataRequestManager.class),
-                mock(FetchRequestManager.class),
-                Optional.of(coordinatorRequestManager),
-                Optional.of(mock(CommitRequestManager.class)),
-                Optional.of(heartbeatRequestManager),
-                Optional.of(mock(ConsumerMembershipManager.class))));
-
+        LogContext logContext = new LogContext();
 
         this.consumerNetworkThread = new ConsumerNetworkThread(
                 logContext,
