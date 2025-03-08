@@ -69,7 +69,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static java.util.Collections.singletonList;
-import static org.apache.kafka.raft.RaftClientTestContext.Builder;
 import static org.apache.kafka.raft.RaftClientTestContext.Builder.DEFAULT_ELECTION_TIMEOUT_MS;
 import static org.apache.kafka.raft.RaftClientTestContext.MockListener;
 import static org.apache.kafka.raft.RaftClientTestContext.RaftProtocol;
@@ -93,7 +92,7 @@ public class KafkaRaftClientTest {
         int localId = randomReplicaId();
         assertThrows(
             IllegalArgumentException.class,
-            new Builder(localId, Uuid.ZERO_UUID)::build
+            new RaftClientTestContext.Builder(localId, Uuid.ZERO_UUID)::build
         );
     }
 
@@ -101,7 +100,7 @@ public class KafkaRaftClientTest {
     @EnumSource(value = RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testInitializeSingleMemberQuorum(RaftProtocol raftProtocol) throws IOException {
         int localId = randomReplicaId();
-        RaftClientTestContext context = new Builder(localId, Collections.singleton(localId))
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, Collections.singleton(localId))
             .withRaftProtocol(raftProtocol)
             .build();
         context.assertElectedLeader(1, localId);
@@ -115,7 +114,7 @@ public class KafkaRaftClientTest {
         int localId = randomReplicaId();
         int initialEpoch = 2;
         Set<Integer> voters = Collections.singleton(localId);
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withRaftProtocol(raftProtocol)
             .withElectedLeader(initialEpoch, localId)
             .build();
@@ -137,7 +136,7 @@ public class KafkaRaftClientTest {
         Set<Integer> voters = Set.of(localId, remoteKey.id());
         int epoch = 2;
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .updateRandom(r -> r.mockNextInt(DEFAULT_ELECTION_TIMEOUT_MS, 0))
             .withElectedLeader(epoch, localId)
             .withRaftProtocol(raftProtocol)
@@ -169,7 +168,7 @@ public class KafkaRaftClientTest {
         Set<Integer> voters = Set.of(localId, remoteKey.id());
         int epoch = 2;
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .updateRandom(r -> r.mockNextInt(DEFAULT_ELECTION_TIMEOUT_MS, 0))
             .withVotedCandidate(epoch, ReplicaKey.of(localId, ReplicaKey.NO_DIRECTORY_ID))
             .withRaftProtocol(raftProtocol)
@@ -201,7 +200,7 @@ public class KafkaRaftClientTest {
         Set<Integer> voters = Set.of(localId, remoteKey.id());
         int epoch = 2;
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .updateRandom(r -> r.mockNextInt(DEFAULT_ELECTION_TIMEOUT_MS, 0))
             .withElectedLeader(epoch, localId)
             .withRaftProtocol(raftProtocol)
@@ -238,7 +237,7 @@ public class KafkaRaftClientTest {
         Set<Integer> voters = Set.of(localId, remoteKey.id());
         int epoch = 2;
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .updateRandom(r -> r.mockNextInt(DEFAULT_ELECTION_TIMEOUT_MS, 0))
             .withVotedCandidate(epoch, ReplicaKey.of(localId, ReplicaKey.NO_DIRECTORY_ID))
             .withRaftProtocol(raftProtocol)
@@ -274,7 +273,7 @@ public class KafkaRaftClientTest {
         ReplicaKey remoteKey = replicaKey(remoteId, raftProtocol.isReconfigSupported());
         Set<Integer> voters = Set.of(localId, remoteKey.id());
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withRaftProtocol(raftProtocol)
             .build();
 
@@ -316,7 +315,7 @@ public class KafkaRaftClientTest {
         Set<Integer> voters = Set.of(localId, remoteId);
         int epoch = 2;
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .updateRandom(r -> r.mockNextInt(DEFAULT_ELECTION_TIMEOUT_MS, 0))
             .withElectedLeader(epoch, localId)
             .withRaftProtocol(raftProtocol)
@@ -354,7 +353,7 @@ public class KafkaRaftClientTest {
         Set<Integer> voters = Set.of(localId, remoteId);
         int epoch = 2;
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .updateRandom(r -> r.mockNextInt(DEFAULT_ELECTION_TIMEOUT_MS, 0))
             .withRaftProtocol(raftProtocol)
             .withElectedLeader(epoch, localId)
@@ -393,7 +392,7 @@ public class KafkaRaftClientTest {
         Set<Integer> voters = Set.of(localId, remoteId);
         int epoch = 2;
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withUnknownLeader(epoch)
             .withRaftProtocol(raftProtocol)
             .build();
@@ -415,7 +414,7 @@ public class KafkaRaftClientTest {
             .thenReturn(buffer) // Buffer for the leader message control record
             .thenReturn(null); // Buffer for the prepareAppend call
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withMemoryPool(memoryPool)
             .withRaftProtocol(raftProtocol)
             .build();
@@ -435,7 +434,7 @@ public class KafkaRaftClientTest {
         int otherNodeId = localId + 1;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withRaftProtocol(raftProtocol)
             .build();
 
@@ -456,7 +455,7 @@ public class KafkaRaftClientTest {
         int otherNodeId = localId + 1;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withRaftProtocol(raftProtocol)
             .build();
 
@@ -488,7 +487,7 @@ public class KafkaRaftClientTest {
         // Note that we intentionally set a request timeout which is smaller than
         // the election timeout so that we can still in the Resigned state and
         // verify retry behavior.
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withElectionTimeoutMs(10000)
             .withRequestTimeoutMs(5000)
             .withElectedLeader(epoch, localId)
@@ -529,7 +528,7 @@ public class KafkaRaftClientTest {
         ReplicaKey otherNodeKey = replicaKey(remoteId, raftProtocol.isReconfigSupported());
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withRaftProtocol(raftProtocol)
             .build();
 
@@ -567,7 +566,7 @@ public class KafkaRaftClientTest {
         int otherNodeId = localId + 1;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withRaftProtocol(raftProtocol)
             .build();
 
@@ -594,7 +593,7 @@ public class KafkaRaftClientTest {
         int remoteId2 = localId + 2;
         Set<Integer> voters = Set.of(localId, remoteId1, remoteId2);
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withRaftProtocol(raftProtocol)
             .build();
 
@@ -622,7 +621,7 @@ public class KafkaRaftClientTest {
         int remoteId2 = localId + 2;
         Set<Integer> voters = Set.of(localId, remoteId1, remoteId2);
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withRaftProtocol(raftProtocol)
             .build();
 
@@ -658,7 +657,7 @@ public class KafkaRaftClientTest {
         ReplicaKey observerKey3 = replicaKey(observerId, reconfigSupported);
         Set<Integer> voters = Set.of(localId, remoteKey1.id(), remoteKey2.id());
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withRaftProtocol(raftProtocol)
             .build();
         int resignLeadershipTimeout = context.checkQuorumTimeoutMs;
@@ -712,7 +711,7 @@ public class KafkaRaftClientTest {
         int localId = randomReplicaId();
         Set<Integer> voters = Set.of(localId);
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withRaftProtocol(raftProtocol)
             .build();
         assertEquals(OptionalInt.of(localId), context.currentLeader());
@@ -732,7 +731,7 @@ public class KafkaRaftClientTest {
         int otherNodeId = localId + 1;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withRaftProtocol(raftProtocol)
             .build();
 
@@ -790,7 +789,7 @@ public class KafkaRaftClientTest {
         int otherNodeId = localId + 1;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withRaftProtocol(raftProtocol)
             .build();
         context.unattachedToLeader();
@@ -807,7 +806,7 @@ public class KafkaRaftClientTest {
         int leaderEpoch = 2;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withElectedLeader(leaderEpoch, otherNodeId)
             .withRaftProtocol(raftProtocol)
             .build();
@@ -824,7 +823,7 @@ public class KafkaRaftClientTest {
         int epoch = 5;
         Set<Integer> voters = Set.of(leaderId, otherNodeId);
 
-        RaftClientTestContext context = new Builder(OptionalInt.empty(), voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(OptionalInt.empty(), voters)
             .withRaftProtocol(raftProtocol)
             .build();
         context.pollUntilRequest();
@@ -851,7 +850,7 @@ public class KafkaRaftClientTest {
         // Need 3 node to require a 2-node majority
         Set<Integer> voters = Set.of(localId, localId + 1, localId + 2);
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withVotedCandidate(2, ReplicaKey.of(localId, ReplicaKey.NO_DIRECTORY_ID))
             .withRaftProtocol(raftProtocol)
             .build();
@@ -870,7 +869,7 @@ public class KafkaRaftClientTest {
         final int localId = randomReplicaId();
         final int otherNodeId = localId + 1;
         Set<Integer> voters = Set.of(localId, otherNodeId);
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withRaftProtocol(raftProtocol)
             .build();
 
@@ -940,7 +939,7 @@ public class KafkaRaftClientTest {
         final int firstNodeId = localId + 1;
         final int secondNodeId = localId + 2;
         Set<Integer> voters = Set.of(localId, firstNodeId, secondNodeId);
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withVotedCandidate(2, ReplicaKey.of(localId, ReplicaKey.NO_DIRECTORY_ID))
             .withRaftProtocol(raftProtocol)
             .build();
@@ -986,7 +985,7 @@ public class KafkaRaftClientTest {
     @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testInitializeAsOnlyVoterWithEmptyElectionState(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
-        RaftClientTestContext context = new Builder(localId, Set.of(localId))
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, Set.of(localId))
             .withRaftProtocol(raftProtocol)
             .build();
         context.assertElectedLeader(1, localId);
@@ -997,7 +996,7 @@ public class KafkaRaftClientTest {
     @Test
     public void testInitializeAsFollowerAndOnlyVoter() throws Exception {
         int localId = randomReplicaId();
-        RaftClientTestContext context = new Builder(localId, Set.of(localId))
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, Set.of(localId))
             .withRaftProtocol(KIP_853_PROTOCOL)
             .withElectedLeader(2, localId + 1)
             .build();
@@ -1009,7 +1008,7 @@ public class KafkaRaftClientTest {
     @Test
     public void testInitializeAsCandidateAndOnlyVoter() throws Exception {
         int localId = randomReplicaId();
-        RaftClientTestContext context = new Builder(localId, Set.of(localId))
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, Set.of(localId))
             .withRaftProtocol(KIP_853_PROTOCOL)
             .withVotedCandidate(2, ReplicaKey.of(localId, ReplicaKey.NO_DIRECTORY_ID))
             .build();
@@ -1020,7 +1019,7 @@ public class KafkaRaftClientTest {
     @Test
     public void testInitializeAsResignedAndOnlyVoter() throws Exception {
         int localId = randomReplicaId();
-        RaftClientTestContext context = new Builder(localId, Set.of(localId))
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, Set.of(localId))
             .withRaftProtocol(KIP_853_PROTOCOL)
             .withElectedLeader(2, localId)
             .build();
@@ -1036,7 +1035,7 @@ public class KafkaRaftClientTest {
         int votedCandidateEpoch = 2;
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withVotedCandidate(votedCandidateEpoch, otherNodeKey)
             .withRaftProtocol(raftProtocol)
             .build();
@@ -1061,7 +1060,7 @@ public class KafkaRaftClientTest {
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(local, leader));
 
-        RaftClientTestContext context = new Builder(local.id(), local.directoryId().get())
+        RaftClientTestContext context = new RaftClientTestContext.Builder(local.id(), local.directoryId().get())
             .withStaticVoters(voters)
             .withElectedLeader(leaderEpoch, leader.id())
             .withRaftProtocol(KIP_853_PROTOCOL)
@@ -1100,7 +1099,7 @@ public class KafkaRaftClientTest {
         int leaderEpoch = 2;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withElectedLeader(leaderEpoch, localId)
             .withRaftProtocol(raftProtocol)
             .build();
@@ -1120,7 +1119,7 @@ public class KafkaRaftClientTest {
         int jitterMs = 85;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .updateRandom(r -> r.mockNextInt(jitterMs))
             .withUnknownLeader(epoch - 1)
             .withRaftProtocol(raftProtocol)
@@ -1164,7 +1163,7 @@ public class KafkaRaftClientTest {
         ReplicaKey voter3 = replicaKey(localId + 2, raftProtocol.isReconfigSupported());
         Set<Integer> voters = Set.of(localId, voter2, voter3.id());
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withUnknownLeader(6)
             .build();
 
@@ -1196,7 +1195,7 @@ public class KafkaRaftClientTest {
         int epoch = 2;
         Set<Integer> voters = Set.of(localId, voter2, voter3.id());
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withUnknownLeader(epoch)
             .withRaftProtocol(raftProtocol)
             .build();
@@ -1230,7 +1229,7 @@ public class KafkaRaftClientTest {
         Mockito.when(memoryPool.tryAllocate(KafkaRaftClient.MAX_BATCH_SIZE_BYTES))
             .thenReturn(buffer);
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withAppendLingerMs(lingerMs)
             .withMemoryPool(memoryPool)
             .withRaftProtocol(raftProtocol)
@@ -1263,7 +1262,7 @@ public class KafkaRaftClientTest {
         Mockito.when(memoryPool.tryAllocate(KafkaRaftClient.MAX_BATCH_SIZE_BYTES))
             .thenReturn(buffer);
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withAppendLingerMs(lingerMs)
             .withMemoryPool(memoryPool)
             .withRaftProtocol(raftProtocol)
@@ -1297,7 +1296,7 @@ public class KafkaRaftClientTest {
         Mockito.when(memoryPool.tryAllocate(KafkaRaftClient.MAX_BATCH_SIZE_BYTES))
             .thenReturn(buffer);
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withAppendLingerMs(lingerMs)
             .withMemoryPool(memoryPool)
             .withRaftProtocol(raftProtocol)
@@ -1327,7 +1326,7 @@ public class KafkaRaftClientTest {
         int lingerMs = 50;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withAppendLingerMs(lingerMs)
             .withRaftProtocol(raftProtocol)
             .build();
@@ -1363,7 +1362,7 @@ public class KafkaRaftClientTest {
         int lingerMs = 50;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withAppendLingerMs(lingerMs)
             .withRaftProtocol(raftProtocol)
             .build();
@@ -1398,7 +1397,7 @@ public class KafkaRaftClientTest {
         int leaderEpoch = 2;
         Set<Integer> voters = Set.of(localId, oldLeaderId);
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withElectedLeader(leaderEpoch, oldLeaderId)
             .withRaftProtocol(raftProtocol)
             .build();
@@ -1429,7 +1428,7 @@ public class KafkaRaftClientTest {
         ReplicaKey preferredNextLeader = replicaKey(localId + 2, reconfigSupported);
         Set<Integer> voters = Set.of(localId, oldLeaderKey.id(), preferredNextLeader.id());
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withElectedLeader(leaderEpoch, oldLeaderKey.id())
             .withRaftProtocol(raftProtocol)
             .build();
@@ -1471,7 +1470,7 @@ public class KafkaRaftClientTest {
         int epoch = 1;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withRaftProtocol(raftProtocol)
             .build();
         context.assertUnknownLeaderAndNoVotedCandidate(0);
@@ -1513,7 +1512,7 @@ public class KafkaRaftClientTest {
         ReplicaKey otherNodeKey = replicaKey(localId + 1, raftProtocol.isReconfigSupported());
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withUnknownLeader(epoch)
             .withRaftProtocol(raftProtocol)
             .build();
@@ -1535,7 +1534,7 @@ public class KafkaRaftClientTest {
         int electedLeaderId = localId + 2;
         Set<Integer> voters = Set.of(localId, otherNodeKey.id(), electedLeaderId);
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withElectedLeader(epoch, electedLeaderId)
             .withRaftProtocol(raftProtocol)
             .build();
@@ -1558,7 +1557,7 @@ public class KafkaRaftClientTest {
         ReplicaKey votedCandidateKey = replicaKey(localId + 2, reconfigSupported);
         Set<Integer> voters = Set.of(localId, otherNodeKey.id(), votedCandidateKey.id());
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withVotedCandidate(epoch, votedCandidateKey)
             .withRaftProtocol(raftProtocol)
             .build();
@@ -1579,7 +1578,7 @@ public class KafkaRaftClientTest {
         int electedLeaderId = localId + 2;
         Set<Integer> voters = Set.of(localId, otherNodeKey.id(), electedLeaderId);
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withElectedLeader(epoch, electedLeaderId)
             .withRaftProtocol(raftProtocol)
             .build();
@@ -1608,7 +1607,7 @@ public class KafkaRaftClientTest {
         ReplicaKey votedCandidateKey = replicaKey(localId + 2, reconfigSupported);
         Set<Integer> voters = Set.of(localId, otherNodeKey.id(), votedCandidateKey.id());
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withVotedCandidate(epoch, votedCandidateKey)
             .withRaftProtocol(raftProtocol)
             .build();
@@ -1634,7 +1633,7 @@ public class KafkaRaftClientTest {
         ReplicaKey otherNodeKey = replicaKey(localId + 1, raftProtocol.isReconfigSupported());
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withUnknownLeader(epoch)
             .withRaftProtocol(raftProtocol)
             .build();
@@ -1655,7 +1654,7 @@ public class KafkaRaftClientTest {
         int otherNodeId2 = localId + 2;
         Set<Integer> voters = Set.of(otherNodeKey.id(), otherNodeId2);
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withUnknownLeader(epoch)
             .withRaftProtocol(raftProtocol)
             .build();
@@ -1674,7 +1673,7 @@ public class KafkaRaftClientTest {
         ReplicaKey otherNodeKey = replicaKey(localId + 1, raftProtocol.isReconfigSupported());
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withUnknownLeader(2)
             .withRaftProtocol(raftProtocol)
             .build();
@@ -1697,7 +1696,7 @@ public class KafkaRaftClientTest {
         ReplicaKey otherNodeKey = replicaKey(localId + 1, raftProtocol.isReconfigSupported());
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withUnknownLeader(4)
             .withRaftProtocol(raftProtocol)
             .build();
@@ -1743,7 +1742,7 @@ public class KafkaRaftClientTest {
         ReplicaKey otherNodeKey = replicaKey(localId + 1, raftProtocol.isReconfigSupported());
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withUnknownLeader(5)
             .withRaftProtocol(raftProtocol)
             .appendToLog(1, Arrays.asList("a", "b", "c"))
@@ -1776,7 +1775,7 @@ public class KafkaRaftClientTest {
         int leaderEpoch = 2;
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withVotedCandidate(leaderEpoch, ReplicaKey.of(localId, ReplicaKey.NO_DIRECTORY_ID))
             .withRaftProtocol(raftProtocol)
             .build();
@@ -1798,7 +1797,7 @@ public class KafkaRaftClientTest {
         int exponentialFactor = 85;  // set it large enough so that replica will bound on jitter
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .updateRandom(r -> r.mockNextInt(exponentialFactor))
             .withRaftProtocol(raftProtocol)
             .build();
@@ -1874,7 +1873,7 @@ public class KafkaRaftClientTest {
         int jitter = 100;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .updateRandom(r -> r.mockNextInt(jitter))
             .withRaftProtocol(raftProtocol)
             .build();
@@ -1916,7 +1915,7 @@ public class KafkaRaftClientTest {
         int epoch = 5;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withElectedLeader(epoch, otherNodeId)
             .withRaftProtocol(raftProtocol)
             .build();
@@ -1937,7 +1936,7 @@ public class KafkaRaftClientTest {
         int lastEpoch = 3;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withElectedLeader(epoch, otherNodeId)
             .appendToLog(lastEpoch, singletonList("foo"))
             .withRaftProtocol(raftProtocol)
@@ -1958,7 +1957,7 @@ public class KafkaRaftClientTest {
         int lastEpoch = 3;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withElectedLeader(epoch, otherNodeId)
             .appendToLog(lastEpoch, singletonList("foo"))
             .withRaftProtocol(raftProtocol)
@@ -1984,7 +1983,7 @@ public class KafkaRaftClientTest {
         int lastEpoch = 3;
         Set<Integer> voters = Set.of(otherNodeId);
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withElectedLeader(epoch, otherNodeId)
             .appendToLog(lastEpoch, singletonList("foo"))
             .withRaftProtocol(raftProtocol)
@@ -2013,7 +2012,7 @@ public class KafkaRaftClientTest {
         int epoch = 5;
         Set<Integer> voters = Set.of(otherNodeId);
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withUnknownLeader(epoch)
             .withRaftProtocol(raftProtocol)
             .build();
@@ -2051,7 +2050,7 @@ public class KafkaRaftClientTest {
         int epoch = 5;
         Set<Integer> voters = Set.of(localId, otherNodeId, leaderNodeId);
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withUnknownLeader(epoch)
             .withRaftProtocol(raftProtocol)
             .build();
@@ -2082,7 +2081,7 @@ public class KafkaRaftClientTest {
         int epoch = 5;
         Set<Integer> voters = Set.of(leaderId, otherNodeId);
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withRaftProtocol(raftProtocol)
             .build();
 
@@ -2113,7 +2112,7 @@ public class KafkaRaftClientTest {
             .map(RaftClientTestContext::mockAddress)
             .collect(Collectors.toList());
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withBootstrapServers(Optional.of(bootstrapServers))
             .withRaftProtocol(raftProtocol)
             .build();
@@ -2160,7 +2159,7 @@ public class KafkaRaftClientTest {
             .map(RaftClientTestContext::mockAddress)
             .collect(Collectors.toList());
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withBootstrapServers(Optional.of(bootstrapServers))
             .withRaftProtocol(raftProtocol)
             .build();
@@ -2203,7 +2202,7 @@ public class KafkaRaftClientTest {
             .map(RaftClientTestContext::mockAddress)
             .collect(Collectors.toList());
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withBootstrapServers(Optional.of(bootstrapServers))
             .withRaftProtocol(raftProtocol)
             .build();
@@ -2277,7 +2276,7 @@ public class KafkaRaftClientTest {
             .map(RaftClientTestContext::mockAddress)
             .collect(Collectors.toList());
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withBootstrapServers(Optional.of(bootstrapServers))
             .withRaftProtocol(raftProtocol)
             .build();
@@ -2328,7 +2327,7 @@ public class KafkaRaftClientTest {
         ReplicaKey otherNodeKey = replicaKey(localId + 1, raftProtocol.isReconfigSupported());
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withUnknownLeader(4)
             .withRaftProtocol(raftProtocol)
             .build();
@@ -2375,7 +2374,7 @@ public class KafkaRaftClientTest {
         int epoch = 5;
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withUnknownLeader(epoch - 1)
             .build();
         context.assertUnknownLeaderAndNoVotedCandidate(epoch - 1);
@@ -2404,7 +2403,7 @@ public class KafkaRaftClientTest {
         ReplicaKey otherNodeKey = replicaKey(localId + 1, raftProtocol.isReconfigSupported());
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withUnknownLeader(4)
             .withRaftProtocol(raftProtocol)
             .build();
@@ -2440,7 +2439,7 @@ public class KafkaRaftClientTest {
         ReplicaKey otherNodeKey = replicaKey(localId + 1, raftProtocol.isReconfigSupported());
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withRaftProtocol(raftProtocol)
             .build();
 
@@ -2474,7 +2473,7 @@ public class KafkaRaftClientTest {
         ReplicaKey otherNodeKey = replicaKey(localId + 1, true);
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withRaftProtocol(KIP_853_PROTOCOL)
             .build();
 
@@ -2520,7 +2519,7 @@ public class KafkaRaftClientTest {
         int epoch = 5;
         Set<Integer> voters = Set.of(localId, voter2, voter3);
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withUnknownLeader(epoch - 1)
             .withRaftProtocol(KIP_853_PROTOCOL)
             .build();
@@ -2572,7 +2571,7 @@ public class KafkaRaftClientTest {
         int otherNodeId = localId + 1;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withUnknownLeader(4)
             .withRaftProtocol(raftProtocol)
             .build();
@@ -2608,7 +2607,7 @@ public class KafkaRaftClientTest {
         ReplicaKey otherNodeKey = replicaKey(localId + 1, raftProtocol.isReconfigSupported());
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withUnknownLeader(4)
             .withRaftProtocol(raftProtocol)
             .build();
@@ -2644,7 +2643,7 @@ public class KafkaRaftClientTest {
         int otherNodeId = localId + 1;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withUnknownLeader(4)
             .withRaftProtocol(raftProtocol)
             .build();
@@ -2670,7 +2669,7 @@ public class KafkaRaftClientTest {
         int epoch = 5;
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withElectedLeader(epoch, otherNodeKey.id())
             .withRaftProtocol(raftProtocol)
             .build();
@@ -2714,7 +2713,7 @@ public class KafkaRaftClientTest {
         ReplicaKey otherNodeKey = replicaKey(localId + 1, raftProtocol.isReconfigSupported());
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withUnknownLeader(4)
             .withRaftProtocol(raftProtocol)
             .build();
@@ -2742,7 +2741,7 @@ public class KafkaRaftClientTest {
         ReplicaKey otherNodeKey = replicaKey(localId + 1, raftProtocol.isReconfigSupported());
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withUnknownLeader(4)
             .withRaftProtocol(raftProtocol)
             .build();
@@ -2773,7 +2772,7 @@ public class KafkaRaftClientTest {
         int voter3 = localId + 2;
         Set<Integer> voters = Set.of(localId, voterKey2.id(), voter3);
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withUnknownLeader(4)
             .withRaftProtocol(raftProtocol)
             .build();
@@ -2810,7 +2809,7 @@ public class KafkaRaftClientTest {
         // The other node starts out as the leader
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withElectedLeader(epoch, otherNodeId)
             .withRaftProtocol(raftProtocol)
             .build();
@@ -2850,7 +2849,7 @@ public class KafkaRaftClientTest {
         // Start out with `voter2` as the leader
         Set<Integer> voters = Set.of(localId, voter2, voter3);
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withElectedLeader(epoch, voter2)
             .withRaftProtocol(raftProtocol)
             .build();
@@ -2888,7 +2887,7 @@ public class KafkaRaftClientTest {
         int epoch = 5;
         Set<Integer> voters = Set.of(localId, voter2, voter3);
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withUnknownLeader(epoch)
             .withRaftProtocol(raftProtocol)
             .build();
@@ -2946,7 +2945,7 @@ public class KafkaRaftClientTest {
             .map(RaftClientTestContext::mockAddress)
             .collect(Collectors.toList());
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withBootstrapServers(Optional.of(bootstrapServers))
             .withRaftProtocol(raftProtocol)
             .withElectedLeader(epoch, leaderId)
@@ -2985,7 +2984,7 @@ public class KafkaRaftClientTest {
             .map(RaftClientTestContext::mockAddress)
             .collect(Collectors.toList());
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withBootstrapServers(Optional.of(bootstrapServers))
             .withRaftProtocol(raftProtocol)
             .withElectedLeader(epoch, leaderId)
@@ -3020,7 +3019,7 @@ public class KafkaRaftClientTest {
             .map(RaftClientTestContext::mockAddress)
             .collect(Collectors.toList());
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withBootstrapServers(Optional.of(bootstrapServers))
             .withRaftProtocol(raftProtocol)
             .build();
@@ -3069,7 +3068,7 @@ public class KafkaRaftClientTest {
             .map(RaftClientTestContext::mockAddress)
             .collect(Collectors.toList());
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withBootstrapServers(Optional.of(bootstrapServers))
             .withRaftProtocol(raftProtocol)
             .build();
@@ -3108,7 +3107,7 @@ public class KafkaRaftClientTest {
         ReplicaKey otherNodeKey = replicaKey(localId + 1, raftProtocol.isReconfigSupported());
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withRaftProtocol(raftProtocol)
             .build();
 
@@ -3157,7 +3156,7 @@ public class KafkaRaftClientTest {
         ReplicaKey laggingFollower = replicaKey(localId + 1, reconfigSupported);
         Set<Integer> voters = Set.of(localId, closeFollower.id(), laggingFollower.id());
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withRaftProtocol(raftProtocol)
             .build();
 
@@ -3210,7 +3209,7 @@ public class KafkaRaftClientTest {
         int epoch = 2;
         Set<Integer> voters = Set.of(localId, voter2.id(), voter3.id());
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withUnknownLeader(epoch)
             .build();
 
@@ -3240,7 +3239,7 @@ public class KafkaRaftClientTest {
         ReplicaKey follower1 = replicaKey(localId + 1, true);
         Set<Integer> voters = Set.of(localId, follower1.id());
 
-        RaftClientTestContext context = new Builder(localId, local.directoryId().get())
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, local.directoryId().get())
             .withStaticVoters(voters)
             .withRaftProtocol(raftProtocol)
             .build();
@@ -3285,7 +3284,7 @@ public class KafkaRaftClientTest {
         Uuid followerDirectoryId2 = bootstrapFollower2.directoryId().orElse(reconfigSupported ? Uuid.randomUuid() : ReplicaKey.NO_DIRECTORY_ID);
         ReplicaKey follower2 = ReplicaKey.of(followerId2, followerDirectoryId2);
 
-        Builder builder = new Builder(localId, localDirectoryId)
+        RaftClientTestContext.Builder builder = new RaftClientTestContext.Builder(localId, localDirectoryId)
             .withRaftProtocol(raftProtocol);
 
         if (withBootstrapSnapshot) {
@@ -3392,7 +3391,7 @@ public class KafkaRaftClientTest {
         Uuid followerDirectoryId = bootstrapFollower.directoryId().orElse(reconfigSupported ? Uuid.randomUuid() : ReplicaKey.NO_DIRECTORY_ID);
         ReplicaKey follower = ReplicaKey.of(followerId, followerDirectoryId);
 
-        Builder builder = new Builder(localId, localDirectoryId)
+        RaftClientTestContext.Builder builder = new RaftClientTestContext.Builder(localId, localDirectoryId)
             .withRaftProtocol(raftProtocol);
 
         if (withBootstrapSnapshot) {
@@ -3535,7 +3534,7 @@ public class KafkaRaftClientTest {
         Uuid followerDirectoryId = bootstrapFollower.directoryId().orElse(raftProtocol.isReconfigSupported() ? Uuid.randomUuid() : ReplicaKey.NO_DIRECTORY_ID);
         ReplicaKey follower = ReplicaKey.of(followerId, followerDirectoryId);
 
-        Builder builder = new Builder(localId, localDirectoryId)
+        RaftClientTestContext.Builder builder = new RaftClientTestContext.Builder(localId, localDirectoryId)
             .withRaftProtocol(raftProtocol);
         if (withBootstrapSnapshot) {
             VoterSet bootstrapVoterSet = VoterSetTest.voterSet(Stream.of(local, bootstrapFollower));
@@ -3611,7 +3610,7 @@ public class KafkaRaftClientTest {
         Set<Integer> staticVoters = Set.of(localId, follower.id());
         VoterSet voterSet = VoterSetTest.voterSet(Stream.of(local, follower, follower2));
 
-        RaftClientTestContext context = new Builder(localId, local.directoryId().get())
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, local.directoryId().get())
             .withStaticVoters(staticVoters)
             .withRaftProtocol(raftProtocol)
             .withBootstrapSnapshot(Optional.of(voterSet))
@@ -3653,7 +3652,7 @@ public class KafkaRaftClientTest {
         int otherNodeId = localId + 1;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withUnknownLeader(1)
             .withRaftProtocol(raftProtocol)
             .build();
@@ -3692,7 +3691,7 @@ public class KafkaRaftClientTest {
         int epoch = 5;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withElectedLeader(epoch, otherNodeId)
             .withRaftProtocol(raftProtocol)
             .build();
@@ -3719,7 +3718,7 @@ public class KafkaRaftClientTest {
         int voter2 = localId + 2;
         Set<Integer> voters = Set.of(voter1, voter2);
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withUnknownLeader(5)
             .withRaftProtocol(raftProtocol)
             .build();
@@ -3742,7 +3741,7 @@ public class KafkaRaftClientTest {
     @EnumSource(value = RaftClientTestContext.RaftProtocol.class, names = {"KIP_595_PROTOCOL", "KIP_853_PROTOCOL"})
     public void testGracefulShutdownSingleMemberQuorum(RaftProtocol raftProtocol) throws IOException {
         int localId = randomReplicaId();
-        RaftClientTestContext context = new Builder(localId, Collections.singleton(localId))
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, Collections.singleton(localId))
             .withRaftProtocol(raftProtocol)
             .build();
 
@@ -3764,7 +3763,7 @@ public class KafkaRaftClientTest {
         int epoch = 5;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withElectedLeader(epoch, otherNodeId)
             .withRaftProtocol(raftProtocol)
             .build();
@@ -3794,7 +3793,7 @@ public class KafkaRaftClientTest {
         int epoch = 5;
         Set<Integer> voters = Set.of(otherNodeId);
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withElectedLeader(epoch, otherNodeId)
             .withRaftProtocol(raftProtocol)
             .withAlwaysFlush(alwaysFlush)
@@ -3826,7 +3825,7 @@ public class KafkaRaftClientTest {
         int epoch = 5;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withElectedLeader(epoch, otherNodeId)
             .withRaftProtocol(raftProtocol)
             .build();
@@ -3893,7 +3892,7 @@ public class KafkaRaftClientTest {
         int epoch = 5;
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .updateRandom(r -> r.mockNextInt(DEFAULT_ELECTION_TIMEOUT_MS, 0))
             .withUnknownLeader(epoch - 1)
             .withRaftProtocol(raftProtocol)
@@ -3927,7 +3926,7 @@ public class KafkaRaftClientTest {
         int localId = randomReplicaId();
         Set<Integer> voters = Collections.singleton(localId);
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withRaftProtocol(raftProtocol)
             .build();
         long now = context.time.milliseconds();
@@ -4007,7 +4006,7 @@ public class KafkaRaftClientTest {
         int lastEpoch = 3;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withElectedLeader(epoch, otherNodeId)
             .appendToLog(lastEpoch, Arrays.asList("foo", "bar"))
             .appendToLog(lastEpoch, singletonList("baz"))
@@ -4040,7 +4039,7 @@ public class KafkaRaftClientTest {
     public void testMetrics(RaftProtocol raftProtocol) throws Exception {
         int localId = randomReplicaId();
         int epoch = 1;
-        RaftClientTestContext context = new Builder(localId, Collections.singleton(localId))
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, Collections.singleton(localId))
             .withRaftProtocol(raftProtocol)
             .build();
         context.pollUntil(() -> context.log.endOffset().offset() == 1L);
@@ -4094,7 +4093,7 @@ public class KafkaRaftClientTest {
         int epoch = 5;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withRaftProtocol(raftProtocol)
             .withElectedLeader(epoch, otherNodeId)
             .build();
@@ -4122,7 +4121,7 @@ public class KafkaRaftClientTest {
         int epoch = 5;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .updateRandom(r -> r.mockNextInt(DEFAULT_ELECTION_TIMEOUT_MS, 0))
             .withUnknownLeader(epoch - 1)
             .withRaftProtocol(raftProtocol)
@@ -4152,7 +4151,7 @@ public class KafkaRaftClientTest {
         int epoch = 5;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withUnknownLeader(epoch - 1)
             .withRaftProtocol(raftProtocol)
             .build();
@@ -4177,7 +4176,7 @@ public class KafkaRaftClientTest {
         int otherNodeId = localId + 1;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withUnknownLeader(1)
             .withRaftProtocol(raftProtocol)
             .build();
@@ -4203,7 +4202,7 @@ public class KafkaRaftClientTest {
         ReplicaKey otherNodeKey = replicaKey(localId + 1, raftProtocol.isReconfigSupported());
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withRaftProtocol(raftProtocol)
             .build();
 
@@ -4254,7 +4253,7 @@ public class KafkaRaftClientTest {
         List<String> batch3 = Arrays.asList("7", "8", "9");
 
         List<List<String>> expectedBatches = Arrays.asList(batch1, batch2, batch3);
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .appendToLog(1, batch1)
             .appendToLog(1, batch2)
             .appendToLog(2, batch3)
@@ -4320,7 +4319,7 @@ public class KafkaRaftClientTest {
         List<String> batch2 = Arrays.asList("4", "5", "6");
         List<String> batch3 = Arrays.asList("7", "8", "9");
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .appendToLog(1, batch1)
             .appendToLog(1, batch2)
             .appendToLog(2, batch3)
@@ -4363,7 +4362,7 @@ public class KafkaRaftClientTest {
         List<String> batch2 = Arrays.asList("4", "5", "6");
         List<String> batch3 = Arrays.asList("7", "8", "9");
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .appendToLog(1, batch1)
             .appendToLog(1, batch2)
             .appendToLog(2, batch3)
@@ -4403,7 +4402,7 @@ public class KafkaRaftClientTest {
         int epoch = 5;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withElectedLeader(epoch, otherNodeId)
             .withRaftProtocol(raftProtocol)
             .build();
@@ -4464,7 +4463,7 @@ public class KafkaRaftClientTest {
         int epoch = 7;
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .appendToLog(2, Arrays.asList("a", "b", "c"))
             .appendToLog(4, Arrays.asList("d", "e", "f"))
             .appendToLog(4, Arrays.asList("g", "h", "i"))
@@ -4511,7 +4510,7 @@ public class KafkaRaftClientTest {
         int epoch = 7;
         Set<Integer> voters = Set.of(localId, otherNodeKey.id());
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .appendToLog(2, Arrays.asList("a", "b", "c"))
             .appendToLog(4, Arrays.asList("d", "e", "f"))
             .appendToLog(4, Arrays.asList("g", "h", "i"))
@@ -4569,7 +4568,7 @@ public class KafkaRaftClientTest {
         int epoch = 7;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withUnknownLeader(epoch)
             .withRaftProtocol(raftProtocol)
             .build();
@@ -4604,7 +4603,7 @@ public class KafkaRaftClientTest {
         int epoch = 7;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withElectedLeader(epoch, otherNodeId)
             .withRaftProtocol(raftProtocol)
             .build();
@@ -4630,7 +4629,7 @@ public class KafkaRaftClientTest {
         int epoch = 7;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
-        RaftClientTestContext context = new Builder(localId, voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withElectedLeader(epoch, localId)
             .withRaftProtocol(raftProtocol)
             .build();
@@ -4662,7 +4661,7 @@ public class KafkaRaftClientTest {
             .map(RaftClientTestContext::mockAddress)
             .collect(Collectors.toList());
 
-        RaftClientTestContext context = new Builder(OptionalInt.empty(), voters)
+        RaftClientTestContext context = new RaftClientTestContext.Builder(OptionalInt.empty(), voters)
             .withBootstrapServers(Optional.of(bootstrapServers))
             .withRaftProtocol(raftProtocol)
             .build();
@@ -4728,7 +4727,7 @@ public class KafkaRaftClientTest {
         return Stream.of(
             Arguments.of(KIP_853_PROTOCOL, true),
             Arguments.of(KIP_853_PROTOCOL, false),
-            Arguments.of(KIP_853_PROTOCOL, true),
+            Arguments.of(KIP_595_PROTOCOL, true),
             Arguments.of(KIP_595_PROTOCOL, false)
         );
     }
