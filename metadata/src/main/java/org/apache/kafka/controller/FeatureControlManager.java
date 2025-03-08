@@ -359,15 +359,6 @@ public class FeatureControlManager {
         return new FinalizedControllerFeatures(features, epoch);
     }
 
-    FinalizedControllerFeatures latestFinalizedFeatures() {
-        Map<String, Short> features = new HashMap<>();
-        features.put(MetadataVersion.FEATURE_NAME, metadataVersion.get().featureLevel());
-        for (Entry<String, Short> entry : finalizedVersions.entrySet()) {
-            features.put(entry.getKey(), entry.getValue());
-        }
-        return new FinalizedControllerFeatures(features, -1);
-    }
-
     public void replay(FeatureLevelRecord record) {
         VersionRange range = quorumFeatures.localSupportedFeature(record.name());
         if (!range.contains(record.featureLevel())) {
@@ -395,7 +386,7 @@ public class FeatureControlManager {
     }
 
     boolean isElrFeatureEnabled() {
-        return latestFinalizedFeatures().versionOrDefault(EligibleLeaderReplicasVersion.FEATURE_NAME, (short) 0) >=
+        return finalizedVersions.getOrDefault(EligibleLeaderReplicasVersion.FEATURE_NAME, (short) 0) >=
             EligibleLeaderReplicasVersion.ELRV_1.featureLevel();
     }
 }
