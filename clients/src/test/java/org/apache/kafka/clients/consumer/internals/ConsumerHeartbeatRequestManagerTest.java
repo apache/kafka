@@ -805,17 +805,6 @@ public class ConsumerHeartbeatRequestManagerTest {
 
     }
 
-    private static Stream<Arguments> pollOnLeavingMatrix() {
-        return Stream.of(
-            Arguments.of(Optional.empty(), DEFAULT),
-            Arguments.of(Optional.empty(), LEAVE_GROUP),
-            Arguments.of(Optional.empty(), REMAIN_IN_GROUP),
-            Arguments.of(Optional.of("groupInstanceId"), DEFAULT),
-            Arguments.of(Optional.of("groupInstanceId"), LEAVE_GROUP),
-            Arguments.of(Optional.of("groupInstanceId"), REMAIN_IN_GROUP)
-        );
-    }
-
     /**
      * This is expected to be the case where a member is already leaving the group and the poll
      * timer expires. The poll timer expiration should not transition the member to STALE, and
@@ -1194,5 +1183,16 @@ public class ConsumerHeartbeatRequestManagerTest {
         when(membershipManager.memberEpoch()).thenReturn(DEFAULT_MEMBER_EPOCH);
         when(membershipManager.groupId()).thenReturn(DEFAULT_GROUP_ID);
         when(membershipManager.serverAssignor()).thenReturn(Optional.of(DEFAULT_REMOTE_ASSIGNOR));
+    }
+
+    private static Stream<Arguments> pollOnLeavingMatrix() {
+        return Stream.of(
+            Arguments.of(Optional.empty(), DEFAULT),
+            Arguments.of(Optional.empty(), LEAVE_GROUP),
+            Arguments.of(Optional.empty(), REMAIN_IN_GROUP),
+            Arguments.of(Optional.of("groupInstanceId"), DEFAULT),
+            Arguments.of(Optional.of("groupInstanceId"), LEAVE_GROUP),
+            Arguments.of(Optional.of("groupInstanceId"), REMAIN_IN_GROUP)
+        );
     }
 }
