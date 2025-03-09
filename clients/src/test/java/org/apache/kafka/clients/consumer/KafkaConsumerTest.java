@@ -304,7 +304,7 @@ public class KafkaConsumerTest {
 
             KafkaMetric existingMetric = (KafkaMetric) consumer.metrics().entrySet().iterator().next().getValue();
             consumer.registerMetricForSubscription(existingMetric);
-            // This test would fail without the check as the exising metric is registered in the consumer on startup
+            // This test would fail without the check as the existing metric is registered in the consumer on startup
             Mockito.verify(clientTelemetryReporter, atMostOnce()).metricChange(existingMetric);
         }
     }
