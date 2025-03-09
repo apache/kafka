@@ -19,7 +19,9 @@ package org.apache.kafka.connect.runtime;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.MetricNameTemplate;
 import org.apache.kafka.common.metrics.Gauge;
+import org.apache.kafka.common.metrics.PluginMetrics;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.internals.PluginMetricsImpl;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Frequencies;
 import org.apache.kafka.common.metrics.stats.Max;
@@ -80,6 +82,7 @@ abstract class WorkerTask<T, R extends ConnectRecord<R>> implements Runnable {
     protected final TransformationChain<T, R> transformationChain;
     private final Supplier<List<ErrorReporter<T>>> errorReportersSupplier;
     protected final Function<ClassLoader, LoaderSwap> pluginLoaderSwapper;
+    protected final PluginMetricsImpl pluginMetrics;
 
     public WorkerTask(ConnectorTaskId id,
                       TaskStatus.Listener statusListener,
@@ -109,6 +112,7 @@ abstract class WorkerTask<T, R extends ConnectRecord<R>> implements Runnable {
         this.time = time;
         this.statusBackingStore = statusBackingStore;
         this.pluginLoaderSwapper = pluginLoaderSwapper;
+        this.pluginMetrics = connectMetrics.taskPluginMetrics(id);
     }
 
     public ConnectorTaskId id() {
@@ -117,6 +121,10 @@ abstract class WorkerTask<T, R extends ConnectRecord<R>> implements Runnable {
 
     public ClassLoader loader() {
         return loader;
+    }
+
+    public PluginMetrics pluginMetrics() {
+        return pluginMetrics;
     }
 
     /**

@@ -17,26 +17,19 @@
 
 package kafka.server
 
-import java.net.{InetAddress, UnknownHostException}
 import java.util.{Collections, Properties}
-import kafka.controller.KafkaController
 import kafka.log.UnifiedLog
-import kafka.network.ConnectionQuotas
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.Logging
-import org.apache.kafka.server.config.{QuotaConfig, ReplicationConfigs, ZooKeeperInternals}
-import org.apache.kafka.common.metrics.Quota
+import org.apache.kafka.server.config.QuotaConfig
 import org.apache.kafka.common.metrics.Quota._
-import org.apache.kafka.common.utils.Sanitizer
 import org.apache.kafka.coordinator.group.GroupCoordinator
-import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.ClientMetricsManager
 import org.apache.kafka.server.common.StopPartition
 import org.apache.kafka.storage.internals.log.{LogStartOffsetIncrementReason, ThrottledReplicaListValidator}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.Seq
-import scala.util.Try
 
 /**
   * The ConfigHandler is used to process broker configuration change notifications.
@@ -46,13 +39,12 @@ trait ConfigHandler {
 }
 
 /**
-  * The TopicConfigHandler will process topic config changes from ZooKeeper or the metadata log.
+  * The TopicConfigHandler will process topic config changes from the metadata log.
   * The callback provides the topic name and the full properties set.
   */
 class TopicConfigHandler(private val replicaManager: ReplicaManager,
                          kafkaConfig: KafkaConfig,
-                         val quotas: QuotaManagers,
-                         kafkaController: Option[KafkaController]) extends ConfigHandler with Logging  {
+                         val quotas: QuotaManagers) extends ConfigHandler with Logging  {
 
   private def updateLogConfig(topic: String,
                               topicConfig: Properties): Unit = {
@@ -62,9 +54,8 @@ class TopicConfigHandler(private val replicaManager: ReplicaManager,
     val wasRemoteLogEnabled = logs.exists(_.remoteLogEnabled())
     val wasCopyDisabled = logs.exists(_.config.remoteLogCopyDisable())
 
-    // kafkaController is only defined in Zookeeper's mode
     logManager.updateTopicConfig(topic, topicConfig, kafkaConfig.remoteLogManagerConfig.isRemoteStorageSystemEnabled(),
-      wasRemoteLogEnabled, kafkaController.isDefined)
+      wasRemoteLogEnabled)
     maybeUpdateRemoteLogComponents(topic, logs, wasRemoteLogEnabled, wasCopyDisabled)
   }
 
@@ -130,10 +121,6 @@ class TopicConfigHandler(private val replicaManager: ReplicaManager,
     }
     updateThrottledList(QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, quotas.leader)
     updateThrottledList(QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, quotas.follower)
-
-    if (Try(topicConfig.getProperty(ReplicationConfigs.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG).toBoolean).getOrElse(false)) {
-      kafkaController.foreach(_.enableTopicUncleanLeaderElection(topic))
-    }
   }
 
   def parseThrottledPartitions(topicConfig: Properties, brokerId: Int, prop: String): Seq[Int] = {
@@ -151,91 +138,6 @@ class TopicConfigHandler(private val replicaManager: ReplicaManager,
   }
 }
 
-
-/**
- * Handles <client-id>, <user> or <user, client-id> quota config updates in ZK.
- * This implementation reports the overrides to the respective ClientQuotaManager objects
- */
-class QuotaConfigHandler(private val quotaManagers: QuotaManagers) {
-
-  def updateQuotaConfig(sanitizedUser: Option[String], sanitizedClientId: Option[String], config: Properties): Unit = {
-    val clientId = sanitizedClientId.map(Sanitizer.desanitize)
-    val producerQuota =
-      if (config.containsKey(QuotaConfig.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG))
-        Some(new Quota(config.getProperty(QuotaConfig.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG).toLong.toDouble, true))
-      else
-        None
-    quotaManagers.produce.updateQuota(sanitizedUser, clientId, sanitizedClientId, producerQuota)
-    val consumerQuota =
-      if (config.containsKey(QuotaConfig.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG))
-        Some(new Quota(config.getProperty(QuotaConfig.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG).toLong.toDouble, true))
-      else
-        None
-    quotaManagers.fetch.updateQuota(sanitizedUser, clientId, sanitizedClientId, consumerQuota)
-    val requestQuota =
-      if (config.containsKey(QuotaConfig.REQUEST_PERCENTAGE_OVERRIDE_CONFIG))
-        Some(new Quota(config.getProperty(QuotaConfig.REQUEST_PERCENTAGE_OVERRIDE_CONFIG).toDouble, true))
-      else
-        None
-    quotaManagers.request.updateQuota(sanitizedUser, clientId, sanitizedClientId, requestQuota)
-    val controllerMutationQuota =
-      if (config.containsKey(QuotaConfig.CONTROLLER_MUTATION_RATE_OVERRIDE_CONFIG))
-        Some(new Quota(config.getProperty(QuotaConfig.CONTROLLER_MUTATION_RATE_OVERRIDE_CONFIG).toDouble, true))
-      else
-        None
-    quotaManagers.controllerMutation.updateQuota(sanitizedUser, clientId, sanitizedClientId, controllerMutationQuota)
-  }
-}
-
-/**
- * The ClientIdConfigHandler will process clientId config changes in ZK.
- * The callback provides the clientId and the full properties set read from ZK.
- */
-class ClientIdConfigHandler(private val quotaManagers: QuotaManagers) extends QuotaConfigHandler(quotaManagers) with ConfigHandler {
-
-  def processConfigChanges(sanitizedClientId: String, clientConfig: Properties): Unit = {
-    updateQuotaConfig(None, Some(sanitizedClientId), clientConfig)
-  }
-}
-
-/**
- * The UserConfigHandler will process <user> and <user, client-id> quota changes in ZK.
- * The callback provides the node name containing sanitized user principal, sanitized client-id if this is
- * a <user, client-id> update and the full properties set read from ZK.
- */
-class UserConfigHandler(private val quotaManagers: QuotaManagers, val credentialProvider: CredentialProvider) extends QuotaConfigHandler(quotaManagers) with ConfigHandler {
-
-  def processConfigChanges(quotaEntityPath: String, config: Properties): Unit = {
-    // Entity path is <user> or <user>/clients/<client>
-    val entities = quotaEntityPath.split("/")
-    if (entities.length != 1 && entities.length != 3)
-      throw new IllegalArgumentException("Invalid quota entity path: " + quotaEntityPath)
-    val sanitizedUser = entities(0)
-    val sanitizedClientId = if (entities.length == 3) Some(entities(2)) else None
-    updateQuotaConfig(Some(sanitizedUser), sanitizedClientId, config)
-    if (sanitizedClientId.isEmpty && sanitizedUser != ZooKeeperInternals.DEFAULT_STRING)
-      credentialProvider.updateCredentials(Sanitizer.desanitize(sanitizedUser), config)
-  }
-}
-
-class IpConfigHandler(private val connectionQuotas: ConnectionQuotas) extends ConfigHandler with Logging {
-
-  def processConfigChanges(ip: String, config: Properties): Unit = {
-    val ipConnectionRateQuota = Option(config.getProperty(QuotaConfig.IP_CONNECTION_RATE_OVERRIDE_CONFIG)).map(_.toInt)
-    val updatedIp = {
-      if (ip != ZooKeeperInternals.DEFAULT_STRING) {
-        try {
-          Some(InetAddress.getByName(ip))
-        } catch {
-          case _: UnknownHostException => throw new IllegalArgumentException(s"Unable to resolve address $ip")
-        }
-      } else
-        None
-    }
-    connectionQuotas.updateIpConnectionRateQuota(updatedIp, ipConnectionRateQuota)
-  }
-}
-
 /**
   * The BrokerConfigHandler will process individual broker config changes in ZK.
   * The callback provides the brokerId and the full properties set read from ZK.
@@ -244,7 +146,7 @@ class IpConfigHandler(private val connectionQuotas: ConnectionQuotas) extends Co
 class BrokerConfigHandler(private val brokerConfig: KafkaConfig,
                           private val quotaManagers: QuotaManagers) extends ConfigHandler with Logging {
   def processConfigChanges(brokerId: String, properties: Properties): Unit = {
-    if (brokerId == ZooKeeperInternals.DEFAULT_STRING)
+    if (brokerId.isEmpty)
       brokerConfig.dynamicConfig.updateDefaultConfig(properties)
     else if (brokerConfig.brokerId == brokerId.trim.toInt) {
       brokerConfig.dynamicConfig.updateBrokerConfig(brokerConfig.brokerId, properties)

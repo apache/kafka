@@ -159,6 +159,20 @@ public final class VoterSet {
     }
 
     /**
+     * Returns the number of voters in the voter set.
+     */
+    public int size() {
+        return voters.size();
+    }
+
+    /**
+     * Returns true if the voter set is empty, otherwise false
+     */
+    public boolean isEmpty() {
+        return voters.isEmpty();
+    }
+
+    /**
      * Returns all of the endpoints for a voter id.
      *
      * {@code Endpoints.empty()} is returned if the id is not a voter.

@@ -1577,7 +1577,9 @@ public abstract class AbstractCoordinator implements Closeable {
                     this.failed.set(new RuntimeException(e));
             } finally {
                 log.debug("Heartbeat thread has closed");
-                this.closed = true;
+                synchronized (AbstractCoordinator.this) {
+                    this.closed = true;
+                }
             }
         }
 

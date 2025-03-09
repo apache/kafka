@@ -20,7 +20,9 @@ import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.health.ConnectorType;
 import org.apache.kafka.connect.runtime.isolation.LoaderSwap;
+import org.apache.kafka.connect.runtime.isolation.PluginType;
 import org.apache.kafka.connect.runtime.isolation.PluginUtils;
+import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.storage.Converter;
@@ -49,25 +51,27 @@ public class TaskPluginsMetadata {
     private final Set<TransformationStage.AliasedPluginInfo> predicates;
 
     public TaskPluginsMetadata(
-            Connector connector,
+            Class<? extends Connector> connectorClass,
             Task task,
             Converter keyConverter,
             Converter valueConverter,
             HeaderConverter headerConverter,
             List<TransformationStage.StageInfo> transformationStageInfo,
-            Function<ClassLoader, LoaderSwap> pluginLoaderSwapper
+            Plugins plugins
     ) {
 
-        assert connector != null;
+        assert connectorClass != null;
         assert task != null;
         assert keyConverter != null;
         assert valueConverter != null;
         assert headerConverter != null;
         assert transformationStageInfo != null;
 
-        this.connectorClass = connector.getClass().getName();
-        this.connectorVersion = PluginUtils.getVersionOrUndefined(connector, pluginLoaderSwapper);
-        this.connectorType = getConnectorType(connector);
+        Function<ClassLoader, LoaderSwap> pluginLoaderSwapper = plugins.safeLoaderSwapper();
+
+        this.connectorClass = connectorClass.getName();
+        this.connectorVersion = plugins.pluginVersion(connectorClass.getName(), connectorClass.getClassLoader(), PluginType.SINK, PluginType.SOURCE);
+        this.connectorType = getConnectorType(connectorClass, pluginLoaderSwapper);
         this.taskClass = task.getClass().getName();
         this.taskVersion = task.version();
         this.keyConverterClass = keyConverter.getClass().getName();
@@ -81,13 +85,15 @@ public class TaskPluginsMetadata {
     }
 
 
-    public ConnectorType getConnectorType(Connector connector) {
-        if (connector instanceof SourceConnector) {
-            return ConnectorType.SOURCE;
-        } else if (connector instanceof SinkConnector) {
-            return ConnectorType.SINK;
-        } else {
-            return ConnectorType.UNKNOWN;
+    public ConnectorType getConnectorType(Class<? extends Connector> connectorClass, Function<ClassLoader, LoaderSwap> pluginLoaderSwapper) {
+        try (LoaderSwap ignored = pluginLoaderSwapper.apply(connectorClass.getClassLoader())) {
+            if (SinkConnector.class.isAssignableFrom(connectorClass)) {
+                return ConnectorType.SINK;
+            } else if (SourceConnector.class.isAssignableFrom(connectorClass)) {
+                return ConnectorType.SOURCE;
+            } else {
+                return ConnectorType.UNKNOWN;
+            }
         }
     }
 

@@ -114,7 +114,7 @@ public final class KafkaRaftClientSnapshotTest {
 
         RaftClientTestContext context = contextBuilder.build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
         // Advance the highWatermark
@@ -236,7 +236,7 @@ public final class KafkaRaftClientSnapshotTest {
             .deleteBeforeSnapshot(snapshotId)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
         // Stop the listener from reading commit batches
@@ -293,7 +293,7 @@ public final class KafkaRaftClientSnapshotTest {
             .deleteBeforeSnapshot(snapshotId)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
         // Send a fetch request for an end offset and epoch which has been snapshotted
@@ -321,7 +321,7 @@ public final class KafkaRaftClientSnapshotTest {
             .withKip853Rpc(withKip853Rpc)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
         List<String> appendRecords = Arrays.asList("a", "b", "c");
@@ -371,7 +371,7 @@ public final class KafkaRaftClientSnapshotTest {
             .withKip853Rpc(withKip853Rpc)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
         List<String> appendRecords = Arrays.asList("a", "b", "c");
@@ -423,7 +423,7 @@ public final class KafkaRaftClientSnapshotTest {
             .withKip853Rpc(withKip853Rpc)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
         assertEquals(oldestSnapshotId.epoch() + 1, epoch);
 
@@ -465,7 +465,7 @@ public final class KafkaRaftClientSnapshotTest {
             .withKip853Rpc(withKip853Rpc)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
         assertEquals(oldestSnapshotId.epoch() + 2 + 1, epoch);
 
@@ -516,7 +516,7 @@ public final class KafkaRaftClientSnapshotTest {
             .withKip853Rpc(withKip853Rpc)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
         assertEquals(oldestSnapshotId.epoch() + 2 + 1, epoch);
 
@@ -562,7 +562,7 @@ public final class KafkaRaftClientSnapshotTest {
             .withKip853Rpc(withKip853Rpc)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
         assertEquals(oldestSnapshotId.epoch() + 2 + 1, epoch);
 
@@ -616,7 +616,7 @@ public final class KafkaRaftClientSnapshotTest {
             .withKip853Rpc(withKip853Rpc)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
         assertEquals(oldestSnapshotId.epoch() + 2 + 1, epoch);
 
@@ -660,7 +660,7 @@ public final class KafkaRaftClientSnapshotTest {
             .withKip853Rpc(withKip853Rpc)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
         context.deliverRequest(
@@ -693,7 +693,7 @@ public final class KafkaRaftClientSnapshotTest {
             .withUnknownLeader(3)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
         context.deliverRequest(
@@ -724,7 +724,7 @@ public final class KafkaRaftClientSnapshotTest {
             .withKip853Rpc(withKip853Rpc)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
         context.deliverRequest(
@@ -756,7 +756,7 @@ public final class KafkaRaftClientSnapshotTest {
             .withKip853Rpc(withKip853Rpc)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
         context.advanceLocalLeaderHighWatermarkToLogEndOffset();
@@ -813,7 +813,7 @@ public final class KafkaRaftClientSnapshotTest {
                 .build();
 
         int resignLeadershipTimeout = context.checkQuorumTimeoutMs;
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
         FetchSnapshotRequestData voter1FetchSnapshotRequest = fetchSnapshotRequest(
@@ -902,7 +902,7 @@ public final class KafkaRaftClientSnapshotTest {
             .withKip853Rpc(withKip853Rpc)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
         context.advanceLocalLeaderHighWatermarkToLogEndOffset();
@@ -1015,7 +1015,7 @@ public final class KafkaRaftClientSnapshotTest {
             .withKip853Rpc(withKip853Rpc)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
         context.advanceLocalLeaderHighWatermarkToLogEndOffset();
@@ -1074,7 +1074,7 @@ public final class KafkaRaftClientSnapshotTest {
             .withKip853Rpc(withKip853Rpc)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
         context.deliverRequest(
@@ -1107,7 +1107,7 @@ public final class KafkaRaftClientSnapshotTest {
             .withKip853Rpc(withKip853Rpc)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
         context.deliverRequest(
@@ -1182,13 +1182,13 @@ public final class KafkaRaftClientSnapshotTest {
         fetchRequest = context.assertSentFetchRequest();
         context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
 
-        // Fetch timer is not reset; sleeping for remainder should transition to candidate
+        // Fetch timer is not reset; sleeping for remainder should transition to prospective
         context.time.sleep(context.fetchTimeoutMs - slept);
 
         context.pollUntilRequest();
 
-        context.assertSentVoteRequest(epoch + 1, 0, 0L, 1);
-        context.assertVotedCandidate(epoch + 1, localId);
+        context.assertSentPreVoteRequest(epoch, 0, 0L, 1);
+        assertTrue(context.client.quorum().isProspective());
     }
 
     @ParameterizedTest
@@ -1777,13 +1777,13 @@ public final class KafkaRaftClientSnapshotTest {
         assertEquals(snapshotId.epoch(), request.snapshotId().epoch());
         assertEquals(0, request.position());
 
-        // Sleeping for fetch timeout should transition to candidate
+        // Sleeping for fetch timeout should transition to prospective
         context.time.sleep(context.fetchTimeoutMs);
 
         context.pollUntilRequest();
 
-        context.assertSentVoteRequest(epoch + 1, 0, 0L, 1);
-        context.assertVotedCandidate(epoch + 1, localId);
+        context.assertSentPreVoteRequest(epoch, 0, 0L, 1);
+        assertTrue(context.client.quorum().isProspective());
 
         // Send the response late
         context.deliverResponse(
@@ -1809,9 +1809,9 @@ public final class KafkaRaftClientSnapshotTest {
             )
         );
 
-        // Assert that the response is ignored and the replicas stays as a candidate
+        // Assert that the response is ignored and the replicas stays as a prospective
         context.client.poll();
-        context.assertVotedCandidate(epoch + 1, localId);
+        assertTrue(context.client.quorum().isProspective());
     }
 
     @ParameterizedTest
@@ -1828,7 +1828,7 @@ public final class KafkaRaftClientSnapshotTest {
             .withKip853Rpc(withKip853Rpc)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int epoch = context.currentEpoch();
 
         // valid cluster id is accepted
@@ -1909,7 +1909,7 @@ public final class KafkaRaftClientSnapshotTest {
             .withKip853Rpc(withKip853Rpc)
             .build();
 
-        context.becomeLeader();
+        context.unattachedToLeader();
         int currentEpoch = context.currentEpoch();
 
         // When leader creating snapshot:

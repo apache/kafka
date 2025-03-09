@@ -54,7 +54,7 @@ class ControllerResult<T> {
         if (o == null || (!o.getClass().equals(getClass()))) {
             return false;
         }
-        ControllerResult other = (ControllerResult) o;
+        ControllerResult<?> other = (ControllerResult<?>) o;
         return records.equals(other.records) &&
             Objects.equals(response, other.response) &&
             Objects.equals(isAtomic, other.isAtomic);

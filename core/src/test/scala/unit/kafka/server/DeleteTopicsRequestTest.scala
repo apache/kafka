@@ -39,7 +39,7 @@ class DeleteTopicsRequestTest extends BaseRequestTest with Logging {
   @ParameterizedTest
   @ValueSource(strings = Array("kraft"))
   def testTopicDeletionClusterHasOfflinePartitions(quorum: String): Unit = {
-    // Create a two topics with one partition/replica. Make one of them offline.
+    // Create two topics with one partition/replica. Make one of them offline.
     val offlineTopic = "topic-1"
     val onlineTopic = "topic-2"
     createTopicWithAssignment(offlineTopic, Map[Int, Seq[Int]](0 -> Seq(0)))
@@ -49,8 +49,8 @@ class DeleteTopicsRequestTest extends BaseRequestTest with Logging {
 
     // Ensure one topic partition is offline.
     TestUtils.waitUntilTrue(() => {
-      aliveBrokers.head.metadataCache.getPartitionInfo(onlineTopic, 0).exists(_.leader() == 1) &&
-        aliveBrokers.head.metadataCache.getPartitionInfo(offlineTopic, 0).exists(_.leader() ==
+      aliveBrokers.head.metadataCache.getLeaderAndIsr(onlineTopic, 0).exists(_.leader() == 1) &&
+        aliveBrokers.head.metadataCache.getLeaderAndIsr(offlineTopic, 0).exists(_.leader() ==
           MetadataResponse.NO_LEADER_ID)
     }, "Topic partition is not offline")
 

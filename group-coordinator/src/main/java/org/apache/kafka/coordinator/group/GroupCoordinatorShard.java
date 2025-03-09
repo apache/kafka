@@ -44,6 +44,7 @@ import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
+import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.TransactionResult;
@@ -90,6 +91,20 @@ import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMe
 import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMemberValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMetadataValue;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupCurrentMemberAssignmentKey;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupCurrentMemberAssignmentValue;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataKey;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataValue;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupMetadataKey;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupMetadataValue;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupPartitionMetadataKey;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupPartitionMetadataValue;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMemberKey;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMemberValue;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMetadataKey;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMetadataValue;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyKey;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.image.MetadataDelta;
@@ -257,11 +272,11 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     static final String GROUP_EXPIRATION_KEY = "expire-group-metadata";
 
     /**
-     * The classic group size counter key to schedule a timer task.
+     * The classic, consumer and streams group size counter key to schedule a timer task.
      *
      * Visible for testing.
      */
-    static final String CLASSIC_GROUP_SIZE_COUNTER_KEY = "classic-group-size-counter";
+    static final String GROUP_SIZE_COUNTER_KEY = "group-size-counter";
 
     /**
      * Hardcoded default value of the interval to update the classic group size counter.
@@ -698,27 +713,27 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     /**
-     * Schedules (or reschedules) the group size counter for the classic groups.
+     * Schedules (or reschedules) the group size counter for the classic/consumer groups.
      */
-    private void scheduleClassicGroupSizeCounter() {
+    private void scheduleGroupSizeCounter() {
         timer.schedule(
-            CLASSIC_GROUP_SIZE_COUNTER_KEY,
+            GROUP_SIZE_COUNTER_KEY,
             DEFAULT_GROUP_GAUGES_UPDATE_INTERVAL_MS,
             TimeUnit.MILLISECONDS,
             true,
             () -> {
-                groupMetadataManager.updateClassicGroupSizeCounter();
-                scheduleClassicGroupSizeCounter();
+                groupMetadataManager.updateGroupSizeCounter();
+                scheduleGroupSizeCounter();
                 return GroupMetadataManager.EMPTY_RESULT;
             }
         );
     }
 
     /**
-     * Cancels the group size counter for the classic groups.
+     * Cancels the group size counter for the classic/consumer groups.
      */
-    private void cancelClassicGroupSizeCounter() {
-        timer.cancel(CLASSIC_GROUP_SIZE_COUNTER_KEY);
+    private void cancelGroupSizeCounter() {
+        timer.cancel(GROUP_SIZE_COUNTER_KEY);
     }
 
     /**
@@ -731,12 +746,11 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     public void onLoaded(MetadataImage newImage) {
         MetadataDelta emptyDelta = new MetadataDelta(newImage);
         groupMetadataManager.onNewMetadataImage(newImage, emptyDelta);
-        offsetMetadataManager.onNewMetadataImage(newImage, emptyDelta);
         coordinatorMetrics.activateMetricsShard(metricsShard);
 
         groupMetadataManager.onLoaded();
         scheduleGroupMetadataExpiration();
-        scheduleClassicGroupSizeCounter();
+        scheduleGroupSizeCounter();
     }
 
     @Override
@@ -744,7 +758,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         timer.cancel(GROUP_EXPIRATION_KEY);
         coordinatorMetrics.deactivateMetricsShard(metricsShard);
         groupMetadataManager.onUnloaded();
-        cancelClassicGroupSizeCounter();
+        cancelGroupSizeCounter();
     }
 
     /**
@@ -756,7 +770,6 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     @Override
     public void onNewMetadataImage(MetadataImage newImage, MetadataDelta delta) {
         groupMetadataManager.onNewMetadataImage(newImage, delta);
-        offsetMetadataManager.onNewMetadataImage(newImage, delta);
     }
 
     private static OffsetCommitKey convertLegacyOffsetCommitKey(
@@ -796,14 +809,14 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         short producerEpoch,
         CoordinatorRecord record
     ) throws RuntimeException {
-        ApiMessageAndVersion key = record.key();
+        ApiMessage key = record.key();
         ApiMessageAndVersion value = record.value();
 
         CoordinatorRecordType recordType;
         try {
-            recordType = CoordinatorRecordType.fromId(key.version());
+            recordType = CoordinatorRecordType.fromId(key.apiKey());
         } catch (UnsupportedVersionException ex) {
-            throw new IllegalStateException("Received an unknown record type " + key.version()
+            throw new IllegalStateException("Received an unknown record type " + key.apiKey()
                 + " in " + record, ex);
         }
 
@@ -812,7 +825,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 offsetMetadataManager.replay(
                     offset,
                     producerId,
-                    convertLegacyOffsetCommitKey((LegacyOffsetCommitKey) key.message()),
+                    convertLegacyOffsetCommitKey((LegacyOffsetCommitKey) key),
                     convertLegacyOffsetCommitValue((LegacyOffsetCommitValue) Utils.messageOrNull(value))
                 );
                 break;
@@ -821,111 +834,160 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 offsetMetadataManager.replay(
                     offset,
                     producerId,
-                    (OffsetCommitKey) key.message(),
+                    (OffsetCommitKey) key,
                     (OffsetCommitValue) Utils.messageOrNull(value)
                 );
                 break;
 
             case GROUP_METADATA:
                 groupMetadataManager.replay(
-                    (GroupMetadataKey) key.message(),
+                    (GroupMetadataKey) key,
                     (GroupMetadataValue) Utils.messageOrNull(value)
                 );
                 break;
 
             case CONSUMER_GROUP_METADATA:
                 groupMetadataManager.replay(
-                    (ConsumerGroupMetadataKey) key.message(),
+                    (ConsumerGroupMetadataKey) key,
                     (ConsumerGroupMetadataValue) Utils.messageOrNull(value)
                 );
                 break;
 
             case CONSUMER_GROUP_PARTITION_METADATA:
                 groupMetadataManager.replay(
-                    (ConsumerGroupPartitionMetadataKey) key.message(),
+                    (ConsumerGroupPartitionMetadataKey) key,
                     (ConsumerGroupPartitionMetadataValue) Utils.messageOrNull(value)
                 );
                 break;
 
             case CONSUMER_GROUP_MEMBER_METADATA:
                 groupMetadataManager.replay(
-                    (ConsumerGroupMemberMetadataKey) key.message(),
+                    (ConsumerGroupMemberMetadataKey) key,
                     (ConsumerGroupMemberMetadataValue) Utils.messageOrNull(value)
                 );
                 break;
 
             case CONSUMER_GROUP_TARGET_ASSIGNMENT_METADATA:
                 groupMetadataManager.replay(
-                    (ConsumerGroupTargetAssignmentMetadataKey) key.message(),
+                    (ConsumerGroupTargetAssignmentMetadataKey) key,
                     (ConsumerGroupTargetAssignmentMetadataValue) Utils.messageOrNull(value)
                 );
                 break;
 
             case CONSUMER_GROUP_TARGET_ASSIGNMENT_MEMBER:
                 groupMetadataManager.replay(
-                    (ConsumerGroupTargetAssignmentMemberKey) key.message(),
+                    (ConsumerGroupTargetAssignmentMemberKey) key,
                     (ConsumerGroupTargetAssignmentMemberValue) Utils.messageOrNull(value)
                 );
                 break;
 
             case CONSUMER_GROUP_CURRENT_MEMBER_ASSIGNMENT:
                 groupMetadataManager.replay(
-                    (ConsumerGroupCurrentMemberAssignmentKey) key.message(),
+                    (ConsumerGroupCurrentMemberAssignmentKey) key,
                     (ConsumerGroupCurrentMemberAssignmentValue) Utils.messageOrNull(value)
                 );
                 break;
 
             case SHARE_GROUP_PARTITION_METADATA:
                 groupMetadataManager.replay(
-                    (ShareGroupPartitionMetadataKey) key.message(),
+                    (ShareGroupPartitionMetadataKey) key,
                     (ShareGroupPartitionMetadataValue) Utils.messageOrNull(value)
                 );
                 break;
 
             case SHARE_GROUP_MEMBER_METADATA:
                 groupMetadataManager.replay(
-                    (ShareGroupMemberMetadataKey) key.message(),
+                    (ShareGroupMemberMetadataKey) key,
                     (ShareGroupMemberMetadataValue) Utils.messageOrNull(value)
                 );
                 break;
 
             case SHARE_GROUP_METADATA:
                 groupMetadataManager.replay(
-                    (ShareGroupMetadataKey) key.message(),
+                    (ShareGroupMetadataKey) key,
                     (ShareGroupMetadataValue) Utils.messageOrNull(value)
                 );
                 break;
 
             case SHARE_GROUP_TARGET_ASSIGNMENT_METADATA:
                 groupMetadataManager.replay(
-                    (ShareGroupTargetAssignmentMetadataKey) key.message(),
+                    (ShareGroupTargetAssignmentMetadataKey) key,
                     (ShareGroupTargetAssignmentMetadataValue) Utils.messageOrNull(value)
                 );
                 break;
 
             case SHARE_GROUP_TARGET_ASSIGNMENT_MEMBER:
                 groupMetadataManager.replay(
-                    (ShareGroupTargetAssignmentMemberKey) key.message(),
+                    (ShareGroupTargetAssignmentMemberKey) key,
                     (ShareGroupTargetAssignmentMemberValue) Utils.messageOrNull(value)
                 );
                 break;
 
             case SHARE_GROUP_CURRENT_MEMBER_ASSIGNMENT:
                 groupMetadataManager.replay(
-                    (ShareGroupCurrentMemberAssignmentKey) key.message(),
+                    (ShareGroupCurrentMemberAssignmentKey) key,
                     (ShareGroupCurrentMemberAssignmentValue) Utils.messageOrNull(value)
                 );
                 break;
 
             case CONSUMER_GROUP_REGULAR_EXPRESSION:
                 groupMetadataManager.replay(
-                    (ConsumerGroupRegularExpressionKey) key.message(),
+                    (ConsumerGroupRegularExpressionKey) key,
                     (ConsumerGroupRegularExpressionValue) Utils.messageOrNull(value)
                 );
                 break;
 
+            case STREAMS_GROUP_METADATA:
+                groupMetadataManager.replay(
+                    (StreamsGroupMetadataKey) key,
+                    (StreamsGroupMetadataValue) Utils.messageOrNull(value)
+                );
+                break;
+
+            case STREAMS_GROUP_PARTITION_METADATA:
+                groupMetadataManager.replay(
+                    (StreamsGroupPartitionMetadataKey) key,
+                    (StreamsGroupPartitionMetadataValue) Utils.messageOrNull(value)
+                );
+                break;
+
+            case STREAMS_GROUP_MEMBER_METADATA:
+                groupMetadataManager.replay(
+                    (StreamsGroupMemberMetadataKey) key,
+                    (StreamsGroupMemberMetadataValue) Utils.messageOrNull(value)
+                );
+                break;
+
+            case STREAMS_GROUP_TARGET_ASSIGNMENT_METADATA:
+                groupMetadataManager.replay(
+                    (StreamsGroupTargetAssignmentMetadataKey) key,
+                    (StreamsGroupTargetAssignmentMetadataValue) Utils.messageOrNull(value)
+                );
+                break;
+
+            case STREAMS_GROUP_TARGET_ASSIGNMENT_MEMBER:
+                groupMetadataManager.replay(
+                    (StreamsGroupTargetAssignmentMemberKey) key,
+                    (StreamsGroupTargetAssignmentMemberValue) Utils.messageOrNull(value)
+                );
+                break;
+
+            case STREAMS_GROUP_CURRENT_MEMBER_ASSIGNMENT:
+                groupMetadataManager.replay(
+                    (StreamsGroupCurrentMemberAssignmentKey) key,
+                    (StreamsGroupCurrentMemberAssignmentValue) Utils.messageOrNull(value)
+                );
+                break;
+
+            case STREAMS_GROUP_TOPOLOGY:
+                groupMetadataManager.replay(
+                    (StreamsGroupTopologyKey) key,
+                    (StreamsGroupTopologyValue) Utils.messageOrNull(value)
+                );
+                break;
+
             default:
-                throw new IllegalStateException("Received an unknown record type " + key.version()
+                throw new IllegalStateException("Received an unknown record type " + recordType
                     + " in " + record);
         }
     }

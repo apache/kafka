@@ -170,6 +170,7 @@ public class ShareFetchBufferTest {
         return new ShareCompletedFetch(
                 logContext,
                 BufferSupplier.create(),
+                0,
                 tp,
                 partitionData,
                 shareFetchMetricsAggregator,

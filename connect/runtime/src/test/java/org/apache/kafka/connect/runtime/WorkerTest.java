@@ -61,9 +61,9 @@ import org.apache.kafka.connect.runtime.MockConnectMetrics.MockMetricsReporter;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.runtime.isolation.LoaderSwap;
 import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
-import org.apache.kafka.connect.runtime.isolation.PluginUtils;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.isolation.Plugins.ClassLoaderUsage;
+import org.apache.kafka.connect.runtime.isolation.TestPlugins;
 import org.apache.kafka.connect.runtime.rest.RestServer;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
@@ -1792,8 +1792,7 @@ public class WorkerTest {
 
         List<MetricsReporter> list = worker.metrics().metrics().reporters();
         for (MetricsReporter reporter : list) {
-            if (reporter instanceof MockMetricsReporter) {
-                MockMetricsReporter mockMetricsReporter = (MockMetricsReporter) reporter;
+            if (reporter instanceof MockMetricsReporter mockMetricsReporter) {
                 //verify connect cluster is set in MetricsContext
                 assertEquals(CLUSTER_ID, mockMetricsReporter.getMetricsContext().contextLabels().get(WorkerConfig.CONNECT_KAFKA_CLUSTER_ID));
             }
@@ -1876,7 +1875,7 @@ public class WorkerTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "rawtypes"})
     public void testZombieFencing(boolean enableTopicCreation) {
         setup(enableTopicCreation);
         Admin admin = mock(Admin.class);
@@ -1894,7 +1893,7 @@ public class WorkerTest {
 
         mockKafkaClusterId();
         mockGenericIsolation();
-        when(plugins.newConnector(anyString(), any())).thenReturn(sourceConnector);
+        when(plugins.connectorClass(anyString(), any())).thenReturn((Class) sourceConnector.getClass());
         when(plugins.pluginLoader(SampleSourceConnector.class.getName(), null)).thenReturn(pluginLoader);
 
         worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, executorService,
@@ -3068,12 +3067,13 @@ public class WorkerTest {
         when(task.version()).thenReturn("1.0");
     }
 
+    @SuppressWarnings({"unchecked", "rawtypes"})
     private void mockVersionedTaskIsolation(Class<? extends Connector> connectorClass, Class<? extends Task> taskClass, VersionRange range, Connector connector, Task task) {
         mockGenericIsolation();
         when(plugins.pluginLoader(connectorClass.getName(), range)).thenReturn(pluginLoader);
-        when(plugins.newConnector(connectorClass.getName(), range)).thenReturn(connector);
+        when(plugins.connectorClass(connectorClass.getName(), range)).thenReturn((Class) connectorClass);
         when(plugins.newTask(taskClass)).thenReturn(task);
-        when(plugins.safeLoaderSwapper()).thenReturn(PluginUtils.noOpLoaderSwap());
+        when(plugins.safeLoaderSwapper()).thenReturn(TestPlugins.noOpLoaderSwap());
         when(task.version()).thenReturn(range == null ? "unknown" : range.toString());
     }
 
@@ -3087,7 +3087,7 @@ public class WorkerTest {
     private void verifyVersionedTaskIsolation(Class<? extends Connector> connectorClass, Class<? extends Task> taskClass, VersionRange range, Task task) {
         verifyGenericIsolation();
         verify(plugins).pluginLoader(connectorClass.getName(), range);
-        verify(plugins).newConnector(connectorClass.getName(), range);
+        verify(plugins).connectorClass(connectorClass.getName(), range);
         verify(plugins).newTask(taskClass);
         verify(task, times(2)).version();
     }

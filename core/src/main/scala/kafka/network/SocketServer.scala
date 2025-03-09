@@ -33,7 +33,7 @@ import kafka.server.{ApiVersionManager, BrokerReconfigurable, KafkaConfig}
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import kafka.utils._
 import org.apache.kafka.common.config.ConfigException
-import org.apache.kafka.common.errors.InvalidRequestException
+import org.apache.kafka.common.errors.{InvalidRequestException, UnsupportedVersionException}
 import org.apache.kafka.common.memory.{MemoryPool, SimpleMemoryPool}
 import org.apache.kafka.common.metrics._
 import org.apache.kafka.common.metrics.stats.{Avg, CumulativeSum, Meter, Rate}
@@ -69,13 +69,6 @@ import scala.util.control.ControlThrowable
  *      It is possible to configure multiple data-planes by specifying multiple "," separated endpoints for "listeners" in KafkaConfig.
  *      Acceptor has N Processor threads that each have their own selector and read requests from sockets
  *      M Handler threads that handle requests and produce responses back to the processor threads for writing.
- *  - control-plane :
- *    - Handles requests from controller. This is optional and can be configured by specifying "control.plane.listener.name".
- *      If not configured, the controller requests are handled by the data-plane.
- *    - The threading model is
- *      1 Acceptor thread that handles new connections
- *      Acceptor has 1 Processor thread that has its own selector and read requests from the socket.
- *      1 Handler thread that handles requests and produces responses back to the processor thread for writing.
  */
 class SocketServer(
   val config: KafkaConfig,
@@ -105,10 +98,6 @@ class SocketServer(
   // data-plane
   private[network] val dataPlaneAcceptors = new ConcurrentHashMap[EndPoint, DataPlaneAcceptor]()
   val dataPlaneRequestChannel = new RequestChannel(maxQueuedRequests, DataPlaneAcceptor.MetricPrefix, time, apiVersionManager.newRequestMetrics)
-  // control-plane
-  private[network] var controlPlaneAcceptorOpt: Option[ControlPlaneAcceptor] = None
-  val controlPlaneRequestChannelOpt: Option[RequestChannel] = config.controlPlaneListenerName.map(_ =>
-    new RequestChannel(20, ControlPlaneAcceptor.MetricPrefix, time, apiVersionManager.newRequestMetrics))
 
   private[this] val nextProcessorId: AtomicInteger = new AtomicInteger(0)
   val connectionQuotas = new ConnectionQuotas(config, time, metrics)
@@ -137,17 +126,7 @@ class SocketServer(
       }.sum / dataPlaneProcessors.size
     }
   })
-  if (config.requiresZookeeper) {
-    metricsGroup.newGauge(s"${ControlPlaneAcceptor.MetricPrefix}NetworkProcessorAvgIdlePercent", () => SocketServer.this.synchronized {
-      val controlPlaneProcessorOpt = controlPlaneAcceptorOpt.map(a => a.processors(0))
-      val ioWaitRatioMetricName = controlPlaneProcessorOpt.map { p =>
-        metrics.metricName("io-wait-ratio", MetricsGroup, p.metricTags)
-      }
-      ioWaitRatioMetricName.map { metricName =>
-        Option(metrics.metric(metricName)).fold(0.0)(m => Math.min(m.metricValue.asInstanceOf[Double], 1.0))
-      }.getOrElse(Double.NaN)
-    })
-  }
+
   metricsGroup.newGauge("MemoryPoolAvailable", () => memoryPool.availableMemory)
   metricsGroup.newGauge("MemoryPoolUsed", () => memoryPool.size() - memoryPool.availableMemory)
   metricsGroup.newGauge(s"${DataPlaneAcceptor.MetricPrefix}ExpiredConnectionsKilledCount", () => SocketServer.this.synchronized {
@@ -159,17 +138,6 @@ class SocketServer(
       Option(metrics.metric(metricName)).fold(0.0)(m => m.metricValue.asInstanceOf[Double])
     }.sum
   })
-  if (config.requiresZookeeper) {
-    metricsGroup.newGauge(s"${ControlPlaneAcceptor.MetricPrefix}ExpiredConnectionsKilledCount", () => SocketServer.this.synchronized {
-      val controlPlaneProcessorOpt = controlPlaneAcceptorOpt.map(a => a.processors(0))
-      val expiredConnectionsKilledCountMetricNames = controlPlaneProcessorOpt.map { p =>
-        metrics.metricName("expired-connections-killed-count", MetricsGroup, p.metricTags)
-      }
-      expiredConnectionsKilledCountMetricNames.map { metricName =>
-        Option(metrics.metric(metricName)).fold(0.0)(m => m.metricValue.asInstanceOf[Double])
-      }.getOrElse(0.0)
-    })
-  }
 
   // Create acceptors and processors for the statically configured endpoints when the
   // SocketServer is constructed. Note that this just opens the ports and creates the data
@@ -178,7 +146,6 @@ class SocketServer(
   if (apiVersionManager.listenerType.equals(ListenerType.CONTROLLER)) {
     config.controllerListeners.foreach(createDataPlaneAcceptorAndProcessors)
   } else {
-    config.controlPlaneListener.foreach(createControlPlaneAcceptorAndProcessor)
     config.dataPlaneListeners.foreach(createDataPlaneAcceptorAndProcessors)
   }
 
@@ -232,16 +199,14 @@ class SocketServer(
     }
 
     info("Enabling request processing.")
-    controlPlaneAcceptorOpt.foreach(chainAcceptorFuture)
     dataPlaneAcceptors.values().forEach(chainAcceptorFuture)
     FutureUtils.chainFuture(CompletableFuture.allOf(authorizerFutures.values.toArray: _*),
         allAuthorizerFuturesComplete)
 
     // Construct a future that will be completed when all Acceptors have been successfully started.
     // Alternately, if any of them fail to start, this future will be completed exceptionally.
-    val allAcceptors = dataPlaneAcceptors.values().asScala.toSeq ++ controlPlaneAcceptorOpt
     val enableFuture = new CompletableFuture[Void]
-    FutureUtils.chainFuture(CompletableFuture.allOf(allAcceptors.map(_.startedFuture).toArray: _*), enableFuture)
+    FutureUtils.chainFuture(CompletableFuture.allOf(dataPlaneAcceptors.values().asScala.toArray.map(_.startedFuture): _*), enableFuture)
     enableFuture
   }
 
@@ -251,8 +216,7 @@ class SocketServer(
     }
     val parsedConfigs = config.valuesFromThisConfigWithPrefixOverride(endpoint.listenerName.configPrefix)
     connectionQuotas.addListener(config, endpoint.listenerName)
-    val isPrivilegedListener = controlPlaneRequestChannelOpt.isEmpty &&
-      config.interBrokerListenerName == endpoint.listenerName
+    val isPrivilegedListener = config.interBrokerListenerName == endpoint.listenerName
     val dataPlaneAcceptor = createDataPlaneAcceptor(endpoint, isPrivilegedListener, dataPlaneRequestChannel)
     config.addReconfigurable(dataPlaneAcceptor)
     dataPlaneAcceptor.configure(parsedConfigs)
@@ -260,25 +224,10 @@ class SocketServer(
     info(s"Created data-plane acceptor and processors for endpoint : ${endpoint.listenerName}")
   }
 
-  private def createControlPlaneAcceptorAndProcessor(endpoint: EndPoint): Unit = synchronized {
-    if (stopped) {
-      throw new RuntimeException("Can't create new control plane acceptor and processor: SocketServer is stopped.")
-    }
-    connectionQuotas.addListener(config, endpoint.listenerName)
-    val controlPlaneAcceptor = createControlPlaneAcceptor(endpoint, controlPlaneRequestChannelOpt.get)
-    controlPlaneAcceptor.addProcessors(1)
-    controlPlaneAcceptorOpt = Some(controlPlaneAcceptor)
-    info(s"Created control-plane acceptor and processor for endpoint : ${endpoint.listenerName}")
-  }
-
   private def endpoints = config.listeners.map(l => l.listenerName -> l).toMap
 
   protected def createDataPlaneAcceptor(endPoint: EndPoint, isPrivilegedListener: Boolean, requestChannel: RequestChannel): DataPlaneAcceptor = {
     new DataPlaneAcceptor(this, endPoint, config, nodeId, connectionQuotas, time, isPrivilegedListener, requestChannel, metrics, credentialProvider, logContext, memoryPool, apiVersionManager)
-  }
-
-  private def createControlPlaneAcceptor(endPoint: EndPoint, requestChannel: RequestChannel): ControlPlaneAcceptor = {
-    new ControlPlaneAcceptor(this, endPoint, config, nodeId, connectionQuotas, time, requestChannel, metrics, credentialProvider, logContext, memoryPool, apiVersionManager)
   }
 
   /**
@@ -289,11 +238,8 @@ class SocketServer(
       stopped = true
       info("Stopping socket server request processors")
       dataPlaneAcceptors.asScala.values.foreach(_.beginShutdown())
-      controlPlaneAcceptorOpt.foreach(_.beginShutdown())
       dataPlaneAcceptors.asScala.values.foreach(_.close())
-      controlPlaneAcceptorOpt.foreach(_.close())
       dataPlaneRequestChannel.clear()
-      controlPlaneRequestChannelOpt.foreach(_.clear())
       info("Stopped socket server request processors")
     }
   }
@@ -309,7 +255,6 @@ class SocketServer(
     this.synchronized {
       stopProcessingRequests()
       dataPlaneRequestChannel.shutdown()
-      controlPlaneRequestChannelOpt.foreach(_.shutdown())
       connectionQuotas.close()
     }
     info("Shutdown completed")
@@ -321,7 +266,7 @@ class SocketServer(
       if (acceptor != null) {
         acceptor.localPort
       } else {
-        controlPlaneAcceptorOpt.map(_.localPort).getOrElse(throw new KafkaException("Could not find listenerName : " + listenerName + " in data-plane or control-plane"))
+        throw new KafkaException("Could not find listenerName : " + listenerName + " in data-plane.")
       }
     } catch {
       case e: Exception =>
@@ -526,42 +471,6 @@ class DataPlaneAcceptor(socketServer: SocketServer,
   override def configure(configs: util.Map[String, _]): Unit = {
     addProcessors(configs.get(SocketServerConfigs.NUM_NETWORK_THREADS_CONFIG).asInstanceOf[Int])
   }
-}
-
-object ControlPlaneAcceptor {
-  val ThreadPrefix = "control-plane"
-  val MetricPrefix = "ControlPlane"
-}
-
-class ControlPlaneAcceptor(socketServer: SocketServer,
-                           endPoint: EndPoint,
-                           config: KafkaConfig,
-                           nodeId: Int,
-                           connectionQuotas: ConnectionQuotas,
-                           time: Time,
-                           requestChannel: RequestChannel,
-                           metrics: Metrics,
-                           credentialProvider: CredentialProvider,
-                           logContext: LogContext,
-                           memoryPool: MemoryPool,
-                           apiVersionManager: ApiVersionManager)
-  extends Acceptor(socketServer,
-                   endPoint,
-                   config,
-                   nodeId,
-                   connectionQuotas,
-                   time,
-                   true,
-                   requestChannel,
-                   metrics,
-                   credentialProvider,
-                   logContext,
-                   memoryPool,
-                   apiVersionManager) {
-
-  override def metricPrefix(): String = ControlPlaneAcceptor.MetricPrefix
-  override def threadPrefix(): String = ControlPlaneAcceptor.ThreadPrefix
-
 }
 
 /**
@@ -888,6 +797,17 @@ private[kafka] object Processor {
   val NetworkProcessorMetricTag = "networkProcessor"
   val ListenerMetricTag = "listener"
   val ConnectionQueueSize = 20
+
+  private[network] def parseRequestHeader(apiVersionManager: ApiVersionManager, buffer: ByteBuffer): RequestHeader = {
+    val header = RequestHeader.parse(buffer)
+    if (apiVersionManager.isApiEnabled(header.apiKey, header.apiVersion)) {
+      header
+    } else if (header.isApiVersionSupported()) {
+      throw new InvalidRequestException(s"Received request for disabled api with key ${header.apiKey.id} (${header.apiKey().name}) and version ${header.apiVersion}")
+    } else {
+      throw new UnsupportedVersionException(s"Received request for api with key ${header.apiKey.id} (${header.apiKey().name}) and unsupported version ${header.apiVersion}")
+    }
+  }
 }
 
 /**
@@ -1103,21 +1023,12 @@ private[kafka] class Processor(
     }
   }
 
-  private def parseRequestHeader(buffer: ByteBuffer): RequestHeader = {
-    val header = RequestHeader.parse(buffer)
-    if (apiVersionManager.isApiEnabled(header.apiKey, header.apiVersion)) {
-      header
-    } else {
-      throw new InvalidRequestException(s"Received request api key ${header.apiKey} with version ${header.apiVersion} which is not enabled")
-    }
-  }
-
   private def processCompletedReceives(): Unit = {
     selector.completedReceives.forEach { receive =>
       try {
         openOrClosingChannel(receive.source) match {
           case Some(channel) =>
-            val header = parseRequestHeader(receive.payload)
+            val header = parseRequestHeader(apiVersionManager, receive.payload)
             if (header.apiKey == ApiKeys.SASL_HANDSHAKE && channel.maybeBeginServerReauthentication(receive,
               () => time.nanoseconds()))
               trace(s"Begin re-authentication: $channel")

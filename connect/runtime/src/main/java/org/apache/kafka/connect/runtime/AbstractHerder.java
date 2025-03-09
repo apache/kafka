@@ -26,6 +26,7 @@ import org.apache.kafka.common.config.ConfigDef.ConfigKey;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigTransformer;
 import org.apache.kafka.common.config.ConfigValue;
+import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.Connector;
@@ -65,7 +66,6 @@ import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.Stage;
 import org.apache.kafka.connect.util.TemporaryStage;
 
-import org.apache.logging.log4j.Level;
 import org.apache.maven.artifact.versioning.InvalidVersionSpecificationException;
 import org.apache.maven.artifact.versioning.VersionRange;
 import org.slf4j.Logger;
@@ -141,7 +141,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     protected final StatusBackingStore statusBackingStore;
     protected final ConfigBackingStore configBackingStore;
     private volatile boolean ready = false;
-    private final ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy;
+    private final Plugin<ConnectorClientConfigOverridePolicy> connectorClientConfigOverridePolicyPlugin;
     private final ExecutorService connectorExecutor;
     private final Time time;
     protected final Loggers loggers;
@@ -161,10 +161,13 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         this.kafkaClusterId = kafkaClusterId;
         this.statusBackingStore = statusBackingStore;
         this.configBackingStore = configBackingStore;
-        this.connectorClientConfigOverridePolicy = connectorClientConfigOverridePolicy;
+        this.connectorClientConfigOverridePolicyPlugin = Plugin.wrapInstance(
+                connectorClientConfigOverridePolicy,
+                worker.metrics().metrics(),
+                WorkerConfig.CONNECTOR_CLIENT_POLICY_CLASS_CONFIG);
         this.connectorExecutor = Executors.newCachedThreadPool();
         this.time = time;
-        this.loggers = new Loggers(time);
+        this.loggers = Loggers.newInstance(time);
         this.cachedConnectors = new CachedConnectors(worker.getPlugins());
     }
 
@@ -186,7 +189,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         this.configBackingStore.stop();
         this.worker.stop();
         this.connectorExecutor.shutdown();
-        Utils.closeQuietly(this.connectorClientConfigOverridePolicy, "connector client config override policy");
+        Utils.closeQuietly(this.connectorClientConfigOverridePolicyPlugin, "connector client config override policy");
     }
 
     protected void ready() {
@@ -397,6 +400,11 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                 status.workerId(), status.trace(), status.version());
     }
 
+    @Override
+    public ConnectMetrics connectMetrics() {
+        return worker.metrics();
+    }
+
     protected Map<String, ConfigValue> validateSinkConnectorConfig(SinkConnector connector, ConfigDef configDef, Map<String, String> config) {
         Map<String, ConfigValue> result = configDef.validateAll(config);
         SinkConnectorConfig.validate(config, result);
@@ -477,7 +485,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             VersionRange range = PluginUtils.connectorVersionRequirement(pluginVersion);
             pluginInstance = (T) plugins().newPlugin(pluginClass, range, connectorLoader);
         } catch (VersionedPluginLoadingException e) {
-            log.error("Failed to load {} class {} with version {}: {}", pluginName, pluginClass, pluginVersion, e);
+            log.error("Failed to load {} class {} with version {}", pluginName, pluginClass, pluginVersion, e);
             pluginConfigValue.addErrorMessage(e.getMessage());
             pluginVersionValue.addErrorMessage(e.getMessage());
             return null;
@@ -487,7 +495,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             return null;
         } catch (InvalidVersionSpecificationException e) {
             // this should have been caught by prior validation logic
-            log.error("Invalid version range for {} class {}: {}", pluginName, pluginClass, pluginVersion, e);
+            log.error("Invalid version range for {} class {} with version {}", pluginName, pluginClass, pluginVersion, e);
             pluginVersionValue.addErrorMessage(e.getMessage());
             return null;
         }
@@ -702,7 +710,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                         connectorClass,
                         connectorType,
                         ConnectorClientConfigRequest.ClientType.PRODUCER,
-                        connectorClientConfigOverridePolicy);
+                        connectorClientConfigOverridePolicyPlugin);
             }
         }
         if (connectorUsesAdmin(connectorType, connectorProps)) {
@@ -716,7 +724,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                         connectorClass,
                         connectorType,
                         ConnectorClientConfigRequest.ClientType.ADMIN,
-                        connectorClientConfigOverridePolicy);
+                        connectorClientConfigOverridePolicyPlugin);
             }
         }
         if (connectorUsesConsumer(connectorType, connectorProps)) {
@@ -730,7 +738,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                         connectorClass,
                         connectorType,
                         ConnectorClientConfigRequest.ClientType.CONSUMER,
-                        connectorClientConfigOverridePolicy);
+                        connectorClientConfigOverridePolicyPlugin);
             }
         }
         return mergeConfigInfos(connType,
@@ -904,7 +912,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                                                       Class<? extends Connector> connectorClass,
                                                       org.apache.kafka.connect.health.ConnectorType connectorType,
                                                       ConnectorClientConfigRequest.ClientType clientType,
-                                                      ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy) {
+                                                      Plugin<ConnectorClientConfigOverridePolicy> connectorClientConfigOverridePolicyPlugin) {
         Map<String, Object> clientConfigs = new HashMap<>();
         for (Map.Entry<String, Object> rawClientConfig : connectorConfig.originalsWithPrefix(prefix).entrySet()) {
             String configName = rawClientConfig.getKey();
@@ -917,7 +925,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         }
         ConnectorClientConfigRequest connectorClientConfigRequest = new ConnectorClientConfigRequest(
             connName, connectorType, connectorClass, clientConfigs, clientType);
-        List<ConfigValue> configValues = connectorClientConfigOverridePolicy.validate(connectorClientConfigRequest);
+        List<ConfigValue> configValues = connectorClientConfigOverridePolicyPlugin.get().validate(connectorClientConfigRequest);
 
         return prefixedConfigInfos(configDef.configKeys(), configValues, prefix);
     }
@@ -1271,13 +1279,13 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
 
     @Override
     public List<String> setWorkerLoggerLevel(String namespace, String desiredLevelStr) {
-        Level level = Level.toLevel(desiredLevelStr.toUpperCase(Locale.ROOT), null);
+        String normalizedLevel = desiredLevelStr.toUpperCase(Locale.ROOT);
 
-        if (level == null) {
+        if (!loggers.isValidLevel(normalizedLevel)) {
             log.warn("Ignoring request to set invalid level '{}' for namespace {}", desiredLevelStr, namespace);
             return Collections.emptyList();
         }
 
-        return loggers.setLevel(namespace, level);
+        return loggers.setLevel(namespace, normalizedLevel);
     }
 }

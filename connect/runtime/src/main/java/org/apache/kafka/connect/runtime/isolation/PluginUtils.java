@@ -449,12 +449,6 @@ public class PluginUtils {
         return aliases;
     }
 
-    public static Function<ClassLoader, LoaderSwap> noOpLoaderSwap() {
-        return classLoader -> {
-            return new LoaderSwap(Thread.currentThread().getContextClassLoader());
-        };
-    }
-
     private static class DirectoryEntry {
         final DirectoryStream<Path> stream;
         final Iterator<Path> iterator;

@@ -40,6 +40,7 @@
     <allow pkg="org.apache.kafka.common.security" />
     <allow pkg="org.apache.kafka.common.serialization" />
     <allow pkg="org.apache.kafka.common.utils" />
+    <allow pkg="org.apache.kafka.common.test.api" />
 
     <subpackage name="coordinator">
         <subpackage name="share">

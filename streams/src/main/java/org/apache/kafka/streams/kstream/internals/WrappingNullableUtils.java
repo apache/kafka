@@ -28,7 +28,7 @@ import org.apache.kafka.streams.processor.internals.SerdeGetter;
  */
 public class WrappingNullableUtils {
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "rawtypes"})
     private static <T> Deserializer<T> prepareDeserializer(final Deserializer<T> specificDeserializer, final ProcessorContext context, final boolean isKey, final String name) {
         final Deserializer<T> deserializerToUse;
 
@@ -41,7 +41,7 @@ public class WrappingNullableUtils {
         return deserializerToUse;
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "rawtypes"})
     private static <T> Serializer<T> prepareSerializer(final Serializer<T> specificSerializer, final ProcessorContext context, final boolean isKey, final String name) {
         final Serializer<T> serializerToUse;
         if (specificSerializer == null) {
@@ -67,19 +67,19 @@ public class WrappingNullableUtils {
         return serdeToUse;
     }
 
-    public static <K> Deserializer<K> prepareKeyDeserializer(final Deserializer<K> specificDeserializer, final ProcessorContext context, final String name) {
+    public static <K> Deserializer<K> prepareKeyDeserializer(final Deserializer<K> specificDeserializer, final ProcessorContext<K, ?> context, final String name) {
         return prepareDeserializer(specificDeserializer, context, true, name);
     }
 
-    public static <V> Deserializer<V> prepareValueDeserializer(final Deserializer<V> specificDeserializer, final ProcessorContext context, final String name) {
+    public static <V> Deserializer<V> prepareValueDeserializer(final Deserializer<V> specificDeserializer, final ProcessorContext<?, V> context, final String name) {
         return prepareDeserializer(specificDeserializer, context, false, name);
     }
 
-    public static <K> Serializer<K> prepareKeySerializer(final Serializer<K> specificSerializer, final ProcessorContext context, final String name) {
+    public static <K> Serializer<K> prepareKeySerializer(final Serializer<K> specificSerializer, final ProcessorContext<K, ?> context, final String name) {
         return prepareSerializer(specificSerializer, context, true, name);
     }
 
-    public static <V> Serializer<V> prepareValueSerializer(final Serializer<V> specificSerializer, final ProcessorContext context, final String name) {
+    public static <V> Serializer<V> prepareValueSerializer(final Serializer<V> specificSerializer, final ProcessorContext<?, V> context, final String name) {
         return prepareSerializer(specificSerializer, context, false, name);
     }
 

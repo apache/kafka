@@ -43,6 +43,10 @@ import java.util.Map;
  *
  * <p>When the Connect worker shuts down, it will call the extension's {@link #close} method to allow the implementation to release all of
  * its resources.
+ *
+ * <p>Implement {@link org.apache.kafka.common.metrics.Monitorable} to enable the extension to register metrics.
+ * The following tags are automatically added to all metrics registered: <code>config</code> set to
+ * <code>rest.extension.classes</code>, and <code>class</code> set to the ConnectRestExtension class name.
  */
 public interface ConnectRestExtension extends Configurable, Versioned, Closeable {
 

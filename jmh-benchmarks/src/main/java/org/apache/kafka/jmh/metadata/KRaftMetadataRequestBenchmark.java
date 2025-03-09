@@ -29,18 +29,16 @@ import kafka.server.KafkaApis;
 import kafka.server.KafkaConfig;
 import kafka.server.MetadataCache;
 import kafka.server.QuotaFactory;
-import kafka.server.RaftSupport;
 import kafka.server.ReplicaManager;
 import kafka.server.ReplicationQuotaManager;
 import kafka.server.SimpleApiVersionManager;
 import kafka.server.builders.KafkaApisBuilder;
 import kafka.server.metadata.KRaftMetadataCache;
-import kafka.server.metadata.MockConfigRepository;
+import kafka.server.share.SharePartitionManager;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.message.ApiMessageType;
-import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataEndpoint;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
@@ -57,9 +55,11 @@ import org.apache.kafka.coordinator.group.GroupCoordinator;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
+import org.apache.kafka.metadata.MockConfigRepository;
 import org.apache.kafka.network.RequestConvertToJson;
 import org.apache.kafka.network.metrics.RequestChannelMetrics;
 import org.apache.kafka.raft.QuorumConfig;
+import org.apache.kafka.server.ClientMetricsManager;
 import org.apache.kafka.server.common.FinalizedFeatures;
 import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
@@ -118,6 +118,8 @@ public class KRaftMetadataRequestBenchmark {
             clientQuotaManager, clientRequestQuotaManager, controllerMutationQuotaManager, replicaQuotaManager,
             replicaQuotaManager, replicaQuotaManager, Optional.empty());
     private final FetchManager fetchManager = Mockito.mock(FetchManager.class);
+    private final SharePartitionManager sharePartitionManager = Mockito.mock(SharePartitionManager.class);
+    private final ClientMetricsManager clientMetricsManager = Mockito.mock(ClientMetricsManager.class);
     private final BrokerTopicStats brokerTopicStats = new BrokerTopicStats(false);
     private final KafkaPrincipal principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "test-user");
     @Param({"500", "1000",  "5000"})
@@ -138,12 +140,7 @@ public class KRaftMetadataRequestBenchmark {
         MetadataDelta buildupMetadataDelta = new MetadataDelta(MetadataImage.EMPTY);
         IntStream.range(0, 5).forEach(brokerId -> {
             RegisterBrokerRecord.BrokerEndpointCollection endpoints = new RegisterBrokerRecord.BrokerEndpointCollection();
-            endpoints(brokerId).forEach(endpoint ->
-                endpoints.add(new RegisterBrokerRecord.BrokerEndpoint().
-                    setHost(endpoint.host()).
-                    setPort(endpoint.port()).
-                    setName(endpoint.listener()).
-                    setSecurityProtocol(endpoint.securityProtocol())));
+            endpoints(brokerId).forEach(endpoint -> endpoints.add(endpoint));
             buildupMetadataDelta.replay(new RegisterBrokerRecord().
                 setBrokerId(brokerId).
                 setBrokerEpoch(100L).
@@ -169,13 +166,13 @@ public class KRaftMetadataRequestBenchmark {
         metadataCache.setImage(buildupMetadataDelta.apply(MetadataProvenance.EMPTY));
     }
 
-    private List<UpdateMetadataEndpoint> endpoints(final int brokerId) {
+    private List<RegisterBrokerRecord.BrokerEndpoint> endpoints(final int brokerId) {
         return Collections.singletonList(
-                new UpdateMetadataEndpoint()
-                        .setHost("host_" + brokerId)
-                        .setPort(9092)
-                        .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
-                        .setListener(ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT).value()));
+                new RegisterBrokerRecord.BrokerEndpoint().
+                        setHost("host_" + brokerId).
+                        setPort(9092).
+                        setName(ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT).value()).
+                        setSecurityProtocol(SecurityProtocol.PLAINTEXT.id));
     }
 
     private KafkaApis createKafkaApis() {
@@ -187,7 +184,7 @@ public class KRaftMetadataRequestBenchmark {
         KafkaConfig config = new KafkaConfig(kafkaProps);
         return new KafkaApisBuilder().
                 setRequestChannel(requestChannel).
-                setMetadataSupport(new RaftSupport(forwardingManager, metadataCache)).
+                setForwardingManager(forwardingManager).
                 setReplicaManager(replicaManager).
                 setGroupCoordinator(groupCoordinator).
                 setTxnCoordinator(transactionCoordinator).
@@ -200,7 +197,8 @@ public class KRaftMetadataRequestBenchmark {
                 setAuthorizer(Optional.empty()).
                 setQuotas(quotaManagers).
                 setFetchManager(fetchManager).
-                setSharePartitionManager(Optional.empty()).
+                setSharePartitionManager(sharePartitionManager).
+                setClientMetricsManager(clientMetricsManager).
                 setBrokerTopicStats(brokerTopicStats).
                 setClusterId("clusterId").
                 setTime(Time.SYSTEM).
