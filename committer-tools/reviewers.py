@@ -46,7 +46,7 @@ def append_message_to_pr_body(pr_url, message):
         escaped_message = message.replace("<", "\\<").replace(">", "\\>")
         updated_pr_body = f"{current_pr_body}{escaped_message}"
     except subprocess.CalledProcessError as e:
-        print("Failed to retrieve PR description:", e.stderr)
+        print("Failed to retrieve PR body:", e.stderr)
         return
 
     choice = input(f'Update the body of "{pr_title}"? (y/n): ').strip().lower()
@@ -56,9 +56,9 @@ def append_message_to_pr_body(pr_url, message):
     try:
         cmd_edit_body = ["gh", "pr", "edit", pr_url, "--body", updated_pr_body]
         subprocess.run(cmd_edit_body, check=True)
-        print("PR description updated successfully!")
+        print("PR body updated successfully!")
     except subprocess.CalledProcessError as e:
-        print("Failed to update PR description:", e.stderr)
+        print("Failed to update PR body:", e.stderr)
 
 
 if __name__ == "__main__":
