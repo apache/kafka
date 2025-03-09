@@ -32,7 +32,7 @@ public class FakeSnapshotWriter implements SnapshotWriter<ApiMessageAndVersion> 
     private boolean closed = false;
 
     public List<List<ApiMessageAndVersion>> batches() {
-        return new ArrayList<>(batches);
+        return batches.stream().map(List::copyOf).toList();
     }
 
     public FakeSnapshotWriter() {
