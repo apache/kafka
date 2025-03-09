@@ -471,7 +471,6 @@ abstract class WorkerTask<T, R extends ConnectRecord<R>> implements Runnable {
             metricGroup.addValueMetric(registry.taskHeaderConverterVersion, now -> pluginsMetadata.headerConverterVersion());
 
             if (!pluginsMetadata.transformations().isEmpty()) {
-                this.transformationGroups.clear();
                 for (TransformationStage.AliasedPluginInfo entry : pluginsMetadata.transformations()) {
                     MetricGroup transformationGroup = connectMetrics.group(registry.transformsGroupName(),
                             registry.connectorTagName(), id.connector(),
@@ -485,7 +484,6 @@ abstract class WorkerTask<T, R extends ConnectRecord<R>> implements Runnable {
             }
 
             if (!pluginsMetadata.predicates().isEmpty()) {
-                this.predicateGroups.clear();
                 for (TransformationStage.AliasedPluginInfo entry : pluginsMetadata.predicates()) {
                     MetricGroup predicateGroup = connectMetrics.group(registry.predicatesGroupName(),
                             registry.connectorTagName(), id.connector(),
