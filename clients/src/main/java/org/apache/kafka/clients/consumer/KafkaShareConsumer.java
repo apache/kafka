@@ -140,6 +140,8 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  *     thrown by a failure to commit the acknowledgements.</li>
  *     <li>The application calls {@link #close()}  which releases any acquired records without acknowledgement.</li>
  * </ul>
+ * <p>The consumer can optionally use the {@code internal.share.acknowledgement.mode} configuration property to choose
+ * between implicit and explicit acknowledgement, specifying <code>"implicit"</code> or <code>"explicit"</code> as required.
  * <p>
  * The consumer guarantees that the records returned in the {@code ConsumerRecords} object for a specific topic-partition
  * are in order of increasing offset. For each topic-partition, Kafka guarantees that acknowledgements for the records

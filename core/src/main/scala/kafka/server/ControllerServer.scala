@@ -42,7 +42,7 @@ import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.config.ServerLogConfigs.{ALTER_CONFIG_POLICY_CLASS_NAME_CONFIG, CREATE_TOPIC_POLICY_CLASS_NAME_CONFIG}
-import org.apache.kafka.server.common.{ApiMessageAndVersion, NodeToControllerChannelManager}
+import org.apache.kafka.server.common.{ApiMessageAndVersion, KRaftVersion, NodeToControllerChannelManager}
 import org.apache.kafka.server.config.ConfigType
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics, LinuxIoMetricsCollector}
 import org.apache.kafka.server.network.{EndpointReadyFutures, KafkaAuthorizerServerInfo}
@@ -153,7 +153,9 @@ class ControllerServer(
       val apiVersionManager = new SimpleApiVersionManager(
         ListenerType.CONTROLLER,
         config.unstableApiVersionsEnabled,
-        () => featuresPublisher.features()
+        () => featuresPublisher.features().setFinalizedLevel(
+          KRaftVersion.FEATURE_NAME,
+          raftManager.client.kraftVersion().featureLevel())
       )
 
       //  metrics will be set to null when closing a controller, so we should recreate it for testing
