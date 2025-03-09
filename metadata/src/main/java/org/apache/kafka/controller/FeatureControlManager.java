@@ -387,10 +387,7 @@ public class FeatureControlManager {
     }
 
     boolean isElrFeatureEnabled() {
-        return finalizedVersions.entrySet().stream()
-            .filter(e -> e.getKey().equals(EligibleLeaderReplicasVersion.FEATURE_NAME))
-            .map(Map.Entry::getValue)
-            .findAny()
-            .orElse((short) 0) >= EligibleLeaderReplicasVersion.ELRV_1.featureLevel();
+        return finalizedVersions.getOrDefault(EligibleLeaderReplicasVersion.FEATURE_NAME, (short) 0) >=
+            EligibleLeaderReplicasVersion.ELRV_1.featureLevel();
     }
 }

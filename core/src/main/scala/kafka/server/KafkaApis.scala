@@ -2611,7 +2611,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           }
 
           // Clients are not allowed to see topics that are not authorized for Describe.
-          if (!authorizer.isEmpty) {
+          if (authorizer.isDefined) {
             val topicsToCheck = response.groups.stream()
               .flatMap(group => group.members.stream)
               .flatMap(member => util.stream.Stream.of(member.assignment, member.targetAssignment))
@@ -2664,6 +2664,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestHelper.sendMaybeThrottle(request, streamsGroupHeartbeatRequest.getErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED.exception))
       CompletableFuture.completedFuture[Unit](())
     } else {
+      val requestContext = request.context
+
       if (streamsGroupHeartbeatRequest.data().topology() != null) {
         val requiredTopics: Seq[String] =
           streamsGroupHeartbeatRequest.data().topology().subtopologies().iterator().asScala.flatMap(subtopology =>
@@ -2707,7 +2709,24 @@ class KafkaApis(val requestChannel: RequestChannel,
           val responseData = response.data()
           val topicsToCreate = response.creatableTopics().asScala
           if (topicsToCreate.nonEmpty) {
-            throw new UnsupportedOperationException("Internal topic auto-creation not yet implemented.")
+
+            val createTopicUnauthorized =
+              if(!authHelper.authorize(request.context, CREATE, CLUSTER, CLUSTER_NAME, logIfDenied = false))
+                authHelper.partitionSeqByAuthorized(request.context, CREATE, TOPIC, topicsToCreate.keys.toSeq)(identity[String])._2
+              else Set.empty
+
+            if (createTopicUnauthorized.nonEmpty) {
+              if (responseData.status() == null) {
+                responseData.setStatus(new util.ArrayList());
+              }
+              responseData.status().add(
+                new StreamsGroupHeartbeatResponseData.Status()
+                  .setStatusCode(StreamsGroupHeartbeatResponse.Status.MISSING_INTERNAL_TOPICS.code())
+                  .setStatusDetail("Unauthorized to CREATE on topics " + createTopicUnauthorized.mkString(",") + ".")
+              )
+            } else {
+              autoTopicCreationManager.createStreamsInternalTopics(topicsToCreate, requestContext);
+            }
           }
 
           requestHelper.sendMaybeThrottle(request, new StreamsGroupHeartbeatResponse(responseData))
@@ -2816,9 +2835,24 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestHelper.sendMaybeThrottle(request, shareGroupHeartbeatRequest.getErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED.exception))
       CompletableFuture.completedFuture[Unit](())
     } else {
+      if (shareGroupHeartbeatRequest.data.subscribedTopicNames != null &&
+        !shareGroupHeartbeatRequest.data.subscribedTopicNames.isEmpty) {
+        // Check the authorization if the subscribed topic names are provided.
+        // Clients are not allowed to see topics that are not authorized for Describe.
+        val subscribedTopicSet = shareGroupHeartbeatRequest.data.subscribedTopicNames.asScala.toSet
+        val authorizedTopics = authHelper.filterByAuthorized(request.context, DESCRIBE, TOPIC,
+          subscribedTopicSet)(identity)
+        if (authorizedTopics.size < subscribedTopicSet.size) {
+          val responseData = new ShareGroupHeartbeatResponseData()
+            .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
+          requestHelper.sendMaybeThrottle(request, new ShareGroupHeartbeatResponse(responseData))
+          return CompletableFuture.completedFuture[Unit](())
+        }
+      }
+
       groupCoordinator.shareGroupHeartbeat(
         request.context,
-        shareGroupHeartbeatRequest.data,
+        shareGroupHeartbeatRequest.data
       ).handle[Unit] { (response, exception) =>
 
         if (exception != null) {
@@ -2876,6 +2910,34 @@ class KafkaApis(val requestChannel: RequestChannel,
           } else {
             // Otherwise, we have to copy the results into the existing ones.
             response.groups.addAll(results)
+          }
+
+          // Clients are not allowed to see topics that are not authorized for Describe.
+          if (authorizer.isDefined) {
+            val topicsToCheck = response.groups.stream()
+              .flatMap(group => group.members.stream)
+              .flatMap(member => member.assignment.topicPartitions.stream)
+              .map(topicPartition => topicPartition.topicName)
+              .collect(Collectors.toSet[String])
+              .asScala
+            val authorizedTopics = authHelper.filterByAuthorized(request.context, DESCRIBE, TOPIC,
+              topicsToCheck)(identity)
+            val updatedGroups = response.groups.stream().map { group =>
+              val hasUnauthorizedTopic = group.members.stream()
+                .flatMap(member => member.assignment.topicPartitions.stream)
+                .anyMatch(tp => !authorizedTopics.contains(tp.topicName))
+
+              if (hasUnauthorizedTopic) {
+                new ShareGroupDescribeResponseData.DescribedGroup()
+                  .setGroupId(group.groupId)
+                  .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
+                  .setErrorMessage("The group has described topic(s) that the client is not authorized to describe.")
+                  .setMembers(List.empty.asJava)
+              } else {
+                group
+              }
+            }.collect(Collectors.toList[ShareGroupDescribeResponseData.DescribedGroup])
+            response.setGroups(updatedGroups)
           }
 
           requestHelper.sendMaybeThrottle(request, new ShareGroupDescribeResponse(response))

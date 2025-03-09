@@ -161,7 +161,7 @@ public class ReassignPartitionsUnitTest {
             reassignments.put(new TopicPartition("foo", 0), asList(0, 1, 3));
             reassignments.put(new TopicPartition("quux", 0), asList(1, 2, 3));
 
-            Map<TopicPartition, Throwable> reassignmentResult = alterPartitionReassignments(adminClient, reassignments);
+            Map<TopicPartition, Throwable> reassignmentResult = alterPartitionReassignments(adminClient, reassignments,  false);
 
             assertEquals(1, reassignmentResult.size());
             assertEquals(UnknownTopicOrPartitionException.class, reassignmentResult.get(new TopicPartition("quux", 0)).getClass());
@@ -606,7 +606,7 @@ public class ReassignPartitionsUnitTest {
                     "{\"version\":1,\"partitions\":" +
                         "[{\"topic\":\"foo\",\"partition\":0,\"replicas\":[0,1],\"log_dirs\":[\"any\",\"any\"]}," +
                         "{\"topic\":\"quux\",\"partition\":0,\"replicas\":[2,3,4],\"log_dirs\":[\"any\",\"any\",\"any\"]}" +
-                        "]}", -1L, -1L, 10000L, Time.SYSTEM), "Expected reassignment with non-existent topic to fail").getCause().getMessage());
+                        "]}", -1L, -1L, 10000L, Time.SYSTEM, false), "Expected reassignment with non-existent topic to fail").getCause().getMessage());
         }
     }
 
@@ -619,7 +619,7 @@ public class ReassignPartitionsUnitTest {
                     "{\"version\":1,\"partitions\":" +
                         "[{\"topic\":\"foo\",\"partition\":0,\"replicas\":[0,1],\"log_dirs\":[\"any\",\"any\"]}," +
                         "{\"topic\":\"foo\",\"partition\":1,\"replicas\":[2,3,4],\"log_dirs\":[\"any\",\"any\",\"any\"]}" +
-                        "]}", -1L, -1L, 10000L, Time.SYSTEM), "Expected reassignment with non-existent broker id to fail").getMessage());
+                        "]}", -1L, -1L, 10000L, Time.SYSTEM, false), "Expected reassignment with non-existent broker id to fail").getMessage());
         }
     }
 
@@ -670,7 +670,7 @@ public class ReassignPartitionsUnitTest {
             reassignments.put(new TopicPartition("foo", 0), asList(0, 1, 4, 2));
             reassignments.put(new TopicPartition("bar", 0), asList(2, 3));
 
-            Map<TopicPartition, Throwable> reassignmentResult = alterPartitionReassignments(adminClient, reassignments);
+            Map<TopicPartition, Throwable> reassignmentResult = alterPartitionReassignments(adminClient, reassignments, false);
 
             assertTrue(reassignmentResult.isEmpty());
             assertEquals(String.join(System.lineSeparator(),
@@ -762,7 +762,7 @@ public class ReassignPartitionsUnitTest {
         try (MockAdminClient adminClient = new MockAdminClient.Builder().numBrokers(4).build()) {
             addTopics(adminClient);
             assertStartsWith("Unexpected character",
-                assertThrows(AdminOperationException.class, () -> executeAssignment(adminClient, false, "{invalid_json", -1L, -1L, 10000L, Time.SYSTEM)).getMessage());
+                assertThrows(AdminOperationException.class, () -> executeAssignment(adminClient, false, "{invalid_json", -1L, -1L, 10000L, Time.SYSTEM, false)).getMessage());
         }
     }
 }

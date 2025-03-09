@@ -52,7 +52,6 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorResult;
 import org.apache.kafka.coordinator.common.runtime.MockCoordinatorExecutor;
@@ -169,13 +168,7 @@ public class GroupMetadataManagerTestContext {
         ) {
             return new GroupCoordinatorConfigContext(
                 new AbstractConfig(
-                    Utils.mergeConfigs(List.of(
-                        GroupCoordinatorConfig.CLASSIC_GROUP_CONFIG_DEF,
-                        GroupCoordinatorConfig.GROUP_COORDINATOR_CONFIG_DEF,
-                        GroupCoordinatorConfig.OFFSET_MANAGEMENT_CONFIG_DEF,
-                        GroupCoordinatorConfig.CONSUMER_GROUP_CONFIG_DEF,
-                        GroupCoordinatorConfig.SHARE_GROUP_CONFIG_DEF
-                    )),
+                    GroupCoordinatorConfig.CONFIG_DEF,
                     props
                 )
             );
