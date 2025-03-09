@@ -94,8 +94,8 @@ public class ProducerConfig extends AbstractConfig {
                                                  + "Note: This setting gives the upper bound of the batch size to be sent. If we have fewer than this many bytes accumulated "
                                                  + "for this partition, we will 'linger' for the <code>linger.ms</code> time waiting for more records to show up. "
                                                  + "This <code>linger.ms</code> setting defaults to 5, which means the producer will wait for 5ms or until the record batch is "
-                                                 + "of <code>batch.size</code>(whichever happens first) before sending the record batch. Note that broker backpressure can "
-                                                 + " result in a higher effective linger time than this setting."
+                                                 + "of <code>batch.size</code> (whichever happens first) before sending the record batch. Note that broker backpressure can "
+                                                 + " result in a higher effective linger time than this setting. "
                                                  + "The default changed from 0 to 5 in Apache Kafka 4.0 as the efficiency gains from larger batches typically result in "
                                                  + "similar or lower producer latency despite the increased linger.";
 
@@ -103,7 +103,7 @@ public class ProducerConfig extends AbstractConfig {
     public static final String PARTITIONER_ADPATIVE_PARTITIONING_ENABLE_CONFIG = "partitioner.adaptive.partitioning.enable";
     private static final String PARTITIONER_ADPATIVE_PARTITIONING_ENABLE_DOC =
             "When set to 'true', the producer will try to adapt to broker performance and produce more messages to partitions hosted on faster brokers. "
-            + "If 'false', producer will try to distribute messages uniformly. Note: this setting has no effect if a custom partitioner is used";
+            + "If 'false', the producer will try to distribute messages uniformly. Note: this setting has no effect if a custom partitioner is used.";
 
     /** <code>partitioner.availability.timeout.ms</code> */
     public static final String PARTITIONER_AVAILABILITY_TIMEOUT_MS_CONFIG = "partitioner.availability.timeout.ms";
@@ -111,7 +111,7 @@ public class ProducerConfig extends AbstractConfig {
             "If a broker cannot process produce requests from a partition for <code>" + PARTITIONER_AVAILABILITY_TIMEOUT_MS_CONFIG + "</code> time, "
             + "the partitioner treats that partition as not available.  If the value is 0, this logic is disabled. "
             + "Note: this setting has no effect if a custom partitioner is used or <code>" + PARTITIONER_ADPATIVE_PARTITIONING_ENABLE_CONFIG
-            + "</code> is set to 'false'";
+            + "</code> is set to 'false'.";
 
     /** <code>partitioner.ignore.keys</code> */
     public static final String PARTITIONER_IGNORE_KEYS_CONFIG = "partitioner.ignore.keys";
