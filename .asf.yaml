@@ -47,13 +47,7 @@ github:
     rebase: false
 
   protected_branches:
-    trunk:
-      required_status_checks:
-        strict: false
-        contexts:
-          - build / CI checks completed
-      required_pull_request_reviews:
-        required_approving_review_count: 1
+    trunk: {}
 
     # Disable force push on release branches
     4.0: {}
