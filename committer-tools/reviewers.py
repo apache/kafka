@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+import json
+import subprocess
 #
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
@@ -33,6 +35,29 @@ def prompt_for_user():
         clean_input = user_input.strip().lower()
         if clean_input != "":
             return clean_input
+
+def append_message_to_pr_body(pr_url, message):
+    try:
+        cmd_get_pr = ["gh", "pr", "view", pr_url, "--json", "title,body"]
+        result = subprocess.run(cmd_get_pr, capture_output=True, text=True, check=True)
+        current_pr_body = json.loads(result.stdout).get("body", {})
+        pr_title = json.loads(result.stdout).get("title", {})
+        updated_pr_body = f"{current_pr_body}{message}"
+    except subprocess.CalledProcessError as e:
+        print("Failed to retrieve PR description:", e.stderr)
+        return
+
+    print(f"The new PR body will be:\n{updated_pr_body}")
+    choice = input(f"Update the body of {pr_title}? (y/n): ").strip().lower()
+    if choice in ['n', 'no']:
+        return
+
+    try:
+        cmd_edit_body = ["gh", "pr", "edit", pr_url, "--body", updated_pr_body]
+        subprocess.run(cmd_edit_body, check=True)
+        print("PR description updated successfully!")
+    except subprocess.CalledProcessError as e:
+        print("Failed to update PR description:", e.stderr)
 
 
 if __name__ == "__main__":
@@ -87,9 +112,16 @@ if __name__ == "__main__":
             continue
 
     if selected_reviewers:
-        out = "\n\nReviewers: "
-        out += ", ".join([f"{name} <{email}>" for name, email, _ in selected_reviewers])
-        out += "\n"
-        print(out)
+        reviewer_message = f'\n\nReviewers: {", ".join([f"{name} <{email}>" for name, email, _ in selected_reviewers])}\n'
+        print(reviewer_message)
+
+        try:
+            pr_number = input("\nEnter Pull Request number to append reviewer message to body (Ctrl+D or Ctrl+C to skip): ")
+            url = f"https://github.com/apache/kafka/pull/{pr_number}"
+            append_message_to_pr_body(url, reviewer_message)
+        except (EOFError, KeyboardInterrupt):
+            exit(0)
+
+        
 
 
