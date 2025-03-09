@@ -315,9 +315,9 @@ import static org.apache.kafka.common.protocol.ApiKeys.OFFSET_FETCH;
 import static org.apache.kafka.common.protocol.ApiKeys.PRODUCE;
 import static org.apache.kafka.common.protocol.ApiKeys.SASL_AUTHENTICATE;
 import static org.apache.kafka.common.protocol.ApiKeys.SYNC_GROUP;
-import static org.apache.kafka.common.protocol.ApiKeys.WRITE_TXN_MARKERS;
 import static org.apache.kafka.common.requests.EndTxnRequest.LAST_STABLE_VERSION_BEFORE_TRANSACTION_V2;
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -584,6 +584,36 @@ public class RequestResponseTest {
         FetchResponse deserialized = FetchResponse.parse(response.serialize((short) 4), (short) 4);
         assertEquals(responseData.entrySet().stream().collect(Collectors.toMap(e -> e.getKey().topicPartition(), Map.Entry::getValue)),
                 deserialized.responseData(topicNames, (short) 4));
+    }
+
+    @Test
+    public void testFetchResponseShouldNotHasNullRecords() {
+        Uuid id = Uuid.randomUuid();
+        FetchResponseData.PartitionData partitionData = new FetchResponseData.PartitionData()
+            .setPartitionIndex(0)
+            .setHighWatermark(1000000)
+            .setLogStartOffset(100)
+            .setLastStableOffset(200)
+            .setRecords(null);
+        FetchResponseData.FetchableTopicResponse response = new FetchResponseData.FetchableTopicResponse()
+            .setTopic("topic")
+            .setPartitions(List.of(partitionData))
+            .setTopicId(id);
+        FetchResponseData data = new FetchResponseData().setResponses(List.of(response));
+        assertThrows(NullPointerException.class, () -> new FetchResponse(data));
+
+        response.setPartitions(List.of(FetchResponse.partitionResponse(0, Errors.NONE)));
+        FetchResponse fetchResponse = assertDoesNotThrow(() -> new FetchResponse(data));
+        fetchResponse.data().responses().stream()
+            .flatMap(res -> res.partitions().stream())
+            .forEach(partition -> assertEquals(MemoryRecords.EMPTY, partition.records()));
+
+        TopicIdPartition topicIdPartition = new TopicIdPartition(id, new TopicPartition("test", 0));
+        LinkedHashMap<TopicIdPartition, FetchResponseData.PartitionData> tpToData = new LinkedHashMap<>(Map.of(topicIdPartition, partitionData));
+        fetchResponse = assertDoesNotThrow(() -> FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, tpToData));
+        fetchResponse.data().responses().stream()
+                .flatMap(res -> res.partitions().stream())
+                .forEach(partition -> assertEquals(MemoryRecords.EMPTY, partition.records()));
     }
 
     @Test

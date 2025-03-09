@@ -36,6 +36,7 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -89,7 +90,7 @@ public class FetchResponse extends AbstractResponse {
      */
     public FetchResponse(FetchResponseData fetchResponseData) {
         super(ApiKeys.FETCH);
-        this.data = fetchResponseData;
+        this.data = throwIfHasNullRecords(fetchResponseData);
     }
 
     public Errors error() {
@@ -258,6 +259,8 @@ public class FetchResponse extends AbstractResponse {
             FetchResponseData.PartitionData partitionData = entry.getValue();
             // Since PartitionData alone doesn't know the partition ID, we set it here
             partitionData.setPartitionIndex(entry.getKey().topicPartition().partition());
+            if (partitionData.records() == null)
+                partitionData.setRecords(MemoryRecords.EMPTY);
             // We have to keep the order of input topic-partition. Hence, we batch the partitions only if the last
             // batch is in the same topic group.
             FetchResponseData.FetchableTopicResponse previousTopic = topicResponseList.isEmpty() ? null
@@ -285,5 +288,12 @@ public class FetchResponse extends AbstractResponse {
                 .setErrorCode(error.code())
                 .setSessionId(sessionId)
                 .setResponses(topicResponseList);
+    }
+
+    private static FetchResponseData throwIfHasNullRecords(FetchResponseData fetchResponseData) {
+        fetchResponseData.responses().stream()
+            .flatMap(response -> response.partitions().stream())
+            .forEach(partition -> Objects.requireNonNull(partition.records(), "[Partition " + partition.partitionIndex() + "] has null records"));
+        return fetchResponseData;
     }
 }
