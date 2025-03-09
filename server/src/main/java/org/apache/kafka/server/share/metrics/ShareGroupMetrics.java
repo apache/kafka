@@ -26,6 +26,7 @@ import com.yammer.metrics.core.Meter;
 import java.util.Arrays;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -33,16 +34,32 @@ import java.util.stream.Collectors;
  * ShareGroupMetrics is used to track the broker-side metrics for the ShareGroup.
  */
 public class ShareGroupMetrics implements AutoCloseable {
-    // Rate of records acknowledged per acknowledgement type.
+
     private static final String RECORD_ACKNOWLEDGEMENTS_PER_SEC = "RecordAcknowledgementsPerSec";
-    // The time in milliseconds to load the share partitions.
     private static final String PARTITION_LOAD_TIME_MS = "PartitionLoadTimeMs";
+    private static final String TOPIC_PARTITIONS_FETCH_RATIO = "RequestTopicPartitionsFetchRatio";
+    private static final String TOPIC_PARTITIONS_ACQUIRE_TIME_MS = "TopicPartitionsAcquireTimeMs";
     private static final String ACK_TYPE_TAG = "ackType";
+
+    /**
+     * Metric for the rate of records acknowledged per acknowledgement type.
+     */
+    private final Map<Byte, Meter> recordAcknowledgementMeterMap;
+    /**
+     * Metric for the time taken to load the share partitions.
+     */
+    private final Histogram partitionLoadTimeMs;
+    /**
+     * Metric for the ratio of topic partitions fetched to the total number of topic partitions requested, per group.
+     */
+    private final Map<String, Histogram> topicPartitionsFetchRatio;
+    /**
+     * Metric for the time taken to acquire topic partitions for a group.
+     */
+    private final Map<String, Histogram> topicPartitionsAcquireTimeMs;
 
     private final KafkaMetricsGroup metricsGroup;
     private final Time time;
-    private final Map<Byte, Meter> recordAcknowledgementMeterMap;
-    private final Histogram partitionLoadTimeMs;
 
     public ShareGroupMetrics(Time time) {
         this.time = time;
@@ -58,7 +75,9 @@ public class ShareGroupMetrics implements AutoCloseable {
                 )
             )
         );
-        partitionLoadTimeMs = metricsGroup.newHistogram(PARTITION_LOAD_TIME_MS);
+        this.partitionLoadTimeMs = metricsGroup.newHistogram(PARTITION_LOAD_TIME_MS);
+        this.topicPartitionsFetchRatio = new ConcurrentHashMap<>();
+        this.topicPartitionsAcquireTimeMs = new ConcurrentHashMap<>();
     }
 
     public void recordAcknowledgement(byte ackType) {
@@ -76,12 +95,36 @@ public class ShareGroupMetrics implements AutoCloseable {
         partitionLoadTimeMs.update(time.hiResClockMs() - start);
     }
 
+    public void recordTopicPartitionsFetchRatio(String groupId, long value) {
+        topicPartitionsFetchRatio.computeIfAbsent(groupId,
+            k -> metricsGroup.newHistogram(TOPIC_PARTITIONS_FETCH_RATIO, true, Map.of("group", groupId)));
+        topicPartitionsFetchRatio.get(groupId).update(value);
+    }
+
+    public void recordTopicPartitionsAcquireTimeMs(String groupId, long timeMs) {
+        topicPartitionsAcquireTimeMs.computeIfAbsent(groupId,
+            k -> metricsGroup.newHistogram(TOPIC_PARTITIONS_ACQUIRE_TIME_MS, true, Map.of("group", groupId)));
+        topicPartitionsAcquireTimeMs.get(groupId).update(timeMs);
+    }
+
+    // Visible for testing
     public Meter recordAcknowledgementMeter(byte ackType) {
         return recordAcknowledgementMeterMap.get(ackType);
     }
 
+    // Visible for testing
     public Histogram partitionLoadTimeMs() {
         return partitionLoadTimeMs;
+    }
+
+    // Visible for testing
+    public Histogram topicPartitionsFetchRatio(String groupId) {
+        return topicPartitionsFetchRatio.get(groupId);
+    }
+
+    // Visible for testing
+    public Histogram topicPartitionsAcquireTimeMs(String groupId) {
+        return topicPartitionsAcquireTimeMs.get(groupId);
     }
 
     @Override
@@ -89,6 +132,8 @@ public class ShareGroupMetrics implements AutoCloseable {
         Arrays.stream(AcknowledgeType.values()).forEach(
             m -> metricsGroup.removeMetric(RECORD_ACKNOWLEDGEMENTS_PER_SEC, Map.of(ACK_TYPE_TAG, m.toString())));
         metricsGroup.removeMetric(PARTITION_LOAD_TIME_MS);
+        topicPartitionsFetchRatio.forEach((k, v) -> metricsGroup.removeMetric(TOPIC_PARTITIONS_FETCH_RATIO, Map.of("group", k)));
+        topicPartitionsAcquireTimeMs.forEach((k, v) -> metricsGroup.removeMetric(TOPIC_PARTITIONS_ACQUIRE_TIME_MS, Map.of("group", k)));
     }
 
     private static String capitalize(String string) {

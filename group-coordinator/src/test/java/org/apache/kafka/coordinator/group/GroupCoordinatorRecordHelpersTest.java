@@ -55,7 +55,6 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -570,7 +569,7 @@ public class GroupCoordinatorRecordHelpersTest {
         assertThrows(IllegalStateException.class, () ->
             GroupCoordinatorRecordHelpers.newGroupMetadataRecord(
                 group,
-                Collections.emptyMap()
+                Map.of()
             ));
     }
 
@@ -620,7 +619,7 @@ public class GroupCoordinatorRecordHelpersTest {
         assertThrows(IllegalStateException.class, () ->
             GroupCoordinatorRecordHelpers.newGroupMetadataRecord(
                 group,
-                Collections.emptyMap()
+                Map.of()
             ));
     }
       
@@ -628,7 +627,7 @@ public class GroupCoordinatorRecordHelpersTest {
     public void testEmptyGroupMetadataRecord() {
         Time time = new MockTime();
 
-        List<GroupMetadataValue.MemberMetadata> expectedMembers = Collections.emptyList();
+        List<GroupMetadataValue.MemberMetadata> expectedMembers = List.of();
 
         CoordinatorRecord expectedRecord = CoordinatorRecord.record(
             new GroupMetadataKey()
