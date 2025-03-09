@@ -36,6 +36,7 @@ def prompt_for_user():
         if clean_input != "":
             return clean_input
 
+
 def append_message_to_pr_body(pr_url, message):
     try:
         cmd_get_pr = ["gh", "pr", "view", pr_url, "--json", "title,body"]
@@ -43,12 +44,11 @@ def append_message_to_pr_body(pr_url, message):
         current_pr_body = json.loads(result.stdout).get("body", {})
         pr_title = json.loads(result.stdout).get("title", {})
         print(f"The new PR body will be:\n{current_pr_body}{message}")
-        escaped_message = message.replace("<", "\<").replace(">", "\>")
+        escaped_message = message.replace("<", "\\<").replace(">", "\\>")
         updated_pr_body = f"{current_pr_body}{escaped_message}"
     except subprocess.CalledProcessError as e:
         print("Failed to retrieve PR description:", e.stderr)
         return
-
 
     choice = input(f"Update the body of {pr_title}? (y/n): ").strip().lower()
     if choice in ['n', 'no']:
@@ -123,7 +123,3 @@ if __name__ == "__main__":
             append_message_to_pr_body(url, reviewer_message)
         except (EOFError, KeyboardInterrupt):
             exit(0)
-
-        
-
-
