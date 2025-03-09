@@ -42,12 +42,14 @@ def append_message_to_pr_body(pr_url, message):
         result = subprocess.run(cmd_get_pr, capture_output=True, text=True, check=True)
         current_pr_body = json.loads(result.stdout).get("body", {})
         pr_title = json.loads(result.stdout).get("title", {})
-        updated_pr_body = f"{current_pr_body}{message}"
+        print(f"The new PR body will be:\n{current_pr_body}{message}")
+        escaped_message = message.replace("<", "\<").replace(">", "\>")
+        updated_pr_body = f"{current_pr_body}{escaped_message}"
     except subprocess.CalledProcessError as e:
         print("Failed to retrieve PR description:", e.stderr)
         return
 
-    print(f"The new PR body will be:\n{updated_pr_body}")
+
     choice = input(f"Update the body of {pr_title}? (y/n): ").strip().lower()
     if choice in ['n', 'no']:
         return
