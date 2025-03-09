@@ -14,11 +14,28 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.snapshot;
 
-import org.apache.kafka.raft.OffsetAndEpoch;
+package org.apache.kafka.clients.admin;
 
-import java.nio.file.Path;
+import org.apache.kafka.common.annotation.InterfaceStability;
 
+import java.util.Collection;
 
-public record SnapshotPath(Path path, OffsetAndEpoch snapshotId, boolean partial, boolean deleted) { }
+/**
+ * Options for {@link Admin#describeStreamsGroups(Collection, DescribeStreamsGroupsOptions)}.
+ * <p>
+ * The API of this class is evolving, see {@link Admin} for details.
+ */
+@InterfaceStability.Evolving
+public class DescribeStreamsGroupsOptions extends AbstractOptions<DescribeStreamsGroupsOptions> {
+    private boolean includeAuthorizedOperations;
+
+    public DescribeStreamsGroupsOptions includeAuthorizedOperations(boolean includeAuthorizedOperations) {
+        this.includeAuthorizedOperations = includeAuthorizedOperations;
+        return this;
+    }
+
+    public boolean includeAuthorizedOperations() {
+        return includeAuthorizedOperations;
+    }
+}
