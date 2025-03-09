@@ -117,7 +117,7 @@ if __name__ == "__main__":
         print(reviewer_message)
 
         try:
-            pr_number = input("\nEnter Pull Request number to append reviewer message to body (Ctrl+D or Ctrl+C to skip): ")
+            pr_number = input("\nEnter the Pull Request number to append reviewer message to body (Ctrl+D or Ctrl+C to skip): ")
             url = f"https://github.com/apache/kafka/pull/{pr_number}"
             append_message_to_pr_body(url, reviewer_message)
         except (EOFError, KeyboardInterrupt):
