@@ -72,9 +72,7 @@ public final class MetadataShell {
         }
 
         public MetadataShell build() {
-            return new MetadataShell(
-                snapshotPath,
-                faultHandler);
+            return new MetadataShell(snapshotPath, faultHandler);
         }
     }
 
