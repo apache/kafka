@@ -86,6 +86,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.ASSIGN_FROM_SUBSCRIBED_ASSIGNORS;
@@ -176,13 +177,51 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                boolean throwOnFetchStableOffsetsUnsupported,
                                String rackId,
                                Optional<ClientTelemetryReporter> clientTelemetryReporter) {
+        this(rebalanceConfig,
+            logContext,
+            client,
+            assignors,
+            metadata,
+            subscriptions,
+            metrics,
+            metricGrpPrefix,
+            time,
+            autoCommitEnabled,
+            autoCommitIntervalMs,
+            interceptors,
+            throwOnFetchStableOffsetsUnsupported,
+            rackId,
+            clientTelemetryReporter,
+            Optional.empty());
+    }
+
+    /**
+     * Initialize the coordination manager.
+     */
+    public ConsumerCoordinator(GroupRebalanceConfig rebalanceConfig,
+                               LogContext logContext,
+                               ConsumerNetworkClient client,
+                               List<ConsumerPartitionAssignor> assignors,
+                               ConsumerMetadata metadata,
+                               SubscriptionState subscriptions,
+                               Metrics metrics,
+                               String metricGrpPrefix,
+                               Time time,
+                               boolean autoCommitEnabled,
+                               int autoCommitIntervalMs,
+                               ConsumerInterceptors<?, ?> interceptors,
+                               boolean throwOnFetchStableOffsetsUnsupported,
+                               String rackId,
+                               Optional<ClientTelemetryReporter> clientTelemetryReporter,
+                               Optional<Supplier<BaseHeartbeatThread>> heartbeatThreadSupplier) {
         super(rebalanceConfig,
               logContext,
               client,
               metrics,
               metricGrpPrefix,
               time,
-              clientTelemetryReporter);
+              clientTelemetryReporter,
+              heartbeatThreadSupplier);
         this.rebalanceConfig = rebalanceConfig;
         this.log = logContext.logger(ConsumerCoordinator.class);
         this.metadata = metadata;
