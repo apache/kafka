@@ -86,7 +86,7 @@ public class MetadataShellIntegrationTest {
         try (IntegrationEnv env = new IntegrationEnv()) {
             env.shell = new MetadataShell(
                 new File(new File(env.tempDir, "__cluster_metadata-0"), "00000000000122906351-0000000226.checkpoint").getAbsolutePath(),
-                env.faultHandler);
+                    env.faultHandler);
 
             if (canLock) {
                 assertEquals(NoSuchFileException.class,
