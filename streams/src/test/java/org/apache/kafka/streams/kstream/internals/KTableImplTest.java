@@ -386,20 +386,20 @@ public class KTableImplTest {
     public void shouldNotEnableSendingOldValuesIfNotMaterializedAlreadyAndNotForcedToMaterialize() {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final var kTable = assertInstanceOf(KTableImpl.class, builder.table("topic1", consumed));
-        kTable.enableSendingOldValues(false);
+        final var table = assertInstanceOf(KTableImpl.class, builder.table("topic1", consumed));
+        table.enableSendingOldValues(false);
 
-        assertFalse(kTable.sendingOldValueEnabled());
+        assertFalse(table.sendingOldValueEnabled());
     }
 
     @Test
     public void shouldEnableSendingOldValuesIfNotMaterializedAlreadyButForcedToMaterialize() {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final var kTable = assertInstanceOf(KTableImpl.class, builder.table("topic1", consumed));
-        kTable.enableSendingOldValues(true);
+        final var table = assertInstanceOf(KTableImpl.class, builder.table("topic1", consumed));
+        table.enableSendingOldValues(true);
 
-        assertTrue(kTable.sendingOldValueEnabled());
+        assertTrue(table.sendingOldValueEnabled());
     }
 
     private void assertTopologyContainsProcessor(final Topology topology, final String processorName) {
