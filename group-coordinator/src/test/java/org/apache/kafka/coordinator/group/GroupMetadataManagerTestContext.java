@@ -643,7 +643,7 @@ public class GroupMetadataManagerTestContext {
     ) {
         return groupMetadataManager
             .streamsGroup(groupId)
-            .getOrMaybeCreateMember(memberId, false)
+            .getMemberOrThrow(memberId)
             .state();
     }
     

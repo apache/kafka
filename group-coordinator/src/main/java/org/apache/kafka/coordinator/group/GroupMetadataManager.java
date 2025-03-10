@@ -62,7 +62,9 @@ import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData.Endpoint
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData.KeyValue;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData.TaskIds;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData.TaskOffset;
+import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData.Topology;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData.Status;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.protocol.Errors;
@@ -812,40 +814,58 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Gets or maybe creates a streams group without updating the groups map.
+     * Gets or creates a streams group without updating the groups map.
      * The group will be materialized during the replay.
      *
-     * @param groupId           The group id.
-     * @param createIfNotExists A boolean indicating whether the group should be
-     *                          created if it does not exist or is an empty classic group.
+     * @param groupId           The group ID.
      *
      * @return A StreamsGroup.
-     * @throws GroupIdNotFoundException if the group does not exist and createIfNotExists is false or
-     *                                  if the group is not a streams group.
      *
      * Package private for testing.
      */
-    StreamsGroup getOrMaybeCreateStreamsGroup(
-        String groupId,
-        boolean createIfNotExists
-    ) throws GroupIdNotFoundException {
+    StreamsGroup getOrCreateStreamsGroup(
+        String groupId
+    ) {
         Group group = groups.get(groupId);
-
-        if (group == null && !createIfNotExists) {
-            throw new GroupIdNotFoundException(String.format("Streams group %s not found.", groupId));
-        }
 
         if (group == null) {
             return new StreamsGroup(logContext, snapshotRegistry, groupId, metrics);
         } else {
-            if (group.type() == STREAMS) {
-                return (StreamsGroup) group;
-            } else {
-                throw new GroupIdNotFoundException(String.format("Group %s is not a streams group.", groupId));
-            }
+            return castToStreamsGroup(group);
         }
     }
-    
+
+    /**
+     * Gets a streams group without updating the groups map. If the group does not exist,
+     * a GroupIdNotFoundException is thrown.
+     *
+     * @param groupId           The group ID.
+     *
+     * @return A StreamsGroup.
+     * @throws GroupIdNotFoundException if the group does not exist
+     *
+     * Package private for testing.
+     */
+    StreamsGroup getStreamsGroupOrThrow(
+        String groupId
+    ) throws GroupIdNotFoundException {
+        Group group = groups.get(groupId);
+
+        if (group == null) {
+            throw new GroupIdNotFoundException(String.format("Streams group %s not found.", groupId));
+        } else {
+            return castToStreamsGroup(group);
+        }
+    }
+
+    private StreamsGroup castToStreamsGroup(final Group group) {
+        if (group.type() == STREAMS) {
+            return (StreamsGroup) group;
+        } else {
+            throw new GroupIdNotFoundException(String.format("Group %s is not a streams group.", group.groupId()));
+        }
+    }
+
     /**
      * Gets a streams group by committed offset.
      *
@@ -1372,7 +1392,7 @@ public class GroupMetadataManager {
      * @param error The error message.
      * @throws InvalidRequestException
      */
-    private void throwIfEmptyString(
+    private static void throwIfEmptyString(
         String value,
         String error
     ) throws InvalidRequestException {
@@ -1388,7 +1408,7 @@ public class GroupMetadataManager {
      * @param error The error message.
      * @throws InvalidRequestException
      */
-    private void throwIfNotEmptyCollection(
+    private static void throwIfNotEmptyCollection(
         Collection<?> value,
         String error
     ) throws InvalidRequestException {
@@ -1397,7 +1417,7 @@ public class GroupMetadataManager {
         }
     }
 
-    private void throwIfInvalidTopology(
+    private static void throwIfInvalidTopology(
         StreamsGroupHeartbeatRequestData.Topology topology
     ) throws StreamsInvalidTopologyException {
         for (StreamsGroupHeartbeatRequestData.Subtopology subtopology: topology.subtopologies()) {
@@ -1416,7 +1436,7 @@ public class GroupMetadataManager {
      * @param error The error message.
      * @throws InvalidRequestException
      */
-    private void throwIfNotNull(
+    private static void throwIfNotNull(
         Object value,
         String error
     ) throws InvalidRequestException {
@@ -1432,27 +1452,11 @@ public class GroupMetadataManager {
      * @param error The error message.
      * @throws InvalidRequestException
      */
-    private void throwIfNull(
+    private static void throwIfNull(
         Object value,
         String error
     ) throws InvalidRequestException {
         if (value == null) {
-            throw new InvalidRequestException(error);
-        }
-    }
-
-    /**
-     * Throws an InvalidRequestException if the value is null or empty.
-     *
-     * @param value The value.
-     * @param error The error message.
-     * @throws InvalidRequestException
-     */
-    private void throwIfNullOrEmpty(
-            String value,
-            String error
-    ) throws InvalidRequestException {
-        if (value == null || value.trim().isEmpty()) {
             throw new InvalidRequestException(error);
         }
     }
@@ -1536,7 +1540,7 @@ public class GroupMetadataManager {
      * @throws InvalidRequestException if the request is not valid.
      * @throws UnsupportedAssignorException if the assignor is not supported.
      */
-    private void throwIfStreamsGroupHeartbeatRequestIsInvalid(
+    private static void throwIfStreamsGroupHeartbeatRequestIsInvalid(
         StreamsGroupHeartbeatRequestData request
     ) throws InvalidRequestException {
         throwIfEmptyString(request.memberId(), "MemberId can't be empty.");
@@ -1583,7 +1587,7 @@ public class GroupMetadataManager {
      *
      * @return A boolean indicating whether the owned partitions are a subset or not.
      */
-    private boolean isSubset(
+    private static boolean isSubset(
         List<ConsumerGroupHeartbeatRequestData.TopicPartitions> ownedTopicPartitions,
         Map<Uuid, Set<Integer>> target
     ) {
@@ -1603,24 +1607,24 @@ public class GroupMetadataManager {
     /**
      * Verifies that the tasks currently owned by the member (the ones set in the
      * request) matches the ones that the member should own. It matches if the streams
-     * only owns tasks which are in the assigned tasks. It does not match if
+     * group member only owns tasks which are in the assigned tasks. It does not match if
      * it owns any other tasks.
      *
-     * @param ownedTasks  The tasks provided by the streams in the request.
-     * @param target      The tasks that the member should have.
+     * @param ownedTasks    The tasks provided by the streams group member in the request.
+     * @param assignedTasks The tasks that the member should have.
      *
      * @return A boolean indicating whether the owned partitions are a subset or not.
      */
-    private boolean isTaskSubset(
+    private static boolean areOwnedTasksContainedInAssignedTasks(
         List<StreamsGroupHeartbeatRequestData.TaskIds> ownedTasks,
-        Map<String, Set<Integer>> target
+        Map<String, Set<Integer>> assignedTasks
     ) {
         if (ownedTasks == null) return false;
 
-        for (StreamsGroupHeartbeatRequestData.TaskIds topicPartitions : ownedTasks) {
-            Set<Integer> partitions = target.get(topicPartitions.subtopologyId());
+        for (StreamsGroupHeartbeatRequestData.TaskIds ownedTasksOfSubtopology : ownedTasks) {
+            Set<Integer> partitions = assignedTasks.get(ownedTasksOfSubtopology.subtopologyId());
             if (partitions == null) return false;
-            for (Integer partitionId : topicPartitions.partitions()) {
+            for (Integer partitionId : ownedTasksOfSubtopology.partitions()) {
                 if (!partitions.contains(partitionId)) return false;
             }
         }
@@ -1793,7 +1797,7 @@ public class GroupMetadataManager {
      * @throws FencedMemberEpochException if the provided epoch is ahead or behind the epoch known
      *                                    by this coordinator.
      */
-    private void throwIfStreamsGroupMemberEpochIsInvalid(
+    private static void throwIfStreamsGroupMemberEpochIsInvalid(
         StreamsGroupMember member,
         int receivedMemberEpoch,
         List<StreamsGroupHeartbeatRequestData.TaskIds> ownedActiveTasks,
@@ -1808,9 +1812,9 @@ public class GroupMetadataManager {
             // If the member comes with the previous epoch and has a subset of the current assignment partitions,
             // we accept it because the response with the bumped epoch may have been lost.
             if (receivedMemberEpoch != member.previousMemberEpoch()
-                || !isTaskSubset(ownedActiveTasks, member.assignedTasks().activeTasks())
-                || !isTaskSubset(ownedStandbyTasks, member.assignedTasks().standbyTasks())
-                || !isTaskSubset(ownedWarmupTasks, member.assignedTasks().warmupTasks())) {
+                || !areOwnedTasksContainedInAssignedTasks(ownedActiveTasks, member.assignedTasks().activeTasks())
+                || !areOwnedTasksContainedInAssignedTasks(ownedStandbyTasks, member.assignedTasks().standbyTasks())
+                || !areOwnedTasksContainedInAssignedTasks(ownedWarmupTasks, member.assignedTasks().warmupTasks())) {
                 throw new FencedMemberEpochException("The streams group member has a smaller member "
                     + "epoch (" + receivedMemberEpoch + ") than the one known by the group coordinator ("
                     + member.memberEpoch() + "). The member must abandon all its partitions and rejoin.");
@@ -1993,16 +1997,16 @@ public class GroupMetadataManager {
     /**
      * Handles a regular heartbeat from a Streams group member.
      * It mainly consists of five parts:
-     * 1) Created or update the member.
+     * 1) Create or update the member.
      *    The group epoch is bumped if the member has been created or updated.
-     * 2) Initialized or update the topology. The group epoch is bumped if the topology
-     *    has been created or updated.
+     * 2) Initialize or update the topology.
+     *    The group epoch is bumped if the topology has been created or updated.
      * 3) Determine the partition metadata and any internal topics that need to be created.
      * 4) Update the target assignment for the streams group if the group epoch
      *    is larger than the current target assignment epoch.
      * 5) Reconcile the member's assignment with the target assignment.
      *
-     * @param groupId             The group id from the request.
+     * @param groupId             The group ID from the request.
      * @param memberId            The member ID from the request.
      * @param memberEpoch         The member epoch from the request.
      * @param instanceId          The instance ID from the request or null.
@@ -2030,47 +2034,42 @@ public class GroupMetadataManager {
         int rebalanceTimeoutMs,
         String clientId,
         String clientHost,
-        final StreamsGroupHeartbeatRequestData.Topology topology,
+        StreamsGroupHeartbeatRequestData.Topology topology,
         List<TaskIds> ownedActiveTasks,
         List<TaskIds> ownedStandbyTasks,
         List<TaskIds> ownedWarmupTasks,
-        final String processId,
-        final Endpoint userEndpoint,
-        final List<KeyValue> clientTags,
-        final List<TaskOffset> taskOffsets,
-        final List<TaskOffset> taskEndOffsets,
-        final boolean shutdownApplication
+        String processId,
+        Endpoint userEndpoint,
+        List<KeyValue> clientTags,
+        List<TaskOffset> taskOffsets,
+        List<TaskOffset> taskEndOffsets,
+        boolean shutdownApplication
     ) throws ApiException {
         final long currentTimeMs = time.milliseconds();
         final List<CoordinatorRecord> records = new ArrayList<>();
         final List<StreamsGroupHeartbeatResponseData.Status> returnedStatus = new ArrayList<>();
 
         // Get or create the streams group.
-        boolean createIfNotExists = memberEpoch == 0;
-        final StreamsGroup group = getOrMaybeCreateStreamsGroup(groupId, createIfNotExists);
+        boolean isJoining = memberEpoch == 0;
+        final StreamsGroup group = isJoining ? getOrCreateStreamsGroup(groupId) : getStreamsGroupOrThrow(groupId);
 
         // Get or create the member.
         StreamsGroupMember member;
         if (instanceId == null) {
-            member = getOrMaybeSubscribeDynamicStreamsGroupMember(
+            member = getOrMaybeCreateDynamicStreamsGroupMember(
                 group,
                 memberId,
                 memberEpoch,
                 ownedActiveTasks,
                 ownedStandbyTasks,
                 ownedWarmupTasks,
-                createIfNotExists
+                isJoining
             );
         } else {
             throw new UnsupportedOperationException("Static members are not supported yet.");
         }
 
         // 1. Create or update the member.
-        // If the member is new or has changed, a StreamsMemberMetadataValue  record is written to the __consumer_offsets partition to
-        // persist the change. If the subscriptions have changed, the subscription metadata is updated and persisted by writing a
-        // StreamsPartitionMetadataValue
-        // record to the __consumer_offsets partition. Finally, the group epoch is bumped if the subscriptions have
-        // changed, and persisted by writing a StreamsMetadataValue record to the partition.
         StreamsGroupMember updatedMember = new StreamsGroupMember.Builder(member)
             .maybeUpdateInstanceId(Optional.empty())
             .maybeUpdateRackId(Optional.ofNullable(rackId))
@@ -2083,59 +2082,22 @@ public class GroupMetadataManager {
             .maybeUpdateUserEndpoint(Optional.ofNullable(userEndpoint).map(x -> new StreamsGroupMemberMetadataValue.Endpoint().setHost(x.host()).setPort(x.port())))
             .build();
 
-        // If the group is newly created, we must ensure that it moves away from
-        // epoch 0 and that it is fully initialized.
-        int groupEpoch = group.groupEpoch();
-        boolean bumpGroupEpoch = false;
-
-        bumpGroupEpoch |= hasStreamsMemberMetadataChanged(groupId, member, updatedMember, records);
+        // If the member is new or has changed, a StreamsGroupMemberMetadataValue record is written to the __consumer_offsets partition
+        // to persist the change, and bump the group epoch later.
+        boolean bumpGroupEpoch = hasStreamsMemberMetadataChanged(groupId, member, updatedMember, records);
 
         // 2. Initialize/Update the group topology.
-        // If the member is new or has changed, a StreamsGroupTopologyValue record is written to the __consumer_offsets partition to persist
+        // If the topology is new or has changed, a StreamsGroupTopologyValue record is written to the __consumer_offsets partition to persist
         // the change. The group epoch is bumped if the topology has changed.
-        StreamsTopology updatedTopology;
-        boolean reconfigureTopology = false;
-        if (topology != null) {
-            StreamsGroupTopologyValue recordValue = convertToStreamsGroupTopologyRecord(topology);
-
-            updatedTopology = StreamsTopology.fromRequest(topology);
-
-            if (group.topology().isEmpty()) {
-                log.info("[GroupId {}][MemberId {}] Member initialized the topology with epoch {}", groupId, memberId, topology.epoch());
-
-                records.add(newStreamsGroupTopologyRecord(groupId, recordValue));
-
-                reconfigureTopology = true;
-                bumpGroupEpoch = true;
-            } else if (!updatedTopology.equals(group.topology().get())) {
-                throw new InvalidRequestException("Topology updates are not supported yet.");
-            }
-        } else if (group.topology().isPresent()) {
-            updatedTopology = group.topology().get();
-        } else {
-            throw new IllegalStateException("The topology is null and the group topology is also null.");
-        }
-
-        if (group.topology().isPresent() && updatedMember.topologyEpoch() < group.topology().get().topologyEpoch()) {
-            returnedStatus.add(
-                new StreamsGroupHeartbeatResponseData.Status()
-                    .setStatusCode(StreamsGroupHeartbeatResponse.Status.STALE_TOPOLOGY.code())
-                    .setStatusDetail(
-                        String.format(
-                            "The member's topology epoch %d is behind the group's topology epoch %d.",
-                            updatedMember.topologyEpoch(),
-                            group.topology().get().topologyEpoch()
-                        )
-                    )
-            );
-        }
+        StreamsTopology updatedTopology = maybeUpdateTopology(groupId, memberId, topology, group, records);
+        maybeSetTopologyStaleStatus(group, updatedMember, returnedStatus);
 
         // 3. Determine the partition metadata and any internal topics if needed.
         ConfiguredTopology updatedConfiguredTopology;
         Map<String, org.apache.kafka.coordinator.group.streams.TopicMetadata> updatedPartitionMetadata;
+        boolean reconfigureTopology = group.topology().isEmpty();
         if (reconfigureTopology || group.hasMetadataExpired(currentTimeMs)) {
 
-            // The partition metadata is updated when the refresh deadline has been reached.
             updatedPartitionMetadata = group.computePartitionMetadata(
                 metadataImage.topics(),
                 updatedTopology
@@ -2162,6 +2124,7 @@ public class GroupMetadataManager {
         }
 
         // Actually bump the group epoch
+        int groupEpoch = group.groupEpoch();
         if (bumpGroupEpoch) {
             groupEpoch += 1;
             records.add(newStreamsGroupEpochRecord(groupId, groupEpoch));
@@ -2215,22 +2178,9 @@ public class GroupMetadataManager {
             .setHeartbeatIntervalMs(streamsGroupHeartbeatIntervalMs(groupId));
 
         // The assignment is only provided in the following cases:
-        // 1. The member sent a full request.
-        //    It does so when joining or rejoining the group with zero
-        //    as the member epoch; or on any errors (e.g., timeout).
-        //    We use all the non-optional fields to detect a full request as those must be set in a full request.
+        // 1. The member is joining.
         // 2. The member's assignment has been updated.
-        boolean isFullRequest =
-            rebalanceTimeoutMs != -1
-                && ownedActiveTasks != null
-                && ownedStandbyTasks != null
-                && ownedWarmupTasks != null
-                && clientTags != null
-                && processId != null;
-        if (memberEpoch == 0
-            || isFullRequest
-            || hasAssignedTasksChanged(member, updatedMember)
-        ) {
+        if (memberEpoch == 0 || hasAssignedTasksChanged(member, updatedMember)) {
             response.setActiveTasks(createStreamsGroupHeartbeatResponseTaskIds(updatedMember.assignedTasks().activeTasks()));
             response.setStandbyTasks(createStreamsGroupHeartbeatResponseTaskIds(updatedMember.assignedTasks().standbyTasks()));
             response.setWarmupTasks(createStreamsGroupHeartbeatResponseTaskIds(updatedMember.assignedTasks().warmupTasks()));
@@ -2251,6 +2201,70 @@ public class GroupMetadataManager {
             response.setStatus(returnedStatus);
         }
         return new CoordinatorResult<>(records, new StreamsGroupHeartbeatResult(response, internalTopicsToBeCreated));
+    }
+
+    /**
+     * Checks if the member's topology epoch is behind the group's topology epoch, and sets the corresponding status.
+     *
+     * @param group          The streams group.
+     * @param member         The streams group member.
+     * @param returnedStatus A mutable collection of status to be returned in the response.
+     */
+    private static void maybeSetTopologyStaleStatus(final StreamsGroup group, final StreamsGroupMember member, final List<Status> returnedStatus) {
+        if (group.topology().isPresent() && member.topologyEpoch() < group.topology().get().topologyEpoch()) {
+            returnedStatus.add(
+                new Status()
+                    .setStatusCode(StreamsGroupHeartbeatResponse.Status.STALE_TOPOLOGY.code())
+                    .setStatusDetail(
+                        String.format(
+                            "The member's topology epoch %d is behind the group's topology epoch %d.",
+                            member.topologyEpoch(),
+                            group.topology().get().topologyEpoch()
+                        )
+                    )
+            );
+        }
+    }
+
+    /**
+     * Compares the topology from the request with the one in the group.
+     *
+     *  - If the topology of the group is uninitialized, it is initialized with the topology from the request. A corresponding
+     *    record is added to records.
+     *  - If the topology of the group is initialized, and the request defines a topology, they are compared. If they
+     *    are not empty, an InvalidRequestException is thrown.
+     *
+     * @param groupId  The group ID.
+     * @param memberId The member ID.
+     * @param topology The topology provided in the request. May be null.
+     * @param group    The streams group.
+     * @param records  A mutable collection of records to be written to the __consumer_offsets partition.
+     * @return The new topology of the group (which may be the same as the current one).
+     */
+    private StreamsTopology maybeUpdateTopology(final String groupId,
+                                                final String memberId,
+                                                final Topology topology,
+                                                final StreamsGroup group,
+                                                final List<CoordinatorRecord> records) {
+        StreamsTopology updatedTopology;
+        if (topology != null) {
+            StreamsGroupTopologyValue recordValue = convertToStreamsGroupTopologyRecord(topology);
+
+            updatedTopology = StreamsTopology.fromHeartbeatRequest(topology);
+
+            if (group.topology().isEmpty()) {
+                log.info("[GroupId {}][MemberId {}] Member initialized the topology with epoch {}", groupId, memberId, topology.epoch());
+
+                records.add(newStreamsGroupTopologyRecord(groupId, recordValue));
+            } else if (!updatedTopology.equals(group.topology().get())) {
+                throw new InvalidRequestException("Topology updates are not supported yet.");
+            }
+        } else if (group.topology().isPresent()) {
+            updatedTopology = group.topology().get();
+        } else {
+            throw new IllegalStateException("The topology is null and the group topology is also null.");
+        }
+        return updatedTopology;
     }
 
     private List<StreamsGroupHeartbeatResponseData.TaskIds> createStreamsGroupHeartbeatResponseTaskIds(final Map<String, Set<Integer>> taskIds) {
@@ -2817,7 +2831,7 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Gets or subscribes a new dynamic streams group member.
+     * Gets or creates a new dynamic streams group member.
      *
      * @param group                 The streams group.
      * @param memberId              The member id.
@@ -2825,22 +2839,22 @@ public class GroupMetadataManager {
      * @param ownedActiveTasks      The owned active tasks reported by the member.
      * @param ownedStandbyTasks     The owned standby tasks reported by the member.
      * @param ownedWarmupTasks      The owned warmup tasks reported by the member.
-     * @param createIfNotExists     Whether the member should be created or not.
+     * @param memberIsJoining     Whether the member should be created or not.
      *
      * @return The existing streams group member or a new one.
      */
-    private StreamsGroupMember getOrMaybeSubscribeDynamicStreamsGroupMember(
+    private StreamsGroupMember getOrMaybeCreateDynamicStreamsGroupMember(
         StreamsGroup group,
         String memberId,
         int memberEpoch,
         List<StreamsGroupHeartbeatRequestData.TaskIds> ownedActiveTasks,
         List<StreamsGroupHeartbeatRequestData.TaskIds> ownedStandbyTasks,
         List<StreamsGroupHeartbeatRequestData.TaskIds> ownedWarmupTasks,
-        boolean createIfNotExists
+        boolean memberIsJoining
     ) {
-        StreamsGroupMember member = group.getOrMaybeCreateDefaultMember(memberId, createIfNotExists);
+        StreamsGroupMember member = memberIsJoining ? group.getOrCreateDefaultMember(memberId) : group.getMemberOrThrow(memberId);
         throwIfStreamsGroupMemberEpochIsInvalid(member, memberEpoch, ownedActiveTasks, ownedStandbyTasks, ownedWarmupTasks);
-        if (createIfNotExists) {
+        if (memberIsJoining) {
             log.info("[GroupId {}][MemberId {}] Member joins the streams group.", group.groupId(), memberId);
         }
         return member;
@@ -3842,7 +3856,7 @@ public class GroupMetadataManager {
      * @param memberId      The member id from the request.
      * @param memberEpoch   The member epoch from the request.
      *
-     * @return A Result containing the StreamsGroupHeartbeat response and
+     * @return A result containing the StreamsGroupHeartbeat response and
      *         a list of records to update the state machine.
      */
     private CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> streamsGroupLeave(
@@ -3857,7 +3871,7 @@ public class GroupMetadataManager {
             .setMemberEpoch(memberEpoch);
 
         if (instanceId == null) {
-            StreamsGroupMember member = group.getOrMaybeCreateMember(memberId, false);
+            StreamsGroupMember member = group.getMemberOrThrow(memberId);
             log.info("[GroupId {}][MemberId {}] Member {} left the streams group.", groupId, memberId, memberId);
             return streamsGroupFenceMember(group, member, new StreamsGroupHeartbeatResult(response, Map.of()));
         } else {
@@ -4302,7 +4316,7 @@ public class GroupMetadataManager {
     ) {
         try {
             StreamsGroup group = streamsGroup(groupId);
-            StreamsGroupMember member = group.getOrMaybeCreateMember(memberId, false);
+            StreamsGroupMember member = group.getMemberOrThrow(memberId);
             log.info("[GroupId {}] Streams member {} fenced from the group because {}.",
                 groupId, memberId, reason);
 
@@ -4433,7 +4447,7 @@ public class GroupMetadataManager {
         timer.schedule(key, rebalanceTimeoutMs, TimeUnit.MILLISECONDS, true, () -> {
             try {
                 StreamsGroup group = streamsGroup(groupId);
-                StreamsGroupMember member = group.getOrMaybeCreateMember(memberId, false);
+                StreamsGroupMember member = group.getMemberOrThrow(memberId);
 
                 if (member.memberEpoch() == memberEpoch) {
                     log.info("[GroupId {}] Member {} fenced from the group because " +
@@ -4587,7 +4601,7 @@ public class GroupMetadataManager {
      * @param context The request context.
      * @param request The actual StreamsGroupHeartbeat request.
      *
-     * @return A Result containing the StreamsGroupHeartbeat response, a list of internal topics to create and
+     * @return A result containing the StreamsGroupHeartbeat response, a list of internal topics to create and
      *         a list of records to update the state machine.
      */
     public CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> streamsGroupHeartbeat(
@@ -5222,14 +5236,14 @@ public class GroupMetadataManager {
         }
 
         if (value != null) {
-            StreamsGroupMember oldMember = streamsGroup.getOrMaybeCreateMember(memberId, true);
+            StreamsGroupMember oldMember = streamsGroup.getOrCreateUninitializedMember(memberId);
             streamsGroup.updateMember(new StreamsGroupMember.Builder(oldMember)
                 .updateWith(value)
                 .build());
         } else {
             StreamsGroupMember oldMember;
             try {
-                oldMember = streamsGroup.getOrMaybeCreateMember(memberId, false);
+                oldMember = streamsGroup.getMemberOrThrow(memberId);
             } catch (UnknownMemberIdException ex) {
                 // If the member does not exist, we can ignore it.
                 return;
@@ -5327,7 +5341,7 @@ public class GroupMetadataManager {
 
         if (value != null) {
             StreamsGroup streamsGroup = getOrMaybeCreatePersistedStreamsGroup(groupId, true);
-            StreamsGroupMember oldMember = streamsGroup.getOrMaybeCreateMember(memberId, true);
+            StreamsGroupMember oldMember = streamsGroup.getOrCreateUninitializedMember(memberId);
             StreamsGroupMember newMember = new StreamsGroupMember.Builder(oldMember)
                 .updateWith(value)
                 .build();
@@ -5343,7 +5357,7 @@ public class GroupMetadataManager {
 
             StreamsGroupMember oldMember;
             try {
-                oldMember = streamsGroup.getOrMaybeCreateMember(memberId, false);
+                oldMember = streamsGroup.getMemberOrThrow(memberId);
             } catch (UnknownMemberIdException ex) {
                 // If the member does not exist, we can ignore the tombstone.
                 return;

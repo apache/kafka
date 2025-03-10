@@ -20,6 +20,7 @@ import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.Subtopology;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.TopicInfo;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -104,12 +105,12 @@ public class StreamsTopologyTest {
     }
 
     @Test
-    public void fromRequestShouldCreateCorrectTopology() {
+    public void fromHeartbeatRequestShouldCreateCorrectTopology() {
         StreamsGroupHeartbeatRequestData.Topology requestTopology = new StreamsGroupHeartbeatRequestData.Topology()
             .setEpoch(1)
             .setSubtopologies(List.of(mkRequestSubtopology1(), mkRequestSubtopology2()));
 
-        StreamsTopology topology = StreamsTopology.fromRequest(requestTopology);
+        StreamsTopology topology = StreamsTopology.fromHeartbeatRequest(requestTopology);
 
         assertEquals(1, topology.topologyEpoch());
         assertEquals(2, topology.subtopologies().size());

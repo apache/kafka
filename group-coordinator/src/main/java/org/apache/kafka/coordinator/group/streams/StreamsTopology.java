@@ -89,7 +89,7 @@ public record StreamsTopology(int topologyEpoch,
      * @param topology The topology supplied in the request.
      * @return The instance of StreamsTopology created from the request.
      */
-    public static StreamsTopology fromRequest(StreamsGroupHeartbeatRequestData.Topology topology) {
+    public static StreamsTopology fromHeartbeatRequest(StreamsGroupHeartbeatRequestData.Topology topology) {
         StreamsGroupTopologyValue recordValue = StreamsCoordinatorRecordHelpers.convertToStreamsGroupTopologyRecord(topology);
         final Map<String, StreamsGroupTopologyValue.Subtopology> subtopologyMap = recordValue.subtopologies().stream()
             .collect(Collectors.toMap(StreamsGroupTopologyValue.Subtopology::subtopologyId, x -> x));
