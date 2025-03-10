@@ -14,16 +14,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.admin;
+package kafka.test.api;
 
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.test.ClusterInstance;
-import org.apache.kafka.common.test.TestUtils;
 import org.apache.kafka.common.test.api.ClusterConfig;
 import org.apache.kafka.common.test.api.ClusterTemplate;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
+import org.apache.kafka.test.TestUtils;
 
 import java.util.HashMap;
 import java.util.List;
@@ -31,9 +32,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
-
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
-
 
 public class AdminClientRebootstrapTest {
     private static final int BROKER_COUNT = 2;
@@ -73,14 +71,10 @@ public class AdminClientRebootstrapTest {
             .setServerProperties(serverProperties).build();
     }
 
-    private boolean containsTopic(Admin admin, String topic) {
-        return assertDoesNotThrow(() ->
-            admin.listTopics().names().get(60, TimeUnit.SECONDS).contains(topic));
-    }
-
     @ClusterTemplate(value = "generator")
-    public void testRebootstrap(ClusterInstance clusterInstance) throws Exception {
+    public void testRebootstrap(ClusterInstance clusterInstance) throws InterruptedException {
         var topic = "topic";
+        var timeout = 5;
         try (var admin = clusterInstance.admin()) {
             admin.createTopics(List.of(new NewTopic(topic, BROKER_COUNT, (short) 2)));
 
@@ -91,8 +85,7 @@ public class AdminClientRebootstrapTest {
             server1.awaitShutdown();
 
             // Only the server 0 is available for the admin client during the bootstrap.
-
-            TestUtils.waitForCondition(() -> containsTopic(admin, topic),
+            TestUtils.waitForCondition(() -> admin.listTopics().names().get(timeout, TimeUnit.MINUTES).contains(topic),
                 "timed out waiting for topics");
 
             server0.shutdown();
@@ -102,16 +95,16 @@ public class AdminClientRebootstrapTest {
             // The server 0, originally cached during the bootstrap, is offline.
             // However, the server 1 from the bootstrap list is online.
             // Should be able to list topics again.
-            TestUtils.waitForCondition(() -> containsTopic(admin, topic),
-                    "timed out waiting for topics");
+            TestUtils.waitForCondition(() -> admin.listTopics().names().get(timeout, TimeUnit.MINUTES).contains(topic),
+                "timed out waiting for topics");
 
             server1.shutdown();
             server1.awaitShutdown();
             server0.startup();
 
             // The same situation, but the server 1 has gone and server 0 is back.
-            TestUtils.waitForCondition(() -> containsTopic(admin, topic),
-                    "timed out waiting for topics");
+            TestUtils.waitForCondition(() -> admin.listTopics().names().get(timeout, TimeUnit.MINUTES).contains(topic),
+                "timed out waiting for topics");
         }
     }
 }
