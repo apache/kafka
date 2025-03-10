@@ -64,6 +64,8 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
         AddPartitionsToTxnConfig.CONFIG_DEF
     ));
 
+    private final TransactionLogConfig transactionLogConfig = new TransactionLogConfig(this);
+
     public AbstractKafkaConfig(ConfigDef definition, Map<?, ?> originals, Map<String, ?> configProviderProps, boolean doLog) {
         super(definition, originals, configProviderProps, doLog);
     }
@@ -82,5 +84,9 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
 
     public int backgroundThreads() {
         return getInt(ServerConfigs.BACKGROUND_THREADS_CONFIG);
+    }
+
+    public TransactionLogConfig transactionLogConfig() {
+        return transactionLogConfig;
     }
 }
