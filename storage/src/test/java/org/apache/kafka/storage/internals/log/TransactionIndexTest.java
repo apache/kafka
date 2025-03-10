@@ -229,7 +229,7 @@ public class TransactionIndexTest {
     }
 
     @Test
-    public void testDoNotCreateFileUntilNeeded() throws IOException {
+    void testDoNotCreateFileUntilNeeded() throws IOException {
         // Given that index file does not exist yet
         file.delete();
         // When index is created, reset, or flushed
@@ -246,7 +246,7 @@ public class TransactionIndexTest {
     }
 
     @Test
-    public void testAppendAndCollectAfterClose() throws IOException {
+    void testAppendAndCollectAfterClose() throws IOException {
         // Given the index
         // When closed
         index.close();
@@ -273,7 +273,7 @@ public class TransactionIndexTest {
     }
 
     @Test
-    public void testAppendAndCollectAfterInterrupted() throws Exception {
+    void testAppendAndCollectAfterInterrupted() throws Exception {
         // Given the index
         // When closed
         index.close();
