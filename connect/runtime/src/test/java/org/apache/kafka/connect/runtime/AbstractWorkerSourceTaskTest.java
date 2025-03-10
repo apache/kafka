@@ -752,9 +752,6 @@ public class AbstractWorkerSourceTaskTest {
 
         expectConvertHeadersAndKeyValue(emptyHeaders(), TOPIC);
 
-        TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, null, Collections.emptyList(), Collections.emptyList());
-        TopicDescription topicDesc = new TopicDescription(TOPIC, false, Collections.singletonList(topicPartitionInfo));
-
         workerTask.toSend = Arrays.asList(record1);
 
         // The transformation errored out so the error should be ignored & the record skipped with error tolerance all
