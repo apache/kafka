@@ -155,15 +155,15 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
         int numTargetPartitions = targetPartitions.size();
         int desiredAssignmentCount = (numTargetPartitions + numGroupMembers - 1) / numGroupMembers;
 
-        Map<TopicIdPartition, List<String>> newAssignment = new HashMap<>((int) (((numTargetPartitions + 1) / 0.75f) + 1));
+        Map<TopicIdPartition, List<String>> newAssignment = newHashMap(numTargetPartitions);
 
         // Hash member IDs to topic partitions. Each member will be assigned one partition, but some partitions
         // might have been assigned to more than one member.
         memberHashAssignment(groupSpec.memberIds(), targetPartitions, newAssignment);
 
         // Combine current and new hashed assignments, sized to accommodate the expected number of mappings.
-        Map<String, Set<TopicIdPartition>> finalAssignment = new HashMap<>((int) ((numGroupMembers / 0.75f) + 1));
-        Map<TopicIdPartition, Set<String>> finalAssignmentByPartition = new HashMap<>((int) (((numTargetPartitions + 1) / 0.75f) + 1));
+        Map<String, Set<TopicIdPartition>> finalAssignment = newHashMap(numGroupMembers);
+        Map<TopicIdPartition, Set<String>> finalAssignmentByPartition = newHashMap(numTargetPartitions);
 
         // First, take the members assigned by hashing.
         newAssignment.forEach((targetPartition, members) -> members.forEach(member -> {
@@ -241,7 +241,7 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
             roundRobinAssignment(topicToMemberSubscription.get(unassignedTopic), unassignedPartitions.get(unassignedTopic), newAssignment));
 
         // Step 3: We combine current assignment and new assignment.
-        Map<String, Set<TopicIdPartition>> finalAssignment = new HashMap<>((int) ((numGroupMembers / 0.75f) + 1));
+        Map<String, Set<TopicIdPartition>> finalAssignment = newHashMap(numGroupMembers);
 
         newAssignment.forEach((targetPartition, members) -> members.forEach(member ->
             finalAssignment.computeIfAbsent(member, k -> new HashSet<>()).add(targetPartition)));
@@ -308,11 +308,11 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
     /**
      * This functions assigns topic partitions to members by a round-robin approach and updates the existing assignment.
      * @param memberIds              The member ids to which the topic partitions need to be assigned, should be non-empty.
-     * @param partitionsToAssign     The subscribed topic partitions which needs assignment.
+     * @param partitionsToAssign     The subscribed topic partitions which need assignment.
      * @param assignment             The existing assignment by topic partition. We need to pass it as a parameter because this
      *                               method can be called multiple times for heterogeneous assignment.
      * @param desiredAssignmentCount The number of partitions which can be assigned to each member to give even balance.
-     *                               Note that this number is slightly higher than strictly required to allow for situations
+     *                               Note that this number can be exceeded by one to allow for situations
      *                               in which we have hashing collisions.
      */
     void roundRobinAssignmentWithCount(
@@ -338,6 +338,7 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
             }
             String memberId = memberIdIterator.next();
             Set<TopicIdPartition> memberPartitions = assignment.computeIfAbsent(memberId, k -> new HashSet<>());
+            // We are prepared to add one more partition, even if the desired assignment count is already reached.
             if (memberPartitions.size() <= desiredAssignmentCount) {
                 memberPartitions.add(partition);
             } else {
@@ -375,7 +376,8 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
         Map<String, MemberAssignment> members = new HashMap<>();
         for (Map.Entry<String, Set<TopicIdPartition>> entry : assignmentByMember.entrySet()) {
             Map<Uuid, Set<Integer>> targetPartitions = new HashMap<>();
-            entry.getValue().forEach(targetPartition -> targetPartitions.computeIfAbsent(targetPartition.topicId(), k -> new HashSet<>()).add(targetPartition.partitionId()));
+            entry.getValue().forEach(targetPartition ->
+                targetPartitions.computeIfAbsent(targetPartition.topicId(), k -> new HashSet<>()).add(targetPartition.partitionId()));
             members.put(entry.getKey(), new MemberAssignmentImpl(targetPartitions));
         }
         allGroupMembers.forEach(member -> {
@@ -384,5 +386,9 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
         });
 
         return new GroupAssignment(members);
+    }
+
+    private static <K, V> HashMap<K, V> newHashMap(int numMappings) {
+        return new HashMap<>((int) (((numMappings + 1) / 0.75f) + 1));
     }
 }
