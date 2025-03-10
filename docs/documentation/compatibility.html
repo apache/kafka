@@ -15,8 +15,8 @@
  limitations under the License.
 -->
 
-<!--#include virtual="../includes/_header.htm" -->
-<!--#include virtual="../includes/_top.htm" -->
+<!--#include virtual="../../includes/_header.htm" -->
+<!--#include virtual="../../includes/_top.htm" -->
 <div class="content">
     <div class="p-compatibility">
         <h1>Compatibility</h1>
@@ -61,7 +61,7 @@
                 <td>✅</td>
             </tr>
         </table>
-        <p><strong>Note: Java 8 is deprecated in Kafka 4.0 and is no longer supported.</strong></p>
+        <p><strong>Note: Java 8 is removed in Kafka 4.0 and is no longer supported.</strong></p>
 
         <h2 class="anchor-heading">Server Compatibility</h2>
         <table>
@@ -128,7 +128,7 @@
                 <th>Key Differences/Limitations</th>
             </tr>
             <tr>
-                <td rowspan="3">0.x</td>
+                <td rowspan="3">0.x, 1.x, 2.0</td>
                 <td>Client</td>
                 <td>❌ Not Compatible</td>
                 <td>Pre-0.10.x protocols are fully removed in Kafka 4.0 (<a
@@ -138,7 +138,9 @@
             <tr>
                 <td>Streams</td>
                 <td>❌ Not Compatible</td>
-                <td>Kafka Streams introduced in Kafka 0.10.x.</td>
+                <td>Pre-0.10.x protocols are fully removed in Kafka 4.0 (<a
+                        href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-896">KIP-896</a>).
+                </td>
             </tr>
             <tr>
                 <td>Connect</td>
@@ -148,23 +150,7 @@
                 </td>
             </tr>
             <tr>
-                <td rowspan="3">1.x</td>
-                <td>Client</td>
-                <td>⚠️ Limited Compatibility</td>
-                <td>Does not support newer features like idempotent producer or transactional API.</td>
-            </tr>
-            <tr>
-                <td>Streams</td>
-                <td>⚠️ Limited Compatibility</td>
-                <td>Basic Streams features available. EOSv1 and eager rebalancing unavailable in Kafka 4.0.</td>
-            </tr>
-            <tr>
-                <td>Connect</td>
-                <td>⚠️ Limited Compatibility</td>
-                <td>IncrementalAlterConfigs not supported before Kafka 2.3.x.</td>
-            </tr>
-            <tr>
-                <td rowspan="3">2.x</td>
+                <td rowspan="3">2.1 ~ 2.8</td>
                 <td>Client</td>
                 <td>⚠️ Partially Compatible</td>
                 <td>
@@ -221,5 +207,5 @@
         </p>
 
     </div>
-    <!--#include virtual="../includes/_footer.htm" -->
+    <!--#include virtual="../../includes/_footer.htm" -->
 </div>
