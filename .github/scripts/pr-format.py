@@ -121,9 +121,9 @@ if __name__ == "__main__":
             checks.append((1, f"{err} {err_msg}"))
 
     # Check title
-    check(not title.endswith("..."), "Title is not truncated", "Title appears truncated")
-    check(len(title) >= 15, "Title is not too short", "Title is too short")
-    check(len(title) < 120, "Title is not too long", "Title is too long")
+    check(not title.endswith("..."), "Title is not truncated", "Title appears truncated (ends with ...)")
+    check(len(title) >= 15, "Title is not too short", "Title is too short (under 15 characters)")
+    check(len(title) <= 120, "Title is not too long", "Title is too long (over 120 characters)")
     ok_prefix = title.startswith("KAFKA-") or title.startswith("MINOR") or title.startswith("HOTFIX")
     check(ok_prefix, "Title has expected KAFKA/MINOR/HOTFIX", "Title is missing KAFKA-XXXXX or MINOR/HOTFIX prefix")
 
