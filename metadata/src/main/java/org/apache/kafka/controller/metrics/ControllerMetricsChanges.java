@@ -133,7 +133,7 @@ class ControllerMetricsChanges {
             if (!PartitionRegistration.electionWasClean(next.leader, prevIsr, prevElr)) {
                 uncleanLeaderElection++;
             }
-            if (PartitionRegistration.electionWithElr(next.leader, prevElr)) {
+            if (PartitionRegistration.electionFromElr(next.leader, prevElr)) {
                 elrElection++;
             }
         }

@@ -169,7 +169,7 @@ public class PartitionRegistration {
         return newLeader == NO_LEADER || Replicas.contains(isr, newLeader) || Replicas.contains(elr, newLeader);
     }
 
-    public static boolean electionWithElr(int newLeader, int[] elr) {
+    public static boolean electionFromElr(int newLeader, int[] elr) {
         return Replicas.contains(elr, newLeader);
     }
 

@@ -67,8 +67,8 @@ public class PartitionRegistrationTest {
 
     @Test
     public void testEligibleLeaderReplicasElection() {
-        assertTrue(PartitionRegistration.electionWithElr(1, new int[]{1, 2}));
-        assertFalse(PartitionRegistration.electionWithElr(1, new int[]{0, 2}));
+        assertTrue(PartitionRegistration.electionFromElr(1, new int[]{1, 2}));
+        assertFalse(PartitionRegistration.electionFromElr(1, new int[]{0, 2}));
     }
 
     @Test
