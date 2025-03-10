@@ -66,6 +66,12 @@ public class PartitionRegistrationTest {
     }
 
     @Test
+    public void testEligibleLeaderReplicasElection() {
+        assertTrue(PartitionRegistration.electionWithElr(1, new int[]{1, 2}));
+        assertFalse(PartitionRegistration.electionWithElr(1, new int[]{0, 2}));
+    }
+
+    @Test
     public void testPartitionControlInfoMergeAndDiff() {
         PartitionRegistration a = new PartitionRegistration.Builder().
             setReplicas(new int[]{1, 2, 3}).setDirectories(DirectoryId.unassignedArray(3)).

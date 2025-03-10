@@ -49,7 +49,8 @@ public class ControllerMetadataMetricsTest {
                         "kafka.controller:type=KafkaController,name=OfflinePartitionsCount",
                         "kafka.controller:type=KafkaController,name=PreferredReplicaImbalanceCount",
                         "kafka.controller:type=KafkaController,name=IgnoredStaticVoters",
-                        "kafka.controller:type=ControllerStats,name=UncleanLeaderElectionsPerSec"
+                        "kafka.controller:type=ControllerStats,name=UncleanLeaderElectionsPerSec",
+                        "kafka.controller:type=ControllerStats,name=EligibleLeaderReplicasElectionsPerSec"
                     )));
             }
             ControllerMetricsTestUtils.assertMetricsForTypeEqual(registry, "KafkaController",
@@ -187,6 +188,22 @@ public class ControllerMetadataMetricsTest {
             assertEquals(0, UncleanLeaderElectionsPerSec.count());
             metrics.updateUncleanLeaderElection(2);
             assertEquals(2, UncleanLeaderElectionsPerSec.count());
+        } finally {
+            registry.shutdown();
+        }
+    }
+
+    @SuppressWarnings("LocalVariableName")
+    @Test
+    public void testUpdateEligibleLeaderReplicasElection() {
+        MetricsRegistry registry = new MetricsRegistry();
+        try (ControllerMetadataMetrics metrics = new ControllerMetadataMetrics(Optional.of(registry))) {
+            Meter EligibleLeaderReplicasElectionsPerSec = (Meter) registry
+                .allMetrics()
+                .get(metricName("ControllerStats", "EligibleLeaderReplicasElectionsPerSec"));
+            assertEquals(0, EligibleLeaderReplicasElectionsPerSec.count());
+            metrics.updateEligibleLeaderReplicasElection(2);
+            assertEquals(2, EligibleLeaderReplicasElectionsPerSec.count());
         } finally {
             registry.shutdown();
         }
