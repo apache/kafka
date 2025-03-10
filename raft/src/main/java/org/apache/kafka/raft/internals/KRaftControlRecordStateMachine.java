@@ -233,7 +233,7 @@ public final class KRaftControlRecordStateMachine {
         while (log.endOffset().offset() > nextOffset) {
             LogFetchInfo info = log.read(nextOffset, Isolation.UNCOMMITTED);
             try (RecordsIterator<?> iterator = new RecordsIterator<>(
-                    info.records,
+                    info.records(),
                     serde,
                     bufferSupplier,
                     maxBatchSizeBytes,

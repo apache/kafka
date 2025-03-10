@@ -17,6 +17,7 @@
 
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData.ReassignableTopic;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
@@ -42,6 +43,11 @@ public class AlterPartitionReassignmentsRequest extends AbstractRequest {
 
         @Override
         public AlterPartitionReassignmentsRequest build(short version) {
+            if (!data.allowReplicationFactorChange() && version < 1) {
+                throw new UnsupportedVersionException("The broker does not support the AllowReplicationFactorChange " +
+                        "option for the AlterPartitionReassignments API. Consider re-sending the request without the " +
+                        "option or updating the server version");
+            }
             return new AlterPartitionReassignmentsRequest(data, version);
         }
 

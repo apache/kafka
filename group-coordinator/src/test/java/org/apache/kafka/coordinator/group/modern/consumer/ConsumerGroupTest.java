@@ -57,7 +57,6 @@ import org.junit.jupiter.params.provider.CsvSource;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -247,7 +246,7 @@ public class ConsumerGroupTest {
 
         member = new ConsumerGroupMember.Builder("member")
             .setMemberEpoch(10)
-            .setAssignedPartitions(Collections.emptyMap())
+            .setAssignedPartitions(Map.of())
             .setPartitionsPendingRevocation(mkAssignment(
                 mkTopicAssignment(fooTopicId, 1)))
             .build();
@@ -260,7 +259,7 @@ public class ConsumerGroupTest {
             .setMemberEpoch(11)
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(fooTopicId, 1)))
-            .setPartitionsPendingRevocation(Collections.emptyMap())
+            .setPartitionsPendingRevocation(Map.of())
             .build();
 
         consumerGroup.updateMember(member);
@@ -641,20 +640,20 @@ public class ConsumerGroupTest {
             .build();
 
         ConsumerGroupMember member1 = new ConsumerGroupMember.Builder("member1")
-            .setSubscribedTopicNames(Collections.singletonList("foo"))
+            .setSubscribedTopicNames(List.of("foo"))
             .build();
         ConsumerGroupMember member2 = new ConsumerGroupMember.Builder("member2")
-            .setSubscribedTopicNames(Collections.singletonList("bar"))
+            .setSubscribedTopicNames(List.of("bar"))
             .build();
         ConsumerGroupMember member3 = new ConsumerGroupMember.Builder("member3")
-            .setSubscribedTopicNames(Collections.singletonList("zar"))
+            .setSubscribedTopicNames(List.of("zar"))
             .build();
 
         ConsumerGroup consumerGroup = createConsumerGroup("group-foo");
 
         // It should be empty by default.
         assertEquals(
-            Collections.emptyMap(),
+            Map.of(),
             consumerGroup.computeSubscriptionMetadata(
                 consumerGroup.computeSubscribedTopicNames(null, null),
                 image.topics(),
@@ -691,7 +690,7 @@ public class ConsumerGroupTest {
 
         // Compute while taking into account removal of member 1.
         assertEquals(
-            Collections.emptyMap(),
+            Map.of(),
             consumerGroup.computeSubscriptionMetadata(
                 consumerGroup.computeSubscribedTopicNames(member1, null),
                 image.topics(),
@@ -785,7 +784,7 @@ public class ConsumerGroupTest {
 
         // Compute while taking into account removal of member 1, member 2 and member 3
         assertEquals(
-            Collections.emptyMap(),
+            Map.of(),
             consumerGroup.computeSubscriptionMetadata(
                 consumerGroup.computeSubscribedTopicNames(new HashSet<>(Arrays.asList(member1, member2, member3))),
                 image.topics(),
@@ -812,7 +811,7 @@ public class ConsumerGroupTest {
                 mkEntry("zar", new TopicMetadata(zarTopicId, "zar", 3))
             ),
             consumerGroup.computeSubscriptionMetadata(
-                consumerGroup.computeSubscribedTopicNames(Collections.singleton(member1)),
+                consumerGroup.computeSubscribedTopicNames(Set.of(member1)),
                 image.topics(),
                 image.cluster()
             )
@@ -826,7 +825,7 @@ public class ConsumerGroupTest {
                 mkEntry("zar", new TopicMetadata(zarTopicId, "zar", 3))
             ),
             consumerGroup.computeSubscriptionMetadata(
-                consumerGroup.computeSubscribedTopicNames(Collections.emptySet()),
+                consumerGroup.computeSubscribedTopicNames(Set.of()),
                 image.topics(),
                 image.cluster()
             )
@@ -836,7 +835,7 @@ public class ConsumerGroupTest {
     @Test
     public void testUpdateSubscribedTopicNamesAndSubscriptionType() {
         ConsumerGroupMember member1 = new ConsumerGroupMember.Builder("member1")
-            .setSubscribedTopicNames(Collections.singletonList("foo"))
+            .setSubscribedTopicNames(List.of("foo"))
             .build();
         ConsumerGroupMember member2 = new ConsumerGroupMember.Builder("member2")
             .setSubscribedTopicNames(Arrays.asList("bar", "foo"))
@@ -849,7 +848,7 @@ public class ConsumerGroupTest {
 
         // It should be empty by default.
         assertEquals(
-            Collections.emptyMap(),
+            Map.of(),
             consumerGroup.subscribedTopicNames()
         );
 
@@ -910,9 +909,9 @@ public class ConsumerGroupTest {
         String memberId2 = "member2";
 
         // Initial assignment for member1
-        Assignment initialAssignment = new Assignment(Collections.singletonMap(
+        Assignment initialAssignment = new Assignment(Map.of(
             topicId,
-            new HashSet<>(Collections.singletonList(0))
+            new HashSet<>(List.of(0))
         ));
         consumerGroup.updateTargetAssignment(memberId1, initialAssignment);
 
@@ -925,9 +924,9 @@ public class ConsumerGroupTest {
         );
 
         // New assignment for member1
-        Assignment newAssignment = new Assignment(Collections.singletonMap(
+        Assignment newAssignment = new Assignment(Map.of(
             topicId,
-            new HashSet<>(Collections.singletonList(1))
+            new HashSet<>(List.of(1))
         ));
         consumerGroup.updateTargetAssignment(memberId1, newAssignment);
 
@@ -940,9 +939,9 @@ public class ConsumerGroupTest {
         );
 
         // New assignment for member2 to add partition 1
-        Assignment newAssignment2 = new Assignment(Collections.singletonMap(
+        Assignment newAssignment2 = new Assignment(Map.of(
             topicId,
-            new HashSet<>(Collections.singletonList(1))
+            new HashSet<>(List.of(1))
         ));
         consumerGroup.updateTargetAssignment(memberId2, newAssignment2);
 
@@ -955,9 +954,9 @@ public class ConsumerGroupTest {
         );
 
         // New assignment for member1 to revoke partition 1 and assign partition 0
-        Assignment newAssignment1 = new Assignment(Collections.singletonMap(
+        Assignment newAssignment1 = new Assignment(Map.of(
             topicId,
-            new HashSet<>(Collections.singletonList(0))
+            new HashSet<>(List.of(0))
         ));
         consumerGroup.updateTargetAssignment(memberId1, newAssignment1);
 
@@ -1121,14 +1120,14 @@ public class ConsumerGroupTest {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         GroupCoordinatorMetricsShard metricsShard = new GroupCoordinatorMetricsShard(
             snapshotRegistry,
-            Collections.emptyMap(),
+            Map.of(),
             new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)
         );
         ConsumerGroup group = new ConsumerGroup(snapshotRegistry, "group-foo", metricsShard);
         snapshotRegistry.idempotentCreateSnapshot(0);
         assertEquals(ConsumerGroup.ConsumerGroupState.EMPTY.toString(), group.stateAsString(0));
         group.updateMember(new ConsumerGroupMember.Builder("member1")
-            .setSubscribedTopicNames(Collections.singletonList("foo"))
+            .setSubscribedTopicNames(List.of("foo"))
             .build());
         snapshotRegistry.idempotentCreateSnapshot(1);
         assertEquals(ConsumerGroup.ConsumerGroupState.EMPTY.toString(), group.stateAsString(0));
@@ -1222,10 +1221,10 @@ public class ConsumerGroupTest {
             .build();
 
         ConsumerGroupMember member1 = new ConsumerGroupMember.Builder("member1")
-            .setSubscribedTopicNames(Collections.singletonList("foo"))
+            .setSubscribedTopicNames(List.of("foo"))
             .build();
         ConsumerGroupMember member2 = new ConsumerGroupMember.Builder("member2")
-            .setSubscribedTopicNames(Collections.singletonList("bar"))
+            .setSubscribedTopicNames(List.of("bar"))
             .build();
 
         ConsumerGroup consumerGroup = createConsumerGroup("group-foo");
@@ -1263,7 +1262,7 @@ public class ConsumerGroupTest {
         assertEquals(ConsumerGroup.ConsumerGroupState.EMPTY.toString(), group.stateAsString(0));
 
         group.updateMember(new ConsumerGroupMember.Builder("member1")
-                .setSubscribedTopicNames(Collections.singletonList("foo"))
+                .setSubscribedTopicNames(List.of("foo"))
                 .setServerAssignorName("assignorName")
                 .build());
         group.updateMember(new ConsumerGroupMember.Builder("member2")
@@ -1279,7 +1278,7 @@ public class ConsumerGroupTest {
             .setMembers(Arrays.asList(
                 new ConsumerGroupDescribeResponseData.Member()
                     .setMemberId("member1")
-                    .setSubscribedTopicNames(Collections.singletonList("foo"))
+                    .setSubscribedTopicNames(List.of("foo"))
                     .setSubscribedTopicRegex("")
                     .setMemberType((byte) 1),
                 new ConsumerGroupDescribeResponseData.Member().setMemberId("member2")
@@ -1297,21 +1296,21 @@ public class ConsumerGroupTest {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         GroupCoordinatorMetricsShard metricsShard = new GroupCoordinatorMetricsShard(
             snapshotRegistry,
-            Collections.emptyMap(),
+            Map.of(),
             new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)
         );
         ConsumerGroup group = new ConsumerGroup(snapshotRegistry, "group-foo", metricsShard);
         snapshotRegistry.idempotentCreateSnapshot(0);
-        assertTrue(group.isInStates(Collections.singleton("empty"), 0));
-        assertFalse(group.isInStates(Collections.singleton("Empty"), 0));
+        assertTrue(group.isInStates(Set.of("empty"), 0));
+        assertFalse(group.isInStates(Set.of("Empty"), 0));
 
         group.updateMember(new ConsumerGroupMember.Builder("member1")
-            .setSubscribedTopicNames(Collections.singletonList("foo"))
+            .setSubscribedTopicNames(List.of("foo"))
             .build());
         snapshotRegistry.idempotentCreateSnapshot(1);
-        assertTrue(group.isInStates(Collections.singleton("empty"), 0));
-        assertTrue(group.isInStates(Collections.singleton("stable"), 1));
-        assertFalse(group.isInStates(Collections.singleton("empty"), 1));
+        assertTrue(group.isInStates(Set.of("empty"), 0));
+        assertTrue(group.isInStates(Set.of("stable"), 1));
+        assertFalse(group.isInStates(Set.of("empty"), 1));
     }
 
     @Test
@@ -1512,7 +1511,7 @@ public class ConsumerGroupTest {
             5000,
             500,
             ConsumerProtocol.PROTOCOL_TYPE,
-            new JoinGroupRequestData.JoinGroupRequestProtocolCollection(Collections.singletonList(
+            new JoinGroupRequestData.JoinGroupRequestProtocolCollection(List.of(
                 new JoinGroupRequestData.JoinGroupRequestProtocol()
                     .setName("range")
                     .setMetadata(Utils.toArray(ConsumerProtocol.serializeSubscription(new ConsumerPartitionAssignor.Subscription(
@@ -1562,7 +1561,7 @@ public class ConsumerGroupTest {
             .setClassicMemberMetadata(
                 new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
                     .setSessionTimeoutMs(member.sessionTimeoutMs())
-                    .setSupportedProtocols(Collections.singletonList(
+                    .setSupportedProtocols(List.of(
                         new ConsumerGroupMemberMetadataValue.ClassicProtocol()
                             .setName("range")
                             .setMetadata(Utils.toArray(ConsumerProtocol.serializeSubscription(new ConsumerPartitionAssignor.Subscription(
@@ -1927,7 +1926,7 @@ public class ConsumerGroupTest {
             consumerGroup.computeSubscribedTopicNames(
                 member3,
                 new ConsumerGroupMember.Builder(member3)
-                    .setSubscribedTopicNames(Collections.emptyList())
+                    .setSubscribedTopicNames(List.of())
                     .build()
             )
         );
@@ -1942,7 +1941,7 @@ public class ConsumerGroupTest {
             consumerGroup.computeSubscribedTopicNames(
                 member3,
                 new ConsumerGroupMember.Builder(member3)
-                    .setSubscribedTopicNames(Collections.emptyList())
+                    .setSubscribedTopicNames(List.of())
                     .setSubscribedTopicRegex("")
                     .build()
             )
@@ -2122,8 +2121,8 @@ public class ConsumerGroupTest {
         assertEquals(
             HOMOGENEOUS,
             ConsumerGroup.subscriptionType(
-                Collections.emptyMap(),
-                Collections.emptyMap(),
+                Map.of(),
+                Map.of(),
                 0
             )
         );
@@ -2131,7 +2130,7 @@ public class ConsumerGroupTest {
         assertEquals(
             HOMOGENEOUS,
             ConsumerGroup.subscriptionType(
-                Collections.emptyMap(),
+                Map.of(),
                 Map.of("foo", new SubscriptionCount(5, 0)),
                 5
             )
@@ -2140,7 +2139,7 @@ public class ConsumerGroupTest {
         assertEquals(
             HETEROGENEOUS,
             ConsumerGroup.subscriptionType(
-                Collections.emptyMap(),
+                Map.of(),
                 Map.of(
                     "foo", new SubscriptionCount(4, 0),
                     "bar", new SubscriptionCount(1, 0)
