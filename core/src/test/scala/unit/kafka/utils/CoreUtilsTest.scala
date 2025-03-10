@@ -17,16 +17,13 @@
 
 package kafka.utils
 
-import java.util
 import java.util.{Base64, UUID}
 import java.util.concurrent.locks.ReentrantLock
-import java.nio.ByteBuffer
 import java.util.regex.Pattern
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import kafka.utils.CoreUtils.inLock
 import org.apache.kafka.common.KafkaException
-import org.apache.kafka.common.utils.Utils
 import org.slf4j.event.Level
 
 
@@ -68,23 +65,6 @@ class CoreUtilsTest extends Logging {
   }
 
   @Test
-  def testReadBytes(): Unit = {
-    for (testCase <- List("", "a", "abcd")) {
-      val bytes = testCase.getBytes
-      assertTrue(util.Arrays.equals(bytes, Utils.readBytes(ByteBuffer.wrap(bytes))))
-    }
-  }
-
-  @Test
-  def testAbs(): Unit = {
-    assertEquals(0, Utils.abs(Integer.MIN_VALUE))
-    assertEquals(1, Utils.abs(-1))
-    assertEquals(0, Utils.abs(0))
-    assertEquals(1, Utils.abs(1))
-    assertEquals(Integer.MAX_VALUE, Utils.abs(Integer.MAX_VALUE))
-  }
-
-  @Test
   def testInLock(): Unit = {
     val lock = new ReentrantLock()
     val result = inLock(lock) {
@@ -111,12 +91,5 @@ class CoreUtilsTest extends Logging {
     assertEquals(clusterId2, "1BjsAid-SFOB5q_jAlna7A")
     assertEquals(clusterId2.length, 22)
     assertTrue(clusterIdPattern.matcher(clusterId2).matches())
-  }
-
-  @Test
-  def testGenerateUuidAsBase64(): Unit = {
-    val clusterId = CoreUtils.generateUuidAsBase64()
-    assertEquals(clusterId.length, 22)
-    assertTrue(clusterIdPattern.matcher(clusterId).matches())
   }
 }

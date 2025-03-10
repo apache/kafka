@@ -21,7 +21,7 @@ import java.io._
 import java.nio._
 import java.util.concurrent.locks.{Lock, ReadWriteLock}
 import java.lang.management._
-import java.util.{Base64, Properties, UUID}
+import java.util.UUID
 import com.typesafe.scalalogging.Logger
 
 import javax.management._
@@ -35,7 +35,6 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.network.SocketServerConfigs
 import org.slf4j.event.Level
 
-import java.util
 import scala.jdk.CollectionConverters._
 
 /**
@@ -134,16 +133,6 @@ object CoreUtils {
 
   def inWriteLock[T](lock: ReadWriteLock)(fun: => T): T = inLock[T](lock.writeLock)(fun)
 
-  /**
-   * Returns a list of duplicated items
-   */
-  def duplicates[T](s: Iterable[T]): Iterable[T] = {
-    s.groupBy(identity)
-      .map { case (k, l) => (k, l.size)}
-      .filter { case (_, l) => l > 1 }
-      .keys
-  }
-
   def listenerListToEndPoints(listeners: String, securityProtocolMap: Map[ListenerName, SecurityProtocol]): Seq[EndPoint] = {
     listenerListToEndPoints(listeners, securityProtocolMap, requireDistinctPorts = true)
   }
@@ -218,30 +207,11 @@ object CoreUtils {
     endPoints
   }
 
-  def generateUuidAsBase64(): String = {
-    val uuid = UUID.randomUUID()
-    Base64.getUrlEncoder.withoutPadding.encodeToString(getBytesFromUuid(uuid))
-  }
-
   def getBytesFromUuid(uuid: UUID): Array[Byte] = {
     // Extract bytes for uuid which is 128 bits (or 16 bytes) long.
     val uuidBytes = ByteBuffer.wrap(new Array[Byte](16))
     uuidBytes.putLong(uuid.getMostSignificantBits)
     uuidBytes.putLong(uuid.getLeastSignificantBits)
     uuidBytes.array
-  }
-
-  def propsWith(key: String, value: String): Properties = {
-    propsWith((key, value))
-  }
-
-  def propsWith(props: (String, String)*): Properties = {
-    val properties = new Properties()
-    props.foreach { case (k, v) => properties.put(k, v) }
-    properties
-  }
-
-  def replicaToBrokerAssignmentAsScala(map: util.Map[Integer, util.List[Integer]]): Map[Int, Seq[Int]] = {
-    map.asScala.map(e => (e._1.asInstanceOf[Int], e._2.asScala.map(_.asInstanceOf[Int])))
   }
 }
