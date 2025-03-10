@@ -61,9 +61,23 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
 
     static class HeartbeatState {
 
+        // Fields of StreamsGroupHeartbeatRequest sent in the most recent request
+        static class SentFields {
+
+            private StreamsRebalanceData.Assignment assignment = null;
+
+            SentFields() {
+            }
+
+            void reset() {
+                assignment = null;
+            }
+        }
+
         private final StreamsMembershipManager membershipManager;
         private final int rebalanceTimeoutMs;
         private final StreamsRebalanceData streamsRebalanceData;
+        private final SentFields sentFields = new SentFields();
 
         public HeartbeatState(final StreamsRebalanceData streamsRebalanceData,
                               final StreamsMembershipManager membershipManager,
@@ -74,6 +88,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         }
 
         public void reset() {
+            sentFields.reset();
         }
 
         public StreamsGroupHeartbeatRequestData buildRequestData() {
@@ -82,29 +97,41 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
             data.setMemberId(membershipManager.memberId());
             data.setMemberEpoch(membershipManager.memberEpoch());
             membershipManager.groupInstanceId().ifPresent(data::setInstanceId);
-            StreamsGroupHeartbeatRequestData.Topology topology = new StreamsGroupHeartbeatRequestData.Topology();
-            topology.setSubtopologies(getTopologyFromStreams(streamsRebalanceData.subtopologies()));
-            topology.setEpoch(streamsRebalanceData.topologyEpoch());
-            data.setRebalanceTimeoutMs(rebalanceTimeoutMs);
-            data.setTopology(topology);
-            data.setProcessId(streamsRebalanceData.processId().toString());
-            streamsRebalanceData.endpoint().ifPresent(userEndpoint -> {
-                data.setUserEndpoint(new StreamsGroupHeartbeatRequestData.Endpoint()
-                    .setHost(userEndpoint.host())
-                    .setPort(userEndpoint.port())
-                );
-            });
-            data.setClientTags(streamsRebalanceData.clientTags().entrySet().stream()
-                .map(entry -> new StreamsGroupHeartbeatRequestData.KeyValue()
-                    .setKey(entry.getKey())
-                    .setValue(entry.getValue())
-                )
-                .collect(Collectors.toList()));
+
+            boolean joining = membershipManager.state() == MemberState.JOINING;
+
+            if (joining) {
+                StreamsGroupHeartbeatRequestData.Topology topology = new StreamsGroupHeartbeatRequestData.Topology();
+                topology.setSubtopologies(getTopologyFromStreams(streamsRebalanceData.subtopologies()));
+                topology.setEpoch(streamsRebalanceData.topologyEpoch());
+                data.setTopology(topology);
+                data.setRebalanceTimeoutMs(rebalanceTimeoutMs);
+                data.setProcessId(streamsRebalanceData.processId().toString());
+                streamsRebalanceData.endpoint().ifPresent(userEndpoint -> {
+                    data.setUserEndpoint(new StreamsGroupHeartbeatRequestData.Endpoint()
+                        .setHost(userEndpoint.host())
+                        .setPort(userEndpoint.port())
+                    );
+                });
+                data.setClientTags(streamsRebalanceData.clientTags().entrySet().stream()
+                    .map(entry -> new StreamsGroupHeartbeatRequestData.KeyValue()
+                        .setKey(entry.getKey())
+                        .setValue(entry.getValue())
+                    )
+                    .collect(Collectors.toList()));
+                data.setActiveTasks(convertTaskIdCollection(Set.of()));
+                data.setStandbyTasks(convertTaskIdCollection(Set.of()));
+                data.setWarmupTasks(convertTaskIdCollection(Set.of()));
+            } else {
+                StreamsRebalanceData.Assignment reconciledAssignment = streamsRebalanceData.reconciledAssignment();
+                if (!reconciledAssignment.equals(sentFields.assignment)) {
+                    data.setActiveTasks(convertTaskIdCollection(reconciledAssignment.activeTasks()));
+                    data.setStandbyTasks(convertTaskIdCollection(reconciledAssignment.standbyTasks()));
+                    data.setWarmupTasks(convertTaskIdCollection(reconciledAssignment.warmupTasks()));
+                    sentFields.assignment = reconciledAssignment;
+                }
+            }
             data.setShutdownApplication(streamsRebalanceData.shutdownRequested());
-            StreamsRebalanceData.Assignment reconciledAssignment = streamsRebalanceData.reconciledAssignment();
-            data.setActiveTasks(convertTaskIdCollection(reconciledAssignment.activeTasks()));
-            data.setStandbyTasks(convertTaskIdCollection(reconciledAssignment.standbyTasks()));
-            data.setWarmupTasks(convertTaskIdCollection(reconciledAssignment.warmupTasks()));
             return data;
         }
 
@@ -119,9 +146,9 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
                 .map(entry -> {
                     StreamsGroupHeartbeatRequestData.TaskIds ids = new StreamsGroupHeartbeatRequestData.TaskIds();
                     ids.setSubtopologyId(entry.getKey());
-                    ids.setPartitions(entry.getValue());
+                    ids.setPartitions(entry.getValue().stream().sorted().collect(Collectors.toList()));
                     return ids;
-                })
+                }).sorted(Comparator.comparing(StreamsGroupHeartbeatRequestData.TaskIds::subtopologyId))
                 .collect(Collectors.toList());
         }
 
