@@ -500,7 +500,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
         InitializeShareGroupStateResult persisterInitializeResult,
         ShareGroupHeartbeatResponseData defaultResponse
     ) {
-
         short persisterErrorCode = Errors.NONE.code();
         for (TopicData<PartitionErrorData> topicData : persisterInitializeResult.topicsData()) {
             Optional<PartitionErrorData> errData = topicData.partitions().stream().filter(partition -> partition.errorCode() != Errors.NONE.code()).findAny();
