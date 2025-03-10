@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group.api.assignor;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.UnknownTopicIdException;
 
 import java.util.Set;
 
@@ -43,4 +44,6 @@ public interface SubscribedTopicDescriber {
      *         If the topic Id does not exist, an empty set is returned.
      */
     Set<String> racksForPartition(Uuid topicId, int partition);
+
+    Set<Integer> assignablePartitions(Uuid topicId) throws UnknownTopicIdException;
 }

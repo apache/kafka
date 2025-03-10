@@ -99,6 +99,7 @@ import org.apache.kafka.server.share.persister.ReadShareGroupStateSummaryParamet
 import org.apache.kafka.server.share.persister.TopicData;
 import org.apache.kafka.server.util.FutureUtils;
 import org.apache.kafka.server.util.timer.Timer;
+import org.apache.kafka.server.util.timer.TimerTask;
 
 import org.slf4j.Logger;
 
@@ -247,7 +248,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 runtime,
                 groupCoordinatorMetrics,
                 groupConfigManager,
-                persister
+                persister,
+                timer
             );
         }
     }
@@ -299,6 +301,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
      */
     private MetadataImage metadataImage = null;
 
+    private Timer timer;
+
     /**
      *
      * @param logContext                The log context.
@@ -314,7 +318,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime,
         GroupCoordinatorMetrics groupCoordinatorMetrics,
         GroupConfigManager groupConfigManager,
-        Persister persister
+        Persister persister,
+        Timer timer
     ) {
         this.log = logContext.logger(GroupCoordinatorService.class);
         this.config = config;
@@ -322,6 +327,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         this.groupCoordinatorMetrics = groupCoordinatorMetrics;
         this.groupConfigManager = groupConfigManager;
         this.persister = persister;
+        this.timer = timer;
     }
 
     /**
@@ -452,7 +458,13 @@ public class GroupCoordinatorService implements GroupCoordinator {
             // This ensures that the previous group write has completed successfully
             // before we start the persister initialize phase.
             if (result.getValue().isPresent()) {
-                return persisterInitialize(result.getValue().get(), result.getKey());
+                timer.add(new TimerTask(0L) {
+                    @Override
+                    public void run() {
+                        System.err.println("smjn: " + result.getValue().get());
+                        persisterInitialize(result.getValue().get(), result.getKey());
+                    }
+                });
             }
             return CompletableFuture.completedFuture(result.getKey());
         }).exceptionally(exception -> handleOperationException(

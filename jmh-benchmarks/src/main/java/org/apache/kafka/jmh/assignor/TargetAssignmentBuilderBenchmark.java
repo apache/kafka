@@ -17,10 +17,10 @@
 package org.apache.kafka.jmh.assignor;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
-import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.SubscribedTopicDescriber;
 import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.assignor.UniformAssignor;
@@ -80,7 +80,7 @@ public class TargetAssignmentBuilderBenchmark {
 
     private static final int GROUP_EPOCH = 0;
 
-    private PartitionAssignor partitionAssignor;
+    private ConsumerGroupPartitionAssignor partitionAssignor;
 
     private TargetAssignmentBuilder.ConsumerTargetAssignmentBuilder targetAssignmentBuilder;
 

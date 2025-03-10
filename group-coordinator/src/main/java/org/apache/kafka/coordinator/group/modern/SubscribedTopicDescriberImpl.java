@@ -17,12 +17,15 @@
 package org.apache.kafka.coordinator.group.modern;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.UnknownTopicIdException;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.SubscribedTopicDescriber;
 
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 /**
  * The subscribed topic metadata class is used by the {@link PartitionAssignor} to obtain
@@ -34,9 +37,15 @@ public class SubscribedTopicDescriberImpl implements SubscribedTopicDescriber {
      * object, which contains topic and partition metadata.
      */
     private final Map<Uuid, TopicMetadata> topicMetadata;
+    private final Map<Uuid, Set<Integer>> topicPartitionAllowedMap;
 
     public SubscribedTopicDescriberImpl(Map<Uuid, TopicMetadata> topicMetadata) {
+        this(topicMetadata, null);
+    }
+
+    public SubscribedTopicDescriberImpl(Map<Uuid, TopicMetadata> topicMetadata, Map<Uuid, Set<Integer>> topicPartitionAllowedMap) {
         this.topicMetadata = Objects.requireNonNull(topicMetadata);
+        this.topicPartitionAllowedMap = topicPartitionAllowedMap;
     }
 
     /**
@@ -72,6 +81,20 @@ public class SubscribedTopicDescriberImpl implements SubscribedTopicDescriber {
     @Override
     public Set<String> racksForPartition(Uuid topicId, int partition) {
         return Set.of();
+    }
+
+    @Override
+    public Set<Integer> assignablePartitions(Uuid topicId) throws UnknownTopicIdException {
+        TopicMetadata topic = this.topicMetadata.get(topicId);
+        if (topic == null) {
+            throw new UnknownTopicIdException(topicId.toString());
+        }
+
+        if (topicPartitionAllowedMap == null) {
+            return IntStream.range(0, topic.numPartitions()).boxed().collect(Collectors.toSet());
+        }
+
+        return topicPartitionAllowedMap.getOrDefault(topicId, Set.of());
     }
 
     @Override

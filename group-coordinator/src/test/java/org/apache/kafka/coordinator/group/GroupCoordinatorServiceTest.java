@@ -102,6 +102,7 @@ import org.apache.kafka.server.share.persister.ReadShareGroupStateSummaryParamet
 import org.apache.kafka.server.share.persister.ReadShareGroupStateSummaryResult;
 import org.apache.kafka.server.share.persister.TopicData;
 import org.apache.kafka.server.util.FutureUtils;
+import org.apache.kafka.server.util.timer.MockTimer;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -3334,7 +3335,8 @@ public class GroupCoordinatorServiceTest {
                 runtime,
                 metrics,
                 configManager,
-                persister
+                persister,
+                new MockTimer()
             );
 
             if (serviceStartup) {

@@ -21,6 +21,7 @@ import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorException;
+import org.apache.kafka.coordinator.group.api.assignor.SubscribedTopicDescriber;
 import org.apache.kafka.coordinator.group.modern.Assignment;
 import org.apache.kafka.coordinator.group.modern.GroupSpecImpl;
 import org.apache.kafka.coordinator.group.modern.MemberSubscriptionAndAssignmentImpl;
@@ -45,6 +46,7 @@ import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.H
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
 
 public class SimpleAssignorTest {
 
@@ -414,7 +416,9 @@ public class SimpleAssignorTest {
         Map<TopicIdPartition, List<String>> assignment = new HashMap<>();
         assignment.put(partition1, List.of(member1));
 
-        assignor.roundRobinAssignment(members, unassignedPartitions, assignment);
+        SubscribedTopicDescriber describer = mock(SubscribedTopicDescriber.class);
+
+        assignor.roundRobinAssignment(members, unassignedPartitions, assignment, describer);
         Map<TopicIdPartition, List<String>> expectedAssignment = Map.of(
             partition1, List.of(member1),
             partition2, List.of(member1),

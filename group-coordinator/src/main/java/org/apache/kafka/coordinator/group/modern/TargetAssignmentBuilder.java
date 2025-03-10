@@ -19,10 +19,12 @@ package org.apache.kafka.coordinator.group.modern;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers;
+import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorException;
+import org.apache.kafka.coordinator.group.api.assignor.ShareGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.modern.consumer.ResolvedRegularExpression;
@@ -102,7 +104,7 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
         public ConsumerTargetAssignmentBuilder(
             String groupId,
             int groupEpoch,
-            PartitionAssignor assignor
+            ConsumerGroupPartitionAssignor assignor
         ) {
             super(groupId, groupEpoch, assignor);
         }
@@ -184,7 +186,7 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
         public ShareTargetAssignmentBuilder(
             String groupId,
             int groupEpoch,
-            PartitionAssignor assignor
+            ShareGroupPartitionAssignor assignor
         ) {
             super(groupId, groupEpoch, assignor);
         }
@@ -286,6 +288,11 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
      * The static members in the group.
      */
     private Map<String, String> staticMembers = new HashMap<>();
+
+    /**
+     * Topic partition allow map.
+     */
+    private Map<Uuid, Set<Integer>> topicPartitionAllowedMap = new HashMap<>();
 
     /**
      * Constructs the object.
@@ -395,6 +402,13 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
         return self();
     }
 
+    public U withAllowedTopicPartitionMap(
+        Map<Uuid, Set<Integer>> topicPartitionAllowedMap
+    ) {
+        this.topicPartitionAllowedMap = topicPartitionAllowedMap;
+        return self();
+    }
+
     /**
      * Adds or updates a member. This is useful when the updated member is
      * not yet materialized in memory.
@@ -483,7 +497,7 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
                 subscriptionType,
                 invertedTargetAssignment
             ),
-            new SubscribedTopicDescriberImpl(topicMetadataMap)
+            new SubscribedTopicDescriberImpl(topicMetadataMap, topicPartitionAllowedMap)
         );
 
         // Compute delta from previous to new target assignment and create the

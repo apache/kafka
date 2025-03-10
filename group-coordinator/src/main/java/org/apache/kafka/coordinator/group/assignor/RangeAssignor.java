@@ -29,6 +29,7 @@ import org.apache.kafka.coordinator.group.modern.MemberAssignmentImpl;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -173,7 +174,7 @@ public class RangeAssignor implements ConsumerGroupPartitionAssignor {
             Map<Uuid, Set<Integer>> assignment = new HashMap<>(memberAssignmentInitialCapacity);
             for (TopicMetadata topicMetadata : topics) {
                 topicMetadata.maybeComputeQuota();
-                addPartitionsToAssignment(topicMetadata, assignment);
+                addPartitionsToAssignment(topicMetadata, assignment, subscribedTopicDescriber.assignablePartitions(topicMetadata.topicId));
             }
             assignments.put(memberId, new MemberAssignmentImpl(assignment));
         }
@@ -219,7 +220,7 @@ public class RangeAssignor implements ConsumerGroupPartitionAssignor {
             for (Uuid topicId : subs.subscribedTopicIds()) {
                 TopicMetadata metadata = topics.get(topicId);
                 metadata.maybeComputeQuota();
-                addPartitionsToAssignment(metadata, assignment);
+                addPartitionsToAssignment(metadata, assignment, subscribedTopicDescriber.assignablePartitions(topicId));
             }
             assignments.put(memberId, new MemberAssignmentImpl(assignment));
         }
@@ -270,7 +271,8 @@ public class RangeAssignor implements ConsumerGroupPartitionAssignor {
      */
     private void addPartitionsToAssignment(
         TopicMetadata topicMetadata,
-        Map<Uuid, Set<Integer>> memberAssignment
+        Map<Uuid, Set<Integer>> memberAssignment,
+        Set<Integer> allowedPartitions
     ) {
         int start = topicMetadata.nextRange;
         int quota = topicMetadata.minQuota;
@@ -287,7 +289,14 @@ public class RangeAssignor implements ConsumerGroupPartitionAssignor {
         topicMetadata.nextRange = end;
 
         if (start < end) {
-            memberAssignment.put(topicMetadata.topicId, new RangeSet(start, end));
+            Set<Integer> range = new HashSet<>();
+            for (int i = start; i < end; i++) {
+                if (allowedPartitions.contains(i)) {
+                    range.add(i);
+                }
+            }
+
+            memberAssignment.put(topicMetadata.topicId, range);
         }
     }
 

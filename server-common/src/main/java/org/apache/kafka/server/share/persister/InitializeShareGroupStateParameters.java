@@ -55,4 +55,11 @@ public class InitializeShareGroupStateParameters implements PersisterParameters 
             return new InitializeShareGroupStateParameters(this.groupTopicPartitionData);
         }
     }
+
+    @Override
+    public String toString() {
+        return "InitializeShareGroupStateParameters{" +
+            "groupTopicPartitionData=" + groupTopicPartitionData +
+            '}';
+    }
 }
