@@ -84,10 +84,6 @@ public class FetchParams {
         return isFromFollower() || (isFromConsumer() && clientMetadata.isEmpty()) || shareFetchRequest;
     }
 
-    public boolean hardMaxBytesLimit() {
-        return requestVersion <= 2 && !shareFetchRequest;
-    }
-
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
