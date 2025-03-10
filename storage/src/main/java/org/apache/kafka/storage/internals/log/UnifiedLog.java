@@ -2312,7 +2312,9 @@ public class UnifiedLog implements AutoCloseable {
      * All the log segments in this log ordered from oldest to newest
      */
     public Collection<LogSegment> logSegments() {
-        return localLog.segments().values();
+        synchronized (lock) {
+            return List.copyOf(localLog.segments().values());
+        }
     }
 
     /**
@@ -2321,13 +2323,13 @@ public class UnifiedLog implements AutoCloseable {
      */
     public Collection<LogSegment> logSegments(long from, long to) {
         synchronized (lock) {
-            return localLog.segments().values(from, to);
+            return List.copyOf(localLog.segments().values(from, to));
         }
     }
 
     public Collection<LogSegment> nonActiveLogSegmentsFrom(long from) {
         synchronized (lock) {
-            return localLog.segments().nonActiveLogSegmentsFrom(from);
+            return List.copyOf(localLog.segments().nonActiveLogSegmentsFrom(from));
         }
     }
 
