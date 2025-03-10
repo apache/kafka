@@ -1825,9 +1825,6 @@ public class TaskManagerTest {
         final StandbyTask standbyTask = standbyTask(taskId02, taskId02ChangelogPartitions)
             .inState(State.RUNNING)
             .withInputPartitions(taskId02Partitions).build();
-        final StandbyTask unassignedStandbyTask = standbyTask(taskId03, taskId03ChangelogPartitions)
-            .inState(State.CREATED)
-            .withInputPartitions(taskId03Partitions).build();
         final TasksRegistry tasks = mock(TasksRegistry.class);
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
         when(tasks.allTasksPerId()).thenReturn(mkMap(mkEntry(taskId00, runningStatefulTask)));
