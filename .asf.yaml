@@ -46,18 +46,6 @@ github:
     merge: false
     rebase: false
 
-  protected_branches:
-    trunk:
-      required_status_checks:
-        strict: true
-        contexts:
-          - build / CI checks completed
-      required_pull_request_reviews:
-        required_approving_review_count: 1
-
-    # Disable force push on release branches
-    4.0: {}
-    3.9: {}
-    3.8: {}
-    3.7: {}
-    3.6: {}
+  # Disable legacy branch protections. We have manual rulesets which protect trunk
+  # and our release branches. See INFRA-26603
+  protected_branches: ~

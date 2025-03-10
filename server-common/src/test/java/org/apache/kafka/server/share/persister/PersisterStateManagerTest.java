@@ -653,9 +653,8 @@ class PersisterStateManagerTest {
 
         CompletableFuture<ReadShareGroupStateResponse> resultFuture = handler.result();
 
-        ReadShareGroupStateResponse result = null;
         try {
-            result = resultFuture.get();
+            resultFuture.get();
         } catch (Exception e) {
             fail("Failed to get result from future", e);
         }
