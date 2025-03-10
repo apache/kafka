@@ -25,6 +25,7 @@ import org.apache.kafka.server.share.fetch.PartitionRotateStrategy.StrategyType;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
+import java.util.List;
 
 import static org.apache.kafka.server.share.fetch.ShareFetchTestUtils.validateRotatedMapEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -37,7 +38,7 @@ public class PartitionRotateStrategyTest {
         PartitionRotateStrategy strategy = PartitionRotateStrategy.type(StrategyType.ROUND_ROBIN);
         ArrayList<TopicIdPartition> partitions = createPartitions(3);
 
-        ArrayList<TopicIdPartition> result = strategy.rotate(partitions, new PartitionRotateMetadata(1));
+        List<TopicIdPartition> result = strategy.rotate(partitions, new PartitionRotateMetadata(1));
         assertEquals(3, result.size());
         validateRotatedMapEquals(partitions, result, 1);
 
@@ -62,7 +63,7 @@ public class PartitionRotateStrategyTest {
         PartitionRotateStrategy strategy = PartitionRotateStrategy.type(StrategyType.ROUND_ROBIN);
 
         ArrayList<TopicIdPartition> partitions = createPartitions(3);
-        ArrayList<TopicIdPartition> result = strategy.rotate(
+        List<TopicIdPartition> result = strategy.rotate(
             partitions,
             new PartitionRotateMetadata(ShareRequestMetadata.INITIAL_EPOCH));
         assertEquals(3, result.size());
@@ -79,7 +80,7 @@ public class PartitionRotateStrategyTest {
     public void testRoundRobinStrategyWithEmptyPartitions() {
         PartitionRotateStrategy strategy = PartitionRotateStrategy.type(StrategyType.ROUND_ROBIN);
         // Empty partitions.
-        ArrayList<TopicIdPartition> result = strategy.rotate(new ArrayList<>(), new PartitionRotateMetadata(5));
+        List<TopicIdPartition> result = strategy.rotate(new ArrayList<>(), new PartitionRotateMetadata(5));
         // The result should be empty.
         assertTrue(result.isEmpty());
     }

@@ -257,12 +257,12 @@ public class SharePartitionManager implements AutoCloseable {
         FetchParams fetchParams,
         int sessionEpoch,
         int batchSize,
-        ArrayList<TopicIdPartition> topicPartitions
+        List<TopicIdPartition> topicPartitions
     ) {
         log.trace("Fetch request for topicIdPartitions: {} with groupId: {} fetch params: {}",
             topicPartitions, groupId, fetchParams);
 
-        ArrayList<TopicIdPartition> topicIdPartitions = PartitionRotateStrategy
+        List<TopicIdPartition> topicIdPartitions = PartitionRotateStrategy
             .type(PartitionRotateStrategy.StrategyType.ROUND_ROBIN)
             .rotate(topicPartitions, new PartitionRotateMetadata(sessionEpoch));
 

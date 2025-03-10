@@ -149,7 +149,7 @@ public class ShareFetchRequest extends AbstractRequest {
     }
 
     private final ShareFetchRequestData data;
-    private volatile ArrayList<TopicIdPartition> shareFetchData = null;
+    private volatile List<TopicIdPartition> shareFetchData = null;
     private volatile List<TopicIdPartition> toForget = null;
 
     public ShareFetchRequest(ShareFetchRequestData data, short version) {
@@ -195,7 +195,7 @@ public class ShareFetchRequest extends AbstractRequest {
                 if (shareFetchData == null) {
                     // Assigning the lazy-initialized `shareFetchData` in the last step
                     // to avoid other threads accessing a half-initialized object.
-                    final ArrayList<TopicIdPartition> shareFetchDataTmp = new ArrayList<>();
+                    final List<TopicIdPartition> shareFetchDataTmp = new ArrayList<>();
                     data.topics().forEach(shareFetchTopic -> {
                         String name = topicNames.get(shareFetchTopic.topicId());
                         shareFetchTopic.partitions().forEach(shareFetchPartition -> {

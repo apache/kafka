@@ -19,6 +19,7 @@ package org.apache.kafka.server.share.fetch;
 import org.apache.kafka.common.TopicIdPartition;
 
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 
 /**
@@ -47,7 +48,7 @@ public interface PartitionRotateStrategy {
      *
      * @return the rotated topicIdPartitions
      */
-    ArrayList<TopicIdPartition> rotate(ArrayList<TopicIdPartition> topicIdPartitions, PartitionRotateMetadata metadata);
+    List<TopicIdPartition> rotate(List<TopicIdPartition> topicIdPartitions, PartitionRotateMetadata metadata);
 
     static PartitionRotateStrategy type(StrategyType type) {
         return switch (type) {
@@ -63,8 +64,8 @@ public interface PartitionRotateStrategy {
      *
      * @return the rotated topicIdPartitions
      */
-    static ArrayList<TopicIdPartition> rotateRoundRobin(
-        ArrayList<TopicIdPartition> topicIdPartitions,
+    static List<TopicIdPartition> rotateRoundRobin(
+        List<TopicIdPartition> topicIdPartitions,
         PartitionRotateMetadata metadata
     ) {
         if (topicIdPartitions.isEmpty() || topicIdPartitions.size() == 1 || metadata.sessionEpoch < 1) {

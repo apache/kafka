@@ -23,11 +23,11 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.server.storage.log.FetchParams;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -57,7 +57,7 @@ public class ShareFetch {
     /**
      * The topic partitions to be fetched.
      */
-    private final ArrayList<TopicIdPartition> topicIdPartitions;
+    private final List<TopicIdPartition> topicIdPartitions;
     /**
      * The batch size of the fetch request.
      */
@@ -81,7 +81,7 @@ public class ShareFetch {
         String groupId,
         String memberId,
         CompletableFuture<Map<TopicIdPartition, PartitionData>> future,
-        ArrayList<TopicIdPartition> topicIdPartitions,
+        List<TopicIdPartition> topicIdPartitions,
         int batchSize,
         int maxFetchRecords,
         BrokerTopicStats brokerTopicStats
@@ -104,7 +104,7 @@ public class ShareFetch {
         return memberId;
     }
 
-    public ArrayList<TopicIdPartition> topicIdPartitions() {
+    public List<TopicIdPartition> topicIdPartitions() {
         return topicIdPartitions;
     }
 

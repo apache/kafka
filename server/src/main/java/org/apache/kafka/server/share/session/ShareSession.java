@@ -112,7 +112,8 @@ public class ShareSession {
     // Update the cached partition data based on the request.
     public synchronized Map<ModifiedTopicIdPartitionType, List<TopicIdPartition>> update(
         List<TopicIdPartition> shareFetchData,
-        List<TopicIdPartition> toForget) {
+        List<TopicIdPartition> toForget
+    ) {
         List<TopicIdPartition> added = new ArrayList<>();
         List<TopicIdPartition> updated = new ArrayList<>();
         List<TopicIdPartition> removed = new ArrayList<>();

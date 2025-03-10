@@ -30,8 +30,6 @@ import com.yammer.metrics.core.Gauge;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -45,18 +43,6 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 public class ShareFetchTestUtils {
 
     /**
-     * Create an ArrayList of topic partitions.
-     *
-     * @param topicIdPartitions The topic partitions to create the list for.
-     * @return The list of topic partitions.
-     */
-    public static ArrayList<TopicIdPartition> arrayList(TopicIdPartition... topicIdPartitions) {
-        ArrayList<TopicIdPartition> list = new ArrayList<>();
-        Collections.addAll(list, topicIdPartitions);
-        return list;
-    }
-
-    /**
      * Validate that the rotated map is equal to the original map with the keys rotated by the given position.
      *
      * @param original The original map.
@@ -64,8 +50,8 @@ public class ShareFetchTestUtils {
      * @param rotationAt The position to rotate the keys at.
      */
     public static void validateRotatedMapEquals(
-        ArrayList<TopicIdPartition> original,
-        ArrayList<TopicIdPartition> result,
+        List<TopicIdPartition> original,
+        List<TopicIdPartition> result,
         int rotationAt
     ) {
 
