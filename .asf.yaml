@@ -46,6 +46,6 @@ github:
     merge: false
     rebase: false
 
-  # Disable legacy branch protections. We have manual rulesets which protect trunk
-  # and our release branches. See INFRA-26603
-  protected_branches: ~
+  # Do no use the "protected_branches" configuration. This controls legacy branch protections
+  # which we do not use. We have manual rulesets which protect trunk and our release branches. 
+  # See INFRA-26603
