@@ -59,7 +59,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("topic1", 1))
     )
 
-    val shareFetchRequest = createShareFetchRequest(groupId, metadata, MAX_PARTITION_BYTES, send, Seq.empty, Map.empty)
+    val shareFetchRequest = createShareFetchRequest(groupId, metadata, send, Seq.empty, Map.empty)
     val shareFetchResponse = connectAndReceive[ShareFetchResponse](shareFetchRequest)
 
     assertEquals(Errors.UNSUPPORTED_VERSION.code(), shareFetchResponse.data().errorCode())
@@ -127,7 +127,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     val send: Seq[TopicIdPartition] = Seq(topicIdPartition)
 
     // Send the share fetch request to the non-replica and verify the error code
-    val shareFetchRequest = createShareFetchRequest(groupId, metadata, MAX_PARTITION_BYTES, send, Seq.empty, Map.empty)
+    val shareFetchRequest = createShareFetchRequest(groupId, metadata, send, Seq.empty, Map.empty)
     val shareFetchResponse = connectAndReceive[ShareFetchResponse](shareFetchRequest, nonReplicaId)
     val partitionData = shareFetchResponse.responseData(topicNames).get(topicIdPartition)
     assertEquals(Errors.NOT_LEADER_OR_FOLLOWER.code, partitionData.errorCode)
@@ -181,7 +181,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     // Send the second share fetch request to fetch the records produced above
     val metadata = new ShareRequestMetadata(memberId, ShareRequestMetadata.nextEpoch(ShareRequestMetadata.INITIAL_EPOCH))
     val acknowledgementsMap: Map[TopicIdPartition, util.List[ShareFetchRequestData.AcknowledgementBatch]] = Map.empty
-    val shareFetchRequest = createShareFetchRequest(groupId, metadata, MAX_PARTITION_BYTES, send, Seq.empty, acknowledgementsMap)
+    val shareFetchRequest = createShareFetchRequest(groupId, metadata, send, Seq.empty, acknowledgementsMap)
     val shareFetchResponse = connectAndReceive[ShareFetchResponse](shareFetchRequest)
 
     val shareFetchResponseData = shareFetchResponse.data()
@@ -251,7 +251,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     // Send the second share fetch request to fetch the records produced above
     val metadata = new ShareRequestMetadata(memberId, ShareRequestMetadata.nextEpoch(ShareRequestMetadata.INITIAL_EPOCH))
     val acknowledgementsMap: Map[TopicIdPartition, util.List[ShareFetchRequestData.AcknowledgementBatch]] = Map.empty
-    val shareFetchRequest = createShareFetchRequest(groupId, metadata, MAX_PARTITION_BYTES, send, Seq.empty, acknowledgementsMap)
+    val shareFetchRequest = createShareFetchRequest(groupId, metadata, send, Seq.empty, acknowledgementsMap)
 
     // For the multi partition fetch request, the response may not be available in the first attempt
     // as the share partitions might not be initialized yet. So, we retry until we get the response.
@@ -352,9 +352,9 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
     // Send the first share fetch request to initialize the share partitions
     // Create different share fetch requests for different partitions as they may have leaders on separate brokers
-    var shareFetchRequest1 = createShareFetchRequest(groupId, metadata, MAX_PARTITION_BYTES, send1, Seq.empty, acknowledgementsMap)
-    var shareFetchRequest2 = createShareFetchRequest(groupId, metadata, MAX_PARTITION_BYTES, send2, Seq.empty, acknowledgementsMap)
-    var shareFetchRequest3 = createShareFetchRequest(groupId, metadata, MAX_PARTITION_BYTES, send3, Seq.empty, acknowledgementsMap)
+    var shareFetchRequest1 = createShareFetchRequest(groupId, metadata, send1, Seq.empty, acknowledgementsMap)
+    var shareFetchRequest2 = createShareFetchRequest(groupId, metadata, send2, Seq.empty, acknowledgementsMap)
+    var shareFetchRequest3 = createShareFetchRequest(groupId, metadata, send3, Seq.empty, acknowledgementsMap)
 
     var shareFetchResponse1 = connectAndReceive[ShareFetchResponse](shareFetchRequest1, destination = leader1)
     var shareFetchResponse2 = connectAndReceive[ShareFetchResponse](shareFetchRequest2, destination = leader2)
@@ -368,9 +368,9 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
     // Send the second share fetch request to fetch the records produced above
     // Create different share fetch requests for different partitions as they may have leaders on separate brokers
-    shareFetchRequest1 = createShareFetchRequest(groupId, metadata, MAX_PARTITION_BYTES, send1, Seq.empty, acknowledgementsMap)
-    shareFetchRequest2 = createShareFetchRequest(groupId, metadata, MAX_PARTITION_BYTES, send2, Seq.empty, acknowledgementsMap)
-    shareFetchRequest3 = createShareFetchRequest(groupId, metadata, MAX_PARTITION_BYTES, send3, Seq.empty, acknowledgementsMap)
+    shareFetchRequest1 = createShareFetchRequest(groupId, metadata, send1, Seq.empty, acknowledgementsMap)
+    shareFetchRequest2 = createShareFetchRequest(groupId, metadata, send2, Seq.empty, acknowledgementsMap)
+    shareFetchRequest3 = createShareFetchRequest(groupId, metadata, send3, Seq.empty, acknowledgementsMap)
 
     shareFetchResponse1 = connectAndReceive[ShareFetchResponse](shareFetchRequest1, destination = leader1)
     shareFetchResponse2 = connectAndReceive[ShareFetchResponse](shareFetchRequest2, destination = leader2)
@@ -469,7 +469,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     var shareSessionEpoch = ShareRequestMetadata.nextEpoch(ShareRequestMetadata.INITIAL_EPOCH)
     var metadata = new ShareRequestMetadata(memberId, shareSessionEpoch)
     val acknowledgementsMapForFetch: Map[TopicIdPartition, util.List[ShareFetchRequestData.AcknowledgementBatch]] = Map.empty
-    var shareFetchRequest = createShareFetchRequest(groupId, metadata, MAX_PARTITION_BYTES, send, Seq.empty, acknowledgementsMapForFetch)
+    var shareFetchRequest = createShareFetchRequest(groupId, metadata, send, Seq.empty, acknowledgementsMapForFetch)
     var shareFetchResponse = connectAndReceive[ShareFetchResponse](shareFetchRequest)
 
     var shareFetchResponseData = shareFetchResponse.data()
@@ -517,7 +517,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     // Sending a third share fetch request to check if acknowledgements were done successfully
     shareSessionEpoch = ShareRequestMetadata.nextEpoch(shareSessionEpoch)
     metadata = new ShareRequestMetadata(memberId, shareSessionEpoch)
-    shareFetchRequest = createShareFetchRequest(groupId, metadata, MAX_PARTITION_BYTES, send, Seq.empty, Map.empty)
+    shareFetchRequest = createShareFetchRequest(groupId, metadata, send, Seq.empty, Map.empty)
     shareFetchResponse = connectAndReceive[ShareFetchResponse](shareFetchRequest)
 
     shareFetchResponseData = shareFetchResponse.data()
@@ -585,7 +585,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     var shareSessionEpoch: Int = ShareRequestMetadata.nextEpoch(ShareRequestMetadata.INITIAL_EPOCH)
     var metadata = new ShareRequestMetadata(memberId, shareSessionEpoch)
     var acknowledgementsMapForFetch: Map[TopicIdPartition, util.List[ShareFetchRequestData.AcknowledgementBatch]] = Map.empty
-    var shareFetchRequest = createShareFetchRequest(groupId, metadata, MAX_PARTITION_BYTES, send, Seq.empty, acknowledgementsMapForFetch)
+    var shareFetchRequest = createShareFetchRequest(groupId, metadata, send, Seq.empty, acknowledgementsMapForFetch)
     var shareFetchResponse = connectAndReceive[ShareFetchResponse](shareFetchRequest)
 
     var shareFetchResponseData = shareFetchResponse.data()
@@ -613,7 +613,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
         .setFirstOffset(0)
         .setLastOffset(9)
         .setAcknowledgeTypes(Collections.singletonList(1.toByte))).asJava) // Accept the records
-    shareFetchRequest = createShareFetchRequest(groupId, metadata, MAX_PARTITION_BYTES, send, Seq.empty, acknowledgementsMapForFetch)
+    shareFetchRequest = createShareFetchRequest(groupId, metadata, send, Seq.empty, acknowledgementsMapForFetch)
     shareFetchResponse = connectAndReceive[ShareFetchResponse](shareFetchRequest)
 
     shareFetchResponseData = shareFetchResponse.data()
@@ -637,7 +637,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     // Sending a fourth share fetch request to confirm if acknowledgements were done successfully
     shareSessionEpoch = ShareRequestMetadata.nextEpoch(shareSessionEpoch)
     metadata = new ShareRequestMetadata(memberId, shareSessionEpoch)
-    shareFetchRequest = createShareFetchRequest(groupId, metadata, MAX_PARTITION_BYTES, send, Seq.empty, Map.empty)
+    shareFetchRequest = createShareFetchRequest(groupId, metadata, send, Seq.empty, Map.empty)
     shareFetchResponse = connectAndReceive[ShareFetchResponse](shareFetchRequest)
 
     shareFetchResponseData = shareFetchResponse.data()
@@ -705,7 +705,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     var shareSessionEpoch = ShareRequestMetadata.nextEpoch(ShareRequestMetadata.INITIAL_EPOCH)
     var metadata = new ShareRequestMetadata(memberId, shareSessionEpoch)
     val acknowledgementsMapForFetch: Map[TopicIdPartition, util.List[ShareFetchRequestData.AcknowledgementBatch]] = Map.empty
-    var shareFetchRequest = createShareFetchRequest(groupId, metadata, MAX_PARTITION_BYTES, send, Seq.empty, acknowledgementsMapForFetch)
+    var shareFetchRequest = createShareFetchRequest(groupId, metadata, send, Seq.empty, acknowledgementsMapForFetch)
     var shareFetchResponse = connectAndReceive[ShareFetchResponse](shareFetchRequest)
 
     var shareFetchResponseData = shareFetchResponse.data()
@@ -750,7 +750,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     // Sending a third share fetch request to check if acknowledgements were done successfully
     shareSessionEpoch = ShareRequestMetadata.nextEpoch(shareSessionEpoch)
     metadata = new ShareRequestMetadata(memberId, shareSessionEpoch)
-    shareFetchRequest = createShareFetchRequest(groupId, metadata, MAX_PARTITION_BYTES, send, Seq.empty, Map.empty)
+    shareFetchRequest = createShareFetchRequest(groupId, metadata, send, Seq.empty, Map.empty)
     shareFetchResponse = connectAndReceive[ShareFetchResponse](shareFetchRequest)
 
     shareFetchResponseData = shareFetchResponse.data()
@@ -818,7 +818,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     var shareSessionEpoch = ShareRequestMetadata.nextEpoch(ShareRequestMetadata.INITIAL_EPOCH)
     var metadata = new ShareRequestMetadata(memberId, shareSessionEpoch)
     var acknowledgementsMapForFetch: Map[TopicIdPartition, util.List[ShareFetchRequestData.AcknowledgementBatch]] = Map.empty
-    var shareFetchRequest = createShareFetchRequest(groupId, metadata, MAX_PARTITION_BYTES, send, Seq.empty, acknowledgementsMapForFetch)
+    var shareFetchRequest = createShareFetchRequest(groupId, metadata, send, Seq.empty, acknowledgementsMapForFetch)
     var shareFetchResponse = connectAndReceive[ShareFetchResponse](shareFetchRequest)
 
     var shareFetchResponseData = shareFetchResponse.data()
@@ -862,7 +862,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
           .setAcknowledgeTypes(Collections.singletonList(2.toByte))).asJava) // Release the records
         releaseAcknowledgementSent = true
       }
-      shareFetchRequest = createShareFetchRequest(groupId, metadata, MAX_PARTITION_BYTES, send, Seq.empty, acknowledgementsMapForFetch)
+      shareFetchRequest = createShareFetchRequest(groupId, metadata, send, Seq.empty, acknowledgementsMapForFetch)
       shareFetchResponse = connectAndReceive[ShareFetchResponse](shareFetchRequest)
 
       shareFetchResponseData = shareFetchResponse.data()
@@ -935,7 +935,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     var shareSessionEpoch = ShareRequestMetadata.nextEpoch(ShareRequestMetadata.INITIAL_EPOCH)
     var metadata = new ShareRequestMetadata(memberId, shareSessionEpoch)
     val acknowledgementsMapForFetch: Map[TopicIdPartition, util.List[ShareFetchRequestData.AcknowledgementBatch]] = Map.empty
-    var shareFetchRequest = createShareFetchRequest(groupId, metadata, MAX_PARTITION_BYTES, send, Seq.empty, acknowledgementsMapForFetch)
+    var shareFetchRequest = createShareFetchRequest(groupId, metadata, send, Seq.empty, acknowledgementsMapForFetch)
     var shareFetchResponse = connectAndReceive[ShareFetchResponse](shareFetchRequest)
 
     var shareFetchResponseData = shareFetchResponse.data()
@@ -983,7 +983,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     // Sending a third share fetch request to check if acknowledgements were done successfully
     shareSessionEpoch = ShareRequestMetadata.nextEpoch(shareSessionEpoch)
     metadata = new ShareRequestMetadata(memberId, shareSessionEpoch)
-    shareFetchRequest = createShareFetchRequest(groupId, metadata, MAX_PARTITION_BYTES, send, Seq.empty, Map.empty)
+    shareFetchRequest = createShareFetchRequest(groupId, metadata, send, Seq.empty, Map.empty)
     shareFetchResponse = connectAndReceive[ShareFetchResponse](shareFetchRequest)
 
     shareFetchResponseData = shareFetchResponse.data()
@@ -1051,7 +1051,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     var shareSessionEpoch = ShareRequestMetadata.nextEpoch(ShareRequestMetadata.INITIAL_EPOCH)
     var metadata = new ShareRequestMetadata(memberId, shareSessionEpoch)
     var acknowledgementsMapForFetch: Map[TopicIdPartition, util.List[ShareFetchRequestData.AcknowledgementBatch]] = Map.empty
-    var shareFetchRequest = createShareFetchRequest(groupId, metadata, MAX_PARTITION_BYTES, send, Seq.empty, acknowledgementsMapForFetch)
+    var shareFetchRequest = createShareFetchRequest(groupId, metadata, send, Seq.empty, acknowledgementsMapForFetch)
     var shareFetchResponse = connectAndReceive[ShareFetchResponse](shareFetchRequest)
 
     var shareFetchResponseData = shareFetchResponse.data()
@@ -1079,7 +1079,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setFirstOffset(0)
       .setLastOffset(9)
       .setAcknowledgeTypes(Collections.singletonList(3.toByte))).asJava) // Reject the records
-    shareFetchRequest = createShareFetchRequest(groupId, metadata, MAX_PARTITION_BYTES, send, Seq.empty, acknowledgementsMapForFetch)
+    shareFetchRequest = createShareFetchRequest(groupId, metadata, send, Seq.empty, acknowledgementsMapForFetch)
     shareFetchResponse = connectAndReceive[ShareFetchResponse](shareFetchRequest)
 
     shareFetchResponseData = shareFetchResponse.data()
@@ -1103,7 +1103,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     // Sending a fourth share fetch request to confirm if acknowledgements were done successfully
     shareSessionEpoch = ShareRequestMetadata.nextEpoch(shareSessionEpoch)
     metadata = new ShareRequestMetadata(memberId, shareSessionEpoch)
-    shareFetchRequest = createShareFetchRequest(groupId, metadata, MAX_PARTITION_BYTES, send, Seq.empty, Map.empty)
+    shareFetchRequest = createShareFetchRequest(groupId, metadata, send, Seq.empty, Map.empty)
     shareFetchResponse = connectAndReceive[ShareFetchResponse](shareFetchRequest)
 
     shareFetchResponseData = shareFetchResponse.data()
@@ -1173,7 +1173,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     var shareSessionEpoch = ShareRequestMetadata.nextEpoch(ShareRequestMetadata.INITIAL_EPOCH)
     var metadata = new ShareRequestMetadata(memberId, shareSessionEpoch)
     val acknowledgementsMapForFetch: Map[TopicIdPartition, util.List[ShareFetchRequestData.AcknowledgementBatch]] = Map.empty
-    var shareFetchRequest = createShareFetchRequest(groupId, metadata, MAX_PARTITION_BYTES, send, Seq.empty, acknowledgementsMapForFetch)
+    var shareFetchRequest = createShareFetchRequest(groupId, metadata, send, Seq.empty, acknowledgementsMapForFetch)
     var shareFetchResponse = connectAndReceive[ShareFetchResponse](shareFetchRequest)
 
     var shareFetchResponseData = shareFetchResponse.data()
@@ -1218,7 +1218,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     // Sending a third share fetch request to check if acknowledgements were done successfully
     shareSessionEpoch = ShareRequestMetadata.nextEpoch(shareSessionEpoch)
     metadata = new ShareRequestMetadata(memberId, shareSessionEpoch)
-    shareFetchRequest = createShareFetchRequest(groupId, metadata, MAX_PARTITION_BYTES, send, Seq.empty, Map.empty)
+    shareFetchRequest = createShareFetchRequest(groupId, metadata, send, Seq.empty, Map.empty)
     shareFetchResponse = connectAndReceive[ShareFetchResponse](shareFetchRequest)
 
     shareFetchResponseData = shareFetchResponse.data()
@@ -1265,7 +1265,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     // Sending a fourth share fetch request to check if acknowledgements were done successfully
     shareSessionEpoch = ShareRequestMetadata.nextEpoch(shareSessionEpoch)
     metadata = new ShareRequestMetadata(memberId, shareSessionEpoch)
-    shareFetchRequest = createShareFetchRequest(groupId, metadata, MAX_PARTITION_BYTES, send, Seq.empty, Map.empty)
+    shareFetchRequest = createShareFetchRequest(groupId, metadata, send, Seq.empty, Map.empty)
     shareFetchResponse = connectAndReceive[ShareFetchResponse](shareFetchRequest)
 
     shareFetchResponseData = shareFetchResponse.data()
@@ -1335,7 +1335,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     // Send the second share fetch request to fetch the records produced above
     val metadata = new ShareRequestMetadata(memberId, ShareRequestMetadata.nextEpoch(ShareRequestMetadata.INITIAL_EPOCH))
     val acknowledgementsMap: Map[TopicIdPartition, util.List[ShareFetchRequestData.AcknowledgementBatch]] = Map.empty
-    val shareFetchRequest = createShareFetchRequest(groupId, metadata, MAX_PARTITION_BYTES, send, Seq.empty, acknowledgementsMap)
+    val shareFetchRequest = createShareFetchRequest(groupId, metadata, send, Seq.empty, acknowledgementsMap)
     val shareFetchResponse = connectAndReceive[ShareFetchResponse](shareFetchRequest)
 
     val shareFetchResponseData = shareFetchResponse.data()
@@ -1410,15 +1410,15 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     // mocking the behaviour of multiple share consumers from the same share group
     val metadata1: ShareRequestMetadata = new ShareRequestMetadata(memberId1, ShareRequestMetadata.INITIAL_EPOCH)
     val acknowledgementsMap1: Map[TopicIdPartition, util.List[ShareFetchRequestData.AcknowledgementBatch]] = Map.empty
-    val shareFetchRequest1 = createShareFetchRequest(groupId, metadata1, MAX_PARTITION_BYTES, send, Seq.empty, acknowledgementsMap1, minBytes = 100, maxBytes = 1500)
+    val shareFetchRequest1 = createShareFetchRequest(groupId, metadata1, send, Seq.empty, acknowledgementsMap1, minBytes = 100, maxBytes = 1500)
 
     val metadata2: ShareRequestMetadata = new ShareRequestMetadata(memberId2, ShareRequestMetadata.INITIAL_EPOCH)
     val acknowledgementsMap2: Map[TopicIdPartition, util.List[ShareFetchRequestData.AcknowledgementBatch]] = Map.empty
-    val shareFetchRequest2 = createShareFetchRequest(groupId, metadata2, MAX_PARTITION_BYTES, send, Seq.empty, acknowledgementsMap2, minBytes = 100, maxBytes = 1500)
+    val shareFetchRequest2 = createShareFetchRequest(groupId, metadata2, send, Seq.empty, acknowledgementsMap2, minBytes = 100, maxBytes = 1500)
 
     val metadata3: ShareRequestMetadata = new ShareRequestMetadata(memberId3, ShareRequestMetadata.INITIAL_EPOCH)
     val acknowledgementsMap3: Map[TopicIdPartition, util.List[ShareFetchRequestData.AcknowledgementBatch]] = Map.empty
-    val shareFetchRequest3 = createShareFetchRequest(groupId, metadata3, MAX_PARTITION_BYTES, send, Seq.empty, acknowledgementsMap3, minBytes = 100, maxBytes = 1500)
+    val shareFetchRequest3 = createShareFetchRequest(groupId, metadata3, send, Seq.empty, acknowledgementsMap3, minBytes = 100, maxBytes = 1500)
 
     val shareFetchResponse1 = connectAndReceive[ShareFetchResponse](shareFetchRequest1)
     val shareFetchResponse2 = connectAndReceive[ShareFetchResponse](shareFetchRequest2)
@@ -1510,15 +1510,15 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     // mocking the behaviour of 3 different share groups
     val metadata1 = new ShareRequestMetadata(memberId1, ShareRequestMetadata.nextEpoch(ShareRequestMetadata.INITIAL_EPOCH))
     val acknowledgementsMap1: Map[TopicIdPartition, util.List[ShareFetchRequestData.AcknowledgementBatch]] = Map.empty
-    val shareFetchRequest1 = createShareFetchRequest(groupId1, metadata1, MAX_PARTITION_BYTES, send, Seq.empty, acknowledgementsMap1)
+    val shareFetchRequest1 = createShareFetchRequest(groupId1, metadata1, send, Seq.empty, acknowledgementsMap1)
 
     val metadata2 = new ShareRequestMetadata(memberId2, ShareRequestMetadata.nextEpoch(ShareRequestMetadata.INITIAL_EPOCH))
     val acknowledgementsMap2: Map[TopicIdPartition, util.List[ShareFetchRequestData.AcknowledgementBatch]] = Map.empty
-    val shareFetchRequest2 = createShareFetchRequest(groupId2, metadata2, MAX_PARTITION_BYTES, send, Seq.empty, acknowledgementsMap2)
+    val shareFetchRequest2 = createShareFetchRequest(groupId2, metadata2, send, Seq.empty, acknowledgementsMap2)
 
     val metadata3 = new ShareRequestMetadata(memberId3, ShareRequestMetadata.nextEpoch(ShareRequestMetadata.INITIAL_EPOCH))
     val acknowledgementsMap3: Map[TopicIdPartition, util.List[ShareFetchRequestData.AcknowledgementBatch]] = Map.empty
-    val shareFetchRequest3 = createShareFetchRequest(groupId3, metadata3, MAX_PARTITION_BYTES, send, Seq.empty, acknowledgementsMap3)
+    val shareFetchRequest3 = createShareFetchRequest(groupId3, metadata3, send, Seq.empty, acknowledgementsMap3)
 
     val shareFetchResponse1 = connectAndReceive[ShareFetchResponse](shareFetchRequest1)
     val shareFetchResponse2 = connectAndReceive[ShareFetchResponse](shareFetchRequest2)
@@ -1604,7 +1604,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     var shareSessionEpoch = ShareRequestMetadata.nextEpoch(ShareRequestMetadata.INITIAL_EPOCH)
     var metadata = new ShareRequestMetadata(memberId, shareSessionEpoch)
     var acknowledgementsMapForFetch: Map[TopicIdPartition, util.List[ShareFetchRequestData.AcknowledgementBatch]] = Map.empty
-    var shareFetchRequest = createShareFetchRequest(groupId, metadata, MAX_PARTITION_BYTES, send, Seq.empty, acknowledgementsMapForFetch)
+    var shareFetchRequest = createShareFetchRequest(groupId, metadata, send, Seq.empty, acknowledgementsMapForFetch)
     var shareFetchResponse = connectAndReceive[ShareFetchResponse](shareFetchRequest)
 
     var shareFetchResponseData = shareFetchResponse.data()
@@ -1632,7 +1632,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setFirstOffset(0)
       .setLastOffset(9)
       .setAcknowledgeTypes(Collections.singletonList(1.toByte))).asJava) // Accept the records
-    shareFetchRequest = createShareFetchRequest(groupId, metadata, MAX_PARTITION_BYTES, send, Seq.empty, acknowledgementsMapForFetch)
+    shareFetchRequest = createShareFetchRequest(groupId, metadata, send, Seq.empty, acknowledgementsMapForFetch)
     shareFetchResponse = connectAndReceive[ShareFetchResponse](shareFetchRequest)
 
     shareFetchResponseData = shareFetchResponse.data()
@@ -1657,7 +1657,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setFirstOffset(10)
       .setLastOffset(19)
       .setAcknowledgeTypes(Collections.singletonList(1.toByte))).asJava) // Accept the records
-    shareFetchRequest = createShareFetchRequest(groupId, metadata, 0, send, Seq.empty, Map.empty)
+    shareFetchRequest = createShareFetchRequest(groupId, metadata, send, Seq.empty, Map.empty)
     shareFetchResponse = connectAndReceive[ShareFetchResponse](shareFetchRequest)
 
     shareFetchResponseData = shareFetchResponse.data()
@@ -1714,7 +1714,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     var shareSessionEpoch = ShareRequestMetadata.nextEpoch(ShareRequestMetadata.INITIAL_EPOCH)
     var metadata = new ShareRequestMetadata(memberId, shareSessionEpoch)
     var acknowledgementsMapForFetch: Map[TopicIdPartition, util.List[ShareFetchRequestData.AcknowledgementBatch]] = Map.empty
-    var shareFetchRequest = createShareFetchRequest(groupId, metadata, MAX_PARTITION_BYTES, send, Seq.empty, acknowledgementsMapForFetch)
+    var shareFetchRequest = createShareFetchRequest(groupId, metadata, send, Seq.empty, acknowledgementsMapForFetch)
     var shareFetchResponse = connectAndReceive[ShareFetchResponse](shareFetchRequest)
 
     var shareFetchResponseData = shareFetchResponse.data()
@@ -1742,7 +1742,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setFirstOffset(0)
       .setLastOffset(9)
       .setAcknowledgeTypes(Collections.singletonList(1.toByte))).asJava) // Accept the records
-    shareFetchRequest = createShareFetchRequest(groupId, metadata, MAX_PARTITION_BYTES, send, Seq.empty, acknowledgementsMapForFetch)
+    shareFetchRequest = createShareFetchRequest(groupId, metadata, send, Seq.empty, acknowledgementsMapForFetch)
     shareFetchResponse = connectAndReceive[ShareFetchResponse](shareFetchRequest)
 
     shareFetchResponseData = shareFetchResponse.data()
@@ -1833,7 +1833,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       .setFirstOffset(0)
       .setLastOffset(9)
       .setAcknowledgeTypes(Collections.singletonList(1.toByte))).asJava) // Acknowledgements in the Initial Fetch Request
-    val shareFetchRequest = createShareFetchRequest(groupId, metadata, MAX_PARTITION_BYTES, send, Seq.empty, acknowledgementsMap)
+    val shareFetchRequest = createShareFetchRequest(groupId, metadata, send, Seq.empty, acknowledgementsMap)
     val shareFetchResponse = connectAndReceive[ShareFetchResponse](shareFetchRequest)
 
     val shareFetchResponseData = shareFetchResponse.data()
@@ -1940,7 +1940,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     // Send the second share fetch request to fetch the records produced above
     var shareSessionEpoch = ShareRequestMetadata.nextEpoch(ShareRequestMetadata.INITIAL_EPOCH)
     var metadata = new ShareRequestMetadata(memberId, shareSessionEpoch)
-    var shareFetchRequest = createShareFetchRequest(groupId, metadata, MAX_PARTITION_BYTES, send, Seq.empty, Map.empty)
+    var shareFetchRequest = createShareFetchRequest(groupId, metadata, send, Seq.empty, Map.empty)
     var shareFetchResponse = connectAndReceive[ShareFetchResponse](shareFetchRequest)
 
     var shareFetchResponseData = shareFetchResponse.data()
@@ -1961,7 +1961,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     // Sending a thord Share Fetch request with invalid share session epoch
     shareSessionEpoch = ShareRequestMetadata.nextEpoch(ShareRequestMetadata.nextEpoch(shareSessionEpoch))
     metadata = new ShareRequestMetadata(memberId, shareSessionEpoch)
-    shareFetchRequest = createShareFetchRequest(groupId, metadata, MAX_PARTITION_BYTES, send, Seq.empty, Map.empty)
+    shareFetchRequest = createShareFetchRequest(groupId, metadata, send, Seq.empty, Map.empty)
     shareFetchResponse = connectAndReceive[ShareFetchResponse](shareFetchRequest)
 
     shareFetchResponseData = shareFetchResponse.data()
@@ -2016,7 +2016,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     // Send the second share fetch request to fetch the records produced above
     var shareSessionEpoch = ShareRequestMetadata.nextEpoch(ShareRequestMetadata.INITIAL_EPOCH)
     var metadata = new ShareRequestMetadata(memberId, shareSessionEpoch)
-    val shareFetchRequest = createShareFetchRequest(groupId, metadata, MAX_PARTITION_BYTES, send, Seq.empty, Map.empty)
+    val shareFetchRequest = createShareFetchRequest(groupId, metadata, send, Seq.empty, Map.empty)
     val shareFetchResponse = connectAndReceive[ShareFetchResponse](shareFetchRequest)
 
     val shareFetchResponseData = shareFetchResponse.data()
@@ -2098,7 +2098,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     // Send the second share fetch request to fetch the records produced above
     var shareSessionEpoch = ShareRequestMetadata.nextEpoch(ShareRequestMetadata.INITIAL_EPOCH)
     var metadata = new ShareRequestMetadata(memberId, shareSessionEpoch)
-    var shareFetchRequest = createShareFetchRequest(groupId, metadata, MAX_PARTITION_BYTES, send, Seq.empty, Map.empty)
+    var shareFetchRequest = createShareFetchRequest(groupId, metadata, send, Seq.empty, Map.empty)
     var shareFetchResponse = connectAndReceive[ShareFetchResponse](shareFetchRequest)
 
     var shareFetchResponseData = shareFetchResponse.data()
@@ -2119,7 +2119,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     // Sending a third Share Fetch request with wrong member Id
     shareSessionEpoch = ShareRequestMetadata.nextEpoch(shareSessionEpoch)
     metadata = new ShareRequestMetadata(wrongMemberId, shareSessionEpoch)
-    shareFetchRequest = createShareFetchRequest(groupId, metadata, MAX_PARTITION_BYTES, send, Seq.empty, Map.empty)
+    shareFetchRequest = createShareFetchRequest(groupId, metadata, send, Seq.empty, Map.empty)
     shareFetchResponse = connectAndReceive[ShareFetchResponse](shareFetchRequest)
 
     shareFetchResponseData = shareFetchResponse.data()
@@ -2175,7 +2175,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     // Send the second share fetch request to fetch the records produced above
     var shareSessionEpoch = ShareRequestMetadata.nextEpoch(ShareRequestMetadata.INITIAL_EPOCH)
     var metadata = new ShareRequestMetadata(memberId, shareSessionEpoch)
-    val shareFetchRequest = createShareFetchRequest(groupId, metadata, MAX_PARTITION_BYTES, send, Seq.empty, Map.empty)
+    val shareFetchRequest = createShareFetchRequest(groupId, metadata, send, Seq.empty, Map.empty)
     val shareFetchResponse = connectAndReceive[ShareFetchResponse](shareFetchRequest)
 
     val shareFetchResponseData = shareFetchResponse.data()
@@ -2260,7 +2260,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     var shareSessionEpoch = ShareRequestMetadata.nextEpoch(ShareRequestMetadata.INITIAL_EPOCH)
     var metadata = new ShareRequestMetadata(memberId, shareSessionEpoch)
     val acknowledgementsMap: Map[TopicIdPartition, util.List[ShareFetchRequestData.AcknowledgementBatch]] = Map.empty
-    var shareFetchRequest = createShareFetchRequest(groupId, metadata, MAX_PARTITION_BYTES, send, Seq.empty, acknowledgementsMap)
+    var shareFetchRequest = createShareFetchRequest(groupId, metadata, send, Seq.empty, acknowledgementsMap)
 
     // For the multi partition fetch request, the response may not be available in the first attempt
     // as the share partitions might not be initialized yet. So, we retry until we get the response.
@@ -2290,7 +2290,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     shareSessionEpoch = ShareRequestMetadata.nextEpoch(shareSessionEpoch)
     metadata = new ShareRequestMetadata(memberId, shareSessionEpoch)
     val forget: Seq[TopicIdPartition] = Seq(topicIdPartition1)
-    shareFetchRequest = createShareFetchRequest(groupId, metadata, MAX_PARTITION_BYTES, Seq.empty, forget, acknowledgementsMap)
+    shareFetchRequest = createShareFetchRequest(groupId, metadata, Seq.empty, forget, acknowledgementsMap)
     val shareFetchResponse = connectAndReceive[ShareFetchResponse](shareFetchRequest)
 
     val shareFetchResponseData = shareFetchResponse.data()
@@ -2315,7 +2315,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     val partitions: util.Set[Integer] = new util.HashSet()
     TestUtils.waitUntilTrue(() => {
       val metadata = new ShareRequestMetadata(memberId, ShareRequestMetadata.INITIAL_EPOCH)
-      val shareFetchRequest = createShareFetchRequest(groupId, metadata, MAX_PARTITION_BYTES, topicIdPartitions, Seq.empty, Map.empty)
+      val shareFetchRequest = createShareFetchRequest(groupId, metadata, topicIdPartitions, Seq.empty, Map.empty)
       val shareFetchResponse = connectAndReceive[ShareFetchResponse](shareFetchRequest)
       val shareFetchResponseData = shareFetchResponse.data()
 
@@ -2358,7 +2358,6 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
   private def createShareFetchRequest(groupId: String,
                                       metadata: ShareRequestMetadata,
-                                      maxPartitionBytes: Int,
                                       send: Seq[TopicIdPartition],
                                       forget: Seq[TopicIdPartition],
                                       acknowledgementsMap: Map[TopicIdPartition, util.List[ShareFetchRequestData.AcknowledgementBatch]],
@@ -2366,7 +2365,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
                                       minBytes: Int = 0,
                                       maxBytes: Int = Int.MaxValue,
                                       batchSize: Int = 500): ShareFetchRequest = {
-    ShareFetchRequest.Builder.forConsumer(groupId, metadata, maxWaitMs, minBytes, maxBytes, maxPartitionBytes, batchSize, send.asJava, forget.asJava, acknowledgementsMap.asJava)
+    ShareFetchRequest.Builder.forConsumer(groupId, metadata, maxWaitMs, minBytes, maxBytes, batchSize, send.asJava, forget.asJava, acknowledgementsMap.asJava)
       .build()
   }
   

@@ -115,7 +115,7 @@ import scala.collection.Seq;
 import scala.jdk.javaapi.CollectionConverters;
 
 import static kafka.server.share.DelayedShareFetchTest.mockTopicIdPartitionToReturnDataEqualToMinBytes;
-import static org.apache.kafka.server.share.fetch.ShareFetchTestUtils.validateRotatedMapEquals;
+import static org.apache.kafka.server.share.fetch.ShareFetchTestUtils.validateRotatedListEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -2826,7 +2826,7 @@ public class SharePartitionManagerTest {
         verify(sharePartitionManager, times(1)).processShareFetch(captor.capture());
         // Verify the partitions rotation, no rotation.
         ShareFetch resultShareFetch = captor.getValue();
-        validateRotatedMapEquals(resultShareFetch.topicIdPartitions(), topicIdPartitions, 0);
+        validateRotatedListEquals(resultShareFetch.topicIdPartitions(), topicIdPartitions, 0);
 
         // Single rotation.
         sharePartitionManager.fetchMessages(groupId, memberId1.toString(), FETCH_PARAMS, 1, BATCH_SIZE,
@@ -2834,7 +2834,7 @@ public class SharePartitionManagerTest {
         verify(sharePartitionManager, times(2)).processShareFetch(captor.capture());
         // Verify the partitions rotation, rotate by 1.
         resultShareFetch = captor.getValue();
-        validateRotatedMapEquals(topicIdPartitions, resultShareFetch.topicIdPartitions(), 1);
+        validateRotatedListEquals(topicIdPartitions, resultShareFetch.topicIdPartitions(), 1);
 
         // Rotation by 3, less that the number of partitions.
         sharePartitionManager.fetchMessages(groupId, memberId1.toString(), FETCH_PARAMS, 3, BATCH_SIZE,
@@ -2842,7 +2842,7 @@ public class SharePartitionManagerTest {
         verify(sharePartitionManager, times(3)).processShareFetch(captor.capture());
         // Verify the partitions rotation, rotate by 3.
         resultShareFetch = captor.getValue();
-        validateRotatedMapEquals(topicIdPartitions, resultShareFetch.topicIdPartitions(), 3);
+        validateRotatedListEquals(topicIdPartitions, resultShareFetch.topicIdPartitions(), 3);
 
         // Rotation by 12, more than the number of partitions.
         sharePartitionManager.fetchMessages(groupId, memberId1.toString(), FETCH_PARAMS, 12, BATCH_SIZE,
@@ -2850,14 +2850,14 @@ public class SharePartitionManagerTest {
         verify(sharePartitionManager, times(4)).processShareFetch(captor.capture());
         // Verify the partitions rotation, rotate by 5 (12 % 7).
         resultShareFetch = captor.getValue();
-        validateRotatedMapEquals(topicIdPartitions, resultShareFetch.topicIdPartitions(), 5);
+        validateRotatedListEquals(topicIdPartitions, resultShareFetch.topicIdPartitions(), 5);
         // Rotation by Integer.MAX_VALUE, boundary test.
         sharePartitionManager.fetchMessages(groupId, memberId1.toString(), FETCH_PARAMS, Integer.MAX_VALUE, BATCH_SIZE,
             topicIdPartitions);
         verify(sharePartitionManager, times(5)).processShareFetch(captor.capture());
         // Verify the partitions rotation, rotate by 1 (2147483647 % 7).
         resultShareFetch = captor.getValue();
-        validateRotatedMapEquals(topicIdPartitions, resultShareFetch.topicIdPartitions(), 1);
+        validateRotatedListEquals(topicIdPartitions, resultShareFetch.topicIdPartitions(), 1);
     }
 
     private Timer systemTimerReaper() {

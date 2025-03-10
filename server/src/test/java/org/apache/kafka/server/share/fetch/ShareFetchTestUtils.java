@@ -43,13 +43,13 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 public class ShareFetchTestUtils {
 
     /**
-     * Validate that the rotated map is equal to the original map with the keys rotated by the given position.
+     * Validate that the rotated list is equal to the original list rotated by the given position.
      *
-     * @param original The original map.
-     * @param result The rotated map.
-     * @param rotationAt The position to rotate the keys at.
+     * @param original The original list.
+     * @param result The rotated list.
+     * @param rotationAt The position to rotate the elements at.
      */
-    public static void validateRotatedMapEquals(
+    public static void validateRotatedListEquals(
         List<TopicIdPartition> original,
         List<TopicIdPartition> result,
         int rotationAt

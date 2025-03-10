@@ -27,7 +27,7 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.apache.kafka.server.share.fetch.ShareFetchTestUtils.validateRotatedMapEquals;
+import static org.apache.kafka.server.share.fetch.ShareFetchTestUtils.validateRotatedListEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -40,22 +40,22 @@ public class PartitionRotateStrategyTest {
 
         List<TopicIdPartition> result = strategy.rotate(partitions, new PartitionRotateMetadata(1));
         assertEquals(3, result.size());
-        validateRotatedMapEquals(partitions, result, 1);
+        validateRotatedListEquals(partitions, result, 1);
 
         // Session epoch is greater than the number of partitions.
         result = strategy.rotate(partitions, new PartitionRotateMetadata(5));
         assertEquals(3, result.size());
-        validateRotatedMapEquals(partitions, result, 2);
+        validateRotatedListEquals(partitions, result, 2);
 
         // Session epoch is at Integer.MAX_VALUE.
         result = strategy.rotate(partitions, new PartitionRotateMetadata(Integer.MAX_VALUE));
         assertEquals(3, result.size());
-        validateRotatedMapEquals(partitions, result, 1);
+        validateRotatedListEquals(partitions, result, 1);
 
         // No rotation at same size as epoch.
         result = strategy.rotate(partitions, new PartitionRotateMetadata(3));
         assertEquals(3, result.size());
-        validateRotatedMapEquals(partitions, result, 0);
+        validateRotatedListEquals(partitions, result, 0);
     }
 
     @Test
@@ -67,13 +67,13 @@ public class PartitionRotateStrategyTest {
             partitions,
             new PartitionRotateMetadata(ShareRequestMetadata.INITIAL_EPOCH));
         assertEquals(3, result.size());
-        validateRotatedMapEquals(partitions, result, 0);
+        validateRotatedListEquals(partitions, result, 0);
 
         result = strategy.rotate(
             partitions,
             new PartitionRotateMetadata(ShareRequestMetadata.FINAL_EPOCH));
         assertEquals(3, result.size());
-        validateRotatedMapEquals(partitions, result, 0);
+        validateRotatedListEquals(partitions, result, 0);
     }
 
     @Test

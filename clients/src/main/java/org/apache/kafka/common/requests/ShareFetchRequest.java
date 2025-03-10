@@ -47,19 +47,17 @@ public class ShareFetchRequest extends AbstractRequest {
         }
 
         public static Builder forConsumer(String groupId, ShareRequestMetadata metadata,
-                                          int maxWait, int minBytes, int maxBytes, int fetchSize, int batchSize,
+                                          int maxWait, int minBytes, int maxBytes, int batchSize,
                                           List<TopicIdPartition> send, List<TopicIdPartition> forget,
                                           Map<TopicIdPartition, List<ShareFetchRequestData.AcknowledgementBatch>> acknowledgementsMap) {
             ShareFetchRequestData data = new ShareFetchRequestData();
             data.setGroupId(groupId);
-            int ackOnlyPartitionMaxBytes = fetchSize;
             boolean isClosingShareSession = false;
             if (metadata != null) {
                 data.setMemberId(metadata.memberId().toString());
                 data.setShareSessionEpoch(metadata.epoch());
                 if (metadata.isFinalEpoch()) {
                     isClosingShareSession = true;
-                    ackOnlyPartitionMaxBytes = 0;
                 }
             }
             data.setMaxWaitMs(maxWait);
@@ -75,8 +73,7 @@ public class ShareFetchRequest extends AbstractRequest {
                 for (TopicIdPartition tip : send) {
                     Map<Integer, ShareFetchRequestData.FetchPartition> partMap = fetchMap.computeIfAbsent(tip.topicId(), k -> new HashMap<>());
                     ShareFetchRequestData.FetchPartition fetchPartition = new ShareFetchRequestData.FetchPartition()
-                            .setPartitionIndex(tip.partition())
-                            .setPartitionMaxBytes(fetchSize);
+                            .setPartitionIndex(tip.partition());
                     partMap.put(tip.partition(), fetchPartition);
                 }
             }
@@ -89,8 +86,7 @@ public class ShareFetchRequest extends AbstractRequest {
                 ShareFetchRequestData.FetchPartition fetchPartition = partMap.get(tip.partition());
                 if (fetchPartition == null) {
                     fetchPartition = new ShareFetchRequestData.FetchPartition()
-                            .setPartitionIndex(tip.partition())
-                            .setPartitionMaxBytes(ackOnlyPartitionMaxBytes);
+                            .setPartitionIndex(tip.partition());
                     partMap.put(tip.partition(), fetchPartition);
                 }
                 fetchPartition.setAcknowledgementBatches(acknowledgeEntry.getValue());
@@ -200,7 +196,7 @@ public class ShareFetchRequest extends AbstractRequest {
                         String name = topicNames.get(shareFetchTopic.topicId());
                         shareFetchTopic.partitions().forEach(shareFetchPartition -> {
                             // Topic name may be null here if the topic name was unable to be resolved using the topicNames map.
-                            shareFetchDataTmp.add(new TopicIdPartition(shareFetchTopic.topicId(), new TopicPartition(name, shareFetchPartition.partitionIndex())));
+                            shareFetchDataTmp.add(new TopicIdPartition(shareFetchTopic.topicId(), shareFetchPartition.partitionIndex(), name));
                         });
                     });
                     shareFetchData = shareFetchDataTmp;
