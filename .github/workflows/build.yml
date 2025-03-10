@@ -140,7 +140,7 @@ jobs:
         # --scan:         Publish the build scan. This will only work on PRs from apache/kafka and trunk
         # --no-scan:      For public fork PRs, we won't attempt to publish the scan
         run: |
-          ./gradlew --build-cache --info $SCAN_ARG check siteDocTar -x test
+          ./gradlew --build-cache --info $SCAN_ARG check releaseTarGz -x test
       - name: Archive check reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -170,6 +170,8 @@ jobs:
             find ./site-docs/generated -type f -exec grep -L "." {} \; >&2
             exit 1
           fi
+      - name: Verify license file
+        run: python committer-tools/verify_license.py --skip-build
 
   test:
     needs: [configure, validate, load-catalog]
