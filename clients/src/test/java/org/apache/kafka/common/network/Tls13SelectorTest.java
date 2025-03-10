@@ -18,6 +18,7 @@
 package org.apache.kafka.common.network;
 
 import org.apache.kafka.common.config.SslConfigs;
+import org.apache.kafka.common.test.api.Flaky;
 import org.apache.kafka.test.TestSslUtils;
 import org.apache.kafka.test.TestUtils;
 
@@ -35,6 +36,7 @@ import java.util.stream.Collectors;
 
 import static java.util.Arrays.asList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class Tls13SelectorTest extends SslSelectorTest {
 
@@ -44,6 +46,20 @@ public class Tls13SelectorTest extends SslSelectorTest {
             trustStoreFile, "client");
         configs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Collections.singletonList("TLSv1.3"));
         return configs;
+    }
+
+    @Flaky(value = "KAFKA-14249", comment = "Copied from base class. Remove this override once the flakiness has been resolved.")
+    @Test
+    @Override
+    public void testCloseOldestConnection() throws Exception {
+        String id = "0";
+        selector.connect(id, new InetSocketAddress("localhost", server.port), BUFFER_SIZE, BUFFER_SIZE);
+        NetworkTestUtils.waitForChannelConnected(selector, id);
+        time.sleep(CONNECTION_MAX_IDLE_MS + 1_000);
+        selector.poll(0);
+
+        assertTrue(selector.disconnected().containsKey(id), "The idle connection should have been closed");
+        assertEquals(ChannelState.EXPIRED, selector.disconnected().get(id));
     }
 
     /**

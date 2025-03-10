@@ -83,7 +83,7 @@ import static org.mockito.Mockito.when;
 public class SelectorTest {
     protected static final int BUFFER_SIZE = 4 * 1024;
     private static final String METRIC_GROUP = "MetricGroup";
-    private static final long CONNECTION_MAX_IDLE_MS = 5_000;
+    static final long CONNECTION_MAX_IDLE_MS = 5_000;
 
     protected EchoServer server;
     protected Time time;
