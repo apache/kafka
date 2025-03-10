@@ -187,7 +187,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         IMPLICIT
     }
 
-    private AcknowledgementMode acknowledgementMode = AcknowledgementMode.UNKNOWN;
+    private AcknowledgementMode acknowledgementMode;
 
     /**
      * A thread-safe {@link ShareFetchBuffer fetch buffer} for the results that are populated in the
@@ -258,6 +258,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             this.metrics = createMetrics(config, time, reporters);
             this.asyncConsumerMetrics = new AsyncConsumerMetrics(metrics);
 
+            this.acknowledgementMode = initializeAcknowledgementMode(config, log);
             this.deserializers = new Deserializers<>(config, keyDeserializer, valueDeserializer, metrics);
             this.currentFetch = ShareFetch.empty();
             this.subscriptions = createSubscriptionState(config, logContext);
@@ -369,6 +370,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         this.subscriptions = subscriptions;
         this.metadata = metadata;
         this.defaultApiTimeoutMs = config.getInt(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
+        this.acknowledgementMode = initializeAcknowledgementMode(config, log);
         this.fetchBuffer = new ShareFetchBuffer(logContext);
         this.completedAcknowledgements = new LinkedList<>();
 
@@ -463,6 +465,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         this.metrics = metrics;
         this.metadata = metadata;
         this.defaultApiTimeoutMs = defaultApiTimeoutMs;
+        this.acknowledgementMode = initializeAcknowledgementMode(null, log);
         this.deserializers = new Deserializers<>(keyDeserializer, valueDeserializer, metrics);
         this.currentFetch = ShareFetch.empty();
         this.applicationEventHandler = applicationEventHandler;
@@ -1060,6 +1063,25 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         } else if (acknowledgementMode == AcknowledgementMode.UNKNOWN) {
             throw new IllegalStateException("Acknowledge called before poll.");
         }
+    }
+
+    /**
+     * Initializes the acknowledgement mode based on the configuration.
+     */
+    private static AcknowledgementMode initializeAcknowledgementMode(ConsumerConfig config, Logger log) {
+        if (config == null) {
+            return AcknowledgementMode.UNKNOWN;
+        }
+        String acknowledgementModeStr = config.getString(ConsumerConfig.INTERNAL_SHARE_ACKNOWLEDGEMENT_MODE_CONFIG);
+        if ((acknowledgementModeStr == null) || acknowledgementModeStr.isEmpty()) {
+            return AcknowledgementMode.UNKNOWN;
+        } else if (acknowledgementModeStr.equalsIgnoreCase("implicit")) {
+            return AcknowledgementMode.IMPLICIT;
+        } else if (acknowledgementModeStr.equalsIgnoreCase("explicit")) {
+            return AcknowledgementMode.EXPLICIT;
+        }
+        log.warn("Invalid value for config {}: \"{}\"", ConsumerConfig.INTERNAL_SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, acknowledgementModeStr);
+        return AcknowledgementMode.UNKNOWN;
     }
 
     /**

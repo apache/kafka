@@ -21,13 +21,4 @@ import org.apache.kafka.common.record.Records;
 /**
  * Metadata for the records fetched from log, including the records itself
  */
-public class LogFetchInfo {
-
-    public final Records records;
-    public final LogOffsetMetadata startOffsetMetadata;
-
-    public LogFetchInfo(Records records, LogOffsetMetadata startOffsetMetadata) {
-        this.records = records;
-        this.startOffsetMetadata = startOffsetMetadata;
-    }
-}
+public record LogFetchInfo(Records records, LogOffsetMetadata startOffsetMetadata) { }

@@ -430,7 +430,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             listenerContext.nextExpectedOffset().ifPresent(nextExpectedOffset -> {
                 if (nextExpectedOffset < highWatermark) {
                     LogFetchInfo readInfo = log.read(nextExpectedOffset, Isolation.COMMITTED);
-                    listenerContext.fireHandleCommit(nextExpectedOffset, readInfo.records);
+                    listenerContext.fireHandleCommit(nextExpectedOffset, readInfo.records());
                 }
             });
         }
@@ -1625,11 +1625,11 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             if (validOffsetAndEpoch.kind() == ValidOffsetAndEpoch.Kind.VALID) {
                 LogFetchInfo info = log.read(fetchOffset, Isolation.UNCOMMITTED);
 
-                if (state.updateReplicaState(replicaKey, currentTimeMs, info.startOffsetMetadata)) {
+                if (state.updateReplicaState(replicaKey, currentTimeMs, info.startOffsetMetadata())) {
                     onUpdateLeaderHighWatermark(state, currentTimeMs);
                 }
 
-                records = info.records;
+                records = info.records();
             } else {
                 records = MemoryRecords.EMPTY;
             }
@@ -1820,7 +1820,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
 
         try {
             var info = log.appendAsFollower(records, quorum.epoch());
-            kafkaRaftMetrics.updateFetchedRecords(info.lastOffset - info.firstOffset + 1);
+            kafkaRaftMetrics.updateFetchedRecords(info.lastOffset() - info.firstOffset() + 1);
         } catch (CorruptRecordException | InvalidRecordException e) {
             logger.info(
                 "Failed to append the records with the batch header '{}' to the log",
@@ -1850,9 +1850,9 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         partitionState.updateState();
 
         OffsetAndEpoch endOffset = endOffset();
-        kafkaRaftMetrics.updateAppendRecords(info.lastOffset - info.firstOffset + 1);
+        kafkaRaftMetrics.updateAppendRecords(info.lastOffset() - info.firstOffset() + 1);
         kafkaRaftMetrics.updateLogEnd(endOffset);
-        logger.trace("Leader appended records at base offset {}, new end offset is {}", info.firstOffset, endOffset);
+        logger.trace("Leader appended records at base offset {}, new end offset is {}", info.firstOffset(), endOffset);
         return info;
     }
 
@@ -2938,7 +2938,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         try {
             int epoch = state.epoch();
             LogAppendInfo info = appendAsLeader(batch.data);
-            OffsetAndEpoch offsetAndEpoch = new OffsetAndEpoch(info.lastOffset, epoch);
+            OffsetAndEpoch offsetAndEpoch = new OffsetAndEpoch(info.lastOffset(), epoch);
             CompletableFuture<Long> future = appendPurgatory.await(
                 offsetAndEpoch.offset() + 1, Integer.MAX_VALUE);
 
