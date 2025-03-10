@@ -70,6 +70,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyMap;
 
 public class ConfigCommandIntegrationTest {
     private final String defaultBrokerId = "0";
@@ -412,7 +413,7 @@ public class ConfigCommandIntegrationTest {
             AlterConfigsResult mockResult = AdminClientTestUtils.alterConfigsResult(
                     new ConfigResource(ConfigResource.Type.BROKER, ""), new UnsupportedVersionException("simulated error"));
             Mockito.doReturn(mockResult).when(spyAdmin)
-                    .incrementalAlterConfigs(any(java.util.Map.class), any(AlterConfigsOptions.class));
+                    .incrementalAlterConfigs(anyMap(), any(AlterConfigsOptions.class));
             assertEquals(
                     "The INCREMENTAL_ALTER_CONFIGS API is not supported by the cluster. The API is supported starting from version 2.3.0. You may want to use an older version of this tool to interact with your cluster, or upgrade your brokers to version 2.3.0 or newer to avoid this error.",
                     assertThrows(UnsupportedVersionException.class, () -> {
@@ -425,7 +426,7 @@ public class ConfigCommandIntegrationTest {
                                         "--entity-default"))));
                     }).getMessage()
             );
-            Mockito.verify(spyAdmin).incrementalAlterConfigs(any(java.util.Map.class), any(AlterConfigsOptions.class));
+            Mockito.verify(spyAdmin).incrementalAlterConfigs(anyMap(), any(AlterConfigsOptions.class));
         }
     }
 
