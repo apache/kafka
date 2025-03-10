@@ -204,7 +204,7 @@ public final class MessageUtil {
         }
     }
 
-    private static ByteBufferAccessor toByteBufferAccessor(final Message message, final short version) {
+    public static ByteBufferAccessor toReadable(final Message message, final short version) {
         ObjectSerializationCache cache = new ObjectSerializationCache();
         int messageSize = message.size(cache, version);
         ByteBufferAccessor bytes = new ByteBufferAccessor(ByteBuffer.allocate(messageSize));
@@ -213,12 +213,8 @@ public final class MessageUtil {
         return bytes;
     }
 
-    public static Readable toReadable(final Message message, final short version) {
-        return toByteBufferAccessor(message, version);
-    }
-
     public static ByteBuffer toByteBuffer(final Message message, final short version) {
-        return toByteBufferAccessor(message, version).buffer();
+        return toReadable(message, version).buffer();
     }
 
     public static ByteBuffer toVersionPrefixedByteBuffer(final short version, final Message message) {

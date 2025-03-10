@@ -24,6 +24,7 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.MessageUtil;
+import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
 
@@ -59,7 +60,7 @@ public class RequestConvertToJsonTest {
                 } else {
                     message = ApiMessageType.fromApiKey(key.id).newRequest();
                 }
-                ByteBuffer bytes = MessageUtil.toByteBuffer(message, version);
+                Readable bytes = MessageUtil.toReadable(message, version);
                 AbstractRequest req = AbstractRequest.parseRequest(key, version, bytes).request;
                 try {
                     RequestConvertToJson.request(req);

@@ -124,13 +124,8 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
     }
 
     // Visible for testing
-    public final Readable serialize() {
+    public final ByteBufferAccessor serialize() {
         return MessageUtil.toReadable(data(), version);
-    }
-
-    // Visible for testing
-    public final ByteBuffer serializeToByteBuffer() {
-        return MessageUtil.toByteBuffer(data(), version);
     }
 
     // Visible for testing
@@ -174,10 +169,6 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
     /**
      * Factory method for getting a request object based on ApiKey ID and a version
      */
-    public static RequestAndSize parseRequest(ApiKeys apiKey, short apiVersion, ByteBuffer buffer) {
-        return parseRequest(apiKey, apiVersion, new ByteBufferAccessor(buffer));
-    }
-
     public static RequestAndSize parseRequest(ApiKeys apiKey, short apiVersion, Readable readable) {
         int bufferSize = readable.remaining();
         return new RequestAndSize(doParseRequest(apiKey, apiVersion, readable), bufferSize);
