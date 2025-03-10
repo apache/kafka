@@ -124,7 +124,7 @@ above.
 
 The following checks are performed on our PRs:
 * Title is not too short or too long
-* Title starts with "KAFKA-", "MINOR-", or "HOTFIX-"
+* Title starts with "KAFKA-", "MINOR", or "HOTFIX"
 * Body is not empty
 * Body includes "Reviewers:" if the PR is approved
 
