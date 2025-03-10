@@ -4,6 +4,7 @@
 import json
 import shlex
 import subprocess
+import tempfile
 #
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
@@ -38,6 +39,17 @@ def prompt_for_user():
             return clean_input
 
 
+def update_trailers(body, trailer):
+    with tempfile.NamedTemporaryFile() as fp:
+        fp.write(body.encode())
+        fp.flush()
+        cmd = f"git interpret-trailers --if-exists replace --trailer '{trailer}' {fp.name} "
+        p = subprocess.run(shlex.split(cmd), capture_output=True, text=True)
+        fp.close()
+
+    return p.stdout
+
+
 def append_message_to_pr_body(pr: int , message: str):
     try:
         pr_url = f"https://github.com/apache/kafka/pull/{pr}"
@@ -45,8 +57,7 @@ def append_message_to_pr_body(pr: int , message: str):
         result = subprocess.run(shlex.split(cmd_get_pr), capture_output=True, text=True, check=True)
         current_pr_body = json.loads(result.stdout).get("body", {})
         pr_title = json.loads(result.stdout).get("title", {})
-        escaped_message = message.replace("<", "\\<").replace(">", "\\>")
-        updated_pr_body = f"{current_pr_body}{escaped_message}"
+        updated_pr_body = update_trailers(current_pr_body, message)
     except subprocess.CalledProcessError as e:
         print("Failed to retrieve PR body:", e.stderr)
         return
@@ -115,8 +126,8 @@ if __name__ == "__main__":
             continue
 
     if selected_reviewers:
-        reviewer_message = f'\n\nReviewers: {", ".join([f"{name} <{email}>" for name, email, _ in selected_reviewers])}\n'
-        print(reviewer_message)
+        reviewer_message = f'Reviewers: {", ".join([f"{name} <{email}>" for name, email, _ in selected_reviewers])}'
+        print(f"\n\n{reviewer_message}\n")
 
         try:
             pr_number = int(input("\nPull Request (Ctrl+D or Ctrl+C to skip): "))
