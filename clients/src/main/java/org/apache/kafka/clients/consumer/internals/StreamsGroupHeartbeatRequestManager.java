@@ -62,11 +62,11 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
     static class HeartbeatState {
 
         // Fields of StreamsGroupHeartbeatRequest sent in the most recent request
-        static class SentFields {
+        static class LastSentFields {
 
             private StreamsRebalanceData.Assignment assignment = null;
 
-            SentFields() {
+            LastSentFields() {
             }
 
             void reset() {
@@ -77,7 +77,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         private final StreamsMembershipManager membershipManager;
         private final int rebalanceTimeoutMs;
         private final StreamsRebalanceData streamsRebalanceData;
-        private final SentFields sentFields = new SentFields();
+        private final LastSentFields lastSentFields = new LastSentFields();
 
         public HeartbeatState(final StreamsRebalanceData streamsRebalanceData,
                               final StreamsMembershipManager membershipManager,
@@ -88,7 +88,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         }
 
         public void reset() {
-            sentFields.reset();
+            lastSentFields.reset();
         }
 
         public StreamsGroupHeartbeatRequestData buildRequestData() {
@@ -124,11 +124,11 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
                 data.setWarmupTasks(convertTaskIdCollection(Set.of()));
             } else {
                 StreamsRebalanceData.Assignment reconciledAssignment = streamsRebalanceData.reconciledAssignment();
-                if (!reconciledAssignment.equals(sentFields.assignment)) {
+                if (!reconciledAssignment.equals(lastSentFields.assignment)) {
                     data.setActiveTasks(convertTaskIdCollection(reconciledAssignment.activeTasks()));
                     data.setStandbyTasks(convertTaskIdCollection(reconciledAssignment.standbyTasks()));
                     data.setWarmupTasks(convertTaskIdCollection(reconciledAssignment.warmupTasks()));
-                    sentFields.assignment = reconciledAssignment;
+                    lastSentFields.assignment = reconciledAssignment;
                 }
             }
             data.setShutdownApplication(streamsRebalanceData.shutdownRequested());
