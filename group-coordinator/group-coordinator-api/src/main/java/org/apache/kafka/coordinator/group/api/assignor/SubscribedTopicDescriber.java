@@ -45,5 +45,14 @@ public interface SubscribedTopicDescriber {
      */
     Set<String> racksForPartition(Uuid topicId, int partition);
 
+    /**
+     * Returns a set of partitions corresponding to a topic id which
+     * are allowlisted based on some criteria. For example, for share groups
+     * only partitions which have been initialized are returned.
+     *
+     * @param topicId   The uuid of the topic
+     * @return The set of integers representing assignable partitions. Could be empty, or contain all partitions.
+     * @throws UnknownTopicIdException if topic id does not exist.
+     */
     Set<Integer> assignablePartitions(Uuid topicId) throws UnknownTopicIdException;
 }

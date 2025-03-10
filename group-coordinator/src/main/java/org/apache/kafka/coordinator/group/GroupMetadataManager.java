@@ -2393,6 +2393,7 @@ public class GroupMetadataManager {
     /**
      * Computes the diff between the subscribed metadata and the initialized share topic
      * partitions corresponding to a share group.
+     *
      * @param group The share group for which diff is being calculated
      * @param subscriptionMetadata The subscription metadata corresponding to the share group.
      * @return A map of topic partitions which are subscribed by the share group but not initialized yet.
@@ -2426,6 +2427,7 @@ public class GroupMetadataManager {
     /**
      * Based on the diff between the subscribed topic partitions and the initialized topic partitions,
      * created initialize request for the non-initialized ones.
+     * 
      * @param group The share group for which partitions need to be initialized.
      * @param subscriptionMetadata The subscription metadata for the share group.
      * @return An optional representing the persister initialize request.
