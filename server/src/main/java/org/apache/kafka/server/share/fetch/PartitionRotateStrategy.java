@@ -19,6 +19,7 @@ package org.apache.kafka.server.share.fetch;
 import org.apache.kafka.common.TopicIdPartition;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 
@@ -80,18 +81,8 @@ public interface PartitionRotateStrategy {
             return topicIdPartitions;
         }
 
-        ArrayList<TopicIdPartition> suffixPartitions = new ArrayList<>(rotateAt);
-        ArrayList<TopicIdPartition> rotatedPartitions = new ArrayList<>(topicIdPartitions.size());
-        int i = 0;
-        for (TopicIdPartition topicIdPartition : topicIdPartitions) {
-            if (i < rotateAt) {
-                suffixPartitions.add(topicIdPartition);
-            } else {
-                rotatedPartitions.add(topicIdPartition);
-            }
-            i++;
-        }
-        rotatedPartitions.addAll(suffixPartitions);
+        List<TopicIdPartition> rotatedPartitions = new ArrayList<>(topicIdPartitions);
+        Collections.rotate(rotatedPartitions, -1 * rotateAt);
         return rotatedPartitions;
     }
 
