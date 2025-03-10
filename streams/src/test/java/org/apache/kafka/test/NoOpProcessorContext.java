@@ -148,6 +148,15 @@ public class NoOpProcessorContext extends AbstractProcessorContext<Object, Objec
     }
 
     @Override
+    public void logChange(final String storeName,
+                          final Bytes key,
+                          final byte[] value,
+                          final long timestamp,
+                          final byte[] rawSerializedHeaders,
+                          final Position position) {
+    }
+
+    @Override
     public void transitionToActive(final StreamTask streamTask, final RecordCollector recordCollector, final ThreadCache newCache) {
     }
 

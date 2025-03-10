@@ -481,6 +481,31 @@ public class MemoryRecordsBuilder implements AutoCloseable {
         }
     }
 
+    private void appendWithOffset(long offset, long timestamp, ByteBuffer key,
+                                   ByteBuffer value, byte[] rawSerializedHeaders) {
+        try {
+            if (isControlBatch)
+                throw new IllegalArgumentException("Raw header records cannot be appended to control batches");
+
+            if (lastOffset != null && offset <= lastOffset)
+                throw new IllegalArgumentException(String.format("Illegal offset %d following previous offset %d " +
+                        "(Offsets must increase monotonically).", offset, lastOffset));
+
+            if (timestamp < 0 && timestamp != RecordBatch.NO_TIMESTAMP)
+                throw new IllegalArgumentException("Invalid negative timestamp " + timestamp);
+
+            if (magic < RecordBatch.MAGIC_VALUE_V2)
+                throw new IllegalArgumentException("Raw serialized headers are only supported for magic >= V2");
+
+            if (baseTimestamp == null)
+                baseTimestamp = timestamp;
+
+            appendDefaultRecord(offset, timestamp, key, value, rawSerializedHeaders);
+        } catch (IOException e) {
+            throw new KafkaException("I/O exception when writing to the append stream, closing", e);
+        }
+    }
+
     /**
      * Append a new record at the given offset.
      * @param offset The absolute offset of the record in the log buffer
@@ -593,6 +618,20 @@ public class MemoryRecordsBuilder implements AutoCloseable {
      */
     public void append(long timestamp, byte[] key, byte[] value, Header[] headers) {
         append(timestamp, wrapNullable(key), wrapNullable(value), headers);
+    }
+
+    /**
+     * Append a record with pre-serialized header bytes at the next sequential offset.
+     */
+    public void append(long timestamp, byte[] key, byte[] value, byte[] rawSerializedHeaders) {
+        append(timestamp, wrapNullable(key), wrapNullable(value), rawSerializedHeaders);
+    }
+
+    /**
+     * Append a record with pre-serialized header bytes at the next sequential offset.
+     */
+    public void append(long timestamp, ByteBuffer key, ByteBuffer value, byte[] rawSerializedHeaders) {
+        appendWithOffset(nextSequentialOffset(), timestamp, key, value, rawSerializedHeaders);
     }
 
     /**
@@ -761,6 +800,15 @@ public class MemoryRecordsBuilder implements AutoCloseable {
         recordWritten(offset, timestamp, sizeInBytes);
     }
 
+    private void appendDefaultRecord(long offset, long timestamp, ByteBuffer key, ByteBuffer value,
+                                     byte[] rawSerializedHeaders) throws IOException {
+        ensureOpenForRecordAppend();
+        int offsetDelta = (int) (offset - baseOffset);
+        long timestampDelta = timestamp - baseTimestamp;
+        int sizeInBytes = DefaultRecord.writeTo(appendStream, offsetDelta, timestampDelta, key, value, rawSerializedHeaders);
+        recordWritten(offset, timestamp, sizeInBytes);
+    }
+
     private long appendLegacyRecord(long offset, long timestamp, ByteBuffer key, ByteBuffer value, byte magic) throws IOException {
         ensureOpenForRecordAppend();
 
@@ -864,6 +912,24 @@ public class MemoryRecordsBuilder implements AutoCloseable {
         }
 
         // Be conservative and not take compression of the new record into consideration.
+        return this.writeLimit >= estimatedBytesWritten() + recordSize;
+    }
+
+    public boolean hasRoomFor(long timestamp, byte[] key, byte[] value, byte[] rawSerializedHeaders) {
+        return hasRoomFor(timestamp, wrapNullable(key), wrapNullable(value), rawSerializedHeaders);
+    }
+
+    public boolean hasRoomFor(long timestamp, ByteBuffer key, ByteBuffer value, byte[] rawSerializedHeaders) {
+        if (isFull())
+            return false;
+
+        if (numRecords == 0)
+            return true;
+
+        int nextOffsetDelta = lastOffset == null ? 0 : (int) (lastOffset - baseOffset + 1);
+        long timestampDelta = baseTimestamp == null ? 0 : timestamp - baseTimestamp;
+        int recordSize = DefaultRecord.sizeInBytes(nextOffsetDelta, timestampDelta, key, value, rawSerializedHeaders);
+
         return this.writeLimit >= estimatedBytesWritten() + recordSize;
     }
 

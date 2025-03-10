@@ -222,6 +222,54 @@ public class DefaultRecord implements Record {
         return ByteUtils.sizeOfVarint(sizeInBytes) + sizeInBytes;
     }
 
+    /**
+     * Write the record to {@code out} using pre-serialized header bytes, bypassing per-header
+     * iteration. The {@code rawSerializedHeaders} must use the standard Kafka header wire format:
+     * {@code [count(varint)][header1][header2]...}, or be empty (length 0) for zero headers.
+     */
+    public static int writeTo(DataOutputStream out,
+                              int offsetDelta,
+                              long timestampDelta,
+                              ByteBuffer key,
+                              ByteBuffer value,
+                              byte[] rawSerializedHeaders) throws IOException {
+        int sizeInBytes = sizeOfBodyInBytes(offsetDelta, timestampDelta, key, value, rawSerializedHeaders);
+        ByteUtils.writeVarint(sizeInBytes, out);
+
+        byte attributes = 0;
+        out.write(attributes);
+
+        ByteUtils.writeVarlong(timestampDelta, out);
+        ByteUtils.writeVarint(offsetDelta, out);
+
+        if (key == null) {
+            ByteUtils.writeVarint(-1, out);
+        } else {
+            int keySize = key.remaining();
+            ByteUtils.writeVarint(keySize, out);
+            Utils.writeTo(out, key, keySize);
+        }
+
+        if (value == null) {
+            ByteUtils.writeVarint(-1, out);
+        } else {
+            int valueSize = value.remaining();
+            ByteUtils.writeVarint(valueSize, out);
+            Utils.writeTo(out, value, valueSize);
+        }
+
+        if (rawSerializedHeaders == null)
+            throw new IllegalArgumentException("Raw serialized headers cannot be null");
+
+        if (rawSerializedHeaders.length == 0) {
+            ByteUtils.writeVarint(0, out);
+        } else {
+            out.write(rawSerializedHeaders);
+        }
+
+        return ByteUtils.sizeOfVarint(sizeInBytes) + sizeInBytes;
+    }
+
     @Override
     public boolean hasMagic(byte magic) {
         return magic >= MAGIC_VALUE_V2;
@@ -551,5 +599,76 @@ public class DefaultRecord implements Record {
         int keySize = key == null ? -1 : key.remaining();
         int valueSize = value == null ? -1 : value.remaining();
         return MAX_RECORD_OVERHEAD + sizeOf(keySize, valueSize, headers);
+    }
+
+    // --- Overloads for pre-serialized raw header bytes ---
+
+    public static int sizeInBytes(int offsetDelta,
+                                  long timestampDelta,
+                                  ByteBuffer key,
+                                  ByteBuffer value,
+                                  byte[] rawSerializedHeaders) {
+        int bodySize = sizeOfBodyInBytes(offsetDelta, timestampDelta, key, value, rawSerializedHeaders);
+        return bodySize + ByteUtils.sizeOfVarint(bodySize);
+    }
+
+    public static int sizeInBytes(int offsetDelta,
+                                  long timestampDelta,
+                                  int keySize,
+                                  int valueSize,
+                                  byte[] rawSerializedHeaders) {
+        int bodySize = sizeOfBodyInBytes(offsetDelta, timestampDelta, keySize, valueSize, rawSerializedHeaders);
+        return bodySize + ByteUtils.sizeOfVarint(bodySize);
+    }
+
+    private static int sizeOfBodyInBytes(int offsetDelta,
+                                         long timestampDelta,
+                                         ByteBuffer key,
+                                         ByteBuffer value,
+                                         byte[] rawSerializedHeaders) {
+        int keySize = key == null ? -1 : key.remaining();
+        int valueSize = value == null ? -1 : value.remaining();
+        return sizeOfBodyInBytes(offsetDelta, timestampDelta, keySize, valueSize, rawSerializedHeaders);
+    }
+
+    private static int sizeOfBodyInBytes(int offsetDelta,
+                                         long timestampDelta,
+                                         int keySize,
+                                         int valueSize,
+                                         byte[] rawSerializedHeaders) {
+        int size = 1; // always one byte for attributes
+        size += ByteUtils.sizeOfVarint(offsetDelta);
+        size += ByteUtils.sizeOfVarlong(timestampDelta);
+        size += sizeOf(keySize, valueSize, rawSerializedHeaders);
+        return size;
+    }
+
+    private static int sizeOf(int keySize, int valueSize, byte[] rawSerializedHeaders) {
+        int size = 0;
+        if (keySize < 0)
+            size += NULL_VARINT_SIZE_BYTES;
+        else
+            size += ByteUtils.sizeOfVarint(keySize) + keySize;
+
+        if (valueSize < 0)
+            size += NULL_VARINT_SIZE_BYTES;
+        else
+            size += ByteUtils.sizeOfVarint(valueSize) + valueSize;
+
+        if (rawSerializedHeaders == null)
+            throw new IllegalArgumentException("Raw serialized headers cannot be null");
+
+        if (rawSerializedHeaders.length == 0)
+            size += ByteUtils.sizeOfVarint(0);
+        else
+            size += rawSerializedHeaders.length;
+
+        return size;
+    }
+
+    static int recordSizeUpperBound(ByteBuffer key, ByteBuffer value, byte[] rawSerializedHeaders) {
+        int keySize = key == null ? -1 : key.remaining();
+        int valueSize = value == null ? -1 : value.remaining();
+        return MAX_RECORD_OVERHEAD + sizeOf(keySize, valueSize, rawSerializedHeaders);
     }
 }

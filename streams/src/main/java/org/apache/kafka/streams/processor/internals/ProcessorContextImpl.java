@@ -16,9 +16,12 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeader;
+import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -37,6 +40,11 @@ import org.apache.kafka.streams.state.internals.PositionSerde;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListener;
 
+import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
@@ -144,6 +152,96 @@ public final class ProcessorContextImpl extends AbstractProcessorContext<Object,
             BYTEARRAY_VALUE_SERIALIZER,
             null,
             null);
+    }
+
+    @Override
+    public void logChange(final String storeName,
+                          final Bytes key,
+                          final byte[] value,
+                          final long timestamp,
+                          final byte[] rawSerializedHeaders,
+                          final Position position) {
+        throwUnsupportedOperationExceptionIfStandby("logChange");
+
+        final TopicPartition changelogPartition = stateManager().registeredChangelogPartitionFor(storeName);
+
+        byte[] finalRawHeaders = rawSerializedHeaders;
+        if (consistencyEnabled) {
+            finalRawHeaders = mergeVectorClockIntoRawHeaders(rawSerializedHeaders, position);
+        }
+
+        final byte[] keyBytes = BYTES_KEY_SERIALIZER.serialize(changelogPartition.topic(), null, key);
+        final ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(
+            changelogPartition.topic(),
+            changelogPartition.partition(),
+            timestamp,
+            keyBytes,
+            value,
+            finalRawHeaders
+        );
+
+        collector.send(key, value, null, null, record);
+    }
+
+    /**
+     * Merge vector clock entries into raw serialized header bytes without deserializing
+     * existing headers. The raw format is [count(varint)][entry1][entry2]... or empty.
+     */
+    private byte[] mergeVectorClockIntoRawHeaders(final byte[] rawHeaders, final Position position) {
+        try {
+            final ByteArrayOutputStream result = new ByteArrayOutputStream();
+            final DataOutputStream out = new DataOutputStream(result);
+
+            int existingCount = 0;
+            byte[] existingEntries = new byte[0];
+            if (rawHeaders != null && rawHeaders.length > 0) {
+                final ByteBuffer buf = ByteBuffer.wrap(rawHeaders);
+                existingCount = ByteUtils.readVarint(buf);
+                existingEntries = new byte[buf.remaining()];
+                buf.get(existingEntries);
+            }
+
+            final byte[] vcEntryBytes = serializeVectorClockEntries(position);
+
+            ByteUtils.writeVarint(existingCount + 2, out);
+            out.write(existingEntries);
+            out.write(vcEntryBytes);
+
+            return result.toByteArray();
+        } catch (final IOException e) {
+            throw new StreamsException("Failed to merge vector clock into raw headers", e);
+        }
+    }
+
+    private byte[] serializeVectorClockEntries(final Position position) throws IOException {
+        final ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        final DataOutputStream out = new DataOutputStream(baos);
+
+        // Entry 1: version header
+        final Header versionHeader = ChangelogRecordDeserializationHelper.CHANGELOG_VERSION_HEADER_RECORD_CONSISTENCY;
+        writeHeaderEntry(out, versionHeader);
+
+        // Entry 2: position header
+        final Header positionHeader = new RecordHeader(
+            ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY,
+            PositionSerde.serialize(position).array()
+        );
+        writeHeaderEntry(out, positionHeader);
+
+        return baos.toByteArray();
+    }
+
+    private static void writeHeaderEntry(final DataOutputStream out, final Header header) throws IOException {
+        final byte[] keyBytes = header.key().getBytes(StandardCharsets.UTF_8);
+        ByteUtils.writeVarint(keyBytes.length, out);
+        out.write(keyBytes);
+        final byte[] val = header.value();
+        if (val == null) {
+            ByteUtils.writeVarint(-1, out);
+        } else {
+            ByteUtils.writeVarint(val.length, out);
+            out.write(val);
+        }
     }
 
     private void addVectorClockToHeaders(final Headers headers, final Position position) {

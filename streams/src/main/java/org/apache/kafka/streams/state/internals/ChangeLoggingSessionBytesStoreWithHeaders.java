@@ -57,15 +57,24 @@ public class ChangeLoggingSessionBytesStoreWithHeaders
     @Override
     public void put(final Windowed<Bytes> sessionKey, final byte[] aggregationWithHeaders) {
         wrapped().put(sessionKey, aggregationWithHeaders);
-        internalContext.logChange(
-            name(),
-            SessionKeySchema.toBinary(sessionKey),
-            rawAggregation(aggregationWithHeaders),
-            internalContext.recordContext().timestamp(),
-            aggregationWithHeaders == null
-                ? internalContext.recordContext().headers()
-                : new SerializedHeaders(rawHeaderBytes(aggregationWithHeaders)),
-            wrapped().getPosition()
-        );
+        if (aggregationWithHeaders == null) {
+            internalContext.logChange(
+                name(),
+                SessionKeySchema.toBinary(sessionKey),
+                null,
+                internalContext.recordContext().timestamp(),
+                internalContext.recordContext().headers(),
+                wrapped().getPosition()
+            );
+        } else {
+            internalContext.logChange(
+                name(),
+                SessionKeySchema.toBinary(sessionKey),
+                rawAggregation(aggregationWithHeaders),
+                internalContext.recordContext().timestamp(),
+                rawHeaderBytes(aggregationWithHeaders),
+                wrapped().getPosition()
+            );
+        }
     }
 }

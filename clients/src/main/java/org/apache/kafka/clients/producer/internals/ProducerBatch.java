@@ -165,6 +165,25 @@ public final class ProducerBatch {
         }
     }
 
+    public FutureRecordMetadata tryAppendRawHeaders(long timestamp, byte[] key, byte[] value, byte[] rawSerializedHeaders, Callback callback, long now) {
+        if (!recordsBuilder.hasRoomFor(timestamp, key, value, rawSerializedHeaders)) {
+            return null;
+        } else {
+            this.recordsBuilder.append(timestamp, key, value, rawSerializedHeaders);
+            this.maxRecordSize = Math.max(this.maxRecordSize, AbstractRecords.estimateSizeInBytesUpperBound(magic(),
+                    recordsBuilder.compression().type(), key, value, rawSerializedHeaders));
+            this.lastAppendTime = now;
+            FutureRecordMetadata future = new FutureRecordMetadata(this.produceFuture, this.recordCount,
+                                                                   timestamp,
+                                                                   key == null ? -1 : key.length,
+                                                                   value == null ? -1 : value.length,
+                                                                   Time.SYSTEM);
+            thunks.add(new Thunk(callback, future));
+            this.recordCount++;
+            return future;
+        }
+    }
+
     /**
      * This method is only used by {@link #split(int)} when splitting a large batch to smaller ones.
      * @return true if the record has been successfully appended, false otherwise.

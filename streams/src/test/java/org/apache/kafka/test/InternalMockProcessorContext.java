@@ -455,6 +455,17 @@ public class InternalMockProcessorContext<KOut, VOut>
             null);
     }
 
+    @Override
+    public void logChange(final String storeName,
+                          final Bytes key,
+                          final byte[] value,
+                          final long timestamp,
+                          final byte[] rawSerializedHeaders,
+                          final Position position) {
+        // In tests, delegate to the Headers-based overload via the regular collector path
+        throw new UnsupportedOperationException("Raw header logChange not supported in mock context");
+    }
+
     private void addVectorClockToHeaders(Headers headers, Position position) {
         headers.add(ChangelogRecordDeserializationHelper.CHANGELOG_VERSION_HEADER_RECORD_CONSISTENCY);
         headers.add(new RecordHeader(

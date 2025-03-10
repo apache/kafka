@@ -124,6 +124,18 @@ public interface InternalProcessorContext<KOut, VOut>
                    final Headers headers,
                    final Position position);
 
+    /**
+     * Log a state store change using pre-serialized header bytes, avoiding header
+     * deserialization/reserialization. When {@code rawSerializedHeaders} is non-null,
+     * the bytes are written directly into the record batch.
+     */
+    void logChange(final String storeName,
+                   final Bytes key,
+                   final byte[] value,
+                   final long timestamp,
+                   final byte[] rawSerializedHeaders,
+                   final Position position);
+
     String changelogFor(final String storeName);
 
     void addProcessorMetadataKeyValue(final String key, final long value);

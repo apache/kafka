@@ -407,6 +407,74 @@ public class RecordAccumulator {
         return new RecordAppendResult(future, dq.size() > 1 || batch.isFull(), true, batch.estimatedSizeInBytes());
     }
 
+    public RecordAppendResult appendWithRawHeaders(String topic,
+                                                  int partition,
+                                                  long timestamp,
+                                                  byte[] key,
+                                                  byte[] value,
+                                                  byte[] rawSerializedHeaders,
+                                                  AppendCallbacks callbacks,
+                                                  long maxTimeToBlock,
+                                                  long nowMs,
+                                                  Cluster cluster) throws InterruptedException {
+        TopicInfo topicInfo = topicInfoMap.computeIfAbsent(topic, k -> new TopicInfo(createBuiltInPartitioner(logContext, k, batchSize)));
+
+        appendsInProgress.incrementAndGet();
+        ByteBuffer buffer = null;
+        if (rawSerializedHeaders == null) rawSerializedHeaders = new byte[0];
+        try {
+            while (true) {
+                final BuiltInPartitioner.StickyPartitionInfo partitionInfo;
+                final int effectivePartition;
+                if (partition == RecordMetadata.UNKNOWN_PARTITION) {
+                    partitionInfo = topicInfo.builtInPartitioner.peekCurrentPartitionInfo(cluster);
+                    effectivePartition = partitionInfo.partition();
+                } else {
+                    partitionInfo = null;
+                    effectivePartition = partition;
+                }
+
+                setPartition(callbacks, effectivePartition);
+
+                Deque<ProducerBatch> dq = topicInfo.batches.computeIfAbsent(effectivePartition, k -> new ArrayDeque<>());
+                synchronized (dq) {
+                    if (partitionChanged(topic, topicInfo, partitionInfo, dq, nowMs, cluster))
+                        continue;
+
+                    RecordAppendResult appendResult = tryAppendRawHeaders(timestamp, key, value, rawSerializedHeaders, callbacks, dq, nowMs);
+                    if (appendResult != null) {
+                        boolean enableSwitch = allBatchesFull(dq);
+                        topicInfo.builtInPartitioner.updatePartitionInfo(partitionInfo, appendResult.appendedBytes, cluster, enableSwitch);
+                        return appendResult;
+                    }
+                }
+
+                if (buffer == null) {
+                    int size = Math.max(this.batchSize, AbstractRecords.estimateSizeInBytesUpperBound(
+                            RecordBatch.CURRENT_MAGIC_VALUE, compression.type(), key, value, rawSerializedHeaders));
+                    log.trace("Allocating a new {} byte message buffer for topic {} partition {} with remaining timeout {}ms", size, topic, effectivePartition, maxTimeToBlock);
+                    buffer = free.allocate(size, maxTimeToBlock);
+                    nowMs = time.milliseconds();
+                }
+
+                synchronized (dq) {
+                    if (partitionChanged(topic, topicInfo, partitionInfo, dq, nowMs, cluster))
+                        continue;
+
+                    RecordAppendResult appendResult = appendNewBatchRawHeaders(topic, effectivePartition, dq, timestamp, key, value, rawSerializedHeaders, callbacks, buffer, nowMs);
+                    if (appendResult.newBatchCreated)
+                        buffer = null;
+                    boolean enableSwitch = allBatchesFull(dq);
+                    topicInfo.builtInPartitioner.updatePartitionInfo(partitionInfo, appendResult.appendedBytes, cluster, enableSwitch);
+                    return appendResult;
+                }
+            }
+        } finally {
+            free.deallocate(buffer);
+            appendsInProgress.decrementAndGet();
+        }
+    }
+
     private MemoryRecordsBuilder recordsBuilder(ByteBuffer buffer) {
         return MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, compression, TimestampType.CREATE_TIME, 0L);
     }
@@ -444,6 +512,52 @@ public class RecordAccumulator {
             }
         }
         return null;
+    }
+
+    private RecordAppendResult tryAppendRawHeaders(long timestamp, byte[] key, byte[] value, byte[] rawSerializedHeaders,
+                                                   Callback callback, Deque<ProducerBatch> deque, long nowMs) {
+        if (closed)
+            throw new KafkaException("Producer closed while send in progress");
+        ProducerBatch last = deque.peekLast();
+        if (last != null) {
+            int initialBytes = last.estimatedSizeInBytes();
+            FutureRecordMetadata future = last.tryAppendRawHeaders(timestamp, key, value, rawSerializedHeaders, callback, nowMs);
+            if (future == null) {
+                last.closeForRecordAppends();
+            } else {
+                int appendedBytes = last.estimatedSizeInBytes() - initialBytes;
+                return new RecordAppendResult(future, deque.size() > 1 || last.isFull(), false, appendedBytes);
+            }
+        }
+        return null;
+    }
+
+    private RecordAppendResult appendNewBatchRawHeaders(String topic,
+                                                        int partition,
+                                                        Deque<ProducerBatch> dq,
+                                                        long timestamp,
+                                                        byte[] key,
+                                                        byte[] value,
+                                                        byte[] rawSerializedHeaders,
+                                                        AppendCallbacks callbacks,
+                                                        ByteBuffer buffer,
+                                                        long nowMs) {
+        assert partition != RecordMetadata.UNKNOWN_PARTITION;
+
+        RecordAppendResult appendResult = tryAppendRawHeaders(timestamp, key, value, rawSerializedHeaders, callbacks, dq, nowMs);
+        if (appendResult != null) {
+            return appendResult;
+        }
+
+        MemoryRecordsBuilder recordsBuilder = recordsBuilder(buffer);
+        ProducerBatch batch = new ProducerBatch(new TopicPartition(topic, partition), recordsBuilder, nowMs);
+        FutureRecordMetadata future = Objects.requireNonNull(batch.tryAppendRawHeaders(timestamp, key, value, rawSerializedHeaders,
+                callbacks, nowMs));
+
+        dq.addLast(batch);
+        incomplete.add(batch);
+
+        return new RecordAppendResult(future, dq.size() > 1 || batch.isFull(), true, batch.estimatedSizeInBytes());
     }
 
     private boolean isMuted(TopicPartition tp) {

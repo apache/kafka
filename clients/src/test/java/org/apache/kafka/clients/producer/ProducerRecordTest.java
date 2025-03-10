@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.clients.producer;
 
+import org.apache.kafka.common.header.Header;
+
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -46,7 +48,7 @@ public class ProducerRecordTest {
         ProducerRecord<String, Integer> valueMisMatch = new ProducerRecord<>("test", 1, "key", 2);
         assertNotEquals(producerRecord, valueMisMatch);
 
-        ProducerRecord<String, Integer> nullFieldsRecord = new ProducerRecord<>("topic", null, null, null, null, null);
+        ProducerRecord<String, Integer> nullFieldsRecord = new ProducerRecord<>("topic", null, null, null, null, (Iterable<Header>) null);
         assertEquals(nullFieldsRecord, nullFieldsRecord);
         assertEquals(nullFieldsRecord.hashCode(), nullFieldsRecord.hashCode());
     }

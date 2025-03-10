@@ -104,17 +104,14 @@ public class ChangeLoggingSessionBytesStoreWithHeadersTest {
 
         store.put(key1, serializedValue);
 
-        final ArgumentCaptor<Headers> headersCaptor = ArgumentCaptor.forClass(Headers.class);
+        final byte[] expectedRawHeaders = AggregationWithHeadersDeserializer.rawHeaderBytes(serializedValue);
+        final ArgumentCaptor<byte[]> rawHeadersCaptor = ArgumentCaptor.forClass(byte[].class);
         verify(inner).put(key1, serializedValue);
         verify(context).logChange(
-            eq(store.name()),
-            eq(binaryKey),
-            eq(value1),
-            eq(0L),
-            headersCaptor.capture(),
-            eq(Position.emptyPosition())
+            eq(store.name()), eq(binaryKey), eq(value1), eq(0L),
+            rawHeadersCaptor.capture(), eq(Position.emptyPosition())
         );
-        assertHeadersEqual(headers, headersCaptor.getValue());
+        assertArrayEquals(expectedRawHeaders, rawHeadersCaptor.getValue());
     }
 
     @Test
@@ -130,17 +127,14 @@ public class ChangeLoggingSessionBytesStoreWithHeadersTest {
 
         store.put(key1, serializedValue);
 
-        final ArgumentCaptor<Headers> headersCaptor = ArgumentCaptor.forClass(Headers.class);
+        final byte[] expectedRawHeaders = AggregationWithHeadersDeserializer.rawHeaderBytes(serializedValue);
+        final ArgumentCaptor<byte[]> rawHeadersCaptor = ArgumentCaptor.forClass(byte[].class);
         verify(inner).put(key1, serializedValue);
         verify(context).logChange(
-            eq(store.name()),
-            eq(binaryKey),
-            eq(value1),
-            eq(0L),
-            headersCaptor.capture(),
-            eq(POSITION)
+            eq(store.name()), eq(binaryKey), eq(value1), eq(0L),
+            rawHeadersCaptor.capture(), eq(POSITION)
         );
-        assertHeadersEqual(headers, headersCaptor.getValue());
+        assertArrayEquals(expectedRawHeaders, rawHeadersCaptor.getValue());
     }
 
     @Test
@@ -156,12 +150,7 @@ public class ChangeLoggingSessionBytesStoreWithHeadersTest {
 
         verify(inner).put(key1, null);
         verify(context).logChange(
-            store.name(),
-            binaryKey,
-            null,
-            42L,
-            contextHeaders,
-            Position.emptyPosition()
+            store.name(), binaryKey, null, 42L, contextHeaders, Position.emptyPosition()
         );
     }
 
@@ -177,17 +166,14 @@ public class ChangeLoggingSessionBytesStoreWithHeadersTest {
 
         store.put(key1, serializedValue);
 
-        final ArgumentCaptor<Headers> headersCaptor = ArgumentCaptor.forClass(Headers.class);
+        final byte[] expectedRawHeaders = AggregationWithHeadersDeserializer.rawHeaderBytes(serializedValue);
+        final ArgumentCaptor<byte[]> rawHeadersCaptor = ArgumentCaptor.forClass(byte[].class);
         verify(inner).put(key1, serializedValue);
         verify(context).logChange(
-            eq(store.name()),
-            eq(binaryKey),
-            eq(value1),
-            eq(0L),
-            headersCaptor.capture(),
-            eq(Position.emptyPosition())
+            eq(store.name()), eq(binaryKey), eq(value1), eq(0L),
+            rawHeadersCaptor.capture(), eq(Position.emptyPosition())
         );
-        assertHeadersEqual(emptyHeaders, headersCaptor.getValue());
+        assertArrayEquals(expectedRawHeaders, rawHeadersCaptor.getValue());
     }
 
     @Test
@@ -203,12 +189,7 @@ public class ChangeLoggingSessionBytesStoreWithHeadersTest {
 
         verify(inner).remove(key1);
         verify(context).logChange(
-            store.name(),
-            binaryKey,
-            null,
-            42L,
-            contextHeaders,
-            Position.emptyPosition()
+            store.name(), binaryKey, null, 42L, contextHeaders, Position.emptyPosition()
         );
     }
 
@@ -227,17 +208,14 @@ public class ChangeLoggingSessionBytesStoreWithHeadersTest {
 
         store.put(key1, serializedValue);
 
-        final ArgumentCaptor<Headers> headersCaptor = ArgumentCaptor.forClass(Headers.class);
+        final byte[] expectedRawHeaders = AggregationWithHeadersDeserializer.rawHeaderBytes(serializedValue);
+        final ArgumentCaptor<byte[]> rawHeadersCaptor = ArgumentCaptor.forClass(byte[].class);
         verify(inner).put(key1, serializedValue);
         verify(context).logChange(
-            eq(store.name()),
-            eq(binaryKey),
-            eq(value1),
-            eq(0L),
-            headersCaptor.capture(),
-            eq(Position.emptyPosition())
+            eq(store.name()), eq(binaryKey), eq(value1), eq(0L),
+            rawHeadersCaptor.capture(), eq(Position.emptyPosition())
         );
-        assertHeadersEqual(headers, headersCaptor.getValue());
+        assertArrayEquals(expectedRawHeaders, rawHeadersCaptor.getValue());
     }
 
     private static void assertHeadersEqual(final Headers expected, final Headers actual) {

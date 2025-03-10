@@ -1169,18 +1169,25 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             // take into account broker load, the amount of data produced to each partition, etc.).
             int partition = partition(record, serializedKey, serializedValue, cluster);
 
-            setReadOnly(record.headers());
-            Header[] headers = record.headers().toArray();
-
-            int serializedSize = AbstractRecords.estimateSizeInBytesUpperBound(RecordBatch.CURRENT_MAGIC_VALUE,
-                    compression.type(), serializedKey, serializedValue, headers);
-            ensureValidRecordSize(serializedSize);
             long timestamp = record.timestamp() == null ? nowMs : record.timestamp();
 
-            // Append the record to the accumulator.  Note, that the actual partition may be
-            // calculated there and can be accessed via appendCallbacks.topicPartition.
-            RecordAccumulator.RecordAppendResult result = accumulator.append(record.topic(), partition, timestamp, serializedKey,
-                    serializedValue, headers, appendCallbacks, remainingWaitMs, nowMs, cluster);
+            final RecordAccumulator.RecordAppendResult result;
+            byte[] rawHeaders = record.rawSerializedHeaders();
+            if (rawHeaders != null) {
+                int serializedSize = AbstractRecords.estimateSizeInBytesUpperBound(RecordBatch.CURRENT_MAGIC_VALUE,
+                        compression.type(), serializedKey, serializedValue, rawHeaders);
+                ensureValidRecordSize(serializedSize);
+                result = accumulator.appendWithRawHeaders(record.topic(), partition, timestamp, serializedKey,
+                        serializedValue, rawHeaders, appendCallbacks, remainingWaitMs, nowMs, cluster);
+            } else {
+                setReadOnly(record.headers());
+                Header[] headers = record.headers().toArray();
+                int serializedSize = AbstractRecords.estimateSizeInBytesUpperBound(RecordBatch.CURRENT_MAGIC_VALUE,
+                        compression.type(), serializedKey, serializedValue, headers);
+                ensureValidRecordSize(serializedSize);
+                result = accumulator.append(record.topic(), partition, timestamp, serializedKey,
+                        serializedValue, headers, appendCallbacks, remainingWaitMs, nowMs, cluster);
+            }
             assert appendCallbacks.getPartition() != RecordMetadata.UNKNOWN_PARTITION;
 
             // Add the partition to the transaction (if in progress) after it has been successfully

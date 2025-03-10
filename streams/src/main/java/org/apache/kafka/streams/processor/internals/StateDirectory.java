@@ -960,6 +960,11 @@ public class StateDirectory implements AutoCloseable {
         }
 
         @Override
+        public void logChange(final String storeName, final Bytes key, final byte[] value, final long timestamp, final byte[] rawSerializedHeaders, final Position position) {
+            throw new IllegalStateException("Should not be called");
+        }
+
+        @Override
         public <K, V> void forward(final K key, final V value) {
             throw new IllegalStateException("Should not be called");
         }
