@@ -67,7 +67,7 @@ def append_message_to_pr_body(pr: int , message: str):
         return
 
     try:
-        cmd_edit_body = shlex.split(f"gh pr edit {pr_url} --body '{updated_pr_body}'")
+        cmd_edit_body = shlex.split(f"gh pr edit {pr_url} --body {shlex.quote(updated_pr_body)}")
         subprocess.run(cmd_edit_body, check=True)
         print("PR body updated successfully!")
     except subprocess.CalledProcessError as e:
