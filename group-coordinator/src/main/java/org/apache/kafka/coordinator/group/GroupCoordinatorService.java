@@ -461,7 +461,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 timer.add(new TimerTask(0L) {
                     @Override
                     public void run() {
-                        System.err.println("smjn: " + result.getValue().get());
                         persisterInitialize(result.getValue().get(), result.getKey());
                     }
                 });
@@ -489,8 +488,10 @@ public class GroupCoordinatorService implements GroupCoordinator {
             ).exceptionally(exception -> {
                 GroupTopicPartitionData<PartitionStateData> gtp = request.groupTopicPartitionData();
                 log.error("Unable to initialize share group state {}, {}", gtp.groupId(), gtp.topicsData(), exception);
+                Errors error = Errors.forException(exception);
                 return new ShareGroupHeartbeatResponseData()
-                    .setErrorCode(Errors.forException(exception).code());
+                    .setErrorCode(error.code())
+                    .setErrorMessage(error.message());
             });
     }
 
@@ -544,8 +545,10 @@ public class GroupCoordinatorService implements GroupCoordinator {
             __ -> defaultResponse
         ).exceptionally(exception -> {
             log.error("Unable to initialize share group state partition metadata for {}.", groupId, exception);
+            Errors error = Errors.forException(exception);
             return new ShareGroupHeartbeatResponseData()
-                .setErrorCode(Errors.forException(exception).code());
+                .setErrorCode(error.code())
+                .setErrorMessage(error.message());
         });
     }
 

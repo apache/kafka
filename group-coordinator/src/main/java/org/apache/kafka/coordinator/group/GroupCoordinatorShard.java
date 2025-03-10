@@ -1030,6 +1030,13 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 );
                 break;
 
+            case SHARE_GROUP_STATE_PARTITION_METADATA:
+                groupMetadataManager.replay(
+                    (ShareGroupStatePartitionMetadataKey) key,
+                    (ShareGroupStatePartitionMetadataValue) Utils.messageOrNull(value)
+                );
+                break;
+
             case CONSUMER_GROUP_REGULAR_EXPRESSION:
                 groupMetadataManager.replay(
                     (ConsumerGroupRegularExpressionKey) key,
@@ -1076,13 +1083,6 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 groupMetadataManager.replay(
                     (StreamsGroupCurrentMemberAssignmentKey) key,
                     (StreamsGroupCurrentMemberAssignmentValue) Utils.messageOrNull(value)
-                );
-                break;
-
-            case SHARE_GROUP_STATE_PARTITION_METADATA:
-                groupMetadataManager.replay(
-                    (ShareGroupStatePartitionMetadataKey) key,
-                    (ShareGroupStatePartitionMetadataValue) Utils.messageOrNull(value)
                 );
                 break;
 
