@@ -14,7 +14,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.admin;
+package org.apache.kafka.tools;
+
+import kafka.admin.ConfigCommand;
 
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTest;
@@ -29,6 +31,7 @@ import java.util.Objects;
 import java.util.OptionalInt;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static org.apache.kafka.tools.ToolsTestUtils.captureStandardOut;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -68,9 +71,7 @@ public class UserScramCredentialsCommandTest {
         List<String> commandArgs = new ArrayList<>(Arrays.asList("--bootstrap-server", cluster.bootstrapServers()));
         commandArgs.addAll(Arrays.asList(args));
         try {
-            String output = ConfigCommandIntegrationTest.captureStandardStream(false, () -> {
-                ConfigCommand.main(commandArgs.toArray(new String[0]));
-            });
+            String output = captureStandardOut(() -> ConfigCommand.main(commandArgs.toArray(new String[0])));
             return new ConfigCommandResult(output);
         } catch (Exception e) {
             return new ConfigCommandResult("", exitStatus.get());

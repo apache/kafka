@@ -160,6 +160,7 @@ import org.apache.kafka.common.message.OffsetFetchRequestData.OffsetFetchRequest
 import org.apache.kafka.common.message.RemoveRaftVoterRequestData;
 import org.apache.kafka.common.message.RemoveRaftVoterResponseData;
 import org.apache.kafka.common.message.ShareGroupDescribeResponseData;
+import org.apache.kafka.common.message.StreamsGroupDescribeResponseData;
 import org.apache.kafka.common.message.UnregisterBrokerResponseData;
 import org.apache.kafka.common.message.WriteTxnMarkersResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -237,6 +238,7 @@ import org.apache.kafka.common.requests.RemoveRaftVoterRequest;
 import org.apache.kafka.common.requests.RemoveRaftVoterResponse;
 import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.requests.ShareGroupDescribeResponse;
+import org.apache.kafka.common.requests.StreamsGroupDescribeResponse;
 import org.apache.kafka.common.requests.UnregisterBrokerResponse;
 import org.apache.kafka.common.requests.UpdateFeaturesRequest;
 import org.apache.kafka.common.requests.UpdateFeaturesResponse;
@@ -5763,6 +5765,233 @@ public class KafkaAdminClientTest {
     }
 
     @Test
+    public void testDescribeStreamsGroups() throws Exception {
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            // Retriable FindCoordinatorResponse errors should be retried
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.COORDINATOR_NOT_AVAILABLE,  Node.noNode()));
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.COORDINATOR_LOAD_IN_PROGRESS,  Node.noNode()));
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+
+            StreamsGroupDescribeResponseData data = new StreamsGroupDescribeResponseData();
+
+            // Retriable errors should be retried
+            data.groups().add(new StreamsGroupDescribeResponseData.DescribedGroup()
+                .setGroupId(GROUP_ID)
+                .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code()));
+            env.kafkaClient().prepareResponse(new StreamsGroupDescribeResponse(data));
+
+            // We need to return two responses here, one with NOT_COORDINATOR error when calling describe streams group
+            // api using coordinator that has moved. This will retry whole operation. So we need to again respond with a
+            // FindCoordinatorResponse.
+            //
+            // And the same reason for COORDINATOR_NOT_AVAILABLE error response
+            data = new StreamsGroupDescribeResponseData();
+            data.groups().add(new StreamsGroupDescribeResponseData.DescribedGroup()
+                .setGroupId(GROUP_ID)
+                .setErrorCode(Errors.NOT_COORDINATOR.code()));
+            env.kafkaClient().prepareResponse(new StreamsGroupDescribeResponse(data));
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+
+            data = new StreamsGroupDescribeResponseData();
+            data.groups().add(new StreamsGroupDescribeResponseData.DescribedGroup()
+                .setGroupId(GROUP_ID)
+                .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code()));
+            env.kafkaClient().prepareResponse(new StreamsGroupDescribeResponse(data));
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+
+            data = makeFullStreamsGroupDescribeResponse();
+
+            env.kafkaClient().prepareResponse(new StreamsGroupDescribeResponse(data));
+
+            final DescribeStreamsGroupsResult result = env.adminClient().describeStreamsGroups(singletonList(GROUP_ID));
+            final StreamsGroupDescription groupDescription = result.describedGroups().get(GROUP_ID).get();
+
+            final String subtopologyId = "my_subtopology";
+            StreamsGroupMemberAssignment.TaskIds expectedActiveTasks1 =
+                new StreamsGroupMemberAssignment.TaskIds(subtopologyId, asList(0, 1, 2));
+            StreamsGroupMemberAssignment.TaskIds expectedStandbyTasks1 =
+                new StreamsGroupMemberAssignment.TaskIds(subtopologyId, asList(3, 4, 5));
+            StreamsGroupMemberAssignment.TaskIds expectedWarmupTasks1 =
+                new StreamsGroupMemberAssignment.TaskIds(subtopologyId, asList(6, 7, 8));
+            StreamsGroupMemberAssignment.TaskIds expectedActiveTasks2 =
+                new StreamsGroupMemberAssignment.TaskIds(subtopologyId, asList(3, 4, 5));
+            StreamsGroupMemberAssignment.TaskIds expectedStandbyTasks2 =
+                new StreamsGroupMemberAssignment.TaskIds(subtopologyId, asList(6, 7, 8));
+            StreamsGroupMemberAssignment.TaskIds expectedWarmupTasks2 =
+                new StreamsGroupMemberAssignment.TaskIds(subtopologyId, asList(0, 1, 2));
+            StreamsGroupMemberAssignment expectedMemberAssignment = new StreamsGroupMemberAssignment(
+                singletonList(expectedActiveTasks1),
+                singletonList(expectedStandbyTasks1),
+                singletonList(expectedWarmupTasks1)
+            );
+            StreamsGroupMemberAssignment expectedTargetAssignment = new StreamsGroupMemberAssignment(
+                singletonList(expectedActiveTasks2),
+                singletonList(expectedStandbyTasks2),
+                singletonList(expectedWarmupTasks2)
+            );
+            final String instanceId = "instance-id";
+            final String rackId = "rack-id";
+            StreamsGroupMemberDescription expectedMemberOne = new StreamsGroupMemberDescription(
+                "0",
+                1,
+                Optional.of(instanceId),
+                Optional.of(rackId),
+                "clientId0",
+                "clientHost",
+                0,
+                "processId",
+                Optional.of(new StreamsGroupMemberDescription.Endpoint("localhost", 8080)),
+                Collections.singletonMap("key", "value"),
+                Collections.singletonList(new StreamsGroupMemberDescription.TaskOffset(subtopologyId, 0, 0)),
+                Collections.singletonList(new StreamsGroupMemberDescription.TaskOffset(subtopologyId, 0, 1)),
+                expectedMemberAssignment,
+                expectedTargetAssignment,
+                true
+            );
+
+            StreamsGroupMemberDescription expectedMemberTwo = new StreamsGroupMemberDescription(
+                "1",
+                2,
+                Optional.empty(),
+                Optional.empty(),
+                "clientId1",
+                "clientHost",
+                1,
+                "processId2",
+                Optional.empty(),
+                Collections.emptyMap(),
+                Collections.emptyList(),
+                Collections.emptyList(),
+                new StreamsGroupMemberAssignment(Collections.emptyList(), Collections.emptyList(), Collections.emptyList()),
+                new StreamsGroupMemberAssignment(Collections.emptyList(), Collections.emptyList(), Collections.emptyList()),
+                false
+            );
+
+            StreamsGroupSubtopologyDescription expectedSubtopologyDescription = new StreamsGroupSubtopologyDescription(
+                subtopologyId,
+                Collections.singletonList("my_source_topic"),
+                Collections.singletonList("my_repartition_sink_topic"),
+                Collections.singletonMap(
+                    "my_changelog_topic",
+                    new StreamsGroupSubtopologyDescription.TopicInfo(
+                        0,
+                        (short) 3,
+                        Collections.singletonMap("key1", "value1")
+                    )
+                ),
+                Collections.singletonMap(
+                    "my_repartition_topic",
+                    new StreamsGroupSubtopologyDescription.TopicInfo(
+                        99,
+                        (short) 0,
+                        Collections.emptyMap()
+                    )
+                )
+            );
+
+            assertEquals(1, result.describedGroups().size());
+            assertEquals(GROUP_ID, groupDescription.groupId());
+            assertEquals(2, groupDescription.members().size());
+            Iterator<StreamsGroupMemberDescription> members = groupDescription.members().iterator();
+            assertEquals(expectedMemberOne, members.next());
+            assertEquals(expectedMemberTwo, members.next());
+            assertEquals(1, groupDescription.subtopologies().size());
+            assertEquals(expectedSubtopologyDescription, groupDescription.subtopologies().iterator().next());
+            assertEquals(2, groupDescription.groupEpoch());
+            assertEquals(1, groupDescription.targetAssignmentEpoch());
+
+        }
+    }
+
+    @Test
+    public void testDescribeStreamsGroupsWithAuthorizedOperationsOmitted() throws Exception {
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            env.kafkaClient().prepareResponse(
+                prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+
+            StreamsGroupDescribeResponseData data = makeFullStreamsGroupDescribeResponse();
+
+            data.groups().iterator().next()
+                .setAuthorizedOperations(MetadataResponse.AUTHORIZED_OPERATIONS_OMITTED);
+
+            env.kafkaClient().prepareResponse(new StreamsGroupDescribeResponse(data));
+
+            final DescribeStreamsGroupsResult result = env.adminClient().describeStreamsGroups(singletonList(GROUP_ID));
+            final StreamsGroupDescription groupDescription = result.describedGroups().get(GROUP_ID).get();
+
+            assertNull(groupDescription.authorizedOperations());
+        }
+    }
+
+    @Test
+    public void testDescribeMultipleStreamsGroups() {
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+
+            StreamsGroupDescribeResponseData.TaskIds activeTasks = new StreamsGroupDescribeResponseData.TaskIds()
+                .setSubtopologyId("my_subtopology")
+                .setPartitions(asList(0, 1, 2));
+            StreamsGroupDescribeResponseData.TaskIds standbyTasks = new StreamsGroupDescribeResponseData.TaskIds()
+                .setSubtopologyId("my_subtopology")
+                .setPartitions(asList(3, 4, 5));
+            StreamsGroupDescribeResponseData.TaskIds warmupTasks = new StreamsGroupDescribeResponseData.TaskIds()
+                .setSubtopologyId("my_subtopology")
+                .setPartitions(asList(6, 7, 8));
+            final StreamsGroupDescribeResponseData.Assignment memberAssignment = new StreamsGroupDescribeResponseData.Assignment()
+                .setActiveTasks(singletonList(activeTasks))
+                .setStandbyTasks(singletonList(standbyTasks))
+                .setWarmupTasks(singletonList(warmupTasks));
+            StreamsGroupDescribeResponseData group0Data = new StreamsGroupDescribeResponseData();
+            group0Data.groups().add(new StreamsGroupDescribeResponseData.DescribedGroup()
+                .setGroupId(GROUP_ID)
+                .setGroupState(GroupState.STABLE.toString())
+                .setMembers(asList(
+                    new StreamsGroupDescribeResponseData.Member()
+                        .setMemberId("0")
+                        .setClientId("clientId0")
+                        .setClientHost("clientHost")
+                        .setAssignment(memberAssignment),
+                    new StreamsGroupDescribeResponseData.Member()
+                        .setMemberId("1")
+                        .setClientId("clientId1")
+                        .setClientHost("clientHost")
+                        .setAssignment(memberAssignment))));
+
+            StreamsGroupDescribeResponseData group1Data = new StreamsGroupDescribeResponseData();
+            group1Data.groups().add(new StreamsGroupDescribeResponseData.DescribedGroup()
+                .setGroupId("group-1")
+                .setGroupState(GroupState.STABLE.toString())
+                .setMembers(asList(
+                    new StreamsGroupDescribeResponseData.Member()
+                        .setMemberId("0")
+                        .setClientId("clientId0")
+                        .setClientHost("clientHost")
+                        .setAssignment(memberAssignment),
+                    new StreamsGroupDescribeResponseData.Member()
+                        .setMemberId("1")
+                        .setClientId("clientId1")
+                        .setClientHost("clientHost")
+                        .setAssignment(memberAssignment))));
+
+            env.kafkaClient().prepareResponse(new StreamsGroupDescribeResponse(group0Data));
+            env.kafkaClient().prepareResponse(new StreamsGroupDescribeResponse(group1Data));
+
+            Collection<String> groups = new HashSet<>();
+            groups.add(GROUP_ID);
+            groups.add("group-1");
+            final DescribeStreamsGroupsResult result = env.adminClient().describeStreamsGroups(groups);
+            assertEquals(2, result.describedGroups().size());
+            assertEquals(groups, result.describedGroups().keySet());
+        }
+    }
+
+    @Test
     public void testDescribeShareGroups() throws Exception {
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
@@ -10280,5 +10509,117 @@ public class KafkaAdminClientTest {
             TestUtils.assertFutureThrows(GroupNotEmptyException.class, result.partitionResult(fooTopicPartition1));
             assertNull(result.partitionResult(barPartition0).get());
         }
+    }
+
+    private static StreamsGroupDescribeResponseData makeFullStreamsGroupDescribeResponse() {
+        StreamsGroupDescribeResponseData data;
+        StreamsGroupDescribeResponseData.TaskIds activeTasks1 = new StreamsGroupDescribeResponseData.TaskIds()
+            .setSubtopologyId("my_subtopology")
+            .setPartitions(asList(0, 1, 2));
+        StreamsGroupDescribeResponseData.TaskIds standbyTasks1 = new StreamsGroupDescribeResponseData.TaskIds()
+            .setSubtopologyId("my_subtopology")
+            .setPartitions(asList(3, 4, 5));
+        StreamsGroupDescribeResponseData.TaskIds warmupTasks1 = new StreamsGroupDescribeResponseData.TaskIds()
+            .setSubtopologyId("my_subtopology")
+            .setPartitions(asList(6, 7, 8));
+        StreamsGroupDescribeResponseData.TaskIds activeTasks2 = new StreamsGroupDescribeResponseData.TaskIds()
+            .setSubtopologyId("my_subtopology")
+            .setPartitions(asList(3, 4, 5));
+        StreamsGroupDescribeResponseData.TaskIds standbyTasks2 = new StreamsGroupDescribeResponseData.TaskIds()
+            .setSubtopologyId("my_subtopology")
+            .setPartitions(asList(6, 7, 8));
+        StreamsGroupDescribeResponseData.TaskIds warmupTasks2 = new StreamsGroupDescribeResponseData.TaskIds()
+            .setSubtopologyId("my_subtopology")
+            .setPartitions(asList(0, 1, 2));
+        StreamsGroupDescribeResponseData.Assignment memberAssignment = new StreamsGroupDescribeResponseData.Assignment()
+            .setActiveTasks(singletonList(activeTasks1))
+            .setStandbyTasks(singletonList(standbyTasks1))
+            .setWarmupTasks(singletonList(warmupTasks1));
+        StreamsGroupDescribeResponseData.Assignment targetAssignment = new StreamsGroupDescribeResponseData.Assignment()
+            .setActiveTasks(singletonList(activeTasks2))
+            .setStandbyTasks(singletonList(standbyTasks2))
+            .setWarmupTasks(singletonList(warmupTasks2));
+        StreamsGroupDescribeResponseData.Member memberOne = new StreamsGroupDescribeResponseData.Member()
+            .setMemberId("0")
+            .setMemberEpoch(1)
+            .setInstanceId("instance-id")
+            .setRackId("rack-id")
+            .setClientId("clientId0")
+            .setClientHost("clientHost")
+            .setTopologyEpoch(0)
+            .setProcessId("processId")
+            .setUserEndpoint(new StreamsGroupDescribeResponseData.Endpoint()
+                .setHost("localhost")
+                .setPort(8080)
+            )
+            .setClientTags(Collections.singletonList(new StreamsGroupDescribeResponseData.KeyValue()
+                .setKey("key")
+                .setValue("value")
+            ))
+            .setTaskOffsets(Collections.singletonList(new StreamsGroupDescribeResponseData.TaskOffset()
+                .setSubtopologyId("my_subtopology")
+                .setPartition(0)
+                .setOffset(0)
+            ))
+            .setTaskEndOffsets(Collections.singletonList(new StreamsGroupDescribeResponseData.TaskOffset()
+                .setSubtopologyId("my_subtopology")
+                .setPartition(0)
+                .setOffset(1)
+            ))
+            .setAssignment(memberAssignment)
+            .setTargetAssignment(targetAssignment)
+            .setIsClassic(true);
+
+        StreamsGroupDescribeResponseData.Member memberTwo = new StreamsGroupDescribeResponseData.Member()
+            .setMemberId("1")
+            .setMemberEpoch(2)
+            .setInstanceId(null)
+            .setRackId(null)
+            .setClientId("clientId1")
+            .setClientHost("clientHost")
+            .setTopologyEpoch(1)
+            .setProcessId("processId2")
+            .setUserEndpoint(null)
+            .setClientTags(Collections.emptyList())
+            .setTaskOffsets(Collections.emptyList())
+            .setTaskEndOffsets(Collections.emptyList())
+            .setAssignment(new StreamsGroupDescribeResponseData.Assignment())
+            .setTargetAssignment(new StreamsGroupDescribeResponseData.Assignment())
+            .setIsClassic(false);
+
+        StreamsGroupDescribeResponseData.Subtopology subtopologyDescription = new StreamsGroupDescribeResponseData.Subtopology()
+            .setSubtopologyId("my_subtopology")
+            .setSourceTopics(Collections.singletonList("my_source_topic"))
+            .setRepartitionSinkTopics(Collections.singletonList("my_repartition_sink_topic"))
+            .setStateChangelogTopics(Collections.singletonList(
+                new StreamsGroupDescribeResponseData.TopicInfo()
+                    .setName("my_changelog_topic")
+                    .setPartitions(0)
+                    .setReplicationFactor((short) 3)
+                    .setTopicConfigs(Collections.singletonList(new StreamsGroupDescribeResponseData.KeyValue()
+                        .setKey("key1")
+                        .setValue("value1")
+                    ))
+            ))
+            .setRepartitionSourceTopics(Collections.singletonList(
+                new StreamsGroupDescribeResponseData.TopicInfo()
+                    .setName("my_repartition_topic")
+                    .setPartitions(99)
+                    .setReplicationFactor((short) 0)
+                    .setTopicConfigs(Collections.emptyList())
+            ));
+
+        data = new StreamsGroupDescribeResponseData();
+        data.groups().add(new StreamsGroupDescribeResponseData.DescribedGroup()
+            .setGroupId(GROUP_ID)
+            .setGroupState(GroupState.STABLE.toString())
+            .setMembers(asList(memberOne, memberTwo))
+            .setTopology(new StreamsGroupDescribeResponseData.Topology()
+                .setEpoch(1)
+                .setSubtopologies(Collections.singletonList(subtopologyDescription))
+            )
+            .setGroupEpoch(2)
+            .setAssignmentEpoch(1));
+        return data;
     }
 }

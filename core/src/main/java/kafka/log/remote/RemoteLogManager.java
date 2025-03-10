@@ -960,6 +960,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                                     // back to the caller. It's important to note that the task being executed is already
                                     // cancelled before the executing thread is interrupted. The caller is responsible
                                     // for handling the exception gracefully by checking if the task is already cancelled.
+                                    @SuppressWarnings("UnusedLocalVariable")
                                     boolean ignored = copyQuotaManagerLockCondition.await(quotaTimeout().toMillis(), TimeUnit.MILLISECONDS);
                                     throttleTimeMs = rlmCopyQuotaManager.getThrottleTimeMs();
                                 }
