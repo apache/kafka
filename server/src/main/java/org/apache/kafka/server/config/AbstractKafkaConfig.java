@@ -64,6 +64,7 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
         AddPartitionsToTxnConfig.CONFIG_DEF
     ));
 
+    @SuppressWarnings("this-escape")
     private final TransactionLogConfig transactionLogConfig = new TransactionLogConfig(this);
 
     public AbstractKafkaConfig(ConfigDef definition, Map<?, ?> originals, Map<String, ?> configProviderProps, boolean doLog) {
