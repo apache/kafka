@@ -41,8 +41,8 @@ def prompt_for_user():
 def append_message_to_pr_body(pr: int , message: str):
     try:
         pr_url = f"https://github.com/apache/kafka/pull/{pr}"
-        cmd_get_pr = shlex.split(f"gh pr view {pr_url} --json title,body")
-        result = subprocess.run(cmd_get_pr, capture_output=True, text=True, check=True)
+        cmd_get_pr = f"gh pr view {pr_url} --json title,body"
+        result = subprocess.run(shlex.split(cmd_get_pr), capture_output=True, text=True, check=True)
         current_pr_body = json.loads(result.stdout).get("body", {})
         pr_title = json.loads(result.stdout).get("title", {})
         escaped_message = message.replace("<", "\\<").replace(">", "\\>")
@@ -56,8 +56,8 @@ def append_message_to_pr_body(pr: int , message: str):
         return
 
     try:
-        cmd_edit_body = shlex.split(f"gh pr edit {pr_url} --body '{updated_pr_body}'")
-        subprocess.run(cmd_edit_body, check=True)
+        cmd_edit_body = f"gh pr edit {pr_url} --body '{updated_pr_body}'"
+        subprocess.run(shlex.split(cmd_edit_body), check=True)
         print("PR body updated successfully!")
     except subprocess.CalledProcessError as e:
         print("Failed to update PR body:", e.stderr)
