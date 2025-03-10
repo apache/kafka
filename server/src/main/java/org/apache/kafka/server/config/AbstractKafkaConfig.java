@@ -67,4 +67,20 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
     public AbstractKafkaConfig(ConfigDef definition, Map<?, ?> originals, Map<String, ?> configProviderProps, boolean doLog) {
         super(definition, originals, configProviderProps, doLog);
     }
+
+    public int numIoThreads() {
+        return getInt(ServerConfigs.NUM_IO_THREADS_CONFIG);
+    }
+
+    public int numReplicaFetchers() {
+        return getInt(ReplicationConfigs.NUM_REPLICA_FETCHERS_CONFIG);
+    }
+
+    public int numRecoveryThreadsPerDataDir() {
+        return getInt(ServerLogConfigs.NUM_RECOVERY_THREADS_PER_DATA_DIR_CONFIG);
+    }
+
+    public int backgroundThreads() {
+        return getInt(ServerConfigs.BACKGROUND_THREADS_CONFIG);
+    }
 }

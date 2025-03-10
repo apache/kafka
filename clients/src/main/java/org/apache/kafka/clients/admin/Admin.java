@@ -1960,6 +1960,29 @@ public interface Admin extends AutoCloseable {
     DeleteShareGroupsResult deleteShareGroups(Collection<String> groupIds, DeleteShareGroupsOptions options);
 
     /**
+     * Describe streams groups in the cluster.
+     *
+     * @param groupIds The IDs of the groups to describe.
+     * @param options  The options to use when describing the groups.
+     * @return The DescribeStreamsGroupsResult.
+     */
+    DescribeStreamsGroupsResult describeStreamsGroups(Collection<String> groupIds,
+                                                      DescribeStreamsGroupsOptions options);
+
+    /**
+     * Describe streams groups in the cluster, with the default options.
+     * <p>
+     * This is a convenience method for {@link #describeStreamsGroups(Collection, DescribeStreamsGroupsOptions)}
+     * with default options. See the overload for more details.
+     *
+     * @param groupIds The IDs of the groups to describe.
+     * @return The DescribeStreamsGroupsResult.
+     */
+    default DescribeStreamsGroupsResult describeStreamsGroups(Collection<String> groupIds) {
+        return describeStreamsGroups(groupIds, new DescribeStreamsGroupsOptions());
+    }
+
+    /**
      * Describe some classic groups in the cluster.
      *
      * @param groupIds The IDs of the groups to describe.

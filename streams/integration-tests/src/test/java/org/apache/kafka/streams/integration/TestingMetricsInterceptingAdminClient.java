@@ -91,6 +91,8 @@ import org.apache.kafka.clients.admin.DescribeReplicaLogDirsOptions;
 import org.apache.kafka.clients.admin.DescribeReplicaLogDirsResult;
 import org.apache.kafka.clients.admin.DescribeShareGroupsOptions;
 import org.apache.kafka.clients.admin.DescribeShareGroupsResult;
+import org.apache.kafka.clients.admin.DescribeStreamsGroupsOptions;
+import org.apache.kafka.clients.admin.DescribeStreamsGroupsResult;
 import org.apache.kafka.clients.admin.DescribeTopicsOptions;
 import org.apache.kafka.clients.admin.DescribeTopicsResult;
 import org.apache.kafka.clients.admin.DescribeTransactionsOptions;
@@ -447,6 +449,11 @@ public class TestingMetricsInterceptingAdminClient extends AdminClient {
     @Override
     public DescribeShareGroupsResult describeShareGroups(final Collection<String> groupIds, final DescribeShareGroupsOptions options) {
         return adminDelegate.describeShareGroups(groupIds, options);
+    }
+    
+    @Override
+    public DescribeStreamsGroupsResult describeStreamsGroups(final Collection<String> groupIds, final DescribeStreamsGroupsOptions options) {
+        return adminDelegate.describeStreamsGroups(groupIds, options);
     }
 
     @Override

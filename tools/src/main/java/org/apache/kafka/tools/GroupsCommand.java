@@ -40,6 +40,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
 import joptsimple.ArgumentAcceptingOptionSpec;
+import joptsimple.OptionException;
 import joptsimple.OptionSpec;
 import joptsimple.OptionSpecBuilder;
 
@@ -217,7 +218,11 @@ public class GroupsCommand {
                             + "This matches group type 'consumer', and group type 'classic' where the protocol type is 'consumer' or empty.");
             shareOpt = parser.accepts("share", "Filter the groups to show share groups.");
 
-            options = parser.parse(args);
+            try {
+                options = parser.parse(args);
+            } catch (OptionException oe) {
+                CommandLineUtils.printUsageAndExit(parser, oe.getMessage());
+            }
 
             checkArgs();
         }

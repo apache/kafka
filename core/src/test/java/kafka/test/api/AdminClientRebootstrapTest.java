@@ -68,7 +68,6 @@ public class AdminClientRebootstrapTest {
         return ClusterConfig.defaultBuilder()
             .setTypes(Set.of(Type.KRAFT))
             .setBrokers(BROKER_COUNT)
-            .setAdminClientProperties(rebootstrapProperties)
             .setServerProperties(serverProperties).build();
     }
 
