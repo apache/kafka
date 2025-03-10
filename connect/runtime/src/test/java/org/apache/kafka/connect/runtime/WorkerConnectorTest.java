@@ -621,6 +621,7 @@ public class WorkerConnectorTest {
         String type = metrics.currentMetricValueAsString(metricGroup, "connector-type");
         String clazz = metrics.currentMetricValueAsString(metricGroup, "connector-class");
         String version = metrics.currentMetricValueAsString(metricGroup, "connector-version");
+        assertEquals("unassigned", status);
         assertEquals(expectedType, type);
         assertNotNull(clazz);
         assertEquals(VERSION, version);
