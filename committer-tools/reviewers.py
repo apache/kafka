@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import json
+import shlex
 import subprocess
 #
 # Licensed to the Apache Software Foundation (ASF) under one or more
@@ -37,9 +38,10 @@ def prompt_for_user():
             return clean_input
 
 
-def append_message_to_pr_body(pr_url, message):
+def append_message_to_pr_body(pr: int , message: str):
     try:
-        cmd_get_pr = ["gh", "pr", "view", pr_url, "--json", "title,body"]
+        pr_url = f"https://github.com/apache/kafka/pull/{pr}"
+        cmd_get_pr = shlex.split(f"gh pr view {pr_url} --json title,body")
         result = subprocess.run(cmd_get_pr, capture_output=True, text=True, check=True)
         current_pr_body = json.loads(result.stdout).get("body", {})
         pr_title = json.loads(result.stdout).get("title", {})
@@ -54,7 +56,7 @@ def append_message_to_pr_body(pr_url, message):
         return
 
     try:
-        cmd_edit_body = ["gh", "pr", "edit", pr_url, "--body", updated_pr_body]
+        cmd_edit_body = shlex.split(f"gh pr edit {pr_url} --body '{updated_pr_body}'")
         subprocess.run(cmd_edit_body, check=True)
         print("PR body updated successfully!")
     except subprocess.CalledProcessError as e:
@@ -117,8 +119,7 @@ if __name__ == "__main__":
         print(reviewer_message)
 
         try:
-            pr_number = input("\nEnter the Pull Request number to append reviewer message to body (Ctrl+D or Ctrl+C to skip): ")
-            url = f"https://github.com/apache/kafka/pull/{pr_number}"
-            append_message_to_pr_body(url, reviewer_message)
+            pr_number = int(input("\nPull Request (Ctrl+D or Ctrl+C to skip): "))
+            append_message_to_pr_body(pr_number, reviewer_message)
         except (EOFError, KeyboardInterrupt):
             exit(0)
