@@ -67,7 +67,7 @@
             have to be <a href="/39/documentation.html#kraft_zk_migration">migrated to KRaft mode</a> before they can be upgraded to 4.0.x.
         </li>
         <li>
-            Apache Kafka 4.0 ships with a brand-new group coordinator implementation (See <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=217387038#KIP848:TheNextGenerationoftheConsumerRebalanceProtocol-GroupCoordinator">here</a>).
+            Apache Kafka 4.0 ships with a brand-new group coordinator implementation (See <a href="https://cwiki.apache.org/confluence/x/HhD1D">here</a>).
             Functionally speaking, it implements all the same APIs. There are reasonable defaults, but the behavior of the new
             group coordinator can be tuned by setting the configurations with prefix <code>group.coordinator</code>.
         </li>
@@ -399,7 +399,7 @@
                     timestamp of more than 1 hour in the future will be rejected when message.timestamp.type=CreateTime is set.
                     See <a href="https://cwiki.apache.org/confluence/x/FAqpEQ">KIP-1030</a>
                 </li>
-                <li>Introduced in <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-890%3A+Transactions+Server-Side+Defense">KIP-890</a>, the <code>TransactionAbortableException</code> enhances error handling within transactional operations by clearly indicating scenarios where transactions should be aborted due to errors. It is important for applications to properly manage both <code>TimeoutException</code> and <code>TransactionAbortableException</code> when working with transaction producers.</li>
+                <li>Introduced in <a href="https://cwiki.apache.org/confluence/x/B40ODg">KIP-890</a>, the <code>TransactionAbortableException</code> enhances error handling within transactional operations by clearly indicating scenarios where transactions should be aborted due to errors. It is important for applications to properly manage both <code>TimeoutException</code> and <code>TransactionAbortableException</code> when working with transaction producers.</li>
                 <ul>
                     <li><b>TimeoutException:</b> This exception indicates that a transactional operation has timed out. Given the risk of message duplication that can arise from retrying operations after a timeout (potentially violating exactly-once semantics), applications should treat timeouts as reasons to abort the ongoing transaction.</li>
                     <li><b>TransactionAbortableException:</b> Specifically introduced to signal errors that should lead to transaction abortion, ensuring this exception is properly handled is critical for maintaining the integrity of transactional processing.</li>
