@@ -334,6 +334,7 @@
     <allow pkg="org.apache.kafka.tools.api" />
     <allow pkg="org.apache.kafka.tools.filter" />
     <allow pkg="org.apache.kafka.image" />
+    <allow pkg="org.apache.kafka.security" />
 
     <subpackage name="consumer">
       <allow pkg="org.apache.kafka.tools"/>

@@ -24,6 +24,7 @@ import sys
 import tarfile
 import tempfile
 import subprocess
+import argparse
 
 # Constant: Regex to extract dependency tokens from the LICENSE file.
 # Matches lines that start with a dash and then a dependency token of the form:
@@ -44,7 +45,7 @@ def get_tarball_path(project_dir):
         print("Error: Distributions directory not found:", distributions_dir)
         sys.exit(1)
     
-    pattern = re.compile(r'^kafka_2\.13-.+\.tgz$', re.IGNORECASE)
+    pattern = re.compile(r'^kafka_2\.13-(?!.*docs).+\.tgz$', re.IGNORECASE)
     candidates = [
         os.path.join(distributions_dir, f)
         for f in os.listdir(distributions_dir)
@@ -74,12 +75,20 @@ def get_license_deps(license_text):
     return set(LICENSE_DEP_PATTERN.findall(license_text))
 
 def main():
+    # Argument parser
+    parser = argparse.ArgumentParser(description="Whether to skip executing ReleaseTarGz.")
+    parser.add_argument("--skip-build", action="store_true", help="skip the build")
+    args = parser.parse_args()
+
     # Assume the current working directory is the project root.
     project_dir = os.getcwd()
     print("Using project directory:", project_dir)
-    
-    # Build the tarball.
-    run_gradlew(project_dir)
+
+    if args.skip_build:
+        print("Skip running './gradlew clean releaseTarGz'")
+    else:
+        # Build the tarball.
+        run_gradlew(project_dir)
     tarball = get_tarball_path(project_dir)
     print("Tarball created at:", tarball)
     

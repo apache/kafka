@@ -16076,6 +16076,11 @@ public class GroupMetadataManagerTest {
             Optional.of(resolvedRegularExpression),
             context.groupMetadataManager.consumerGroup("foo").resolvedRegularExpression("abc*")
         );
+
+        assertEquals(
+            Set.of("foo"),
+            context.groupMetadataManager.groupsSubscribedToTopic("abc")
+        );
     }
 
     @Test
@@ -16101,6 +16106,11 @@ public class GroupMetadataManagerTest {
             resolvedRegularExpression
         ));
 
+        assertEquals(
+            Set.of("foo"),
+            context.groupMetadataManager.groupsSubscribedToTopic("abc")
+        );
+
         context.replay(GroupCoordinatorRecordHelpers.newConsumerGroupRegularExpressionTombstone(
             "foo",
             "abc*"
@@ -16109,6 +16119,11 @@ public class GroupMetadataManagerTest {
         assertEquals(
             Optional.empty(),
             context.groupMetadataManager.consumerGroup("foo").resolvedRegularExpression("abc*")
+        );
+
+        assertEquals(
+            Set.of(),
+            context.groupMetadataManager.groupsSubscribedToTopic("abc")
         );
     }
 
