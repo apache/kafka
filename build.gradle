@@ -1533,13 +1533,14 @@ project(':test-common:test-common-runtime') {
   dependencies {
     api project(':core')
     api project(':clients')
-    api project(':server')
-    api project(':server-common')
-    api project(':group-coordinator')
-    api project(':test-common:test-common-internal-api')
-    api project(':metadata')
-    api project(':raft')
-    api project(':storage')
+
+    implementation project(':server')
+    implementation project(':server-common')
+    implementation project(':group-coordinator')
+    implementation project(':test-common:test-common-internal-api')
+    implementation project(':metadata')
+    implementation project(':raft')
+    implementation project(':storage')
 
     implementation libs.junitPlatformLanucher
     implementation libs.junitJupiter
@@ -1969,6 +1970,9 @@ project(':clients:clients-integration-tests') {
     testImplementation libs.slf4jApi
     testImplementation project(':test-common:test-common-internal-api')
     testImplementation project(':test-common:test-common-runtime')
+    implementation project(':server-common')
+    implementation project(':group-coordinator')
+    implementation project(':transaction-coordinator')
 
     testImplementation libs.junitJupiter
     testImplementation libs.junitPlatformSuiteEngine
