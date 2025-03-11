@@ -1655,10 +1655,7 @@ public class UnifiedLog implements AutoCloseable {
                         }
                     } else if (targetTimestamp == ListOffsetsRequest.MAX_TIMESTAMP) {
                         // Cache to avoid race conditions.
-                        List<LogSegment> segments;
-                        synchronized (lock) {
-                            segments = List.copyOf(logSegments());
-                        }
+                        List<LogSegment> segments = logSegments();
                         LogSegment latestTimestampSegment = null;
                         for (LogSegment segment : segments) {
                             if (latestTimestampSegment == null) {
@@ -1708,10 +1705,7 @@ public class UnifiedLog implements AutoCloseable {
 
     private Optional<FileRecords.TimestampAndOffset> searchOffsetInLocalLog(long targetTimestamp, long startOffset) {
         // Cache to avoid race conditions.
-        List<LogSegment> segmentsCopy;
-        synchronized (lock) {
-            segmentsCopy = List.copyOf(logSegments());
-        }
+        List<LogSegment> segmentsCopy = logSegments();
         Optional<LogSegment> targetSeg = findFirst(
             segmentsCopy,
             item -> {
@@ -2311,7 +2305,7 @@ public class UnifiedLog implements AutoCloseable {
     /**
      * All the log segments in this log ordered from oldest to newest
      */
-    public Collection<LogSegment> logSegments() {
+    public List<LogSegment> logSegments() {
         synchronized (lock) {
             return List.copyOf(localLog.segments().values());
         }
@@ -2321,13 +2315,13 @@ public class UnifiedLog implements AutoCloseable {
      * Get all segments beginning with the segment that includes "from" and ending with the segment
      * that includes up to "to-1" or the end of the log (if to > logEndOffset).
      */
-    public Collection<LogSegment> logSegments(long from, long to) {
+    public List<LogSegment> logSegments(long from, long to) {
         synchronized (lock) {
             return List.copyOf(localLog.segments().values(from, to));
         }
     }
 
-    public Collection<LogSegment> nonActiveLogSegmentsFrom(long from) {
+    public List<LogSegment> nonActiveLogSegmentsFrom(long from) {
         synchronized (lock) {
             return List.copyOf(localLog.segments().nonActiveLogSegmentsFrom(from));
         }

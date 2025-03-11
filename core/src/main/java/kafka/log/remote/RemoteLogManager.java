@@ -731,7 +731,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                     && isRemoteSegmentWithinLeaderEpochs(rlsMetadata, unifiedLog.logEndOffset(), epochWithOffsets)
                     && rlsMetadata.state().equals(RemoteLogSegmentState.COPY_SEGMENT_FINISHED)) {
                     // cache to avoid race conditions
-                    List<LogSegment> segmentsCopy = new ArrayList<>(unifiedLog.logSegments());
+                    List<LogSegment> segmentsCopy = unifiedLog.logSegments();
                     if (segmentsCopy.isEmpty() || rlsMetadata.startOffset() < segmentsCopy.get(0).baseOffset()) {
                         // search in remote-log
                         return lookupTimestamp(rlsMetadata, timestamp, startingOffset);
@@ -902,7 +902,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
          */
         List<EnrichedLogSegment> candidateLogSegments(UnifiedLog log, Long fromOffset, Long lastStableOffset) {
             List<EnrichedLogSegment> candidateLogSegments = new ArrayList<>();
-            List<LogSegment> segments = List.copyOf(log.logSegments(fromOffset, Long.MAX_VALUE));
+            List<LogSegment> segments = log.logSegments(fromOffset, Long.MAX_VALUE);
             if (!segments.isEmpty()) {
                 for (int idx = 1; idx < segments.size(); idx++) {
                     LogSegment previousSeg = segments.get(idx - 1);
