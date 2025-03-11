@@ -472,7 +472,6 @@ public class InternalStreamsBuilderTest {
         final GraphNode join = getNodeByType(builder.root, StreamStreamJoinNode.class, new HashSet<>());
         assertNotNull(join);
         assertTrue(((StreamStreamJoinNode) join).getSelfJoin());
-        final GraphNode parent = join.parentNodes().stream().findFirst().get();
         final AtomicInteger count = new AtomicInteger();
         countJoinWindowNodes(count, builder.root, new HashSet<>());
         assertEquals(count.get(), 1);
