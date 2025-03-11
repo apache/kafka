@@ -82,13 +82,13 @@ public class MetadataSchemaCheckerTool {
                 break;
             }
             case "verify-evolution": {
-                String path = namespace.getString("path");
+                String child = namespace.getString("path");
                 String parent = namespace.getString("parent_path");
                 EvolutionVerifier verifier = new EvolutionVerifier(
-                    CheckerUtils.readMessageSpecFromFile(path),
-                    CheckerUtils.readMessageSpecFromFile(parent));
+                    CheckerUtils.readMessageSpecFromFile(parent),
+                    CheckerUtils.readMessageSpecFromFile(child));
                 verifier.verify();
-                writer.println("Successfully verified evolution of path: " + path +
+                writer.println("Successfully verified evolution of path: " + child +
                         " from parent: " + parent);
                 break;
             }
