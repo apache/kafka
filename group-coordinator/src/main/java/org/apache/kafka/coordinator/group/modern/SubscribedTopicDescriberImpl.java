@@ -83,6 +83,16 @@ public class SubscribedTopicDescriberImpl implements SubscribedTopicDescriber {
         return Set.of();
     }
 
+    /**
+     * Returns a set of assignable partitions from the topic metadata.
+     * If the allowed partition map is null, all the partitions in the corresponding
+     * topic metadata are returned for the argument topic id. If allowed map is empty,
+     * empty set is returned.
+     *
+     * @param topicId The uuid of the topic
+     * @return Set of integers if assignable partitions available, empty otherwise.
+     * @throws UnknownTopicIdException if the topicId is not found in the metadata.
+     */
     @Override
     public Set<Integer> assignablePartitions(Uuid topicId) throws UnknownTopicIdException {
         TopicMetadata topic = this.topicMetadata.get(topicId);
