@@ -484,6 +484,30 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testSocketServerConfigTest(quorum: String, groupProtocol: String): Unit = {
+    val updatedMaxConnections = "20"
+    val connectionsIpsOverride = "1.2.3.4:1234,1.2.4.5:2345"
+    val properties = new Properties()
+    properties.setProperty(SocketServerConfigs.MAX_CONNECTIONS_PER_IP_CONFIG, updatedMaxConnections)
+    properties.setProperty(SocketServerConfigs.MAX_CONNECTIONS_PER_IP_OVERRIDES_CONFIG, connectionsIpsOverride)
+
+    TestUtils.incrementalAlterConfigs(servers, adminClients.head, properties, true)
+
+    servers.foreach(_.shutdown())
+    servers.foreach(_.awaitShutdown())
+    servers.foreach(_.startup())
+
+    servers.foreach { broker =>
+      assertEquals(updatedMaxConnections, broker.config.originals()
+        .get(SocketServerConfigs.MAX_CONNECTIONS_PER_IP_CONFIG).toString)
+
+      assertEquals(connectionsIpsOverride, broker.config.originals()
+        .get(SocketServerConfigs.MAX_CONNECTIONS_PER_IP_OVERRIDES_CONFIG).toString)
+    }
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testLogCleanerConfig(quorum: String, groupProtocol: String): Unit = {
     val (producerThread, consumerThread) = startProduceConsume(retries = 0, groupProtocol)
 
