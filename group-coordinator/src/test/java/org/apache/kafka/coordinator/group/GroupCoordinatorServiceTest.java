@@ -3164,9 +3164,6 @@ public class GroupCoordinatorServiceTest {
         String groupId = "share-group";
         Uuid topicId = Uuid.randomUuid();
         Exception exp = new NotCoordinatorException("bad stuff");
-        MetadataImage image = new MetadataImageBuilder()
-            .addTopic(topicId, "topic-name", 3)
-            .build();
 
         when(mockPersister.initializeState(any())).thenReturn(CompletableFuture.failedFuture(exp));
 

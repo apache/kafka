@@ -3298,14 +3298,14 @@ public class GroupMetadataManagerTest {
         ));
 
         // Session timer is scheduled on first heartbeat.
-        CoordinatorResult<ShareGroupHeartbeatResponseData, CoordinatorRecord> result =
+        CoordinatorResult<Map.Entry<ShareGroupHeartbeatResponseData, Optional<InitializeShareGroupStateParameters>>, CoordinatorRecord> result =
             context.shareGroupHeartbeat(
                 new ShareGroupHeartbeatRequestData()
                     .setGroupId(groupId)
                     .setMemberId(memberId)
                     .setMemberEpoch(0)
                     .setSubscribedTopicNames(List.of("foo")));
-        assertEquals(1, result.response().memberEpoch());
+        assertEquals(1, result.response().getKey().memberEpoch());
 
         // Verify that there is a session time.
         context.assertSessionTimeout(groupId, memberId, 45000);
