@@ -18,7 +18,7 @@ package kafka.server
 
 import kafka.cluster.Partition
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.FetchRequest
 import org.apache.kafka.common.{TopicIdPartition, Uuid}
@@ -220,7 +220,6 @@ class DelayedRemoteFetchTest {
   private def buildFetchParams(replicaId: Int,
                                maxWaitMs: Int): FetchParams = {
     new FetchParams(
-      ApiKeys.FETCH.latestVersion,
       replicaId,
       1,
       maxWaitMs,
