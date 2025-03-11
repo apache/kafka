@@ -1040,7 +1040,7 @@ private[log] class Cleaner(val id: Int,
                                   map: OffsetMap,
                                   stats: CleanerStats): Unit = {
     map.clear()
-    val dirty = log.logSegments(start, end).asScala.toBuffer
+    val dirty = log.logSegments(start, end).asScala
     val nextSegmentStartOffsets = new ListBuffer[Long]
     if (dirty.nonEmpty) {
       for (nextSegment <- dirty.tail) nextSegmentStartOffsets.append(nextSegment.baseOffset)

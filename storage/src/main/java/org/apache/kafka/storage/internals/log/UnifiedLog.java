@@ -1992,7 +1992,7 @@ public class UnifiedLog implements AutoCloseable {
      * The size of the log in bytes
      */
     public long size() {
-        return localLog.segments().sizeInBytes();
+        return LogSegments.sizeInBytes(logSegments());
     }
 
     /**
