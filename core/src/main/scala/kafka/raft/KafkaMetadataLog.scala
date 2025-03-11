@@ -507,10 +507,11 @@ final class KafkaMetadataLog private (
     // Keep deleting snapshots and segments as long as we exceed the retention size
     def shouldClean(snapshotId: OffsetAndEpoch): Option[SnapshotDeletionReason] = {
       snapshotSizes.get(snapshotId).flatMap { snapshotSize =>
-        if (log.size + snapshotTotalSize > config.retentionMaxBytes) {
+        val logSize = log.size
+        if (logSize + snapshotTotalSize > config.retentionMaxBytes) {
           val oldSnapshotTotalSize = snapshotTotalSize
           snapshotTotalSize -= snapshotSize
-          Some(RetentionSizeBreach(log.size, oldSnapshotTotalSize, config.retentionMaxBytes))
+          Some(RetentionSizeBreach(logSize, oldSnapshotTotalSize, config.retentionMaxBytes))
         } else {
           None
         }

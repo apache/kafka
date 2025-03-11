@@ -1933,8 +1933,9 @@ public class UnifiedLog implements AutoCloseable {
 
     private int deleteRetentionSizeBreachedSegments() throws IOException {
         long retentionSize = UnifiedLog.localRetentionSize(config(), remoteLogEnabledAndRemoteCopyEnabled());
-        if (retentionSize < 0 || size() < retentionSize) return 0;
-        final AtomicLong diff = new AtomicLong(size() - retentionSize);
+        long logSize = size();
+        if (retentionSize < 0 || logSize < retentionSize) return 0;
+        final AtomicLong diff = new AtomicLong(logSize - retentionSize);
 
         DeletionCondition shouldDelete = (segment, nextSegmentOpt) -> {
             int segmentSize = segment.size();
