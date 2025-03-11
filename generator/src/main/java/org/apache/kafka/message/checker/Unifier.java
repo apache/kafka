@@ -146,13 +146,11 @@ class Unifier {
         }
         // Recursive step.
         if (field1.type().isStruct()) {
-            System.out.println("Field1 is struct: Unifying struct " + field1.name() + " and " + field2.name());
             unifyStructs(field1.name(),
                 field1.fields(),
                 field2.name(),
                 field2.fields());
         } else if (field2.type().isStructArray()) {
-            System.out.println("Field2 is struct: Unifying struct array " + field1.name() + " and " + field2.name());
             unifyStructs(((FieldType.ArrayType) field1.type()).elementName(),
                 field1.fields(),
                 ((FieldType.ArrayType) field2.type()).elementName(),
@@ -190,7 +188,6 @@ class Unifier {
             topLevelMessage2.validVersions());
         while (iterator.hasNext()) {
             FieldSpecPair pair = iterator.next();
-            System.out.println("Unifying " + pair.field1().name() + " and " + pair.field2().name());
             unify(pair.field1(), pair.field2());
         }
     }
