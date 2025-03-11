@@ -24,7 +24,6 @@ import org.apache.kafka.server.metrics.KafkaMetricsGroup;
 import com.yammer.metrics.core.Histogram;
 import com.yammer.metrics.core.Meter;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -87,7 +86,7 @@ public class RequestMetrics {
 
     public RequestMetrics(String name) {
         this.name = name;
-        tags = Collections.singletonMap("request", name);
+        tags = Map.of("request", name);
         // time a request spent in a request queue
         requestQueueTimeHist = metricsGroup.newHistogram(REQUEST_QUEUE_TIME_MS, true, tags);
         // time a request takes to be processed at the local broker

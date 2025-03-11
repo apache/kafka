@@ -362,7 +362,7 @@ public class ConnectorConfig extends AbstractConfig {
      * {@link Transformation transformations} and {@link Predicate predicates}
      * as they are specified in the {@link #TRANSFORMS_CONFIG} and {@link #PREDICATES_CONFIG}
      */
-    public <R extends ConnectRecord<R>> List<TransformationStage<R>> transformationStages(ConnectorTaskId connectorTaskId, ConnectMetrics metrics) {
+    public <R extends ConnectRecord<R>> List<TransformationStage<R>> transformationStages(Plugins plugins, ConnectorTaskId connectorTaskId, ConnectMetrics metrics) {
         final List<String> transformAliases = getList(TRANSFORMS_CONFIG);
 
         final List<TransformationStage<R>> transformations = new ArrayList<>(transformAliases.size());
@@ -370,8 +370,9 @@ public class ConnectorConfig extends AbstractConfig {
             final String prefix = TRANSFORMS_CONFIG + "." + alias + ".";
 
             try {
-                @SuppressWarnings("unchecked")
-                final Transformation<R> transformation = Utils.newInstance(getClass(prefix + "type"), Transformation.class);
+                final String typeConfig = prefix + "type";
+                final String versionConfig = prefix + WorkerConfig.PLUGIN_VERSION_SUFFIX;
+                @SuppressWarnings("unchecked") final Transformation<R> transformation = getTransformationOrPredicate(plugins, typeConfig, versionConfig);
                 Map<String, Object> configs = originalsWithPrefix(prefix);
                 Object predicateAlias = configs.remove(TransformationStage.PREDICATE_CONFIG);
                 Object negate = configs.remove(TransformationStage.NEGATE_CONFIG);
@@ -379,13 +380,15 @@ public class ConnectorConfig extends AbstractConfig {
                 Plugin<Transformation<R>> transformationPlugin = metrics.wrap(transformation, connectorTaskId, alias);
                 if (predicateAlias != null) {
                     String predicatePrefix = PREDICATES_PREFIX + predicateAlias + ".";
+                    final String predicateTypeConfig = predicatePrefix + "type";
+                    final String predicateVersionConfig = predicatePrefix + WorkerConfig.PLUGIN_VERSION_SUFFIX;
                     @SuppressWarnings("unchecked")
-                    Predicate<R> predicate = Utils.newInstance(getClass(predicatePrefix + "type"), Predicate.class);
+                    Predicate<R> predicate = getTransformationOrPredicate(plugins, predicateTypeConfig, predicateVersionConfig);
                     predicate.configure(originalsWithPrefix(predicatePrefix));
                     Plugin<Predicate<R>> predicatePlugin = metrics.wrap(predicate, connectorTaskId, (String) predicateAlias);
-                    transformations.add(new TransformationStage<>(predicatePlugin, negate != null && Boolean.parseBoolean(negate.toString()), transformationPlugin));
+                    transformations.add(new TransformationStage<>(predicatePlugin, negate != null && Boolean.parseBoolean(negate.toString()), transformationPlugin, plugins.safeLoaderSwapper()));
                 } else {
-                    transformations.add(new TransformationStage<>(transformationPlugin));
+                    transformations.add(new TransformationStage<>(transformationPlugin, plugins.safeLoaderSwapper()));
                 }
             } catch (Exception e) {
                 throw new ConnectException(e);
@@ -393,6 +396,17 @@ public class ConnectorConfig extends AbstractConfig {
         }
 
         return transformations;
+    }
+
+    @SuppressWarnings("unchecked")
+    private <T> T getTransformationOrPredicate(Plugins plugins, String classConfig, String versionConfig) {
+        try {
+            VersionRange range = PluginUtils.connectorVersionRequirement(getString(versionConfig));
+            VersionRange connectorRange = PluginUtils.connectorVersionRequirement(getString(CONNECTOR_VERSION));
+            return (T) plugins.newPlugin(getClass(classConfig).getName(), range, plugins.pluginLoader(getString(CONNECTOR_CLASS_CONFIG), connectorRange));
+        } catch (Exception e) {
+            throw new ConnectException(e);
+        }
     }
 
     /**

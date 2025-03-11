@@ -42,6 +42,7 @@ import org.apache.kafka.coordinator.share.{ShareCoordinator, ShareCoordinatorRec
 import org.apache.kafka.coordinator.transaction.ProducerIdManager
 import org.apache.kafka.image.publisher.{BrokerRegistrationTracker, MetadataPublisher}
 import org.apache.kafka.metadata.{BrokerState, ListenerInfo}
+import org.apache.kafka.metadata.publisher.AclPublisher
 import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.{ApiMessageAndVersion, DirectoryEventHandler, NodeToControllerChannelManager, TopicIdPartition}
@@ -49,7 +50,7 @@ import org.apache.kafka.server.config.ConfigType
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.{ClientMetricsReceiverPlugin, KafkaYammerMetrics}
 import org.apache.kafka.server.network.{EndpointReadyFutures, KafkaAuthorizerServerInfo}
-import org.apache.kafka.server.share.persister.{DefaultStatePersister, NoOpShareStatePersister, Persister, PersisterStateManager}
+import org.apache.kafka.server.share.persister.{DefaultStatePersister, NoOpStatePersister, Persister, PersisterStateManager}
 import org.apache.kafka.server.share.session.ShareSessionCache
 import org.apache.kafka.server.util.timer.{SystemTimer, SystemTimerReaper}
 import org.apache.kafka.server.util.{Deadline, FutureUtils, KafkaScheduler}
@@ -275,13 +276,12 @@ class BrokerServer(
       clientQuotaMetadataManager = new ClientQuotaMetadataManager(quotaManagers, socketServer.connectionQuotas)
 
       val listenerInfo = ListenerInfo.create(Optional.of(config.interBrokerListenerName.value()),
-          config.effectiveAdvertisedBrokerListeners.map(_.toJava).asJava).
+          config.effectiveAdvertisedBrokerListeners.map(_.toPublic()).asJava).
             withWildcardHostnamesResolved().
             withEphemeralPortsCorrected(name => socketServer.boundPort(new ListenerName(name)))
 
       alterPartitionManager = AlterPartitionManager(
         config,
-        metadataCache,
         scheduler = kafkaScheduler,
         controllerNodeProvider,
         time = time,
@@ -441,7 +441,6 @@ class BrokerServer(
         config.shareGroupConfig.shareFetchMaxFetchRecords,
         persister,
         groupConfigManager,
-        metrics,
         brokerTopicStats
       )
 
@@ -531,7 +530,7 @@ class BrokerServer(
           config.nodeId,
           sharedServer.metadataPublishingFaultHandler,
           "broker",
-          authorizer
+          authorizer.toJava
         ),
         sharedServer.initialBrokerMetadataLoadFaultHandler,
         sharedServer.metadataPublishingFaultHandler
@@ -648,6 +647,7 @@ class BrokerServer(
         .withGroupCoordinatorMetrics(new GroupCoordinatorMetrics(KafkaYammerMetrics.defaultRegistry, metrics))
         .withGroupConfigManager(groupConfigManager)
         .withPersister(persister)
+        .withAuthorizer(authorizer.toJava)
         .build()
     } else {
       GroupCoordinatorAdapter(
@@ -709,18 +709,17 @@ class BrokerServer(
               )
             )
           )
-      } else if (klass.getName.equals(classOf[NoOpShareStatePersister].getName)) {
-        info("Using no op persister")
-        new NoOpShareStatePersister()
+      } else if (klass.getName.equals(classOf[NoOpStatePersister].getName)) {
+        info("Using no-op persister")
+        new NoOpStatePersister()
       } else {
-        error("Unknown persister specified. Persister is only factory pluggable!")
-        throw new IllegalArgumentException("Unknown persiser specified " + config.shareGroupConfig.shareGroupPersisterClassName)
+        error("Unknown persister specified. Persister is only factory-pluggable!")
+        throw new IllegalArgumentException("Unknown persister specified " + config.shareGroupConfig.shareGroupPersisterClassName)
       }
     } else {
-      // in case share coordinator not enabled or
-      // persister class name deliberately empty (key=)
-      info("Using no op persister")
-      new NoOpShareStatePersister()
+      // in case share coordinator not enabled or persister class name deliberately empty (key=)
+      info("Using no-op persister")
+      new NoOpStatePersister()
     }
   }
 

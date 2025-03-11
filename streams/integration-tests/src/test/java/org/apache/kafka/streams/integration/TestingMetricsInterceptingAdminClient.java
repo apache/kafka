@@ -35,6 +35,10 @@ import org.apache.kafka.clients.admin.AlterPartitionReassignmentsOptions;
 import org.apache.kafka.clients.admin.AlterPartitionReassignmentsResult;
 import org.apache.kafka.clients.admin.AlterReplicaLogDirsOptions;
 import org.apache.kafka.clients.admin.AlterReplicaLogDirsResult;
+import org.apache.kafka.clients.admin.AlterShareGroupOffsetsOptions;
+import org.apache.kafka.clients.admin.AlterShareGroupOffsetsResult;
+import org.apache.kafka.clients.admin.AlterStreamsGroupOffsetsOptions;
+import org.apache.kafka.clients.admin.AlterStreamsGroupOffsetsResult;
 import org.apache.kafka.clients.admin.AlterUserScramCredentialsOptions;
 import org.apache.kafka.clients.admin.AlterUserScramCredentialsResult;
 import org.apache.kafka.clients.admin.CreateAclsOptions;
@@ -53,6 +57,12 @@ import org.apache.kafka.clients.admin.DeleteConsumerGroupsOptions;
 import org.apache.kafka.clients.admin.DeleteConsumerGroupsResult;
 import org.apache.kafka.clients.admin.DeleteRecordsOptions;
 import org.apache.kafka.clients.admin.DeleteRecordsResult;
+import org.apache.kafka.clients.admin.DeleteShareGroupsOptions;
+import org.apache.kafka.clients.admin.DeleteShareGroupsResult;
+import org.apache.kafka.clients.admin.DeleteStreamsGroupOffsetsOptions;
+import org.apache.kafka.clients.admin.DeleteStreamsGroupOffsetsResult;
+import org.apache.kafka.clients.admin.DeleteStreamsGroupsOptions;
+import org.apache.kafka.clients.admin.DeleteStreamsGroupsResult;
 import org.apache.kafka.clients.admin.DeleteTopicsOptions;
 import org.apache.kafka.clients.admin.DeleteTopicsResult;
 import org.apache.kafka.clients.admin.DescribeAclsOptions;
@@ -81,6 +91,8 @@ import org.apache.kafka.clients.admin.DescribeReplicaLogDirsOptions;
 import org.apache.kafka.clients.admin.DescribeReplicaLogDirsResult;
 import org.apache.kafka.clients.admin.DescribeShareGroupsOptions;
 import org.apache.kafka.clients.admin.DescribeShareGroupsResult;
+import org.apache.kafka.clients.admin.DescribeStreamsGroupsOptions;
+import org.apache.kafka.clients.admin.DescribeStreamsGroupsResult;
 import org.apache.kafka.clients.admin.DescribeTopicsOptions;
 import org.apache.kafka.clients.admin.DescribeTopicsResult;
 import org.apache.kafka.clients.admin.DescribeTransactionsOptions;
@@ -110,6 +122,9 @@ import org.apache.kafka.clients.admin.ListPartitionReassignmentsResult;
 import org.apache.kafka.clients.admin.ListShareGroupOffsetsOptions;
 import org.apache.kafka.clients.admin.ListShareGroupOffsetsResult;
 import org.apache.kafka.clients.admin.ListShareGroupOffsetsSpec;
+import org.apache.kafka.clients.admin.ListStreamsGroupOffsetsOptions;
+import org.apache.kafka.clients.admin.ListStreamsGroupOffsetsResult;
+import org.apache.kafka.clients.admin.ListStreamsGroupOffsetsSpec;
 import org.apache.kafka.clients.admin.ListTopicsOptions;
 import org.apache.kafka.clients.admin.ListTopicsResult;
 import org.apache.kafka.clients.admin.ListTransactionsOptions;
@@ -287,13 +302,28 @@ public class TestingMetricsInterceptingAdminClient extends AdminClient {
     }
 
     @Override
+    public ListStreamsGroupOffsetsResult listStreamsGroupOffsets(final Map<String, ListStreamsGroupOffsetsSpec> groupSpecs, final ListStreamsGroupOffsetsOptions options) {
+        return adminDelegate.listStreamsGroupOffsets(groupSpecs, options);
+    }
+
+    @Override
     public DeleteConsumerGroupsResult deleteConsumerGroups(final Collection<String> groupIds, final DeleteConsumerGroupsOptions options) {
         return adminDelegate.deleteConsumerGroups(groupIds, options);
     }
 
     @Override
+    public DeleteStreamsGroupsResult deleteStreamsGroups(final Collection<String> groupIds, final DeleteStreamsGroupsOptions options) {
+        return adminDelegate.deleteStreamsGroups(groupIds, options);
+    }
+
+    @Override
     public DeleteConsumerGroupOffsetsResult deleteConsumerGroupOffsets(final String groupId, final Set<TopicPartition> partitions, final DeleteConsumerGroupOffsetsOptions options) {
         return adminDelegate.deleteConsumerGroupOffsets(groupId, partitions, options);
+    }
+
+    @Override
+    public DeleteStreamsGroupOffsetsResult deleteStreamsGroupOffsets(final String groupId, final Set<TopicPartition> partitions, final DeleteStreamsGroupOffsetsOptions options) {
+        return adminDelegate.deleteStreamsGroupOffsets(groupId, partitions, options);
     }
 
     @Override
@@ -319,6 +349,11 @@ public class TestingMetricsInterceptingAdminClient extends AdminClient {
     @Override
     public AlterConsumerGroupOffsetsResult alterConsumerGroupOffsets(final String groupId, final Map<TopicPartition, OffsetAndMetadata> offsets, final AlterConsumerGroupOffsetsOptions options) {
         return adminDelegate.alterConsumerGroupOffsets(groupId, offsets, options);
+    }
+
+    @Override
+    public AlterStreamsGroupOffsetsResult alterStreamsGroupOffsets(final String groupId, final Map<TopicPartition, OffsetAndMetadata> offsets, final AlterStreamsGroupOffsetsOptions options) {
+        return adminDelegate.alterStreamsGroupOffsets(groupId, offsets, options);
     }
 
     @Override
@@ -415,10 +450,25 @@ public class TestingMetricsInterceptingAdminClient extends AdminClient {
     public DescribeShareGroupsResult describeShareGroups(final Collection<String> groupIds, final DescribeShareGroupsOptions options) {
         return adminDelegate.describeShareGroups(groupIds, options);
     }
+    
+    @Override
+    public DescribeStreamsGroupsResult describeStreamsGroups(final Collection<String> groupIds, final DescribeStreamsGroupsOptions options) {
+        return adminDelegate.describeStreamsGroups(groupIds, options);
+    }
+
+    @Override
+    public AlterShareGroupOffsetsResult alterShareGroupOffsets(final String groupId, final Map<TopicPartition, Long> offsets, final AlterShareGroupOffsetsOptions options) {
+        return adminDelegate.alterShareGroupOffsets(groupId, offsets, options);
+    }
 
     @Override
     public ListShareGroupOffsetsResult listShareGroupOffsets(final Map<String, ListShareGroupOffsetsSpec> groupSpecs, final ListShareGroupOffsetsOptions options) {
         return adminDelegate.listShareGroupOffsets(groupSpecs, options);
+    }
+
+    @Override
+    public DeleteShareGroupsResult deleteShareGroups(final Collection<String> groupIds, final DeleteShareGroupsOptions options) {
+        return adminDelegate.deleteShareGroups(groupIds, options);
     }
 
     @Override

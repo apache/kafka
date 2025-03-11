@@ -66,9 +66,12 @@ class MockFetcherThread(val mockLeader: MockLeaderEndPoint,
     partitions
   }
 
-  override def processPartitionData(topicPartition: TopicPartition,
-                                    fetchOffset: Long,
-                                    partitionData: FetchData): Option[LogAppendInfo] = {
+  override def processPartitionData(
+    topicPartition: TopicPartition,
+    fetchOffset: Long,
+    leaderEpochForReplica: Int,
+    partitionData: FetchData
+  ): Option[LogAppendInfo] = {
     val state = replicaPartitionState(topicPartition)
 
     if (leader.isTruncationOnFetchSupported && FetchResponse.isDivergingEpoch(partitionData)) {
@@ -87,17 +90,24 @@ class MockFetcherThread(val mockLeader: MockLeaderEndPoint,
     var shallowOffsetOfMaxTimestamp = -1L
     var lastOffset = state.logEndOffset
     var lastEpoch: OptionalInt = OptionalInt.empty()
+    var skipRemainingBatches = false
 
     for (batch <- batches) {
       batch.ensureValid()
-      if (batch.maxTimestamp > maxTimestamp) {
-        maxTimestamp = batch.maxTimestamp
-        shallowOffsetOfMaxTimestamp = batch.baseOffset
+
+      skipRemainingBatches = skipRemainingBatches || hasHigherPartitionLeaderEpoch(batch, leaderEpochForReplica);
+      if (skipRemainingBatches) {
+        info(s"Skipping batch $batch because leader epoch is $leaderEpochForReplica")
+      } else {
+        if (batch.maxTimestamp > maxTimestamp) {
+          maxTimestamp = batch.maxTimestamp
+          shallowOffsetOfMaxTimestamp = batch.baseOffset
+        }
+        state.log.append(batch)
+        state.logEndOffset = batch.nextOffset
+        lastOffset = batch.lastOffset
+        lastEpoch = OptionalInt.of(batch.partitionLeaderEpoch)
       }
-      state.log.append(batch)
-      state.logEndOffset = batch.nextOffset
-      lastOffset = batch.lastOffset
-      lastEpoch = OptionalInt.of(batch.partitionLeaderEpoch)
     }
 
     state.logStartOffset = partitionData.logStartOffset
@@ -113,6 +123,11 @@ class MockFetcherThread(val mockLeader: MockLeaderEndPoint,
       CompressionType.NONE,
       FetchResponse.recordsSize(partitionData),
       batches.headOption.map(_.lastOffset).getOrElse(-1)))
+  }
+
+  private def hasHigherPartitionLeaderEpoch(batch: RecordBatch, leaderEpoch: Int): Boolean = {
+    batch.partitionLeaderEpoch() != RecordBatch.NO_PARTITION_LEADER_EPOCH &&
+    batch.partitionLeaderEpoch() > leaderEpoch
   }
 
   override def truncate(topicPartition: TopicPartition, truncationState: OffsetTruncationState): Unit = {

@@ -38,6 +38,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
+import org.apache.kafka.common.errors.InvalidRecordStateException;
 import org.apache.kafka.common.errors.ShareSessionNotFoundException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.UnknownServerException;
@@ -108,7 +109,6 @@ import java.util.stream.Stream;
 
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
-import static java.util.Collections.singletonMap;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.internals.events.CompletableEvent.calculateDeadlineMs;
@@ -152,7 +152,7 @@ public class ShareConsumeRequestManagerTest {
     private final TopicIdPartition t2ip0 = new TopicIdPartition(topicId2, t2p0);
     private final int validLeaderEpoch = 0;
     private final MetadataResponse initialUpdateResponse =
-            RequestTestUtils.metadataUpdateWithIds(1, singletonMap(topicName, 2), topicIds);
+            RequestTestUtils.metadataUpdateWithIds(1, Map.of(topicName, 2), topicIds);
 
     private final long retryBackoffMs = 100;
     private final long requestTimeoutMs = 30000;
@@ -271,7 +271,7 @@ public class ShareConsumeRequestManagerTest {
 
         Acknowledgements acknowledgements = Acknowledgements.empty();
         acknowledgements.add(1L, AcknowledgeType.ACCEPT);
-        shareConsumeRequestManager.fetch(Collections.singletonMap(tip0, new NodeAcknowledgements(0, acknowledgements)));
+        shareConsumeRequestManager.fetch(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)));
 
         assertEquals(1, sendFetches());
         assertFalse(shareConsumeRequestManager.hasCompletedFetches());
@@ -285,12 +285,12 @@ public class ShareConsumeRequestManagerTest {
 
         partitionRecords = fetchRecords();
         assertTrue(partitionRecords.containsKey(tp0));
-        assertEquals(Collections.singletonMap(tip0, acknowledgements), completedAcknowledgements.get(0));
+        assertEquals(Map.of(tip0, acknowledgements), completedAcknowledgements.get(0));
         completedAcknowledgements.clear();
 
         Acknowledgements acknowledgements2 = Acknowledgements.empty();
         acknowledgements2.add(2L, AcknowledgeType.REJECT);
-        shareConsumeRequestManager.fetch(Collections.singletonMap(tip0, new NodeAcknowledgements(0, acknowledgements2)));
+        shareConsumeRequestManager.fetch(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements2)));
 
         assertEquals(1, sendFetches());
         assertFalse(shareConsumeRequestManager.hasCompletedFetches());
@@ -307,7 +307,7 @@ public class ShareConsumeRequestManagerTest {
 
         partitionRecords = fetchRecords();
         assertTrue(partitionRecords.isEmpty());
-        assertEquals(Collections.singletonMap(tip0, acknowledgements2), completedAcknowledgements.get(0));
+        assertEquals(Map.of(tip0, acknowledgements2), completedAcknowledgements.get(0));
     }
 
     @Test
@@ -331,7 +331,7 @@ public class ShareConsumeRequestManagerTest {
         acknowledgements.add(2L, AcknowledgeType.ACCEPT);
         acknowledgements.add(3L, AcknowledgeType.REJECT);
 
-        shareConsumeRequestManager.commitSync(Collections.singletonMap(tip0, new NodeAcknowledgements(0, acknowledgements)), time.milliseconds() + 2000);
+        shareConsumeRequestManager.commitSync(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)), time.milliseconds() + 2000);
 
         assertEquals(1, shareConsumeRequestManager.sendAcknowledgements());
 
@@ -339,7 +339,7 @@ public class ShareConsumeRequestManagerTest {
         networkClientDelegate.poll(time.timer(0));
         assertTrue(shareConsumeRequestManager.hasCompletedFetches());
 
-        assertEquals(Collections.singletonMap(tip0, acknowledgements), completedAcknowledgements.get(0));
+        assertEquals(Map.of(tip0, acknowledgements), completedAcknowledgements.get(0));
         completedAcknowledgements.clear();
     }
 
@@ -364,7 +364,7 @@ public class ShareConsumeRequestManagerTest {
         acknowledgements.add(2L, AcknowledgeType.ACCEPT);
         acknowledgements.add(3L, AcknowledgeType.REJECT);
 
-        shareConsumeRequestManager.commitAsync(Collections.singletonMap(tip0, new NodeAcknowledgements(0, acknowledgements)));
+        shareConsumeRequestManager.commitAsync(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)));
 
         assertEquals(1, shareConsumeRequestManager.sendAcknowledgements());
 
@@ -372,7 +372,7 @@ public class ShareConsumeRequestManagerTest {
         networkClientDelegate.poll(time.timer(0));
         assertTrue(shareConsumeRequestManager.hasCompletedFetches());
 
-        assertEquals(Collections.singletonMap(tip0, acknowledgements), completedAcknowledgements.get(0));
+        assertEquals(Map.of(tip0, acknowledgements), completedAcknowledgements.get(0));
         completedAcknowledgements.clear();
     }
 
@@ -398,19 +398,19 @@ public class ShareConsumeRequestManagerTest {
         acknowledgements.add(1L, AcknowledgeType.ACCEPT);
         acknowledgements.add(2L, AcknowledgeType.ACCEPT);
 
-        shareConsumeRequestManager.commitAsync(Collections.singletonMap(tip0, new NodeAcknowledgements(0, acknowledgements)));
+        shareConsumeRequestManager.commitAsync(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)));
 
         assertEquals(1, shareConsumeRequestManager.sendAcknowledgements());
 
         Acknowledgements acknowledgements2 = Acknowledgements.empty();
         acknowledgements2.add(3L, AcknowledgeType.REJECT);
 
-        shareConsumeRequestManager.commitAsync(Collections.singletonMap(tip0, new NodeAcknowledgements(0, acknowledgements2)));
+        shareConsumeRequestManager.commitAsync(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements2)));
 
         client.prepareResponse(null, true);
         networkClientDelegate.poll(time.timer(0));
 
-        assertEquals(Collections.singletonMap(tip0, acknowledgements), completedAcknowledgements.get(0));
+        assertEquals(Map.of(tip0, acknowledgements), completedAcknowledgements.get(0));
         assertInstanceOf(UnknownServerException.class, completedAcknowledgements.get(0).get(tip0).getAcknowledgeException());
         completedAcknowledgements.clear();
 
@@ -421,7 +421,7 @@ public class ShareConsumeRequestManagerTest {
             // We expect the remaining acknowledgements to be cleared due to share session epoch being set to 0.
             assertNull(shareConsumeRequestManager.requestStates(0));
             // The callback for these unsent acknowledgements will be invoked with an error code.
-            assertEquals(Collections.singletonMap(tip0, acknowledgements2), completedAcknowledgements.get(0));
+            assertEquals(Map.of(tip0, acknowledgements2), completedAcknowledgements.get(0));
             assertInstanceOf(ShareSessionNotFoundException.class, completedAcknowledgements.get(0).get(tip0).getAcknowledgeException());
         });
 
@@ -454,14 +454,14 @@ public class ShareConsumeRequestManagerTest {
         acknowledgements.add(1L, AcknowledgeType.ACCEPT);
 
         // Piggyback acknowledgements
-        shareConsumeRequestManager.fetch(Collections.singletonMap(tip0, new NodeAcknowledgements(0, acknowledgements)));
+        shareConsumeRequestManager.fetch(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)));
 
         // Remaining acknowledgements sent with close().
         Acknowledgements acknowledgements2 = Acknowledgements.empty();
         acknowledgements2.add(2L, AcknowledgeType.ACCEPT);
         acknowledgements2.add(3L, AcknowledgeType.REJECT);
 
-        shareConsumeRequestManager.acknowledgeOnClose(Collections.singletonMap(tip0, new NodeAcknowledgements(0, acknowledgements2)),
+        shareConsumeRequestManager.acknowledgeOnClose(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements2)),
                 calculateDeadlineMs(time.timer(100)));
 
         assertEquals(1, shareConsumeRequestManager.sendAcknowledgements());
@@ -498,7 +498,7 @@ public class ShareConsumeRequestManagerTest {
         acknowledgements.add(2L, AcknowledgeType.ACCEPT);
         acknowledgements.add(3L, AcknowledgeType.REJECT);
 
-        shareConsumeRequestManager.commitAsync(Collections.singletonMap(tip0, new NodeAcknowledgements(0, acknowledgements)));
+        shareConsumeRequestManager.commitAsync(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)));
         shareConsumeRequestManager.acknowledgeOnClose(Collections.emptyMap(),
                 calculateDeadlineMs(time.timer(100)));
 
@@ -511,7 +511,7 @@ public class ShareConsumeRequestManagerTest {
         networkClientDelegate.poll(time.timer(0));
         assertTrue(shareConsumeRequestManager.hasCompletedFetches());
 
-        assertEquals(Collections.singletonMap(tip0, acknowledgements), completedAcknowledgements.get(0));
+        assertEquals(Map.of(tip0, acknowledgements), completedAcknowledgements.get(0));
         completedAcknowledgements.clear();
     }
 
@@ -536,7 +536,7 @@ public class ShareConsumeRequestManagerTest {
         acknowledgements.add(2L, AcknowledgeType.ACCEPT);
         acknowledgements.add(3L, AcknowledgeType.REJECT);
 
-        shareConsumeRequestManager.commitSync(Collections.singletonMap(tip0, new NodeAcknowledgements(0, acknowledgements)),
+        shareConsumeRequestManager.commitSync(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)),
                 calculateDeadlineMs(time.timer(100)));
         shareConsumeRequestManager.acknowledgeOnClose(Collections.emptyMap(),
                 calculateDeadlineMs(time.timer(100)));
@@ -550,7 +550,7 @@ public class ShareConsumeRequestManagerTest {
         networkClientDelegate.poll(time.timer(0));
         assertTrue(shareConsumeRequestManager.hasCompletedFetches());
 
-        assertEquals(Collections.singletonMap(tip0, acknowledgements), completedAcknowledgements.get(0));
+        assertEquals(Map.of(tip0, acknowledgements), completedAcknowledgements.get(0));
         completedAcknowledgements.clear();
     }
 
@@ -568,16 +568,16 @@ public class ShareConsumeRequestManagerTest {
         ShareConsumeRequestManager.ResultHandler resultHandler = shareConsumeRequestManager.buildResultHandler(null, Optional.empty());
 
         // Passing null acknowledgements should mean we do not send the background event at all.
-        resultHandler.complete(tip0, null, true);
+        resultHandler.complete(tip0, null, ShareConsumeRequestManager.AcknowledgeRequestType.COMMIT_ASYNC);
         assertEquals(0, completedAcknowledgements.size());
 
         // Setting isCommitAsync to false should still not send any background event
         // as we have initialized remainingResults to null.
-        resultHandler.complete(tip0, acknowledgements, false);
+        resultHandler.complete(tip0, acknowledgements, ShareConsumeRequestManager.AcknowledgeRequestType.COMMIT_SYNC);
         assertEquals(0, completedAcknowledgements.size());
 
         // Sending non-null acknowledgements means we do send the background event
-        resultHandler.complete(tip0, acknowledgements, true);
+        resultHandler.complete(tip0, acknowledgements, ShareConsumeRequestManager.AcknowledgeRequestType.COMMIT_ASYNC);
         assertEquals(3, completedAcknowledgements.get(0).get(tip0).size());
     }
 
@@ -600,16 +600,16 @@ public class ShareConsumeRequestManagerTest {
         ShareConsumeRequestManager.ResultHandler resultHandler = shareConsumeRequestManager.buildResultHandler(resultCount, Optional.of(future));
 
         // We only send the background event after all results have been completed.
-        resultHandler.complete(tip0, acknowledgements, false);
+        resultHandler.complete(tip0, acknowledgements, ShareConsumeRequestManager.AcknowledgeRequestType.COMMIT_SYNC);
         assertEquals(0, completedAcknowledgements.size());
         assertFalse(future.isDone());
 
-        resultHandler.complete(t2ip0, null, false);
+        resultHandler.complete(t2ip0, null, ShareConsumeRequestManager.AcknowledgeRequestType.COMMIT_SYNC);
         assertEquals(0, completedAcknowledgements.size());
         assertFalse(future.isDone());
 
         // After third response is received, we send the background event.
-        resultHandler.complete(tip1, acknowledgements, false);
+        resultHandler.complete(tip1, acknowledgements, ShareConsumeRequestManager.AcknowledgeRequestType.COMMIT_SYNC);
         assertEquals(1, completedAcknowledgements.size());
         assertEquals(2, completedAcknowledgements.get(0).size());
         assertEquals(3, completedAcknowledgements.get(0).get(tip0).size());
@@ -657,14 +657,14 @@ public class ShareConsumeRequestManagerTest {
         acknowledgements.add(2L, AcknowledgeType.ACCEPT);
         acknowledgements.add(3L, AcknowledgeType.REJECT);
 
-        shareConsumeRequestManager.commitAsync(Collections.singletonMap(tip0, new NodeAcknowledgements(0, acknowledgements)));
+        shareConsumeRequestManager.commitAsync(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)));
 
         Acknowledgements acknowledgements2 = Acknowledgements.empty();
         acknowledgements.add(4L, AcknowledgeType.ACCEPT);
         acknowledgements.add(5L, AcknowledgeType.ACCEPT);
         acknowledgements.add(6L, AcknowledgeType.ACCEPT);
 
-        shareConsumeRequestManager.commitAsync(Collections.singletonMap(tip0, new NodeAcknowledgements(0, acknowledgements2)));
+        shareConsumeRequestManager.commitAsync(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements2)));
 
         assertEquals(6, shareConsumeRequestManager.requestStates(0).getAsyncRequest().getAcknowledgementsToSendCount(tip0));
 
@@ -700,14 +700,14 @@ public class ShareConsumeRequestManagerTest {
         acknowledgements.add(2L, AcknowledgeType.ACCEPT);
         acknowledgements.add(3L, AcknowledgeType.REJECT);
 
-        shareConsumeRequestManager.commitAsync(Collections.singletonMap(tip0, new NodeAcknowledgements(0, acknowledgements)));
+        shareConsumeRequestManager.commitAsync(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)));
 
         Acknowledgements acknowledgements2 = Acknowledgements.empty();
         acknowledgements2.add(4L, AcknowledgeType.ACCEPT);
         acknowledgements2.add(5L, AcknowledgeType.ACCEPT);
         acknowledgements2.add(6L, AcknowledgeType.ACCEPT);
 
-        shareConsumeRequestManager.commitSync(Collections.singletonMap(tip0, new NodeAcknowledgements(0, acknowledgements2)), 60000L);
+        shareConsumeRequestManager.commitSync(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements2)), 60000L);
 
         assertEquals(3, shareConsumeRequestManager.requestStates(0).getAsyncRequest().getAcknowledgementsToSendCount(tip0));
         assertEquals(1, shareConsumeRequestManager.requestStates(0).getSyncRequestQueue().size());
@@ -758,7 +758,7 @@ public class ShareConsumeRequestManagerTest {
         acknowledgements.add(5L, AcknowledgeType.RELEASE);
         acknowledgements.add(6L, AcknowledgeType.ACCEPT);
 
-        shareConsumeRequestManager.commitSync(Collections.singletonMap(tip0, new NodeAcknowledgements(0, acknowledgements)), 60000L);
+        shareConsumeRequestManager.commitSync(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)), 60000L);
         assertNull(shareConsumeRequestManager.requestStates(0).getAsyncRequest());
 
         assertEquals(1, shareConsumeRequestManager.requestStates(0).getSyncRequestQueue().size());
@@ -806,7 +806,7 @@ public class ShareConsumeRequestManagerTest {
         fetchRecords();
 
         // Piggyback acknowledgements
-        shareConsumeRequestManager.fetch(Collections.singletonMap(tip0, new NodeAcknowledgements(0, acknowledgements)));
+        shareConsumeRequestManager.fetch(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)));
 
         assertEquals(1, sendFetches());
         assertFalse(shareConsumeRequestManager.hasCompletedFetches());
@@ -816,7 +816,7 @@ public class ShareConsumeRequestManagerTest {
 
         Acknowledgements acknowledgements2 = Acknowledgements.empty();
         acknowledgements2.add(3L, AcknowledgeType.ACCEPT);
-        shareConsumeRequestManager.fetch(Collections.singletonMap(tip0, new NodeAcknowledgements(0, acknowledgements2)));
+        shareConsumeRequestManager.fetch(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements2)));
 
         client.prepareResponse(fullFetchResponse(tip0, records, acquiredRecords, Errors.NONE));
         networkClientDelegate.poll(time.timer(0));
@@ -852,10 +852,10 @@ public class ShareConsumeRequestManagerTest {
         subscriptions.assignFromSubscribed(Collections.singleton(t2p0));
 
         client.updateMetadata(
-                RequestTestUtils.metadataUpdateWithIds(1, singletonMap(topicName2, 1),
+                RequestTestUtils.metadataUpdateWithIds(1, Map.of(topicName2, 1),
                         tp -> validLeaderEpoch, topicIds, false));
 
-        shareConsumeRequestManager.commitAsync(Collections.singletonMap(tip0, new NodeAcknowledgements(0, acknowledgements)));
+        shareConsumeRequestManager.commitAsync(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)));
 
         assertEquals(1, shareConsumeRequestManager.sendAcknowledgements());
 
@@ -889,10 +889,10 @@ public class ShareConsumeRequestManagerTest {
         subscriptions.assignFromSubscribed(Collections.singleton(t2p0));
 
         client.updateMetadata(
-                RequestTestUtils.metadataUpdateWithIds(1, singletonMap(topicName2, 1),
+                RequestTestUtils.metadataUpdateWithIds(1, Map.of(topicName2, 1),
                         tp -> validLeaderEpoch, topicIds, false));
 
-        shareConsumeRequestManager.commitSync(Collections.singletonMap(tip0, new NodeAcknowledgements(0, acknowledgements)),
+        shareConsumeRequestManager.commitSync(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)),
                 calculateDeadlineMs(time.timer(100)));
 
         assertEquals(1, shareConsumeRequestManager.sendAcknowledgements());
@@ -926,10 +926,10 @@ public class ShareConsumeRequestManagerTest {
         subscriptions.assignFromSubscribed(Collections.singleton(t2p0));
 
         client.updateMetadata(
-                RequestTestUtils.metadataUpdateWithIds(1, singletonMap(topicName2, 1),
+                RequestTestUtils.metadataUpdateWithIds(1, Map.of(topicName2, 1),
                         tp -> validLeaderEpoch, topicIds, false));
 
-        shareConsumeRequestManager.acknowledgeOnClose(Collections.singletonMap(tip0, new NodeAcknowledgements(0, acknowledgements)),
+        shareConsumeRequestManager.acknowledgeOnClose(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)),
                 calculateDeadlineMs(time.timer(100)));
 
         assertEquals(1, shareConsumeRequestManager.sendAcknowledgements());
@@ -960,14 +960,14 @@ public class ShareConsumeRequestManagerTest {
         acknowledgements.add(2L, AcknowledgeType.ACCEPT);
 
         // Send acknowledgements via ShareFetch
-        shareConsumeRequestManager.fetch(Collections.singletonMap(tip0, new NodeAcknowledgements(0, acknowledgements)));
+        shareConsumeRequestManager.fetch(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)));
         fetchRecords();
         // Subscription changes.
         subscriptions.subscribeToShareGroup(Collections.singleton(topicName2));
         subscriptions.assignFromSubscribed(Collections.singleton(t2p0));
 
         client.updateMetadata(
-                RequestTestUtils.metadataUpdateWithIds(1, singletonMap(topicName2, 1),
+                RequestTestUtils.metadataUpdateWithIds(1, Map.of(topicName2, 1),
                         tp -> validLeaderEpoch, topicIds, false));
 
         assertEquals(1, sendFetches());
@@ -987,7 +987,7 @@ public class ShareConsumeRequestManagerTest {
         subscriptions.assignFromSubscribed(Collections.singletonList(tp0));
 
         client.updateMetadata(
-                RequestTestUtils.metadataUpdateWithIds(2, singletonMap(topicName, 2),
+                RequestTestUtils.metadataUpdateWithIds(2, Map.of(topicName, 2),
                         tp -> validLeaderEpoch, topicIds, false));
         Node nodeId0 = metadata.fetch().nodeById(0);
         Node nodeId1 = metadata.fetch().nodeById(1);
@@ -1010,7 +1010,7 @@ public class ShareConsumeRequestManagerTest {
         acknowledgements.add(2L, AcknowledgeType.ACCEPT);
 
         // Send acknowledgements via ShareFetch
-        shareConsumeRequestManager.fetch(Collections.singletonMap(tip0, new NodeAcknowledgements(0, acknowledgements)));
+        shareConsumeRequestManager.fetch(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)));
         fetchRecords();
         // Subscription changes.
         subscriptions.assignFromSubscribed(Collections.singletonList(tp1));
@@ -1059,7 +1059,7 @@ public class ShareConsumeRequestManagerTest {
         subscriptions.assignFromSubscribed(Collections.singletonList(tp0));
 
         client.updateMetadata(
-                RequestTestUtils.metadataUpdateWithIds(2, singletonMap(topicName, 2),
+                RequestTestUtils.metadataUpdateWithIds(2, Map.of(topicName, 2),
                         tp -> validLeaderEpoch, topicIds, false));
         Node nodeId0 = metadata.fetch().nodeById(0);
         Node nodeId1 = metadata.fetch().nodeById(1);
@@ -1109,7 +1109,7 @@ public class ShareConsumeRequestManagerTest {
         subscriptions.assignFromSubscribed(partitions);
 
         client.updateMetadata(
-            RequestTestUtils.metadataUpdateWithIds(2, singletonMap(topicName, 1),
+            RequestTestUtils.metadataUpdateWithIds(2, Map.of(topicName, 1),
                 tp -> validLeaderEpoch, topicIds, false));
         Node nodeId0 = metadata.fetch().nodeById(0);
         Node nodeId1 = metadata.fetch().nodeById(1);
@@ -1132,7 +1132,7 @@ public class ShareConsumeRequestManagerTest {
         acknowledgements.add(5L, AcknowledgeType.RELEASE);
         acknowledgements.add(6L, AcknowledgeType.ACCEPT);
 
-        shareConsumeRequestManager.commitSync(Collections.singletonMap(tip0, new NodeAcknowledgements(0, acknowledgements)), 60000L);
+        shareConsumeRequestManager.commitSync(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)), 60000L);
         assertNull(shareConsumeRequestManager.requestStates(0).getAsyncRequest());
 
         assertEquals(1, shareConsumeRequestManager.requestStates(0).getSyncRequestQueue().size());
@@ -1171,7 +1171,7 @@ public class ShareConsumeRequestManagerTest {
         acknowledgements.add(1L, AcknowledgeType.ACCEPT);
         acknowledgements.add(2L, AcknowledgeType.ACCEPT);
 
-        shareConsumeRequestManager.commitAsync(Collections.singletonMap(tip0, new NodeAcknowledgements(0, acknowledgements)));
+        shareConsumeRequestManager.commitAsync(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)));
 
         assertEquals(1, shareConsumeRequestManager.sendAcknowledgements());
 
@@ -1179,7 +1179,7 @@ public class ShareConsumeRequestManagerTest {
         networkClientDelegate.poll(time.timer(0));
         assertTrue(shareConsumeRequestManager.hasCompletedFetches());
 
-        assertEquals(Collections.singletonMap(tip0, acknowledgements), completedAcknowledgements.get(0));
+        assertEquals(Map.of(tip0, acknowledgements), completedAcknowledgements.get(0));
 
         completedAcknowledgements.clear();
 
@@ -1189,7 +1189,7 @@ public class ShareConsumeRequestManagerTest {
         Acknowledgements acknowledgements2 = Acknowledgements.empty();
         acknowledgements2.add(3L, AcknowledgeType.ACCEPT);
 
-        shareConsumeRequestManager.commitAsync(Collections.singletonMap(tip0, new NodeAcknowledgements(0, acknowledgements2)));
+        shareConsumeRequestManager.commitAsync(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements2)));
 
         TestUtils.retryOnExceptionWithTimeout(() -> assertEquals(1, shareConsumeRequestManager.sendAcknowledgements()));
 
@@ -1317,6 +1317,87 @@ public class ShareConsumeRequestManagerTest {
     }
 
     @Test
+    public void testShareFetchInvalidResponse() {
+        buildRequestManager();
+        shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
+
+        subscriptions.subscribeToShareGroup(Collections.singleton(topicName));
+        subscriptions.assignFromSubscribed(Collections.singleton(tp0));
+
+        client.updateMetadata(
+                RequestTestUtils.metadataUpdateWithIds(1, Map.of(topicName, 1),
+                        tp -> validLeaderEpoch, topicIds, false));
+
+        assertEquals(1, sendFetches());
+        assertFalse(shareConsumeRequestManager.hasCompletedFetches());
+
+        client.prepareResponse(fullFetchResponse(t2ip0, records, acquiredRecords, Errors.NONE));
+        networkClientDelegate.poll(time.timer(0));
+        assertFalse(shareConsumeRequestManager.hasCompletedFetches());
+    }
+
+    @Test
+    public void testShareAcknowledgeInvalidResponse() throws InterruptedException {
+        buildRequestManager();
+        shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
+
+        subscriptions.subscribeToShareGroup(Collections.singleton(topicName));
+        subscriptions.assignFromSubscribed(Collections.singleton(tp0));
+
+        client.updateMetadata(
+                RequestTestUtils.metadataUpdateWithIds(1, Map.of(topicName, 1),
+                        tp -> validLeaderEpoch, topicIds, false));
+
+        assertEquals(1, sendFetches());
+        assertFalse(shareConsumeRequestManager.hasCompletedFetches());
+
+        client.prepareResponse(fullFetchResponse(tip0, records, acquiredRecords, Errors.NONE));
+        networkClientDelegate.poll(time.timer(0));
+        assertTrue(shareConsumeRequestManager.hasCompletedFetches());
+
+        fetchRecords();
+
+        Acknowledgements acknowledgements = Acknowledgements.empty();
+        acknowledgements.add(1L, AcknowledgeType.ACCEPT);
+
+        shareConsumeRequestManager.commitAsync(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)));
+
+        assertEquals(1, shareConsumeRequestManager.sendAcknowledgements());
+
+        // If a top-level error is received, we still retry the acknowledgements independent of the topic-partitions received in the response.
+        client.prepareResponse(acknowledgeResponseWithTopLevelError(t2ip0, Errors.LEADER_NOT_AVAILABLE));
+        networkClientDelegate.poll(time.timer(0));
+
+        assertEquals(1, shareConsumeRequestManager.requestStates(0).getAsyncRequest().getIncompleteAcknowledgementsCount(tip0));
+
+        TestUtils.retryOnExceptionWithTimeout(() -> assertEquals(1, shareConsumeRequestManager.sendAcknowledgements()));
+
+        client.prepareResponse(fullAcknowledgeResponse(t2ip0, Errors.NONE));
+        networkClientDelegate.poll(time.timer(0));
+
+        // If we do not get the expected partitions in the response, we fail these acknowledgements with InvalidRecordStateException.
+        assertEquals(InvalidRecordStateException.class, completedAcknowledgements.get(0).get(tip0).getAcknowledgeException().getClass());
+        completedAcknowledgements.clear();
+
+        // Send remaining acknowledgements through piggybacking on the next fetch.
+        Acknowledgements acknowledgements1 = Acknowledgements.empty();
+        acknowledgements1.add(2L, AcknowledgeType.ACCEPT);
+        acknowledgements1.add(3L, AcknowledgeType.REJECT);
+
+        shareConsumeRequestManager.fetch(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements1)));
+
+        assertEquals(1, sendFetches());
+        assertFalse(shareConsumeRequestManager.hasCompletedFetches());
+
+        client.prepareResponse(fullFetchResponse(t2ip0, records, acquiredRecords, Errors.NONE));
+        networkClientDelegate.poll(time.timer(0));
+        assertFalse(shareConsumeRequestManager.hasCompletedFetches());
+
+        // If we do not get the expected partitions in the response, we fail these acknowledgements with InvalidRecordStateException.
+        assertEquals(InvalidRecordStateException.class, completedAcknowledgements.get(0).get(tip0).getAcknowledgeException().getClass());
+    }
+
+    @Test
     public void testCloseShouldBeIdempotent() {
         buildRequestManager();
 
@@ -1342,6 +1423,31 @@ public class ShareConsumeRequestManagerTest {
 
         Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords = fetchRecords();
         assertFalse(partitionRecords.containsKey(tp0));
+    }
+
+    @Test
+    public void testPiggybackAcknowledgementsOnInitialShareSessionError() {
+        buildRequestManager();
+        shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
+
+        assignFromSubscribed(singleton(tp0));
+
+        Acknowledgements acknowledgements = Acknowledgements.empty();
+        acknowledgements.add(1L, AcknowledgeType.ACCEPT);
+        acknowledgements.add(2L, AcknowledgeType.ACCEPT);
+        acknowledgements.add(3L, AcknowledgeType.REJECT);
+
+        shareConsumeRequestManager.fetch(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)));
+
+        assertEquals(1, sendFetches());
+        assertFalse(shareConsumeRequestManager.hasCompletedFetches());
+
+        client.prepareResponse(fullFetchResponse(tip0, records, acquiredRecords, Errors.NONE));
+        networkClientDelegate.poll(time.timer(0));
+        assertTrue(shareConsumeRequestManager.hasCompletedFetches());
+
+        assertEquals(3, completedAcknowledgements.get(0).get(tip0).size());
+        assertEquals(Errors.INVALID_SHARE_SESSION_EPOCH.exception(), completedAcknowledgements.get(0).get(tip0).getAcknowledgeException());
     }
 
     @Test
@@ -1629,7 +1735,7 @@ public class ShareConsumeRequestManagerTest {
         subscriptions.assignFromSubscribed(partitions);
 
         client.updateMetadata(
-            RequestTestUtils.metadataUpdateWithIds(2, singletonMap(topicName, 2),
+            RequestTestUtils.metadataUpdateWithIds(2, Map.of(topicName, 2),
                 tp -> validLeaderEpoch, topicIds, false));
         Node nodeId0 = metadata.fetch().nodeById(0);
         Node nodeId1 = metadata.fetch().nodeById(1);
@@ -1669,7 +1775,7 @@ public class ShareConsumeRequestManagerTest {
 
         Acknowledgements acknowledgements = Acknowledgements.empty();
         acknowledgements.add(1L, AcknowledgeType.ACCEPT);
-        shareConsumeRequestManager.fetch(Collections.singletonMap(tip0, new NodeAcknowledgements(0, acknowledgements)));
+        shareConsumeRequestManager.fetch(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)));
 
         assertEquals(startingClusterMetadata, metadata.fetch());
 
@@ -1732,7 +1838,7 @@ public class ShareConsumeRequestManagerTest {
         subscriptions.assignFromSubscribed(partitions);
 
         client.updateMetadata(
-            RequestTestUtils.metadataUpdateWithIds(2, singletonMap(topicName, 2),
+            RequestTestUtils.metadataUpdateWithIds(2, Map.of(topicName, 2),
                 tp -> validLeaderEpoch, topicIds, false));
         Node nodeId0 = metadata.fetch().nodeById(0);
         Node nodeId1 = metadata.fetch().nodeById(1);
@@ -1774,7 +1880,7 @@ public class ShareConsumeRequestManagerTest {
 
         Acknowledgements acknowledgements = Acknowledgements.empty();
         acknowledgements.add(1L, AcknowledgeType.ACCEPT);
-        shareConsumeRequestManager.fetch(Collections.singletonMap(tip0, new NodeAcknowledgements(0, acknowledgements)));
+        shareConsumeRequestManager.fetch(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)));
 
         // The metadata snapshot will have been updated with the new leader information
         assertNotEquals(startingClusterMetadata, metadata.fetch());
@@ -1831,7 +1937,7 @@ public class ShareConsumeRequestManagerTest {
         subscriptions.assignFromSubscribed(partitions);
 
         client.updateMetadata(
-            RequestTestUtils.metadataUpdateWithIds(2, singletonMap(topicName, 2),
+            RequestTestUtils.metadataUpdateWithIds(2, Map.of(topicName, 2),
                 tp -> validLeaderEpoch, topicIds, false));
         Node nodeId0 = metadata.fetch().nodeById(0);
         Node nodeId1 = metadata.fetch().nodeById(1);
@@ -1869,7 +1975,7 @@ public class ShareConsumeRequestManagerTest {
 
         Acknowledgements acknowledgements = Acknowledgements.empty();
         acknowledgements.add(1L, AcknowledgeType.ACCEPT);
-        shareConsumeRequestManager.fetch(Collections.singletonMap(tip0, new NodeAcknowledgements(0, acknowledgements)));
+        shareConsumeRequestManager.fetch(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)));
 
         assertEquals(startingClusterMetadata, metadata.fetch());
 
@@ -1934,7 +2040,7 @@ public class ShareConsumeRequestManagerTest {
         subscriptions.assignFromSubscribed(partitions);
 
         client.updateMetadata(
-                RequestTestUtils.metadataUpdateWithIds(2, singletonMap(topicName, 2),
+                RequestTestUtils.metadataUpdateWithIds(2, Map.of(topicName, 2),
                         tp -> validLeaderEpoch, topicIds, false));
         Node nodeId0 = metadata.fetch().nodeById(0);
         Node nodeId1 = metadata.fetch().nodeById(1);
@@ -2024,7 +2130,7 @@ public class ShareConsumeRequestManagerTest {
         subscriptions.assignFromSubscribed(partitions);
 
         client.updateMetadata(
-                RequestTestUtils.metadataUpdateWithIds(2, singletonMap(topicName, 2),
+                RequestTestUtils.metadataUpdateWithIds(2, Map.of(topicName, 2),
                         tp -> validLeaderEpoch, topicIds, false));
         Node nodeId0 = metadata.fetch().nodeById(0);
         Node nodeId1 = metadata.fetch().nodeById(1);
@@ -2115,7 +2221,7 @@ public class ShareConsumeRequestManagerTest {
         subscriptions.assignFromSubscribed(partitions);
 
         client.updateMetadata(
-                RequestTestUtils.metadataUpdateWithIds(2, singletonMap(topicName, 2),
+                RequestTestUtils.metadataUpdateWithIds(2, Map.of(topicName, 2),
                         tp -> validLeaderEpoch, topicIds, false));
         Node nodeId0 = metadata.fetch().nodeById(0);
         Node nodeId1 = metadata.fetch().nodeById(1);
@@ -2164,7 +2270,7 @@ public class ShareConsumeRequestManagerTest {
         acknowledgementsTp1.add(1L, AcknowledgeType.ACCEPT);
         acknowledgementsTp1.add(2L, AcknowledgeType.ACCEPT);
 
-        shareConsumeRequestManager.fetch(Collections.singletonMap(tip1, new NodeAcknowledgements(1, acknowledgementsTp1)));
+        shareConsumeRequestManager.fetch(Map.of(tip1, new NodeAcknowledgements(1, acknowledgementsTp1)));
 
         // Move the leadership of tp0 onto node 1
         HashMap<TopicPartition, Metadata.LeaderIdAndEpoch> partitionLeaders = new HashMap<>();
@@ -2174,7 +2280,7 @@ public class ShareConsumeRequestManagerTest {
         assertNotEquals(startingClusterMetadata, metadata.fetch());
 
         // We fail the acknowledgements for records which were received from node0 with NOT_LEADER_OR_FOLLOWER exception.
-        shareConsumeRequestManager.acknowledgeOnClose(Collections.singletonMap(tip0, new NodeAcknowledgements(0, acknowledgementsTp0)), calculateDeadlineMs(time.timer(100)));
+        shareConsumeRequestManager.acknowledgeOnClose(Map.of(tip0, new NodeAcknowledgements(0, acknowledgementsTp0)), calculateDeadlineMs(time.timer(100)));
 
         // Verify if the callback was invoked with the failed acknowledgements.
         assertEquals(1, completedAcknowledgements.get(0).size());
@@ -2208,7 +2314,7 @@ public class ShareConsumeRequestManagerTest {
         subscriptions.assignFromSubscribed(partitions);
 
         client.updateMetadata(
-            RequestTestUtils.metadataUpdateWithIds(2, singletonMap(topicName, 2),
+            RequestTestUtils.metadataUpdateWithIds(2, Map.of(topicName, 2),
                 tp -> validLeaderEpoch, topicIds, false));
         Node nodeId0 = metadata.fetch().nodeById(0);
         Node nodeId1 = metadata.fetch().nodeById(1);
@@ -2246,13 +2352,13 @@ public class ShareConsumeRequestManagerTest {
 
         Acknowledgements acknowledgements = Acknowledgements.empty();
         acknowledgements.add(1, AcknowledgeType.ACCEPT);
-        shareConsumeRequestManager.fetch(Collections.singletonMap(tip0, new NodeAcknowledgements(0, acknowledgements)));
+        shareConsumeRequestManager.fetch(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)));
 
         assertEquals(startingClusterMetadata, metadata.fetch());
 
         acknowledgements = Acknowledgements.empty();
         acknowledgements.add(1, AcknowledgeType.ACCEPT);
-        shareConsumeRequestManager.fetch(Collections.singletonMap(tip0, new NodeAcknowledgements(0, acknowledgements)));
+        shareConsumeRequestManager.fetch(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)));
 
         assertEquals(2, sendFetches());
         assertFalse(shareConsumeRequestManager.hasCompletedFetches());
@@ -2293,7 +2399,7 @@ public class ShareConsumeRequestManagerTest {
 
         assertNotEquals(startingClusterMetadata, metadata.fetch());
 
-        shareConsumeRequestManager.fetch(Collections.singletonMap(tip1, new NodeAcknowledgements(1, acknowledgements)));
+        shareConsumeRequestManager.fetch(Map.of(tip1, new NodeAcknowledgements(1, acknowledgements)));
 
         assertEquals(1, sendFetches());
         assertFalse(shareConsumeRequestManager.hasCompletedFetches());
@@ -2325,7 +2431,7 @@ public class ShareConsumeRequestManagerTest {
     }
 
     private ShareFetchResponse fetchResponseWithTopLevelError(TopicIdPartition tp, Errors error) {
-        Map<TopicIdPartition, ShareFetchResponseData.PartitionData> partitions = Collections.singletonMap(tp,
+        Map<TopicIdPartition, ShareFetchResponseData.PartitionData> partitions = Map.of(tp,
                 new ShareFetchResponseData.PartitionData()
                         .setPartitionIndex(tp.topicPartition().partition())
                         .setErrorCode(error.code()));
@@ -2344,7 +2450,7 @@ public class ShareConsumeRequestManagerTest {
                                                  List<ShareFetchResponseData.AcquiredRecords> acquiredRecords,
                                                  Errors error,
                                                  Errors acknowledgeError) {
-        Map<TopicIdPartition, ShareFetchResponseData.PartitionData> partitions = Collections.singletonMap(tp,
+        Map<TopicIdPartition, ShareFetchResponseData.PartitionData> partitions = Map.of(tp,
                 partitionDataForFetch(tp, records, acquiredRecords, error, acknowledgeError));
         return ShareFetchResponse.of(Errors.NONE, 0, new LinkedHashMap<>(partitions), Collections.emptyList());
     }
@@ -2354,8 +2460,14 @@ public class ShareConsumeRequestManagerTest {
         return ShareAcknowledgeResponse.of(Errors.NONE, 0, new LinkedHashMap<>(partitions), Collections.emptyList());
     }
 
+    private ShareAcknowledgeResponse acknowledgeResponseWithTopLevelError(TopicIdPartition tp, Errors error) {
+        Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData> partitions = Map.of(tp,
+                partitionDataForAcknowledge(tp, Errors.NONE));
+        return ShareAcknowledgeResponse.of(error, 0, new LinkedHashMap<>(partitions), Collections.emptyList());
+    }
+
     private ShareAcknowledgeResponse fullAcknowledgeResponse(TopicIdPartition tp, Errors error) {
-        Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData> partitions = Collections.singletonMap(tp,
+        Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData> partitions = Map.of(tp,
                 partitionDataForAcknowledge(tp, error));
         return ShareAcknowledgeResponse.of(Errors.NONE, 0, new LinkedHashMap<>(partitions), Collections.emptyList());
     }
@@ -2370,7 +2482,7 @@ public class ShareConsumeRequestManagerTest {
                                                              Errors error,
                                                              ShareAcknowledgeResponseData.LeaderIdAndEpoch currentLeader,
                                                              List<Node> nodeEndpoints) {
-        Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData> partitions = Collections.singletonMap(tp,
+        Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData> partitions = Map.of(tp,
             partitionDataForAcknowledge(tp, error, currentLeader));
         return ShareAcknowledgeResponse.of(Errors.NONE, 0, new LinkedHashMap<>(partitions), nodeEndpoints);
     }

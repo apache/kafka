@@ -39,6 +39,7 @@ import java.util.Map;
  * - {@link Errors#UNRELEASED_INSTANCE_ID}
  * - {@link Errors#GROUP_MAX_SIZE_REACHED}
  * - {@link Errors#INVALID_REGULAR_EXPRESSION}
+ * - {@link Errors#TOPIC_AUTHORIZATION_FAILED}
  */
 public class ConsumerGroupHeartbeatResponse extends AbstractResponse {
     private final ConsumerGroupHeartbeatResponseData data;

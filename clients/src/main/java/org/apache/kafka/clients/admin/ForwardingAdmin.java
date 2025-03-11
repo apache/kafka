@@ -169,13 +169,28 @@ public class ForwardingAdmin implements Admin {
     }
 
     @Override
+    public ListStreamsGroupOffsetsResult listStreamsGroupOffsets(Map<String, ListStreamsGroupOffsetsSpec> groupSpecs, ListStreamsGroupOffsetsOptions options) {
+        return delegate.listStreamsGroupOffsets(groupSpecs, options);
+    }
+
+    @Override
     public DeleteConsumerGroupsResult deleteConsumerGroups(Collection<String> groupIds, DeleteConsumerGroupsOptions options) {
         return delegate.deleteConsumerGroups(groupIds, options);
     }
 
     @Override
+    public DeleteStreamsGroupsResult deleteStreamsGroups(Collection<String> groupIds, DeleteStreamsGroupsOptions options) {
+        return delegate.deleteStreamsGroups(groupIds, options);
+    }
+
+    @Override
     public DeleteConsumerGroupOffsetsResult deleteConsumerGroupOffsets(String groupId, Set<TopicPartition> partitions, DeleteConsumerGroupOffsetsOptions options) {
         return delegate.deleteConsumerGroupOffsets(groupId, partitions, options);
+    }
+
+    @Override
+    public DeleteStreamsGroupOffsetsResult deleteStreamsGroupOffsets(String groupId, Set<TopicPartition> partitions, DeleteStreamsGroupOffsetsOptions options) {
+        return delegate.deleteStreamsGroupOffsets(groupId, partitions, options);
     }
 
     @Override
@@ -201,6 +216,11 @@ public class ForwardingAdmin implements Admin {
     @Override
     public AlterConsumerGroupOffsetsResult alterConsumerGroupOffsets(String groupId, Map<TopicPartition, OffsetAndMetadata> offsets, AlterConsumerGroupOffsetsOptions options) {
         return delegate.alterConsumerGroupOffsets(groupId, offsets, options);
+    }
+
+    @Override
+    public AlterStreamsGroupOffsetsResult alterStreamsGroupOffsets(String groupId, Map<TopicPartition, OffsetAndMetadata> offsets, AlterStreamsGroupOffsetsOptions options) {
+        return delegate.alterStreamsGroupOffsets(groupId, offsets, options);
     }
 
     @Override
@@ -299,8 +319,23 @@ public class ForwardingAdmin implements Admin {
     }
 
     @Override
+    public AlterShareGroupOffsetsResult alterShareGroupOffsets(String groupId, Map<TopicPartition, Long> offsets, AlterShareGroupOffsetsOptions options) {
+        return delegate.alterShareGroupOffsets(groupId, offsets, options);
+    }
+
+    @Override
     public ListShareGroupOffsetsResult listShareGroupOffsets(Map<String, ListShareGroupOffsetsSpec> groupSpecs, ListShareGroupOffsetsOptions options) {
         return delegate.listShareGroupOffsets(groupSpecs, options);
+    }
+
+    @Override
+    public DeleteShareGroupsResult deleteShareGroups(Collection<String> groupIds, DeleteShareGroupsOptions options) {
+        return delegate.deleteShareGroups(groupIds, options);
+    }
+
+    @Override
+    public DescribeStreamsGroupsResult describeStreamsGroups(Collection<String> groupIds, DescribeStreamsGroupsOptions options) {
+        return delegate.describeStreamsGroups(groupIds, options);
     }
 
     @Override
