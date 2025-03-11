@@ -51,6 +51,7 @@ import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTemplate;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
+import org.apache.kafka.common.test.api.ClusterTestThreadLeakIgnore;
 import org.apache.kafka.common.test.api.ClusterTests;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.Utils;
@@ -545,5 +546,20 @@ public class ClusterTestExtensionsTest {
             );
             assertInstanceOf(SaslAuthenticationException.class, exception.getCause());
         }
+    }
+
+    @ClusterTest(autoStart = AutoStart.NO)
+    @ClusterTestThreadLeakIgnore(prefixes = {"unmatchedPrefix", "testThreadLeakShould"})
+    public void testThreadLeakIgnore() {
+        new Thread("testThreadLeakShouldBeIgnored") {
+            @Override
+            public void run() {
+                try {
+                    Thread.sleep(2000L);
+                } catch (InterruptedException e) {
+                    // ignore
+                }
+            }
+        }.start();
     }
 }

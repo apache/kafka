@@ -24,6 +24,7 @@ import org.apache.kafka.common.test.api.ClusterFeature;
 import org.apache.kafka.common.test.api.ClusterTemplate;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
+import org.apache.kafka.common.test.api.ClusterTestThreadLeakIgnore;
 import org.apache.kafka.common.test.api.ClusterTests;
 import org.apache.kafka.common.test.api.DetectThreadLeak;
 import org.apache.kafka.common.test.api.Type;
@@ -48,6 +49,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -156,8 +158,18 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
     @Override
     public void beforeEach(ExtensionContext context) {
         if (isClusterTest(context)) {
-            DetectThreadLeak detectThreadLeak = DetectThreadLeak.of(thread ->
-                SKIPPED_THREAD_PREFIX.stream().noneMatch(prefix -> thread.getName().startsWith(prefix)));
+            Predicate<Thread> knownIgnorableThreads = thread ->
+                    SKIPPED_THREAD_PREFIX.stream().noneMatch(prefix -> thread.getName().startsWith(prefix));
+
+            ClusterTestThreadLeakIgnore threadLeakIgnore = context.getRequiredTestMethod().getDeclaredAnnotation(ClusterTestThreadLeakIgnore.class);
+            Predicate<Thread> extraIgnorableThreads = thread -> {
+                if (threadLeakIgnore != null) {
+                    return Arrays.stream(threadLeakIgnore.prefixes()).noneMatch(prefix -> thread.getName().startsWith(prefix));
+                }
+                return true;
+            };
+
+            DetectThreadLeak detectThreadLeak = DetectThreadLeak.of(knownIgnorableThreads.and(extraIgnorableThreads));
             getStore(context).put(DETECT_THREAD_LEAK_KEY, detectThreadLeak);
         }
     }
