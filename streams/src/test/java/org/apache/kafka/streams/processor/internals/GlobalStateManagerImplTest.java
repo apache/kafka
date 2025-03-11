@@ -356,15 +356,34 @@ public class GlobalStateManagerImplTest {
     }
 
     @Test
+    public void shouldListenForRestoreEventsWhenReprocessing() {
+        setUpReprocessing();
+
+        initializeConsumer(6, 1, t1);
+        consumer.setMaxPollRecords(2L);
+
+        stateManager.initialize();
+        stateManager.registerStore(store1, stateRestoreCallback, null);
+
+        assertThat(stateRestoreListener.numBatchRestored, equalTo(2L));
+        assertThat(stateRestoreListener.restoreStartOffset, equalTo(1L));
+        assertThat(stateRestoreListener.restoreEndOffset, equalTo(7L));
+        assertThat(stateRestoreListener.totalNumRestored, equalTo(6L));
+    }
+
+    @Test
     public void shouldListenForRestoreEvents() {
-        initializeConsumer(5, 1, t1);
+        initializeConsumer(6, 1, t1);
+        consumer.setMaxPollRecords(2L);
+
         stateManager.initialize();
 
         stateManager.registerStore(store1, stateRestoreCallback, null);
 
+        assertThat(stateRestoreListener.numBatchRestored, equalTo(2L));
         assertThat(stateRestoreListener.restoreStartOffset, equalTo(1L));
-        assertThat(stateRestoreListener.restoreEndOffset, equalTo(6L));
-        assertThat(stateRestoreListener.totalNumRestored, equalTo(5L));
+        assertThat(stateRestoreListener.restoreEndOffset, equalTo(7L));
+        assertThat(stateRestoreListener.totalNumRestored, equalTo(6L));
 
 
         assertThat(stateRestoreListener.storeNameCalledStates.get(RESTORE_START), equalTo(store1.name()));
