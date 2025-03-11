@@ -704,7 +704,7 @@ public class TransactionManager {
 
     public synchronized void handleCompletedBatch(ProducerBatch batch, ProduceResponse.PartitionResponse response) {
         int lastAckedSequence = maybeUpdateLastAckedSequence(batch.topicPartition, batch.lastSequence());
-        log.debug("ProducerId: {}; Set last ack'd sequence number for topic-partition {} to {}",
+        log.trace("ProducerId: {}; Set last ack'd sequence number for topic-partition {} to {}",
                 batch.producerId(),
                 batch.topicPartition,
                 lastAckedSequence);
