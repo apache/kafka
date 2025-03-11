@@ -500,16 +500,16 @@ public class GroupCoordinatorService implements GroupCoordinator {
         InitializeShareGroupStateResult persisterInitializeResult,
         ShareGroupHeartbeatResponseData defaultResponse
     ) {
-        short persisterErrorCode = Errors.NONE.code();
+        Errors persisterError = Errors.NONE;
         for (TopicData<PartitionErrorData> topicData : persisterInitializeResult.topicsData()) {
             Optional<PartitionErrorData> errData = topicData.partitions().stream().filter(partition -> partition.errorCode() != Errors.NONE.code()).findAny();
             if (errData.isPresent()) {
-                persisterErrorCode = errData.get().errorCode();
+                persisterError = Errors.forCode(errData.get().errorCode());
                 break;
             }
         }
 
-        if (persisterErrorCode == Errors.NONE.code()) {
+        if (persisterError.code() == Errors.NONE.code()) {
             Map<Uuid, Set<Integer>> topicPartitionMap = new HashMap<>();
             for (TopicData<PartitionErrorData> topicData : persisterInitializeResult.topicsData()) {
                 topicPartitionMap.put(
@@ -522,10 +522,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
             }
             return performShareGroupStateMetadataInitialize(groupId, topicPartitionMap, defaultResponse);
         } else {
-            log.error("Received error while calling initialize state for {} on persister {}.", groupId, persisterErrorCode);
+            log.error("Received error while calling initialize state for {} on persister {}.", groupId, persisterError.code());
             return CompletableFuture.completedFuture(
                 new ShareGroupHeartbeatResponseData()
-                    .setErrorCode(persisterErrorCode)
+                    .setErrorCode(persisterError.code())
+                    .setErrorMessage(persisterError.message())
             );
         }
     }
