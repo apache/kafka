@@ -281,7 +281,8 @@ public class TaskManager {
                     task.prepareCommit();
                 } catch (final RuntimeException swallow) {
                     log.warn("Error flushing cache for corrupted task {}. " +
-                        "Since the task is closing dirty, the following exception is swallowed: ", task.id(), swallow);
+                        "Since the task is closing dirty, the following exception is swallowed: {}",
+                        task.id(), swallow.getMessage());
                 }
 
                 try {
@@ -293,7 +294,8 @@ public class TaskManager {
                     }
                 } catch (final RuntimeException swallow) {
                     log.warn("Error suspending corrupted task {}. " +
-                        "Since the task is closing dirty, the following exception is swallowed: ", task.id(), swallow);
+                        "Since the task is closing dirty, the following exception is swallowed: {}",
+                        task.id(), swallow.getMessage());
                 }
                 task.closeDirty();
             }
@@ -1476,14 +1478,16 @@ public class TaskManager {
             task.prepareCommit();
         } catch (final RuntimeException swallow) {
             log.warn("Error flushing cache of dirty task {}. " +
-                "Since the task is closing dirty, the following exception is swallowed: ", task.id(), swallow);
+                "Since the task is closing dirty, the following exception is swallowed: {}",
+                task.id(), swallow.getMessage());
         }
 
         try {
             task.suspend();
         } catch (final RuntimeException swallow) {
             log.warn("Error suspending dirty task {}. " +
-                "Since the task is closing dirty, the following exception is swallowed: ", task.id(), swallow);
+                "Since the task is closing dirty, the following exception is swallowed: {}",
+                task.id(), swallow.getMessage());
         }
 
         task.closeDirty();
@@ -1494,7 +1498,8 @@ public class TaskManager {
             }
         } catch (final RuntimeException swallow) {
             log.warn("Error removing dirty task {}. " +
-                "Since the task is closing dirty, the following exception is swallowed: ", task.id(), swallow);
+                "Since the task is closing dirty, the following exception is swallowed: {}",
+                task.id(), swallow);
         }
     }
 
