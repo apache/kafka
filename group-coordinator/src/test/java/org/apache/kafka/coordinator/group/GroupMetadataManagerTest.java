@@ -15377,6 +15377,19 @@ public class GroupMetadataManagerTest {
         newGroupConfig.put(SHARE_HEARTBEAT_INTERVAL_MS_CONFIG, 10000);
         context.updateGroupConfig(groupId, newGroupConfig);
 
+        context.groupMetadataManager.replay(
+            new ShareGroupStatePartitionMetadataKey()
+                .setGroupId(groupId),
+            new ShareGroupStatePartitionMetadataValue()
+                .setInitializedTopics(List.of(
+                    new ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo()
+                        .setTopicId(fooTopicId)
+                        .setTopicName(fooTopicName)
+                        .setPartitions(List.of(0, 1, 2, 3, 4, 5))
+                ))
+                .setDeletingTopics(List.of())
+        );
+
         // Session timer is rescheduled on second heartbeat.
         result = context.shareGroupHeartbeat(
             new ShareGroupHeartbeatRequestData()
@@ -17603,6 +17616,121 @@ public class GroupMetadataManagerTest {
 
         assertNull(result.response());
         assertEquals(List.of(), result.records());
+    }
+
+    @Test
+    public void testSubscribedTopicsChangeMap() {
+        String topicName = "foo";
+        Uuid topicId = Uuid.randomUuid();
+        int partitions = 1;
+        String groupId = "foogrp";
+        ShareGroup group = mock(ShareGroup.class);
+        when(group.groupId()).thenReturn(groupId);
+
+        MockPartitionAssignor assignor = new MockPartitionAssignor("simple");
+        assignor.prepareGroupAssignment(new GroupAssignment(Map.of()));
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withShareGroupAssignor(assignor)
+            .build();
+
+        // Empty on empty metadata image
+        MetadataImage image = MetadataImage.EMPTY;
+        MetadataDelta delta = new MetadataDelta.Builder()
+            .setImage(image)
+            .build();
+        context.groupMetadataManager.onNewMetadataImage(image, delta);
+        assertEquals(
+            Map.of(),
+            context.groupMetadataManager.subscribedTopicsChangeMap(group, Map.of(
+                topicName, new TopicMetadata(topicId, topicName, partitions)
+            ))
+        );
+        verify(group, times(0)).groupId();
+
+        // Empty on empty subscription metadata
+        image = new MetadataImageBuilder()
+            .addTopic(topicId, topicName, partitions)
+            .build();
+
+        delta = new MetadataDelta.Builder()
+            .setImage(image)
+            .build();
+        context.groupMetadataManager.onNewMetadataImage(image, delta);
+        assertEquals(
+            Map.of(),
+            context.groupMetadataManager.subscribedTopicsChangeMap(group, Map.of())
+        );
+        verify(group, times(0)).groupId();
+
+        // No error on empty initialized metadata (no replay of initialized topics)
+        image = new MetadataImageBuilder()
+            .addTopic(topicId, topicName, partitions)
+            .build();
+
+        delta = new MetadataDelta.Builder()
+            .setImage(image)
+            .build();
+        context.groupMetadataManager.onNewMetadataImage(image, delta);
+        assertEquals(
+            Map.of(
+                topicId, Map.entry(
+                    topicName,
+                    Set.of(0)
+                )
+            ),
+            context.groupMetadataManager.subscribedTopicsChangeMap(group, Map.of(
+                topicName, new TopicMetadata(topicId, topicName, partitions)
+            ))
+        );
+        verify(group, times(1)).groupId();
+
+        // Calculates correct diff
+        String t1Name = "t1";
+        Uuid t1Id = Uuid.randomUuid();
+        String t2Name = "t2";
+        Uuid t2Id = Uuid.randomUuid();
+
+        image = new MetadataImageBuilder()
+            .addTopic(t1Id, t1Name, 2)
+            .addTopic(t2Id, t2Name, 2)
+            .build();
+
+        delta = new MetadataDelta.Builder()
+            .setImage(image)
+            .build();
+        context.groupMetadataManager.onNewMetadataImage(image, delta);
+        context.groupMetadataManager.replay(
+            new ShareGroupMetadataKey()
+                .setGroupId(groupId),
+            new ShareGroupMetadataValue()
+                .setEpoch(0)
+        );
+        context.groupMetadataManager.replay(
+            new ShareGroupStatePartitionMetadataKey()
+                .setGroupId(groupId),
+            new ShareGroupStatePartitionMetadataValue()
+                .setInitializedTopics(List.of(
+                    new ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo()
+                        .setTopicId(t1Id)
+                        .setTopicName(t1Name)
+                        .setPartitions(List.of(0, 1))
+                ))
+                .setDeletingTopics(List.of())
+        );
+
+        // Since t1 is already initialized due to replay above
+        assertEquals(
+            Map.of(
+                t2Id, Map.entry(
+                    t2Name,
+                    Set.of(0, 1)
+                )
+            ),
+            context.groupMetadataManager.subscribedTopicsChangeMap(group, Map.of(
+                t1Name, new TopicMetadata(t1Id, t1Name, 2),
+                t2Name, new TopicMetadata(t2Id, t2Name, 2)
+            ))
+        );
     }
 
     private static void checkJoinGroupResponse(

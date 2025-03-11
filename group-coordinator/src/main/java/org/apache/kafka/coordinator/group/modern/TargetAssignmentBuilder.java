@@ -19,12 +19,10 @@ package org.apache.kafka.coordinator.group.modern;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers;
-import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorException;
-import org.apache.kafka.coordinator.group.api.assignor.ShareGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.modern.consumer.ResolvedRegularExpression;
@@ -104,7 +102,7 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
         public ConsumerTargetAssignmentBuilder(
             String groupId,
             int groupEpoch,
-            ConsumerGroupPartitionAssignor assignor
+            PartitionAssignor assignor
         ) {
             super(groupId, groupEpoch, assignor);
         }
@@ -186,7 +184,7 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
         public ShareTargetAssignmentBuilder(
             String groupId,
             int groupEpoch,
-            ShareGroupPartitionAssignor assignor
+            PartitionAssignor assignor
         ) {
             super(groupId, groupEpoch, assignor);
         }

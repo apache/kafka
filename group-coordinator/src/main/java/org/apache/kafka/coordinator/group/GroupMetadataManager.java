@@ -2398,14 +2398,14 @@ public class GroupMetadataManager {
      * @param subscriptionMetadata The subscription metadata corresponding to the share group.
      * @return A map of topic partitions which are subscribed by the share group but not initialized yet.
      */
-    private Map<Uuid, Map.Entry<String, Set<Integer>>> subscribedTopicsChangeMap(ShareGroup group, Map<String, TopicMetadata> subscriptionMetadata) {
-        Map<Uuid, Map.Entry<String, Set<Integer>>> topicPartitionChangeMap = new HashMap<>();
-
+    // Visibility for testing
+    Map<Uuid, Map.Entry<String, Set<Integer>>> subscribedTopicsChangeMap(ShareGroup group, Map<String, TopicMetadata> subscriptionMetadata) {
         TopicsImage topicsImage = metadataImage.topics();
-        if (topicsImage == null || topicsImage.isEmpty()) {
+        if (topicsImage == null || topicsImage.isEmpty() || subscriptionMetadata == null || subscriptionMetadata.isEmpty()) {
             return Map.of();
         }
 
+        Map<Uuid, Map.Entry<String, Set<Integer>>> topicPartitionChangeMap = new HashMap<>();
         ShareGroupStatePartitionMetadataInfo info = shareGroupPartitionMetadata.get(group.groupId());
         Map<Uuid, Set<Integer>> alreadyInitialized = info == null ? Map.of() : info.initializedTopics();
 
@@ -2427,7 +2427,7 @@ public class GroupMetadataManager {
     /**
      * Based on the diff between the subscribed topic partitions and the initialized topic partitions,
      * created initialize request for the non-initialized ones.
-     * 
+     *
      * @param group The share group for which partitions need to be initialized.
      * @param subscriptionMetadata The subscription metadata for the share group.
      * @return An optional representing the persister initialize request.
