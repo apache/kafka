@@ -2258,7 +2258,7 @@ public class GroupMetadataManager {
             member,
             updatedMember,
             records
-        );
+        ) || initializedAssignmentPending(group);
 
         int groupEpoch = group.groupEpoch();
         Map<String, TopicMetadata> subscriptionMetadata = group.subscriptionMetadata();
@@ -2305,9 +2305,8 @@ public class GroupMetadataManager {
         // the existing and the new target assignment is persisted to the partition.
         final int targetAssignmentEpoch;
         final Assignment targetAssignment;
-        boolean initializedAssignmentPending = initializedAssignmentPending(group);
 
-        if (groupEpoch > group.assignmentEpoch() || initializedAssignmentPending) {
+        if (groupEpoch > group.assignmentEpoch()) {
             targetAssignment = updateTargetAssignment(
                 group,
                 groupEpoch,
@@ -2316,11 +2315,7 @@ public class GroupMetadataManager {
                 subscriptionType,
                 records
             );
-            if (initializedAssignmentPending) {
-                targetAssignmentEpoch = groupEpoch + 1; // force member re-conciliation
-            } else {
-                targetAssignmentEpoch = groupEpoch;
-            }
+            targetAssignmentEpoch = groupEpoch;
         } else {
             targetAssignmentEpoch = group.assignmentEpoch();
             targetAssignment = group.targetAssignment(updatedMember.memberId());
@@ -2358,7 +2353,7 @@ public class GroupMetadataManager {
             records,
             Map.entry(
                 response,
-                maybeCreateInitializeShareGroupStateRequest(group, subscriptionMetadata)
+                maybeCreateInitializeShareGroupStateRequest(groupId, groupEpoch, subscriptionMetadata)
             )
         );
     }
@@ -2399,14 +2394,14 @@ public class GroupMetadataManager {
      * @return A map of topic partitions which are subscribed by the share group but not initialized yet.
      */
     // Visibility for testing
-    Map<Uuid, Map.Entry<String, Set<Integer>>> subscribedTopicsChangeMap(ShareGroup group, Map<String, TopicMetadata> subscriptionMetadata) {
+    Map<Uuid, Map.Entry<String, Set<Integer>>> subscribedTopicsChangeMap(String groupId, Map<String, TopicMetadata> subscriptionMetadata) {
         TopicsImage topicsImage = metadataImage.topics();
         if (topicsImage == null || topicsImage.isEmpty() || subscriptionMetadata == null || subscriptionMetadata.isEmpty()) {
             return Map.of();
         }
 
         Map<Uuid, Map.Entry<String, Set<Integer>>> topicPartitionChangeMap = new HashMap<>();
-        ShareGroupStatePartitionMetadataInfo info = shareGroupPartitionMetadata.get(group.groupId());
+        ShareGroupStatePartitionMetadataInfo info = shareGroupPartitionMetadata.get(groupId);
         Map<Uuid, Set<Integer>> alreadyInitialized = info == null ? Map.of() : info.initializedTopics();
 
         subscriptionMetadata.forEach((topicName, topicMetadata) -> {
@@ -2428,19 +2423,21 @@ public class GroupMetadataManager {
      * Based on the diff between the subscribed topic partitions and the initialized topic partitions,
      * created initialize request for the non-initialized ones.
      *
-     * @param group The share group for which partitions need to be initialized.
+     * @param groupId The share group for which partitions need to be initialized.
+     * @param groupEpoch The group epoch of the share group.
      * @param subscriptionMetadata The subscription metadata for the share group.
      * @return An optional representing the persister initialize request.
      */
     private Optional<InitializeShareGroupStateParameters> maybeCreateInitializeShareGroupStateRequest(
-        ShareGroup group,
+        String groupId,
+        int groupEpoch,
         Map<String, TopicMetadata> subscriptionMetadata
     ) {
         if (subscriptionMetadata == null || subscriptionMetadata.isEmpty() || metadataImage.isEmpty()) {
             return Optional.empty();
         }
 
-        Map<Uuid, Map.Entry<String, Set<Integer>>> topicPartitionChangeMap = subscribedTopicsChangeMap(group, subscriptionMetadata);
+        Map<Uuid, Map.Entry<String, Set<Integer>>> topicPartitionChangeMap = subscribedTopicsChangeMap(groupId, subscriptionMetadata);
 
         // Nothing to initialize.
         if (topicPartitionChangeMap.isEmpty()) {
@@ -2448,11 +2445,11 @@ public class GroupMetadataManager {
         }
 
         return Optional.of(new InitializeShareGroupStateParameters.Builder().setGroupTopicPartitionData(
-            new GroupTopicPartitionData<>(group.groupId(), topicPartitionChangeMap.entrySet().stream()
+            new GroupTopicPartitionData<>(groupId, topicPartitionChangeMap.entrySet().stream()
                 .map(entry -> new TopicData<>(
                     entry.getKey(),
                     entry.getValue().getValue().stream()
-                        .map(partitionId -> PartitionFactory.newPartitionStateData(partitionId, group.groupEpoch(), -1))
+                        .map(partitionId -> PartitionFactory.newPartitionStateData(partitionId, groupEpoch, -1))
                         .toList())
                 ).toList()
             )).build()

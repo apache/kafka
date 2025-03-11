@@ -14929,7 +14929,7 @@ public class GroupMetadataManagerTest {
                 Set.of(0)
             ),
             groupIds.get(1),
-            15,
+            16,
             true
         );
 
@@ -15008,7 +15008,7 @@ public class GroupMetadataManagerTest {
                 Set.of(0)
             ),
             groupId,
-            0,
+            1,
             true
         );
 
@@ -15092,7 +15092,7 @@ public class GroupMetadataManagerTest {
                 Set.of(0)
             ),
             groupId,
-            0,
+            1,
             true
         );
 
@@ -15164,7 +15164,7 @@ public class GroupMetadataManagerTest {
                 Set.of(0, 1, 2)
             ),
             groupId,
-            0,
+            1,
             true
         );
 
@@ -15364,7 +15364,7 @@ public class GroupMetadataManagerTest {
                 Set.of(0)
             ),
             groupId,
-            100,
+            101,
             true
         );
 
@@ -15582,7 +15582,7 @@ public class GroupMetadataManagerTest {
                 Set.of(0, 1, 2, 3, 4, 5)
             ),
             groupId,
-            0,
+            1,
             true
         );
 
@@ -17727,7 +17727,7 @@ public class GroupMetadataManagerTest {
                 Set.of(0, 1)
             ),
             groupId,
-            0,
+            1,
             true
         );
 
@@ -17784,7 +17784,7 @@ public class GroupMetadataManagerTest {
                 Set.of(2, 3)
             ),
             groupId,
-            1,
+            2,
             true
         );
     }
@@ -17866,8 +17866,6 @@ public class GroupMetadataManagerTest {
         Uuid topicId = Uuid.randomUuid();
         int partitions = 1;
         String groupId = "foogrp";
-        ShareGroup group = mock(ShareGroup.class);
-        when(group.groupId()).thenReturn(groupId);
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("simple");
         assignor.prepareGroupAssignment(new GroupAssignment(Map.of()));
@@ -17883,11 +17881,10 @@ public class GroupMetadataManagerTest {
         context.groupMetadataManager.onNewMetadataImage(image, delta);
         assertEquals(
             Map.of(),
-            context.groupMetadataManager.subscribedTopicsChangeMap(group, Map.of(
+            context.groupMetadataManager.subscribedTopicsChangeMap(groupId, Map.of(
                 topicName, new TopicMetadata(topicId, topicName, partitions)
             ))
         );
-        verify(group, times(0)).groupId();
 
         // Empty on empty subscription metadata
         image = new MetadataImageBuilder()
@@ -17900,9 +17897,8 @@ public class GroupMetadataManagerTest {
         context.groupMetadataManager.onNewMetadataImage(image, delta);
         assertEquals(
             Map.of(),
-            context.groupMetadataManager.subscribedTopicsChangeMap(group, Map.of())
+            context.groupMetadataManager.subscribedTopicsChangeMap(groupId, Map.of())
         );
-        verify(group, times(0)).groupId();
 
         // No error on empty initialized metadata (no replay of initialized topics)
         image = new MetadataImageBuilder()
@@ -17920,11 +17916,10 @@ public class GroupMetadataManagerTest {
                     Set.of(0)
                 )
             ),
-            context.groupMetadataManager.subscribedTopicsChangeMap(group, Map.of(
+            context.groupMetadataManager.subscribedTopicsChangeMap(groupId, Map.of(
                 topicName, new TopicMetadata(topicId, topicName, partitions)
             ))
         );
-        verify(group, times(1)).groupId();
 
         // Calculates correct diff
         String t1Name = "t1";
@@ -17968,7 +17963,7 @@ public class GroupMetadataManagerTest {
                     Set.of(0, 1)
                 )
             ),
-            context.groupMetadataManager.subscribedTopicsChangeMap(group, Map.of(
+            context.groupMetadataManager.subscribedTopicsChangeMap(groupId, Map.of(
                 t1Name, new TopicMetadata(t1Id, t1Name, 2),
                 t2Name, new TopicMetadata(t2Id, t2Name, 2)
             ))

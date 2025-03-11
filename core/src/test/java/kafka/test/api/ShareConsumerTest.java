@@ -101,6 +101,7 @@ import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
+import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -799,7 +800,17 @@ public class ShareConsumerTest {
             producer.flush();
 
             shareConsumer.subscribe(Set.of(tp.topic()));
-            ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(5000));
+            AtomicReference<ConsumerRecords<byte[], byte[]>> recordsAtomic = new AtomicReference<>();
+            waitForCondition(() -> {
+                    ConsumerRecords<byte[], byte[]> recs = shareConsumer.poll(Duration.ofMillis(2500L));
+                    recordsAtomic.set(recs);
+                    return recs.count() == 1;
+                },
+                DEFAULT_MAX_WAIT_MS,
+                500L,
+                () -> "failed to get records"
+            );
+            ConsumerRecords<byte[], byte[]> records = recordsAtomic.get();
             assertEquals(1, records.count());
             records.forEach(consumedRecord -> shareConsumer.acknowledge(consumedRecord, AcknowledgeType.RELEASE));
             records = shareConsumer.poll(Duration.ofMillis(5000));
@@ -808,6 +819,8 @@ public class ShareConsumerTest {
             records = shareConsumer.poll(Duration.ofMillis(500));
             assertEquals(0, records.count());
             verifyShareGroupStateTopicRecordsProduced();
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
         }
     }
 
@@ -897,7 +910,7 @@ public class ShareConsumerTest {
     }
 
     @ClusterTest
-    public void testImplicitAcknowledgeCommitSync() {
+    public void testImplicitAcknowledgeCommitSync() throws InterruptedException {
         setup();
         alterShareAutoOffsetReset("group1", "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
@@ -908,7 +921,17 @@ public class ShareConsumerTest {
             producer.flush();
 
             shareConsumer.subscribe(Set.of(tp.topic()));
-            ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(5000));
+            AtomicReference<ConsumerRecords<byte[], byte[]>> recordsAtomic = new AtomicReference<>();
+            waitForCondition(() -> {
+                    ConsumerRecords<byte[], byte[]> recs = shareConsumer.poll(Duration.ofMillis(2500L));
+                    recordsAtomic.set(recs);
+                    return recs.count() == 1;
+                },
+                DEFAULT_MAX_WAIT_MS,
+                500L,
+                () -> "records not found"
+            );
+            ConsumerRecords<byte[], byte[]> records = recordsAtomic.get();
             assertEquals(1, records.count());
             Map<TopicIdPartition, Optional<KafkaException>> result = shareConsumer.commitSync();
             assertEquals(1, result.size());
