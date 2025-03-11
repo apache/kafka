@@ -527,11 +527,6 @@ public class RequestResponseTest {
     public void fetchResponseVersionTest() {
         Uuid id = Uuid.randomUuid();
         MemoryRecords records = MemoryRecords.readableRecords(ByteBuffer.allocate(10));
-        FetchResponseData.PartitionData partitionData = new FetchResponseData.PartitionData()
-                .setPartitionIndex(0)
-                .setHighWatermark(1000000)
-                .setLogStartOffset(-1)
-                .setRecords(records);
         LinkedHashMap<TopicIdPartition, FetchResponseData.PartitionData> idResponseData = new LinkedHashMap<>();
         idResponseData.put(new TopicIdPartition(id, new TopicPartition("test", 0)),
                 new FetchResponseData.PartitionData()

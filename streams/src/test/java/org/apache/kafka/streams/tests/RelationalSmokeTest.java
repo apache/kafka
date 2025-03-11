@@ -672,8 +672,6 @@ public class RelationalSmokeTest extends SmokeTestUtil {
         }
 
         public static boolean verifySync(final String broker, final Instant deadline) throws InterruptedException {
-            final Deserializer<Integer> keyDeserializer = intSerde.deserializer();
-
             final Deserializer<Article> articleDeserializer = new Article.ArticleDeserializer();
 
             final Deserializer<AugmentedArticle> augmentedArticleDeserializer =
