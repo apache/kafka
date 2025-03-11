@@ -30,11 +30,12 @@
   // - FENCED_MEMBER_EPOCH (version 0+)
   // - UNRELEASED_INSTANCE_ID (version 0+)
   // - GROUP_MAX_SIZE_REACHED (version 0+)
-  // - TOPIC_AUTHORIZATION_FAILED (version 0+) 
+  // - TOPIC_AUTHORIZATION_FAILED (version 0+)
   // - CLUSTER_AUTHORIZATION_FAILED (version 0+)
   // - STREAMS_INVALID_TOPOLOGY (version 0+)
   // - STREAMS_INVALID_TOPOLOGY_EPOCH (version 0+)
   // - STREAMS_TOPOLOGY_FENCED (version 0+)
+  // - TOPIC_AUTHORIZATION_FAILED (version 0+)
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",
       "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
