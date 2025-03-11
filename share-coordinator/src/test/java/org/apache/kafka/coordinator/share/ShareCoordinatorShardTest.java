@@ -1237,7 +1237,6 @@ class ShareCoordinatorShardTest {
         assertEquals(expectedRecords, result.records());
 
         // invalid state epoch
-        int stateEpoch = 1;
         partition = 0;
         shard.replay(0L, 0L, (short) 0, ShareCoordinatorRecordHelpers.newShareSnapshotRecord(
             GROUP_ID, TOPIC_ID, partition, new ShareGroupOffset.Builder()
