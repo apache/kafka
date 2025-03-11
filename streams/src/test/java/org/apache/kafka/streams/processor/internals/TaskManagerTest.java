@@ -3057,7 +3057,7 @@ public class TaskManagerTest {
 
         assertThat(task00.commitNeeded, is(false));
         assertThat(task00.commitPrepared, is(true));
-        assertThat(task00.commitNeeded, is(false));
+        assertThat(task01.commitNeeded, is(false));
         assertThat(task01.commitPrepared, is(true));
         assertThat(task02.commitPrepared, is(false));
         assertThat(task10.commitPrepared, is(false));

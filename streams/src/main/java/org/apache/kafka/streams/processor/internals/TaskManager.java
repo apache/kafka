@@ -1203,7 +1203,7 @@ public class TaskManager {
             }
         }
 
-        if (processingMode == EXACTLY_ONCE_V2 && revokedTasksNeedCommit) {
+        if (revokedTasksNeedCommit) {
             for (final Task task : commitNeededActiveTasks) {
                 if (!dirtyTasks.contains(task)) {
                     try {
