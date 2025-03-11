@@ -22,10 +22,8 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * The result of the {@link Admin#deleteShareGroupOffsets(String, Set, DeleteShareGroupOffsetsOptions)} call.
@@ -46,11 +44,6 @@ public class DeleteShareGroupOffsetsResult {
      */
     public KafkaFuture<Void> all() {
         return this.future.thenApply(topicPartitionErrorsMap ->  {
-            List<TopicPartition> partitionsFailed = topicPartitionErrorsMap.entrySet()
-                .stream()
-                .filter(e -> e.getValue() != null)
-                .map(Map.Entry::getKey)
-                .collect(Collectors.toList());
             for (ApiException error : topicPartitionErrorsMap.values()) {
                 if (error != null) {
                     throw error;
