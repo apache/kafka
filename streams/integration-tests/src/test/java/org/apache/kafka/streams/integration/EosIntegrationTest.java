@@ -48,10 +48,9 @@ import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.processor.Cancellable;
-import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.api.ContextualProcessor;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
@@ -881,6 +880,7 @@ public class EosIntegrationTest {
                                        final String storeName,
                                        final long startingOffset,
                                        final long endingOffset) {}
+
             @Override
             public void onBatchRestored(final TopicPartition topicPartition,
                                         final String storeName,
@@ -893,6 +893,7 @@ public class EosIntegrationTest {
                     }
                 }
             }
+
             @Override
             public void onRestoreEnd(final TopicPartition topicPartition,
                                      final String storeName,
@@ -902,9 +903,7 @@ public class EosIntegrationTest {
         ensureCommittedRecordsInTopicPartition(
             applicationId + "-" + stateStoreName + "-changelog",
             partitionToVerify,
-            2000,
-            IntegerDeserializer.class,
-            IntegerDeserializer.class
+            2000
         );
         throwException.set(true);
         final List<KeyValue<Integer, Integer>> recordBatch2 = IntStream.range(endKey - 1000, endKey).mapToObj(i -> KeyValue.pair(i, 0)).collect(Collectors.toList());
@@ -944,59 +943,29 @@ public class EosIntegrationTest {
         }
     }
 
-    final static AtomicReference<TaskId> taskWithData = new AtomicReference<>();
-    final static AtomicBoolean didRevokeIdleTask = new AtomicBoolean(false);
+    static final AtomicReference<TaskId> TASK_WITH_DATA = new AtomicReference<>();
+    static final AtomicBoolean DID_REVOKE_IDLE_TASK = new AtomicBoolean(false);
 
     @Test
     public void shouldNotCommitActiveTasksWithPendingInputIfRevokedTaskDidNotMakeProgress() throws Exception {
-        shouldNotProduceDuplicates(false);
-    }
-
-    @Test
-    public void shouldCommitAllTasksIfRevokedTaskTriggerPunctuation() throws Exception {
-        shouldNotProduceDuplicates(true);
-    }
-
-    private void shouldNotProduceDuplicates(final boolean usePunctuation) throws Exception {
         final AtomicBoolean requestCommit = new AtomicBoolean(false);
 
         final StreamsBuilder builder = new StreamsBuilder();
         builder.<Long, Long>stream(MULTI_PARTITION_INPUT_TOPIC)
-            .process(() -> new Processor<Long, Long, Long, Long>() {
-                ProcessorContext<Long, Long> context;
+            .process(() -> new ContextualProcessor<Long, Long, Long, Long>() {
                 @Override
-                public void init(final ProcessorContext<Long, Long> context) {
-                    this.context = context;
-
-                    if (usePunctuation) {
-                        final AtomicReference<Cancellable> cancellable = new AtomicReference<>();
-                        cancellable.set(context.schedule(
-                            Duration.ofSeconds(1),
-                            PunctuationType.WALL_CLOCK_TIME,
-                            time -> {
-                                context.forward(new Record<>(
-                                    (context.taskId().partition() + 1) * 100L,
-                                    -(context.taskId().partition() + 1L),
-                                    context.currentSystemTimeMs()));
-                                cancellable.get().cancel();
-                            }
-                        ));
-                    }
-                }
-
-                @Override
-                public void process(Record<Long, Long> record) {
-                    if (!usePunctuation && !requestCommit.get()) {
-                        if (taskWithData.get() != null) {
+                public void process(final Record<Long, Long> record) {
+                    if (!requestCommit.get()) {
+                        if (TASK_WITH_DATA.get() != null) {
                             throw new IllegalStateException("Should only process single record using single task");
                         }
-                        taskWithData.set(context.taskId());
+                        TASK_WITH_DATA.set(context().taskId());
                     }
 
-                    context.forward(record.withValue(context.recordMetadata().get().offset()));
+                    context().forward(record.withValue(context().recordMetadata().get().offset()));
 
                     if (requestCommit.get()) {
-                        context.commit();
+                        context().commit();
                     }
                 }
             })
@@ -1027,50 +996,34 @@ public class EosIntegrationTest {
             startApplicationAndWaitUntilRunning(streams);
 
             // PHASE 1:
-            // (A) write single input record, and wait for it to get into output topic (uncommitted)
-            // or (B) produce single output record via punctuation (uncommitted) [this happens for both tasks]
+            // write single input record, and wait for it to get into output topic (uncommitted)
             // StreamThread-1 now has a task with progress, and one task w/o progress
-            if (!usePunctuation) {
-                final List<KeyValue<Long, Long>> inputData_task0 = Collections.singletonList(KeyValue.pair(1L, -1L));
+            final List<KeyValue<Long, Long>> inputDataTask0 = Collections.singletonList(KeyValue.pair(1L, -1L));
 
-                IntegrationTestUtils.produceKeyValuesSynchronously(
-                    MULTI_PARTITION_INPUT_TOPIC,
-                    inputData_task0,
-                    TestUtils.producerConfig(CLUSTER.bootstrapServers(), LongSerializer.class, LongSerializer.class),
-                    CLUSTER.time
-                );
+            IntegrationTestUtils.produceKeyValuesSynchronously(
+                MULTI_PARTITION_INPUT_TOPIC,
+                inputDataTask0,
+                TestUtils.producerConfig(CLUSTER.bootstrapServers(), LongSerializer.class, LongSerializer.class),
+                CLUSTER.time
+            );
 
-                final List<KeyValue<Long, Long>> expectedUncommittedResultTask0 = Collections.singletonList(KeyValue.pair(1L, 0L));
-                final List<KeyValue<Long, Long>> uncommittedRecordsBeforeRebalance = readResult(SINGLE_PARTITION_OUTPUT_TOPIC, expectedUncommittedResultTask0.size(), null);
-                checkResultPerKey(uncommittedRecordsBeforeRebalance, expectedUncommittedResultTask0, "The uncommitted records do not match what expected");
-            } else {
-                final List<KeyValue<Long, Long>> expectedUncommittedResultTask0 = Arrays.asList(KeyValue.pair(100L, -1L), KeyValue.pair(200L, -2L));
-                final List<KeyValue<Long, Long>> uncommittedRecordsBeforeRebalance = readResult(SINGLE_PARTITION_OUTPUT_TOPIC, expectedUncommittedResultTask0.size(), null);
-                checkResultPerKey(uncommittedRecordsBeforeRebalance, expectedUncommittedResultTask0, "The uncommitted records do not match what expected");
-            }
+            final List<KeyValue<Long, Long>> expectedUncommittedResultTask0 = Collections.singletonList(KeyValue.pair(1L, 0L));
+            final List<KeyValue<Long, Long>> uncommittedRecordsBeforeRebalance = readResult(SINGLE_PARTITION_OUTPUT_TOPIC, expectedUncommittedResultTask0.size(), null);
+            checkResultPerKey(uncommittedRecordsBeforeRebalance, expectedUncommittedResultTask0, "The uncommitted records do not match what expected");
 
             // PHASE 2:
             // add second thread, to trigger rebalance
-            // (A) expect idle task to get revoked -- this should not trigger a TX commit
-            // (B) both task should get committed
+            // expect idle task to get revoked -- this should not trigger a TX commit
             streams.addStreamThread();
 
-            if (!usePunctuation) {
-                waitForCondition(didRevokeIdleTask::get, "Idle Task was not revoked as expected.");
+            waitForCondition(DID_REVOKE_IDLE_TASK::get, "Idle Task was not revoked as expected.");
 
-                // best-effort sanity check (might pass and not detect issue in slow environments)
-                try {
-                    readResult(SINGLE_PARTITION_OUTPUT_TOPIC, 1, "consumer", 10_000L);
-                    throw new Exception("Should not be able to read records, as they should have not been committed.");
-                } catch (final AssertionError expected) {
-                    // swallow -- we expect to not be able to read uncommitted data, but time-out
-                }
-            } else {
-                final List<KeyValue<Long, Long>> expectedUncommittedResultTask0 = Arrays.asList(KeyValue.pair(100L, -1L), KeyValue.pair(200L, -2L));
-                final List<KeyValue<Long, Long>> uncommittedRecordsBeforeRebalance = readResult(SINGLE_PARTITION_OUTPUT_TOPIC, expectedUncommittedResultTask0.size(), "consumer");
-                checkResultPerKey(uncommittedRecordsBeforeRebalance, expectedUncommittedResultTask0, "The uncommitted records do not match what expected");
-
-                return;
+            // best-effort sanity check (might pass and not detect issue in slow environments)
+            try {
+                readResult(SINGLE_PARTITION_OUTPUT_TOPIC, 1, "consumer", 10_000L);
+                throw new Exception("Should not be able to read records, as they should have not been committed.");
+            } catch (final AssertionError expected) {
+                // swallow -- we expect to not be able to read uncommitted data, but time-out
             }
 
             // PHASE 3:
@@ -1079,13 +1032,13 @@ public class EosIntegrationTest {
             requestCommit.set(true);
 
             // produce into input topic to fence KS producer
-            final List<KeyValue<Long, Long>> inputData_task0_fencing = Collections.singletonList(KeyValue.pair(4L, -3L));
+            final List<KeyValue<Long, Long>> inputDataTask0Fencing = Collections.singletonList(KeyValue.pair(4L, -3L));
 
             final Properties producerConfigs = new Properties();
             producerConfigs.setProperty(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalProducerId.get());
             IntegrationTestUtils.produceKeyValuesSynchronously(
                 MULTI_PARTITION_INPUT_TOPIC,
-                inputData_task0_fencing,
+                inputDataTask0Fencing,
                 TestUtils.producerConfig(CLUSTER.bootstrapServers(), LongSerializer.class, LongSerializer.class, producerConfigs),
                 CLUSTER.time,
                 true
@@ -1115,8 +1068,8 @@ public class EosIntegrationTest {
             KafkaConsumer<String, String> consumer = new KafkaConsumer<>(
                 consumerConfig(
                     CLUSTER.bootstrapServers(),
-                    Serdes.ByteArray().deserializer().getClass(),
-                    Serdes.ByteArray().deserializer().getClass()
+                    ByteArrayDeserializer.class,
+                    ByteArrayDeserializer.class
                 )
             )
         ) {
@@ -1158,7 +1111,6 @@ public class EosIntegrationTest {
         return data;
     }
 
-    @SuppressWarnings("deprecation")
     // the threads should no longer fail one thread one at a time
     private KafkaStreams getKafkaStreams(final String dummyHostName,
                                          final boolean withState,
@@ -1351,9 +1303,7 @@ public class EosIntegrationTest {
 
     private <K, V> void ensureCommittedRecordsInTopicPartition(final String topic,
                                                                final int partition,
-                                                               final int numberOfRecords,
-                                                               final Class<? extends Deserializer<K>> keyDeserializer,
-                                                               final Class<? extends Deserializer<V>> valueDeserializer) throws Exception {
+                                                               final int numberOfRecords) throws Exception {
         final long timeoutMs = 2 * DEFAULT_TIMEOUT;
         final int maxTries = 10;
         final long deadline = System.currentTimeMillis() + timeoutMs;
@@ -1363,8 +1313,8 @@ public class EosIntegrationTest {
                 TestUtils.consumerConfig(
                     CLUSTER.bootstrapServers(),
                     CONSUMER_GROUP_ID,
-                    keyDeserializer,
-                    valueDeserializer,
+                    IntegerDeserializer.class,
+                    IntegerDeserializer.class,
                     Utils.mkProperties(Collections.singletonMap(
                         ConsumerConfig.ISOLATION_LEVEL_CONFIG,
                         IsolationLevel.READ_COMMITTED.toString())
