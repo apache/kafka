@@ -21,7 +21,7 @@ on:
     branches:
       - trunk
   pull_request:
-    types: [edited]
+    types: [opened, reopened, edited]
     branches:
       - trunk
 
