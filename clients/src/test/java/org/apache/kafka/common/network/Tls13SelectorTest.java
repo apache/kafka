@@ -36,7 +36,6 @@ import java.util.stream.Collectors;
 
 import static java.util.Arrays.asList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class Tls13SelectorTest extends SslSelectorTest {
 
