@@ -52,14 +52,7 @@ public class Tls13SelectorTest extends SslSelectorTest {
     @Test
     @Override
     public void testCloseOldestConnection() throws Exception {
-        String id = "0";
-        selector.connect(id, new InetSocketAddress("localhost", server.port), BUFFER_SIZE, BUFFER_SIZE);
-        NetworkTestUtils.waitForChannelConnected(selector, id);
-        time.sleep(CONNECTION_MAX_IDLE_MS + 1_000);
-        selector.poll(0);
-
-        assertTrue(selector.disconnected().containsKey(id), "The idle connection should have been closed");
-        assertEquals(ChannelState.EXPIRED, selector.disconnected().get(id));
+        super.testCloseOldestConnection();
     }
 
     /**
