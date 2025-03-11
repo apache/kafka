@@ -122,6 +122,15 @@ structure of the PR
 Note that the pr-reviewed.yml workflow uses the `ci-approved` mechanism described
 above.
 
+The following checks are performed on our PRs:
+* Title is not too short or too long
+* Title starts with "KAFKA-", "MINOR", or "HOTFIX"
+* Body is not empty
+* Body includes "Reviewers:" if the PR is approved
+
+With the merge queue, our PR title and body will become the commit subject and message.
+This linting step will help to ensure that we have nice looking commits.
+
 ### Stale PRs
 
 This one is straightforward. Using the "actions/stale" GitHub Action, we automatically
