@@ -397,7 +397,7 @@ public class RecordAccumulatorTest {
             List<ProducerBatch> batches = accum.drain(metadataCache, nodes, 5 * 1024, 0).get(node1.id());
             if (batches != null) {
                 for (ProducerBatch batch : batches) {
-                    for (Record record : batch.records().records())
+                    for (@SuppressWarnings("UnusedLocalVariable") Record ignored : batch.records().records())
                         read++;
                     accum.deallocate(batch);
                 }

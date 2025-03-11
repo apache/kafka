@@ -1146,7 +1146,7 @@ sasl.mechanism.inter.broker.protocol=GSSAPI (or one of the other enabled mechani
             <p>Delegation token based authentication is a lightweight authentication mechanism to complement existing SASL/SSL
                 methods. Delegation tokens are shared secrets between kafka brokers and clients. Delegation tokens will help processing
                 frameworks to distribute the workload to available workers in a secure environment without the added cost of distributing
-                Kerberos TGT/keytabs or keystores when 2-way SSL is used. See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-48+Delegation+token+support+for+Kafka">KIP-48</a>
+                Kerberos TGT/keytabs or keystores when 2-way SSL is used. See <a href="https://cwiki.apache.org/confluence/x/tfmnAw">KIP-48</a>
                 for more details.</p>
             Under the default implementation of <code>principal.builder.class</code>, the owner of delegation token is used as the authenticated <code>Principal</code> for configuration of ACLs etc.
 
@@ -1246,8 +1246,8 @@ sasl.mechanism.inter.broker.protocol=GSSAPI (or one of the other enabled mechani
     <pre><code class="language-text">authorizer.class.name=org.apache.kafka.metadata.authorizer.StandardAuthorizer</code></pre>
 
     Kafka ACLs are defined in the general format of "Principal {P} is [Allowed|Denied] Operation {O} From Host {H} on any Resource {R} matching ResourcePattern {RP}".
-    You can read more about the ACL structure in <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-11+-+Authorization+Interface">KIP-11</a> and
-    resource patterns in <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-290%3A+Support+for+Prefixed+ACLs">KIP-290</a>.
+    You can read more about the ACL structure in <a href="https://cwiki.apache.org/confluence/x/XIUWAw">KIP-11</a> and
+    resource patterns in <a href="https://cwiki.apache.org/confluence/x/QpvLB">KIP-290</a>.
     In order to add, remove, or list ACLs, you can use the Kafka ACL CLI <code>kafka-acls.sh</code>. 
     <h5><u>Behavior Without ACLs:</u></h5>
     <p>If a resource (R) does not have any ACLs defined, meaning that no ACL matches the resource, Kafka will restrict
@@ -1573,10 +1573,10 @@ RULE:[n:string](regexp)s/pattern/replacement/g/U</code></pre>
         <li><b>DelegationToken:</b> this represents the delegation tokens in the cluster. Actions, such as describing
             delegation tokens could be protected by a privilege on the DelegationToken resource. Since these objects have
             a little special behavior in Kafka it is recommended to read
-            <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-48+Delegation+token+support+for+Kafka#KIP-48DelegationtokensupportforKafka-DescribeDelegationTokenRequest">KIP-48</a>
+            <a href="https://cwiki.apache.org/confluence/x/tfmnAw">KIP-48</a>
             and the related upstream documentation at <a href="#security_delegation_token">Authentication using Delegation Tokens</a>.</li>
         <li><b>User:</b> CreateToken and DescribeToken operations can be granted to User resources to allow creating and describing
-            tokens for other users. More info can be found in <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-373%3A+Allow+users+to+create+delegation+tokens+for+other+users">KIP-373</a>.</li>
+            tokens for other users. More info can be found in <a href="https://cwiki.apache.org/confluence/x/cwOQBQ">KIP-373</a>.</li>
     </ul>
     <h5 class="anchor-heading"><a id="operations_resources_and_protocols" class="anchor-link"></a><a href="#operations_resources_and_protocols">Operations and Resources on Protocols</a></h5>
     <p>In the below table we'll list the valid operations on resources that are executed by the Kafka API protocols.</p>

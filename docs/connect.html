@@ -308,7 +308,7 @@ predicates.IsBar.pattern=bar</code></pre>
         <li><code>DELETE /connectors/{name}</code> - delete a connector, halting all tasks and deleting its configuration</li>
         <li><code>GET /connectors/{name}/topics</code> - get the set of topics that a specific connector is using since the connector was created or since a request to reset its set of active topics was issued</li>
         <li><code>PUT /connectors/{name}/topics/reset</code> - send a request to empty the set of active topics of a connector</li>
-        <li>Offsets management endpoints (see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-875%3A+First-class+offsets+support+in+Kafka+Connect">KIP-875</a> for more details):
+        <li>Offsets management endpoints (see <a href="https://cwiki.apache.org/confluence/x/Io3GDQ">KIP-875</a> for more details):
             <ul>
                 <li><code>GET /connectors/{name}/offsets</code> - get the current offsets for a connector</li>
                 <li><code>DELETE /connectors/{name}/offsets</code> - reset the offsets for a connector. The connector must exist and must be in the stopped state (see <a href="#connect_stopconnector"><code>PUT /connectors/{name}/stop</code></a>)</li>
@@ -381,7 +381,7 @@ predicates.IsBar.pattern=bar</code></pre>
         <li><code>PUT /admin/loggers/{name}</code> - set the log level for the specified logger</li>
     </ul>
 
-    <p>See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-495%3A+Dynamically+Adjust+Log+Levels+in+Connect">KIP-495</a> for more details about the admin logger REST APIs.</p>
+    <p>See <a href="https://cwiki.apache.org/confluence/x/-4tTBw">KIP-495</a> for more details about the admin logger REST APIs.</p>
 
     <p>For the complete specification of the Kafka Connect REST API, see the <a href="/{{version}}/generated/connect_rest.yaml">OpenAPI documentation</a></p>
 
@@ -817,7 +817,7 @@ if (offset != null) {
 
     <h6>Supporting exactly-once</h6>
 
-    <p>With the passing of <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-618%3A+Exactly-Once+Support+for+Source+Connectors">KIP-618</a>, Kafka Connect supports exactly-once source connectors as of version 3.3.0. In order for a source connector to take advantage of this support, it must be able to provide meaningful source offsets for each record that it emits, and resume consumption from the external system at the exact position corresponding to any of those offsets without dropping or duplicating messages.</p>
+    <p>With the passing of <a href="https://cwiki.apache.org/confluence/x/Vg0rCQ">KIP-618</a>, Kafka Connect supports exactly-once source connectors as of version 3.3.0. In order for a source connector to take advantage of this support, it must be able to provide meaningful source offsets for each record that it emits, and resume consumption from the external system at the exact position corresponding to any of those offsets without dropping or duplicating messages.</p>
 
     <h6>Defining transaction boundaries</h6>
 
@@ -985,7 +985,7 @@ Struct struct = new Struct(schema)
 
     <p>
     Starting with 2.3.0, Kafka Connect is using by default a protocol that performs
-    <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-415%3A+Incremental+Cooperative+Rebalancing+in+Kafka+Connect">incremental cooperative rebalancing</a>
+    <a href="https://cwiki.apache.org/confluence/x/Y4MCBg">incremental cooperative rebalancing</a>
     that incrementally balances the connectors and tasks across the Connect workers, affecting only tasks that are new, to be removed, or need to move from one worker to another.
     Other tasks are not stopped and restarted during the rebalance, as they would have been with the old protocol.
     </p>
