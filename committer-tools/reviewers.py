@@ -53,22 +53,23 @@ def update_trailers(body, trailer):
 def append_message_to_pr_body(pr: int , message: str):
     try:
         pr_url = f"https://github.com/apache/kafka/pull/{pr}"
-        cmd_get_pr = shlex.split(f"gh pr view {pr_url} --json title,body")
-        result = subprocess.run(cmd_get_pr, capture_output=True, text=True, check=True)
-        current_pr_body = json.loads(result.stdout).get("body", {})
+        cmd_get_pr = f"gh pr view {pr_url} --json title,body"
+        result = subprocess.run(shlex.split(cmd_get_pr), capture_output=True, text=True, check=True)
+        current_pr_body = json.loads(result.stdout).get("body", {}).strip() + "\n"
         pr_title = json.loads(result.stdout).get("title", {})
         updated_pr_body = update_trailers(current_pr_body, message)
     except subprocess.CalledProcessError as e:
         print("Failed to retrieve PR body:", e.stderr)
         return
 
+    print(f"""New PR body will be:\n\n---\n{updated_pr_body}---\n""")
     choice = input(f'Update the body of "{pr_title}"? (y/n): ').strip().lower()
     if choice in ['n', 'no']:
         return
 
     try:
-        cmd_edit_body = shlex.split(f"gh pr edit {pr_url} --body {shlex.quote(updated_pr_body)}")
-        subprocess.run(cmd_edit_body, check=True)
+        cmd_edit_body = f"gh pr edit {pr_url} --body {shlex.quote(updated_pr_body)}"
+        subprocess.run(shlex.split(cmd_edit_body), check=True)
         print("PR body updated successfully!")
     except subprocess.CalledProcessError as e:
         print("Failed to update PR body:", e.stderr)
@@ -126,7 +127,8 @@ if __name__ == "__main__":
             continue
 
     if selected_reviewers:
-        reviewer_message = f'Reviewers: {", ".join([f"{name} <{email}>" for name, email, _ in selected_reviewers])}'
+        reviewer_message = "Reviewers: "
+        reviewer_message += ", ".join([f"{name} <{email}>" for name, email, _ in selected_reviewers])
         print(f"\n\n{reviewer_message}\n")
 
         try:
