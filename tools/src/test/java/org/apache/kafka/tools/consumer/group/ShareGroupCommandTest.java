@@ -475,10 +475,10 @@ public class ShareGroupCommandTest {
 
                     List<String> expectedValues1;
                     if (describeType.contains("--verbose")) {
-                        expectedValues1 = List.of(firstGroup, "memid1", "host1", "clId1", "0", "topic1:0,1;topic2:0");
+                        expectedValues1 = List.of(firstGroup, "memid1", "host1", "clId1", "3", "0", "topic1:0,1;topic2:0");
 
                     } else {
-                        expectedValues1 = List.of(firstGroup, "memid1", "host1", "clId1", "topic1:0,1;topic2:0");
+                        expectedValues1 = List.of(firstGroup, "memid1", "host1", "clId1", "3", "topic1:0,1;topic2:0");
                     }
                     return checkArgsHeaderOutput(cgcArgs, lines[0]) &&
                         Arrays.stream(lines[1].trim().split("\\s+")).toList().equals(expectedValues1);
@@ -531,12 +531,12 @@ public class ShareGroupCommandTest {
                     List<String> expectedValues1;
                     List<String> expectedValues2;
                     if (describeType.contains("--verbose")) {
-                        expectedValues1 = List.of(firstGroup, "memid1", "host1", "clId1", "0", "topic1:0,1;topic2:0");
-                        expectedValues2 = List.of(secondGroup, "memid1", "host1", "clId1", "0", "topic1:0");
+                        expectedValues1 = List.of(firstGroup, "memid1", "host1", "clId1", "3", "0", "topic1:0,1;topic2:0");
+                        expectedValues2 = List.of(secondGroup, "memid1", "host1", "clId1", "1", "0", "topic1:0");
 
                     } else {
-                        expectedValues1 = List.of(firstGroup, "memid1", "host1", "clId1", "topic1:0,1;topic2:0");
-                        expectedValues2 = List.of(secondGroup, "memid1", "host1", "clId1", "topic1:0");
+                        expectedValues1 = List.of(firstGroup, "memid1", "host1", "clId1", "3", "topic1:0,1;topic2:0");
+                        expectedValues2 = List.of(secondGroup, "memid1", "host1", "clId1", "1", "topic1:0");
                     }
                     return checkArgsHeaderOutput(cgcArgs, lines[0]) && checkArgsHeaderOutput(cgcArgs, lines[3]) &&
                         Arrays.stream(lines[1].trim().split("\\s+")).toList().equals(expectedValues1) &&
@@ -899,8 +899,8 @@ public class ShareGroupCommandTest {
 
     private boolean checkMembersArgsHeaderOutput(String output, boolean verbose) {
         List<String> expectedKeys = verbose ?
-            List.of("GROUP", "CONSUMER-ID", "HOST", "CLIENT-ID", "MEMBER-EPOCH", "ASSIGNMENT") :
-            List.of("GROUP", "CONSUMER-ID", "HOST", "CLIENT-ID", "ASSIGNMENT");
+            List.of("GROUP", "CONSUMER-ID", "HOST", "CLIENT-ID", "#PARTITIONS", "MEMBER-EPOCH", "ASSIGNMENT") :
+            List.of("GROUP", "CONSUMER-ID", "HOST", "CLIENT-ID", "#PARTITIONS", "ASSIGNMENT");
         return Arrays.stream(output.trim().split("\\s+")).toList().equals(expectedKeys);
     }
 
