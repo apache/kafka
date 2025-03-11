@@ -132,21 +132,21 @@
                 <td>Client</td>
                 <td>❌ Not Compatible</td>
                 <td>Pre-0.10.x protocols are fully removed in Kafka 4.0 (<a
-                        href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-896">KIP-896</a>).
+                        href="https://cwiki.apache.org/confluence/x/K5sODg">KIP-896</a>).
                 </td>
             </tr>
             <tr>
                 <td>Streams</td>
                 <td>❌ Not Compatible</td>
                 <td>Pre-0.10.x protocols are fully removed in Kafka 4.0 (<a
-                        href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-896">KIP-896</a>).
+                        href="https://cwiki.apache.org/confluence/x/K5sODg">KIP-896</a>).
                 </td>
             </tr>
             <tr>
                 <td>Connect</td>
                 <td>❌ Not Compatible</td>
                 <td>Pre-0.10.x protocols are fully removed in Kafka 4.0 (<a
-                        href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-896">KIP-896</a>).
+                        href="https://cwiki.apache.org/confluence/x/K5sODg">KIP-896</a>).
                 </td>
             </tr>
             <tr>
@@ -154,26 +154,23 @@
                 <td>Client</td>
                 <td>⚠️ Partially Compatible</td>
                 <td>
-                    Multiple Admin API methods removed/renamed: alterConfigs → incrementalAlterConfigs<br>
-                    UniformStickyPartitioner removed
+                    More details in the <a href="/40/documentation.html#upgrade_400_notable_consumer">Consumer</a>, 
+                    <a href="/40/documentation.html#upgrade_400_notable_producer">Producer</a>, and
+                    <a href="/40/documentation.html#upgrade_400_notable_admin_client">Admin Client</a> section.
                 </td>
             </tr>
             <tr>
                 <td>Streams</td>
                 <td>⚠️ Limited Compatibility</td>
                 <td>
-                    EOSv1 and eager rebalancing unavailable in Kafka 4.0.<br>
-                    All public API, deprecated in Apache Kafka 3.6 or an earlier release, have been removed,
-                    with the exception of <code>JoinWindows.of()</code> and <code>JoinWindows#grace().</code>
+                    More details in the <a href="/40/documentation.html#upgrade_400_notable_kafka_streams">Kafka Streams</a> section.
                 </td>
             </tr>
             <tr>
                 <td>Connect</td>
                 <td>⚠️ Limited Compatibility</td>
                 <td>
-                    MirrorMaker 1 supported in 2.x but removed in 4.0.<br> 
-                    IncrementalAlterConfigs unsupported before Kafka 2.3.x.<br>
-                    whitelist/blacklist configurations renamed to include/exclude
+                    More details in the <a href="/40/documentation.html#upgrade_400_notable_connect">Connect</a> section.
                 </td>
             </tr>
             <tr>
@@ -194,8 +191,8 @@
             </tr>
         </table>
         <p>
-            Note: Starting with Kafka 4.0, the `--zookeeper` option in AdminClient commands has been removed. Users must
-            use the `--bootstrap-server` option to interact with the Kafka cluster. This change aligns with the transition
+            Note: Starting with Kafka 4.0, the <code>--zookeeper</code> option in AdminClient commands has been removed. Users must
+            use the <code>--bootstrap-server</code> option to interact with the Kafka cluster. This change aligns with the transition
             to KRaft mode.
         </p>
 
