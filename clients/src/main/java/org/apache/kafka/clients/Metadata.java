@@ -388,6 +388,7 @@ public class Metadata implements Closeable {
         // 2. for which corresponding leader's node is missing in the new-nodes.
         // 3. for which the existing metadata doesn't know about the partition.
         List<PartitionMetadata> updatePartitionMetadata = new ArrayList<>();
+        Map<String, Uuid> topicIdsForUpdatedTopics = new HashMap<>();
         for (Entry<TopicPartition, Metadata.LeaderIdAndEpoch> partitionLeader: partitionLeaders.entrySet()) {
             TopicPartition partition = partitionLeader.getKey();
             Metadata.LeaderAndEpoch currentLeader = currentLeader(partition);
@@ -422,20 +423,16 @@ public class Metadata implements Closeable {
             updatePartitionMetadata.add(updatedMetadata);
 
             lastSeenLeaderEpochs.put(partition, newLeader.epoch.get());
+
+            final String updatedTopic = updatedMetadata.topic();
+            if (this.metadataSnapshot.topicIds().containsKey(updatedTopic))
+                topicIdsForUpdatedTopics.put(updatedTopic, this.metadataSnapshot.topicIds().get(updatedTopic));
         }
 
         if (updatePartitionMetadata.isEmpty()) {
             log.debug("No relevant metadata updates.");
             return new HashSet<>();
         }
-
-        Set<String> updatedTopics = updatePartitionMetadata.stream().map(MetadataResponse.PartitionMetadata::topic).collect(Collectors.toSet());
-
-        // Get topic-ids for updated topics from existing topic-ids.
-        Map<String, Uuid> existingTopicIds = this.metadataSnapshot.topicIds();
-        Map<String, Uuid> topicIdsForUpdatedTopics = updatedTopics.stream()
-            .filter(existingTopicIds::containsKey)
-            .collect(Collectors.toMap(e -> e, existingTopicIds::get));
 
         if (log.isDebugEnabled()) {
             updatePartitionMetadata.forEach(
