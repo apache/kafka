@@ -1929,70 +1929,70 @@ public class StreamsMembershipManagerTest {
 
     private static void verifyInStateReconciling(final StreamsMembershipManager membershipManager) {
         assertEquals(MemberState.RECONCILING, membershipManager.state());
-        assertFalse(membershipManager.shouldHeartbeatNow());
+        assertFalse(membershipManager.shouldNotWaitForHeartbeatInterval());
         assertFalse(membershipManager.shouldSkipHeartbeat());
         assertFalse(membershipManager.isLeavingGroup());
     }
 
     private static void verifyInStateAcknowledging(final StreamsMembershipManager membershipManager) {
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
-        assertTrue(membershipManager.shouldHeartbeatNow());
+        assertTrue(membershipManager.shouldNotWaitForHeartbeatInterval());
         assertFalse(membershipManager.shouldSkipHeartbeat());
         assertFalse(membershipManager.isLeavingGroup());
     }
 
     private static void verifyInStateLeaving(final StreamsMembershipManager membershipManager) {
         assertEquals(MemberState.LEAVING, membershipManager.state());
-        assertTrue(membershipManager.shouldHeartbeatNow());
+        assertTrue(membershipManager.shouldNotWaitForHeartbeatInterval());
         assertFalse(membershipManager.shouldSkipHeartbeat());
         assertTrue(membershipManager.isLeavingGroup());
     }
 
     private static void verifyInStatePrepareLeaving(final StreamsMembershipManager membershipManager) {
         assertEquals(MemberState.PREPARE_LEAVING, membershipManager.state());
-        assertFalse(membershipManager.shouldHeartbeatNow());
+        assertFalse(membershipManager.shouldNotWaitForHeartbeatInterval());
         assertFalse(membershipManager.shouldSkipHeartbeat());
         assertTrue(membershipManager.isLeavingGroup());
     }
 
     private static void verifyInStateUnsubscribed(final StreamsMembershipManager membershipManager) {
         assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
-        assertFalse(membershipManager.shouldHeartbeatNow());
+        assertFalse(membershipManager.shouldNotWaitForHeartbeatInterval());
         assertTrue(membershipManager.shouldSkipHeartbeat());
         assertFalse(membershipManager.isLeavingGroup());
     }
 
     private static void verifyInStateJoining(final StreamsMembershipManager membershipManager) {
         assertEquals(MemberState.JOINING, membershipManager.state());
-        assertTrue(membershipManager.shouldHeartbeatNow());
+        assertTrue(membershipManager.shouldNotWaitForHeartbeatInterval());
         assertFalse(membershipManager.shouldSkipHeartbeat());
         assertFalse(membershipManager.isLeavingGroup());
     }
 
     private static void verifyInStateStable(final StreamsMembershipManager membershipManager) {
         assertEquals(MemberState.STABLE, membershipManager.state());
-        assertFalse(membershipManager.shouldHeartbeatNow());
+        assertFalse(membershipManager.shouldNotWaitForHeartbeatInterval());
         assertFalse(membershipManager.shouldSkipHeartbeat());
         assertFalse(membershipManager.isLeavingGroup());
     }
 
     private static void verifyInStateFenced(final StreamsMembershipManager membershipManager) {
         assertEquals(MemberState.FENCED, membershipManager.state());
-        assertFalse(membershipManager.shouldHeartbeatNow());
+        assertFalse(membershipManager.shouldNotWaitForHeartbeatInterval());
         assertTrue(membershipManager.shouldSkipHeartbeat());
         assertFalse(membershipManager.isLeavingGroup());
     }
 
     private static void verifyInStateFatal(final StreamsMembershipManager membershipManager) {
         assertEquals(MemberState.FATAL, membershipManager.state());
-        assertFalse(membershipManager.shouldHeartbeatNow());
+        assertFalse(membershipManager.shouldNotWaitForHeartbeatInterval());
         assertTrue(membershipManager.shouldSkipHeartbeat());
         assertFalse(membershipManager.isLeavingGroup());
     }
 
     private static void verifyInStateStale(final StreamsMembershipManager membershipManager) {
         assertEquals(MemberState.STALE, membershipManager.state());
-        assertFalse(membershipManager.shouldHeartbeatNow());
+        assertFalse(membershipManager.shouldNotWaitForHeartbeatInterval());
         assertTrue(membershipManager.shouldSkipHeartbeat());
         assertFalse(membershipManager.isLeavingGroup());
     }

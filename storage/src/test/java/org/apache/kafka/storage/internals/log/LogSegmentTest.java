@@ -144,7 +144,6 @@ public class LogSegmentTest {
     })
     public void testAppendForLogSegmentOffsetOverflowException(long baseOffset, long largestOffset) throws IOException {
         try (LogSegment seg = createSegment(baseOffset, 10, Time.SYSTEM)) {
-            long currentTime = Time.SYSTEM.milliseconds();
             MemoryRecords memoryRecords = v1Records(0, "hello");
             assertThrows(LogSegmentOffsetOverflowException.class, () -> seg.append(largestOffset, memoryRecords));
         }

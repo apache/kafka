@@ -35,9 +35,9 @@
 
 <ol>
     <li>Upgrade the brokers one at a time: shut down the broker, update the code, and restart it. Once you have done so, the
-        brokers will be running the latest version and you can verify that the cluster's behavior and performance meets expectations.
+        brokers will be running the latest version and you can verify that the cluster's behavior and performance meet expectations.
     </li>
-    <li>Once the cluster's behavior and performance has been verified, finalize the upgrade by running
+    <li>Once the cluster's behavior and performance have been verified, finalize the upgrade by running
         <code>
             bin/kafka-features.sh --bootstrap-server localhost:9092 upgrade --release-version 4.0
         </code>
@@ -67,31 +67,31 @@
             have to be <a href="/39/documentation.html#kraft_zk_migration">migrated to KRaft mode</a> before they can be upgraded to 4.0.x.
         </li>
         <li>
-            Apache Kafka 4.0 ships with a brand-new group coordinator implementation (See <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=217387038#KIP848:TheNextGenerationoftheConsumerRebalanceProtocol-GroupCoordinator">here</a>).
+            Apache Kafka 4.0 ships with a brand-new group coordinator implementation (See <a href="https://cwiki.apache.org/confluence/x/HhD1D">here</a>).
             Functionally speaking, it implements all the same APIs. There are reasonable defaults, but the behavior of the new
             group coordinator can be tuned by setting the configurations with prefix <code>group.coordinator</code>.
         </li>
         <li>
             The Next Generation of the Consumer Rebalance Protocol (<a href="https://cwiki.apache.org/confluence/x/HhD1D">KIP-848</a>)
             is now Generally Available (GA) in Apache Kafka 4.0. The protocol is automatically enabled on the server when the upgrade to 4.0 is finalized.
-            Note that once the new protocol is used by consumer groups, the cluster can only downgrade to version 3.4.1 or newer.
-            Check <a href="/{{version}}/documentation.html#consumer_rebalance_protocol">here</a> for details.
+            Note that once the new protocol is used by consumer groups, the cluster can only be downgraded to version 3.4.1 or newer.
+            For more information check <a href="/{{version}}/documentation.html#consumer_rebalance_protocol">here</a>.
         </li>
         <li>
-            Transactions Server Side Defense (<a href="https://cwiki.apache.org/confluence/x/B40ODg">KIP-890</a>)
+            Transactions Server-Side Defense (<a href="https://cwiki.apache.org/confluence/x/B40ODg">KIP-890</a>)
             brings a strengthened transactional protocol to Apache Kafka 4.0. The new and improved transactional protocol is enabled when the upgrade to 4.0 is finalized.
             When using 4.0 producer clients, the producer epoch is bumped on every transaction to ensure every transaction includes the intended messages and duplicates are not
-            written as part of the next transaction. Downgrading the protocol is safe. For more information check <a href="/{{version}}/documentation.html#transaction_protocol">here</a>
+            written as part of the next transaction. Downgrading the protocol is safe. For more information check <a href="/{{version}}/documentation.html#transaction_protocol">here</a>.
         </li>
         <li>
             Eligible Leader Replicas (<a href="https://cwiki.apache.org/confluence/x/mpOzDw">KIP-966 Part 1</a>)
             enhances the replication protocol for the Apache Kafka 4.0. Now the KRaft controller keeps track of the data partition replicas that are
             not included in ISR but are safe to be elected as leader without data loss. Such replicas are stored in the partition metadata as
             the <code>Eligible Leader Replicas</code>(ELR).
-            For more information check <a href="/{{version}}/documentation.html#eligible_leader_replicas">here</a>
+            For more information check <a href="/{{version}}/documentation.html#eligible_leader_replicas">here</a>.
         </li>
         <li>
-            Since Apache Kafka 4.0.0, we have added a system property ("org.apache.kafka.sasl.oauthbearer.allowed.urls") to
+            Since Apache Kafka 4.0.0, we have added a system property (<code>org.apache.kafka.sasl.oauthbearer.allowed.urls</code>) to
             set the allowed URLs as SASL OAUTHBEARER token or jwks endpoints. By default, the value is an empty list.
             Users should explicitly set the allowed list if necessary.
         </li>
@@ -112,10 +112,10 @@
                             Please use <code>bufferpool-wait-time-ns-total</code>, <code>io-wait-time-ns-total</code>, and <code>io-time-ns-total</code> metrics as replacements, respectively.
                         </li>
                         <li>The <code>kafka.common.requests.DescribeLogDirsResponse.LogDirInfo</code> class was removed. Please use the <code>kafka.clients.admin.DescribeLogDirsResult.descriptions()</code> class
-                            and <code>kafka.clients.admin.DescribeLogDirsResult.allDescriptions()</code>instead.
+                            and <code>kafka.clients.admin.DescribeLogDirsResult.allDescriptions()</code> instead.
                         </li>
                         <li>The <code>kafka.common.requests.DescribeLogDirsResponse.ReplicaInfo</code> class was removed. Please use the <code>kafka.clients.admin.DescribeLogDirsResult.descriptions()</code> class
-                            and <code>kafka.clients.admin.DescribeLogDirsResult.allDescriptions()</code>instead.
+                            and <code>kafka.clients.admin.DescribeLogDirsResult.allDescriptions()</code> instead.
                         </li>
                         <li>The <code>org.apache.kafka.common.security.oauthbearer.secured.OAuthBearerLoginCallbackHandler</code> class was removed.
                             Please use the <code>org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler</code> class instead.
@@ -126,7 +126,7 @@
                         <li>The <code>org.apache.kafka.common.errors.NotLeaderForPartitionException</code> class was removed. The <code>org.apache.kafka.common.errors.NotLeaderOrFollowerException</code> is returned
                             if a request could not be processed because the broker is not the leader or follower for a topic partition.
                         </li>
-                        <li>The <code>org.apache.kafka.clients.producer.internals.DefaultPartitioner</code> and <code>org.apache.kafka.clients.producer.UniformStickyPartitioner</code> class was removed.
+                        <li>The <code>org.apache.kafka.clients.producer.internals.DefaultPartitioner</code> and <code>org.apache.kafka.clients.producer.UniformStickyPartitioner</code> classes were removed.
                         </li>
                         <li>The <code>log.message.format.version</code> and <code>message.format.version</code> configs were removed.
                         </li>
@@ -155,21 +155,21 @@
                         </li>
                         <li>
                             The <code>remote.log.manager.copier.thread.pool.size</code> configuration default value was changed to 10 from -1.
-                            Values of -1 are no longer valid. A minimum of 1 or higher is valid.
-                            See <a href="https://cwiki.apache.org/confluence/x/FAqpEQ">KIP-1030</a> 
+                            Values of -1 are no longer valid; a minimum value of 1 or higher is required.
+                            See <a href="https://cwiki.apache.org/confluence/x/FAqpEQ">KIP-1030</a>
                         </li>
                         <li>
                             The <code>remote.log.manager.expiration.thread.pool.size</code> configuration default value was changed to 10 from -1.
-                            Values of -1 are no longer valid. A minimum of 1 or higher is valid.
-                            See <a href="https://cwiki.apache.org/confluence/x/FAqpEQ">KIP-1030</a> 
+                            Values of -1 are no longer valid; a minimum value of 1 or higher is required.
+                            See <a href="https://cwiki.apache.org/confluence/x/FAqpEQ">KIP-1030</a>
                         </li>
                         <li>
                             The <code>remote.log.manager.thread.pool.size</code> configuration default value was changed to 2 from 10.
-                            See <a href="https://cwiki.apache.org/confluence/x/FAqpEQ">KIP-1030</a> 
+                            See <a href="https://cwiki.apache.org/confluence/x/FAqpEQ">KIP-1030</a>
                         </li>
                         <li>
                             The minimum <code>segment.bytes/log.segment.bytes</code> has changed from 14 bytes to 1MB.
-                            See <a href="https://cwiki.apache.org/confluence/x/FAqpEQ">KIP-1030</a> 
+                            See <a href="https://cwiki.apache.org/confluence/x/FAqpEQ">KIP-1030</a>
                         </li>
                     </ul>
                 </li>
@@ -179,7 +179,7 @@
                             MirrorMaker (MM2), as described in the <a href="/{{version}}/documentation/#georeplication">Geo-Replication section.</a>.
                         </li>
                         <li>The <code>use.incremental.alter.configs</code> configuration was removed from <code>MirrorSourceConnector</code>.
-                            The modified behavior is identical to the previous <code>required</code> configuration, therefore users should ensure that brokers in the target cluster are at least running 2.3.0.
+                            The modified behavior is now identical to the previous <code>required</code> configuration, therefore users should ensure that brokers in the target cluster are at least running 2.3.0.
                         </li>
                         <li>The <code>add.source.alias.to.metrics</code> configuration was removed from <code>MirrorSourceConnector</code>.
                             The source cluster alias is now always added to the metrics.
@@ -238,7 +238,7 @@
                         <li>The <code>--broker-list</code> option was removed from the <code>kafka-verifiable-consumer</code> command line tool.
                             Please use <code>--bootstrap-server</code> instead.
                         </li>
-                        <li>kafka-configs.sh now uses incrementalAlterConfigs API to alter broker configurations instead of the deprecated alterConfigs API,
+                        <li><code>kafka-configs.sh</code> now uses incrementalAlterConfigs API to alter broker configurations instead of the deprecated alterConfigs API,
                             and it will fall directly if the broker doesn't support incrementalAlterConfigs API, which means the broker version is prior to 2.3.x.
                             See <a href="https://cwiki.apache.org/confluence/x/wIn5E">KIP-1011</a> for more details.
                         </li>
@@ -265,7 +265,7 @@
                             partition assignment, whereas the earlier <code>poll(long)</code> method used to wait beyond the timeout.
                         </li>
                         <li>The <code>committed(TopicPartition)</code> and <code>committed(TopicPartition, Duration)</code> methods were removed from the consumer.
-                            Please use <code>committed(Set&ltTopicPartition&gt)</code> and <code>committed(Set&ltTopicPartition&gt, Duration)</code> instead.
+                            Please use <code>committed(Set&lt;TopicPartition&gt;)</code> and <code>committed(Set&lt;TopicPartition&gt;, Duration)</code> instead.
                         </li>
                         <li>
                             The <code>setException(KafkaException)</code> method was removed from the <code>org.apache.kafka.clients.consumer.MockConsumer</code>.
@@ -310,7 +310,7 @@
                             Please use <code>validateOnly</code> instead.
                         </li>
                         <li>The constructor <code>org.apache.kafka.clients.admin.FeatureUpdate</code> with short and boolean arguments was removed.
-                            Please use the constructor that accepts short and the specified UpgradeType enum instead.
+                            Please use the constructor that accepts short and the specified <code>UpgradeType</code> enum instead.
                         </li>
                         <li>
                             The <code>allowDowngrade</code> method was removed from the <code>org.apache.kafka.clients.admin.FeatureUpdate</code>.
@@ -331,7 +331,7 @@
                 <li><b>Kafka Streams</b>
                     <ul>
                         <li>
-			    All public API, deprecated in Apache Kafka 3.6 or an earlier release, have been removed, with the exception of <code>JoinWindows.of()</code> and <code>JoinWindows#grace()</code>.
+			    All public APIs, deprecated in Apache Kafka 3.6 or an earlier release, have been removed, with the exception of <code>JoinWindows.of()</code> and <code>JoinWindows#grace()</code>.
 			    See <a href="https://issues.apache.org/jira/browse/KAFKA-17531">KAFKA-17531</a> for details.
                         </li>
                         <li>
@@ -353,10 +353,10 @@
                     <a href="https://cwiki.apache.org/confluence/x/Bov5E">KIP-1013</a> for more details.
                 </li>
                 <li>
-                    Java 23 support has been added in Apache Kafka 4.0
+                    Java 23 support has been added in Apache Kafka 4.0.
                 </li>
                 <li>
-                    Scala 2.12 support has been removed in Apache Kafka 4.0
+                    Scala 2.12 support has been removed in Apache Kafka 4.0.
                     See <a href="https://cwiki.apache.org/confluence/x/OovOCg">KIP-751</a> for more details
                 </li>
                 <li>
@@ -374,7 +374,7 @@
                     The <code>--delete-config</code> option in the <code>kafka-topics</code> command line tool has been deprecated.
                 </li>
                 <li>
-                    For implementors of RemoteLogMetadataManager (RLMM), a new API `nextSegmentWithTxnIndex` is
+                    For implementors of RemoteLogMetadataManager (RLMM), a new API <code>nextSegmentWithTxnIndex</code> is
                     introduced in RLMM to allow the implementation to return the next segment metadata with a transaction
                     index. This API is used when the consumers are enabled with isolation level as READ_COMMITTED.
                     See <a href="https://cwiki.apache.org/confluence/x/BwuTEg">KIP-1058</a> for more details.
@@ -385,21 +385,21 @@
                     See <a href="https://cwiki.apache.org/confluence/x/jA3OEg">KIP-1074</a> for more details.
                 </li>
                 <li>
-                    KIP-714 is now enabled for Kafka Streams via <a href="https://cwiki.apache.org/confluence/x/XA-OEg">KIP-1076</a>.
+                    <a href="https://cwiki.apache.org/confluence/x/2xRRCg">KIP-714</a> is now enabled for Kafka Streams via <a href="https://cwiki.apache.org/confluence/x/XA-OEg">KIP-1076</a>.
 		    This allows to not only collect the metric of the internally used clients of a Kafka Streams application via a broker-side plugin,
 		    but also to collect the <a href="/{{version}}/documentation/#kafka_streams_monitoring">metrics</a> of the Kafka Streams runtime itself.
             </li>
                 <li>
-                    The default value of 'num.recovery.threads.per.data.dir' has been changed from 1 to 2. The impact of this is faster
+                    The default value of <code>num.recovery.threads.per.data.dir</code> has been changed from 1 to 2. The impact of this is faster
                     recovery post unclean shutdown at the expense of extra IO cycles.
-                    See <a href="https://cwiki.apache.org/confluence/x/FAqpEQ">KIP-1030</a> 
+                    See <a href="https://cwiki.apache.org/confluence/x/FAqpEQ">KIP-1030</a>
                 </li>
                 <li>
-                    The default value of 'message.timestamp.after.max.ms' has been changed from Long.Max to 1 hour. The impact of this messages with a 
+                    The default value of <code>message.timestamp.after.max.ms</code> has been changed from Long.Max to 1 hour. The impact of this messages with a
                     timestamp of more than 1 hour in the future will be rejected when message.timestamp.type=CreateTime is set.
-                    See <a href="https://cwiki.apache.org/confluence/x/FAqpEQ">KIP-1030</a> 
+                    See <a href="https://cwiki.apache.org/confluence/x/FAqpEQ">KIP-1030</a>
                 </li>
-                <li>Introduced in KIP-890, the <code>TransactionAbortableException</code> enhances error handling within transactional operations by clearly indicating scenarios where transactions should be aborted due to errors. It is important for applications to properly manage both <code>TimeoutException</code> and <code>TransactionAbortableException</code> when working with transaction producers.</li>
+                <li>Introduced in <a href="https://cwiki.apache.org/confluence/x/B40ODg">KIP-890</a>, the <code>TransactionAbortableException</code> enhances error handling within transactional operations by clearly indicating scenarios where transactions should be aborted due to errors. It is important for applications to properly manage both <code>TimeoutException</code> and <code>TransactionAbortableException</code> when working with transaction producers.</li>
                 <ul>
                     <li><b>TimeoutException:</b> This exception indicates that a transactional operation has timed out. Given the risk of message duplication that can arise from retrying operations after a timeout (potentially violating exactly-once semantics), applications should treat timeouts as reasons to abort the ongoing transaction.</li>
                     <li><b>TransactionAbortableException:</b> Specifically introduced to signal errors that should lead to transaction abortion, ensuring this exception is properly handled is critical for maintaining the integrity of transactional processing.</li>
