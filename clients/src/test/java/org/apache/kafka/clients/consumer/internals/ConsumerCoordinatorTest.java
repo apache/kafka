@@ -4147,7 +4147,7 @@ public abstract class ConsumerCoordinatorTest {
 
     private void createMockHeartbeatThreadCoordinator() {
         metrics.close();
-        coordinator.close(time.timer(0));
+        coordinator.close(time.timer(0), CloseOptions.GroupMembershipOperation.DEFAULT);
 
         metrics = new Metrics(time);
         coordinator = new ConsumerCoordinator(

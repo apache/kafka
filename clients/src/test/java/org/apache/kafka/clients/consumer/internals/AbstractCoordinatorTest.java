@@ -137,7 +137,7 @@ public class AbstractCoordinatorTest {
 
 
     private void setupCoordinator(int retryBackoffMs, int retryBackoffMaxMs, int rebalanceTimeoutMs, Optional<String> groupInstanceId, Optional<Supplier<BaseHeartbeatThread>> heartbeatThreadSupplier) {
-        setupCoordinator(retryBackoffMs, retryBackoffMaxMs, rebalanceTimeoutMs, groupInstanceId, groupInstanceId.isEmpty(), heartbeatThreadSupplier);
+        setupCoordinator(retryBackoffMs, retryBackoffMaxMs, rebalanceTimeoutMs, groupInstanceId, heartbeatThreadSupplier, groupInstanceId.isEmpty());
     }
 
     private void setupCoordinator(int retryBackoffMs, int retryBackoffMaxMs, int rebalanceTimeoutMs, Optional<String> groupInstanceId, Optional<Supplier<BaseHeartbeatThread>> heartbeatThreadSupplier, boolean leaveOnClose) {
@@ -1108,7 +1108,7 @@ public class AbstractCoordinatorTest {
     @ParameterizedTest
     @MethodSource("groupInstanceIdAndMembershipOperationMatrix")
     public void testLeaveGroupSentWithGroupInstanceIdUnSetAndDifferentGroupMembershipOperation(Optional<String> groupInstanceId, CloseOptions.GroupMembershipOperation operation) {
-        checkLeaveGroupRequestSent(groupInstanceId, operation, true);
+        checkLeaveGroupRequestSent(groupInstanceId, operation, Optional.empty(), true);
     }
 
     private static Stream<Arguments> groupInstanceIdAndMembershipOperationMatrix() {
@@ -1127,7 +1127,7 @@ public class AbstractCoordinatorTest {
     }
 
     private void checkLeaveGroupRequestSent(Optional<String> groupInstanceId, CloseOptions.GroupMembershipOperation operation, Optional<Supplier<BaseHeartbeatThread>> heartbeatThreadSupplier, boolean leaveOnClose) {
-        setupCoordinator(RETRY_BACKOFF_MS, RETRY_BACKOFF_MAX_MS, Integer.MAX_VALUE, groupInstanceId, leaveOnClose);
+        setupCoordinator(RETRY_BACKOFF_MS, RETRY_BACKOFF_MAX_MS, Integer.MAX_VALUE, groupInstanceId, heartbeatThreadSupplier, leaveOnClose);
 
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         mockClient.prepareResponse(joinGroupFollowerResponse(1, memberId, leaderId, Errors.NONE));
@@ -1223,7 +1223,7 @@ public class AbstractCoordinatorTest {
     private RequestFuture<Void> setupLeaveGroup(LeaveGroupResponse leaveGroupResponse,
                                                 String leaveReason,
                                                 String expectedLeaveReason) {
-        setupCoordinator(RETRY_BACKOFF_MS, RETRY_BACKOFF_MAX_MS, Integer.MAX_VALUE, Optional.empty());
+        setupCoordinator(RETRY_BACKOFF_MS, RETRY_BACKOFF_MAX_MS, Integer.MAX_VALUE, Optional.empty(), Optional.empty());
 
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         mockClient.prepareResponse(joinGroupFollowerResponse(1, memberId, leaderId, Errors.NONE));
