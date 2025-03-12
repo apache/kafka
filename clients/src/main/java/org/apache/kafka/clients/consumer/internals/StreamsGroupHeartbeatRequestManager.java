@@ -64,13 +64,13 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         // Fields of StreamsGroupHeartbeatRequest sent in the most recent request
         static class LastSentFields {
 
-            private StreamsRebalanceData.Assignment assignment = null;
+            private StreamsRebalanceData.Assignment assignment = StreamsRebalanceData.Assignment.EMPTY;
 
             LastSentFields() {
             }
 
             void reset() {
-                assignment = null;
+                assignment = StreamsRebalanceData.Assignment.EMPTY;
             }
         }
 
@@ -102,7 +102,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
 
             if (joining) {
                 StreamsGroupHeartbeatRequestData.Topology topology = new StreamsGroupHeartbeatRequestData.Topology();
-                topology.setSubtopologies(getTopologyFromStreams(streamsRebalanceData.subtopologies()));
+                topology.setSubtopologies(fromStreamsToHeartbeatRequest(streamsRebalanceData.subtopologies()));
                 topology.setEpoch(streamsRebalanceData.topologyEpoch());
                 data.setTopology(topology);
                 data.setRebalanceTimeoutMs(rebalanceTimeoutMs);
@@ -119,15 +119,15 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
                         .setValue(entry.getValue())
                     )
                     .collect(Collectors.toList()));
-                data.setActiveTasks(convertTaskIdCollection(Set.of()));
-                data.setStandbyTasks(convertTaskIdCollection(Set.of()));
-                data.setWarmupTasks(convertTaskIdCollection(Set.of()));
+                data.setActiveTasks(fromStreamsToHeartbeatRequest(Set.of()));
+                data.setStandbyTasks(fromStreamsToHeartbeatRequest(Set.of()));
+                data.setWarmupTasks(fromStreamsToHeartbeatRequest(Set.of()));
             } else {
                 StreamsRebalanceData.Assignment reconciledAssignment = streamsRebalanceData.reconciledAssignment();
                 if (!reconciledAssignment.equals(lastSentFields.assignment)) {
-                    data.setActiveTasks(convertTaskIdCollection(reconciledAssignment.activeTasks()));
-                    data.setStandbyTasks(convertTaskIdCollection(reconciledAssignment.standbyTasks()));
-                    data.setWarmupTasks(convertTaskIdCollection(reconciledAssignment.warmupTasks()));
+                    data.setActiveTasks(fromStreamsToHeartbeatRequest(reconciledAssignment.activeTasks()));
+                    data.setStandbyTasks(fromStreamsToHeartbeatRequest(reconciledAssignment.standbyTasks()));
+                    data.setWarmupTasks(fromStreamsToHeartbeatRequest(reconciledAssignment.warmupTasks()));
                     lastSentFields.assignment = reconciledAssignment;
                 }
             }
@@ -135,7 +135,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
             return data;
         }
 
-        private static List<StreamsGroupHeartbeatRequestData.TaskIds> convertTaskIdCollection(final Set<StreamsRebalanceData.TaskId> tasks) {
+        private static List<StreamsGroupHeartbeatRequestData.TaskIds> fromStreamsToHeartbeatRequest(final Set<StreamsRebalanceData.TaskId> tasks) {
             return tasks.stream()
                 .collect(
                     Collectors.groupingBy(StreamsRebalanceData.TaskId::subtopologyId,
@@ -144,27 +144,26 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
                 .entrySet()
                 .stream()
                 .map(entry -> {
-                    StreamsGroupHeartbeatRequestData.TaskIds ids = new StreamsGroupHeartbeatRequestData.TaskIds();
-                    ids.setSubtopologyId(entry.getKey());
-                    ids.setPartitions(entry.getValue().stream().sorted().collect(Collectors.toList()));
-                    return ids;
-                }).sorted(Comparator.comparing(StreamsGroupHeartbeatRequestData.TaskIds::subtopologyId))
+                    return new StreamsGroupHeartbeatRequestData.TaskIds()
+                        .setSubtopologyId(entry.getKey())
+                        .setPartitions(entry.getValue());
+                })
                 .collect(Collectors.toList());
         }
 
-        private static List<StreamsGroupHeartbeatRequestData.Subtopology> getTopologyFromStreams(final Map<String, StreamsRebalanceData.Subtopology> subtopologies) {
+        private static List<StreamsGroupHeartbeatRequestData.Subtopology> fromStreamsToHeartbeatRequest(final Map<String, StreamsRebalanceData.Subtopology> subtopologies) {
             final List<StreamsGroupHeartbeatRequestData.Subtopology> subtopologiesForRequest = new ArrayList<>(subtopologies.size());
             for (final Map.Entry<String, StreamsRebalanceData.Subtopology> subtopology : subtopologies.entrySet()) {
-                subtopologiesForRequest.add(getSubtopologyFromStreams(subtopology.getKey(), subtopology.getValue()));
+                subtopologiesForRequest.add(fromStreamsToHeartbeatRequest(subtopology.getKey(), subtopology.getValue()));
             }
             subtopologiesForRequest.sort(Comparator.comparing(StreamsGroupHeartbeatRequestData.Subtopology::subtopologyId));
             return subtopologiesForRequest;
         }
 
-        private static StreamsGroupHeartbeatRequestData.Subtopology getSubtopologyFromStreams(final String subtopologyName,
-                                                                                              final StreamsRebalanceData.Subtopology subtopology) {
+        private static StreamsGroupHeartbeatRequestData.Subtopology fromStreamsToHeartbeatRequest(final String subtopologyId,
+                                                                                                  final StreamsRebalanceData.Subtopology subtopology) {
             final StreamsGroupHeartbeatRequestData.Subtopology subtopologyData = new StreamsGroupHeartbeatRequestData.Subtopology();
-            subtopologyData.setSubtopologyId(subtopologyName);
+            subtopologyData.setSubtopologyId(subtopologyId);
             ArrayList<String> sortedSourceTopics = new ArrayList<>(subtopology.sourceTopics());
             Collections.sort(sortedSourceTopics);
             subtopologyData.setSourceTopics(sortedSourceTopics);
