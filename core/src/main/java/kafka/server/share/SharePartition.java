@@ -31,6 +31,7 @@ import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
+import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.ShareFetchResponseData.AcquiredRecords;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.RecordBatch;
@@ -744,7 +745,8 @@ public class SharePartition {
                 log.trace("No cached data exists for the share partition for requested fetch batch: {}-{}",
                     groupId, topicIdPartition);
                 return acquireNewBatchRecords(memberId, fetchPartitionData.records.batches(),
-                    firstBatch.baseOffset(), lastBatch.lastOffset(), batchSize, maxFetchRecords);
+                    firstBatch.baseOffset(), lastBatch.lastOffset(), batchSize, maxFetchRecords,
+                    fetchPartitionData.abortedTransactions, isolationType);
             }
 
             log.trace("Overlap exists with in-flight records. Acquire the records if available for"
@@ -773,7 +775,8 @@ public class SharePartition {
                     // Thus, a new batch needs to be acquired for the gap.
                     if (maybeGapStartOffset < entry.getKey()) {
                         ShareAcquiredRecords shareAcquiredRecords = acquireNewBatchRecords(memberId, fetchPartitionData.records.batches(),
-                            maybeGapStartOffset, entry.getKey() - 1, batchSize, maxFetchRecords);
+                            maybeGapStartOffset, entry.getKey() - 1, batchSize, maxFetchRecords,
+                            fetchPartitionData.abortedTransactions, isolationType);
                         result.addAll(shareAcquiredRecords.acquiredRecords());
                         acquiredCount += shareAcquiredRecords.count();
                     }
@@ -848,7 +851,8 @@ public class SharePartition {
                 log.trace("There exists another batch which needs to be acquired as well");
                 ShareAcquiredRecords shareAcquiredRecords = acquireNewBatchRecords(memberId, fetchPartitionData.records.batches(),
                     subMap.lastEntry().getValue().lastOffset() + 1,
-                    lastBatch.lastOffset(), batchSize, maxFetchRecords - acquiredCount);
+                    lastBatch.lastOffset(), batchSize, maxFetchRecords - acquiredCount,
+                    fetchPartitionData.abortedTransactions, isolationType);
                 result.addAll(shareAcquiredRecords.acquiredRecords());
                 acquiredCount += shareAcquiredRecords.count();
             }
@@ -1472,7 +1476,9 @@ public class SharePartition {
         long firstOffset,
         long lastOffset,
         int batchSize,
-        int maxFetchRecords
+        int maxFetchRecords,
+        Optional<List<FetchResponseData.AbortedTransaction>> abortedTransactions,
+        FetchIsolation isolationType
     ) {
         lock.writeLock().lock();
         try {
@@ -1496,7 +1502,8 @@ public class SharePartition {
             }
 
             // Create batches of acquired records.
-            List<AcquiredRecords> acquiredRecords = createBatches(memberId, batches, firstAcquiredOffset, lastAcquiredOffset, batchSize);
+            List<AcquiredRecords> acquiredRecords = createBatches(memberId, batches, firstAcquiredOffset,
+                lastAcquiredOffset, batchSize, abortedTransactions, isolationType);
             // if the cachedState was empty before acquiring the new batches then startOffset needs to be updated
             if (cachedState.firstKey() == firstAcquiredOffset)  {
                 startOffset = firstAcquiredOffset;
@@ -1521,7 +1528,9 @@ public class SharePartition {
         Iterable<? extends RecordBatch> batches,
         long firstAcquiredOffset,
         long lastAcquiredOffset,
-        int batchSize
+        int batchSize,
+        Optional<List<FetchResponseData.AbortedTransaction>> abortedTransactions,
+        FetchIsolation isolationType
     ) {
         lock.writeLock().lock();
         try {
