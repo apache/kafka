@@ -1699,8 +1699,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         skippedMarkers += 1
       } else {
         val controlRecordType = marker.transactionResult match {
-          case TransactionResult.COMMIT => ControlRecordType.COMMIT
-          case TransactionResult.ABORT => ControlRecordType.ABORT
+          case TransactionResult.COMMIT => org.apache.kafka.common.record.ControlRecordType.COMMIT
+          case TransactionResult.ABORT => org.apache.kafka.common.record.ControlRecordType.ABORT
         }
 
         val markerResults = new ConcurrentHashMap[TopicPartition, Errors]()

@@ -15,7 +15,7 @@
 
 {
   "type": "data",
-  "name": "ControlRecordTypeSchema",
+  "name": "ControlRecordType",
   "validVersions": "0",
   "flexibleVersions": "none",
   "fields": [

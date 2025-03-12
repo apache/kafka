@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.record;
 
-import org.apache.kafka.common.message.ControlRecordTypeSchema;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -40,7 +39,7 @@ public class ControlRecordTypeTest {
     @Test
     public void testParseUnknownType() {
         ByteBuffer buffer = ByteBuffer.allocate(32);
-        buffer.putShort(ControlRecordTypeSchema.HIGHEST_SUPPORTED_VERSION);
+        buffer.putShort(org.apache.kafka.common.message.ControlRecordType.HIGHEST_SUPPORTED_VERSION);
         buffer.putShort((short) 337);
         buffer.flip();
         ControlRecordType type = ControlRecordType.parse(buffer);
@@ -64,8 +63,8 @@ public class ControlRecordTypeTest {
         if (expected == ControlRecordType.UNKNOWN) {
             return;
         }
-        for (short version = ControlRecordTypeSchema.LOWEST_SUPPORTED_VERSION;
-             version <= ControlRecordTypeSchema.HIGHEST_SUPPORTED_VERSION; version++) {
+        for (short version = org.apache.kafka.common.message.ControlRecordType.LOWEST_SUPPORTED_VERSION;
+             version <= org.apache.kafka.common.message.ControlRecordType.HIGHEST_SUPPORTED_VERSION; version++) {
             ByteBuffer buffer = expected.recordKey();
             ControlRecordType deserializedKey = ControlRecordType.parse(buffer);
             assertEquals(expected, deserializedKey);
@@ -75,8 +74,8 @@ public class ControlRecordTypeTest {
     @ParameterizedTest
     @EnumSource(value = ControlRecordType.class)
     public void testValueControlRecordKeySize(ControlRecordType type) {
-        for (short version = ControlRecordTypeSchema.LOWEST_SUPPORTED_VERSION;
-             version <= ControlRecordTypeSchema.HIGHEST_SUPPORTED_VERSION; version++) {
+        for (short version = org.apache.kafka.common.message.ControlRecordType.LOWEST_SUPPORTED_VERSION;
+             version <= org.apache.kafka.common.message.ControlRecordType.HIGHEST_SUPPORTED_VERSION; version++) {
             assertEquals(4, type.controlRecordKeySize());
         }
     }
@@ -84,8 +83,8 @@ public class ControlRecordTypeTest {
     @ParameterizedTest
     @EnumSource(value = ControlRecordType.class)
     public void testBackwardDeserializeCompatibility(ControlRecordType type) {
-        for (short version = ControlRecordTypeSchema.LOWEST_SUPPORTED_VERSION;
-             version <= ControlRecordTypeSchema.HIGHEST_SUPPORTED_VERSION; version++) {
+        for (short version = org.apache.kafka.common.message.ControlRecordType.LOWEST_SUPPORTED_VERSION;
+             version <= org.apache.kafka.common.message.ControlRecordType.HIGHEST_SUPPORTED_VERSION; version++) {
             Struct struct = new Struct(v0Schema);
             struct.set("version", version);
             struct.set("type", type.type());
@@ -105,8 +104,8 @@ public class ControlRecordTypeTest {
         if (type == ControlRecordType.UNKNOWN) {
             return;
         }
-        for (short version = ControlRecordTypeSchema.LOWEST_SUPPORTED_VERSION;
-             version <= ControlRecordTypeSchema.HIGHEST_SUPPORTED_VERSION; version++) {
+        for (short version = org.apache.kafka.common.message.ControlRecordType.LOWEST_SUPPORTED_VERSION;
+             version <= org.apache.kafka.common.message.ControlRecordType.HIGHEST_SUPPORTED_VERSION; version++) {
             ByteBuffer newVersionBuffer = type.recordKey();
 
             Struct struct = v0Schema.read(newVersionBuffer);
