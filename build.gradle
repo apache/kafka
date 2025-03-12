@@ -1531,14 +1531,15 @@ project(':test-common:test-common-runtime') {
   }
 
   dependencies {
-    implementation project(':test-common:test-common-internal-api')
-    implementation project(':clients')
-    implementation project(':core')
-    implementation project(':group-coordinator')
-    implementation project(':metadata')
-    implementation project(':raft')
+    api project(':core')
+    api project(':clients')
+
     implementation project(':server')
     implementation project(':server-common')
+    implementation project(':group-coordinator')
+    implementation project(':test-common:test-common-internal-api')
+    implementation project(':metadata')
+    implementation project(':raft')
     implementation project(':storage')
 
     implementation libs.junitPlatformLanucher
@@ -1959,6 +1960,31 @@ project(':clients') {
     include "**/org/apache/kafka/server/telemetry/*"
   }
 }
+
+project(':clients:clients-integration-tests') {
+  base {
+    archivesName = "kafka-clients-integration-tests"
+  }
+
+  dependencies {
+    testImplementation libs.slf4jApi
+    testImplementation project(':test-common:test-common-internal-api')
+    testImplementation project(':test-common:test-common-runtime')
+    implementation project(':server-common')
+    implementation project(':group-coordinator')
+    implementation project(':transaction-coordinator')
+
+    testImplementation libs.junitJupiter
+    testImplementation libs.junitPlatformSuiteEngine
+
+    testRuntimeOnly runtimeTestLibs
+  }
+
+  checkstyle {
+    configProperties = checkstyleConfigProperties("import-control-clients-integration-tests.xml")
+  }
+}
+
 
 project(':raft') {
   base {
