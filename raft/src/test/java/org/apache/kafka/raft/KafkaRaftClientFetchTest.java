@@ -67,7 +67,7 @@ public final class KafkaRaftClientFetchTest {
                 VoterSetTest.voterSet(Stream.of(local, electedLeader)), KRaftVersion.KRAFT_VERSION_1
             )
             .withElectedLeader(epoch, electedLeader.id())
-            .withRaftProtocol(RaftClientTestContext.RaftProtocol.KIP_996_PROTOCOL)
+            .withRaftProtocol(RaftProtocol.KIP_996_PROTOCOL)
             .build();
 
         context.pollUntilRequest();
@@ -102,7 +102,7 @@ public final class KafkaRaftClientFetchTest {
                 VoterSetTest.voterSet(Stream.of(local, electedLeader)), KRaftVersion.KRAFT_VERSION_1
             )
             .withElectedLeader(epoch, electedLeader.id())
-            .withRaftProtocol(RaftClientTestContext.RaftProtocol.KIP_996_PROTOCOL)
+            .withRaftProtocol(RaftProtocol.KIP_996_PROTOCOL)
             .build();
 
         context.pollUntilRequest();

@@ -2217,33 +2217,4 @@ public final class RaftClientTestContext {
             snapshot = Optional.of(reader);
         }
     }
-
-    /**
-     * Determines what versions of RPCs are in use. Note, these are ordered from oldest to newest, and are
-     * cumulative. E.g. KIP_996_PROTOCOL includes KIP_853_PROTOCOL and KIP_595_PROTOCOL changes
-     */
-    enum RaftProtocol {
-        // kraft support
-        KIP_595_PROTOCOL,
-        // dynamic quorum reconfiguration support
-        KIP_853_PROTOCOL,
-        // preVote support
-        KIP_996_PROTOCOL;
-
-        boolean isKRaftSupported() {
-            return isAtLeast(KIP_595_PROTOCOL);
-        }
-
-        boolean isReconfigSupported() {
-            return isAtLeast(KIP_853_PROTOCOL);
-        }
-
-        boolean isPreVoteSupported() {
-            return isAtLeast(KIP_996_PROTOCOL);
-        }
-
-        private boolean isAtLeast(RaftProtocol otherRpc) {
-            return this.compareTo(otherRpc) >= 0;
-        }
-    }
 }
