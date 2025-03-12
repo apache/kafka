@@ -138,6 +138,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
       // check transactionTimeoutMs is not larger than the broker configured maximum allowed value
       responseCallback(initTransactionError(Errors.INVALID_TRANSACTION_TIMEOUT))
     } else {
+      val resolvedTxnTimeoutMs = if (enableTwoPCFlag) Int.MaxValue else transactionTimeoutMs
       val coordinatorEpochAndMetadata = txnManager.getTransactionState(transactionalId).flatMap {
         case None =>
           try {
@@ -147,7 +148,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
               nextProducerId = RecordBatch.NO_PRODUCER_ID,
               producerEpoch = RecordBatch.NO_PRODUCER_EPOCH,
               lastProducerEpoch = RecordBatch.NO_PRODUCER_EPOCH,
-              txnTimeoutMs = transactionTimeoutMs,
+              txnTimeoutMs = resolvedTxnTimeoutMs,
               state = Empty,
               topicPartitions = collection.mutable.Set.empty[TopicPartition],
               txnLastUpdateTimestamp = time.milliseconds(),
@@ -166,7 +167,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
           val txnMetadata = existingEpochAndMetadata.transactionMetadata
 
           txnMetadata.inLock {
-            prepareInitProducerIdTransit(transactionalId, transactionTimeoutMs, coordinatorEpoch, txnMetadata,
+            prepareInitProducerIdTransit(transactionalId, resolvedTxnTimeoutMs, coordinatorEpoch, txnMetadata,
               expectedProducerIdAndEpoch)
           }
       }

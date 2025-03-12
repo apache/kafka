@@ -91,5 +91,7 @@ public final class TransactionStateManagerConfig {
         return transactionRemoveExpiredTransactionalIdCleanupIntervalMs;
     }
 
-    public boolean transaction2PCEnabled() { return transaction2PCEnabled; }
+    public boolean transaction2PCEnabled() {
+        return transaction2PCEnabled;
+    }
 }
