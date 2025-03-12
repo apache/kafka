@@ -17,14 +17,12 @@
 
 package kafka.utils
 
-import java.io._
-import java.nio._
+import java.io.File
 import java.util.concurrent.locks.{Lock, ReadWriteLock}
-import java.lang.management._
-import java.util.UUID
+import java.lang.management.ManagementFactory
 import com.typesafe.scalalogging.Logger
 
-import javax.management._
+import javax.management.ObjectName
 import scala.collection._
 import scala.collection.Seq
 import org.apache.kafka.network.EndPoint
@@ -106,15 +104,6 @@ object CoreUtils {
         logger.error(s"Failed to register Mbean $name", e)
         false
     }
-  }
-
-  /**
-   * Create an instance of the class with the given class name
-   */
-  def createObject[T <: AnyRef](className: String, args: AnyRef*): T = {
-    val klass = Utils.loadClass(className, classOf[Object]).asInstanceOf[Class[T]]
-    val constructor = klass.getConstructor(args.map(_.getClass): _*)
-    constructor.newInstance(args: _*)
   }
 
   /**
@@ -205,13 +194,5 @@ object CoreUtils {
     }
     validate(endPoints)
     endPoints
-  }
-
-  def getBytesFromUuid(uuid: UUID): Array[Byte] = {
-    // Extract bytes for uuid which is 128 bits (or 16 bytes) long.
-    val uuidBytes = ByteBuffer.wrap(new Array[Byte](16))
-    uuidBytes.putLong(uuid.getMostSignificantBits)
-    uuidBytes.putLong(uuid.getLeastSignificantBits)
-    uuidBytes.array
   }
 }
