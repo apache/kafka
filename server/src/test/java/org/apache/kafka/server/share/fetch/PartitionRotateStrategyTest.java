@@ -86,9 +86,9 @@ public class PartitionRotateStrategyTest {
     }
 
     /**
-     * Create an ordered set of topic partitions.
+     * Create a list of topic partitions.
      * @param size The number of topic-partitions to create.
-     * @return The ordered set of topic partitions.
+     * @return The list of topic partitions.
      */
     private List<TopicIdPartition> createPartitions(int size) {
         List<TopicIdPartition> partitions = new ArrayList<>();
