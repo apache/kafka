@@ -5619,7 +5619,12 @@ public class GroupMetadataManager {
                     break;
 
                 case SHARE:
-                    // Nothing for now for the ShareGroup, as no members are persisted.
+                    ShareGroup shareGroup = (ShareGroup) group;
+                    log.info("Loaded share group {} with {} members.", groupId, shareGroup.members().size());
+                    shareGroup.members().forEach((memberId, member) -> {
+                        log.debug("Loaded member {} in share group {}.", memberId, groupId);
+                        scheduleShareGroupSessionTimeout(groupId, memberId);
+                    });
                     break;
 
                 default:

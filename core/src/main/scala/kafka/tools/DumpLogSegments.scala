@@ -21,7 +21,6 @@ import com.fasterxml.jackson.databind.JsonNode
 
 import java.io._
 import com.fasterxml.jackson.databind.node.{IntNode, JsonNodeFactory, ObjectNode, TextNode}
-import kafka.utils.CoreUtils
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.message.ConsumerProtocolAssignment
 import org.apache.kafka.common.message.ConsumerProtocolAssignmentJsonConverter
@@ -646,8 +645,8 @@ object DumpLogSegments {
       } else if (options.has(shareStateOpt)) {
         new ShareGroupStateMessageParser
       } else {
-        val valueDecoder = CoreUtils.createObject[org.apache.kafka.tools.api.Decoder[_]](options.valueOf(valueDecoderOpt))
-        val keyDecoder = CoreUtils.createObject[org.apache.kafka.tools.api.Decoder[_]](options.valueOf(keyDecoderOpt))
+        val valueDecoder = Utils.newInstance(options.valueOf(valueDecoderOpt), classOf[Decoder[_]])
+        val keyDecoder = Utils.newInstance(options.valueOf(keyDecoderOpt), classOf[Decoder[_]])
         new DecoderMessageParser(keyDecoder, valueDecoder)
       }
 
