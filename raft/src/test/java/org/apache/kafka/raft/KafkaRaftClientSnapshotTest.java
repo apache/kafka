@@ -60,7 +60,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public final class KafkaRaftClientSnapshotTest {
-
     @Test
     public void testLatestSnapshotId() throws Exception {
         int localId = randomReplicaId();
