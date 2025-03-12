@@ -248,11 +248,11 @@ public class GroupCoordinatorConfig {
 
     public static final String STREAMS_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG = "group.streams.min.session.timeout.ms";
     public static final int STREAMS_GROUP_MIN_SESSION_TIMEOUT_MS_DEFAULT = 45000;
-    public static final String STREAMS_GROUP_MIN_SESSION_TIMEOUT_MS_DOC = "The minimum session timeout.";
+    public static final String STREAMS_GROUP_MIN_SESSION_TIMEOUT_MS_DOC = "The minimum allowed value for the group-level configuration of " + GroupConfig.STREAMS_SESSION_TIMEOUT_MS_CONFIG;
 
     public static final String STREAMS_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG = "group.streams.max.session.timeout.ms";
     public static final int STREAMS_GROUP_MAX_SESSION_TIMEOUT_MS_DEFAULT = 60000;
-    public static final String STREAMS_GROUP_MAX_SESSION_TIMEOUT_MS_DOC = "The maximum session timeout.";
+    public static final String STREAMS_GROUP_MAX_SESSION_TIMEOUT_MS_DOC = "The maximum allowed value for the group-level configuration of " + GroupConfig.STREAMS_SESSION_TIMEOUT_MS_CONFIG;
 
     public static final String STREAMS_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG = "group.streams.heartbeat.interval.ms";
     public static final int STREAMS_GROUP_HEARTBEAT_INTERVAL_MS_DEFAULT = 5000;
@@ -260,11 +260,11 @@ public class GroupCoordinatorConfig {
 
     public static final String STREAMS_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG = "group.streams.min.heartbeat.interval.ms";
     public static final int STREAMS_GROUP_MIN_HEARTBEAT_INTERVAL_MS_DEFAULT = 5000;
-    public static final String STREAMS_GROUP_MIN_HEARTBEAT_INTERVAL_MS_DOC = "The minimum heartbeat interval.";
+    public static final String STREAMS_GROUP_MIN_HEARTBEAT_INTERVAL_MS_DOC = "The minimum allowed value for the group-level configuration of " + GroupConfig.STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG;
 
     public static final String STREAMS_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG = "group.streams.max.heartbeat.interval.ms";
     public static final int STREAMS_GROUP_MAX_HEARTBEAT_INTERVAL_MS_DEFAULT = 15000;
-    public static final String STREAMS_GROUP_MAX_HEARTBEAT_INTERVAL_MS_DOC = "The maximum heartbeat interval.";
+    public static final String STREAMS_GROUP_MAX_HEARTBEAT_INTERVAL_MS_DOC = "The maximum allowed value for the group-level configuration of " + GroupConfig.STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG;
 
     public static final String STREAMS_GROUP_MAX_SIZE_CONFIG = "group.streams.max.size";
     public static final int STREAMS_GROUP_MAX_SIZE_DEFAULT = Integer.MAX_VALUE;
@@ -276,7 +276,7 @@ public class GroupCoordinatorConfig {
 
     public static final String STREAMS_GROUP_MAX_STANDBY_REPLICAS_CONFIG = "group.streams.max.standby.replicas";
     public static final int STREAMS_GROUP_MAX_STANDBY_REPLICAS_DEFAULT = 2;
-    public static final String STREAMS_GROUP_MAX_STANDBY_REPLICAS_DOC = "Maximum for dynamic configurations of the standby replica configuration.";
+    public static final String STREAMS_GROUP_MAX_STANDBY_REPLICAS_DOC = "The maximum allowed value for the group-level configuration of " + GroupConfig.STREAMS_NUM_STANDBY_REPLICAS_CONFIG;
 
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
         // Group coordinator configs

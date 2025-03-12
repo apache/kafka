@@ -60,16 +60,10 @@ public final class GroupConfig extends AbstractConfig {
         "<li>anything else: throw exception to the share consumer.</li></ul>";
 
     public static final String STREAMS_SESSION_TIMEOUT_MS_CONFIG = "group.streams.session.timeout.ms";
-    public static final int STREAMS_SESSION_TIMEOUT_MS_DEFAULT = 45000;
-    public static final String STREAMS_SESSION_TIMEOUT_MS_DOC = "The timeout to detect client failures when using the streams group protocol.";
 
     public static final String STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG = "group.streams.heartbeat.interval.ms";
-    public static final int STREAMS_HEARTBEAT_INTERVAL_MS_DEFAULT = 5000;
-    public static final String STREAMS_HEARTBEAT_INTERVAL_MS_DOC = "The heartbeat interval given to the members.";
 
     public static final String STREAMS_NUM_STANDBY_REPLICAS_CONFIG = "group.streams.num.standby.replicas";
-    public static final int STREAMS_NUM_STANDBY_REPLICAS_DEFAULT = 0;
-    public static final String STREAMS_NUM_STANDBY_REPLICAS_DOC = "The number of standby replicas for each task.";
 
     public final int consumerSessionTimeoutMs;
 
@@ -128,22 +122,22 @@ public final class GroupConfig extends AbstractConfig {
             SHARE_AUTO_OFFSET_RESET_DOC)
         .define(STREAMS_SESSION_TIMEOUT_MS_CONFIG,
             INT,
-            STREAMS_SESSION_TIMEOUT_MS_DEFAULT,
+            GroupCoordinatorConfig.STREAMS_GROUP_SESSION_TIMEOUT_MS_DEFAULT,
             atLeast(1),
             MEDIUM,
-            STREAMS_SESSION_TIMEOUT_MS_DOC)
+            GroupCoordinatorConfig.STREAMS_GROUP_SESSION_TIMEOUT_MS_DOC)
         .define(STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG,
             INT,
-            STREAMS_HEARTBEAT_INTERVAL_MS_DEFAULT,
+            GroupCoordinatorConfig.STREAMS_GROUP_HEARTBEAT_INTERVAL_MS_DEFAULT,
             atLeast(1),
             MEDIUM,
-            STREAMS_HEARTBEAT_INTERVAL_MS_DOC)
+            GroupCoordinatorConfig.STREAMS_GROUP_HEARTBEAT_INTERVAL_MS_DOC)
         .define(STREAMS_NUM_STANDBY_REPLICAS_CONFIG,
             INT,
-            STREAMS_NUM_STANDBY_REPLICAS_DEFAULT,
+            GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT,
             atLeast(0),
             MEDIUM,
-            STREAMS_NUM_STANDBY_REPLICAS_DOC);
+            GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DOC);
 
     public GroupConfig(Map<?, ?> props) {
         super(CONFIG, props, false);
