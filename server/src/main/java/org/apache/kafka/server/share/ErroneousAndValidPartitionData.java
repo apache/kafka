@@ -53,8 +53,8 @@ public class ErroneousAndValidPartitionData {
     }
 
     public ErroneousAndValidPartitionData() {
-        this.erroneous = new HashMap<>();
-        this.validTopicIdPartitions = new ArrayList<>();
+        this.erroneous = Map.of();
+        this.validTopicIdPartitions = List.of();
     }
 
     public Map<TopicIdPartition, ShareFetchResponseData.PartitionData> erroneous() {

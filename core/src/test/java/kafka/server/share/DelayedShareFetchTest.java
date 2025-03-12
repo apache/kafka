@@ -1144,7 +1144,7 @@ public class DelayedShareFetchTest {
     public void testOnCompleteExecutionOnTimeout() {
         ShareFetch shareFetch = new ShareFetch(
             FETCH_PARAMS, "grp", Uuid.randomUuid().toString(),
-            new CompletableFuture<>(), new ArrayList<>(), BATCH_SIZE, MAX_FETCH_RECORDS,
+            new CompletableFuture<>(), List.of(), BATCH_SIZE, MAX_FETCH_RECORDS,
             BROKER_TOPIC_STATS);
         DelayedShareFetch delayedShareFetch = DelayedShareFetchBuilder.builder()
             .withShareFetchData(shareFetch)

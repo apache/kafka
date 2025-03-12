@@ -36,7 +36,7 @@ public class PartitionRotateStrategyTest {
     @Test
     public void testRoundRobinStrategy() {
         PartitionRotateStrategy strategy = PartitionRotateStrategy.type(StrategyType.ROUND_ROBIN);
-        ArrayList<TopicIdPartition> partitions = createPartitions(3);
+        List<TopicIdPartition> partitions = createPartitions(3);
 
         List<TopicIdPartition> result = strategy.rotate(partitions, new PartitionRotateMetadata(1));
         assertEquals(3, result.size());
@@ -62,7 +62,7 @@ public class PartitionRotateStrategyTest {
     public void testRoundRobinStrategyWithSpecialSessionEpochs() {
         PartitionRotateStrategy strategy = PartitionRotateStrategy.type(StrategyType.ROUND_ROBIN);
 
-        ArrayList<TopicIdPartition> partitions = createPartitions(3);
+        List<TopicIdPartition> partitions = createPartitions(3);
         List<TopicIdPartition> result = strategy.rotate(
             partitions,
             new PartitionRotateMetadata(ShareRequestMetadata.INITIAL_EPOCH));
@@ -90,8 +90,8 @@ public class PartitionRotateStrategyTest {
      * @param size The number of topic-partitions to create.
      * @return The ordered set of topic partitions.
      */
-    private ArrayList<TopicIdPartition> createPartitions(int size) {
-        ArrayList<TopicIdPartition> partitions = new ArrayList<>();
+    private List<TopicIdPartition> createPartitions(int size) {
+        List<TopicIdPartition> partitions = new ArrayList<>();
         for (int i = 0; i < size; i++) {
             partitions.add(new TopicIdPartition(Uuid.randomUuid(), i, "foo" + i));
         }

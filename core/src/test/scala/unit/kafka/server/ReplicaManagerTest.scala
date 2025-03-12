@@ -6083,8 +6083,7 @@ class ReplicaManagerTest {
     try {
       val groupId = "grp"
       val tp1 = new TopicIdPartition(Uuid.randomUuid, new TopicPartition("foo1", 0))
-      val topicPartitions = new util.ArrayList[TopicIdPartition]
-      topicPartitions.add(tp1)
+      val topicPartitions = util.List.of(tp1)
 
       val sp1 = mock(classOf[SharePartition])
       val sharePartitions = new util.LinkedHashMap[TopicIdPartition, SharePartition]
