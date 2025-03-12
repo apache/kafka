@@ -1423,7 +1423,10 @@ public class GroupMetadataManager {
         for (StreamsGroupHeartbeatRequestData.Subtopology subtopology: topology.subtopologies()) {
             for (StreamsGroupHeartbeatRequestData.TopicInfo topicInfo: subtopology.stateChangelogTopics()) {
                 if (topicInfo.partitions() != 0) {
-                    throw new StreamsInvalidTopologyException("Changelog topics must have an undefined partition count.");
+                    throw new StreamsInvalidTopologyException(String.format(
+                        "Changelog topic %s must have an undefined partition count, but it is set to %d.",
+                        topicInfo.name(), topicInfo.partitions()
+                    ));
                 }
             }
         }
@@ -1562,7 +1565,8 @@ public class GroupMetadataManager {
         } else if (request.memberEpoch() == LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
             throwIfNull(request.instanceId(), "InstanceId can't be null.");
         } else if (request.memberEpoch() <  LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
-            throw new InvalidRequestException("MemberEpoch is invalid.");
+            throw new InvalidRequestException(String.format("MemberEpoch is %d, but must be greater than or equal to -2.",
+                request.memberEpoch()));
         }
 
         if (request.activeTasks() != null || request.standbyTasks() != null || request.warmupTasks() != null) {
@@ -2023,7 +2027,7 @@ public class GroupMetadataManager {
      * @param taskEndOffsets      Cumulative changelog offsets for tasks, or null.
      * @param taskOffsets         Cumulative changelog end-offsets for tasks, or null.
      * @param shutdownApplication Whether all Streams clients in the group should shut down.
-     * @return A Result containing the StreamsGroupHeartbeat response and a list of records to update the state machine.
+     * @return A result containing the StreamsGroupHeartbeat response and a list of records to update the state machine.
      */
     private CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> streamsGroupHeartbeat(
         String groupId,
@@ -3338,9 +3342,9 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Creates the member subscription record if the updatedMember is different from
-     * the old member. Returns true if the topologyEpoch of the member has changed,
-     * which is always true when a member is first created.
+     * Creates the member metadatarecord record if the updatedMember is different from
+     * the old member. Returns true if the metadata has changed, which is always true
+     * when a member is first created.
      *
      * @param groupId       The group id.
      * @param member        The old member.
@@ -3358,12 +3362,10 @@ public class GroupMetadataManager {
         String memberId = updatedMember.memberId();
         if (!updatedMember.equals(member)) {
             records.add(newStreamsGroupMemberRecord(groupId, updatedMember));
+            log.info("[GroupId {}] Member {} updated its member metdata to {}.",
+                groupId, memberId, updatedMember);
 
-            if (!Objects.equals(updatedMember.topologyEpoch(), member.topologyEpoch())) {
-                log.info("[GroupId {}] Member {} updated its topology epoch to: {}.",
-                    groupId, memberId, updatedMember.topologyEpoch());
-                return true;
-            }
+            return true;
         }
         return false;
     }
