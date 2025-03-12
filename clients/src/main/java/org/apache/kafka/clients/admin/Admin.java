@@ -1943,6 +1943,7 @@ public interface Admin extends AutoCloseable {
     /**
      * Delete share groups from the cluster with the default options.
      *
+     * @param groupIds Collection of share group ids which are to be deleted.
      * @return The DeleteShareGroupsResult.
      */
     default DeleteShareGroupsResult deleteShareGroups(Collection<String> groupIds) {
@@ -1952,10 +1953,34 @@ public interface Admin extends AutoCloseable {
     /**
      * Delete share groups from the cluster.
      *
+     * @param groupIds Collection of share group ids which are to be deleted.
      * @param options The options to use when deleting a share group.
      * @return The DeleteShareGroupsResult.
      */
     DeleteShareGroupsResult deleteShareGroups(Collection<String> groupIds, DeleteShareGroupsOptions options);
+
+    /**
+     * Describe streams groups in the cluster.
+     *
+     * @param groupIds The IDs of the groups to describe.
+     * @param options  The options to use when describing the groups.
+     * @return The DescribeStreamsGroupsResult.
+     */
+    DescribeStreamsGroupsResult describeStreamsGroups(Collection<String> groupIds,
+                                                      DescribeStreamsGroupsOptions options);
+
+    /**
+     * Describe streams groups in the cluster, with the default options.
+     * <p>
+     * This is a convenience method for {@link #describeStreamsGroups(Collection, DescribeStreamsGroupsOptions)}
+     * with default options. See the overload for more details.
+     *
+     * @param groupIds The IDs of the groups to describe.
+     * @return The DescribeStreamsGroupsResult.
+     */
+    default DescribeStreamsGroupsResult describeStreamsGroups(Collection<String> groupIds) {
+        return describeStreamsGroups(groupIds, new DescribeStreamsGroupsOptions());
+    }
 
     /**
      * Describe some classic groups in the cluster.
