@@ -77,4 +77,7 @@ public class InitProducerIdRequest extends AbstractRequest {
         return data;
     }
 
+    public boolean enable2Pc() { return data.enable2Pc(); }
+
+    public boolean keepPreparedTxn() { return data.keepPreparedTxn(); }
 }

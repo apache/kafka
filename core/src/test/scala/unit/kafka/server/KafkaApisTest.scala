@@ -1579,6 +1579,8 @@ class KafkaApisTest extends Logging {
         new InitProducerIdRequestData()
           .setTransactionalId(transactionalId)
           .setTransactionTimeoutMs(txnTimeoutMs)
+          .setEnable2Pc(false)
+          .setKeepPreparedTxn(false)
           .setProducerId(producerId)
           .setProducerEpoch(epoch)
       ).build(version.toShort)
@@ -1594,6 +1596,8 @@ class KafkaApisTest extends Logging {
       when(txnCoordinator.handleInitProducerId(
         ArgumentMatchers.eq(transactionalId),
         ArgumentMatchers.eq(txnTimeoutMs),
+        ArgumentMatchers.eq(false),
+        ArgumentMatchers.eq(false),
         ArgumentMatchers.eq(expectedProducerIdAndEpoch),
         responseCallback.capture(),
         ArgumentMatchers.eq(requestLocal)
