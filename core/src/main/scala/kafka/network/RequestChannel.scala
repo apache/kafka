@@ -261,7 +261,7 @@ object RequestChannel extends Logging {
           apiRemoteTimeMs, apiThrottleTimeMs, responseQueueTimeMs,
           responseSendTimeMs, temporaryMemoryBytes,
           messageConversionsTimeMs)
-        val logPrefix = "Completed request: {}"
+        val logPrefix = "Completed request:{}"
         // log deprecated apis at `info` level to allow them to be selectively enabled
         if (header.isApiVersionDeprecated())
           requestLogger.info(logPrefix, desc)

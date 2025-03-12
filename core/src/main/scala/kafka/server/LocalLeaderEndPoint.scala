@@ -92,7 +92,6 @@ class LocalLeaderEndPoint(sourceBroker: BrokerEndPoint,
     val fetchData = request.fetchData(topicNames.asJava)
 
     val fetchParams = new FetchParams(
-      request.version,
       FetchRequest.FUTURE_LOCAL_REPLICA_ID,
       -1,
       0L, // timeout is 0 so that the callback will be executed immediately

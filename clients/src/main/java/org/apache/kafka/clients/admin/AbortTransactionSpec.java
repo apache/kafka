@@ -17,11 +17,9 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Objects;
 
-@InterfaceStability.Evolving
 public class AbortTransactionSpec {
     private final TopicPartition topicPartition;
     private final long producerId;

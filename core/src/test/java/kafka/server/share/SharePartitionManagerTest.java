@@ -47,7 +47,6 @@ import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.ShareFetchRequest;
 import org.apache.kafka.common.requests.ShareFetchResponse;
 import org.apache.kafka.common.requests.ShareRequestMetadata;
-import org.apache.kafka.common.test.api.Flaky;
 import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
@@ -153,7 +152,7 @@ public class SharePartitionManagerTest {
     private static final int DELAYED_SHARE_FETCH_MAX_WAIT_MS = 2000;
     private static final int DELAYED_SHARE_FETCH_TIMEOUT_MS = 3000;
     private static final int BATCH_SIZE = 500;
-    private static final FetchParams FETCH_PARAMS = new FetchParams(ApiKeys.SHARE_FETCH.latestVersion(),
+    private static final FetchParams FETCH_PARAMS = new FetchParams(
         FetchRequest.ORDINARY_CONSUMER_ID, -1, DELAYED_SHARE_FETCH_MAX_WAIT_MS,
         1, 1024 * 1024, FetchIsolation.HIGH_WATERMARK, Optional.empty(), true);
     private static final String TIMER_NAME_PREFIX = "share-partition-manager";
@@ -1260,7 +1259,6 @@ public class SharePartitionManagerTest {
         );
     }
 
-    @Flaky("KAFKA-18657")
     @Test
     public void testReplicaManagerFetchShouldProceed() {
         String groupId = "grp";
@@ -2298,7 +2296,6 @@ public class SharePartitionManagerTest {
         shareGroupMetrics.close();
     }
 
-    @Flaky("KAFKA-18657")
     @Test
     public void testDelayedInitializationShouldCompleteFetchRequest() {
         String groupId = "grp";
@@ -2737,7 +2734,7 @@ public class SharePartitionManagerTest {
 
         SharePartition sp1 = mock(SharePartition.class);
         // Do not make the share partition acquirable hence it shouldn't be removed from the cache,
-        // as it won't be part of replica manger readFromLog request.
+        // as it won't be part of replica manager readFromLog request.
         when(sp1.maybeAcquireFetchLock()).thenReturn(false);
         when(sp1.maybeInitialize()).thenReturn(CompletableFuture.completedFuture(null));
 

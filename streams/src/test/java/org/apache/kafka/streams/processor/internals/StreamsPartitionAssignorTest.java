@@ -159,7 +159,6 @@ import static org.hamcrest.Matchers.anEmptyMap;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -371,23 +370,11 @@ public class StreamsPartitionAssignorTest {
 
     @ParameterizedTest
     @MethodSource("parameter")
-    public void shouldUseEagerRebalancingProtocol(final Map<String, Object> parameterizedConfig) {
-        setUp(parameterizedConfig, false);
-        createDefaultMockTaskManager();
-        configurePartitionAssignorWith(Collections.singletonMap(StreamsConfig.UPGRADE_FROM_CONFIG, StreamsConfig.UPGRADE_FROM_23), parameterizedConfig);
-
-        assertEquals(1, partitionAssignor.supportedProtocols().size());
-        assertTrue(partitionAssignor.supportedProtocols().contains(RebalanceProtocol.EAGER));
-        assertFalse(partitionAssignor.supportedProtocols().contains(RebalanceProtocol.COOPERATIVE));
-    }
-
-    @ParameterizedTest
-    @MethodSource("parameter")
-    public void shouldUseCooperativeRebalancingProtocol(final Map<String, Object> parameterizedConfig) {
+    public void shouldSupportOnlyCooperativeRebalancingProtocol(final Map<String, Object> parameterizedConfig) {
         setUp(parameterizedConfig, false);
         configureDefault(parameterizedConfig);
 
-        assertEquals(2, partitionAssignor.supportedProtocols().size());
+        assertEquals(1, partitionAssignor.supportedProtocols().size());
         assertTrue(partitionAssignor.supportedProtocols().contains(RebalanceProtocol.COOPERATIVE));
     }
 
@@ -586,7 +573,7 @@ public class StreamsPartitionAssignorTest {
 
     @ParameterizedTest
     @MethodSource("parameter")
-    public void testEagerSubscription(final Map<String, Object> parameterizedConfig) {
+    public void shouldThrowOnEagerSubscription(final Map<String, Object> parameterizedConfig) {
         setUp(parameterizedConfig, false);
         builder.addSource(null, "source1", null, null, null, "topic1");
         builder.addSource(null, "source2", null, null, null, "topic2");
@@ -600,17 +587,10 @@ public class StreamsPartitionAssignorTest {
         );
 
         createMockTaskManager(prevTasks, standbyTasks);
-        configurePartitionAssignorWith(Collections.singletonMap(StreamsConfig.UPGRADE_FROM_CONFIG, StreamsConfig.UPGRADE_FROM_23), parameterizedConfig);
-        assertThat(partitionAssignor.rebalanceProtocol(), equalTo(RebalanceProtocol.EAGER));
-
-        final Set<String> topics = Set.of("topic1", "topic2");
-        final Subscription subscription = new Subscription(new ArrayList<>(topics), partitionAssignor.subscriptionUserData(topics));
-
-        Collections.sort(subscription.topics());
-        assertEquals(asList("topic1", "topic2"), subscription.topics());
-
-        final SubscriptionInfo info = getInfo(PID_1, prevTasks, standbyTasks, uniqueField);
-        assertEquals(info, SubscriptionInfo.decode(subscription.userData()));
+        assertThrows(
+            ConfigException.class,
+            () -> configurePartitionAssignorWith(Collections.singletonMap(StreamsConfig.UPGRADE_FROM_CONFIG, StreamsConfig.UPGRADE_FROM_23), parameterizedConfig)
+        );
     }
 
     @ParameterizedTest
@@ -2133,64 +2113,6 @@ public class StreamsPartitionAssignorTest {
         assertThat(assignment.size(), equalTo(2));
         assertThat(AssignmentInfo.decode(assignment.get("consumer1").userData()).version(), equalTo(smallestVersion));
         assertThat(AssignmentInfo.decode(assignment.get("consumer2").userData()).version(), equalTo(smallestVersion));
-    }
-
-    @ParameterizedTest
-    @MethodSource("parameter")
-    public void shouldDownGradeSubscriptionToVersion1(final Map<String, Object> parameterizedConfig) {
-        setUp(parameterizedConfig, false);
-        createDefaultMockTaskManager();
-        configurePartitionAssignorWith(Collections.singletonMap(StreamsConfig.UPGRADE_FROM_CONFIG, StreamsConfig.UPGRADE_FROM_0100), parameterizedConfig);
-
-        final Set<String> topics = Set.of("topic1");
-        final Subscription subscription = new Subscription(new ArrayList<>(topics), partitionAssignor.subscriptionUserData(topics));
-
-        assertThat(SubscriptionInfo.decode(subscription.userData()).version(), equalTo(1));
-    }
-
-    @ParameterizedTest
-    @MethodSource("parameter")
-    public void shouldDownGradeSubscriptionToVersion2For0101(final Map<String, Object> parameterizedConfig) {
-        setUp(parameterizedConfig, false);
-        shouldDownGradeSubscriptionToVersion2(StreamsConfig.UPGRADE_FROM_0101, parameterizedConfig);
-    }
-
-    @ParameterizedTest
-    @MethodSource("parameter")
-    public void shouldDownGradeSubscriptionToVersion2For0102(final Map<String, Object> parameterizedConfig) {
-        setUp(parameterizedConfig, false);
-        shouldDownGradeSubscriptionToVersion2(StreamsConfig.UPGRADE_FROM_0102, parameterizedConfig);
-    }
-
-    @ParameterizedTest
-    @MethodSource("parameter")
-    public void shouldDownGradeSubscriptionToVersion2For0110(final Map<String, Object> parameterizedConfig) {
-        setUp(parameterizedConfig, false);
-        shouldDownGradeSubscriptionToVersion2(StreamsConfig.UPGRADE_FROM_0110, parameterizedConfig);
-    }
-
-    @ParameterizedTest
-    @MethodSource("parameter")
-    public void shouldDownGradeSubscriptionToVersion2For10(final Map<String, Object> parameterizedConfig) {
-        setUp(parameterizedConfig, false);
-        shouldDownGradeSubscriptionToVersion2(StreamsConfig.UPGRADE_FROM_10, parameterizedConfig);
-    }
-
-    @ParameterizedTest
-    @MethodSource("parameter")
-    public void shouldDownGradeSubscriptionToVersion2For11(final Map<String, Object> parameterizedConfig) {
-        setUp(parameterizedConfig, false);
-        shouldDownGradeSubscriptionToVersion2(StreamsConfig.UPGRADE_FROM_11, parameterizedConfig);
-    }
-
-    private void shouldDownGradeSubscriptionToVersion2(final Object upgradeFromValue, final Map<String, Object> parameterizedConfig) {
-        createDefaultMockTaskManager();
-        configurePartitionAssignorWith(Collections.singletonMap(StreamsConfig.UPGRADE_FROM_CONFIG, upgradeFromValue), parameterizedConfig);
-
-        final Set<String> topics = Set.of("topic1");
-        final Subscription subscription = new Subscription(new ArrayList<>(topics), partitionAssignor.subscriptionUserData(topics));
-
-        assertThat(SubscriptionInfo.decode(subscription.userData()).version(), equalTo(2));
     }
 
     @ParameterizedTest

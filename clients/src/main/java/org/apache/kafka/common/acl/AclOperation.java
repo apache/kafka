@@ -17,8 +17,6 @@
 
 package org.apache.kafka.common.acl;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
-
 import java.util.HashMap;
 import java.util.Locale;
 
@@ -38,9 +36,7 @@ import java.util.Locale;
  *
  * <li><code>ALLOW ALTER_CONFIGS</code> implies <code>ALLOW DESCRIBE_CONFIGS</code>
  * </ul>
- * The API for this class is still evolving and we may break compatibility in minor releases, if necessary.
  */
-@InterfaceStability.Evolving
 public enum AclOperation {
     /**
      * Represents any AclOperation which this client cannot understand, perhaps because this

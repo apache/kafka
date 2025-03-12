@@ -66,7 +66,6 @@ import org.apache.kafka.timeline.TimelineHashMap;
 
 import org.slf4j.Logger;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
@@ -88,7 +87,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     public static final Exception NEGATIVE_PARTITION_ID = new Exception("The partition id cannot be a negative number.");
 
     public static class Builder implements CoordinatorShardBuilder<ShareCoordinatorShard, CoordinatorRecord> {
-        private ShareCoordinatorConfig config;
+        private final ShareCoordinatorConfig config;
         private LogContext logContext;
         private SnapshotRegistry snapshotRegistry;
         private CoordinatorMetrics coordinatorMetrics;
@@ -326,7 +325,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             ))
         );
 
-        return new CoordinatorResult<>(Collections.singletonList(record), responseData);
+        return new CoordinatorResult<>(List.of(record), responseData);
     }
 
     /**
@@ -409,7 +408,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             .setStateEpoch(responseData.results().get(0).partitions().get(0).stateEpoch());
 
         CoordinatorRecord record = generateShareStateRecord(writePartitionData, key);
-        return new CoordinatorResult<>(Collections.singletonList(record), responseData);
+        return new CoordinatorResult<>(List.of(record), responseData);
     }
 
     /**
@@ -519,7 +518,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             ))
         );
 
-        return new CoordinatorResult<>(Collections.singletonList(record), responseData);
+        return new CoordinatorResult<>(List.of(record), responseData);
     }
 
     /**
