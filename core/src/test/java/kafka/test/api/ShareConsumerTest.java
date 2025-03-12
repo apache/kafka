@@ -24,8 +24,10 @@ import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.AlterConfigsOptions;
 import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.CreateTopicsResult;
+import org.apache.kafka.clients.admin.DescribeShareGroupsOptions;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.RecordsToDelete;
+import org.apache.kafka.clients.admin.ShareMemberDescription;
 import org.apache.kafka.clients.consumer.AcknowledgeType;
 import org.apache.kafka.clients.consumer.AcknowledgementCommitCallback;
 import org.apache.kafka.clients.consumer.Consumer;
@@ -1717,12 +1719,11 @@ public class ShareConsumerTest {
              Producer<byte[], byte[]> producer = createProducer()) {
 
             shareConsumer.subscribe(Set.of(tp.topic()));
-            // Wait for assignment
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
             // Producing a record.
             producer.send(record);
             producer.flush();
-            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 0);
+            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 0, true, "group1", List.of(tp));
             // No records should be consumed because share.auto.offset.reset has a default of "latest". Since the record
             // was produced before share partition was initialized (which happens after the first share fetch request
             // in the poll method), the start offset would be the latest offset, i.e. 1 (the next offset after the already
@@ -1812,7 +1813,7 @@ public class ShareConsumerTest {
             // all messages present on the partition
             assertEquals(1, records1.count());
 
-            ConsumerRecords<byte[], byte[]> records2 = shareConsumerLatest.poll(Duration.ofMillis(5000));
+            ConsumerRecords<byte[], byte[]> records2 = waitedPoll(shareConsumerLatest, 2500L, 0, true, "group2", List.of(tp));
             // Since the value for share.auto.offset.reset has been altered to "latest", the consumer should not consume
             // any message
             assertEquals(0, records2.count());
@@ -2467,12 +2468,30 @@ public class ShareConsumerTest {
         }
     }
 
-    private static ConsumerRecords<byte[], byte[]> waitedPoll(ShareConsumer<byte[], byte[]> shareConsumer, long pollMs, int recordCount) {
+    private ConsumerRecords<byte[], byte[]> waitedPoll(
+        ShareConsumer<byte[], byte[]> shareConsumer,
+        long pollMs,
+        int recordCount
+    ) {
+        return waitedPoll(shareConsumer, pollMs, recordCount, false, "", List.of());
+    }
+
+    private ConsumerRecords<byte[], byte[]> waitedPoll(
+        ShareConsumer<byte[], byte[]> shareConsumer,
+        long pollMs,
+        int recordCount,
+        boolean checkAssignment,
+        String groupId,
+        List<TopicPartition> tps
+    ) {
         AtomicReference<ConsumerRecords<byte[], byte[]>> recordsAtomic = new AtomicReference<>();
         try {
             waitForCondition(() -> {
                     ConsumerRecords<byte[], byte[]> recs = shareConsumer.poll(Duration.ofMillis(pollMs));
                     recordsAtomic.set(recs);
+                    if (checkAssignment) {
+                        waitForAssignment(groupId, tps);
+                    }
                     return recs.count() == recordCount;
                 },
                 DEFAULT_MAX_WAIT_MS,
@@ -2481,6 +2500,33 @@ public class ShareConsumerTest {
             );
             return recordsAtomic.get();
         } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private void waitForAssignment(String groupId, List<TopicPartition> tps) {
+        try {
+            waitForCondition(() -> {
+                    try (Admin admin = createAdminClient()) {
+                        Collection<ShareMemberDescription> members = admin.describeShareGroups(List.of(groupId),
+                            new DescribeShareGroupsOptions().includeAuthorizedOperations(true)
+                        ).describedGroups().get(groupId).get().members();
+                        Set<TopicPartition> assigned = new HashSet<>();
+                        members.forEach(desc -> {
+                            if (desc.assignment() != null) {
+                                assigned.addAll(desc.assignment().topicPartitions());
+                            }
+                        });
+                        return assigned.containsAll(tps);
+                    } catch (Exception e) {
+                        throw new RuntimeException(e);
+                    }
+                },
+                DEFAULT_MAX_WAIT_MS,
+                1000L,
+                () -> "tps not assigned to members"
+            );
+        } catch (Exception e) {
             throw new RuntimeException(e);
         }
     }
