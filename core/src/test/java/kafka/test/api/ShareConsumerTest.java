@@ -261,7 +261,7 @@ public class ShareConsumerTest {
             producer.send(record);
             producer.flush();
             shareConsumer.subscribe(Set.of(tp.topic()));
-            ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(5000));
+            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 1);
             assertEquals(1, records.count());
             verifyShareGroupStateTopicRecordsProduced();
         }
@@ -278,7 +278,7 @@ public class ShareConsumerTest {
             producer.send(record);
             producer.flush();
             shareConsumer.subscribe(Set.of(tp.topic()));
-            ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(5000));
+            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 1);
             assertEquals(1, records.count());
             producer.send(record);
             records = shareConsumer.poll(Duration.ofMillis(5000));
@@ -373,7 +373,7 @@ public class ShareConsumerTest {
             shareConsumer.setAcknowledgementCommitCallback(new TestableAcknowledgementCommitCallback(partitionOffsetsMap, partitionExceptionMap));
             shareConsumer.subscribe(Set.of(tp.topic()));
 
-            ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(5000));
+            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 1);
             assertEquals(1, records.count());
 
             // Now in the second poll, we implicitly acknowledge the record received in the first poll.
@@ -595,7 +595,7 @@ public class ShareConsumerTest {
             producer.flush();
 
             shareConsumer.subscribe(Set.of(tp.topic()));
-            ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(5000));
+            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 1);
             assertEquals(1, records.count());
             records.forEach(shareConsumer::acknowledge);
             producer.send(record);
@@ -617,7 +617,7 @@ public class ShareConsumerTest {
             producer.flush();
 
             shareConsumer.subscribe(Set.of(tp.topic()));
-            ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(5000));
+            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 1);
             assertEquals(1, records.count());
             records.forEach(shareConsumer::acknowledge);
             producer.send(record);
@@ -652,7 +652,7 @@ public class ShareConsumerTest {
             Map<TopicPartition, Exception> partitionExceptionMap1 = new HashMap<>();
             shareConsumer1.setAcknowledgementCommitCallback(new TestableAcknowledgementCommitCallback(partitionOffsetsMap1, partitionExceptionMap1));
 
-            ConsumerRecords<byte[], byte[]> records = shareConsumer1.poll(Duration.ofMillis(5000));
+            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer1, 2500L, 3);
             assertEquals(3, records.count());
             Iterator<ConsumerRecord<byte[], byte[]>> iterator = records.iterator();
 
@@ -745,7 +745,7 @@ public class ShareConsumerTest {
             Map<TopicPartition, Exception> partitionExceptionMap = new HashMap<>();
             shareConsumer1.setAcknowledgementCommitCallback(new TestableAcknowledgementCommitCallback(partitionOffsetsMap, partitionExceptionMap));
 
-            ConsumerRecords<byte[], byte[]> records = shareConsumer1.poll(Duration.ofMillis(5000));
+            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer1, 2500L, 3);
             assertEquals(3, records.count());
             Iterator<ConsumerRecord<byte[], byte[]>> iterator = records.iterator();
 
@@ -800,17 +800,7 @@ public class ShareConsumerTest {
             producer.flush();
 
             shareConsumer.subscribe(Set.of(tp.topic()));
-            AtomicReference<ConsumerRecords<byte[], byte[]>> recordsAtomic = new AtomicReference<>();
-            waitForCondition(() -> {
-                    ConsumerRecords<byte[], byte[]> recs = shareConsumer.poll(Duration.ofMillis(2500L));
-                    recordsAtomic.set(recs);
-                    return recs.count() == 1;
-                },
-                DEFAULT_MAX_WAIT_MS,
-                500L,
-                () -> "failed to get records"
-            );
-            ConsumerRecords<byte[], byte[]> records = recordsAtomic.get();
+            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 1);
             assertEquals(1, records.count());
             records.forEach(consumedRecord -> shareConsumer.acknowledge(consumedRecord, AcknowledgeType.RELEASE));
             records = shareConsumer.poll(Duration.ofMillis(5000));
@@ -819,8 +809,6 @@ public class ShareConsumerTest {
             records = shareConsumer.poll(Duration.ofMillis(500));
             assertEquals(0, records.count());
             verifyShareGroupStateTopicRecordsProduced();
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
         }
     }
 
@@ -835,7 +823,7 @@ public class ShareConsumerTest {
             producer.send(record);
             producer.flush();
             shareConsumer.subscribe(Set.of(tp.topic()));
-            ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(5000));
+            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 1);
             assertEquals(1, records.count());
             records.forEach(consumedRecord -> shareConsumer.acknowledge(consumedRecord, AcknowledgeType.RELEASE));
             records.forEach(consumedRecord -> shareConsumer.acknowledge(consumedRecord, AcknowledgeType.ACCEPT));
@@ -857,7 +845,7 @@ public class ShareConsumerTest {
             producer.flush();
 
             shareConsumer.subscribe(Set.of(tp.topic()));
-            ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(5000));
+            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 1);
             assertEquals(1, records.count());
             records.forEach(consumedRecord -> shareConsumer.acknowledge(consumedRecord, AcknowledgeType.RELEASE));
             verifyShareGroupStateTopicRecordsProduced();
@@ -876,7 +864,7 @@ public class ShareConsumerTest {
             producer.flush();
 
             shareConsumer.subscribe(Set.of(tp.topic()));
-            ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(5000));
+            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 1);
             assertEquals(1, records.count());
             ConsumerRecord<byte[], byte[]> consumedRecord = records.records(tp).get(0);
             shareConsumer.acknowledge(consumedRecord);
@@ -899,7 +887,7 @@ public class ShareConsumerTest {
             producer.flush();
 
             shareConsumer.subscribe(Set.of(tp.topic()));
-            ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(5000));
+            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 1);
             assertEquals(1, records.count());
             ConsumerRecord<byte[], byte[]> consumedRecord = records.records(tp).get(0);
             records = shareConsumer.poll(Duration.ofMillis(500));
@@ -965,7 +953,7 @@ public class ShareConsumerTest {
 
             shareConsumer.setAcknowledgementCommitCallback(new TestableAcknowledgementCommitCallback(partitionOffsetsMap1, partitionExceptionMap1));
 
-            ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(5000));
+            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 3);
             assertEquals(3, records.count());
 
             // Implicitly acknowledging all the records received.
@@ -997,7 +985,7 @@ public class ShareConsumerTest {
             producer.flush();
 
             shareConsumer.subscribe(Set.of(tp.topic()));
-            ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(5000));
+            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 1);
             assertEquals(1, records.count());
             records.forEach(shareConsumer::acknowledge);
             producer.send(record);
@@ -1023,7 +1011,7 @@ public class ShareConsumerTest {
             producer.flush();
 
             shareConsumer.subscribe(Set.of(tp.topic()));
-            ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(5000));
+            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 1);
             assertEquals(1, records.count());
             assertThrows(IllegalStateException.class, () -> shareConsumer.acknowledge(records.iterator().next()));
         }
@@ -1048,7 +1036,7 @@ public class ShareConsumerTest {
 
             shareConsumer.subscribe(Set.of(tp.topic()));
 
-            ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(5000));
+            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 2);
             assertEquals(2, records.count());
             verifyShareGroupStateTopicRecordsProduced();
         }
@@ -1597,7 +1585,7 @@ public class ShareConsumerTest {
             shareConsumer.wakeup();
             assertThrows(WakeupException.class, () -> shareConsumer.poll(Duration.ZERO));
 
-            ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(5000));
+            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 1);
             assertEquals(1, records.count());
             verifyShareGroupStateTopicRecordsProduced();
         }
@@ -1761,7 +1749,7 @@ public class ShareConsumerTest {
             // Producing a record.
             producer.send(record);
             producer.flush();
-            ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(5000));
+            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 1);
             // Since the value for share.auto.offset.reset has been altered to "earliest", the consumer should consume
             // all messages present on the partition
             assertEquals(1, records.count());
@@ -1818,7 +1806,7 @@ public class ShareConsumerTest {
             // Producing a record.
             producer.send(record);
             producer.flush();
-            ConsumerRecords<byte[], byte[]> records1 = shareConsumerEarliest.poll(Duration.ofMillis(5000));
+            ConsumerRecords<byte[], byte[]> records1 = waitedPoll(shareConsumerEarliest, 2500L, 1);
             // Since the value for share.auto.offset.reset has been altered to "earliest", the consumer should consume
             // all messages present on the partition
             assertEquals(1, records1.count());
@@ -2475,6 +2463,24 @@ public class ShareConsumerTest {
         } catch (Exception e) {
             service.shutdownNow();
             Thread.currentThread().interrupt();
+        }
+    }
+
+    private static ConsumerRecords<byte[], byte[]> waitedPoll(ShareConsumer<byte[], byte[]> shareConsumer, long pollMs, int recordCount) {
+        AtomicReference<ConsumerRecords<byte[], byte[]>> recordsAtomic = new AtomicReference<>();
+        try {
+            waitForCondition(() -> {
+                    ConsumerRecords<byte[], byte[]> recs = shareConsumer.poll(Duration.ofMillis(pollMs));
+                    recordsAtomic.set(recs);
+                    return recs.count() == recordCount;
+                },
+                DEFAULT_MAX_WAIT_MS,
+                500L,
+                () -> "failed to get records"
+            );
+            return recordsAtomic.get();
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
         }
     }
 }
