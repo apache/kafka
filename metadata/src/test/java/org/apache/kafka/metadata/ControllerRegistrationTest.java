@@ -29,7 +29,6 @@ import org.apache.kafka.server.common.MetadataVersion;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -41,9 +40,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 @Timeout(value = 40)
 public class ControllerRegistrationTest {
     static <K, V> Map<K, V> doubleMap(K k1, V v1, K k2, V v2) {
-        HashMap<K, V> map = new HashMap<>();
-        map.put(k1, v1);
-        map.put(k2, v2);
+        Map<K, V> map = Map.of(k1, v1, k2, v2);
         return map;
     }
 
