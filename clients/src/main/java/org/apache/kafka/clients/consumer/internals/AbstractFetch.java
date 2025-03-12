@@ -64,6 +64,9 @@ import static org.apache.kafka.clients.consumer.internals.FetchUtils.requestMeta
 public abstract class AbstractFetch implements Closeable {
 
     private final Logger log;
+    // Calling LoggerFactory.getLogger() is pretty expensive with log4j2. See KAFKA-18046 for details.
+    // We cache the logger used by CompletedFetch because it is created on every fetch responses.
+    private final Logger completedFetchLog;
     private final IdempotentCloser idempotentCloser = new IdempotentCloser();
     protected final LogContext logContext;
     protected final ConsumerMetadata metadata;
@@ -88,6 +91,7 @@ public abstract class AbstractFetch implements Closeable {
                          final Time time,
                          final ApiVersions apiVersions) {
         this.log = logContext.logger(AbstractFetch.class);
+        this.completedFetchLog = logContext.logger(CompletedFetch.class);
         this.logContext = logContext;
         this.metadata = metadata;
         this.subscriptions = subscriptions;
@@ -208,7 +212,7 @@ public abstract class AbstractFetch implements Closeable {
                 }
 
                 CompletedFetch completedFetch = new CompletedFetch(
-                        logContext,
+                        completedFetchLog,
                         subscriptions,
                         decompressionBufferSupplier,
                         partition,

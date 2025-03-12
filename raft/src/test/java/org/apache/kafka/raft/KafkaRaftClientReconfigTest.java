@@ -129,7 +129,7 @@ public class KafkaRaftClientReconfigTest {
         context.unattachedToLeader();
 
         // check if leader writes 3 bootstrap records to the log
-        Records records = context.log.read(0, Isolation.UNCOMMITTED).records;
+        Records records = context.log.read(0, Isolation.UNCOMMITTED).records();
         RecordBatch batch = records.batches().iterator().next();
         assertTrue(batch.isControlBatch());
         Iterator<Record> recordIterator = batch.iterator();
@@ -189,28 +189,10 @@ public class KafkaRaftClientReconfigTest {
             .withUnknownLeader(0)
             .build();
 
-        List<List<ControlRecord>> expectedBootstrapRecords = Arrays.asList(
-            Arrays.asList(
-                new ControlRecord(
-                    ControlRecordType.SNAPSHOT_HEADER,
-                    new SnapshotHeaderRecord()
-                        .setVersion((short) 0)
-                        .setLastContainedLogTimestamp(0)
-                )
-            ),
-            Arrays.asList(
-                new ControlRecord(
-                    ControlRecordType.SNAPSHOT_FOOTER,
-                    new SnapshotFooterRecord()
-                        .setVersion((short) 0)
-                )
-            )
-        );
-
         // check leader does not write bootstrap records to log
         context.unattachedToLeader();
 
-        Records records = context.log.read(0, Isolation.UNCOMMITTED).records;
+        Records records = context.log.read(0, Isolation.UNCOMMITTED).records();
         RecordBatch batch = records.batches().iterator().next();
         assertTrue(batch.isControlBatch());
         Iterator<Record> recordIterator = batch.iterator();
