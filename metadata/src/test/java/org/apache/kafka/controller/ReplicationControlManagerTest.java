@@ -1535,7 +1535,6 @@ public class ReplicationControlManagerTest {
             anonymousContextFor(ApiKeys.CREATE_TOPICS);
         ControllerResult<CreateTopicsResponseData> createResult =
             replicationControl.createTopics(createTopicsRequestContext, request, Collections.singleton("foo"));
-
         CreatableTopicResult createdTopic = createResult.response().topics().find("foo");
         assertEquals(NONE.code(), createdTopic.errorCode());
         ctx.replay(createResult.records());
