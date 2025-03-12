@@ -1716,10 +1716,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             // An empty record is sent instead of an incomplete batch when
             //  - there is no minimum-one-message constraint and
             //  - the first batch size is more than maximum bytes that can be sent and
-            //  - for FetchRequest version 3 or above.
-            if (!remoteStorageFetchInfo.minOneMessage &&
-                    !remoteStorageFetchInfo.hardMaxBytesLimit &&
-                    firstBatchSize > maxBytes) {
+            if (!remoteStorageFetchInfo.minOneMessage && firstBatchSize > maxBytes) {
                 return new FetchDataInfo(new LogOffsetMetadata(offset), MemoryRecords.EMPTY);
             }
 
