@@ -231,10 +231,6 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                     broker having node.id=1: broker.roles=broker+controller
                     broker having node.id=2: broker.roles=broker+controller
                     broker having node.id=3: broker.roles=broker+controller
-                num_nodes = 3, controller_num_nodes_override = 1
-                    broker having node.id=1: broker.roles=broker+controller
-                    broker having node.id=2: broker.roles=broker
-                    broker having node.id=3: broker.roles=broker
             3) Isolated KRaft quorum when instantiating the broker service:
                 The number of nodes, all of which will have broker.roles=broker, is defined by this parameter.
                 The node.id values will be 1..num_nodes
@@ -243,6 +239,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                 The node.id values will be 3001..(3000 + num_nodes)
                 The value passed in is determined by the broker service when that is instantiated, and it uses the
                 same algorithm as described above: 1, 3, or 5 unless controller_num_nodes_override is provided.
+            5) In Combined KRaft quorum mode, the controller node count tries to be at least 3 unless the broker count is
+                less than 3.
         :param ZookeeperService zk:
         :param dict topics: which topics to create automatically
         :param str security_protocol: security protocol for clients to use
@@ -266,6 +264,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         :param str extra_kafka_opts: jvm args to add to KAFKA_OPTS variable
         :param KafkaService isolated_kafka: process.roles=controller for this cluster when not None; ignored when using ZooKeeper
         :param int controller_num_nodes_override: the number of controller nodes to use in the cluster, instead of 5, 3, or 1 based on num_nodes, if positive, not using ZooKeeper, and isolated_kafka is not None; ignored otherwise
+                Also, in the Combined KRaft mode, the controller node count tries to be at least 3 unless the broker count is less than 3.
         :param bool allow_zk_with_kraft: if True, then allow a KRaft broker or controller to also use ZooKeeper
         :param quorum_info_provider: A function that takes this KafkaService as an argument and returns a ServiceQuorumInfo. If this is None, then the ServiceQuorumInfo is generated from the test context
         :param use_new_coordinator: When true, use the new implementation of the group coordinator as per KIP-848. If this is None, the default existing group coordinator is used.
@@ -329,6 +328,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             self.standalone_controller_bootstrapped = False
             if self.quorum_info.has_brokers:
                 num_nodes_broker_role = num_nodes
+                controller_num_nodes_override = min(num_nodes_broker_role, max(3, controller_num_nodes_override))
                 if self.quorum_info.has_controllers:
                     self.num_nodes_controller_role = self.num_kraft_controllers(num_nodes_broker_role, controller_num_nodes_override)
                     if self.isolated_kafka:
