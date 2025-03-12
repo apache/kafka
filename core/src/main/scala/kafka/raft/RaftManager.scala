@@ -25,7 +25,6 @@ import java.util.concurrent.CompletableFuture
 import java.util.{Map => JMap}
 import java.util.{Collection => JCollection}
 import kafka.log.LogManager
-import kafka.log.UnifiedLog
 import kafka.server.KafkaConfig
 import kafka.utils.CoreUtils
 import kafka.utils.Logging
@@ -49,6 +48,7 @@ import org.apache.kafka.server.common.serialization.RecordSerde
 import org.apache.kafka.server.util.{FileLock, KafkaScheduler}
 import org.apache.kafka.server.fault.FaultHandler
 import org.apache.kafka.server.util.timer.SystemTimer
+import org.apache.kafka.storage.internals.log.UnifiedLog
 
 import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters._

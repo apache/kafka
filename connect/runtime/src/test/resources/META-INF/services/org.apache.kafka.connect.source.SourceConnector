@@ -21,5 +21,6 @@ org.apache.kafka.connect.integration.BlockingConnectorTest$BlockingSourceConnect
 org.apache.kafka.connect.integration.BlockingConnectorTest$TaskInitializeBlockingSourceConnector
 org.apache.kafka.connect.integration.ExactlyOnceSourceIntegrationTest$NaughtyConnector
 org.apache.kafka.connect.integration.MonitorableSourceConnector
+org.apache.kafka.connect.integration.TestableSourceConnector
 org.apache.kafka.connect.runtime.SampleSourceConnector
 org.apache.kafka.connect.runtime.rest.resources.ConnectorPluginsResourceTest$ConnectorPluginsResourceTestConnector

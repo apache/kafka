@@ -52,7 +52,7 @@ public final class KRaftVersionTest {
             MetadataVersion metadataVersion = KRaftVersion.values()[i].bootstrapMetadataVersion();
             switch (i) {
                 case 0:
-                    assertEquals(MetadataVersion.MINIMUM_KRAFT_VERSION, metadataVersion);
+                    assertEquals(MetadataVersion.MINIMUM_VERSION, metadataVersion);
                     break;
                 case 1:
                     assertEquals(MetadataVersion.IBP_3_9_IV0, metadataVersion);

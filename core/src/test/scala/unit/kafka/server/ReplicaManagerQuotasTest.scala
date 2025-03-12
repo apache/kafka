@@ -24,7 +24,6 @@ import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils._
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.record.{MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.FetchRequest
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
@@ -175,7 +174,6 @@ class ReplicaManagerQuotasTest {
         new LogOffsetMetadata(50L, 0L, 250),
         new PartitionData(Uuid.ZERO_UUID, 50, 0, 1, Optional.empty()))
       val fetchParams = new FetchParams(
-        ApiKeys.FETCH.latestVersion,
         1,
         1,
         600,
@@ -227,7 +225,6 @@ class ReplicaManagerQuotasTest {
         new LogOffsetMetadata(50L, 0L, 250),
         new PartitionData(Uuid.ZERO_UUID, 50, 0, 1, Optional.empty()))
       val fetchParams = new FetchParams(
-        ApiKeys.FETCH.latestVersion,
         FetchRequest.CONSUMER_REPLICA_ID,
         -1,
         600L,

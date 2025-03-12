@@ -88,7 +88,7 @@ class ThresholdPurgatoryTest {
         assertEquals(5, purgatory.numWaiting());
 
         time.sleep(50);
-        assertFutureThrows(future3, TimeoutException.class);
+        assertFutureThrows(TimeoutException.class, future3);
         assertFalse(future1.isDone());
         assertFalse(future2.isDone());
         assertFalse(future4.isDone());
@@ -96,9 +96,9 @@ class ThresholdPurgatoryTest {
         assertEquals(4, purgatory.numWaiting());
 
         time.sleep(50);
-        assertFutureThrows(future1, TimeoutException.class);
-        assertFutureThrows(future2, TimeoutException.class);
-        assertFutureThrows(future5, TimeoutException.class);
+        assertFutureThrows(TimeoutException.class, future1);
+        assertFutureThrows(TimeoutException.class, future2);
+        assertFutureThrows(TimeoutException.class, future5);
         assertFalse(future4.isDone());
         assertEquals(1, purgatory.numWaiting());
 
@@ -107,7 +107,7 @@ class ThresholdPurgatoryTest {
         assertEquals(1, purgatory.numWaiting());
 
         time.sleep(50);
-        assertFutureThrows(future4, TimeoutException.class);
+        assertFutureThrows(TimeoutException.class, future4);
         assertEquals(0, purgatory.numWaiting());
     }
 
@@ -134,9 +134,9 @@ class ThresholdPurgatoryTest {
         assertEquals(3, purgatory.numWaiting());
 
         purgatory.completeAllExceptionally(new NotLeaderOrFollowerException());
-        assertFutureThrows(future1, NotLeaderOrFollowerException.class);
-        assertFutureThrows(future2, NotLeaderOrFollowerException.class);
-        assertFutureThrows(future3, NotLeaderOrFollowerException.class);
+        assertFutureThrows(NotLeaderOrFollowerException.class, future1);
+        assertFutureThrows(NotLeaderOrFollowerException.class, future2);
+        assertFutureThrows(NotLeaderOrFollowerException.class, future3);
         assertEquals(0, purgatory.numWaiting());
     }
 

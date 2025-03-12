@@ -19,7 +19,6 @@ package kafka.server
 import java.io.File
 import java.nio.file.Files
 import java.util.{Optional, Properties}
-import kafka.log.UnifiedLog
 import org.apache.kafka.common.{KafkaException, Uuid}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.metadata.bootstrap.{BootstrapDirectory, BootstrapMetadata}
@@ -28,6 +27,7 @@ import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.server.config.{KRaftConfigs, ServerLogConfigs}
 import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.storage.internals.log.UnifiedLog
 import org.apache.kafka.test.TestUtils
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
@@ -109,7 +109,7 @@ class KafkaRaftServerTest {
   }
 
   private def writeBootstrapMetadata(logDir: File, metadataVersion: MetadataVersion): Unit = {
-    val bootstrapDirectory = new BootstrapDirectory(logDir.toString, Optional.empty())
+    val bootstrapDirectory = new BootstrapDirectory(logDir.toString)
     bootstrapDirectory.writeBinaryFile(BootstrapMetadata.fromVersion(metadataVersion, "test"))
   }
 
@@ -262,7 +262,7 @@ class KafkaRaftServerTest {
   }
 
   @Test
-  def testKRaftUpdateAt3_3_IV1(): Unit = {
+  def testKRaftUpdateAt3_3_IV3(): Unit = {
     val clusterId = clusterIdBase64
     val nodeId = 0
     val metaProperties = new MetaProperties.Builder().
@@ -280,12 +280,12 @@ class KafkaRaftServerTest {
     configProperties.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL")
 
     val (metaPropertiesEnsemble, bootstrapMetadata) =
-      invokeLoadMetaProperties(metaProperties, configProperties, Some(MetadataVersion.IBP_3_3_IV1))
+      invokeLoadMetaProperties(metaProperties, configProperties, Some(MetadataVersion.IBP_3_3_IV3))
 
     assertEquals(metaProperties, metaPropertiesEnsemble.logDirProps().values().iterator().next())
     assertTrue(metaPropertiesEnsemble.errorLogDirs().isEmpty)
     assertTrue(metaPropertiesEnsemble.emptyLogDirs().isEmpty)
-    assertEquals(bootstrapMetadata.metadataVersion(), MetadataVersion.IBP_3_3_IV1)
+    assertEquals(bootstrapMetadata.metadataVersion(), MetadataVersion.IBP_3_3_IV3)
   }
 
   @Test

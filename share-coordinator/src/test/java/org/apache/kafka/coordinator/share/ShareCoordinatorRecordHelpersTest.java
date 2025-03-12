@@ -27,7 +27,7 @@ import org.apache.kafka.server.share.persister.PersisterStateBatch;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -47,7 +47,7 @@ public class ShareCoordinatorRecordHelpersTest {
                 .setStateEpoch(1)
                 .setLeaderEpoch(5)
                 .setStartOffset(0)
-                .setStateBatches(Collections.singletonList(batch))
+                .setStateBatches(List.of(batch))
                 .build()
         );
 
@@ -62,7 +62,7 @@ public class ShareCoordinatorRecordHelpersTest {
                     .setStateEpoch(1)
                     .setLeaderEpoch(5)
                     .setStartOffset(0)
-                    .setStateBatches(Collections.singletonList(
+                    .setStateBatches(List.of(
                         new ShareSnapshotValue.StateBatch()
                             .setFirstOffset(1L)
                             .setLastOffset(10L)
@@ -88,7 +88,7 @@ public class ShareCoordinatorRecordHelpersTest {
                 .setStateEpoch(-1)  // ignored for share update
                 .setLeaderEpoch(5)
                 .setStartOffset(0)
-                .setStateBatches(Collections.singletonList(batch))
+                .setStateBatches(List.of(batch))
                 .build()
         );
 
@@ -102,7 +102,7 @@ public class ShareCoordinatorRecordHelpersTest {
                     .setSnapshotEpoch(0)
                     .setLeaderEpoch(5)
                     .setStartOffset(0)
-                    .setStateBatches(Collections.singletonList(
+                    .setStateBatches(List.of(
                         new ShareUpdateValue.StateBatch()
                             .setFirstOffset(1L)
                             .setLastOffset(10L)

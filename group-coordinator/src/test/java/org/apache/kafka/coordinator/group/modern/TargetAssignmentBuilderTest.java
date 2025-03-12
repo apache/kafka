@@ -30,7 +30,6 @@ import org.apache.kafka.image.TopicsImage;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -323,11 +322,11 @@ public class TargetAssignmentBuilderTest {
         );
 
         TargetAssignmentBuilder.TargetAssignmentResult result = context.build();
-        assertEquals(Collections.singletonList(newConsumerGroupTargetAssignmentEpochRecord(
+        assertEquals(List.of(newConsumerGroupTargetAssignmentEpochRecord(
             "my-group",
             20
         )), result.records());
-        assertEquals(Collections.emptyMap(), result.targetAssignment());
+        assertEquals(Map.of(), result.targetAssignment());
     }
 
     @Test
@@ -362,7 +361,7 @@ public class TargetAssignmentBuilderTest {
 
         TargetAssignmentBuilder.TargetAssignmentResult result = context.build();
 
-        assertEquals(Collections.singletonList(newConsumerGroupTargetAssignmentEpochRecord(
+        assertEquals(List.of(newConsumerGroupTargetAssignmentEpochRecord(
             "my-group",
             20
         )), result.records());
@@ -870,10 +869,10 @@ public class TargetAssignmentBuilderTest {
 
         context.addGroupMember("member-2", Arrays.asList("foo", "bar", "zar"), mkAssignment());
 
-        context.addGroupMember("member-3", Collections.emptyList(), "foo*", mkAssignment());
+        context.addGroupMember("member-3", List.of(), "foo*", mkAssignment());
 
         context.addResolvedRegularExpression("foo*", new ResolvedRegularExpression(
-            Collections.singleton("foo"),
+            Set.of("foo"),
             10L,
             12345L
         ));
