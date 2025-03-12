@@ -116,6 +116,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -795,6 +796,194 @@ public class ShareConsumeRequestManagerTest {
     }
 
     @Test
+    public void testRetryAcknowledgementsCommitAsync() throws InterruptedException {
+        buildRequestManager();
+        shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
+
+        assignFromSubscribed(Collections.singleton(tp0));
+
+        // normal fetch
+        assertEquals(1, sendFetches());
+        assertFalse(shareConsumeRequestManager.hasCompletedFetches());
+
+        client.prepareResponse(fullFetchResponse(tip0, buildRecords(1L, 6, 1),
+                ShareCompletedFetchTest.acquiredRecords(1L, 6), Errors.NONE));
+        networkClientDelegate.poll(time.timer(0));
+        assertTrue(shareConsumeRequestManager.hasCompletedFetches());
+
+        Acknowledgements acknowledgements = Acknowledgements.empty();
+        acknowledgements.add(1L, AcknowledgeType.ACCEPT);
+        acknowledgements.add(2L, AcknowledgeType.ACCEPT);
+        acknowledgements.add(3L, AcknowledgeType.REJECT);
+        acknowledgements.add(4L, AcknowledgeType.ACCEPT);
+        acknowledgements.add(5L, AcknowledgeType.RELEASE);
+        acknowledgements.add(6L, AcknowledgeType.ACCEPT);
+
+        shareConsumeRequestManager.commitAsync(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)), calculateDeadlineMs(time, 1000L));
+        assertNull(shareConsumeRequestManager.requestStates(0).getSyncRequestQueue());
+
+        assertNotNull(shareConsumeRequestManager.requestStates(0).getAsyncRequest());
+        assertEquals(6, shareConsumeRequestManager.requestStates(0).getAsyncRequest().getAcknowledgementsToSendCount(tip0));
+
+        assertEquals(1, shareConsumeRequestManager.sendAcknowledgements());
+        assertEquals(6, shareConsumeRequestManager.requestStates(0).getAsyncRequest().getInFlightAcknowledgementsCount(tip0));
+        // Response contains a retriable exception.
+        client.prepareResponse(fullAcknowledgeResponse(tip0, Errors.REQUEST_TIMED_OUT));
+        networkClientDelegate.poll(time.timer(0));
+
+        assertEquals(6, shareConsumeRequestManager.requestStates(0).getAsyncRequest().getIncompleteAcknowledgementsCount(tip0));
+        assertEquals(0, shareConsumeRequestManager.requestStates(0).getAsyncRequest().getInFlightAcknowledgementsCount(tip0));
+
+        // Wait till the request times out.
+        time.sleep(2000L);
+
+        assertEquals(0, shareConsumeRequestManager.sendAcknowledgements());
+
+        assertEquals(1, completedAcknowledgements.size());
+        assertEquals(6, completedAcknowledgements.get(0).get(tip0).size());
+        assertEquals(Errors.REQUEST_TIMED_OUT.exception(), completedAcknowledgements.get(0).get(tip0).getAcknowledgeException());
+    }
+
+    @Test
+    public void testRetryAcknowledgementsMultipleCommitAsync() {
+        buildRequestManager();
+        shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
+
+        assignFromSubscribed(Collections.singleton(tp0));
+
+        // normal fetch
+        assertEquals(1, sendFetches());
+        assertFalse(shareConsumeRequestManager.hasCompletedFetches());
+
+        client.prepareResponse(fullFetchResponse(tip0, buildRecords(1L, 6, 1),
+                ShareCompletedFetchTest.acquiredRecords(1L, 6), Errors.NONE));
+        networkClientDelegate.poll(time.timer(0));
+        assertTrue(shareConsumeRequestManager.hasCompletedFetches());
+
+        Acknowledgements acknowledgements = Acknowledgements.empty();
+        acknowledgements.add(1L, AcknowledgeType.ACCEPT);
+        acknowledgements.add(2L, AcknowledgeType.ACCEPT);
+
+        // commitAsync() acknowledges the first 2 records.
+        shareConsumeRequestManager.commitAsync(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)), calculateDeadlineMs(time, 1000L));
+        assertNull(shareConsumeRequestManager.requestStates(0).getSyncRequestQueue());
+
+        assertNotNull(shareConsumeRequestManager.requestStates(0).getAsyncRequest());
+        assertEquals(2, shareConsumeRequestManager.requestStates(0).getAsyncRequest().getAcknowledgementsToSendCount(tip0));
+
+        assertEquals(1, shareConsumeRequestManager.sendAcknowledgements());
+        assertEquals(2, shareConsumeRequestManager.requestStates(0).getAsyncRequest().getInFlightAcknowledgementsCount(tip0));
+
+        // Response contains a retriable exception, so the we retry.
+        client.prepareResponse(fullAcknowledgeResponse(tip0, Errors.REQUEST_TIMED_OUT));
+        networkClientDelegate.poll(time.timer(0));
+
+        Acknowledgements acknowledgements1 = Acknowledgements.empty();
+        acknowledgements1.add(3L, AcknowledgeType.REJECT);
+        acknowledgements1.add(4L, AcknowledgeType.ACCEPT);
+
+        // 2nd commitAsync() acknowledges the next 2 records.
+        shareConsumeRequestManager.commitAsync(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements1)), calculateDeadlineMs(time, 1000L));
+
+        assertEquals(2, shareConsumeRequestManager.requestStates(0).getAsyncRequest().getIncompleteAcknowledgementsCount(tip0));
+        assertEquals(0, shareConsumeRequestManager.requestStates(0).getAsyncRequest().getInFlightAcknowledgementsCount(tip0));
+
+
+        Acknowledgements acknowledgements2 = Acknowledgements.empty();
+        acknowledgements2.add(5L, AcknowledgeType.RELEASE);
+        acknowledgements2.add(6L, AcknowledgeType.ACCEPT);
+
+        // 3rd commitAsync() acknowledges the next 2 records.
+        shareConsumeRequestManager.commitAsync(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements2)), calculateDeadlineMs(time, 1000L));
+
+        time.sleep(2000L);
+
+        // As the timer for the initial commitAsync() was 1000ms, the request timed out and we fill the callback with a timeout exception.
+        assertEquals(0, shareConsumeRequestManager.sendAcknowledgements());
+        assertEquals(1, completedAcknowledgements.size());
+        assertEquals(2, completedAcknowledgements.get(0).get(tip0).size());
+        assertEquals(Errors.REQUEST_TIMED_OUT.exception(), completedAcknowledgements.get(0).get(tip0).getAcknowledgeException());
+        completedAcknowledgements.clear();
+
+        // Further requests which came before the timeout are processed as expected.
+        assertEquals(1, shareConsumeRequestManager.sendAcknowledgements());
+
+        assertEquals(4, shareConsumeRequestManager.requestStates(0).getAsyncRequest().getInFlightAcknowledgementsCount(tip0));
+
+        client.prepareResponse(fullAcknowledgeResponse(tip0, Errors.NONE));
+        networkClientDelegate.poll(time.timer(0));
+
+        assertEquals(0, shareConsumeRequestManager.requestStates(0).getAsyncRequest().getInFlightAcknowledgementsCount(tip0));
+        assertEquals(1, completedAcknowledgements.size());
+        assertEquals(4, completedAcknowledgements.get(0).get(tip0).size());
+        assertNull(completedAcknowledgements.get(0).get(tip0).getAcknowledgeException());
+    }
+
+    @Test
+    public void testRetryAcknowledgementsMultipleCommitSync() throws InterruptedException {
+        buildRequestManager();
+        shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
+
+        assignFromSubscribed(Collections.singleton(tp0));
+
+        // normal fetch
+        assertEquals(1, sendFetches());
+        assertFalse(shareConsumeRequestManager.hasCompletedFetches());
+
+        client.prepareResponse(fullFetchResponse(tip0, buildRecords(1L, 6, 1),
+                ShareCompletedFetchTest.acquiredRecords(1L, 6), Errors.NONE));
+        networkClientDelegate.poll(time.timer(0));
+        assertTrue(shareConsumeRequestManager.hasCompletedFetches());
+
+        Acknowledgements acknowledgements = Acknowledgements.empty();
+        acknowledgements.add(1L, AcknowledgeType.ACCEPT);
+        acknowledgements.add(2L, AcknowledgeType.ACCEPT);
+
+        // commitSync() for the first 2 acknowledgements.
+        shareConsumeRequestManager.commitSync(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)), calculateDeadlineMs(time, 1000L));
+        assertNull(shareConsumeRequestManager.requestStates(0).getAsyncRequest());
+
+        assertEquals(1, shareConsumeRequestManager.sendAcknowledgements());
+
+        // Response contains a retriable exception.
+        client.prepareResponse(fullAcknowledgeResponse(tip0, Errors.REQUEST_TIMED_OUT));
+        networkClientDelegate.poll(time.timer(0));
+        assertEquals(2, shareConsumeRequestManager.requestStates(0).getSyncRequestQueue().peek().getIncompleteAcknowledgementsCount(tip0));
+
+        // We expire the commitSync request as it had a timer of 1000ms.
+        time.sleep(2000L);
+
+        Acknowledgements acknowledgements1 = Acknowledgements.empty();
+        acknowledgements1.add(3L, AcknowledgeType.REJECT);
+        acknowledgements1.add(4L, AcknowledgeType.ACCEPT);
+        acknowledgements1.add(5L, AcknowledgeType.ACCEPT);
+        acknowledgements1.add(6L, AcknowledgeType.ACCEPT);
+
+        // commitSync() for the next 4 acknowledgements.
+        shareConsumeRequestManager.commitSync(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements1)), calculateDeadlineMs(time, 1000L));
+
+        // We send the 2nd commitSync request, and fail the first one as timer has expired.
+        assertEquals(1, shareConsumeRequestManager.sendAcknowledgements());
+        assertEquals(1, completedAcknowledgements.size());
+        assertEquals(2, completedAcknowledgements.get(0).get(tip0).size());
+        assertEquals(Errors.REQUEST_TIMED_OUT.exception(), completedAcknowledgements.get(0).get(tip0).getAcknowledgeException());
+        completedAcknowledgements.clear();
+
+        // We get a successful response for the 2nd commitSync request.
+        client.prepareResponse(fullAcknowledgeResponse(tip0, Errors.NONE));
+        networkClientDelegate.poll(time.timer(0));
+
+        assertEquals(1, completedAcknowledgements.size());
+        assertEquals(4, completedAcknowledgements.get(0).get(tip0).size());
+        assertNull(completedAcknowledgements.get(0).get(tip0).getAcknowledgeException());
+
+        // Another call to poll removes the request state from the map.
+        assertEquals(0, shareConsumeRequestManager.sendAcknowledgements());
+
+        assertNull(shareConsumeRequestManager.requestStates(0));
+    }
+
+    @Test
     public void testPiggybackAcknowledgementsInFlight() {
         buildRequestManager();
 
@@ -843,6 +1032,7 @@ public class ShareConsumeRequestManagerTest {
     @Test
     public void testCommitAsyncWithSubscriptionChange() {
         buildRequestManager();
+        shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
 
         assignFromSubscribed(singleton(tp0));
 
@@ -870,17 +1060,26 @@ public class ShareConsumeRequestManagerTest {
 
         assertEquals(1, shareConsumeRequestManager.sendAcknowledgements());
 
-        client.prepareResponse(fullAcknowledgeResponse(t2ip0, Errors.NONE));
+        client.prepareResponse(fullAcknowledgeResponse(tip0, Errors.NONE));
         networkClientDelegate.poll(time.timer(0));
+
+        assertEquals(3, completedAcknowledgements.get(0).get(tip0).size());
+        assertNull(completedAcknowledgements.get(0).get(tip0).getAcknowledgeException());
 
         // We should send a fetch to the newly subscribed partition.
         assertEquals(1, sendFetches());
 
+        client.prepareResponse(fullFetchResponse(t2ip0, records, acquiredRecords, Errors.NONE));
+        networkClientDelegate.poll(time.timer(0));
+        assertTrue(shareConsumeRequestManager.hasCompletedFetches());
+
+        assertEquals(3, fetchRecords().get(t2p0).size());
     }
 
     @Test
     public void testCommitSyncWithSubscriptionChange() {
         buildRequestManager();
+        shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
 
         assignFromSubscribed(singleton(tp0));
 
@@ -908,16 +1107,26 @@ public class ShareConsumeRequestManagerTest {
 
         assertEquals(1, shareConsumeRequestManager.sendAcknowledgements());
 
-        client.prepareResponse(fullAcknowledgeResponse(t2ip0, Errors.NONE));
+        client.prepareResponse(fullAcknowledgeResponse(tip0, Errors.NONE));
         networkClientDelegate.poll(time.timer(0));
+
+        assertEquals(3, completedAcknowledgements.get(0).get(tip0).size());
+        assertNull(completedAcknowledgements.get(0).get(tip0).getAcknowledgeException());
 
         // We should send a fetch to the newly subscribed partition.
         assertEquals(1, sendFetches());
+
+        client.prepareResponse(fullFetchResponse(t2ip0, records, acquiredRecords, Errors.NONE));
+        networkClientDelegate.poll(time.timer(0));
+        assertTrue(shareConsumeRequestManager.hasCompletedFetches());
+
+        assertEquals(3, fetchRecords().get(t2p0).size());
     }
 
     @Test
     public void testCloseWithSubscriptionChange() {
         buildRequestManager();
+        shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
 
         assignFromSubscribed(singleton(tp0));
 
@@ -945,8 +1154,11 @@ public class ShareConsumeRequestManagerTest {
 
         assertEquals(1, shareConsumeRequestManager.sendAcknowledgements());
 
-        client.prepareResponse(fullAcknowledgeResponse(t2ip0, Errors.NONE));
+        client.prepareResponse(fullAcknowledgeResponse(tip0, Errors.NONE));
         networkClientDelegate.poll(time.timer(0));
+
+        assertEquals(3, completedAcknowledgements.get(0).get(tip0).size());
+        assertNull(completedAcknowledgements.get(0).get(tip0).getAcknowledgeException());
 
         // As we are closing, we would not send any more fetches.
         assertEquals(0, sendFetches());

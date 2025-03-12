@@ -317,6 +317,10 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                     } else {
                         // Processing the acknowledgements from commitSync
                         for (AcknowledgeRequestState acknowledgeRequestState : requestStates.getValue().getSyncRequestQueue()) {
+                            if (!isNodeFree(nodeId)) {
+                                log.trace("Skipping acknowledge request because previous request to {} has not been processed, so acks are not sent", nodeId);
+                                break;
+                            }
                             maybeBuildRequest(acknowledgeRequestState, currentTimeMs, false, isAsyncSent).ifPresent(unsentRequests::add);
                         }
                     }
@@ -380,6 +384,8 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                     acknowledgeRequestState.handleAcknowledgeTimedOut(tip);
                 }
                 acknowledgeRequestState.incompleteAcknowledgements.clear();
+                // Reset timer for any future processing on the same request state.
+                acknowledgeRequestState.resetTimerAndRequestState();
                 return Optional.empty();
             }
 
@@ -1008,8 +1014,10 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
     }
 
     private TopicIdPartition lookupTopicId(Uuid topicId, int partitionIndex) {
-        String topicName = metadata.topicNames().getOrDefault(topicId,
-                topicNamesMap.remove(new IdAndPartition(topicId, partitionIndex)));
+        String topicName = metadata.topicNames().get(topicId);
+        if (topicName == null) {
+            topicName = topicNamesMap.remove(new IdAndPartition(topicId, partitionIndex));
+        }
         if (topicName == null) {
             log.error("Topic name not found in metadata for topicId {} and partitionIndex {}", topicId, partitionIndex);
             return null;
@@ -1091,6 +1099,8 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
          */
         private boolean isProcessed;
 
+        private final long deadlineMs;
+
         AcknowledgeRequestState(LogContext logContext,
                                 String owner,
                                 long deadlineMs,
@@ -1110,6 +1120,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             this.incompleteAcknowledgements = new HashMap<>();
             this.requestType = acknowledgeRequestType;
             this.isProcessed = false;
+            this.deadlineMs = deadlineMs;
         }
 
         UnsentRequest buildRequest() {
@@ -1190,6 +1201,14 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             return acknowledgementsToSend.isEmpty() &&
                     incompleteAcknowledgements.isEmpty() &&
                     inFlightAcknowledgements.isEmpty();
+        }
+
+        /**
+         * Resets the timer with the new deadline and resets the RequestState.
+         */
+        void resetTimerAndRequestState() {
+            resetDeadline(deadlineMs);
+            reset();
         }
 
         /**
