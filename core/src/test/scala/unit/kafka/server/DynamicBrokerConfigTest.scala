@@ -33,6 +33,7 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.network.SocketServerConfigs
+import org.apache.kafka.server.DynamicThreadPool
 import org.apache.kafka.server.authorizer._
 import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
@@ -1041,7 +1042,7 @@ class DynamicBrokerConfigTest {
 class TestDynamicThreadPool extends BrokerReconfigurable {
 
   override def reconfigurableConfigs: Set[String] = {
-    DynamicThreadPool.ReconfigurableConfigs
+    DynamicThreadPool.RECONFIGURABLE_CONFIGS.asScala
   }
 
   override def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {

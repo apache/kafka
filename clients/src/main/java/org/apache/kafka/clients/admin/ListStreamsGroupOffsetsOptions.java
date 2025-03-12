@@ -14,43 +14,31 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.Map;
 
 /**
- * The parent class of result of the {@link Admin#deleteConsumerGroups(Collection)},
- * {@link Admin#deleteShareGroups(Collection)} calls.
+ * Options for {@link Admin#listStreamsGroupOffsets(Map, ListStreamsGroupOffsetsOptions)}.
  * <p>
  * The API of this class is evolving, see {@link Admin} for details.
  */
 @InterfaceStability.Evolving
-public abstract class DeleteGroupsResult {
-    private final Map<String, KafkaFuture<Void>> futures;
+public class ListStreamsGroupOffsetsOptions extends AbstractOptions<ListStreamsGroupOffsetsOptions> {
 
-    DeleteGroupsResult(final Map<String, KafkaFuture<Void>> futures) {
-        this.futures = futures;
-    }
+    private boolean requireStable = false;
 
     /**
-     * Return a map from group id to futures which can be used to check the status of
-     * individual deletions.
+     * Sets an optional requireStable flag.
      */
-    public Map<String, KafkaFuture<Void>> deletedGroups() {
-        Map<String, KafkaFuture<Void>> deletedGroups = new HashMap<>(futures.size());
-        deletedGroups.putAll(futures);
-        return deletedGroups;
+    public ListStreamsGroupOffsetsOptions requireStable(final boolean requireStable) {
+        this.requireStable = requireStable;
+        return this;
     }
 
-    /**
-     * Return a future which succeeds only if all the group deletions succeed.
-     */
-    public KafkaFuture<Void> all() {
-        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture<?>[0]));
+    public boolean requireStable() {
+        return requireStable;
     }
 }

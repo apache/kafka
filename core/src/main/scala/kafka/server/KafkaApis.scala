@@ -723,7 +723,6 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
 
       val params = new FetchParams(
-        versionId,
         fetchRequest.replicaId,
         fetchRequest.replicaEpoch,
         fetchRequest.maxWait,
@@ -2611,7 +2610,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           }
 
           // Clients are not allowed to see topics that are not authorized for Describe.
-          if (!authorizer.isEmpty) {
+          if (authorizer.isDefined) {
             val topicsToCheck = response.groups.stream()
               .flatMap(group => group.members.stream)
               .flatMap(member => util.stream.Stream.of(member.assignment, member.targetAssignment))
@@ -2835,9 +2834,24 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestHelper.sendMaybeThrottle(request, shareGroupHeartbeatRequest.getErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED.exception))
       CompletableFuture.completedFuture[Unit](())
     } else {
+      if (shareGroupHeartbeatRequest.data.subscribedTopicNames != null &&
+        !shareGroupHeartbeatRequest.data.subscribedTopicNames.isEmpty) {
+        // Check the authorization if the subscribed topic names are provided.
+        // Clients are not allowed to see topics that are not authorized for Describe.
+        val subscribedTopicSet = shareGroupHeartbeatRequest.data.subscribedTopicNames.asScala.toSet
+        val authorizedTopics = authHelper.filterByAuthorized(request.context, DESCRIBE, TOPIC,
+          subscribedTopicSet)(identity)
+        if (authorizedTopics.size < subscribedTopicSet.size) {
+          val responseData = new ShareGroupHeartbeatResponseData()
+            .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
+          requestHelper.sendMaybeThrottle(request, new ShareGroupHeartbeatResponse(responseData))
+          return CompletableFuture.completedFuture[Unit](())
+        }
+      }
+
       groupCoordinator.shareGroupHeartbeat(
         request.context,
-        shareGroupHeartbeatRequest.data,
+        shareGroupHeartbeatRequest.data
       ).handle[Unit] { (response, exception) =>
 
         if (exception != null) {
@@ -2897,6 +2911,34 @@ class KafkaApis(val requestChannel: RequestChannel,
             response.groups.addAll(results)
           }
 
+          // Clients are not allowed to see topics that are not authorized for Describe.
+          if (authorizer.isDefined) {
+            val topicsToCheck = response.groups.stream()
+              .flatMap(group => group.members.stream)
+              .flatMap(member => member.assignment.topicPartitions.stream)
+              .map(topicPartition => topicPartition.topicName)
+              .collect(Collectors.toSet[String])
+              .asScala
+            val authorizedTopics = authHelper.filterByAuthorized(request.context, DESCRIBE, TOPIC,
+              topicsToCheck)(identity)
+            val updatedGroups = response.groups.stream().map { group =>
+              val hasUnauthorizedTopic = group.members.stream()
+                .flatMap(member => member.assignment.topicPartitions.stream)
+                .anyMatch(tp => !authorizedTopics.contains(tp.topicName))
+
+              if (hasUnauthorizedTopic) {
+                new ShareGroupDescribeResponseData.DescribedGroup()
+                  .setGroupId(group.groupId)
+                  .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
+                  .setErrorMessage("The group has described topic(s) that the client is not authorized to describe.")
+                  .setMembers(List.empty.asJava)
+              } else {
+                group
+              }
+            }.collect(Collectors.toList[ShareGroupDescribeResponseData.DescribedGroup])
+            response.setGroups(updatedGroups)
+          }
+
           requestHelper.sendMaybeThrottle(request, new ShareGroupDescribeResponse(response))
         }
       }
@@ -2954,12 +2996,8 @@ class KafkaApis(val requestChannel: RequestChannel,
     erroneousAndValidPartitionData.erroneous.forEach {
       case(tp, _) => if (!topicIdPartitionSeq.contains(tp)) topicIdPartitionSeq += tp
     }
-    erroneousAndValidPartitionData.validTopicIdPartitions.forEach {
-      case(tp, _) => if (!topicIdPartitionSeq.contains(tp)) topicIdPartitionSeq += tp
-    }
-    shareFetchData.forEach {
-      case(tp, _) => if (!topicIdPartitionSeq.contains(tp)) topicIdPartitionSeq += tp
-    }
+    erroneousAndValidPartitionData.validTopicIdPartitions.forEach(tp => if (!topicIdPartitionSeq.contains(tp)) topicIdPartitionSeq += tp)
+    shareFetchData.forEach { tp => if (!topicIdPartitionSeq.contains(tp)) topicIdPartitionSeq += tp}
 
     // Kafka share consumers need READ permission on each topic they are fetching.
     val authorizedTopics = authHelper.filterByAuthorized(
@@ -3096,24 +3134,23 @@ class KafkaApis(val requestChannel: RequestChannel,
     val erroneous = mutable.Map.empty[TopicIdPartition, ShareFetchResponseData.PartitionData]
     erroneousAndValidPartitionData.erroneous.forEach { (topicIdPartition, partitionData) => erroneous.put(topicIdPartition, partitionData) }
 
-    val interestedWithMaxBytes = new util.LinkedHashMap[TopicIdPartition, Integer]
+    val interestedTopicPartitions = new util.ArrayList[TopicIdPartition]
 
-    erroneousAndValidPartitionData.validTopicIdPartitions.forEach { case (topicIdPartition, sharePartitionData) =>
+    erroneousAndValidPartitionData.validTopicIdPartitions.forEach { case topicIdPartition =>
       if (!authorizedTopics.contains(topicIdPartition.topicPartition.topic))
         erroneous += topicIdPartition -> ShareFetchResponse.partitionResponse(topicIdPartition, Errors.TOPIC_AUTHORIZATION_FAILED)
       else if (!metadataCache.contains(topicIdPartition.topicPartition))
         erroneous += topicIdPartition -> ShareFetchResponse.partitionResponse(topicIdPartition, Errors.UNKNOWN_TOPIC_OR_PARTITION)
       else
-        interestedWithMaxBytes.put(topicIdPartition, sharePartitionData.maxBytes)
+        interestedTopicPartitions.add(topicIdPartition)
     }
 
     val shareFetchRequest = request.body[ShareFetchRequest]
 
     val clientId = request.header.clientId
-    val versionId = request.header.apiVersion
     val groupId = shareFetchRequest.data.groupId
 
-    if (interestedWithMaxBytes.isEmpty) {
+    if (interestedTopicPartitions.isEmpty) {
       CompletableFuture.completedFuture(erroneous)
     } else {
       // for share fetch from consumer, cap fetchMaxBytes to the maximum bytes that could be fetched without being
@@ -3133,7 +3170,6 @@ class KafkaApis(val requestChannel: RequestChannel,
           request.context.listenerName.value))
 
       val params = new FetchParams(
-        versionId,
         FetchRequest.CONSUMER_REPLICA_ID,
         -1,
         shareFetchRequest.maxWait,
@@ -3151,7 +3187,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         params,
         shareSessionEpoch,
         shareFetchRequest.data.batchSize,
-        interestedWithMaxBytes
+        interestedTopicPartitions
       ).thenApply{ result =>
         val combinedResult = mutable.Map.empty[TopicIdPartition, ShareFetchResponseData.PartitionData]
         result.asScala.foreach { case (tp, data) =>
