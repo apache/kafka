@@ -14,17 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.test.api;
+package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.clients.CommonClientConfigs;
-import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
-import org.apache.kafka.test.TestUtils;
+import org.junit.jupiter.api.Assertions;
 
 import java.time.Duration;
 import java.util.List;
@@ -46,7 +45,7 @@ public class AdminClientRebootstrapTest {
             @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "2")
         }
     )
-    public void testRebootstrap(ClusterInstance clusterInstance) throws InterruptedException {
+    public void testRebootstrap(ClusterInstance clusterInstance) {
         var broker0 = 0;
         var broker1 = 1;
         var timeout = 60;
@@ -57,8 +56,7 @@ public class AdminClientRebootstrapTest {
             admin.createTopics(List.of(new NewTopic(TOPIC, PARTITIONS, (short) 2)));
 
             // Only the broker 1 is available for the admin client during the bootstrap.
-            TestUtils.waitForCondition(() -> admin.listTopics().names().get(timeout, TimeUnit.SECONDS).contains(TOPIC),
-                "timed out waiting for topics");
+            Assertions.assertDoesNotThrow(() -> admin.listTopics().names().get(timeout, TimeUnit.SECONDS).contains(TOPIC));
 
             clusterInstance.shutdownBroker(broker1);
             clusterInstance.startBroker(broker0);
@@ -66,8 +64,7 @@ public class AdminClientRebootstrapTest {
             // The broker 1, originally cached during the bootstrap, is offline.
             // However, the broker 0 from the bootstrap list is online.
             // Should be able to list topics again.
-            TestUtils.waitForCondition(() -> admin.listTopics().names().get(timeout, TimeUnit.SECONDS).contains(TOPIC),
-                "timed out waiting for topics");
+            Assertions.assertDoesNotThrow(() -> admin.listTopics().names().get(timeout, TimeUnit.SECONDS).contains(TOPIC));
         }
     }
 
@@ -79,7 +76,7 @@ public class AdminClientRebootstrapTest {
             @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "2")
         }
     )
-    public void testRebootstrapDisabled(ClusterInstance clusterInstance) throws InterruptedException {
+    public void testRebootstrapDisabled(ClusterInstance clusterInstance) {
         var broker0 = 0;
         var broker1 = 1;
 
@@ -89,8 +86,7 @@ public class AdminClientRebootstrapTest {
         admin.createTopics(List.of(new NewTopic(TOPIC, PARTITIONS, (short) 2)));
 
         // Only the broker 1 is available for the admin client during the bootstrap.
-        TestUtils.waitForCondition(() -> admin.listTopics().names().get(60, TimeUnit.SECONDS).contains(TOPIC),
-            "timed out waiting for topics");
+        Assertions.assertDoesNotThrow(() -> admin.listTopics().names().get(60, TimeUnit.SECONDS).contains(TOPIC));
 
         clusterInstance.shutdownBroker(broker1);
         clusterInstance.startBroker(broker0);
