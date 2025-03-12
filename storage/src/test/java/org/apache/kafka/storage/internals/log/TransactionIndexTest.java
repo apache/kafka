@@ -228,7 +228,8 @@ public class TransactionIndexTest {
         assertFalse(index.isEmpty());
     }
 
-    public void testDoNotCreateFileUntilNeeded() throws IOException {
+    @Test
+    void testDoNotCreateFileUntilNeeded() throws IOException {
         // Given that index file does not exist yet
         file.delete();
         // When index is created, reset, or flushed
