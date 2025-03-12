@@ -1703,26 +1703,15 @@ public class UnifiedLog implements AutoCloseable {
         return logStartOffset == logEndOffset();
     }
 
-    private Optional<FileRecords.TimestampAndOffset> searchOffsetInLocalLog(long targetTimestamp, long startOffset) {
+    private Optional<FileRecords.TimestampAndOffset> searchOffsetInLocalLog(long targetTimestamp, long startOffset) throws IOException {
         // Cache to avoid race conditions.
-        List<LogSegment> segmentsCopy = logSegments();
-        Optional<LogSegment> targetSeg = findFirst(
-            segmentsCopy,
-            item -> {
-                try {
-                    return item.largestTimestamp() >= targetTimestamp;
-                } catch (IOException e) {
-                    return false;
-                }
+        List<LogSegment> segments = logSegments();
+        for (LogSegment segment : segments) {
+            if (segment.largestTimestamp() >= targetTimestamp) {
+                return segment.findOffsetByTimestamp(targetTimestamp, startOffset);
             }
-        );
-        return targetSeg.flatMap(s -> {
-            try {
-                return s.findOffsetByTimestamp(targetTimestamp, startOffset);
-            } catch (IOException e) {
-                return Optional.empty();
-            }
-        });
+        }
+        return Optional.empty();
     }
 
     /**

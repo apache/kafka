@@ -138,7 +138,6 @@ import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -666,7 +665,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             long timestamp,
             long startingOffset,
             LeaderEpochFileCache leaderEpochCache,
-            Supplier<Optional<FileRecords.TimestampAndOffset>> searchLocalLog) {
+            TimestampAndOffsetSupplier searchLocalLog) {
         CompletableFuture<OffsetResultHolder.FileRecordsOrError> taskFuture = new CompletableFuture<>();
         Future<Void> jobFuture = remoteStorageReaderThreadPool.submit(
                 new RemoteLogOffsetReader(this, topicPartition, timestamp, startingOffset, leaderEpochCache, searchLocalLog, result -> {
