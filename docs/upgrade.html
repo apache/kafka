@@ -101,7 +101,7 @@
         </li>
         <li>A number of deprecated classes, methods, configurations and tools have been removed.
             <ul>
-                <li><b>Common</b>
+                <li><a id="upgrade_400_notable_common" href="#upgrade_400_notable_common"><b>Common</b></a>
                     <ul>
                         <li>The <code>metrics.jmx.blacklist</code> and <code>metrics.jmx.whitelist</code> configurations were removed from the <code>org.apache.kafka.common.metrics.JmxReporter</code>
                             Please use <code>metrics.jmx.exclude</code> and <code>metrics.jmx.include</code> respectively instead.
@@ -144,7 +144,7 @@
                         </li>
                     </ul>
                 </li>
-                <li><b>Broker</b>
+                <li><a id="upgrade_400_notable_broker" href="#upgrade_400_notable_broker"><b>Broker</b></a>
                     <ul>
                         <li>The <code>delegation.token.master.key</code> configuration was removed.
                             Please use <code>delegation.token.secret.key</code> instead.
@@ -177,7 +177,7 @@
                         </li>
                     </ul>
                 </li>
-                <li><b>MirrorMaker</b>
+                <li><a id="upgrade_400_notable_MirrorMaker" href="#upgrade_400_notable_MirrorMaker"><b>MirrorMaker</b></a>
                     <ul>
                         <li>The original MirrorMaker (MM1) and related classes were removed. Please use the Connect-based
                             MirrorMaker (MM2), as described in the <a href="/{{version}}/documentation/#georeplication">Geo-Replication section.</a>.
@@ -199,7 +199,7 @@
                         </li>
                     </ul>
                 </li>
-                <li><b>Tools</b>
+                <li><a id="upgrade_400_notable_tools" href="#upgrade_400_notable_tools"><b>Tools</b></a>
                     <ul>
                         <li>The <code>kafka.common.MessageReader</code> class was removed. Please use the
                             <a href="/{{version}}/javadoc/org/apache/kafka/tools/api/RecordReader.html"><code>org.apache.kafka.tools.api.RecordReader</code></a>
@@ -250,7 +250,7 @@
                         </li>
                     </ul>
                 </li>
-                <li><b>Connect</b>
+                <li><a id="upgrade_400_notable_connect" href="#upgrade_400_notable_connect"><b>Connect</b></a>
                     <ul>
                         <li>The <code>whitelist</code> and <code>blacklist</code> configurations were removed from the <code>org.apache.kafka.connect.transforms.ReplaceField</code> transformation.
                             Please use <code>include</code> and <code>exclude</code> respectively instead.
@@ -262,7 +262,7 @@
                         </li>
                     </ul>
                 </li>
-                <li><b>Consumer</b>
+                <li><a id="upgrade_400_notable_consumer" href="#upgrade_400_notable_consumer"><b>Consumer</b></a>
                     <ul>
                         <li>The <code>poll(long)</code> method was removed from the consumer. Please use <code>poll(Duration)</code> instead. Note that there is
                             a difference in behavior between the two methods. The <code>poll(Duration)</code> method does not block beyond the timeout awaiting
@@ -277,7 +277,7 @@
                         </li>
                     </ul>
                 </li>
-                <li><b>Producer</b>
+                <li><a id="upgrade_400_notable_producer" href="#upgrade_400_notable_producer"><b>Producer</b></a>
                     <ul>
                         <li>The <code>enable.idempotence</code> configuration will no longer automatically fall back when the <code>max.in.flight.requests.per.connection</code> value exceeds 5.
                         </li>
@@ -288,7 +288,7 @@
                         </li>
                     </ul>
                 </li>
-                <li><b>Admin client</b>
+                <li><a id="upgrade_400_notable_admin_client" href="#upgrade_400_notable_admin_client"><b>Admin client</b></a>
                     <ul>
                         <li>
                             The <code>alterConfigs</code> method was removed from the <code>org.apache.kafka.clients.admin.Admin</code>.
@@ -332,7 +332,7 @@
                         </li>
                     </ul>
                 </li>
-                <li><b>Kafka Streams</b>
+                <li><a id="upgrade_400_notable_kafka_streams" href="#upgrade_400_notable_kafka_streams"><b>Kafka Streams</b></a>
                     <ul>
                         <li>
 			    All public APIs, deprecated in Apache Kafka 3.6 or an earlier release, have been removed, with the exception of <code>JoinWindows.of()</code> and <code>JoinWindows#grace()</code>.
