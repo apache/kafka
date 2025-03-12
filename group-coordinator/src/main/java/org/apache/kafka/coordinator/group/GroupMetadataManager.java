@@ -2346,7 +2346,8 @@ public class GroupMetadataManager {
         // 2. The member's assignment has been updated.
         boolean isFullRequest = subscribedTopicNames != null;
         if (memberEpoch == 0 || isFullRequest || hasAssignedPartitionsChanged(member, updatedMember)) {
-            response.setAssignment(createShareGroupResponseAssignment(updatedMember));
+            ShareGroupHeartbeatResponseData.Assignment assignment = createShareGroupResponseAssignment(updatedMember);
+            response.setAssignment(assignment);
         }
 
         return new CoordinatorResult<>(

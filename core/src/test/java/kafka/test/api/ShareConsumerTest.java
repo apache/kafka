@@ -405,7 +405,7 @@ public class ShareConsumerTest {
             shareConsumer.setAcknowledgementCommitCallback(new TestableAcknowledgementCommitCallback(partitionOffsetsMap, partitionExceptionMap));
             shareConsumer.subscribe(Set.of(tp.topic()));
 
-            ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(5000));
+            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 1);
             assertEquals(1, records.count());
 
             // Waiting until the acquisition lock expires.
@@ -566,7 +566,7 @@ public class ShareConsumerTest {
 
             shareConsumer.subscribe(Set.of(tp.topic()));
 
-            ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(5000));
+            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 4);
             assertEquals(4, records.count());
             assertEquals(transactional1.offset(), records.records(tp).get(0).offset());
             assertEquals(nonTransactional1.offset(), records.records(tp).get(1).offset());
@@ -1343,7 +1343,7 @@ public class ShareConsumerTest {
             // Poll twice to receive records. The first poll fetches the record and starts the acquisition lock timer.
             // Since, we are only sending one record and the acquisition lock hasn't timed out, the second poll only
             // acknowledges the record from the first poll and does not fetch any more records.
-            ConsumerRecords<byte[], byte[]> consumerRecords = shareConsumer.poll(Duration.ofMillis(5000));
+            ConsumerRecords<byte[], byte[]> consumerRecords = waitedPoll(shareConsumer, 2500L, 1);
             ConsumerRecord<byte[], byte[]> consumerRecord = consumerRecords.records(tp).get(0);
             assertEquals("key_1", new String(consumerRecord.key()));
             assertEquals("value_1", new String(consumerRecord.value()));
@@ -1717,11 +1717,12 @@ public class ShareConsumerTest {
              Producer<byte[], byte[]> producer = createProducer()) {
 
             shareConsumer.subscribe(Set.of(tp.topic()));
+            // Wait for assignment
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
             // Producing a record.
             producer.send(record);
             producer.flush();
-            ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(5000));
+            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 0);
             // No records should be consumed because share.auto.offset.reset has a default of "latest". Since the record
             // was produced before share partition was initialized (which happens after the first share fetch request
             // in the poll method), the start offset would be the latest offset, i.e. 1 (the next offset after the already
