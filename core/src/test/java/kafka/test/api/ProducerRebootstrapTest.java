@@ -23,101 +23,96 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.test.ClusterInstance;
-import org.apache.kafka.common.test.api.ClusterConfig;
-import org.apache.kafka.common.test.api.ClusterTemplate;
+import org.apache.kafka.common.test.api.ClusterConfigProperty;
+import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 
-import java.util.HashMap;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ExecutionException;
-import java.util.stream.Stream;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class ProducerRebootstrapTest {
-    private static final int BROKER_COUNT = 2;
+    private static final String TOPIC = "topic";
+    private static final int PARTITIONS = 2;
 
-    private static List<ClusterConfig> generator() {
-        // Enable unclean leader election for the test topic
-        Map<String, String> serverProperties = Map.of(
-            TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, "true",
-            GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, String.valueOf(BROKER_COUNT)
-        );
-
-        return Stream.of(false, true)
-            .map(ProducerRebootstrapTest::getRebootstrapConfig)
-            .map(rebootstrapProperties -> ProducerRebootstrapTest.buildConfig(serverProperties, rebootstrapProperties))
-            .toList();
-    }
-
-    private static Map<String, String> getRebootstrapConfig(boolean useRebootstrapTriggerMs) {
-        Map<String, String> properties = new HashMap<>();
-        if (useRebootstrapTriggerMs) {
-            properties.put(CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_CONFIG, "5000");
-        } else {
-            properties.put(CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_CONFIG, "3600000");
-            properties.put(CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG, "5000");
-            properties.put(CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG, "5000");
-            properties.put(CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG, "1000");
-            properties.put(CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_CONFIG, "1000");
+    @ClusterTest(
+        brokers = 2,
+        types = {Type.KRAFT},
+        serverProperties = {
+            @ClusterConfigProperty(key = TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, value = "true"),
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "2")
         }
-        properties.put(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG, "rebootstrap");
-        properties.putIfAbsent(ProducerConfig.ACKS_CONFIG, "-1");
-        return properties;
-    }
-
-    private static ClusterConfig buildConfig(Map<String, String> serverProperties, Map<String, String> rebootstrapProperties) {
-        return ClusterConfig.defaultBuilder()
-            .setTypes(Set.of(Type.KRAFT))
-            .setBrokers(BROKER_COUNT)
-            .setProducerProperties(rebootstrapProperties)
-            .setServerProperties(serverProperties).build();
-    }
-
-    @ClusterTemplate(value = "generator")
+    )
     public void testRebootstrap(ClusterInstance clusterInstance) throws ExecutionException, InterruptedException {
-        var topic = "topic";
         try (var admin = clusterInstance.admin()) {
-            admin.createTopics(List.of(new NewTopic(topic, BROKER_COUNT, (short) 2)));
+            admin.createTopics(List.of(new NewTopic(TOPIC, PARTITIONS, (short) 2)));
         }
 
         var part = 0;
-        var key0 = "key 0";
-        var value0 = "value 0";
-        var key1 = "key 1";
-        var value1 = "value 1";
-        var server0 = clusterInstance.brokers().get(0);
-        var server1 = clusterInstance.brokers().get(1);
+        var broker0 = 0;
+        var broker1 = 1;
 
         // It's ok to shut the leader down, cause the reelection is small enough to the producer timeout.
-        server1.shutdown();
-        server1.awaitShutdown();
+        clusterInstance.shutdownBroker(broker0);
 
         try (var producer = clusterInstance.producer()) {
-            // Only the server 0 is available for the producer during the bootstrap.
-            var recordMetadata0 = producer.send(new ProducerRecord<>(topic, part, key0.getBytes(), value0.getBytes())).get();
+            // Only the broker 1 is available for the producer during the bootstrap.
+            var recordMetadata0 = producer.send(new ProducerRecord<>(TOPIC, part, "key 0".getBytes(), "value 0".getBytes())).get();
             assertEquals(0, recordMetadata0.offset());
 
-            server0.shutdown();
-            server0.awaitShutdown();
-            server1.startup();
+            clusterInstance.shutdownBroker(broker1);
+            clusterInstance.startBroker(broker0);
 
-            // Current server 0 is offline.
-            // However, the server 1 from the bootstrap list is online.
+            // Current broker 1 is offline.
+            // However, the broker 0 from the bootstrap list is online.
             // Should be able to produce records.
-            var recordMetadata1 = producer.send(new ProducerRecord<>(topic, part, key1.getBytes(), value1.getBytes())).get();
+            var recordMetadata1 = producer.send(new ProducerRecord<>(TOPIC, part, "key 1".getBytes(), "value 1".getBytes())).get();
             assertEquals(0, recordMetadata1.offset());
-
-            server1.shutdown();
-            server1.awaitShutdown();
-            server0.startup();
-
-            // The same situation, but the server 1 has gone and server 0 is back.
-            var recordMetadata2 = producer.send(new ProducerRecord<>(topic, part, key1.getBytes(), value1.getBytes())).get();
-            assertEquals(1, recordMetadata2.offset());
         }
+    }
+
+    @ClusterTest(
+        brokers = 2,
+        types = {Type.KRAFT},
+        serverProperties = {
+            @ClusterConfigProperty(key = TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, value = "true"),
+            @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "2")
+        }
+    )
+    public void testRebootstrapDisabled(ClusterInstance clusterInstance) throws ExecutionException, InterruptedException {
+        try (var admin = clusterInstance.admin()) {
+            admin.createTopics(List.of(new NewTopic(TOPIC, PARTITIONS, (short) 2)));
+        }
+
+        var part = 0;
+        var broker0 = 0;
+        var broker1 = 1;
+
+        // It's ok to shut the leader down, cause the reelection is small enough to the producer timeout.
+        clusterInstance.shutdownBroker(broker0);
+
+        var producer = clusterInstance.producer(Map.of(
+            CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG, "none",
+            ProducerConfig.ACKS_CONFIG, "-1"));
+
+        // Only the broker 1 is available for the producer during the bootstrap.
+        var recordMetadata0 = producer.send(new ProducerRecord<>(TOPIC, part, "key 0".getBytes(), "value 0".getBytes())).get();
+        assertEquals(0, recordMetadata0.offset());
+
+        clusterInstance.shutdownBroker(broker1);
+        clusterInstance.startBroker(broker0);
+
+        // The broker 1, originally cached during the bootstrap, is offline.
+        // As a result, the producer will throw a TimeoutException when trying to send a message.
+        assertThrows(TimeoutException.class, () -> producer.send(new ProducerRecord<>(TOPIC, part, "key 1".getBytes(), "value 1".getBytes())).get(5, TimeUnit.SECONDS));
+        // Since the brokers cached during the bootstrap are offline, the producer needs to wait the default timeout for other threads.
+        producer.close(Duration.ofSeconds(0));
     }
 }
