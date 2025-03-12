@@ -49,7 +49,7 @@ public class AdminClientRebootstrapTest {
     public void testRebootstrap(ClusterInstance clusterInstance) throws InterruptedException {
         var broker0 = 0;
         var broker1 = 1;
-        var timeout = 5;
+        var timeout = 60;
 
         clusterInstance.shutdownBroker(broker0);
 
@@ -57,7 +57,7 @@ public class AdminClientRebootstrapTest {
             admin.createTopics(List.of(new NewTopic(TOPIC, PARTITIONS, (short) 2)));
 
             // Only the broker 1 is available for the admin client during the bootstrap.
-            TestUtils.waitForCondition(() -> admin.listTopics().names().get(timeout, TimeUnit.MINUTES).contains(TOPIC),
+            TestUtils.waitForCondition(() -> admin.listTopics().names().get(timeout, TimeUnit.SECONDS).contains(TOPIC),
                 "timed out waiting for topics");
 
             clusterInstance.shutdownBroker(broker1);
@@ -66,7 +66,7 @@ public class AdminClientRebootstrapTest {
             // The broker 1, originally cached during the bootstrap, is offline.
             // However, the broker 0 from the bootstrap list is online.
             // Should be able to list topics again.
-            TestUtils.waitForCondition(() -> admin.listTopics().names().get(timeout, TimeUnit.MINUTES).contains(TOPIC),
+            TestUtils.waitForCondition(() -> admin.listTopics().names().get(timeout, TimeUnit.SECONDS).contains(TOPIC),
                 "timed out waiting for topics");
         }
     }
@@ -89,16 +89,16 @@ public class AdminClientRebootstrapTest {
         admin.createTopics(List.of(new NewTopic(TOPIC, PARTITIONS, (short) 2)));
 
         // Only the broker 1 is available for the admin client during the bootstrap.
-        TestUtils.waitForCondition(() -> admin.listTopics().names().get(5, TimeUnit.MINUTES).contains(TOPIC),
+        TestUtils.waitForCondition(() -> admin.listTopics().names().get(60, TimeUnit.SECONDS).contains(TOPIC),
             "timed out waiting for topics");
 
         clusterInstance.shutdownBroker(broker1);
         clusterInstance.startBroker(broker0);
 
         // The broker 1, originally cached during the bootstrap, is offline.
-        // The admin client will throw a TimeoutException because the brokers are offline during the bootstrap list
+        // As a result, the admin client will throw a TimeoutException when trying to get list of the topics.
         assertThrows(TimeoutException.class, () -> admin.listTopics().names().get(5, TimeUnit.SECONDS));
-        // The admin client needs to wait the default timeout for other threads because the brokers are offline.
-        admin.close(Duration.ofSeconds(0));
+        // Since the brokers cached during the bootstrap are offline, the admin client needs to wait the default timeout for other threads.
+        admin.close(Duration.ZERO);
     }
 }
