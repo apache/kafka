@@ -1685,9 +1685,9 @@ class ReplicaManager(val config: KafkaConfig,
       if (params.isFromFollower && shouldLeaderThrottle(quota, partition, params.replicaId)) {
         // If the partition is being throttled, simply return an empty set.
         new FetchDataInfo(givenFetchedDataInfo.fetchOffsetMetadata, MemoryRecords.EMPTY)
-      } else if (!params.hardMaxBytesLimit && givenFetchedDataInfo.firstEntryIncomplete) {
-        // For FetchRequest version 3, we replace incomplete message sets with an empty one as consumers can make
-        // progress in such cases and don't need to report a `RecordTooLargeException`
+      } else if (givenFetchedDataInfo.firstEntryIncomplete) {
+        // Replace incomplete message sets with an empty one as consumers can make progress in such
+        // cases and don't need to report a `RecordTooLargeException`
         new FetchDataInfo(givenFetchedDataInfo.fetchOffsetMetadata, MemoryRecords.EMPTY)
       } else {
         givenFetchedDataInfo
@@ -1799,7 +1799,7 @@ class ReplicaManager(val config: KafkaConfig,
 
     var limitBytes = params.maxBytes
     val result = new mutable.ArrayBuffer[(TopicIdPartition, LogReadResult)]
-    var minOneMessage = !params.hardMaxBytesLimit
+    var minOneMessage = true
     readPartitionInfo.foreach { case (tp, fetchInfo) =>
       val readResult = read(tp, fetchInfo, limitBytes, minOneMessage)
       val recordBatchSize = readResult.info.records.sizeInBytes
@@ -1855,7 +1855,7 @@ class ReplicaManager(val config: KafkaConfig,
           // For the first topic-partition that needs remote data, we will use this information to read the data in another thread.
           new FetchDataInfo(new LogOffsetMetadata(offset), MemoryRecords.EMPTY, false, Optional.empty(),
             Optional.of(new RemoteStorageFetchInfo(adjustedMaxBytes, minOneMessage, tp.topicPartition(),
-              fetchInfo, params.isolation, params.hardMaxBytesLimit())))
+              fetchInfo, params.isolation)))
         }
 
         LogReadResult(fetchDataInfo,

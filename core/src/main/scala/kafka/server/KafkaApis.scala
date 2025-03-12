@@ -723,7 +723,6 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
 
       val params = new FetchParams(
-        versionId,
         fetchRequest.replicaId,
         fetchRequest.replicaEpoch,
         fetchRequest.maxWait,
@@ -3153,7 +3152,6 @@ class KafkaApis(val requestChannel: RequestChannel,
     val shareFetchRequest = request.body[ShareFetchRequest]
 
     val clientId = request.header.clientId
-    val versionId = request.header.apiVersion
     val groupId = shareFetchRequest.data.groupId
 
     if (interestedWithMaxBytes.isEmpty) {
@@ -3176,7 +3174,6 @@ class KafkaApis(val requestChannel: RequestChannel,
           request.context.listenerName.value))
 
       val params = new FetchParams(
-        versionId,
         FetchRequest.CONSUMER_REPLICA_ID,
         -1,
         shareFetchRequest.maxWait,
