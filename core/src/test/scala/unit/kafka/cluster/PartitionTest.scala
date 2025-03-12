@@ -129,7 +129,6 @@ object PartitionTest {
     maxBytes: Int = Int.MaxValue
   ): FetchParams = {
     new FetchParams(
-      ApiKeys.FETCH.latestVersion,
       replicaId,
       replicaEpoch,
       maxWaitMs,
@@ -148,7 +147,6 @@ object PartitionTest {
     isolation: FetchIsolation = FetchIsolation.HIGH_WATERMARK
   ): FetchParams = {
     new FetchParams(
-      ApiKeys.FETCH.latestVersion,
       FetchRequest.CONSUMER_REPLICA_ID,
       -1,
       maxWaitMs,

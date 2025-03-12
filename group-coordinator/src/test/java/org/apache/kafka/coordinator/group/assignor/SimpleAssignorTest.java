@@ -391,7 +391,7 @@ public class SimpleAssignorTest {
         List<TopicIdPartition> partitions = List.of(partition1, partition2, partition3);
 
         Map<TopicIdPartition, List<String>> computedAssignment = new HashMap<>();
-        assignor.memberHashAssignment(partitions, members, computedAssignment);
+        assignor.memberHashAssignment(members, partitions, computedAssignment);
 
         Map<TopicIdPartition, List<String>> expectedAssignment = new HashMap<>();
         expectedAssignment.put(partition1, List.of(member3));
@@ -423,6 +423,51 @@ public class SimpleAssignorTest {
         );
 
         assertAssignment(expectedAssignment, assignment);
+    }
+
+    @Test
+    public void testRoundRobinAssignmentWithCount() {
+        String member1 = "member1";
+        String member2 = "member2";
+        List<String> members = List.of(member1, member2);
+        TopicIdPartition partition1 = new TopicIdPartition(TOPIC_1_UUID, 0);
+        TopicIdPartition partition2 = new TopicIdPartition(TOPIC_2_UUID, 0);
+        TopicIdPartition partition3 = new TopicIdPartition(TOPIC_3_UUID, 0);
+        TopicIdPartition partition4 = new TopicIdPartition(TOPIC_4_UUID, 0);
+        List<TopicIdPartition> unassignedPartitions = List.of(partition2, partition3, partition4);
+
+        Map<String, Set<TopicIdPartition>> assignment = new HashMap<>();
+        assignment.put(member1, new HashSet<>(Set.of(partition1)));
+        assignment.put(member2, new HashSet<>(Set.of(partition1)));
+
+        assignor.roundRobinAssignmentWithCount(members, unassignedPartitions, assignment, 2);
+        Map<String, Set<TopicIdPartition>> expectedAssignment = Map.of(
+            member1, Set.of(partition1, partition2, partition4),
+            member2, Set.of(partition1, partition3)
+        );
+
+        assertFinalAssignment(expectedAssignment, assignment);
+    }
+
+    @Test
+    public void testRoundRobinAssignmentWithCountTooManyPartitions() {
+        String member1 = "member1";
+        String member2 = "member2";
+        List<String> members = List.of(member1, member2);
+        TopicIdPartition partition1 = new TopicIdPartition(TOPIC_1_UUID, 0);
+        TopicIdPartition partition2 = new TopicIdPartition(TOPIC_2_UUID, 0);
+        TopicIdPartition partition3 = new TopicIdPartition(TOPIC_3_UUID, 0);
+        TopicIdPartition partition4 = new TopicIdPartition(TOPIC_4_UUID, 0);
+        TopicIdPartition partition5 = new TopicIdPartition(TOPIC_4_UUID, 1);
+        TopicIdPartition partition6 = new TopicIdPartition(TOPIC_4_UUID, 2);
+        List<TopicIdPartition> unassignedPartitions = List.of(partition2, partition3, partition4, partition5, partition6);
+
+        Map<String, Set<TopicIdPartition>> assignment = new HashMap<>();
+        assignment.put(member1, new HashSet<>(Set.of(partition1)));
+        assignment.put(member2, new HashSet<>(Set.of(partition1)));
+
+        assertThrows(PartitionAssignorException.class,
+            () -> assignor.roundRobinAssignmentWithCount(members, unassignedPartitions, assignment, 2));
     }
 
     @Test
@@ -755,6 +800,18 @@ public class SimpleAssignorTest {
             List<String> computedMembers = computedAssignment.getOrDefault(topicIdPartition, List.of());
             assertEquals(members.size(), computedMembers.size());
             members.forEach(member -> assertTrue(computedMembers.contains(member)));
+        });
+    }
+
+    private void assertFinalAssignment(
+        Map<String, Set<TopicIdPartition>> expectedAssignment,
+        Map<String, Set<TopicIdPartition>> computedAssignment
+    ) {
+        assertEquals(expectedAssignment.size(), computedAssignment.size());
+        expectedAssignment.forEach((memberId, partitions) -> {
+            Set<TopicIdPartition> computedPartitions = computedAssignment.getOrDefault(memberId, Set.of());
+            assertEquals(partitions.size(), computedPartitions.size());
+            partitions.forEach(member -> assertTrue(computedPartitions.contains(member)));
         });
     }
 
