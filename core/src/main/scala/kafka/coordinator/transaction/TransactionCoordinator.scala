@@ -130,10 +130,10 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
     } else if (enableTwoPCFlag && !txnManager.isTransaction2pcEnabled()) {
       // if the request is to enable two-phase commit but the broker 2PC config is set to false,
       // then return error as invalid request.
-      responseCallback(initTransactionError(Errors.INVALID_REQUEST))
+      responseCallback(initTransactionError(Errors.INVALID_TXN_STATE))
     } else if (keepPreparedTxn) {
       // if the request is to keep the prepared transaction, then return error as invalid request.
-      responseCallback(initTransactionError(Errors.INVALID_REQUEST))
+      responseCallback(initTransactionError(Errors.UNSUPPORTED_VERSION))
     } else if (!txnManager.validateTransactionTimeoutMs(enableTwoPCFlag, transactionTimeoutMs)) {
       // check transactionTimeoutMs is not larger than the broker configured maximum allowed value
       responseCallback(initTransactionError(Errors.INVALID_TRANSACTION_TIMEOUT))
