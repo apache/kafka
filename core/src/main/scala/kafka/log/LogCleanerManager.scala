@@ -27,7 +27,7 @@ import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpointFile
-import org.apache.kafka.storage.internals.log.{LogCleaningAbortedException, LogDirFailureChannel}
+import org.apache.kafka.storage.internals.log.{LogCleaningAbortedException, LogDirFailureChannel, UnifiedLog}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 
 import java.util.Comparator
@@ -678,7 +678,7 @@ private[log] object LogCleanerManager extends Logging {
   def calculateCleanableBytes(log: UnifiedLog, firstDirtyOffset: Long, uncleanableOffset: Long): (Long, Long) = {
     val firstUncleanableSegment = log.nonActiveLogSegmentsFrom(uncleanableOffset).asScala.headOption.getOrElse(log.activeSegment)
     val firstUncleanableOffset = firstUncleanableSegment.baseOffset
-    val cleanableBytes = log.logSegments(math.min(firstDirtyOffset, firstUncleanableOffset), firstUncleanableOffset).map(_.size.toLong).sum
+    val cleanableBytes = log.logSegments(math.min(firstDirtyOffset, firstUncleanableOffset), firstUncleanableOffset).asScala.map(_.size.toLong).sum
 
     (firstUncleanableOffset, cleanableBytes)
   }
