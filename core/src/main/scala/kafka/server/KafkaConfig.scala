@@ -415,7 +415,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
       if (!isNewGroupCoordinatorEnabled) {
         warn(s"The new '${GroupType.STREAMS}' rebalance protocol is only supported with the new group coordinator.")
       }
-      warn(s"Share groups and the new '${GroupType.STREAMS}' rebalance protocol are enabled. " +
+      warn(s"Streams groups and the new '${GroupType.STREAMS}' rebalance protocol are enabled. " +
         "This is part of the early access of KIP-1071 and MUST NOT be used in production.")
     }
     protocols
