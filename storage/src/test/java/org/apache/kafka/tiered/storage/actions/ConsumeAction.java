@@ -188,21 +188,29 @@ public final class ConsumeAction implements TieredStorageTestAction {
     }
 
     private String errorMessage(
-            LocalTieredStorageEvent.EventType eventType, 
-            int actualCount, 
-            RemoteFetchCount.OperationType exceptedOperationType, 
-            int exceptedCount
+        LocalTieredStorageEvent.EventType eventType,
+        int actualCount,
+        RemoteFetchCount.OperationType exceptedOperationType,
+        int exceptedCount
     ) {
         return String.format(
-                "Number of %s requests from broker %d to the tier storage does not match the expected " +
-                        "value for topic-partition %s. But was %d %s %d.",
-                eventType,
-                remoteFetchSpec.getSourceBrokerId(),
-                remoteFetchSpec.getTopicPartition(),
-                actualCount,
-                exceptedOperationType,
-                exceptedCount
+            "Expected %s requests count from broker %d to tiered storage for topic-partition %s to be %s %d, " +
+                    "but actual count was %d.",
+            eventType,
+            remoteFetchSpec.getSourceBrokerId(),
+            remoteFetchSpec.getTopicPartition(),
+            operationTypeToString(exceptedOperationType),
+            exceptedCount,
+            actualCount
         );
+    }
+
+    private String operationTypeToString(RemoteFetchCount.OperationType operationType) {
+        return switch (operationType) {
+            case EQUALS_TO -> "equal to";
+            case LESS_THAN_OR_EQUALS_TO -> "less than or equal to";
+            case GREATER_THAN_OR_EQUALS_TO -> "greater than or equal to";
+        };
     }
 
     @Override
