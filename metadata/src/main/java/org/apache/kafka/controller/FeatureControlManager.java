@@ -372,7 +372,7 @@ public class FeatureControlManager {
             metadataVersion.set(Optional.of(mv));
             log.info("Replayed a FeatureLevelRecord setting metadata.version to {}", mv);
         } else if (record.name().equals(KRaftVersion.FEATURE_NAME)) {
-            // Skip any feature level record for kraft.version. This has two benefits:
+            // KAFKA-18979 - Skip any feature level record for kraft.version. This has two benefits:
             // 1. It removes from snapshots any FeatureLevelRecord for kraft.version that was incorrectly written to the log
             // 2. Allows ApiVersions to report the correct finalized kraft.version
         } else {
