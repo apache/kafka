@@ -81,7 +81,7 @@ class StreamsUpgradeTest(Test):
             'avg' : { 'partitions': 5, 'replication-factor': 1 },
             'wcnt' : { 'partitions': 5, 'replication-factor': 1 },
             'tagg' : { 'partitions': 5, 'replication-factor': 1 }
-        }, controller_num_nodes_override=1)
+        }, override_num_isolated_controllers=1)
         self.kafka.start()
 
         self.driver = StreamsSmokeTestDriverService(self.test_context, self.kafka)

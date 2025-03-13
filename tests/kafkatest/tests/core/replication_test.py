@@ -166,7 +166,7 @@ class ReplicationTest(EndToEndTest):
                           client_sasl_mechanism=client_sasl_mechanism,
                           interbroker_sasl_mechanism=interbroker_sasl_mechanism,
                           tls_version=tls_version,
-                          controller_num_nodes_override = num_controllers)
+                          override_num_isolated_controllers = num_controllers)
         self.kafka.start()
 
         compression_types = None if not compression_type else [compression_type]

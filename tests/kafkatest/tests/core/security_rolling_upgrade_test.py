@@ -43,7 +43,7 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
             "partitions": 3,
             "replication-factor": 3,
             'configs': {"min.insync.replicas": 2}}},
-            controller_num_nodes_override=1)
+            override_num_isolated_controllers=1)
 
     def create_producer_and_consumer(self):
         self.producer = VerifiableProducer(

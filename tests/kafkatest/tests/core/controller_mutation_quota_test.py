@@ -54,7 +54,7 @@ class ControllerMutationQuotaTest(Test):
                 ["quota.window.num", "%s" % self.window_num],
                 ["controller.quota.window.size.seconds", "%s" % self.window_size_seconds]
             ],
-            controller_num_nodes_override=1)
+            override_num_isolated_controllers=1)
 
     def setUp(self):
         self.kafka.start()

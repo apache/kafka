@@ -46,7 +46,7 @@ class LogCompactionTest(Test):
             server_prop_overrides=[
                 [config_property.LOG_SEGMENT_BYTES, LogCompactionTest.LOG_SEGMENT_BYTES],
             ],
-            controller_num_nodes_override=self.num_zk)
+            override_num_isolated_controllers=self.num_zk)
         self.kafka.start()
 
     def start_test_log_compaction_tool(self, security_protocol):

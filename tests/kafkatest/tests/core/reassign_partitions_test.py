@@ -57,7 +57,7 @@ class ReassignPartitionsTest(ProduceConsumeValidateTest):
                                           "min.insync.replicas": 3,
                                       }}
                                   },
-                                  controller_num_nodes_override=1)
+                                  override_num_isolated_controllers=1)
         self.timeout_sec = 60
         self.producer_throughput = 1000
         self.num_producers = 1

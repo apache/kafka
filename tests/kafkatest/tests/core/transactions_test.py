@@ -224,7 +224,7 @@ class TransactionsTest(Test):
         self.kafka = KafkaService(self.test_context,
                                   num_nodes=self.num_brokers,
                                   zk=None,
-                                  controller_num_nodes_override=1,
+                                  override_num_isolated_controllers=1,
                                   use_transactions_v2=use_transactions_v2)
         security_protocol = 'PLAINTEXT'
         self.kafka.security_protocol = security_protocol

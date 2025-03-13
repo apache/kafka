@@ -200,7 +200,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                  listener_security_config=ListenerSecurityConfig(), per_node_server_prop_overrides=None,
                  extra_kafka_opts="", tls_version=None,
                  isolated_kafka=None,
-                 controller_num_nodes_override=0,
+                 override_num_isolated_controllers=0,
                  allow_zk_with_kraft=False,
                  quorum_info_provider=None,
                  use_new_coordinator=None,
@@ -219,8 +219,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                 The number of nodes having a broker role is defined by this parameter.
                 The node.id values will be 1..num_nodes
                 The number of nodes having a controller role will by default be 1, 3, or 5 depending on num_nodes
-                (1 if num_nodes < 3, otherwise 3 if num_nodes < 5, otherwise 5).  This calculation
-                can be overridden via controller_num_nodes_override, which must be between 1 and num_nodes,
+                (1 if num_nodes < 3, otherwise 3 if num_nodes < 5, otherwise 5).
                 inclusive, when non-zero.  Here are some possibilities:
                 num_nodes = 1:
                     broker having node.id=1: broker.roles=broker+controller
@@ -238,7 +237,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                 The number of nodes, all of which will have broker.roles=controller, is defined by this parameter.
                 The node.id values will be 3001..(3000 + num_nodes)
                 The value passed in is determined by the broker service when that is instantiated, and it uses the
-                same algorithm as described above: 1, 3, or 5 unless controller_num_nodes_override is provided.
+                same algorithm as described above: 1, 3, or 5 unless override_num_isolated_controllers is provided.
             5) In Combined KRaft quorum mode, the controller node count tries to be at least 3 unless the broker count is
                 less than 3.
         :param ZookeeperService zk:
@@ -263,8 +262,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             e.g: {1: [["config1", "true"], ["config2", "1000"]], 2: [["config1", "false"], ["config2", "0"]]}
         :param str extra_kafka_opts: jvm args to add to KAFKA_OPTS variable
         :param KafkaService isolated_kafka: process.roles=controller for this cluster when not None; ignored when using ZooKeeper
-        :param int controller_num_nodes_override: the number of controller nodes to use in the cluster, instead of 5, 3, or 1 based on num_nodes, if positive, not using ZooKeeper, and isolated_kafka is not None; ignored otherwise
-                Also, in the Combined KRaft mode, the controller node count tries to be at least 3 unless the broker count is less than 3.
+        :param int override_num_isolated_controllers: the number of controller nodes to use in the cluster, instead of 5, 3, or 1 based on num_nodes, if positive, not using ZooKeeper, and isolated_kafka is not None; ignored otherwise
         :param bool allow_zk_with_kraft: if True, then allow a KRaft broker or controller to also use ZooKeeper
         :param quorum_info_provider: A function that takes this KafkaService as an argument and returns a ServiceQuorumInfo. If this is None, then the ServiceQuorumInfo is generated from the test context
         :param use_new_coordinator: When true, use the new implementation of the group coordinator as per KIP-848. If this is None, the default existing group coordinator is used.
@@ -328,9 +326,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             self.standalone_controller_bootstrapped = False
             if self.quorum_info.has_brokers:
                 num_nodes_broker_role = num_nodes
-                controller_num_nodes_override = min(num_nodes_broker_role, max(3, controller_num_nodes_override))
                 if self.quorum_info.has_controllers:
-                    self.num_nodes_controller_role = self.num_kraft_controllers(num_nodes_broker_role, controller_num_nodes_override)
+                    self.num_nodes_controller_role = self.num_kraft_controllers(num_nodes_broker_role, 0)
                     if self.isolated_kafka:
                         raise Exception("Must not specify isolated Kafka service with combined Controller quorum")
             else:
@@ -356,7 +353,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             if self.quorum_info.has_controllers:
                 self.controller_quorum = self
             else:
-                num_isolated_controller_nodes = self.num_kraft_controllers(num_nodes, controller_num_nodes_override)
+                num_isolated_controller_nodes = self.num_kraft_controllers(num_nodes, override_num_isolated_controllers)
                 self.isolated_controller_quorum = KafkaService(
                     context, num_isolated_controller_nodes, self.zk, security_protocol=self.controller_security_protocol,
                     interbroker_security_protocol=self.intercontroller_security_protocol,

@@ -54,7 +54,7 @@ class ReplicaVerificationToolTest(Test):
             self.test_context, self.num_brokers,
             self.zk, security_protocol=security_protocol,
             interbroker_security_protocol=interbroker_security_protocol, topics=self.topics,
-            controller_num_nodes_override=self.num_zk)
+            override_num_isolated_controllers=self.num_zk)
         self.kafka.start()
 
     def start_replica_verification_tool(self, security_protocol):

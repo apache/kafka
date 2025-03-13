@@ -62,7 +62,7 @@ class GroupModeTransactionsTest(Test):
 
         self.kafka = KafkaService(test_context,
                                   num_nodes=self.num_brokers,
-                                  zk=None, controller_num_nodes_override=1)
+                                  zk=None, override_num_isolated_controllers=1)
 
     def seed_messages(self, topic, num_seed_messages):
         seed_timeout_sec = 10000

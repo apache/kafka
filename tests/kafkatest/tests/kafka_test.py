@@ -39,7 +39,7 @@ class KafkaTest(Test):
         self.kafka = KafkaService(
             test_context, self.num_brokers,
             self.zk, topics=self.topics,
-            controller_num_nodes_override=self.num_zk)
+            override_num_isolated_controllers=self.num_zk)
 
     def setUp(self):
         if self.zk:

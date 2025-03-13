@@ -47,7 +47,7 @@ class AuthorizerTest(Test):
         topics = {"test_topic": {"partitions": 1, "replication-factor": 1}}
 
         self.kafka = KafkaService(self.test_context, num_nodes=1, zk=None,
-                                  topics=topics, controller_num_nodes_override=1)
+                                  topics=topics, override_num_isolated_controllers=1)
 
         broker_security_protocol = "SSL"
         broker_principal = "User:CN=systemtest"

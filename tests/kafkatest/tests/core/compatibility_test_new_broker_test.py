@@ -66,7 +66,7 @@ class ClientCompatibilityTestNewBroker(ProduceConsumeValidateTest):
                                                                     "partitions": 3,
                                                                     "replication-factor": 3,
                                                                     'configs': {"min.insync.replicas": 2}}},
-                                  controller_num_nodes_override=1)
+                                  override_num_isolated_controllers=1)
         for node in self.kafka.nodes:
             if timestamp_type is not None:
                 node.config[config_property.MESSAGE_TIMESTAMP_TYPE] = timestamp_type

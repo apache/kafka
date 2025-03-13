@@ -36,7 +36,7 @@ class TestBounce(Test):
         num_kafka_nodes = quorum_size if quorum.for_test(test_context) == quorum.combined_kraft else 1
         self.kafka = KafkaService(test_context, num_nodes=num_kafka_nodes, zk=None,
                                   topics={self.topic: {"partitions": 1, "replication-factor": 1}},
-                                  controller_num_nodes_override=quorum_size)
+                                  override_num_isolated_controllers=quorum_size)
         self.num_messages = 1000
 
     def create_producer(self):

@@ -62,7 +62,7 @@ class ReplicationReplicaFailureTest(EndToEndTest):
         """
         self.create_kafka(num_nodes=3,
                           server_prop_overrides=[["replica.lag.time.max.ms", "10000"]],
-                          controller_num_nodes_override=1)
+                          override_num_isolated_controllers=1)
         self.kafka.start()
 
         self.trogdor = TrogdorService(context=self.test_context,

@@ -107,7 +107,7 @@ class TestQuorumReconfiguration(ProduceConsumeValidateTest):
                                                        "replication-factor": self.replication_factor,
                                                        'configs': {"min.insync.replicas": 1}}},
                                   version=DEV_BRANCH,
-                                  controller_num_nodes_override=2,
+                                  override_num_isolated_controllers=2,
                                   dynamicRaftQuorum=True)
         # Start a controller and the broker-only nodes
         # We leave starting the second controller for later in perform_reconfig
@@ -146,7 +146,7 @@ class TestQuorumReconfiguration(ProduceConsumeValidateTest):
                                                        "replication-factor": self.replication_factor,
                                                        'configs': {"min.insync.replicas": 1}}},
                                   version=DEV_BRANCH,
-                                  controller_num_nodes_override=2,
+                                  override_num_isolated_controllers=2,
                                   quorum_info_provider=remote_quorum,
                                   dynamicRaftQuorum=True)
         # Start a controller and the broker-only nodes

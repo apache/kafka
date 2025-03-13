@@ -219,7 +219,7 @@ class TransactionsUpgradeTest(Test):
                                   num_nodes=self.num_brokers,
                                   zk=None,
                                   version=fromKafkaVersion,
-                                  controller_num_nodes_override=1)
+                                  override_num_isolated_controllers=1)
 
         security_protocol = 'PLAINTEXT'
         self.kafka.security_protocol = security_protocol

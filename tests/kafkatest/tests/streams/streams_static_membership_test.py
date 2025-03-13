@@ -39,7 +39,7 @@ class StreamsStaticMembershipTest(Test):
         }
 
         self.kafka = KafkaService(self.test_context, num_nodes=3,
-                                  zk=None, topics=self.topics, controller_num_nodes_override=1)
+                                  zk=None, topics=self.topics, override_num_isolated_controllers=1)
 
         self.producer = VerifiableProducer(self.test_context,
                                            1,

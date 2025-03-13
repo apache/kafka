@@ -53,7 +53,7 @@ class FetchFromFollowerTest(ProduceConsumeValidateTest):
                                       2: [("broker.rack", "rack-b")],
                                       3: [("broker.rack", "rack-c")]
                                   },
-                                  controller_num_nodes_override=1)
+                                  override_num_isolated_controllers=1)
 
         self.producer_throughput = 1000
         self.num_producers = 1

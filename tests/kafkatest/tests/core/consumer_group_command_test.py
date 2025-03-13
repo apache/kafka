@@ -49,7 +49,7 @@ class ConsumerGroupCommandTest(Test):
             self.test_context, self.num_brokers,
             None, security_protocol=security_protocol,
             interbroker_security_protocol=interbroker_security_protocol, topics=self.topics,
-            controller_num_nodes_override=self.num_brokers)
+            override_num_isolated_controllers=self.num_brokers)
         self.kafka.start()
 
     def start_consumer(self, group_protocol=None):

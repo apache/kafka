@@ -66,7 +66,7 @@ class ThrottlingTest(ProduceConsumeValidateTest):
                                           }
                                       }
                                   },
-                                  controller_num_nodes_override=1)
+                                  override_num_isolated_controllers=1)
         self.producer_throughput = 1000
         self.timeout_sec = 400
         self.num_records = 2000

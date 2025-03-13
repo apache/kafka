@@ -30,7 +30,7 @@ class ReplicaScaleTest(Test):
     def __init__(self, test_context):
         super(ReplicaScaleTest, self).__init__(test_context=test_context)
         self.test_context = test_context
-        self.kafka = KafkaService(self.test_context, num_nodes=8, zk=None, controller_num_nodes_override=1)
+        self.kafka = KafkaService(self.test_context, num_nodes=8, zk=None, override_num_isolated_controllers=1)
 
     def setUp(self):
         self.kafka.start()

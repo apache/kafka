@@ -189,7 +189,7 @@ class TransactionsMixedVersionsTest(Test):
                                   num_nodes=self.num_brokers,
                                   zk=None,
                                   version=oldKafkaVersion,
-                                  controller_num_nodes_override=1)
+                                  override_num_isolated_controllers=1)
 
         self.kafka.nodes[0].version = DEV_BRANCH
 

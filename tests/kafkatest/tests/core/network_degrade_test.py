@@ -34,7 +34,7 @@ class NetworkDegradeTest(Test):
 
     def __init__(self, test_context):
         super(NetworkDegradeTest, self).__init__(test_context)
-        self.kafka = KafkaService(test_context, num_nodes=2, zk=None, controller_num_nodes_override=2)
+        self.kafka = KafkaService(test_context, num_nodes=2, zk=None, override_num_isolated_controllers=2)
         self.trogdor = TrogdorService(context=self.test_context, client_services=[self.kafka.controller_quorum])
 
     def setUp(self):
