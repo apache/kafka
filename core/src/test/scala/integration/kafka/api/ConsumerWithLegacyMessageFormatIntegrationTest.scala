@@ -55,10 +55,7 @@ class ConsumerWithLegacyMessageFormatIntegrationTest extends AbstractConsumerTes
 
     brokers.filter(_.config.brokerId == brokerId).foreach(b => {
       val unifiedLog = b.replicaManager.logManager.getLog(tp).get
-      unifiedLog.appendAsLeaderWithRecordVersion(
-        records = builder.build(),
-        leaderEpoch = 0,
-        recordVersion = RecordVersion.lookup(magicValue)
+      unifiedLog.appendAsLeaderWithRecordVersion(builder.build(), 0, RecordVersion.lookup(magicValue)
       )
       // Default isolation.level is read_uncommitted. It makes Partition#fetchOffsetForTimestamp to return UnifiedLog#highWatermark,
       // so increasing high watermark to make it return the correct offset.

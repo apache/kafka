@@ -531,8 +531,8 @@ public class ConsumerGroupCommand {
                 return topicPartitions
                     .stream()
                     .map(TopicPartition::partition)
-                    .map(Object::toString)
                     .sorted()
+                    .map(Object::toString)
                     .collect(Collectors.joining(",", topicName + ":", ""));
             }).sorted().collect(Collectors.joining(";"));
         }

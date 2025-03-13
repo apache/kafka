@@ -16,6 +16,7 @@
  */
 package kafka.cluster
 
+import java.lang.{Long => JLong}
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import java.util.Optional
 import java.util.concurrent.{CompletableFuture, CopyOnWriteArrayList}
@@ -39,7 +40,7 @@ import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.metadata.{LeaderAndIsr, LeaderRecoveryState}
 import org.apache.kafka.server.common.RequestLocal
-import org.apache.kafka.storage.internals.log.{AppendOrigin, AsyncOffsetReader, FetchDataInfo, LeaderHwChange, LogAppendInfo, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogReadInfo, LogStartOffsetIncrementReason, OffsetResultHolder, VerificationGuard}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, AsyncOffsetReader, FetchDataInfo, LeaderHwChange, LogAppendInfo, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogReadInfo, LogStartOffsetIncrementReason, OffsetResultHolder, UnifiedLog, VerificationGuard}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.purgatory.{DelayedOperationPurgatory, TopicPartitionOperationKey}
 import org.apache.kafka.server.share.fetch.DelayedShareFetchPartitionKey
@@ -49,7 +50,7 @@ import org.slf4j.event.Level
 
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
-import scala.jdk.OptionConverters.RichOption
+import scala.jdk.OptionConverters.{RichOption, RichOptional}
 import scala.jdk.javaapi.OptionConverters
 
 /**
@@ -494,7 +495,7 @@ class Partition(val topicPartition: TopicPartition,
     logManager.initializingLog(topicPartition)
     var maybeLog: Option[UnifiedLog] = None
     try {
-      val log = logManager.getOrCreateLog(topicPartition, isNew, isFutureReplica, topicId, targetLogDirectoryId)
+      val log = logManager.getOrCreateLog(topicPartition, isNew, isFutureReplica, topicId.toJava, targetLogDirectoryId)
       if (!isFutureReplica) log.setLogOffsetsListener(logOffsetsListener)
       maybeLog = Some(log)
       updateHighWatermark(log)
@@ -593,7 +594,7 @@ class Partition(val topicPartition: TopicPartition,
    */
   def topicId: Option[Uuid] = {
     if (_topicId.isEmpty || _topicId.contains(Uuid.ZERO_UUID)) {
-      _topicId = this.log.orElse(logManager.getLog(topicPartition)).flatMap(_.topicId)
+      _topicId = this.log.orElse(logManager.getLog(topicPartition)).flatMap(_.topicId.toScala)
     }
     _topicId
   }
@@ -1170,7 +1171,7 @@ class Partition(val topicPartition: TopicPartition,
       }
     }
 
-    leaderLog.maybeIncrementHighWatermark(newHighWatermark) match {
+    leaderLog.maybeIncrementHighWatermark(newHighWatermark).toScala match {
       case Some(oldHighWatermark) =>
         debug(s"High watermark updated from $oldHighWatermark to $newHighWatermark")
         true
@@ -1302,27 +1303,35 @@ class Partition(val topicPartition: TopicPartition,
     }
   }
 
-  private def doAppendRecordsToFollowerOrFutureReplica(records: MemoryRecords, isFuture: Boolean): Option[LogAppendInfo] = {
+  private def doAppendRecordsToFollowerOrFutureReplica(
+    records: MemoryRecords,
+    isFuture: Boolean,
+    partitionLeaderEpoch: Int
+  ): Option[LogAppendInfo] = {
     if (isFuture) {
       // The read lock is needed to handle race condition if request handler thread tries to
       // remove future replica after receiving AlterReplicaLogDirsRequest.
       inReadLock(leaderIsrUpdateLock) {
         // Note the replica may be undefined if it is removed by a non-ReplicaAlterLogDirsThread before
         // this method is called
-        futureLog.map { _.appendAsFollower(records) }
+        futureLog.map { _.appendAsFollower(records, partitionLeaderEpoch) }
       }
     } else {
       // The lock is needed to prevent the follower replica from being updated while ReplicaAlterDirThread
       // is executing maybeReplaceCurrentWithFutureReplica() to replace follower replica with the future replica.
       futureLogLock.synchronized {
-        Some(localLogOrException.appendAsFollower(records))
+        Some(localLogOrException.appendAsFollower(records, partitionLeaderEpoch))
       }
     }
   }
 
-  def appendRecordsToFollowerOrFutureReplica(records: MemoryRecords, isFuture: Boolean): Option[LogAppendInfo] = {
+  def appendRecordsToFollowerOrFutureReplica(
+    records: MemoryRecords,
+    isFuture: Boolean,
+    partitionLeaderEpoch: Int
+  ): Option[LogAppendInfo] = {
     try {
-      doAppendRecordsToFollowerOrFutureReplica(records, isFuture)
+      doAppendRecordsToFollowerOrFutureReplica(records, isFuture, partitionLeaderEpoch)
     } catch {
       case e: UnexpectedAppendOffsetException =>
         val log = if (isFuture) futureLocalLogOrException else localLogOrException
@@ -1340,7 +1349,7 @@ class Partition(val topicPartition: TopicPartition,
           info(s"Unexpected offset in append to $topicPartition. First offset ${e.firstOffset} is less than log start offset ${log.logStartOffset}." +
                s" Since this is the first record to be appended to the $replicaName's log, will start the log from offset ${e.firstOffset}.")
           truncateFullyAndStartAt(e.firstOffset, isFuture)
-          doAppendRecordsToFollowerOrFutureReplica(records, isFuture)
+          doAppendRecordsToFollowerOrFutureReplica(records, isFuture, partitionLeaderEpoch)
         } else
           throw e
     }
@@ -1361,8 +1370,7 @@ class Partition(val topicPartition: TopicPartition,
               s"live replica(s) broker.id are : $inSyncReplicaIds")
           }
 
-          val info = leaderLog.appendAsLeader(records, leaderEpoch = this.leaderEpoch, origin,
-            requestLocal, verificationGuard)
+          val info = leaderLog.appendAsLeader(records, this.leaderEpoch, origin, requestLocal, verificationGuard)
 
           // we may need to increment high watermark since ISR could be down to 1
           (info, maybeIncrementLeaderHW(leaderLog))
@@ -1614,7 +1622,7 @@ class Partition(val topicPartition: TopicPartition,
       case Some(producers) =>
         producerState
           .setErrorCode(Errors.NONE.code)
-          .setActiveProducers(producers.asJava)
+          .setActiveProducers(producers)
       case None =>
         producerState
           .setErrorCode(Errors.NOT_LEADER_OR_FOLLOWER.code)
@@ -1688,7 +1696,7 @@ class Partition(val topicPartition: TopicPartition,
     */
   def truncateFullyAndStartAt(newOffset: Long,
                               isFuture: Boolean,
-                              logStartOffsetOpt: Option[Long] = None): Unit = {
+                              logStartOffsetOpt: Optional[JLong] = Optional.empty): Unit = {
     // The read lock is needed to prevent the follower replica from being truncated while ReplicaAlterDirThread
     // is executing maybeReplaceCurrentWithFutureReplica() to replace follower replica with the future replica.
     inReadLock(leaderIsrUpdateLock) {
@@ -1716,7 +1724,7 @@ class Partition(val topicPartition: TopicPartition,
       val localLogOrError = getLocalLog(currentLeaderEpoch, fetchOnlyFromLeader)
       localLogOrError match {
         case Left(localLog) =>
-          localLog.endOffsetForEpoch(leaderEpoch) match {
+          localLog.endOffsetForEpoch(leaderEpoch).toScala match {
             case Some(epochAndOffset) => new EpochEndOffset()
               .setPartition(partitionId)
               .setErrorCode(Errors.NONE.code)

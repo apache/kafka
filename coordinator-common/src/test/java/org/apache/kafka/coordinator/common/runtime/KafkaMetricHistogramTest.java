@@ -22,7 +22,7 @@ import org.apache.kafka.common.metrics.Metrics;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -42,11 +42,11 @@ public class KafkaMetricHistogramTest {
             );
 
             Set<MetricName> expected = Set.of(
-                new MetricName("test-metric-max", "test-group", "test description", Collections.emptyMap()),
-                new MetricName("test-metric-p999", "test-group", "test description", Collections.emptyMap()),
-                new MetricName("test-metric-p99", "test-group", "test description", Collections.emptyMap()),
-                new MetricName("test-metric-p95", "test-group", "test description", Collections.emptyMap()),
-                new MetricName("test-metric-p50", "test-group", "test description", Collections.emptyMap())
+                new MetricName("test-metric-max", "test-group", "test description", Map.of()),
+                new MetricName("test-metric-p999", "test-group", "test description", Map.of()),
+                new MetricName("test-metric-p99", "test-group", "test description", Map.of()),
+                new MetricName("test-metric-p95", "test-group", "test description", Map.of()),
+                new MetricName("test-metric-p50", "test-group", "test description", Map.of())
             );
             Set<MetricName> actual = histogram.stats().stream().map(CompoundStat.NamedMeasurable::name).collect(Collectors.toSet());
             assertEquals(expected, actual);

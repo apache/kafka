@@ -18,7 +18,6 @@ package kafka.server
 
 import kafka.cluster.Partition
 import kafka.integration.KafkaServerTestHarness
-import kafka.log.UnifiedLog
 import kafka.log.remote.RemoteLogManager
 import kafka.utils.TestUtils.random
 import kafka.utils._
@@ -35,7 +34,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.coordinator.group.GroupConfig
 import org.apache.kafka.server.config.{QuotaConfig, ServerLogConfigs}
-import org.apache.kafka.storage.internals.log.LogConfig
+import org.apache.kafka.storage.internals.log.{LogConfig, UnifiedLog}
 import org.apache.kafka.test.TestUtils.assertFutureThrows
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{Test, Timeout}
@@ -518,9 +517,9 @@ class DynamicConfigChangeUnitTest {
   @Test
   def shouldParseRegardlessOfWhitespaceAroundValues(): Unit = {
     def parse(configHandler: TopicConfigHandler, value: String): Seq[Int] = {
-      configHandler.parseThrottledPartitions(
-        CoreUtils.propsWith(QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, value),
-        102, QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG)
+      val props = new Properties()
+      props.put(QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, value)
+      configHandler.parseThrottledPartitions(props, 102, QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG)
     }
     val configHandler: TopicConfigHandler = new TopicConfigHandler(null, null, null)
     assertEquals(ReplicationQuotaManager.ALL_REPLICAS.asScala.map(_.toInt).toSeq, parse(configHandler, "* "))

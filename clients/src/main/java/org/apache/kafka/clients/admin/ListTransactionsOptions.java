@@ -17,8 +17,6 @@
 
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
-
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
@@ -27,10 +25,7 @@ import java.util.Set;
 
 /**
  * Options for {@link Admin#listTransactions()}.
- *
- * The API of this class is evolving, see {@link Admin} for details.
  */
-@InterfaceStability.Evolving
 public class ListTransactionsOptions extends AbstractOptions<ListTransactionsOptions> {
     private Set<TransactionState> filteredStates = Collections.emptySet();
     private Set<Long> filteredProducerIds = Collections.emptySet();

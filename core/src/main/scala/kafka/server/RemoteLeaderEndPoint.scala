@@ -33,7 +33,6 @@ import org.apache.kafka.server.network.BrokerEndPoint
 
 import scala.jdk.CollectionConverters._
 import scala.collection.{Map, mutable}
-import scala.jdk.OptionConverters.RichOption
 
 /**
  * Facilitates fetches from a remote replica leader.
@@ -180,7 +179,7 @@ class RemoteLeaderEndPoint(logPrefix: String,
         try {
           val logStartOffset = replicaManager.localLogOrException(topicPartition).logStartOffset
           val lastFetchedEpoch = if (isTruncationOnFetchSupported)
-            fetchState.lastFetchedEpoch.map(_.asInstanceOf[Integer]).toJava
+            fetchState.lastFetchedEpoch
           else
             Optional.empty[Integer]
           builder.add(topicPartition, new FetchRequest.PartitionData(
