@@ -275,7 +275,7 @@ class BrokerServer(
       clientQuotaMetadataManager = new ClientQuotaMetadataManager(quotaManagers, socketServer.connectionQuotas)
 
       val listenerInfo = ListenerInfo.create(Optional.of(config.interBrokerListenerName.value()),
-          config.effectiveAdvertisedBrokerListeners.map(_.toPublic()).asJava).
+          config.effectiveAdvertisedBrokerListeners.asJava).
             withWildcardHostnamesResolved().
             withEphemeralPortsCorrected(name => socketServer.boundPort(new ListenerName(name)))
 
@@ -478,8 +478,7 @@ class BrokerServer(
         if (listenerName != null) {
           val endpoint = listenerInfo.listeners().values().stream
             .filter(e =>
-              e.listenerName().isPresent &&
-                ListenerName.normalised(e.listenerName().get()).equals(ListenerName.normalised(listenerName))
+                ListenerName.normalised(e.listenerName()).equals(ListenerName.normalised(listenerName))
             )
             .findFirst()
             .orElseThrow(() => new ConfigException(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP,

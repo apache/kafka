@@ -112,7 +112,7 @@ class KRaftClusterTest {
       cluster.format()
       cluster.startup()
       val controller = cluster.controllers().values().iterator().asScala.filter(_.controller.isActive).next()
-      val port = controller.socketServer.boundPort(controller.config.controllerListeners.head.listenerName)
+      val port = controller.socketServer.boundPort(ListenerName.normalised(controller.config.controllerListeners.head.listenerName))
 
       // shutdown active controller
       controller.shutdown()

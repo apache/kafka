@@ -29,6 +29,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -95,16 +96,16 @@ public class ListenerInfoTest {
             endpoints.add(ALL.get((i + startIndex) % ALL.size()));
         }
         ListenerInfo listenerInfo = ListenerInfo.create(endpoints);
-        assertEquals(ALL.get(startIndex).listenerName().get(),
-            listenerInfo.firstListener().listenerName().get());
+        assertEquals(ALL.get(startIndex).listenerName(),
+            listenerInfo.firstListener().listenerName());
     }
 
     @ParameterizedTest
     @ValueSource(ints = {0, 1, 2, 3})
     public void testCreateWithExplicitFirstListener(int startIndex) {
-        ListenerInfo listenerInfo = ListenerInfo.create(ALL.get(startIndex).listenerName(), ALL);
-        assertEquals(ALL.get(startIndex).listenerName().get(),
-            listenerInfo.firstListener().listenerName().get());
+        ListenerInfo listenerInfo = ListenerInfo.create(Optional.of(ALL.get(startIndex).listenerName()), ALL);
+        assertEquals(ALL.get(startIndex).listenerName(),
+            listenerInfo.firstListener().listenerName());
     }
 
     @Test

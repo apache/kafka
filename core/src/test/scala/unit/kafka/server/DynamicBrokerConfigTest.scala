@@ -1033,7 +1033,7 @@ class DynamicBrokerConfigTest {
     props.put(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, "SASL_PLAINTEXT://localhost:8181")
     ctx.config.dynamicConfig.updateDefaultConfig(props)
     ctx.config.effectiveAdvertisedBrokerListeners.foreach(e =>
-      assertEquals(SecurityProtocol.PLAINTEXT.name, e.listenerName.value)
+      assertEquals(SecurityProtocol.PLAINTEXT.name, e.listenerName)
     )
     assertFalse(ctx.currentDefaultLogConfig.get().originals().containsKey(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG))
   }

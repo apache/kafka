@@ -124,7 +124,7 @@ public class StandardAuthorizer implements ClusterMetadataAuthorizer {
         Map<Endpoint, CompletableFuture<Void>> result = new HashMap<>();
         for (Endpoint endpoint : serverInfo.endpoints()) {
             if (serverInfo.earlyStartListeners().contains(
-                    endpoint.listenerName().orElse(""))) {
+                    endpoint.listenerName())) {
                 result.put(endpoint, CompletableFuture.completedFuture(null));
             } else {
                 result.put(endpoint, initialLoadFuture);

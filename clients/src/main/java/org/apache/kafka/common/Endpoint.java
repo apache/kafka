@@ -16,23 +16,29 @@
  */
 package org.apache.kafka.common;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 
+import java.util.Locale;
 import java.util.Objects;
-import java.util.Optional;
 
 /**
  * Represents a broker endpoint.
  */
 
-@InterfaceStability.Evolving
 public class Endpoint {
 
     private final String listenerName;
     private final SecurityProtocol securityProtocol;
     private final String host;
     private final int port;
+
+    public static String parseListenerName(String connectionString) {
+        int firstColon = connectionString.indexOf(':');
+        if (firstColon < 0) {
+            throw new KafkaException("Unable to parse a listener name from " + connectionString);
+        }
+        return connectionString.substring(0, firstColon).toUpperCase(Locale.ROOT);
+    }
 
     public Endpoint(String listenerName, SecurityProtocol securityProtocol, String host, int port) {
         this.listenerName = listenerName;
@@ -45,8 +51,8 @@ public class Endpoint {
      * Returns the listener name of this endpoint. This is non-empty for endpoints provided
      * to broker plugins, but may be empty when used in clients.
      */
-    public Optional<String> listenerName() {
-        return Optional.ofNullable(listenerName);
+    public String listenerName() {
+        return listenerName;
     }
 
     /**

@@ -85,7 +85,7 @@ public class BrokerRegistration {
         public Builder setListeners(List<Endpoint> listeners) {
             Map<String, Endpoint> listenersMap = new HashMap<>();
             for (Endpoint endpoint : listeners) {
-                listenersMap.put(endpoint.listenerName().get(), endpoint);
+                listenersMap.put(endpoint.listenerName(), endpoint);
             }
             this.listeners = listenersMap;
             return this;
