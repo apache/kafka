@@ -24,7 +24,6 @@ import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -99,9 +98,9 @@ public class ClientMetricsConfigs extends AbstractConfig {
     ));
 
     private static final ConfigDef CONFIG = new ConfigDef()
-        .define(SUBSCRIPTION_METRICS, Type.LIST, Collections.emptyList(), Importance.MEDIUM, "Subscription metrics list")
+        .define(SUBSCRIPTION_METRICS, Type.LIST, List.of(), Importance.MEDIUM, "Subscription metrics list")
         .define(PUSH_INTERVAL_MS, Type.INT, DEFAULT_INTERVAL_MS, Importance.MEDIUM, "Push interval in milliseconds")
-        .define(CLIENT_MATCH_PATTERN, Type.LIST, Collections.emptyList(), Importance.MEDIUM, "Client match pattern list");
+        .define(CLIENT_MATCH_PATTERN, Type.LIST, List.of(), Importance.MEDIUM, "Client match pattern list");
 
     public ClientMetricsConfigs(Properties props) {
         super(CONFIG, props);
@@ -165,7 +164,7 @@ public class ClientMetricsConfigs extends AbstractConfig {
      */
     public static Map<String, Pattern> parseMatchingPatterns(List<String> patterns) {
         if (patterns == null || patterns.isEmpty()) {
-            return Collections.emptyMap();
+            return Map.of();
         }
 
         Map<String, Pattern> patternsMap = new HashMap<>();

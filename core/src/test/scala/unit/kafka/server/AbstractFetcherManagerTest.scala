@@ -33,6 +33,7 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, Test}
 import org.mockito.Mockito.{mock, verify, when}
 
+import java.util.Optional
 import scala.collection.{Map, Set, mutable}
 import scala.jdk.CollectionConverters._
 
@@ -72,7 +73,7 @@ class AbstractFetcherManagerTest {
     when(fetcher.addPartitions(Map(tp -> initialFetchState)))
       .thenReturn(Set(tp))
     when(fetcher.fetchState(tp))
-      .thenReturn(Some(PartitionFetchState(topicId, fetchOffset, None, leaderEpoch, Truncating, lastFetchedEpoch = None)))
+      .thenReturn(Some(PartitionFetchState(topicId, fetchOffset, None, leaderEpoch, Truncating, lastFetchedEpoch = Optional.empty)))
       .thenReturn(None)
     when(fetcher.removePartitions(Set(tp))).thenReturn(Map.empty[TopicPartition, PartitionFetchState])
 
@@ -184,11 +185,11 @@ class AbstractFetcherManagerTest {
       .thenReturn(Set(tp2))
 
     when(fetcher.fetchState(tp1))
-      .thenReturn(Some(PartitionFetchState(None, fetchOffset, None, leaderEpoch, Truncating, lastFetchedEpoch = None)))
-      .thenReturn(Some(PartitionFetchState(topicId1, fetchOffset, None, leaderEpoch, Truncating, lastFetchedEpoch = None)))
+      .thenReturn(Some(PartitionFetchState(None, fetchOffset, None, leaderEpoch, Truncating, lastFetchedEpoch = Optional.empty)))
+      .thenReturn(Some(PartitionFetchState(topicId1, fetchOffset, None, leaderEpoch, Truncating, lastFetchedEpoch = Optional.empty)))
     when(fetcher.fetchState(tp2))
-      .thenReturn(Some(PartitionFetchState(None, fetchOffset, None, leaderEpoch, Truncating, lastFetchedEpoch = None)))
-      .thenReturn(Some(PartitionFetchState(topicId2, fetchOffset, None, leaderEpoch, Truncating, lastFetchedEpoch = None)))
+      .thenReturn(Some(PartitionFetchState(None, fetchOffset, None, leaderEpoch, Truncating, lastFetchedEpoch = Optional.empty)))
+      .thenReturn(Some(PartitionFetchState(topicId2, fetchOffset, None, leaderEpoch, Truncating, lastFetchedEpoch = Optional.empty)))
 
     val topicIds = Map(tp1.topic -> topicId1, tp2.topic -> topicId2)
 
@@ -328,21 +329,24 @@ class AbstractFetcherManagerTest {
       fetchBackOffMs = 0,
       brokerTopicStats = new BrokerTopicStats) {
 
-    override protected def processPartitionData(topicPartition: TopicPartition, fetchOffset: Long, partitionData: FetchData): Option[LogAppendInfo] = {
-      None
-    }
+    override protected def processPartitionData(
+      topicPartition: TopicPartition,
+      fetchOffset: Long,
+      partitionLeaderEpoch: Int,
+      partitionData: FetchData
+    ): Option[LogAppendInfo] = None
 
     override protected def truncate(topicPartition: TopicPartition, truncationState: OffsetTruncationState): Unit = {}
 
     override protected def truncateFullyAndStartAt(topicPartition: TopicPartition, offset: Long): Unit = {}
 
-    override protected def latestEpoch(topicPartition: TopicPartition): Option[Int] = Some(0)
+    override protected def latestEpoch(topicPartition: TopicPartition): Optional[Integer] = Optional.of(0)
 
     override protected def logStartOffset(topicPartition: TopicPartition): Long = 1
 
     override protected def logEndOffset(topicPartition: TopicPartition): Long = 1
 
-    override protected def endOffsetForEpoch(topicPartition: TopicPartition, epoch: Int): Option[OffsetAndEpoch] = Some(new OffsetAndEpoch(1, 0))
+    override protected def endOffsetForEpoch(topicPartition: TopicPartition, epoch: Int): Optional[OffsetAndEpoch] = Optional.of(new OffsetAndEpoch(1, 0))
   }
 
 }

@@ -52,7 +52,6 @@ import org.slf4j.Logger;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -494,7 +493,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         final MemoryRecordsBuilder builder;
 
         /**
-         * The timer used to enfore the append linger time if
+         * The timer used to enforce the append linger time if
          * it is non-zero.
          */
         final Optional<TimerTask> lingerTimeoutTask;
@@ -2534,7 +2533,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
      */
     public List<TopicPartition> activeTopicPartitions() {
         if (coordinators == null || coordinators.isEmpty()) {
-            return Collections.emptyList();
+            return List.of();
         }
 
         return coordinators.entrySet().stream()

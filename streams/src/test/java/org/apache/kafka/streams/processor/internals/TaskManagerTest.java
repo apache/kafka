@@ -1825,9 +1825,6 @@ public class TaskManagerTest {
         final StandbyTask standbyTask = standbyTask(taskId02, taskId02ChangelogPartitions)
             .inState(State.RUNNING)
             .withInputPartitions(taskId02Partitions).build();
-        final StandbyTask unassignedStandbyTask = standbyTask(taskId03, taskId03ChangelogPartitions)
-            .inState(State.CREATED)
-            .withInputPartitions(taskId03Partitions).build();
         final TasksRegistry tasks = mock(TasksRegistry.class);
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
         when(tasks.allTasksPerId()).thenReturn(mkMap(mkEntry(taskId00, runningStatefulTask)));
@@ -4673,7 +4670,7 @@ public class TaskManagerTest {
         verifyNoMoreInteractions(activeTaskCreator);
         verifyNoMoreInteractions(standbyTaskCreator);
 
-        // verify the recycled task is now being used as an assiged Active
+        // verify the recycled task is now being used as an assigned Active
         assertEquals(Collections.singletonMap(taskId00, activeTask), taskManager.activeTaskMap());
         assertEquals(Collections.emptyMap(), taskManager.standbyTaskMap());
     }
@@ -4734,7 +4731,7 @@ public class TaskManagerTest {
         verifyNoMoreInteractions(activeTaskCreator);
         verifyNoMoreInteractions(standbyTaskCreator);
 
-        // verify the recycled task is now being used as an assiged Active
+        // verify the recycled task is now being used as an assigned Active
         assertEquals(Collections.singletonMap(taskId00, activeTask), taskManager.activeTaskMap());
         assertEquals(Collections.emptyMap(), taskManager.standbyTaskMap());
     }

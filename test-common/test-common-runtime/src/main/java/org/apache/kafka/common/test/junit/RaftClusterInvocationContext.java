@@ -38,7 +38,7 @@ import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.fault.FaultHandlerException;
 
 import org.junit.jupiter.api.extension.AfterTestExecutionCallback;
-import org.junit.jupiter.api.extension.BeforeTestExecutionCallback;
+import org.junit.jupiter.api.extension.BeforeEachCallback;
 import org.junit.jupiter.api.extension.Extension;
 import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
 
@@ -90,7 +90,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
     public List<Extension> getAdditionalExtensions() {
         RaftClusterInstance clusterInstance = new RaftClusterInstance(clusterConfig, isCombined);
         return Arrays.asList(
-                (BeforeTestExecutionCallback) context -> {
+                (BeforeEachCallback) context -> {
                     clusterInstance.format();
                     if (clusterConfig.isAutoStart()) {
                         clusterInstance.start();
@@ -190,10 +190,20 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         }
 
         @Override
+        public boolean started() {
+            return started.get();
+        }
+
+        @Override
         public void stop() {
             if (stopped.compareAndSet(false, true)) {
                 Utils.closeQuietly(clusterTestKit, "cluster");
             }
+        }
+
+        @Override
+        public boolean stopped() {
+            return stopped.get();
         }
 
         @Override

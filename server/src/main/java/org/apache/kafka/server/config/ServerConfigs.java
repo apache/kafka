@@ -52,7 +52,8 @@ public class ServerConfigs {
     public static final String BACKGROUND_THREADS_DOC = "The number of threads to use for various background processing tasks";
 
     public static final String NUM_REPLICA_ALTER_LOG_DIRS_THREADS_CONFIG = "num.replica.alter.log.dirs.threads";
-    public static final String NUM_REPLICA_ALTER_LOG_DIRS_THREADS_DOC = "The number of threads that can move replicas between log directories, which may include disk I/O";
+    public static final String NUM_REPLICA_ALTER_LOG_DIRS_THREADS_DOC = "The number of threads that can move replicas between log directories, which may include disk I/O. " +
+            "The default value is equal to the number of directories specified in the <code>" + ServerLogConfigs.LOG_DIR_CONFIG + "</code> or <code>" + ServerLogConfigs.LOG_DIRS_CONFIG + "</code> configuration property.";
 
     public static final String REQUEST_TIMEOUT_MS_CONFIG = CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG;
     public static final int REQUEST_TIMEOUT_MS_DEFAULT = 30000;
