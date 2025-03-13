@@ -1920,7 +1920,7 @@ public final class KafkaRaftClientSnapshotTest {
             () -> context.client.createSnapshot(invalidSnapshotId1, 0)
         );
         assertEquals(
-            "Cannot create a snapshot with an id (OffsetAndEpoch(offset=4, epoch=2)) greater than the high-watermark (0)",
+            "Cannot create a snapshot with an id (OffsetAndEpoch[offset=4, epoch=2]) greater than the high-watermark (0)",
             exception.getMessage()
         );
 
@@ -1940,7 +1940,7 @@ public final class KafkaRaftClientSnapshotTest {
             () -> context.client.createSnapshot(invalidSnapshotId2, 0)
         );
         assertEquals(
-            "Cannot create a snapshot with an id (OffsetAndEpoch(offset=7, epoch=3)) greater than the high-watermark (4)",
+            "Cannot create a snapshot with an id (OffsetAndEpoch[offset=7, epoch=3]) greater than the high-watermark (4)",
             exception.getMessage()
         );
 
@@ -1951,7 +1951,7 @@ public final class KafkaRaftClientSnapshotTest {
             () -> context.client.createSnapshot(invalidSnapshotId3, 0)
         );
         assertEquals(
-            "Snapshot id (OffsetAndEpoch(offset=4, epoch=4)) is not valid according to the log: ValidOffsetAndEpoch(kind=DIVERGING, offsetAndEpoch=OffsetAndEpoch(offset=7, epoch=3))",
+            "Snapshot id (OffsetAndEpoch[offset=4, epoch=4]) is not valid according to the log: ValidOffsetAndEpoch(kind=DIVERGING, offsetAndEpoch=OffsetAndEpoch[offset=7, epoch=3])",
             exception.getMessage()
         );
 
@@ -1964,7 +1964,7 @@ public final class KafkaRaftClientSnapshotTest {
             () -> context.client.createSnapshot(invalidSnapshotId4, 0)
         );
         assertEquals(
-            "Snapshot id (OffsetAndEpoch(offset=4, epoch=2)) is not valid according to the log: ValidOffsetAndEpoch(kind=DIVERGING, offsetAndEpoch=OffsetAndEpoch(offset=3, epoch=2))",
+            "Snapshot id (OffsetAndEpoch[offset=4, epoch=2]) is not valid according to the log: ValidOffsetAndEpoch(kind=DIVERGING, offsetAndEpoch=OffsetAndEpoch[offset=3, epoch=2])",
             exception.getMessage()
         );
 
@@ -2007,7 +2007,7 @@ public final class KafkaRaftClientSnapshotTest {
             () -> context.client.createSnapshot(invalidSnapshotId1, 0)
         );
         assertEquals(
-            "Cannot create a snapshot with an id (OffsetAndEpoch(offset=1, epoch=1)) greater than the high-watermark (0)",
+            "Cannot create a snapshot with an id (OffsetAndEpoch[offset=1, epoch=1]) greater than the high-watermark (0)",
             exception.getMessage()
         );
 
@@ -2035,7 +2035,7 @@ public final class KafkaRaftClientSnapshotTest {
             () -> context.client.createSnapshot(invalidSnapshotId2, 0)
         );
         assertEquals(
-            "Cannot create a snapshot with an id (OffsetAndEpoch(offset=1, epoch=5)) greater than the high-watermark (0)",
+            "Cannot create a snapshot with an id (OffsetAndEpoch[offset=1, epoch=5]) greater than the high-watermark (0)",
             exception.getMessage()
         );
 
@@ -2063,7 +2063,7 @@ public final class KafkaRaftClientSnapshotTest {
             () -> context.client.createSnapshot(invalidSnapshotId3, 0)
         );
         assertEquals(
-            "Snapshot id (OffsetAndEpoch(offset=6, epoch=6)) is not valid according to the log: ValidOffsetAndEpoch(kind=DIVERGING, offsetAndEpoch=OffsetAndEpoch(offset=6, epoch=4))",
+            "Snapshot id (OffsetAndEpoch[offset=6, epoch=6]) is not valid according to the log: ValidOffsetAndEpoch(kind=DIVERGING, offsetAndEpoch=OffsetAndEpoch[offset=6, epoch=4])",
             exception.getMessage()
         );
 
@@ -2076,7 +2076,7 @@ public final class KafkaRaftClientSnapshotTest {
             () -> context.client.createSnapshot(invalidSnapshotId4, 0)
         );
         assertEquals(
-            "Snapshot id (OffsetAndEpoch(offset=6, epoch=3)) is not valid according to the log: ValidOffsetAndEpoch(kind=DIVERGING, offsetAndEpoch=OffsetAndEpoch(offset=3, epoch=3))",
+            "Snapshot id (OffsetAndEpoch[offset=6, epoch=3]) is not valid according to the log: ValidOffsetAndEpoch(kind=DIVERGING, offsetAndEpoch=OffsetAndEpoch[offset=3, epoch=3])",
             exception.getMessage()
         );
 

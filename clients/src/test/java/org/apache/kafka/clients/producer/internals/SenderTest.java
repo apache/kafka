@@ -1674,7 +1674,7 @@ public class SenderTest {
         Sender sender = new Sender(logContext, client, metadata, this.accumulator, true, MAX_REQUEST_SIZE, ACKS_ALL, 10,
             senderMetrics, time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, transactionManager, apiVersions);
 
-        Future<RecordMetadata> failedResponse = appendToAccumulator(tp0);
+        appendToAccumulator(tp0);
         Future<RecordMetadata> successfulResponse = appendToAccumulator(tp1);
         sender.runOnce();  // connect and send.
 

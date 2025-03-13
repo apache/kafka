@@ -26,14 +26,14 @@ import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.storage.log.FetchIsolation
 import org.apache.kafka.server.util.MockTime
-import org.apache.kafka.storage.internals.log.{LogConfig, LogDirFailureChannel, ProducerStateManagerConfig}
+import org.apache.kafka.storage.internals.log.{LogConfig, LogDirFailureChannel, ProducerStateManagerConfig, UnifiedLog}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api._
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 
-import java.util.Properties
+import java.util.{Optional, Properties}
 
 class BrokerCompressionTest {
 
@@ -57,36 +57,34 @@ class BrokerCompressionTest {
     val logProps = new Properties()
     logProps.put(TopicConfig.COMPRESSION_TYPE_CONFIG, brokerCompressionType.name)
     /*configure broker-side compression  */
-    val log = UnifiedLog(
-      dir = logDir,
-      config = new LogConfig(logProps),
-      logStartOffset = 0L,
-      recoveryPoint = 0L,
-      scheduler = time.scheduler,
-      time = time,
-      brokerTopicStats = new BrokerTopicStats,
-      maxTransactionTimeoutMs = 5 * 60 * 1000,
-      producerStateManagerConfig = new ProducerStateManagerConfig(TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_DEFAULT, false),
-      producerIdExpirationCheckIntervalMs = TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
-      logDirFailureChannel = new LogDirFailureChannel(10),
-      topicId = None
-    )
+    val log = UnifiedLog.create(
+      logDir,
+      new LogConfig(logProps),
+      0L,
+      0L,
+      time.scheduler,
+      new BrokerTopicStats,
+      time,
+      5 * 60 * 1000,
+      new ProducerStateManagerConfig(TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_DEFAULT, false),
+      TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
+      new LogDirFailureChannel(10),
+      true,
+      Optional.empty)
 
     /* append two messages */
     log.appendAsLeader(MemoryRecords.withRecords(messageCompression, 0,
-          new SimpleRecord("hello".getBytes), new SimpleRecord("there".getBytes)), leaderEpoch = 0)
+          new SimpleRecord("hello".getBytes), new SimpleRecord("there".getBytes)), 0)
 
     def readBatch(offset: Int): RecordBatch = {
-      val fetchInfo = log.read(offset,
-        maxLength = 4096,
-        isolation = FetchIsolation.LOG_END,
-        minOneMessage = true)
+      val fetchInfo = log.read(offset, 4096, FetchIsolation.LOG_END, true)
       fetchInfo.records.batches.iterator.next()
     }
 
     if (brokerCompressionType != BrokerCompressionType.PRODUCER) {
+      val batches = readBatch(0)
       val targetCompression = BrokerCompressionType.targetCompression(log.config.compression, null)
-      assertEquals(targetCompression.`type`(), readBatch(0).compressionType, "Compression at offset 0 should produce " + brokerCompressionType)
+      assertEquals(targetCompression.`type`(), batches.compressionType, "Compression at offset 0 should produce " + brokerCompressionType)
     }
     else
       assertEquals(messageCompressionType, readBatch(0).compressionType, "Compression at offset 0 should produce " + messageCompressionType)
