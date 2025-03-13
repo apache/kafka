@@ -24,24 +24,24 @@ import java.util.Map;
 public class ShareAcknowledgeAsyncEvent extends ApplicationEvent {
 
     private final Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap;
-    private final long deadlineMs;
+    private final long defaultTimeoutMs;
 
-    public ShareAcknowledgeAsyncEvent(final Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap, final long deadlineMs) {
+    public ShareAcknowledgeAsyncEvent(final Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap, final long defaultTimeoutMs) {
         super(Type.SHARE_ACKNOWLEDGE_ASYNC);
         this.acknowledgementsMap = acknowledgementsMap;
-        this.deadlineMs = deadlineMs;
+        this.defaultTimeoutMs = defaultTimeoutMs;
     }
 
     public Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap() {
         return acknowledgementsMap;
     }
 
-    public long deadlineMs() {
-        return deadlineMs;
+    public long defaultTimeoutMs() {
+        return defaultTimeoutMs;
     }
 
     @Override
     protected String toStringBase() {
-        return super.toStringBase() + ", acknowledgementsMap=" + acknowledgementsMap + ", deadlineMs=" + deadlineMs;
+        return super.toStringBase() + ", acknowledgementsMap=" + acknowledgementsMap + ", defaultTimeoutMs=" + defaultTimeoutMs;
     }
 }

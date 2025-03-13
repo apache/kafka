@@ -533,12 +533,12 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
      * Enqueue an AcknowledgeRequestState to be picked up on the next poll.
      *
      * @param acknowledgementsMap The acknowledgements to commit
-     * @param deadlineMs          Time until which the request will be retried if it fails with
+     * @param defaultTimeoutMs    Timeout which would be used when the request is retried, i.e. if it fails with
      *                            an expected retriable error.
      */
     public void commitAsync(
             final Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap,
-            final long deadlineMs) {
+            final long defaultTimeoutMs) {
         final Cluster cluster = metadata.fetch();
         final ResultHandler resultHandler = new ResultHandler(Optional.empty());
 
@@ -562,7 +562,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                             if (asyncRequestState == null) {
                                 acknowledgeRequestStates.get(nodeId).setAsyncRequest(new AcknowledgeRequestState(logContext,
                                         ShareConsumeRequestManager.class.getSimpleName() + ":2",
-                                        deadlineMs,
+                                        defaultTimeoutMs,
                                         retryBackoffMs,
                                         retryBackoffMaxMs,
                                         sessionHandler,
@@ -1099,11 +1099,14 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
          */
         private boolean isProcessed;
 
-        private final long deadlineMs;
+        /**
+         * Timeout in milliseconds indicating how long the request would be retried if it fails with a retriable exception.
+         */
+        private final long timeoutMs;
 
         AcknowledgeRequestState(LogContext logContext,
                                 String owner,
-                                long deadlineMs,
+                                long timeoutMs,
                                 long retryBackoffMs,
                                 long retryBackoffMaxMs,
                                 ShareSessionHandler sessionHandler,
@@ -1111,7 +1114,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                                 Map<TopicIdPartition, Acknowledgements> acknowledgementsMap,
                                 ResultHandler resultHandler,
                                 AcknowledgeRequestType acknowledgeRequestType) {
-            super(logContext, owner, retryBackoffMs, retryBackoffMaxMs, deadlineTimer(time, deadlineMs));
+            super(logContext, owner, retryBackoffMs, retryBackoffMaxMs, time.timer(timeoutMs));
             this.sessionHandler = sessionHandler;
             this.nodeId = nodeId;
             this.acknowledgementsToSend = acknowledgementsMap;
@@ -1120,7 +1123,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             this.incompleteAcknowledgements = new HashMap<>();
             this.requestType = acknowledgeRequestType;
             this.isProcessed = false;
-            this.deadlineMs = deadlineMs;
+            this.timeoutMs = timeoutMs;
         }
 
         UnsentRequest buildRequest() {
@@ -1207,7 +1210,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
          * Resets the timer with the new deadline and resets the RequestState.
          */
         void resetTimerAndRequestState() {
-            resetDeadline(deadlineMs);
+            resetTimeout(timeoutMs);
             reset();
         }
 

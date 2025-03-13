@@ -53,8 +53,8 @@ public class TimedRequestState extends RequestState {
         return timer.isExpired();
     }
 
-    public void resetDeadline(long deadlineMs) {
-        timer.resetDeadline(deadlineMs);
+    public void resetTimeout(long timeoutMs) {
+        timer.updateAndReset(timeoutMs);
     }
 
     public long remainingMs() {
