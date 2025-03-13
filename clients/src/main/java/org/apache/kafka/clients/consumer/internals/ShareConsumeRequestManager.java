@@ -43,6 +43,7 @@ import org.apache.kafka.common.requests.ShareFetchResponse;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
 
 import org.slf4j.Logger;
@@ -66,6 +67,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
+
+import static org.apache.kafka.clients.consumer.internals.TimedRequestState.deadlineTimer;
 
 /**
  * {@code ShareConsumeRequestManager} is responsible for generating {@link ShareFetchRequest} and
@@ -511,7 +514,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                 if (!acknowledgementsMapForNode.isEmpty()) {
                     acknowledgeRequestStates.get(nodeId).addSyncRequest(new AcknowledgeRequestState(logContext,
                         ShareConsumeRequestManager.class.getSimpleName() + ":1",
-                        deadlineMs,
+                        deadlineTimer(time, deadlineMs),
                         retryBackoffMs,
                         retryBackoffMaxMs,
                         sessionHandler,
@@ -562,7 +565,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                             if (asyncRequestState == null) {
                                 acknowledgeRequestStates.get(nodeId).setAsyncRequest(new AcknowledgeRequestState(logContext,
                                         ShareConsumeRequestManager.class.getSimpleName() + ":2",
-                                        defaultTimeoutMs,
+                                        time.timer(defaultTimeoutMs),
                                         retryBackoffMs,
                                         retryBackoffMaxMs,
                                         sessionHandler,
@@ -664,7 +667,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                     // There can only be one close() happening at a time. So per node, there will be one acknowledge request state.
                     acknowledgeRequestStates.get(nodeId).setCloseRequest(new AcknowledgeRequestState(logContext,
                             ShareConsumeRequestManager.class.getSimpleName() + ":3",
-                            deadlineMs,
+                            deadlineTimer(time, deadlineMs),
                             retryBackoffMs,
                             retryBackoffMaxMs,
                             sessionHandler,
@@ -1106,7 +1109,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
 
         AcknowledgeRequestState(LogContext logContext,
                                 String owner,
-                                long timeoutMs,
+                                Timer timer,
                                 long retryBackoffMs,
                                 long retryBackoffMaxMs,
                                 ShareSessionHandler sessionHandler,
@@ -1114,7 +1117,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                                 Map<TopicIdPartition, Acknowledgements> acknowledgementsMap,
                                 ResultHandler resultHandler,
                                 AcknowledgeRequestType acknowledgeRequestType) {
-            super(logContext, owner, retryBackoffMs, retryBackoffMaxMs, time.timer(timeoutMs));
+            super(logContext, owner, retryBackoffMs, retryBackoffMaxMs, timer);
             this.sessionHandler = sessionHandler;
             this.nodeId = nodeId;
             this.acknowledgementsToSend = acknowledgementsMap;
@@ -1123,7 +1126,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             this.incompleteAcknowledgements = new HashMap<>();
             this.requestType = acknowledgeRequestType;
             this.isProcessed = false;
-            this.timeoutMs = timeoutMs;
+            this.timeoutMs = timer.timeoutMs();
         }
 
         UnsentRequest buildRequest() {
@@ -1207,7 +1210,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         }
 
         /**
-         * Resets the timer with the new deadline and resets the RequestState.
+         * Resets the timer with the configured timeout and resets the RequestState.
          */
         void resetTimerAndRequestState() {
             resetTimeout(timeoutMs);
