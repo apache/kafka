@@ -114,6 +114,8 @@ def main():
         
         # Get dependency sets.
         libs = get_libs_set(libs_dir)
+        # TODO: fix regular expression to match all dependencies
+        libs = libs - {"listenablefuture-9999.0-empty-to-avoid-conflict-with-guava"}
         license_deps = get_license_deps(license_text)
 
         print("\nDependencies from libs (extracted from jar names):")

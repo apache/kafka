@@ -22,18 +22,30 @@ import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.coordinator.group.Group;
 import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
 import org.apache.kafka.image.ClusterImage;
+import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsImage;
+import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
 import org.apache.kafka.timeline.TimelineInteger;
+import org.apache.kafka.timeline.TimelineLong;
 import org.apache.kafka.timeline.TimelineObject;
 
+import com.google.common.hash.HashCode;
+import com.google.common.hash.HashFunction;
+import com.google.common.hash.Hasher;
+import com.google.common.hash.Hashing;
+
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 
 import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HETEROGENEOUS;
@@ -74,6 +86,11 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
     protected final TimelineInteger groupEpoch;
 
     /**
+     * The metadata hash which is computed based on the all subscribed topics.
+     */
+    protected final TimelineLong metadataHash;
+
+    /**
      * The group members.
      */
     protected final TimelineHashMap<String, T> members;
@@ -82,11 +99,6 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
      * The number of subscribers or regular expressions per topic.
      */
     protected final TimelineHashMap<String, SubscriptionCount> subscribedTopicNames;
-
-    /**
-     * The metadata associated with each subscribed topic name.
-     */
-    protected final TimelineHashMap<String, TopicMetadata> subscribedTopicMetadata;
 
     /**
      * The group's subscription type.
@@ -131,9 +143,9 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
         this.snapshotRegistry = Objects.requireNonNull(snapshotRegistry);
         this.groupId = Objects.requireNonNull(groupId);
         this.groupEpoch = new TimelineInteger(snapshotRegistry);
+        this.metadataHash = new TimelineLong(snapshotRegistry);
         this.members = new TimelineHashMap<>(snapshotRegistry, 0);
         this.subscribedTopicNames = new TimelineHashMap<>(snapshotRegistry, 0);
-        this.subscribedTopicMetadata = new TimelineHashMap<>(snapshotRegistry, 0);
         this.subscriptionType = new TimelineObject<>(snapshotRegistry, HOMOGENEOUS);
         this.targetAssignmentEpoch = new TimelineInteger(snapshotRegistry);
         this.targetAssignment = new TimelineHashMap<>(snapshotRegistry, 0);
@@ -174,6 +186,22 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
     public void setGroupEpoch(int groupEpoch) {
         this.groupEpoch.set(groupEpoch);
         maybeUpdateGroupState();
+    }
+
+    /**
+     * @return The metadata hash.
+     */
+    public long metadataHash() {
+        return metadataHash.get();
+    }
+
+    /**
+     * Sets the metadata hash.
+     *
+     * @param metadataHash The new metadata hash.
+     */
+    public void setMetadataHash(long metadataHash) {
+        this.metadataHash.set(metadataHash);
     }
 
     /**
@@ -348,54 +376,58 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
     }
 
     /**
-     * @return An immutable Map of subscription metadata for
-     *         each topic that the consumer group is subscribed to.
-     */
-    public Map<String, TopicMetadata> subscriptionMetadata() {
-        return Collections.unmodifiableMap(subscribedTopicMetadata);
-    }
-
-    /**
-     * Updates the subscription metadata. This replaces the previous one.
+     * Compute metadata hash based on the current subscription info.
      *
-     * @param subscriptionMetadata The new subscription metadata.
+     * @param subscribedTopicNames Map of topic names to the number of subscribers.
+     * @param metadataImage        The current metadata for all available topics.
+     * @param topicHashCache       The cache of topic hashes.
      */
-    public void setSubscriptionMetadata(
-        Map<String, TopicMetadata> subscriptionMetadata
-    ) {
-        this.subscribedTopicMetadata.clear();
-        this.subscribedTopicMetadata.putAll(subscriptionMetadata);
-    }
-
-    /**
-     * Computes the subscription metadata based on the current subscription info.
-     *
-     * @param subscribedTopicNames      Map of topic names to the number of subscribers.
-     * @param topicsImage               The current metadata for all available topics.
-     * @param clusterImage              The current metadata for the Kafka cluster.
-     *
-     * @return An immutable map of subscription metadata for each topic that the consumer group is subscribed to.
-     */
-    public Map<String, TopicMetadata> computeSubscriptionMetadata(
+    public long computeMetadataHash(
         Map<String, SubscriptionCount> subscribedTopicNames,
-        TopicsImage topicsImage,
-        ClusterImage clusterImage
+        MetadataImage metadataImage,
+        Map<String, Long> topicHashCache
     ) {
-        // Create the topic metadata for each subscribed topic.
-        Map<String, TopicMetadata> newSubscriptionMetadata = new HashMap<>(subscribedTopicNames.size());
+        TopicsImage topicsImage = metadataImage.topics();
+        List<HashCode> hashCodes = subscribedTopicNames.keySet().stream()
+            .filter(topicName -> topicsImage.getTopic(topicName) != null)
+            .map(topicName -> HashCode.fromLong(
+                topicHashCache.computeIfAbsent(
+                    topicName,
+                    key -> computeTopicHash(topicsImage.getTopic(topicName), metadataImage.cluster())
+                )
+            ))
+            .toList();
+        return hashCodes.isEmpty() ? 0 : Hashing.combineUnordered(
+            hashCodes
+        ).asLong();
+    }
 
-        subscribedTopicNames.forEach((topicName, count) -> {
-            TopicImage topicImage = topicsImage.getTopic(topicName);
-            if (topicImage != null) {
-                newSubscriptionMetadata.put(topicName, new TopicMetadata(
-                    topicImage.id(),
-                    topicImage.name(),
-                    topicImage.partitions().size()
-                ));
-            }
+    /**
+     * Computes the hash of the topic id, name, number of partitions, and partition racks by Murmur3.
+     *
+     * @param topicImage   The topic image.
+     * @param clusterImage The cluster image.
+     */
+    public static long computeTopicHash(TopicImage topicImage, ClusterImage clusterImage) {
+        HashFunction hf = Hashing.murmur3_128();
+        Hasher topicHasher = hf.newHasher()
+            .putByte((byte) 0) // magic byte
+            .putLong(topicImage.id().hashCode()) // topic Id
+            .putString(topicImage.name(), StandardCharsets.UTF_8) // topic name
+            .putLong(topicImage.partitions().size()); // number of partitions
+
+        topicImage.partitions().entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(entry -> {
+            topicHasher.putInt(entry.getKey()); // partition id
+            Arrays.stream(entry.getValue().replicas)
+                .mapToObj(clusterImage::broker)
+                .filter(Objects::nonNull)
+                .map(BrokerRegistration::rack)
+                .filter(Optional::isPresent)
+                .map(Optional::get)
+                .sorted()
+                .forEach(rack -> topicHasher.putString(rack, StandardCharsets.UTF_8)); // sorted racks
         });
-
-        return Collections.unmodifiableMap(newSubscriptionMetadata);
+        return topicHasher.hash().asLong();
     }
 
     /**

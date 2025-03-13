@@ -28,9 +28,8 @@ import org.apache.kafka.coordinator.group.modern.Assignment;
 import org.apache.kafka.coordinator.group.modern.SubscribedTopicDescriberImpl;
 import org.apache.kafka.coordinator.group.modern.TargetAssignmentBuilder;
 import org.apache.kafka.coordinator.group.modern.TopicIds;
-import org.apache.kafka.coordinator.group.modern.TopicMetadata;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
-import org.apache.kafka.image.TopicsImage;
+import org.apache.kafka.image.MetadataImage;
 
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -93,9 +92,9 @@ public class TargetAssignmentBuilderBenchmark {
 
     private List<String> allTopicNames = Collections.emptyList();
 
-    private Map<String, TopicMetadata> subscriptionMetadata = Collections.emptyMap();
+    private Set<Uuid> subscriptionTopicIdSet;
 
-    private TopicsImage topicsImage;
+    private MetadataImage metadataImage;
 
     private TopicIds.TopicResolver topicResolver;
 
@@ -118,11 +117,11 @@ public class TargetAssignmentBuilderBenchmark {
 
         targetAssignmentBuilder = new TargetAssignmentBuilder.ConsumerTargetAssignmentBuilder(GROUP_ID, GROUP_EPOCH, partitionAssignor)
             .withMembers(members)
-            .withSubscriptionMetadata(subscriptionMetadata)
+            .withSubscriptionTopicIdSet(subscriptionTopicIdSet)
             .withSubscriptionType(subscriptionType)
             .withTargetAssignment(existingTargetAssignment)
             .withInvertedTargetAssignment(invertedTargetAssignment)
-            .withTopicsImage(topicsImage)
+            .withMetadataImage(metadataImage)
             .addOrUpdateMember(newMember.memberId(), newMember);
     }
 
@@ -130,16 +129,12 @@ public class TargetAssignmentBuilderBenchmark {
         allTopicNames = AssignorBenchmarkUtils.createTopicNames(topicCount);
 
         int partitionsPerTopic = (memberCount * partitionsToMemberRatio) / topicCount;
-        subscriptionMetadata = AssignorBenchmarkUtils.createSubscriptionMetadata(
-            allTopicNames,
-            partitionsPerTopic
-        );
 
-        topicsImage = AssignorBenchmarkUtils.createTopicsImage(subscriptionMetadata);
-        topicResolver = new TopicIds.CachedTopicResolver(topicsImage);
+        metadataImage = AssignorBenchmarkUtils.createMetadataImage(allTopicNames, partitionsPerTopic);
+        topicResolver = new TopicIds.CachedTopicResolver(metadataImage.topics());
 
-        Map<Uuid, TopicMetadata> topicMetadata = AssignorBenchmarkUtils.createTopicMetadata(subscriptionMetadata);
-        subscribedTopicDescriber = new SubscribedTopicDescriberImpl(topicMetadata);
+        subscriptionTopicIdSet = AssignorBenchmarkUtils.subscriptionTopicIdSet(metadataImage);
+        subscribedTopicDescriber = new SubscribedTopicDescriberImpl(subscriptionTopicIdSet, metadataImage);
     }
 
     private Map<String, Assignment> generateMockInitialTargetAssignmentAndUpdateInvertedTargetAssignment(

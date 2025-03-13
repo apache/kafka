@@ -17,7 +17,6 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.IllegalGenerationException;
@@ -2373,18 +2372,9 @@ public class OffsetMetadataManagerTest {
             "foo",
             true
         );
-        MetadataImage image = new MetadataImageBuilder()
-            .addTopic(Uuid.randomUuid(), "foo", 1)
-            .addRacks()
-            .build();
         ConsumerGroupMember member1 = new ConsumerGroupMember.Builder("member1")
             .setSubscribedTopicNames(List.of("bar"))
             .build();
-        group.computeSubscriptionMetadata(
-            group.computeSubscribedTopicNames(null, member1),
-            image.topics(),
-            image.cluster()
-        );
         group.updateMember(member1);
         context.commitOffset("foo", "bar", 0, 100L, 0);
         assertTrue(group.isSubscribedToTopic("bar"));

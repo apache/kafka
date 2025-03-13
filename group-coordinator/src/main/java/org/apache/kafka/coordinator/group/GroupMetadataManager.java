@@ -127,7 +127,6 @@ import org.apache.kafka.coordinator.group.modern.MemberState;
 import org.apache.kafka.coordinator.group.modern.ModernGroup;
 import org.apache.kafka.coordinator.group.modern.SubscriptionCount;
 import org.apache.kafka.coordinator.group.modern.TargetAssignmentBuilder;
-import org.apache.kafka.coordinator.group.modern.TopicMetadata;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.modern.consumer.CurrentAssignmentBuilder;
@@ -173,6 +172,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiFunction;
 import java.util.function.Function;
@@ -202,14 +202,12 @@ import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.n
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupRegularExpressionTombstone;
-import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentTombstoneRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupCurrentAssignmentRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupCurrentAssignmentTombstoneRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupEpochRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupMemberSubscriptionRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupMemberSubscriptionTombstoneRecord;
-import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupSubscriptionMetadataRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentTombstoneRecord;
 import static org.apache.kafka.coordinator.group.Utils.assignmentToString;
 import static org.apache.kafka.coordinator.group.Utils.ofSentinel;
@@ -229,7 +227,6 @@ import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecor
 import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers.newStreamsGroupMemberTombstoneRecord;
 import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentTombstoneRecord;
 
-
 /**
  * The GroupMetadataManager manages the metadata of all classic and consumer groups. It holds
  * the hard and the soft state of the groups. This class has two kinds of methods:
@@ -242,21 +239,11 @@ import static org.apache.kafka.coordinator.group.streams.StreamsCoordinatorRecor
 public class GroupMetadataManager {
     private static final int METADATA_REFRESH_INTERVAL_MS = Integer.MAX_VALUE;
 
-    private static class UpdateSubscriptionMetadataResult {
-        private final int groupEpoch;
-        private final Map<String, TopicMetadata> subscriptionMetadata;
-        private final SubscriptionType subscriptionType;
-
-        UpdateSubscriptionMetadataResult(
-            int groupEpoch,
-            Map<String, TopicMetadata> subscriptionMetadata,
-            SubscriptionType subscriptionType
-        ) {
-            this.groupEpoch = groupEpoch;
-            this.subscriptionMetadata = Objects.requireNonNull(subscriptionMetadata);
-            this.subscriptionType = Objects.requireNonNull(subscriptionType);
-        }
-    }
+    private record UpdateSubscriptionMetadataResult(
+        int groupEpoch,
+        Set<Uuid> subscriptionTopicIdSet,
+        SubscriptionType subscriptionType
+    ) { }
 
     public static class Builder {
         private LogContext logContext = null;
@@ -444,6 +431,11 @@ public class GroupMetadataManager {
     private MetadataImage metadataImage;
 
     /**
+     * The topic hash value by topic name.
+     */
+    private final Map<String, Long> topicHashCache;
+
+    /**
      * This tracks the version (or the offset) of the last metadata image
      * with newly created topics.
      */
@@ -501,6 +493,7 @@ public class GroupMetadataManager {
         this.shareGroupAssignor = shareGroupAssignor;
         this.streamsGroupSessionTimeoutMs = 45000;
         this.authorizer = authorizer;
+        this.topicHashCache = new ConcurrentHashMap<>();
     }
 
     /**
@@ -1914,7 +1907,7 @@ public class GroupMetadataManager {
         );
 
         int groupEpoch = group.groupEpoch();
-        Map<String, TopicMetadata> subscriptionMetadata = group.subscriptionMetadata();
+        Set<Uuid> subscriptionTopicIdSet = Set.of();
         SubscriptionType subscriptionType = group.subscriptionType();
 
         if (bumpGroupEpoch || group.hasMetadataExpired(currentTimeMs)) {
@@ -1930,7 +1923,7 @@ public class GroupMetadataManager {
             );
 
             groupEpoch = result.groupEpoch;
-            subscriptionMetadata = result.subscriptionMetadata;
+            subscriptionTopicIdSet = result.subscriptionTopicIdSet;
             subscriptionType = result.subscriptionType;
         }
 
@@ -1940,12 +1933,21 @@ public class GroupMetadataManager {
         final Assignment targetAssignment;
 
         if (groupEpoch > group.assignmentEpoch()) {
+            // In group object, it doesn't keep subscribed topic id set.
+            // If the set is empty, compute it from the subscribed topic names,
+            // so we don't use empty set to update target assignment.
+            if (subscriptionTopicIdSet.isEmpty()) {
+                subscriptionTopicIdSet = computeSubscribedTopicIdSet(group.computeSubscribedTopicNames(
+                    member,
+                    updatedMember
+                ));
+            }
             targetAssignment = updateTargetAssignment(
                 group,
                 groupEpoch,
                 member,
                 updatedMember,
-                subscriptionMetadata,
+                subscriptionTopicIdSet,
                 subscriptionType,
                 records
             );
@@ -2056,7 +2058,7 @@ public class GroupMetadataManager {
         }
 
         int groupEpoch = group.groupEpoch();
-        Map<String, TopicMetadata> subscriptionMetadata = group.subscriptionMetadata();
+        Set<Uuid> subscriptionTopicIdSet = Set.of();
         SubscriptionType subscriptionType = group.subscriptionType();
         final ConsumerProtocolSubscription subscription = deserializeSubscription(protocols);
 
@@ -2099,7 +2101,7 @@ public class GroupMetadataManager {
             );
 
             groupEpoch = result.groupEpoch;
-            subscriptionMetadata = result.subscriptionMetadata;
+            subscriptionTopicIdSet = result.subscriptionTopicIdSet;
             subscriptionType = result.subscriptionType;
         }
 
@@ -2109,12 +2111,21 @@ public class GroupMetadataManager {
         final Assignment targetAssignment;
 
         if (groupEpoch > group.assignmentEpoch()) {
+            // In group object, it doesn't keep subscribed topic id set.
+            // If the set is empty, compute it from the subscribed topic names,
+            // so we don't use empty set to update target assignment.
+            if (subscriptionTopicIdSet.isEmpty()) {
+                subscriptionTopicIdSet = computeSubscribedTopicIdSet(group.computeSubscribedTopicNames(
+                    member,
+                    updatedMember
+                ));
+            }
             targetAssignment = updateTargetAssignment(
                 group,
                 groupEpoch,
                 member,
                 updatedMember,
-                subscriptionMetadata,
+                subscriptionTopicIdSet,
                 subscriptionType,
                 records
             );
@@ -2238,7 +2249,8 @@ public class GroupMetadataManager {
         );
 
         int groupEpoch = group.groupEpoch();
-        Map<String, TopicMetadata> subscriptionMetadata = group.subscriptionMetadata();
+        long metadataHash = group.metadataHash();
+        Set<Uuid> subscriptionTopicIdSet = Set.of();
         SubscriptionType subscriptionType = group.subscriptionType();
 
         if (bumpGroupEpoch || group.hasMetadataExpired(currentTimeMs)) {
@@ -2246,10 +2258,11 @@ public class GroupMetadataManager {
             // 1) The member has updated its subscriptions;
             // 2) The refresh deadline has been reached.
             Map<String, SubscriptionCount> subscribedTopicNamesMap = group.computeSubscribedTopicNames(member, updatedMember);
-            subscriptionMetadata = group.computeSubscriptionMetadata(
+            subscriptionTopicIdSet = computeSubscribedTopicIdSet(subscribedTopicNamesMap);
+            metadataHash = group.computeMetadataHash(
                 subscribedTopicNamesMap,
-                metadataImage.topics(),
-                metadataImage.cluster()
+                metadataImage,
+                topicHashCache
             );
 
             int numMembers = group.numMembers();
@@ -2262,17 +2275,16 @@ public class GroupMetadataManager {
                 numMembers
             );
 
-            if (!subscriptionMetadata.equals(group.subscriptionMetadata())) {
-                log.info("[GroupId {}] Computed new subscription metadata: {}.",
-                    groupId, subscriptionMetadata);
+            if (metadataHash != group.metadataHash()) {
+                log.info("[GroupId {}] Computed new metadata hash: {}.",
+                    groupId, metadataHash);
                 bumpGroupEpoch = true;
-                records.add(newShareGroupSubscriptionMetadataRecord(groupId, subscriptionMetadata));
             }
 
             if (bumpGroupEpoch) {
                 groupEpoch += 1;
-                records.add(newShareGroupEpochRecord(groupId, groupEpoch));
-                log.info("[GroupId {}] Bumped group epoch to {}.", groupId, groupEpoch);
+                records.add(newShareGroupEpochRecord(groupId, groupEpoch, metadataHash));
+                log.info("[GroupId {}] Bumped group epoch to {} with metadata hash {}.", groupId, groupEpoch, metadataHash);
             }
 
             group.setMetadataRefreshDeadline(currentTimeMs + METADATA_REFRESH_INTERVAL_MS, groupEpoch);
@@ -2284,11 +2296,20 @@ public class GroupMetadataManager {
         final Assignment targetAssignment;
 
         if (groupEpoch > group.assignmentEpoch()) {
+            // In group object, it doesn't keep subscribed topic id set.
+            // If the set is empty, compute it from the subscribed topic names,
+            // so we don't use empty set to update target assignment.
+            if (subscriptionTopicIdSet.isEmpty()) {
+                subscriptionTopicIdSet = computeSubscribedTopicIdSet(group.computeSubscribedTopicNames(
+                    member,
+                    updatedMember
+                ));
+            }
             targetAssignment = updateTargetAssignment(
                 group,
                 groupEpoch,
                 updatedMember,
-                subscriptionMetadata,
+                subscriptionTopicIdSet,
                 subscriptionType,
                 records
             );
@@ -2774,25 +2795,24 @@ public class GroupMetadataManager {
             }
 
             // Compute the subscription metadata.
-            Map<String, TopicMetadata> subscriptionMetadata = group.computeSubscriptionMetadata(
+            long metadataHash = group.computeMetadataHash(
                 subscribedTopicNames,
-                metadataImage.topics(),
-                metadataImage.cluster()
+                metadataImage,
+                topicHashCache
             );
 
-            if (!subscriptionMetadata.equals(group.subscriptionMetadata())) {
+            if (metadataHash != group.metadataHash()) {
                 if (log.isDebugEnabled()) {
-                    log.debug("[GroupId {}] Computed new subscription metadata: {}.",
-                        groupId, subscriptionMetadata);
+                    log.debug("[GroupId {}] Computed new metadata hash: {}.",
+                        groupId, metadataHash);
                 }
                 bumpGroupEpoch = true;
-                records.add(newConsumerGroupSubscriptionMetadataRecord(groupId, subscriptionMetadata));
             }
 
             if (bumpGroupEpoch) {
                 int groupEpoch = group.groupEpoch() + 1;
-                records.add(newConsumerGroupEpochRecord(groupId, groupEpoch));
-                log.info("[GroupId {}] Bumped group epoch to {}.", groupId, groupEpoch);
+                records.add(newConsumerGroupEpochRecord(groupId, groupEpoch, metadataHash));
+                log.info("[GroupId {}] Bumped group epoch to {} with metadata hash {}.", groupId, groupEpoch, metadataHash);
                 metrics.record(CONSUMER_GROUP_REBALANCES_SENSOR_NAME);
                 group.setMetadataRefreshDeadline(
                     time.milliseconds() + METADATA_REFRESH_INTERVAL_MS,
@@ -2968,10 +2988,11 @@ public class GroupMetadataManager {
             member,
             updatedMember
         );
-        Map<String, TopicMetadata> subscriptionMetadata = group.computeSubscriptionMetadata(
+        Set<Uuid> subscribedTopicIdSet = computeSubscribedTopicIdSet(subscribedTopicNamesMap);
+        long metadataHash = group.computeMetadataHash(
             subscribedTopicNamesMap,
-            metadataImage.topics(),
-            metadataImage.cluster()
+            metadataImage,
+            topicHashCache
         );
 
         int numMembers = group.numMembers();
@@ -2985,19 +3006,18 @@ public class GroupMetadataManager {
             numMembers
         );
 
-        if (!subscriptionMetadata.equals(group.subscriptionMetadata())) {
+        if (metadataHash != group.metadataHash()) {
             if (log.isDebugEnabled()) {
-                log.debug("[GroupId {}] Computed new subscription metadata: {}.",
-                    groupId, subscriptionMetadata);
+                log.debug("[GroupId {}] Computed new metadata hash: {}.",
+                    groupId, metadataHash);
             }
             bumpGroupEpoch = true;
-            records.add(newConsumerGroupSubscriptionMetadataRecord(groupId, subscriptionMetadata));
         }
 
         if (bumpGroupEpoch) {
             groupEpoch += 1;
-            records.add(newConsumerGroupEpochRecord(groupId, groupEpoch));
-            log.info("[GroupId {}] Bumped group epoch to {}.", groupId, groupEpoch);
+            records.add(newConsumerGroupEpochRecord(groupId, groupEpoch, metadataHash));
+            log.info("[GroupId {}] Bumped group epoch to {} with metadata hash {}.", groupId, groupEpoch, metadataHash);
             metrics.record(CONSUMER_GROUP_REBALANCES_SENSOR_NAME);
         }
 
@@ -3005,21 +3025,31 @@ public class GroupMetadataManager {
 
         return new UpdateSubscriptionMetadataResult(
             groupEpoch,
-            subscriptionMetadata,
+            subscribedTopicIdSet,
             subscriptionType
         );
+    }
+
+    private Set<Uuid> computeSubscribedTopicIdSet(
+        Map<String, SubscriptionCount> subscribedTopicNamesMap
+    ) {
+        return subscribedTopicNamesMap.keySet().stream()
+            .map(topicName -> metadataImage.topics().getTopic(topicName))
+            .filter(Objects::nonNull)
+            .map(TopicImage::id)
+            .collect(Collectors.toSet());
     }
 
     /**
      * Updates the target assignment according to the updated member and subscription metadata.
      *
-     * @param group                 The ConsumerGroup.
-     * @param groupEpoch            The group epoch.
-     * @param member                The existing member.
-     * @param updatedMember         The updated member.
-     * @param subscriptionMetadata  The subscription metadata.
-     * @param subscriptionType      The group subscription type.
-     * @param records               The list to accumulate any new records.
+     * @param group                  The ConsumerGroup.
+     * @param groupEpoch             The group epoch.
+     * @param member                 The existing member.
+     * @param updatedMember          The updated member.
+     * @param subscriptionTopicIdSet The subscription topic id set.
+     * @param subscriptionType       The group subscription type.
+     * @param records                The list to accumulate any new records.
      * @return The new target assignment.
      */
     private Assignment updateTargetAssignment(
@@ -3027,7 +3057,7 @@ public class GroupMetadataManager {
         int groupEpoch,
         ConsumerGroupMember member,
         ConsumerGroupMember updatedMember,
-        Map<String, TopicMetadata> subscriptionMetadata,
+        Set<Uuid> subscriptionTopicIdSet,
         SubscriptionType subscriptionType,
         List<CoordinatorRecord> records
     ) {
@@ -3040,11 +3070,11 @@ public class GroupMetadataManager {
                 new TargetAssignmentBuilder.ConsumerTargetAssignmentBuilder(group.groupId(), groupEpoch, consumerGroupAssignors.get(preferredServerAssignor))
                     .withMembers(group.members())
                     .withStaticMembers(group.staticMembers())
-                    .withSubscriptionMetadata(subscriptionMetadata)
+                    .withSubscriptionTopicIdSet(subscriptionTopicIdSet)
                     .withSubscriptionType(subscriptionType)
                     .withTargetAssignment(group.targetAssignment())
                     .withInvertedTargetAssignment(group.invertedTargetAssignment())
-                    .withTopicsImage(metadataImage.topics())
+                    .withMetadataImage(metadataImage)
                     .withResolvedRegularExpressions(group.resolvedRegularExpressions())
                     .addOrUpdateMember(updatedMember.memberId(), updatedMember);
 
@@ -3087,19 +3117,19 @@ public class GroupMetadataManager {
     /**
      * Updates the target assignment according to the updated member and subscription metadata.
      *
-     * @param group                 The ShareGroup.
-     * @param groupEpoch            The group epoch.
-     * @param updatedMember         The updated member.
-     * @param subscriptionMetadata  The subscription metadata.
-     * @param subscriptionType      The group subscription type.
-     * @param records               The list to accumulate any new records.
+     * @param group                  The ShareGroup.
+     * @param groupEpoch             The group epoch.
+     * @param updatedMember          The updated member.
+     * @param subscriptionTopicIdSet The subscription topic id set.
+     * @param subscriptionType       The group subscription type.
+     * @param records                The list to accumulate any new records.
      * @return The new target assignment.
      */
     private Assignment updateTargetAssignment(
         ShareGroup group,
         int groupEpoch,
         ShareGroupMember updatedMember,
-        Map<String, TopicMetadata> subscriptionMetadata,
+        Set<Uuid> subscriptionTopicIdSet,
         SubscriptionType subscriptionType,
         List<CoordinatorRecord> records
     ) {
@@ -3107,11 +3137,11 @@ public class GroupMetadataManager {
             TargetAssignmentBuilder.ShareTargetAssignmentBuilder assignmentResultBuilder =
                 new TargetAssignmentBuilder.ShareTargetAssignmentBuilder(group.groupId(), groupEpoch, shareGroupAssignor)
                     .withMembers(group.members())
-                    .withSubscriptionMetadata(subscriptionMetadata)
+                    .withSubscriptionTopicIdSet(subscriptionTopicIdSet)
                     .withSubscriptionType(subscriptionType)
                     .withTargetAssignment(group.targetAssignment())
                     .withInvertedTargetAssignment(group.invertedTargetAssignment())
-                    .withTopicsImage(metadataImage.topics())
+                    .withMetadataImage(metadataImage)
                     .addOrUpdateMember(updatedMember.memberId(), updatedMember);
 
             long startTimeMs = time.milliseconds();
@@ -3285,24 +3315,23 @@ public class GroupMetadataManager {
                 members
             );
 
-            // We update the subscription metadata without the leaving members.
-            Map<String, TopicMetadata> subscriptionMetadata = group.computeSubscriptionMetadata(
+            // We update the metadata hash without the leaving member.
+            long metadataHash = group.computeMetadataHash(
                 group.computeSubscribedTopicNamesWithoutDeletedMembers(members, deletedRegexes),
-                metadataImage.topics(),
-                metadataImage.cluster()
+                metadataImage,
+                topicHashCache
             );
 
-            if (!subscriptionMetadata.equals(group.subscriptionMetadata())) {
+            if (metadataHash != group.metadataHash()) {
                 if (log.isDebugEnabled()) {
-                    log.debug("[GroupId {}] Computed new subscription metadata: {}.",
-                        group.groupId(), subscriptionMetadata);
+                    log.debug("[GroupId {}] Computed new metadata hash: {}.",
+                        group.groupId(), metadataHash);
                 }
-                records.add(newConsumerGroupSubscriptionMetadataRecord(group.groupId(), subscriptionMetadata));
             }
 
             // We bump the group epoch.
             int groupEpoch = group.groupEpoch() + 1;
-            records.add(newConsumerGroupEpochRecord(group.groupId(), groupEpoch));
+            records.add(newConsumerGroupEpochRecord(group.groupId(), groupEpoch, metadataHash));
             log.info("[GroupId {}] Bumped group epoch to {}.", group.groupId(), groupEpoch);
 
             for (ConsumerGroupMember member : members) {
@@ -3331,22 +3360,21 @@ public class GroupMetadataManager {
         records.add(newShareGroupTargetAssignmentTombstoneRecord(group.groupId(), member.memberId()));
         records.add(newShareGroupMemberSubscriptionTombstoneRecord(group.groupId(), member.memberId()));
 
-        // We update the subscription metadata without the leaving member.
-        Map<String, TopicMetadata> subscriptionMetadata = group.computeSubscriptionMetadata(
+        // We update the metadata hash without the leaving member.
+        long metadataHash = group.computeMetadataHash(
             group.computeSubscribedTopicNames(member, null),
-            metadataImage.topics(),
-            metadataImage.cluster()
+            metadataImage,
+            topicHashCache
         );
 
-        if (!subscriptionMetadata.equals(group.subscriptionMetadata())) {
-            log.info("[GroupId {}] Computed new subscription metadata: {}.",
-                group.groupId(), subscriptionMetadata);
-            records.add(newShareGroupSubscriptionMetadataRecord(group.groupId(), subscriptionMetadata));
+        if (metadataHash != group.metadataHash()) {
+            log.info("[GroupId {}] Computed new metadata hash: {}.",
+                group.groupId(), metadataHash);
         }
 
         // We bump the group epoch.
         int groupEpoch = group.groupEpoch() + 1;
-        records.add(newShareGroupEpochRecord(group.groupId(), groupEpoch));
+        records.add(newShareGroupEpochRecord(group.groupId(), groupEpoch, metadataHash));
 
         cancelGroupSessionTimeout(group.groupId(), member.memberId());
 
@@ -4069,7 +4097,11 @@ public class GroupMetadataManager {
     ) {
         groupsByTopics.computeIfPresent(topicName, (__, groupIds) -> {
             groupIds.remove(groupId);
-            return groupIds.isEmpty() ? null : groupIds;
+            if (groups.isEmpty()) {
+                topicHashCache.remove(topicName);
+                return null;
+            }
+            return groupIds;
         });
     }
 
@@ -4124,6 +4156,7 @@ public class GroupMetadataManager {
         if (value != null) {
             ConsumerGroup consumerGroup = getOrMaybeCreatePersistedConsumerGroup(groupId, true);
             consumerGroup.setGroupEpoch(value.epoch());
+            consumerGroup.setMetadataHash(value.metadataHash());
         } else {
             ConsumerGroup consumerGroup;
             try {
@@ -4153,8 +4186,9 @@ public class GroupMetadataManager {
 
     /**
      * Replays ConsumerGroupPartitionMetadataKey/Value to update the hard state of
-     * the consumer group. It updates the subscription metadata of the consumer
-     * group.
+     * the consumer group.
+     * The ConsumerGroupPartitionMetadataKey/Value are deprecated.
+     * Keep the function for backward compatibility.
      *
      * @param key   A ConsumerGroupPartitionMetadataKey key.
      * @param value A ConsumerGroupPartitionMetadataValue record.
@@ -4165,22 +4199,10 @@ public class GroupMetadataManager {
     ) {
         String groupId = key.groupId();
 
-        ConsumerGroup group;
         try {
-            group = getOrMaybeCreatePersistedConsumerGroup(groupId, value != null);
+            getOrMaybeCreatePersistedConsumerGroup(groupId, value != null);
         } catch (GroupIdNotFoundException ex) {
             // If the group does not exist, we can ignore the tombstone.
-            return;
-        }
-
-        if (value != null) {
-            Map<String, TopicMetadata> subscriptionMetadata = new HashMap<>();
-            value.topics().forEach(topicMetadata -> {
-                subscriptionMetadata.put(topicMetadata.topicName(), TopicMetadata.fromRecord(topicMetadata));
-            });
-            group.setSubscriptionMetadata(subscriptionMetadata);
-        } else {
-            group.setSubscriptionMetadata(Map.of());
         }
     }
 
@@ -4461,6 +4483,7 @@ public class GroupMetadataManager {
         if (value != null) {
             ShareGroup shareGroup = getOrMaybeCreatePersistedShareGroup(groupId, true);
             shareGroup.setGroupEpoch(value.epoch());
+            shareGroup.setMetadataHash(value.metadataHash());
         } else {
             ShareGroup shareGroup = getOrMaybeCreatePersistedShareGroup(groupId, false);
             if (!shareGroup.members().isEmpty()) {
@@ -4654,17 +4677,7 @@ public class GroupMetadataManager {
         ShareGroupPartitionMetadataValue value
     ) {
         String groupId = key.groupId();
-        ShareGroup group = getOrMaybeCreatePersistedShareGroup(groupId, false);
-
-        if (value != null) {
-            Map<String, TopicMetadata> subscriptionMetadata = new HashMap<>();
-            value.topics().forEach(topicMetadata ->
-                subscriptionMetadata.put(topicMetadata.topicName(), TopicMetadata.fromRecord(topicMetadata))
-            );
-            group.setSubscriptionMetadata(subscriptionMetadata);
-        } else {
-            group.setSubscriptionMetadata(Map.of());
-        }
+        getOrMaybeCreatePersistedShareGroup(groupId, false);
     }
 
     /**
@@ -4778,11 +4791,15 @@ public class GroupMetadataManager {
         Set<String> allGroupIds = new HashSet<>();
         topicsDelta.changedTopics().forEach((topicId, topicDelta) -> {
             String topicName = topicDelta.name();
+            // trigger recalculate topic hash in next consumer group heartbeat
+            topicHashCache.remove(topicName);
             allGroupIds.addAll(groupsSubscribedToTopic(topicName));
         });
         topicsDelta.deletedTopicIds().forEach(topicId -> {
             TopicImage topicImage = delta.image().topics().getTopic(topicId);
-            allGroupIds.addAll(groupsSubscribedToTopic(topicImage.name()));
+            String topicName = topicImage.name();
+            topicHashCache.remove(topicName);
+            allGroupIds.addAll(groupsSubscribedToTopic(topicName));
         });
         allGroupIds.forEach(groupId -> {
             Group group = groups.get(groupId);

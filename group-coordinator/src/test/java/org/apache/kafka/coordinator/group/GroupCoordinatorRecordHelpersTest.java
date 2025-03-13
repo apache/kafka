@@ -33,7 +33,6 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataV
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetadataKey;
-import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupRegularExpressionKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupRegularExpressionValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMemberKey;
@@ -46,7 +45,6 @@ import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataKey;
 import org.apache.kafka.coordinator.group.modern.MemberState;
-import org.apache.kafka.coordinator.group.modern.TopicMetadata;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.modern.consumer.ResolvedRegularExpression;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
@@ -57,7 +55,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -65,7 +62,6 @@ import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
 
-import static org.apache.kafka.coordinator.group.Assertions.assertRecordEquals;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkOrderedAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkOrderedTopicAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
@@ -75,7 +71,6 @@ import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.n
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupEpochTombstoneRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionTombstoneRecord;
-import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupSubscriptionMetadataTombstoneRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochTombstoneRecord;
@@ -148,47 +143,6 @@ public class GroupCoordinatorRecordHelpersTest {
     }
 
     @Test
-    public void testNewConsumerGroupSubscriptionMetadataRecord() {
-        Uuid fooTopicId = Uuid.randomUuid();
-        Uuid barTopicId = Uuid.randomUuid();
-        Map<String, TopicMetadata> subscriptionMetadata = new LinkedHashMap<>();
-
-        subscriptionMetadata.put("foo", new TopicMetadata(
-            fooTopicId,
-            "foo",
-            10
-        ));
-        subscriptionMetadata.put("bar", new TopicMetadata(
-            barTopicId,
-            "bar",
-            20
-        ));
-
-        CoordinatorRecord expectedRecord = CoordinatorRecord.record(
-            new ConsumerGroupPartitionMetadataKey()
-                .setGroupId("group-id"),
-            new ApiMessageAndVersion(
-                new ConsumerGroupPartitionMetadataValue()
-                    .setTopics(Arrays.asList(
-                        new ConsumerGroupPartitionMetadataValue.TopicMetadata()
-                            .setTopicId(fooTopicId)
-                            .setTopicName("foo")
-                            .setNumPartitions(10),
-                        new ConsumerGroupPartitionMetadataValue.TopicMetadata()
-                            .setTopicId(barTopicId)
-                            .setTopicName("bar")
-                            .setNumPartitions(20))),
-                (short) 0
-            )
-        );
-
-        assertRecordEquals(expectedRecord, newConsumerGroupSubscriptionMetadataRecord(
-            "group-id",
-            subscriptionMetadata
-        ));
-    }
-
-    @Test
     public void testNewConsumerGroupSubscriptionMetadataTombstoneRecord() {
         CoordinatorRecord expectedRecord = CoordinatorRecord.tombstone(
             new ConsumerGroupPartitionMetadataKey()
@@ -201,60 +155,19 @@ public class GroupCoordinatorRecordHelpersTest {
     }
 
     @Test
-    public void testEmptyPartitionMetadataWhenRacksUnavailableGroupSubscriptionMetadataRecord() {
-        Uuid fooTopicId = Uuid.randomUuid();
-        Uuid barTopicId = Uuid.randomUuid();
-        Map<String, TopicMetadata> subscriptionMetadata = new LinkedHashMap<>();
-
-        subscriptionMetadata.put("foo", new TopicMetadata(
-            fooTopicId,
-            "foo",
-            10
-        ));
-        subscriptionMetadata.put("bar", new TopicMetadata(
-            barTopicId,
-            "bar",
-            20
-        ));
-
-        CoordinatorRecord expectedRecord = CoordinatorRecord.record(
-            new ConsumerGroupPartitionMetadataKey()
-                .setGroupId("group-id"),
-            new ApiMessageAndVersion(
-                new ConsumerGroupPartitionMetadataValue()
-                    .setTopics(Arrays.asList(
-                        new ConsumerGroupPartitionMetadataValue.TopicMetadata()
-                            .setTopicId(fooTopicId)
-                            .setTopicName("foo")
-                            .setNumPartitions(10),
-                        new ConsumerGroupPartitionMetadataValue.TopicMetadata()
-                            .setTopicId(barTopicId)
-                            .setTopicName("bar")
-                            .setNumPartitions(20))),
-                (short) 0
-            )
-        );
-
-        assertRecordEquals(expectedRecord, newConsumerGroupSubscriptionMetadataRecord(
-            "group-id",
-            subscriptionMetadata
-        ));
-    }
-
-    @Test
     public void testNewConsumerGroupEpochRecord() {
         CoordinatorRecord expectedRecord = CoordinatorRecord.record(
             new ConsumerGroupMetadataKey()
                 .setGroupId("group-id"),
             new ApiMessageAndVersion(
                 new ConsumerGroupMetadataValue()
-                    .setEpoch(10),
-                (short) 0
-            )
-        );
+                    .setEpoch(10)
+                    .setMetadataHash(10),
+                (short) 0));
 
         assertEquals(expectedRecord, newConsumerGroupEpochRecord(
             "group-id",
+            10,
             10
         ));
     }

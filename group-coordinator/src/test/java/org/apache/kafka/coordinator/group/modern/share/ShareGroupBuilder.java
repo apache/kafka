@@ -20,15 +20,19 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers;
 import org.apache.kafka.coordinator.group.modern.Assignment;
-import org.apache.kafka.coordinator.group.modern.TopicMetadata;
+import org.apache.kafka.coordinator.group.modern.ModernGroup;
+import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.TopicImage;
-import org.apache.kafka.image.TopicsImage;
+
+import com.google.common.hash.HashCode;
+import com.google.common.hash.Hashing;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 public class ShareGroupBuilder {
     private final String groupId;
@@ -36,7 +40,7 @@ public class ShareGroupBuilder {
     private int assignmentEpoch;
     private final Map<String, ShareGroupMember> members = new HashMap<>();
     private final Map<String, Assignment> assignments = new HashMap<>();
-    private Map<String, TopicMetadata> subscriptionMetadata;
+    private long metadataHash;
 
     public ShareGroupBuilder(String groupId, int groupEpoch) {
         this.groupId = groupId;
@@ -49,8 +53,8 @@ public class ShareGroupBuilder {
         return this;
     }
 
-    public ShareGroupBuilder withSubscriptionMetadata(Map<String, TopicMetadata> subscriptionMetadata) {
-        this.subscriptionMetadata = subscriptionMetadata;
+    public ShareGroupBuilder withMetadataHash(long metadataHash) {
+        this.metadataHash = metadataHash;
         return this;
     }
 
@@ -64,7 +68,7 @@ public class ShareGroupBuilder {
         return this;
     }
 
-    public List<CoordinatorRecord> build(TopicsImage topicsImage) {
+    public List<CoordinatorRecord> build(MetadataImage metadataImage) {
         List<CoordinatorRecord> records = new ArrayList<>();
 
         // Add subscription records for members.
@@ -72,29 +76,26 @@ public class ShareGroupBuilder {
             records.add(GroupCoordinatorRecordHelpers.newShareGroupMemberSubscriptionRecord(groupId, member))
         );
 
-        // Add subscription metadata.
-        if (subscriptionMetadata == null) {
-            subscriptionMetadata = new HashMap<>();
+        // Add metadata hash.
+        if (metadataHash == 0) {
+            Map<String, Long> topicHashes = new HashMap<>();
             members.forEach((memberId, member) ->
-                member.subscribedTopicNames().forEach(topicName -> {
-                    TopicImage topicImage = topicsImage.getTopic(topicName);
-                    if (topicImage != null) {
-                        subscriptionMetadata.put(topicName, new TopicMetadata(
-                            topicImage.id(),
-                            topicImage.name(),
-                            topicImage.partitions().size()
-                        ));
-                    }
-                })
+                member.subscribedTopicNames().forEach(topicName ->
+                    topicHashes.computeIfAbsent(topicName, name -> {
+                        TopicImage topicImage = metadataImage.topics().getTopic(topicName);
+                        return ModernGroup.computeTopicHash(topicImage, metadataImage.cluster());
+                    })
+                )
             );
-        }
-
-        if (!subscriptionMetadata.isEmpty()) {
-            records.add(GroupCoordinatorRecordHelpers.newShareGroupSubscriptionMetadataRecord(groupId, subscriptionMetadata));
+            if (!topicHashes.isEmpty()) {
+                metadataHash = Hashing.combineUnordered(
+                    topicHashes.values().stream().map(HashCode::fromLong).collect(Collectors.toSet())
+                ).asLong();
+            }
         }
 
         // Add group epoch record.
-        records.add(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, groupEpoch));
+        records.add(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, groupEpoch, metadataHash));
 
         // Add target assignment records.
         assignments.forEach((memberId, assignment) ->

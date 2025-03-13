@@ -27,12 +27,10 @@ import org.apache.kafka.coordinator.group.modern.Assignment;
 import org.apache.kafka.coordinator.group.modern.GroupSpecImpl;
 import org.apache.kafka.coordinator.group.modern.MemberSubscriptionAndAssignmentImpl;
 import org.apache.kafka.coordinator.group.modern.TopicIds;
-import org.apache.kafka.coordinator.group.modern.TopicMetadata;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
-import org.apache.kafka.image.TopicsImage;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -89,69 +87,38 @@ public class AssignorBenchmarkUtils {
     }
 
     /**
-     * Creates a subscription metadata map for the given topics.
-     *
-     * @param topicNames                The names of the topics.
-     * @param partitionsPerTopic        The number of partitions per topic.
-     * @return The subscription metadata map.
+     * Get the subscription topic Id set from the given metadata image.
+     * @param metadataImage The metadata image.
+     * @return
      */
-    public static Map<String, TopicMetadata> createSubscriptionMetadata(
-        List<String> topicNames,
+    public static Set<Uuid> subscriptionTopicIdSet(MetadataImage metadataImage) {
+        return metadataImage.topics().topicsById().keySet();
+    }
+
+    /**
+     * Creates a TopicsImage from the given topic names.
+     *
+     * @param allTopicNames The topic names.
+     * @param partitionsPerTopic
+     * @return A TopicsImage containing the topic ids, names and partition counts from the
+     * subscription metadata.
+     */
+    public static MetadataImage createMetadataImage(
+        List<String> allTopicNames,
         int partitionsPerTopic
     ) {
-        Map<String, TopicMetadata> subscriptionMetadata = new HashMap<>();
+        MetadataDelta delta = new MetadataDelta(MetadataImage.EMPTY);
 
-        for (String topicName : topicNames) {
-            Uuid topicId = Uuid.randomUuid();
-
-            TopicMetadata metadata = new TopicMetadata(
-                topicId,
+        for (String topicName : allTopicNames) {
+            AssignorBenchmarkUtils.addTopic(
+                delta,
+                Uuid.randomUuid(),
                 topicName,
                 partitionsPerTopic
             );
-            subscriptionMetadata.put(topicName, metadata);
         }
 
-        return subscriptionMetadata;
-    }
-
-    /**
-     * Creates a topic metadata map from the given subscription metadata.
-     *
-     * @param subscriptionMetadata  The subscription metadata.
-     * @return The topic metadata map.
-     */
-    public static Map<Uuid, TopicMetadata> createTopicMetadata(
-        Map<String, TopicMetadata> subscriptionMetadata
-    ) {
-        Map<Uuid, TopicMetadata> topicMetadata = new HashMap<>((int) (subscriptionMetadata.size() / 0.75f + 1));
-        for (Map.Entry<String, TopicMetadata> entry : subscriptionMetadata.entrySet()) {
-            topicMetadata.put(entry.getValue().id(), entry.getValue());
-        }
-        return topicMetadata;
-    }
-
-    /**
-     * Creates a TopicsImage from the given subscription metadata.
-     *
-     * @param subscriptionMetadata  The subscription metadata.
-     * @return A TopicsImage containing the topic ids, names and partition counts from the
-     *         subscription metadata.
-     */
-    public static TopicsImage createTopicsImage(Map<String, TopicMetadata> subscriptionMetadata) {
-        MetadataDelta delta = new MetadataDelta(MetadataImage.EMPTY);
-
-        for (Map.Entry<String, TopicMetadata> entry : subscriptionMetadata.entrySet()) {
-            TopicMetadata topicMetadata = entry.getValue();
-            AssignorBenchmarkUtils.addTopic(
-                delta,
-                topicMetadata.id(),
-                topicMetadata.name(),
-                topicMetadata.numPartitions()
-            );
-        }
-
-        return delta.apply(MetadataProvenance.EMPTY).topics();
+        return delta.apply(MetadataProvenance.EMPTY);
     }
 
     /**
