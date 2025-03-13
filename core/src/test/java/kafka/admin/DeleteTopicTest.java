@@ -16,7 +16,6 @@
  */
 package kafka.admin;
 
-import kafka.log.UnifiedLog;
 import kafka.server.KafkaBroker;
 
 import org.apache.kafka.clients.admin.Admin;
@@ -41,6 +40,7 @@ import org.apache.kafka.metadata.BrokerState;
 import org.apache.kafka.server.common.RequestLocal;
 import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.storage.internals.log.AppendOrigin;
+import org.apache.kafka.storage.internals.log.UnifiedLog;
 import org.apache.kafka.storage.internals.log.VerificationGuard;
 
 import java.util.ArrayList;
@@ -53,7 +53,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
-import scala.Option;
 import scala.jdk.javaapi.OptionConverters;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -248,7 +247,7 @@ public class DeleteTopicTest {
             UnifiedLog log = server.logManager().getLog(topicPartition, false).get();
             writeDups(100, 3, log);
             // force roll the segment so that cleaner can work on it
-            server.logManager().getLog(topicPartition, false).get().roll(Option.empty());
+            server.logManager().getLog(topicPartition, false).get().roll(Optional.empty());
             // wait for cleaner to clean
             server.logManager().cleaner().awaitCleaned(topicPartition, 0, 60000);
             admin.deleteTopics(List.of(DEFAULT_TOPIC)).all().get();
