@@ -173,12 +173,15 @@ public class MetadataSnapshot {
 
         Map<TopicPartition, PartitionMetadata> newMetadataByPartition = new HashMap<>(addPartitions.size());
 
-        // We want the most recent topic ID. We start with the previous ID stored for retained topics and then
-        // update with newest information from the MetadataResponse. We always take the latest state, removing existing
-        // topic IDs if the latest state contains the topic name but not a topic ID.
-        Map<String, Uuid> newTopicIds = this.topicIds.entrySet().stream()
-                .filter(entry -> shouldRetainTopic.test(entry.getKey()))
-                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+        Map<String, Uuid> newTopicIds = new HashMap<>(this.topicIds.size());
+
+        for (Map.Entry<TopicPartition, PartitionMetadata> entry : metadataByPartition.entrySet()) {
+            if (shouldRetainTopic.test(entry.getKey().topic())) {
+                newMetadataByPartition.put(entry.getKey(), entry.getValue());
+                if (this.topicIds.containsKey(entry.getKey().topic()))
+                    newTopicIds.putIfAbsent(entry.getKey().topic(), this.topicIds.get(entry.getKey().topic()));
+            }
+        }
 
         for (PartitionMetadata partition : addPartitions) {
             newMetadataByPartition.put(partition.topicPartition, partition);
@@ -188,11 +191,6 @@ public class MetadataSnapshot {
             else
                 // Remove if the latest metadata does not have a topic ID
                 newTopicIds.remove(partition.topic());
-        }
-        for (Map.Entry<TopicPartition, PartitionMetadata> entry : metadataByPartition.entrySet()) {
-            if (shouldRetainTopic.test(entry.getKey().topic())) {
-                newMetadataByPartition.putIfAbsent(entry.getKey(), entry.getValue());
-            }
         }
 
         Set<String> newUnauthorizedTopics = fillSet(addUnauthorizedTopics, unauthorizedTopics, shouldRetainTopic);
