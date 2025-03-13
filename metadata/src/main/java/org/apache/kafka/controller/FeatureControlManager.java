@@ -54,7 +54,6 @@ public class FeatureControlManager {
         private LogContext logContext = null;
         private SnapshotRegistry snapshotRegistry = null;
         private QuorumFeatures quorumFeatures = null;
-        private MetadataVersion metadataVersion = MetadataVersion.latestProduction();
         private ClusterFeatureSupportDescriber clusterSupportDescriber = new ClusterFeatureSupportDescriber() {
             @Override
             public Iterator<Entry<Integer, Map<String, VersionRange>>> brokerSupported() {
@@ -82,11 +81,6 @@ public class FeatureControlManager {
             return this;
         }
 
-        Builder setMetadataVersion(MetadataVersion metadataVersion) {
-            this.metadataVersion = metadataVersion;
-            return this;
-        }
-
         Builder setClusterFeatureSupportDescriber(ClusterFeatureSupportDescriber clusterSupportDescriber) {
             this.clusterSupportDescriber = clusterSupportDescriber;
             return this;
@@ -106,7 +100,6 @@ public class FeatureControlManager {
                 logContext,
                 quorumFeatures,
                 snapshotRegistry,
-                metadataVersion,
                 clusterSupportDescriber
             );
         }
@@ -127,7 +120,7 @@ public class FeatureControlManager {
     /**
      * The current metadata version
      */
-    private final TimelineObject<MetadataVersion> metadataVersion;
+    private final TimelineObject<Optional<MetadataVersion>> metadataVersion;
 
     /**
      * Gives information about the supported versions in the cluster.
@@ -138,13 +131,12 @@ public class FeatureControlManager {
         LogContext logContext,
         QuorumFeatures quorumFeatures,
         SnapshotRegistry snapshotRegistry,
-        MetadataVersion metadataVersion,
         ClusterFeatureSupportDescriber clusterSupportDescriber
     ) {
         this.log = logContext.logger(FeatureControlManager.class);
         this.quorumFeatures = quorumFeatures;
         this.finalizedVersions = new TimelineHashMap<>(snapshotRegistry, 0);
-        this.metadataVersion = new TimelineObject<>(snapshotRegistry, metadataVersion);
+        this.metadataVersion = new TimelineObject<>(snapshotRegistry, Optional.empty());
         this.clusterSupportDescriber = clusterSupportDescriber;
     }
 
@@ -157,7 +149,7 @@ public class FeatureControlManager {
                 BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
 
         Map<String, Short> proposedUpdatedVersions = new HashMap<>(finalizedVersions);
-        proposedUpdatedVersions.put(MetadataVersion.FEATURE_NAME, metadataVersion.get().featureLevel());
+        proposedUpdatedVersions.put(MetadataVersion.FEATURE_NAME, metadataVersionOrThrow().featureLevel());
         proposedUpdatedVersions.putAll(updates);
 
         for (Entry<String, Short> entry : updates.entrySet()) {
@@ -175,8 +167,17 @@ public class FeatureControlManager {
         }
     }
 
-    MetadataVersion metadataVersion() {
+    Optional<MetadataVersion> metadataVersion() {
         return metadataVersion.get();
+    }
+
+    MetadataVersion metadataVersionOrThrow() {
+        return metadataVersionOrThrow(SnapshotRegistry.LATEST_EPOCH);
+    }
+
+    private MetadataVersion metadataVersionOrThrow(long epoch) {
+        return metadataVersion.get(epoch).orElseThrow(() ->
+            new IllegalStateException("Unknown metadata version for FeatureControlManager"));
     }
 
     private ApiError updateFeature(
@@ -193,7 +194,7 @@ public class FeatureControlManager {
 
         final short currentVersion;
         if (featureName.equals(MetadataVersion.FEATURE_NAME)) {
-            currentVersion = metadataVersion.get().featureLevel();
+            currentVersion = metadataVersionOrThrow().featureLevel();
         } else {
             currentVersion = finalizedVersions.getOrDefault(featureName, (short) 0);
         }
@@ -262,7 +263,7 @@ public class FeatureControlManager {
         String registrationSuffix = "";
         HashSet<Integer> foundControllers = new HashSet<>();
         foundControllers.add(quorumFeatures.nodeId());
-        if (metadataVersion.get().isControllerRegistrationSupported()) {
+        if (metadataVersionOrThrow().isControllerRegistrationSupported()) {
             for (Iterator<Entry<Integer, Map<String, VersionRange>>> iter =
                  clusterSupportDescriber.controllerSupported();
                  iter.hasNext(); ) {
@@ -309,7 +310,7 @@ public class FeatureControlManager {
         boolean allowUnsafeDowngrade,
         Consumer<ApiMessageAndVersion> recordConsumer
     ) {
-        MetadataVersion currentVersion = metadataVersion();
+        MetadataVersion currentVersion = metadataVersionOrThrow();
         final MetadataVersion newVersion;
         try {
             newVersion = MetadataVersion.fromFeatureLevel(newVersionLevel);
@@ -352,7 +353,7 @@ public class FeatureControlManager {
 
     FinalizedControllerFeatures finalizedFeatures(long epoch) {
         Map<String, Short> features = new HashMap<>();
-        features.put(MetadataVersion.FEATURE_NAME, metadataVersion.get(epoch).featureLevel());
+        features.put(MetadataVersion.FEATURE_NAME, metadataVersionOrThrow(epoch).featureLevel());
         for (Entry<String, Short> entry : finalizedVersions.entrySet(epoch)) {
             features.put(entry.getKey(), entry.getValue());
         }
@@ -367,7 +368,7 @@ public class FeatureControlManager {
         }
         if (record.name().equals(MetadataVersion.FEATURE_NAME)) {
             MetadataVersion mv = MetadataVersion.fromFeatureLevel(record.featureLevel());
-            metadataVersion.set(mv);
+            metadataVersion.set(Optional.of(mv));
             log.info("Replayed a FeatureLevelRecord setting metadata.version to {}", mv);
         } else {
             if (record.featureLevel() == 0) {
