@@ -25,7 +25,6 @@ import kafka.log._
 import kafka.server._
 import kafka.utils._
 import org.apache.kafka.common.config.TopicConfig
-import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.record.{MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.{FetchRequest, LeaderAndIsrRequest}
 import org.apache.kafka.common.utils.Utils
@@ -395,7 +394,6 @@ class PartitionLockTest extends Logging {
 
     while (fetchOffset < numRecords) {
       val fetchParams = new FetchParams(
-        ApiKeys.FETCH.latestVersion,
         followerId,
         1,
         0L,
