@@ -493,7 +493,7 @@ final class KafkaMetadataLogTest {
   def testStartupWithInvalidSnapshotState(): Unit = {
     // Initialize an empty log at offset 100.
     var log = buildMetadataLog(tempDir, mockTime)
-    log.log.truncateFullyAndStartAt(newOffset = 100)
+    log.log.truncateFullyAndStartAt(100, Optional.empty)
     log.close()
 
     val metadataDir = metadataLogDir(tempDir)
@@ -513,7 +513,7 @@ final class KafkaMetadataLogTest {
     // Snapshot at offset 100 should be fine.
     writeEmptySnapshot(metadataDir, new OffsetAndEpoch(100, 1))
     log = buildMetadataLog(tempDir, mockTime)
-    log.log.truncateFullyAndStartAt(newOffset = 200)
+    log.log.truncateFullyAndStartAt(200, Optional.empty)
     log.close()
 
     // Snapshots at higher offsets are also fine. In this case, the
@@ -527,7 +527,7 @@ final class KafkaMetadataLogTest {
   def testSnapshotDeletionWithInvalidSnapshotState(): Unit = {
     // Initialize an empty log at offset 100.
     val log = buildMetadataLog(tempDir, mockTime)
-    log.log.truncateFullyAndStartAt(newOffset = 100)
+    log.log.truncateFullyAndStartAt(100, Optional.empty)
     log.close()
 
     val metadataDir = metadataLogDir(tempDir)
