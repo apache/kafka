@@ -46,8 +46,6 @@
         "about": "The partitions to fetch.", "fields": [
         { "name": "PartitionIndex", "type": "int32", "versions": "0+",
           "about": "The partition index." },
-        { "name": "PartitionMaxBytes", "type": "int32", "versions": "0+",
-          "about": "TO BE REMOVED. The maximum bytes to fetch from this partition. 0 when only acknowledgement with no fetching is required. See KIP-74 for cases where this limit may not be honored." },
         { "name": "AcknowledgementBatches", "type": "[]AcknowledgementBatch", "versions": "0+",
           "about": "Record batches to acknowledge.", "fields": [
           { "name": "FirstOffset", "type": "int64", "versions": "0+",

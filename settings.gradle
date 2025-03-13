@@ -64,6 +64,7 @@ buildCache {
 }
 
 include 'clients',
+    'clients:clients-integration-tests',
     'connect:api',
     'connect:basic-auth-extension',
     'connect:file',

@@ -32,7 +32,7 @@ import java.util.Optional;
  *
  * @param name               The name of the topic.
  * @param numberOfPartitions The number of partitions for the topic.
- * @param replicationFactor  The replication factor of the topic. If undefiend, the broker default is used.
+ * @param replicationFactor  The replication factor of the topic. If undefined, the broker default is used.
  * @param topicConfigs       The topic configurations of the topic.
  */
 public record ConfiguredInternalTopic(String name,

@@ -162,7 +162,7 @@ Deletion of requested consumer groups ('my-group', 'my-other-group') was success
   <p>
   To reset offsets of a consumer group, "--reset-offsets" option can be used.
   This option supports one consumer group at the time. It requires defining following scopes: --all-topics or --topic. One scope must be selected, unless you use '--from-file' scenario. Also, first make sure that the consumer instances are inactive.
-  See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-122%3A+Add+Reset+Consumer+Group+Offsets+tooling">KIP-122</a> for more details.
+  See <a href="https://cwiki.apache.org/confluence/x/_iEIB">KIP-122</a> for more details.
 
   <p>
   It has 3 execution options:
@@ -468,7 +468,7 @@ Updated config for entity: client-id 'clientA'.</code></pre>
 
   It is possible to set default quotas for each (user, client-id), user or client-id group by specifying <i>--entity-default</i> option instead of <i>--entity-name</i>.
   <p>
-  Configure default client-id quota for user=userA:
+  Configure default client-id quota for user=user1:
   <pre><code class="language-bash">$ bin/kafka-configs.sh --bootstrap-server localhost:9092 --alter --add-config 'producer_byte_rate=1024,consumer_byte_rate=2048,request_percentage=200' --entity-type users --entity-name user1 --entity-type clients --entity-default
 Updated config for entity: user-principal 'user1', default client-id.</code></pre>
 
@@ -489,6 +489,13 @@ Configs for user-principal 'user1' are producer_byte_rate=1024,consumer_byte_rat
   Describe quota for a given client-id:
   <pre><code class="language-bash">$ bin/kafka-configs.sh --bootstrap-server localhost:9092 --describe --entity-type clients --entity-name clientA
 Configs for client-id 'clientA' are producer_byte_rate=1024,consumer_byte_rate=2048,request_percentage=200</code></pre>
+  Describe default quota for user:
+  <pre><code class="language-bash">$ bin/kafka-configs.sh --bootstrap-server localhost:9092 --describe --entity-type users --entity-default
+Quota configs for the default user-principal are consumer_byte_rate=2048.0, request_percentage=200.0, producer_byte_rate=1024.0</code></pre>
+  Describe default quota for client-id:
+  <pre><code class="language-bash">$ bin/kafka-configs.sh --bootstrap-server localhost:9092 --describe --entity-type clients --entity-default
+Quota configs for the default client-id are consumer_byte_rate=2048.0, request_percentage=200.0, producer_byte_rate=1024.0</code></pre>
+
   If entity name is not specified, all entities of the specified type are described. For example, describe all users:
   <pre><code class="language-bash">$ bin/kafka-configs.sh --bootstrap-server localhost:9092 --describe --entity-type users
 Configs for user-principal 'user1' are producer_byte_rate=1024,consumer_byte_rate=2048,request_percentage=200
@@ -590,7 +597,7 @@ primary->secondary.topics = foobar-topic, quux-.*</code></pre>
   <h4 class="anchor-heading"><a id="georeplication-mirrormaker" class="anchor-link"></a><a href="#georeplication-mirrormaker">Configuring Geo-Replication</a></h4>
 
   <p>
-    The following sections describe how to configure and run a dedicated MirrorMaker cluster. If you want to run MirrorMaker within an existing Kafka Connect cluster or other supported deployment setups, please refer to <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-382%3A+MirrorMaker+2.0">KIP-382: MirrorMaker 2.0</a> and be aware that the names of configuration settings may vary between deployment modes.
+    The following sections describe how to configure and run a dedicated MirrorMaker cluster. If you want to run MirrorMaker within an existing Kafka Connect cluster or other supported deployment setups, please refer to <a href="https://cwiki.apache.org/confluence/x/ooOzBQ">KIP-382: MirrorMaker 2.0</a> and be aware that the names of configuration settings may vary between deployment modes.
   </p>
 
   <p>
@@ -600,7 +607,7 @@ primary->secondary.topics = foobar-topic, quux-.*</code></pre>
   <ul>
     <li><a href="https://github.com/apache/kafka/blob/trunk/connect/mirror/src/main/java/org/apache/kafka/connect/mirror/MirrorMakerConfig.java">MirrorMakerConfig</a>, <a href="https://github.com/apache/kafka/blob/trunk/connect/mirror/src/main/java/org/apache/kafka/connect/mirror/MirrorConnectorConfig.java">MirrorConnectorConfig</a></li>
     <li><a href="https://github.com/apache/kafka/blob/trunk/connect/mirror/src/main/java/org/apache/kafka/connect/mirror/DefaultTopicFilter.java">DefaultTopicFilter</a> for topics, <a href="https://github.com/apache/kafka/blob/trunk/connect/mirror/src/main/java/org/apache/kafka/connect/mirror/DefaultGroupFilter.java">DefaultGroupFilter</a> for consumer groups</li>
-    <li>Example configuration settings in <a href="https://github.com/apache/kafka/blob/trunk/config/connect-mirror-maker.properties">connect-mirror-maker.properties</a>, <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-382%3A+MirrorMaker+2.0">KIP-382: MirrorMaker 2.0</a></li>
+    <li>Example configuration settings in <a href="https://github.com/apache/kafka/blob/trunk/config/connect-mirror-maker.properties">connect-mirror-maker.properties</a>, <a href="https://cwiki.apache.org/confluence/x/ooOzBQ">KIP-382: MirrorMaker 2.0</a></li>
   </ul>
 
   <h5 class="anchor-heading"><a id="georeplication-config-syntax" class="anchor-link"></a><a href="#georeplication-config-syntax">Configuration File Syntax</a></h5>
@@ -695,7 +702,7 @@ us-east.admin.bootstrap.servers = broker8-secondary:9092</code></pre>
   </p>
 
   <p>
-    In either case, it is also necessary to enable intra-cluster communication between the MirrorMaker nodes, as described in  <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-710%3A+Full+support+for+distributed+mode+in+dedicated+MirrorMaker+2.0+clusters">KIP-710</a>. To do this, the <code>dedicated.mode.enable.internal.rest</code> property must be set to <code>true</code>. In addition, many of the REST-related  <a href="https://kafka.apache.org/documentation/#connectconfigs">configuration properties available for Kafka Connect</a> can be specified the MirrorMaker config. For example, to enable intra-cluster communication in MirrorMaker cluster with each node listening on port 8080 of their local machine, the following should be added to the MirrorMaker config file:
+    In either case, it is also necessary to enable intra-cluster communication between the MirrorMaker nodes, as described in  <a href="https://cwiki.apache.org/confluence/x/4g5RCg">KIP-710</a>. To do this, the <code>dedicated.mode.enable.internal.rest</code> property must be set to <code>true</code>. In addition, many of the REST-related  <a href="https://kafka.apache.org/documentation/#connectconfigs">configuration properties available for Kafka Connect</a> can be specified the MirrorMaker config. For example, to enable intra-cluster communication in MirrorMaker cluster with each node listening on port 8080 of their local machine, the following should be added to the MirrorMaker config file:
   </p>
 
 <pre><code class="language-text">dedicated.mode.enable.internal.rest = true
@@ -1129,8 +1136,8 @@ checkpoint-latency-ms-avg</code></pre>
   </p>
 
   <ul>
-    <li>Use <a href="#security_authz">prefix ACLs</a> (cf. <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-290%3A+Support+for+Prefixed+ACLs">KIP-290</a>) to enforce a common prefix for topic names. For example, team A may only be permitted to create topics whose names start with <code>payments.teamA.</code>.</li>
-    <li>Define a custom <code>CreateTopicPolicy</code> (cf. <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-108%3A+Create+Topic+Policy">KIP-108</a> and the setting <a href="#brokerconfigs_create.topic.policy.class.name">create.topic.policy.class.name</a>) to enforce strict naming patterns. These policies provide the most flexibility and can cover complex patterns and rules to match an organization's needs.</li>
+    <li>Use <a href="#security_authz">prefix ACLs</a> (cf. <a href="https://cwiki.apache.org/confluence/x/QpvLB">KIP-290</a>) to enforce a common prefix for topic names. For example, team A may only be permitted to create topics whose names start with <code>payments.teamA.</code>.</li>
+    <li>Define a custom <code>CreateTopicPolicy</code> (cf. <a href="https://cwiki.apache.org/confluence/x/Iw8IB">KIP-108</a> and the setting <a href="#brokerconfigs_create.topic.policy.class.name">create.topic.policy.class.name</a>) to enforce strict naming patterns. These policies provide the most flexibility and can cover complex patterns and rules to match an organization's needs.</li>
     <li>Disable topic creation for normal users by denying it with an ACL, and then rely on an external process to create topics on behalf of users (e.g., scripting or your favorite automation toolkit).</li>
     <li>It may also be useful to disable the Kafka feature to auto-create topics on demand by setting <code>auto.create.topics.enable=false</code> in the broker configuration. Note that you should not rely solely on this option.</li>
   </ul>
@@ -1155,7 +1162,7 @@ Security settings for Kafka fall into three main categories, which are similar t
   <ol>
     <li><strong>Encryption</strong> of data transferred between Kafka brokers and Kafka clients, between brokers, and between brokers and other optional tools.</li>
     <li><strong>Authentication</strong> of connections from Kafka clients and applications to Kafka brokers, as well as connections between Kafka brokers.</li>
-    <li><strong>Authorization</strong> of client operations such as creating, deleting, and altering the configuration of topics; writing events to or reading events from a topic; creating and deleting ACLs. Administrators can also define custom policies to put in place additional restrictions, such as a <code>CreateTopicPolicy</code> and <code>AlterConfigPolicy</code> (see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-108%3A+Create+Topic+Policy">KIP-108</a> and the settings <a href="#brokerconfigs_create.topic.policy.class.name">create.topic.policy.class.name</a>, <a href="#brokerconfigs_alter.config.policy.class.name">alter.config.policy.class.name</a>).</li>
+    <li><strong>Authorization</strong> of client operations such as creating, deleting, and altering the configuration of topics; writing events to or reading events from a topic; creating and deleting ACLs. Administrators can also define custom policies to put in place additional restrictions, such as a <code>CreateTopicPolicy</code> and <code>AlterConfigPolicy</code> (see <a href="https://cwiki.apache.org/confluence/x/Iw8IB">KIP-108</a> and the settings <a href="#brokerconfigs_create.topic.policy.class.name">create.topic.policy.class.name</a>, <a href="#brokerconfigs_alter.config.policy.class.name">alter.config.policy.class.name</a>).</li>
   </ol>
 
   <p>
@@ -1184,7 +1191,7 @@ $ bin/kafka-acls.sh \
   </p>
 
   <p>
-  <strong>Client quotas:</strong> Kafka supports different types of (per-user principal) client quotas. Because a client's quotas apply irrespective of which topics the client is writing to or reading from, they are a convenient and effective tool to allocate resources in a multi-tenant cluster. <a href="#design_quotascpu">Request rate quotas</a>, for example, help to limit a user's impact on broker CPU usage by limiting the time a broker spends on the <a href="/protocol.html">request handling path</a> for that user, after which throttling kicks in. In many situations, isolating users with request rate quotas has a bigger impact in multi-tenant clusters than setting incoming/outgoing network bandwidth quotas, because excessive broker CPU usage for processing requests reduces the effective bandwidth the broker can serve. Furthermore, administrators can also define quotas on topic operations—such as create, delete, and alter—to prevent Kafka clusters from being overwhelmed by highly concurrent topic operations (see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-599%3A+Throttle+Create+Topic%2C+Create+Partition+and+Delete+Topic+Operations">KIP-599</a> and the quota type <code>controller_mutation_rate</code>).
+  <strong>Client quotas:</strong> Kafka supports different types of (per-user principal) client quotas. Because a client's quotas apply irrespective of which topics the client is writing to or reading from, they are a convenient and effective tool to allocate resources in a multi-tenant cluster. <a href="#design_quotascpu">Request rate quotas</a>, for example, help to limit a user's impact on broker CPU usage by limiting the time a broker spends on the <a href="/protocol.html">request handling path</a> for that user, after which throttling kicks in. In many situations, isolating users with request rate quotas has a bigger impact in multi-tenant clusters than setting incoming/outgoing network bandwidth quotas, because excessive broker CPU usage for processing requests reduces the effective bandwidth the broker can serve. Furthermore, administrators can also define quotas on topic operations—such as create, delete, and alter—to prevent Kafka clusters from being overwhelmed by highly concurrent topic operations (see <a href="https://cwiki.apache.org/confluence/x/6DLcC">KIP-599</a> and the quota type <code>controller_mutation_rate</code>).
   </p>
 
   <p>
@@ -1343,13 +1350,13 @@ NodeId	DirectoryId           	LogEndOffset	Lag	LastFetchTimestamp	LastCaughtUpTi
 
   <p>Check and wait until the <code>Lag</code> is small for a majority of the controllers. If the leader's end offset is not increasing, you can wait until the lag is 0 for a majority; otherwise, you can pick the latest leader end offset and wait until all replicas have reached it. Check and wait until the <code>LastFetchTimestamp</code> and <code>LastCaughtUpTimestamp</code> are close to each other for the majority of the controllers. At this point it is safer to format the controller's metadata log directory. This can be done by running the kafka-storage.sh command.</p>
 
-  <pre><code class="language-bash">$ bin/kafka-storage.sh format --cluster-id uuid --config server_properties</code></pre>
+  <pre><code class="language-bash">$ bin/kafka-storage.sh format --cluster-id uuid --config config/server.properties</code></pre>
 
   <p>It is possible for the <code>bin/kafka-storage.sh format</code> command above to fail with a message like <code>Log directory ... is already formatted</code>. This can happen when combined mode is used and only the metadata log directory was lost but not the others. In that case and only in that case, can you run the <code>bin/kafka-storage.sh format</code> command with the <code>--ignore-formatted</code> option.</p>
 
   <p>Start the KRaft controller after formatting the log directories.</p>
 
-  <pre><code class="language-bash">$ bin/kafka-server-start.sh server_properties</code></pre>
+  <pre><code class="language-bash">$ bin/kafka-server-start.sh config/server.properties</code></pre>
 
   <h3 class="anchor-heading"><a id="monitoring" class="anchor-link"></a><a href="#monitoring">6.7 Monitoring</a></h3>
 
@@ -3827,22 +3834,22 @@ controller.listener.names=CONTROLLER</code></pre>
   <h5 class="anchor-heading"><a id="kraft_storage_standalone" class="anchor-link"></a><a href="#kraft_storage_standalone">Bootstrap a Standalone Controller</a></h5>
   The recommended method for creating a new KRaft controller cluster is to bootstrap it with one voter and dynamically <a href="#kraft_reconfig_add">add the rest of the controllers</a>. Bootstrapping the first controller can be done with the following CLI command:
 
-  <pre><code class="language-bash">$ bin/kafka-storage.sh format --cluster-id &lt;cluster-id&gt; --standalone --config controller.properties</code></pre>
+  <pre><code class="language-bash">$ bin/kafka-storage.sh format --cluster-id &lt;CLUSTER_ID&gt; --standalone --config config/controller.properties</code></pre>
 
   This command will 1) create a meta.properties file in metadata.log.dir with a randomly generated directory.id, 2) create a snapshot at 00000000000000000000-0000000000.checkpoint with the necessary control records (KRaftVersionRecord and VotersRecord) to make this Kafka node the only voter for the quorum.
 
   <h5 class="anchor-heading"><a id="kraft_storage_voters" class="anchor-link"></a><a href="#kraft_storage_voters">Bootstrap with Multiple Controllers</a></h5>
   The KRaft cluster metadata partition can also be bootstrapped with more than one voter. This can be done by using the --initial-controllers flag:
 
-  <pre><code class="language-bash">cluster-id=$(bin/kafka-storage.sh random-uuid)
-controller-0-uuid=$(bin/kafka-storage.sh random-uuid)
-controller-1-uuid=$(bin/kafka-storage.sh random-uuid)
-controller-2-uuid=$(bin/kafka-storage.sh random-uuid)
+  <pre><code class="language-bash">CLUSTER_ID="$(bin/kafka-storage.sh random-uuid)"
+CONTROLLER_0_UUID="$(bin/kafka-storage.sh random-uuid)"
+CONTROLLER_1_UUID="$(bin/kafka-storage.sh random-uuid)"
+CONTROLLER_2_UUID="$(bin/kafka-storage.sh random-uuid)"
 
 # In each controller execute
-bin/kafka-storage.sh format --cluster-id ${cluster-id} \
-                     --initial-controllers "0@controller-0:1234:${controller-0-uuid},1@controller-1:1234:${controller-1-uuid},2@controller-2:1234:${controller-2-uuid}" \
-                     --config controller.properties</code></pre>
+bin/kafka-storage.sh format --cluster-id ${CLUSTER_ID} \
+                     --initial-controllers "0@controller-0:1234:${CONTROLLER_0_UUID},1@controller-1:1234:${CONTROLLER_1_UUID},2@controller-2:1234:${CONTROLLER_2_UUID}" \
+                     --config config/controller.properties</code></pre>
 
 This command is similar to the standalone version but the snapshot at 00000000000000000000-0000000000.checkpoint will instead contain a VotersRecord that includes information for all of the controllers specified in --initial-controllers. It is important that the value of this flag is the same in all of the controllers with the same cluster id.
 
@@ -3851,7 +3858,7 @@ In the replica description 0@controller-0:1234:3Db5QLSqSZieL3rJBUUegA, 0 is the 
   <h5 class="anchor-heading"><a id="kraft_storage_observers" class="anchor-link"></a><a href="#kraft_storage_observers">Formatting Brokers and New Controllers</a></h5>
   When provisioning new broker and controller nodes that we want to add to an existing Kafka cluster, use the <code>kafka-storage.sh format</code> command with the --no-initial-controllers flag.
 
-  <pre><code class="language-bash">$ bin/kafka-storage.sh format --cluster-id &lt;cluster-id&gt; --config server.properties --no-initial-controllers</code></pre>
+  <pre><code class="language-bash">$ bin/kafka-storage.sh format --cluster-id &lt;CLUSTER_ID&gt; --config config/server.properties --no-initial-controllers</code></pre>
 
   <h4 class="anchor-heading"><a id="kraft_reconfig" class="anchor-link"></a><a href="#kraft_reconfig">Controller membership changes</a></h4>
 
@@ -3917,10 +3924,10 @@ Feature: metadata.version       SupportedMinVersion: 3.3-IV3    SupportedMaxVers
   After starting the controller, the replication to the new controller can be monitored using the <code>bin/kafka-metadata-quorum.sh describe --replication</code> command. Once the new controller has caught up to the active controller, it can be added to the cluster using the <code>bin/kafka-metadata-quorum.sh add-controller</code> command.
 
   When using broker endpoints use the --bootstrap-server flag:
-  <pre><code class="language-bash">$ bin/kafka-metadata-quorum.sh --command-config controller.properties --bootstrap-server localhost:9092 add-controller</code></pre>
+  <pre><code class="language-bash">$ bin/kafka-metadata-quorum.sh --command-config config/controller.properties --bootstrap-server localhost:9092 add-controller</code></pre>
 
   When using controller endpoints use the --bootstrap-controller flag:
-  <pre><code class="language-bash">$ bin/kafka-metadata-quorum.sh --command-config controller.properties --bootstrap-controller localhost:9092 add-controller</code></pre>
+  <pre><code class="language-bash">$ bin/kafka-metadata-quorum.sh --command-config config/controller.properties --bootstrap-controller localhost:9093 add-controller</code></pre>
 
   <h5 class="anchor-heading"><a id="kraft_reconfig_remove" class="anchor-link"></a><a href="#kraft_reconfig_remove">Remove Controller</a></h5>
   If the dynamic controller cluster already exists, it can be shrunk using the <code>bin/kafka-metadata-quorum.sh remove-controller</code> command. Until KIP-996: Pre-vote has been implemented and released, it is recommended to shutdown the controller that will be removed before running the remove-controller command.
@@ -3965,7 +3972,7 @@ CurrentObservers:       [{"id": 0, "directoryId": "3Db5QLSqSZieL3rJBUUegA"},
 
   <p>The kafka-metadata-shell.sh tool can be used to interactively inspect the state of the cluster metadata partition:</p>
 
-  <pre><code class="language-bash">$ bin/kafka-metadata-shell.sh --snapshot metadata_log_dir/__cluster_metadata-0/00000000000000000000.log
+  <pre><code class="language-bash">$ bin/kafka-metadata-shell.sh --snapshot metadata_log_dir/__cluster_metadata-0/00000000000000007228-0000000001.checkpoint
 &gt;&gt; ls /
 brokers  local  metadataQuorum  topicIds  topics
 &gt;&gt; ls /topics
@@ -3983,7 +3990,7 @@ foo
   "partitionEpoch" : 0
 }
 &gt;&gt; exit</code></pre>
-
+  Note: <code>00000000000000000000-0000000000.checkpoint</code> does not contain cluster metadata. Use a valid snapshot file when examining metadata with the <code>kafka-metadata-shell.sh</code> tool.
   <h4 class="anchor-heading"><a id="kraft_deployment" class="anchor-link"></a><a href="#kraft_deployment">Deploying Considerations</a></h4>
 
   <ul>
@@ -4007,7 +4014,7 @@ foo
 <p>In the tiered storage approach, Kafka cluster is configured with two tiers of storage - local and remote.
   The local tier is the same as the current Kafka that uses the local disks on the Kafka brokers to store the log segments.
   The new remote tier uses external storage systems, such as HDFS or S3, to store the completed log segments.
-  Please check <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-405%3A+Kafka+Tiered+Storage">KIP-405</a> for more information.
+  Please check <a href="https://cwiki.apache.org/confluence/x/KJDQBQ">KIP-405</a> for more information.
 </p>
 
 <h4 class="anchor-heading"><a id="tiered_storage_config" class="anchor-link"></a><a href="#tiered_storage_config">Configuration</a></h4>
@@ -4159,14 +4166,14 @@ $ bin/kafka-topics.sh --create --topic tieredTopic --bootstrap-server localhost:
   <li>No support for log segments missing producer snapshot file. It can happen when topic is created before v2.8.0.</li>
 </ul>
 
-<p>For more information, please check <a href="https://cwiki.apache.org/confluence/display/KAFKA/Kafka+Tiered+Storage+GA+Release+Notes">Kafka Tiered Storage GA Release Notes</a>.
+<p>For more information, please check <a href="https://cwiki.apache.org/confluence/x/9xDOEg">Kafka Tiered Storage GA Release Notes</a>.
 </p>
 
   <h3 class="anchor-heading"><a id="consumer_rebalance_protocol" class="anchor-link"></a><a href="#consumer_rebalance_protocol">6.10 Consumer Rebalance Protocol</a></h3>
 
   <h4 class="anchor-heading"><a id="consumer_rebalance_protocol_overview" class="anchor-link"></a><a href="#consumer_rebalance_protocol_overview">Overview</a></h4>
 
-  <p>Starting from Apache Kafka 4.0, the Next Generation of the Consumer Rebalance Protocol (<a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-848%3A+The+Next+Generation+of+the+Consumer+Rebalance+Protocol">KIP-848</a>)
+  <p>Starting from Apache Kafka 4.0, the Next Generation of the Consumer Rebalance Protocol (<a href="https://cwiki.apache.org/confluence/x/HhD1D">KIP-848</a>)
     is Generally Available (GA). It improves the scalability of consumer groups while simplifying consumers. It also decreases rebalance times, thanks to
     its fully incremental design, which no longer relies on a global synchronization barrier.</p>
 
@@ -4187,7 +4194,7 @@ $ bin/kafka-topics.sh --create --topic tieredTopic --bootstrap-server localhost:
   <p>The assignment strategy is also controlled by the server. The <code>group.consumer.assignors</code> configuration can be used to specify the list of available
     assignors for <code>Consumer</code> groups. By default, the <code>uniform</code> assignor and the <code>range</code> assignor are configured. The first assignor
     in the list is used by default unless the Consumer selects a different one. It is also possible to implement custom assignment strategies on the server side
-    by implementing the <code>org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor</code> interface and specifying the full class name in the configuration.</p>
+    by implementing the <code>ConsumerGroupPartitionAssignor</code> interface and specifying the full class name in the configuration.</p>
 
   <h4 class="anchor-heading"><a id="consumer_rebalance_protocol_consumer" class="anchor-link"></a><a href="#consumer_rebalance_protocol_consumer">Consumer</a></h4>
 
@@ -4202,7 +4209,7 @@ $ bin/kafka-topics.sh --create --topic tieredTopic --bootstrap-server localhost:
     on the server side.</p>
 
   <p>New metrics have been added to the Consumer when using the new rebalance protocol, mainly providing visibility over the improved threading model.
-    See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-1068%3A+New+metrics+for+the+new+KafkaConsumer">New Consumer Metrics</a>.</p>
+    See <a href="https://cwiki.apache.org/confluence/x/lQ_TEg">New Consumer Metrics</a>.</p>
 
   <p>When the new rebalance protocol is enabled, the following configurations and APIs are no longer usable:</p>
   <ul>
@@ -4241,7 +4248,7 @@ $ bin/kafka-topics.sh --create --topic tieredTopic --bootstrap-server localhost:
 
 <h4 class="anchor-heading"><a id="transaction_protocol_overview" class="anchor-link"></a><a href="#transaction_protocol_overview">Overview</a></h4>
 
-<p>Starting from Apache Kafka 4.0, Transactions Server Side Defense (<a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-890%3A+Transactions+Server-Side+Defense">KIP-890</a>)
+<p>Starting from Apache Kafka 4.0, Transactions Server Side Defense (<a href="https://cwiki.apache.org/confluence/x/B40ODg">KIP-890</a>)
   brings a strengthened transactional protocol. When enabled and using 4.0 producer clients, the producer epoch is bumped on every transaction to ensure every transaction includes the intended messages and duplicates are not
   written as part of the next transaction.</p>
 
@@ -4279,7 +4286,7 @@ $ bin/kafka-topics.sh --create --topic tieredTopic --bootstrap-server localhost:
 
   <h4 class="anchor-heading"><a id="eligible_leader_replicas_overview" class="anchor-link"></a><a href="#eligible_leader_replicas_overview">Overview</a></h4>
 
-  <p>Starting from Apache Kafka 4.0, Eligible Leader Replicas (<a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-966%3A+Eligible+Leader+Replicas">KIP-966 Part 1</a>)
+  <p>Starting from Apache Kafka 4.0, Eligible Leader Replicas (<a href="https://cwiki.apache.org/confluence/x/mpOzDw">KIP-966 Part 1</a>)
     is available for the users to an improvement to Kafka replication. As the "strict min ISR" rule has been generally applied, which means the high watermark for the data partition can't advance
     if the size of the ISR is smaller than the min ISR(<code>min.insync.replicas</code>), it makes some replicas that are not in the ISR safe to become the leader. The KRaft controller
     stores such replicas in the PartitionRecord field called <code>Eligible Leader Replicas</code>. During the leader election, the controller will select the leaders
