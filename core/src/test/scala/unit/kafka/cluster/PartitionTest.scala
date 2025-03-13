@@ -18,7 +18,7 @@ package kafka.cluster
 
 import java.net.InetAddress
 import com.yammer.metrics.core.Metric
-import kafka.log._
+import kafka.log.LogManager
 import kafka.server._
 import kafka.utils._
 import org.apache.kafka.common.errors.{ApiException, FencedLeaderEpochException, InconsistentTopicIdException, InvalidTxnStateException, NotLeaderOrFollowerException, OffsetNotAvailableException, OffsetOutOfRangeException, UnknownLeaderEpochException}
@@ -60,7 +60,7 @@ import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams, Unexpec
 import org.apache.kafka.server.util.{KafkaScheduler, MockTime}
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpoints
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
-import org.apache.kafka.storage.internals.log.{AppendOrigin, CleanerConfig, EpochEntry, LocalLog, LogAppendInfo, LogDirFailureChannel, LogLoader, LogOffsetMetadata, LogReadInfo, LogSegments, LogStartOffsetIncrementReason, ProducerStateManager, ProducerStateManagerConfig, UnifiedLog => JUnifiedLog, VerificationGuard}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, CleanerConfig, EpochEntry, LocalLog, LogAppendInfo, LogDirFailureChannel, LogLoader, LogOffsetMetadata, LogOffsetsListener, LogReadInfo, LogSegments, LogStartOffsetIncrementReason, ProducerStateManager, ProducerStateManagerConfig, UnifiedLog, VerificationGuard}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
@@ -129,7 +129,6 @@ object PartitionTest {
     maxBytes: Int = Int.MaxValue
   ): FetchParams = {
     new FetchParams(
-      ApiKeys.FETCH.latestVersion,
       replicaId,
       replicaEpoch,
       maxWaitMs,
@@ -148,7 +147,6 @@ object PartitionTest {
     isolation: FetchIsolation = FetchIsolation.HIGH_WATERMARK
   ): FetchParams = {
     new FetchParams(
-      ApiKeys.FETCH.latestVersion,
       FetchRequest.CONSUMER_REPLICA_ID,
       -1,
       maxWaitMs,
@@ -165,14 +163,14 @@ class PartitionTest extends AbstractPartitionTest {
 
   @Test
   def testLastFetchedOffsetValidation(): Unit = {
-    val log = logManager.getOrCreateLog(topicPartition, topicId = None)
+    val log = logManager.getOrCreateLog(topicPartition, topicId = Optional.empty)
     def append(leaderEpoch: Int, count: Int): Unit = {
       val recordArray = (1 to count).map { i =>
         new SimpleRecord(s"$i".getBytes)
       }
       val records = MemoryRecords.withRecords(0L, Compression.NONE, leaderEpoch,
         recordArray: _*)
-      log.appendAsLeader(records, leaderEpoch = leaderEpoch)
+      log.appendAsLeader(records, leaderEpoch)
     }
 
     append(leaderEpoch = 0, count = 2) // 0
@@ -232,7 +230,7 @@ class PartitionTest extends AbstractPartitionTest {
 
     // Move log start offset to the middle of epoch 3
     log.updateHighWatermark(log.logEndOffset)
-    log.maybeIncrementLogStartOffset(newLogStartOffset = 5L, LogStartOffsetIncrementReason.ClientRecordDeletion)
+    log.maybeIncrementLogStartOffset(5L, LogStartOffsetIncrementReason.ClientRecordDeletion)
 
     assertDivergence(epochEndOffset(epoch = 2, endOffset = 5), read(lastFetchedEpoch = 2, fetchOffset = 8))
     assertNoDivergence(read(lastFetchedEpoch = 0, fetchOffset = 5))
@@ -241,7 +239,7 @@ class PartitionTest extends AbstractPartitionTest {
     assertThrows(classOf[OffsetOutOfRangeException], () => read(lastFetchedEpoch = 0, fetchOffset = 0))
 
     // Fetch offset lower than start offset should throw OffsetOutOfRangeException
-    log.maybeIncrementLogStartOffset(newLogStartOffset = 10, LogStartOffsetIncrementReason.ClientRecordDeletion)
+    log.maybeIncrementLogStartOffset(10, LogStartOffsetIncrementReason.ClientRecordDeletion)
     assertThrows(classOf[OffsetOutOfRangeException], () => read(lastFetchedEpoch = 5, fetchOffset = 6)) // diverging
     assertThrows(classOf[OffsetOutOfRangeException], () => read(lastFetchedEpoch = 3, fetchOffset = 6)) // not diverging
   }
@@ -250,15 +248,15 @@ class PartitionTest extends AbstractPartitionTest {
   def testMakeLeaderUpdatesEpochCache(): Unit = {
     val leaderEpoch = 8
 
-    val log = logManager.getOrCreateLog(topicPartition, topicId = None)
+    val log = logManager.getOrCreateLog(topicPartition, topicId = Optional.empty)
     log.appendAsLeader(MemoryRecords.withRecords(0L, Compression.NONE, 0,
       new SimpleRecord("k1".getBytes, "v1".getBytes),
       new SimpleRecord("k2".getBytes, "v2".getBytes)
-    ), leaderEpoch = 0)
+    ), 0)
     log.appendAsLeader(MemoryRecords.withRecords(0L, Compression.NONE, 5,
       new SimpleRecord("k3".getBytes, "v3".getBytes),
       new SimpleRecord("k4".getBytes, "v4".getBytes)
-    ), leaderEpoch = 5)
+    ), 5)
     assertEquals(4, log.logEndOffset)
 
     val partition = setupPartitionWithMocks(leaderEpoch = leaderEpoch, isLeader = true)
@@ -446,7 +444,7 @@ class PartitionTest extends AbstractPartitionTest {
         val log = super.createLog(isNew, isFutureReplica, offsetCheckpoints, None, None)
         val logDirFailureChannel = new LogDirFailureChannel(1)
         val segments = new LogSegments(log.topicPartition)
-        val leaderEpochCache = JUnifiedLog.createLeaderEpochCache(
+        val leaderEpochCache = UnifiedLog.createLeaderEpochCache(
           log.dir, log.topicPartition, logDirFailureChannel, Optional.empty, time.scheduler)
         val maxTransactionTimeoutMs = 5 * 60 * 1000
         val producerStateManagerConfig = new ProducerStateManagerConfig(TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_DEFAULT, true)
@@ -476,7 +474,7 @@ class PartitionTest extends AbstractPartitionTest {
         val localLog = new LocalLog(log.dir, log.config, segments, offsets.recoveryPoint,
           offsets.nextOffsetMetadata, mockTime.scheduler, mockTime, log.topicPartition,
           logDirFailureChannel)
-        new SlowLog(log, topicId, offsets.logStartOffset, localLog, leaderEpochCache, producerStateManager, appendSemaphore)
+        new SlowLog(log, topicId.toJava, offsets.logStartOffset, localLog, leaderEpochCache, producerStateManager, appendSemaphore)
       }
     }
 
@@ -542,12 +540,12 @@ class PartitionTest extends AbstractPartitionTest {
       new SimpleRecord("k2".getBytes, "v4".getBytes),
       new SimpleRecord("k2".getBytes, "v5".getBytes),
       new SimpleRecord("k2".getBytes, "v6".getBytes)
-    ), leaderEpoch = 0)
+    ), 0)
     currentLog.roll()
     currentLog.appendAsLeader(MemoryRecords.withRecords(0L, Compression.NONE, 0,
       new SimpleRecord("k3".getBytes, "v7".getBytes),
       new SimpleRecord("k4".getBytes, "v8".getBytes)
-    ), leaderEpoch = 0)
+    ), 0)
 
     // Write to the future replica as if the log had been compacted, and do not roll the segment
 
@@ -1364,7 +1362,7 @@ class PartitionTest extends AbstractPartitionTest {
 
   @Test
   def testUpdateFollowerFetchState(): Unit = {
-    val log = logManager.getOrCreateLog(topicPartition, topicId = None)
+    val log = logManager.getOrCreateLog(topicPartition, topicId = Optional.empty)
     seedLogData(log, numRecords = 6, leaderEpoch = 4)
 
     val controllerEpoch = 0
@@ -1390,8 +1388,8 @@ class PartitionTest extends AbstractPartitionTest {
 
     assertReplicaState(partition, remoteBrokerId,
       lastCaughtUpTimeMs = initializeTimeMs,
-      logStartOffset = JUnifiedLog.UNKNOWN_OFFSET,
-      logEndOffset = JUnifiedLog.UNKNOWN_OFFSET
+      logStartOffset = UnifiedLog.UNKNOWN_OFFSET,
+      logEndOffset = UnifiedLog.UNKNOWN_OFFSET
     )
 
     time.sleep(500)
@@ -1428,7 +1426,7 @@ class PartitionTest extends AbstractPartitionTest {
 
     when(offsetCheckpoints.fetch(ArgumentMatchers.anyString, ArgumentMatchers.eq(topicPartition)))
       .thenReturn(Optional.empty[JLong])
-    val log = logManager.getOrCreateLog(topicPartition, topicId = None)
+    val log = logManager.getOrCreateLog(topicPartition, topicId = Optional.empty)
     seedLogData(log, numRecords = 6, leaderEpoch = 4)
 
     val controllerEpoch = 0
@@ -1464,7 +1462,7 @@ class PartitionTest extends AbstractPartitionTest {
 
   @Test
   def testInvalidAlterPartitionRequestsAreNotRetried(): Unit = {
-    val log = logManager.getOrCreateLog(topicPartition, topicId = topicId)
+    val log = logManager.getOrCreateLog(topicPartition, topicId = topicId.toJava)
     seedLogData(log, numRecords = 10, leaderEpoch = 4)
 
     val controllerEpoch = 0
@@ -1489,8 +1487,8 @@ class PartitionTest extends AbstractPartitionTest {
 
     assertReplicaState(partition, remoteBrokerId,
       lastCaughtUpTimeMs = 0L,
-      logStartOffset = JUnifiedLog.UNKNOWN_OFFSET,
-      logEndOffset = JUnifiedLog.UNKNOWN_OFFSET
+      logStartOffset = UnifiedLog.UNKNOWN_OFFSET,
+      logEndOffset = UnifiedLog.UNKNOWN_OFFSET
     )
 
     fetchFollower(partition, replicaId = remoteBrokerId, fetchOffset = 10L)
@@ -1516,7 +1514,7 @@ class PartitionTest extends AbstractPartitionTest {
 
   @Test
   def testIsrExpansion(): Unit = {
-    val log = logManager.getOrCreateLog(topicPartition, topicId = topicId)
+    val log = logManager.getOrCreateLog(topicPartition, topicId = topicId.toJava)
     seedLogData(log, numRecords = 10, leaderEpoch = 4)
 
     val controllerEpoch = 0
@@ -1541,8 +1539,8 @@ class PartitionTest extends AbstractPartitionTest {
 
     assertReplicaState(partition, remoteBrokerId,
       lastCaughtUpTimeMs = 0L,
-      logStartOffset = JUnifiedLog.UNKNOWN_OFFSET,
-      logEndOffset = JUnifiedLog.UNKNOWN_OFFSET
+      logStartOffset = UnifiedLog.UNKNOWN_OFFSET,
+      logEndOffset = UnifiedLog.UNKNOWN_OFFSET
     )
 
     fetchFollower(partition, replicaId = remoteBrokerId, fetchOffset = 3L)
@@ -1580,7 +1578,7 @@ class PartitionTest extends AbstractPartitionTest {
 
   @Test
   def testIsrNotExpandedIfUpdateFails(): Unit = {
-    val log = logManager.getOrCreateLog(topicPartition, topicId = topicId)
+    val log = logManager.getOrCreateLog(topicPartition, topicId = topicId.toJava)
     seedLogData(log, numRecords = 10, leaderEpoch = 4)
 
     val controllerEpoch = 0
@@ -1605,8 +1603,8 @@ class PartitionTest extends AbstractPartitionTest {
 
     assertReplicaState(partition, remoteBrokerId,
       lastCaughtUpTimeMs = 0L,
-      logStartOffset = JUnifiedLog.UNKNOWN_OFFSET,
-      logEndOffset = JUnifiedLog.UNKNOWN_OFFSET
+      logStartOffset = UnifiedLog.UNKNOWN_OFFSET,
+      logEndOffset = UnifiedLog.UNKNOWN_OFFSET
     )
 
     fetchFollower(partition, replicaId = remoteBrokerId, fetchOffset = 10L)
@@ -1636,7 +1634,7 @@ class PartitionTest extends AbstractPartitionTest {
   @ParameterizedTest
   @ValueSource(strings = Array("fenced", "shutdown", "unfenced"))
   def testHighWatermarkIncreasesWithFencedOrShutdownFollower(brokerState: String): Unit = {
-    val log = logManager.getOrCreateLog(topicPartition, topicId = None)
+    val log = logManager.getOrCreateLog(topicPartition, topicId = Optional.empty)
     seedLogData(log, numRecords = 10, leaderEpoch = 4)
 
     val controllerEpoch = 0
@@ -1736,7 +1734,7 @@ class PartitionTest extends AbstractPartitionTest {
   @ParameterizedTest
   @ValueSource(strings = Array("kraft"))
   def testIsrNotExpandedIfReplicaIsFencedOrShutdown(quorum: String): Unit = {
-    val log = logManager.getOrCreateLog(topicPartition, topicId = topicId)
+    val log = logManager.getOrCreateLog(topicPartition, topicId = topicId.toJava)
     seedLogData(log, numRecords = 10, leaderEpoch = 4)
 
     val controllerEpoch = 0
@@ -1843,7 +1841,7 @@ class PartitionTest extends AbstractPartitionTest {
 
   @Test
   def testIsrCanExpandedIfBrokerEpochsMatchWithKraftMetadataCache(): Unit = {
-    val log = logManager.getOrCreateLog(topicPartition, topicId = topicId)
+    val log = logManager.getOrCreateLog(topicPartition, topicId = topicId.toJava)
     seedLogData(log, numRecords = 10, leaderEpoch = 4)
 
     val controllerEpoch = 0
@@ -1939,7 +1937,7 @@ class PartitionTest extends AbstractPartitionTest {
 
   @Test
   def testFenceFollowerFetchWithStaleBrokerEpoch(): Unit = {
-    val log = logManager.getOrCreateLog(topicPartition, topicId = None)
+    val log = logManager.getOrCreateLog(topicPartition, topicId = Optional.empty)
     seedLogData(log, numRecords = 10, leaderEpoch = 4)
     val controllerEpoch = 0
     val leaderEpoch = 5
@@ -2003,7 +2001,7 @@ class PartitionTest extends AbstractPartitionTest {
 
   @Test
   def testIsrNotExpandedIfReplicaIsInControlledShutdown(): Unit = {
-    val log = logManager.getOrCreateLog(topicPartition, topicId = topicId)
+    val log = logManager.getOrCreateLog(topicPartition, topicId = topicId.toJava)
     seedLogData(log, numRecords = 10, leaderEpoch = 4)
 
     val controllerEpoch = 0
@@ -2101,7 +2099,7 @@ class PartitionTest extends AbstractPartitionTest {
 
   @Test
   def testRetryShrinkIsr(): Unit = {
-    val log = logManager.getOrCreateLog(topicPartition, topicId = None)
+    val log = logManager.getOrCreateLog(topicPartition, topicId = Optional.empty)
     seedLogData(log, numRecords = 10, leaderEpoch = 4)
 
     val controllerEpoch = 0
@@ -2154,7 +2152,7 @@ class PartitionTest extends AbstractPartitionTest {
 
   @Test
   def testMaybeShrinkIsr(): Unit = {
-    val log = logManager.getOrCreateLog(topicPartition, topicId = topicId)
+    val log = logManager.getOrCreateLog(topicPartition, topicId = topicId.toJava)
     seedLogData(log, numRecords = 10, leaderEpoch = 4)
 
     val controllerEpoch = 0
@@ -2198,8 +2196,8 @@ class PartitionTest extends AbstractPartitionTest {
 
     assertReplicaState(partition, remoteBrokerId2,
       lastCaughtUpTimeMs = initializeTimeMs,
-      logStartOffset = JUnifiedLog.UNKNOWN_OFFSET,
-      logEndOffset = JUnifiedLog.UNKNOWN_OFFSET
+      logStartOffset = UnifiedLog.UNKNOWN_OFFSET,
+      logEndOffset = UnifiedLog.UNKNOWN_OFFSET
     )
 
     // On initialization, the replica is considered caught up and should not be removed
@@ -2237,7 +2235,7 @@ class PartitionTest extends AbstractPartitionTest {
   @Test
   def testHighWatermarkAdvanceShouldNotAdvanceWhenUnderMinISR(): Unit = {
     configRepository.setTopicConfig(topicPartition.topic, TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "3")
-    val log = logManager.getOrCreateLog(topicPartition, topicId = topicId)
+    val log = logManager.getOrCreateLog(topicPartition, topicId = topicId.toJava)
     seedLogData(log, numRecords = 10, leaderEpoch = 4)
 
     val controllerEpoch = 0
@@ -2294,7 +2292,7 @@ class PartitionTest extends AbstractPartitionTest {
 
   @Test
   def testAlterIsrLeaderAndIsrRace(): Unit = {
-    val log = logManager.getOrCreateLog(topicPartition, topicId = topicId)
+    val log = logManager.getOrCreateLog(topicPartition, topicId = topicId.toJava)
     seedLogData(log, numRecords = 10, leaderEpoch = 4)
 
     val controllerEpoch = 0
@@ -2317,8 +2315,8 @@ class PartitionTest extends AbstractPartitionTest {
 
     assertReplicaState(partition, remoteBrokerId,
       lastCaughtUpTimeMs = initializeTimeMs,
-      logStartOffset = JUnifiedLog.UNKNOWN_OFFSET,
-      logEndOffset = JUnifiedLog.UNKNOWN_OFFSET
+      logStartOffset = UnifiedLog.UNKNOWN_OFFSET,
+      logEndOffset = UnifiedLog.UNKNOWN_OFFSET
     )
 
     // Shrink the ISR
@@ -2352,7 +2350,7 @@ class PartitionTest extends AbstractPartitionTest {
 
   @Test
   def testShouldNotShrinkIsrIfPreviousFetchIsCaughtUp(): Unit = {
-    val log = logManager.getOrCreateLog(topicPartition, topicId = topicId)
+    val log = logManager.getOrCreateLog(topicPartition, topicId = topicId.toJava)
     seedLogData(log, numRecords = 10, leaderEpoch = 4)
 
     val controllerEpoch = 0
@@ -2376,8 +2374,8 @@ class PartitionTest extends AbstractPartitionTest {
 
     assertReplicaState(partition, remoteBrokerId,
       lastCaughtUpTimeMs = initializeTimeMs,
-      logStartOffset = JUnifiedLog.UNKNOWN_OFFSET,
-      logEndOffset = JUnifiedLog.UNKNOWN_OFFSET
+      logStartOffset = UnifiedLog.UNKNOWN_OFFSET,
+      logEndOffset = UnifiedLog.UNKNOWN_OFFSET
     )
 
     // There is a short delay before the first fetch. The follower is not yet caught up to the log end.
@@ -2412,7 +2410,7 @@ class PartitionTest extends AbstractPartitionTest {
 
   @Test
   def testShouldNotShrinkIsrIfFollowerCaughtUpToLogEnd(): Unit = {
-    val log = logManager.getOrCreateLog(topicPartition, topicId = topicId)
+    val log = logManager.getOrCreateLog(topicPartition, topicId = topicId.toJava)
     seedLogData(log, numRecords = 10, leaderEpoch = 4)
 
     val controllerEpoch = 0
@@ -2436,8 +2434,8 @@ class PartitionTest extends AbstractPartitionTest {
 
     assertReplicaState(partition, remoteBrokerId,
       lastCaughtUpTimeMs = initializeTimeMs,
-      logStartOffset = JUnifiedLog.UNKNOWN_OFFSET,
-      logEndOffset = JUnifiedLog.UNKNOWN_OFFSET
+      logStartOffset = UnifiedLog.UNKNOWN_OFFSET,
+      logEndOffset = UnifiedLog.UNKNOWN_OFFSET
     )
 
     // The follower catches up to the log end immediately.
@@ -2460,7 +2458,7 @@ class PartitionTest extends AbstractPartitionTest {
 
   @Test
   def testIsrNotShrunkIfUpdateFails(): Unit = {
-    val log = logManager.getOrCreateLog(topicPartition, topicId = topicId)
+    val log = logManager.getOrCreateLog(topicPartition, topicId = topicId.toJava)
     seedLogData(log, numRecords = 10, leaderEpoch = 4)
 
     val controllerEpoch = 0
@@ -2483,8 +2481,8 @@ class PartitionTest extends AbstractPartitionTest {
 
     assertReplicaState(partition, remoteBrokerId,
       lastCaughtUpTimeMs = initializeTimeMs,
-      logStartOffset = JUnifiedLog.UNKNOWN_OFFSET,
-      logEndOffset = JUnifiedLog.UNKNOWN_OFFSET
+      logStartOffset = UnifiedLog.UNKNOWN_OFFSET,
+      logEndOffset = UnifiedLog.UNKNOWN_OFFSET
     )
 
     time.sleep(30001)
@@ -2547,7 +2545,7 @@ class PartitionTest extends AbstractPartitionTest {
   }
 
   def handleAlterIsrFailure(error: Errors, callback: (Int, Int, Partition) => Unit): Unit = {
-    val log = logManager.getOrCreateLog(topicPartition, topicId = topicId)
+    val log = logManager.getOrCreateLog(topicPartition, topicId = topicId.toJava)
     seedLogData(log, numRecords = 10, leaderEpoch = 4)
 
     val controllerEpoch = 0
@@ -2570,8 +2568,8 @@ class PartitionTest extends AbstractPartitionTest {
 
     assertReplicaState(partition, remoteBrokerId,
       lastCaughtUpTimeMs = 0L,
-      logStartOffset = JUnifiedLog.UNKNOWN_OFFSET,
-      logEndOffset = JUnifiedLog.UNKNOWN_OFFSET
+      logStartOffset = UnifiedLog.UNKNOWN_OFFSET,
+      logEndOffset = UnifiedLog.UNKNOWN_OFFSET
     )
 
     // This will attempt to expand the ISR
@@ -2639,7 +2637,7 @@ class PartitionTest extends AbstractPartitionTest {
       logManager,
       alterPartitionManager)
 
-    val log = logManager.getOrCreateLog(topicPartition, topicId = topicId)
+    val log = logManager.getOrCreateLog(topicPartition, topicId = topicId.toJava)
     seedLogData(log, numRecords = 10, leaderEpoch = 4)
 
     val controllerEpoch = 0
@@ -2696,7 +2694,7 @@ class PartitionTest extends AbstractPartitionTest {
 
   @Test
   def testSingleInFlightAlterIsr(): Unit = {
-    val log = logManager.getOrCreateLog(topicPartition, topicId = topicId)
+    val log = logManager.getOrCreateLog(topicPartition, topicId = topicId.toJava)
     seedLogData(log, numRecords = 10, leaderEpoch = 4)
 
     val controllerEpoch = 0
@@ -2737,7 +2735,7 @@ class PartitionTest extends AbstractPartitionTest {
 
   @Test
   def testUseCheckpointToInitializeHighWatermark(): Unit = {
-    val log = logManager.getOrCreateLog(topicPartition, topicId = topicId)
+    val log = logManager.getOrCreateLog(topicPartition, topicId = topicId.toJava)
     seedLogData(log, numRecords = 6, leaderEpoch = 5)
 
     when(offsetCheckpoints.fetch(logDir1.getAbsolutePath, topicPartition))
@@ -3106,8 +3104,8 @@ class PartitionTest extends AbstractPartitionTest {
     // in the ISR.
     assertReplicaState(partition, followerId,
       lastCaughtUpTimeMs = 0L,
-      logStartOffset = JUnifiedLog.UNKNOWN_OFFSET,
-      logEndOffset = JUnifiedLog.UNKNOWN_OFFSET
+      logStartOffset = UnifiedLog.UNKNOWN_OFFSET,
+      logEndOffset = UnifiedLog.UNKNOWN_OFFSET
     )
 
     // Follower fetches and updates its replica state.
@@ -3174,7 +3172,7 @@ class PartitionTest extends AbstractPartitionTest {
     leaderLog.appendAsLeader(MemoryRecords.withRecords(0L, Compression.NONE, 0,
       new SimpleRecord("k1".getBytes, "v1".getBytes),
       new SimpleRecord("k1".getBytes, "v1".getBytes)
-    ), leaderEpoch = leaderEpoch)
+    ), leaderEpoch)
 
     // makeLeader is called again with the same leader epoch but with
     // a newer partition epoch.
@@ -3681,7 +3679,7 @@ class PartitionTest extends AbstractPartitionTest {
 
   private class SlowLog(
     log: UnifiedLog,
-    topicId: Option[Uuid],
+    topicId: Optional[Uuid],
     logStartOffset: Long,
     localLog: LocalLog,
     leaderEpochCache: LeaderEpochFileCache,
@@ -3694,7 +3692,9 @@ class PartitionTest extends AbstractPartitionTest {
     log.producerIdExpirationCheckIntervalMs,
     leaderEpochCache,
     producerStateManager,
-    _topicId = topicId) {
+    topicId,
+    false,
+    LogOffsetsListener.NO_OP_OFFSETS_LISTENER) {
 
     override def appendAsFollower(records: MemoryRecords, epoch: Int): LogAppendInfo = {
       appendSemaphore.acquire()
@@ -3851,7 +3851,7 @@ class PartitionTest extends AbstractPartitionTest {
 
     // Then
     assertTrue(res)
-    verify(spyLogManager, times(1)).getOrCreateLog(topicPartition, isNew, isFuture = false, Some(topicId), Some(targetDirectory))
+    verify(spyLogManager, times(1)).getOrCreateLog(topicPartition, isNew, isFuture = false, Optional.of(topicId), Some(targetDirectory))
   }
 
   @ParameterizedTest
@@ -3896,7 +3896,7 @@ class PartitionTest extends AbstractPartitionTest {
 
     // Then
     assertTrue(res)
-    verify(spyLogManager, times(1)).getOrCreateLog(topicPartition, isNew, isFuture = false, Some(topicId), Some(targetDirectory))
+    verify(spyLogManager, times(1)).getOrCreateLog(topicPartition, isNew, isFuture = false, Optional.of(topicId), Some(targetDirectory))
   }
 
   @ParameterizedTest
@@ -3941,7 +3941,7 @@ class PartitionTest extends AbstractPartitionTest {
 
     // Then
     assertTrue(res)
-    verify(spyLogManager, times(1)).getOrCreateLog(topicPartition, isNew, isFuture = false, Some(topicId), Some(targetDirectory))
+    verify(spyLogManager, times(1)).getOrCreateLog(topicPartition, isNew, isFuture = false, Optional.of(topicId), Some(targetDirectory))
   }
 
   @ParameterizedTest
@@ -3986,7 +3986,7 @@ class PartitionTest extends AbstractPartitionTest {
 
     // Then
     assertTrue(res)
-    verify(spyLogManager, times(1)).getOrCreateLog(topicPartition, isNew, isFuture = false, Some(topicId), Some(targetDirectory))
+    verify(spyLogManager, times(1)).getOrCreateLog(topicPartition, isNew, isFuture = false, Optional.of(topicId), Some(targetDirectory))
   }
 
   @ParameterizedTest
@@ -4031,7 +4031,7 @@ class PartitionTest extends AbstractPartitionTest {
 
     // Then
     assertTrue(res)
-    verify(spyLogManager, times(1)).getOrCreateLog(topicPartition, isNew, isFuture = false, Some(topicId), Some(targetDirectory))
+    verify(spyLogManager, times(1)).getOrCreateLog(topicPartition, isNew, isFuture = false, Optional.of(topicId), Some(targetDirectory))
   }
 
 
@@ -4077,7 +4077,7 @@ class PartitionTest extends AbstractPartitionTest {
 
     // Then
     assertTrue(res)
-    verify(spyLogManager, times(1)).getOrCreateLog(topicPartition, isNew, isFuture = false, Some(topicId), Some(targetDirectory))
+    verify(spyLogManager, times(1)).getOrCreateLog(topicPartition, isNew, isFuture = false, Optional.of(topicId), Some(targetDirectory))
   }
 
   @Test

@@ -77,7 +77,6 @@ public class MockApiFixedKeyProcessor<KIn, VIn, VOut> implements FixedKeyProcess
     public void process(final FixedKeyRecord<KIn, VIn> record) {
         final KIn key = record.key();
         final VIn value = record.value();
-        final KeyValueTimestamp<KIn, VIn> keyValueTimestamp = new KeyValueTimestamp<>(key, value, record.timestamp());
 
         if (value != null) {
             lastValueAndTimestampPerKey.put(key, ValueAndTimestamp.make(value, record.timestamp()));
