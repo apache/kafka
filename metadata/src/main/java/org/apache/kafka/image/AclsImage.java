@@ -20,7 +20,6 @@ package org.apache.kafka.image;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.image.node.AclsImageNode;
 import org.apache.kafka.image.writer.ImageWriter;
-import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.metadata.authorizer.StandardAcl;
 import org.apache.kafka.metadata.authorizer.StandardAclWithId;
 
@@ -51,11 +50,7 @@ public final class AclsImage {
         return acls;
     }
 
-    public void write(ImageWriter writer, ImageWriterOptions options) {
-        // Technically, AccessControlEntryRecord appeared in 3.2-IV0, so we should not write it if
-        // the output version is less than that. However, there is a problem: pre-production KRaft
-        // images didn't support FeatureLevelRecord, so we can't distinguish 3.2-IV0 from 3.0-IV1.
-        // The least bad way to resolve this is just to pretend that ACLs were in 3.0-IV1.
+    public void write(ImageWriter writer) {
         for (Entry<Uuid, StandardAcl> entry : acls.entrySet()) {
             StandardAclWithId aclWithId = new StandardAclWithId(entry.getKey(), entry.getValue());
             writer.write(0, aclWithId.toRecord());

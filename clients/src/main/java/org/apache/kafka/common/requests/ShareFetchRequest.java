@@ -28,10 +28,8 @@ import org.apache.kafka.common.protocol.Errors;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 
 public class ShareFetchRequest extends AbstractRequest {
 
@@ -49,19 +47,17 @@ public class ShareFetchRequest extends AbstractRequest {
         }
 
         public static Builder forConsumer(String groupId, ShareRequestMetadata metadata,
-                                          int maxWait, int minBytes, int maxBytes, int fetchSize, int batchSize,
+                                          int maxWait, int minBytes, int maxBytes, int batchSize,
                                           List<TopicIdPartition> send, List<TopicIdPartition> forget,
                                           Map<TopicIdPartition, List<ShareFetchRequestData.AcknowledgementBatch>> acknowledgementsMap) {
             ShareFetchRequestData data = new ShareFetchRequestData();
             data.setGroupId(groupId);
-            int ackOnlyPartitionMaxBytes = fetchSize;
             boolean isClosingShareSession = false;
             if (metadata != null) {
                 data.setMemberId(metadata.memberId().toString());
                 data.setShareSessionEpoch(metadata.epoch());
                 if (metadata.isFinalEpoch()) {
                     isClosingShareSession = true;
-                    ackOnlyPartitionMaxBytes = 0;
                 }
             }
             data.setMaxWaitMs(maxWait);
@@ -77,8 +73,7 @@ public class ShareFetchRequest extends AbstractRequest {
                 for (TopicIdPartition tip : send) {
                     Map<Integer, ShareFetchRequestData.FetchPartition> partMap = fetchMap.computeIfAbsent(tip.topicId(), k -> new HashMap<>());
                     ShareFetchRequestData.FetchPartition fetchPartition = new ShareFetchRequestData.FetchPartition()
-                            .setPartitionIndex(tip.partition())
-                            .setPartitionMaxBytes(fetchSize);
+                            .setPartitionIndex(tip.partition());
                     partMap.put(tip.partition(), fetchPartition);
                 }
             }
@@ -91,8 +86,7 @@ public class ShareFetchRequest extends AbstractRequest {
                 ShareFetchRequestData.FetchPartition fetchPartition = partMap.get(tip.partition());
                 if (fetchPartition == null) {
                     fetchPartition = new ShareFetchRequestData.FetchPartition()
-                            .setPartitionIndex(tip.partition())
-                            .setPartitionMaxBytes(ackOnlyPartitionMaxBytes);
+                            .setPartitionIndex(tip.partition());
                     partMap.put(tip.partition(), fetchPartition);
                 }
                 fetchPartition.setAcknowledgementBatches(acknowledgeEntry.getValue());
@@ -151,7 +145,7 @@ public class ShareFetchRequest extends AbstractRequest {
     }
 
     private final ShareFetchRequestData data;
-    private volatile LinkedHashMap<TopicIdPartition, ShareFetchRequest.SharePartitionData> shareFetchData = null;
+    private volatile List<TopicIdPartition> shareFetchData = null;
     private volatile List<TopicIdPartition> toForget = null;
 
     public ShareFetchRequest(ShareFetchRequestData data, short version) {
@@ -179,41 +173,6 @@ public class ShareFetchRequest extends AbstractRequest {
         );
     }
 
-    public static final class SharePartitionData {
-        public final Uuid topicId;
-        public final int maxBytes;
-
-        public SharePartitionData(
-                Uuid topicId,
-                int maxBytes
-        ) {
-            this.topicId = topicId;
-            this.maxBytes = maxBytes;
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-            ShareFetchRequest.SharePartitionData that = (ShareFetchRequest.SharePartitionData) o;
-            return Objects.equals(topicId, that.topicId) &&
-                    maxBytes == that.maxBytes;
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(topicId, maxBytes);
-        }
-
-        @Override
-        public String toString() {
-            return "SharePartitionData(" +
-                    "topicId=" + topicId +
-                    ", maxBytes=" + maxBytes +
-                    ')';
-        }
-    }
-
     public int minBytes() {
         return data.minBytes();
     }
@@ -226,23 +185,18 @@ public class ShareFetchRequest extends AbstractRequest {
         return data.maxWaitMs();
     }
 
-    public Map<TopicIdPartition, ShareFetchRequest.SharePartitionData> shareFetchData(Map<Uuid, String> topicNames) {
+    public List<TopicIdPartition> shareFetchData(Map<Uuid, String> topicNames) {
         if (shareFetchData == null) {
             synchronized (this) {
                 if (shareFetchData == null) {
                     // Assigning the lazy-initialized `shareFetchData` in the last step
                     // to avoid other threads accessing a half-initialized object.
-                    final LinkedHashMap<TopicIdPartition, ShareFetchRequest.SharePartitionData> shareFetchDataTmp = new LinkedHashMap<>();
+                    final List<TopicIdPartition> shareFetchDataTmp = new ArrayList<>();
                     data.topics().forEach(shareFetchTopic -> {
                         String name = topicNames.get(shareFetchTopic.topicId());
                         shareFetchTopic.partitions().forEach(shareFetchPartition -> {
                             // Topic name may be null here if the topic name was unable to be resolved using the topicNames map.
-                            shareFetchDataTmp.put(new TopicIdPartition(shareFetchTopic.topicId(), new TopicPartition(name, shareFetchPartition.partitionIndex())),
-                                    new ShareFetchRequest.SharePartitionData(
-                                            shareFetchTopic.topicId(),
-                                            shareFetchPartition.partitionMaxBytes()
-                                    )
-                            );
+                            shareFetchDataTmp.add(new TopicIdPartition(shareFetchTopic.topicId(), shareFetchPartition.partitionIndex(), name));
                         });
                     });
                     shareFetchData = shareFetchDataTmp;

@@ -58,10 +58,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class PartitionRegistrationTest {
     @Test
     public void testElectionWasClean() {
-        assertTrue(PartitionRegistration.electionWasClean(1, new int[]{1, 2}));
-        assertFalse(PartitionRegistration.electionWasClean(1, new int[]{0, 2}));
-        assertFalse(PartitionRegistration.electionWasClean(1, new int[]{}));
-        assertTrue(PartitionRegistration.electionWasClean(3, new int[]{1, 2, 3, 4, 5, 6}));
+        assertTrue(PartitionRegistration.electionWasClean(1, new int[]{1, 2}, new int[]{}));
+        assertFalse(PartitionRegistration.electionWasClean(1, new int[]{0, 2}, new int[]{}));
+        assertFalse(PartitionRegistration.electionWasClean(1, new int[]{}, new int[]{3, 4}));
+        assertTrue(PartitionRegistration.electionWasClean(3, new int[]{1, 2, 3, 4, 5, 6}, new int[]{}));
+        assertTrue(PartitionRegistration.electionWasClean(3, new int[]{}, new int[]{1, 2, 3}));
     }
 
     @Test
@@ -91,8 +92,8 @@ public class PartitionRegistrationTest {
             setIsr(new int[]{1, 2}).setRemovingReplicas(new int[]{1}).setLeader(1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(0).setPartitionEpoch(0).build();
         Uuid topicId = Uuid.fromString("OGdAI5nxT_m-ds3rJMqPLA");
         int partitionId = 4;
-        ApiMessageAndVersion record = registrationA.toRecord(topicId, partitionId, new ImageWriterOptions.Builder().
-                setMetadataVersion(MetadataVersion.IBP_3_7_IV0).build()); // highest MV for PartitionRecord v0
+        ApiMessageAndVersion record = registrationA.toRecord(topicId, partitionId,
+            new ImageWriterOptions.Builder(MetadataVersion.IBP_3_7_IV0).build()); // highest MV for PartitionRecord v0
         PartitionRegistration registrationB =
             new PartitionRegistration((PartitionRecord) record.message());
         assertEquals(registrationA, registrationB);
@@ -336,8 +337,7 @@ public class PartitionRegistrationTest {
             ));
         }
         List<UnwritableMetadataException> exceptions = new ArrayList<>();
-        ImageWriterOptions options = new ImageWriterOptions.Builder().
-                setMetadataVersion(metadataVersion).
+        ImageWriterOptions options = new ImageWriterOptions.Builder(metadataVersion).
                 setEligibleLeaderReplicasEnabled(metadataVersion.isElrSupported()).
                 setLossHandler(exceptions::add).
                 build();
@@ -373,8 +373,7 @@ public class PartitionRegistrationTest {
             setDirectories(Arrays.asList(DirectoryId.migratingArray(5))).
             setPartitionEpoch(0);
         List<UnwritableMetadataException> exceptions = new ArrayList<>();
-        ImageWriterOptions options = new ImageWriterOptions.Builder().
-            setMetadataVersion(MetadataVersion.IBP_4_0_IV1).
+        ImageWriterOptions options = new ImageWriterOptions.Builder(MetadataVersion.IBP_4_0_IV1).
             setLossHandler(exceptions::add).
             build();
         assertEquals(new ApiMessageAndVersion(expectRecord, (short) 2), partitionRegistration.toRecord(topicID, 0, options));

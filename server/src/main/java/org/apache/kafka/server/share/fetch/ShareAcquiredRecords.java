@@ -19,8 +19,8 @@ package org.apache.kafka.server.share.fetch;
 
 import org.apache.kafka.common.message.ShareFetchResponseData.AcquiredRecords;
 
-import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * The ShareAcquiredRecords class is used to send the acquired records and associated metadata.
@@ -43,12 +43,12 @@ public class ShareAcquiredRecords {
         List<AcquiredRecords> acquiredRecords,
         int count
     ) {
-        this.acquiredRecords = acquiredRecords;
+        this.acquiredRecords = Objects.requireNonNull(acquiredRecords);
         this.count = count;
     }
 
     private ShareAcquiredRecords() {
-        this.acquiredRecords = Collections.emptyList();
+        this.acquiredRecords = List.of();
         this.count = 0;
     }
 
@@ -62,11 +62,5 @@ public class ShareAcquiredRecords {
 
     public static ShareAcquiredRecords empty() {
         return EMPTY_SHARE_ACQUIRED_RECORDS;
-    }
-
-    public static ShareAcquiredRecords fromAcquiredRecords(AcquiredRecords acquiredRecords) {
-        return new ShareAcquiredRecords(
-            List.of(acquiredRecords), (int) (acquiredRecords.lastOffset() - acquiredRecords.firstOffset() + 1)
-        );
     }
 }

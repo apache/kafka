@@ -111,7 +111,7 @@ public class ControllerRegistration {
             if (supportedFeatures == null) {
                 supportedFeatures = new HashMap<>();
                 supportedFeatures.put(MetadataVersion.FEATURE_NAME, VersionRange.of(
-                        MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel(),
+                        MetadataVersion.MINIMUM_VERSION.featureLevel(),
                         MetadataVersion.latestProduction().featureLevel()));
             }
             return new ControllerRegistration(id,

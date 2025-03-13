@@ -270,7 +270,7 @@ public class ReplicaFetcherThreadBenchmark {
                             config,
                             replicaManager,
                             replicaQuota,
-                            () -> MetadataVersion.MINIMUM_KRAFT_VERSION,
+                            () -> MetadataVersion.MINIMUM_VERSION,
                             () -> -1L
                     ) {
                         @Override
@@ -303,15 +303,15 @@ public class ReplicaFetcherThreadBenchmark {
                     replicaManager,
                     replicaQuota,
                     String.format("[ReplicaFetcher replicaId=%d, leaderId=%d, fetcherId=%d", config.brokerId(), 3, 3),
-                    () -> MetadataVersion.MINIMUM_KRAFT_VERSION
+                    () -> MetadataVersion.MINIMUM_VERSION
             );
 
             pool = partitions;
         }
 
         @Override
-        public Option<Object> latestEpoch(TopicPartition topicPartition) {
-            return Option.apply(0);
+        public Optional<Integer> latestEpoch(TopicPartition topicPartition) {
+            return Optional.of(0);
         }
 
         @Override
@@ -330,13 +330,17 @@ public class ReplicaFetcherThreadBenchmark {
         }
 
         @Override
-        public Option<OffsetAndEpoch> endOffsetForEpoch(TopicPartition topicPartition, int epoch) {
-            return Option.apply(new OffsetAndEpoch(0, 0));
+        public Optional<OffsetAndEpoch> endOffsetForEpoch(TopicPartition topicPartition, int epoch) {
+            return Optional.of(new OffsetAndEpoch(0, 0));
         }
 
         @Override
-        public Option<LogAppendInfo> processPartitionData(TopicPartition topicPartition, long fetchOffset,
-                                                          FetchResponseData.PartitionData partitionData) {
+        public Option<LogAppendInfo> processPartitionData(
+            TopicPartition topicPartition,
+            long fetchOffset,
+            int partitionLeaderEpoch,
+            FetchResponseData.PartitionData partitionData
+        ) {
             return Option.empty();
         }
     }

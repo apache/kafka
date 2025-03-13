@@ -54,10 +54,7 @@ versions += [
   apacheds: "2.0.0-M24",
   argparse4j: "0.7.0",
   bcpkix: "1.78.1",
-  // Version >=3.1.2 includes an improvement to prevent hash DOS attacks,
-  // but currently, tests are failing in >=3.1.2. Therefore, we are temporarily using version 3.1.1.
-  // The failing tests should be fixed under KAFKA-18089, allowing us to upgrade to >=3.1.2.
-  caffeine: "3.1.1",
+  caffeine: "3.1.8",
   bndlib: "7.0.0",
   checkstyle: project.hasProperty('checkstyleVersion') ? checkstyleVersion : "10.20.2",
   commonsValidator: "1.9.0",
@@ -105,7 +102,7 @@ versions += [
   kafka_37: "3.7.2",
   kafka_38: "3.8.1",
   kafka_39: "3.9.0",
-  log4j2: "2.24.1",
+  log4j2: "2.24.3",
   // When updating lz4 make sure the compression levels in org.apache.kafka.common.record.CompressionType are still valid
   lz4: "1.8.0",
   mavenArtifact: "3.9.6",
@@ -153,7 +150,6 @@ libs += [
   jacksonDatabind: "com.fasterxml.jackson.core:jackson-databind:$versions.jackson",
   jacksonDatabindYaml: "com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:$versions.jackson",
   jacksonDataformatCsv: "com.fasterxml.jackson.dataformat:jackson-dataformat-csv:$versions.jackson",
-  jacksonModuleScala: "com.fasterxml.jackson.module:jackson-module-scala_$versions.baseScala:$versions.jackson",
   jacksonJDK8Datatypes: "com.fasterxml.jackson.datatype:jackson-datatype-jdk8:$versions.jackson",
   jacksonBlackbird: "com.fasterxml.jackson.module:jackson-module-blackbird:$versions.jackson",
   jacksonJakartarsJsonProvider: "com.fasterxml.jackson.jakarta.rs:jackson-jakarta-rs-json-provider:$versions.jackson",

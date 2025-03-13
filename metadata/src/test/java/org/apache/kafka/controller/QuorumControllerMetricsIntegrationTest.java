@@ -198,7 +198,7 @@ public class QuorumControllerMetricsIntegrationTest {
                                                      build()
         ) {
             QuorumController active = controlEnv.activeController();
-            Map<Integer, Long> brokerEpochs = registerBrokersAndUnfence(active, 3);
+            registerBrokersAndUnfence(active, 3);
 
             // Test that a new operation increments operationsStarted. We retry this if needed
             // to handle the case where another operation is performed in between loading
