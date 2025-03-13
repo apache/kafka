@@ -19,7 +19,7 @@ package kafka.server
 import java.io.File
 import java.util.Properties
 import kafka.cluster.Partition
-import kafka.log.{LogManager, UnifiedLog}
+import kafka.log.LogManager
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.TestUtils.MockAlterPartitionManager
 import kafka.utils._
@@ -30,7 +30,7 @@ import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.server.common.KRaftVersion
 import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.server.util.MockTime
-import org.apache.kafka.storage.internals.log.{LogDirFailureChannel, LogOffsetMetadata}
+import org.apache.kafka.storage.internals.log.{LogDirFailureChannel, LogOffsetMetadata, UnifiedLog}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.Mockito.{atLeastOnce, mock, verify, when}
