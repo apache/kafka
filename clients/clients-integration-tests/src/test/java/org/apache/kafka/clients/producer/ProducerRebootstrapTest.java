@@ -111,6 +111,6 @@ public class ProducerRebootstrapTest {
         // As a result, the producer will throw a TimeoutException when trying to send a message.
         assertThrows(TimeoutException.class, () -> producer.send(new ProducerRecord<>(TOPIC, part, "key 1".getBytes(), "value 1".getBytes())).get(5, TimeUnit.SECONDS));
         // Since the brokers cached during the bootstrap are offline, the producer needs to wait the default timeout for other threads.
-        producer.close(Duration.ofSeconds(0));
+        producer.close(Duration.ZERO);
     }
 }
