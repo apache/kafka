@@ -26,8 +26,8 @@ import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -55,9 +55,9 @@ public class ShareFetch {
      */
     private final String memberId;
     /**
-     * The maximum number of bytes that can be fetched for each partition.
+     * The topic partitions to be fetched.
      */
-    private final LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes;
+    private final List<TopicIdPartition> topicIdPartitions;
     /**
      * The batch size of the fetch request.
      */
@@ -81,7 +81,7 @@ public class ShareFetch {
         String groupId,
         String memberId,
         CompletableFuture<Map<TopicIdPartition, PartitionData>> future,
-        LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes,
+        List<TopicIdPartition> topicIdPartitions,
         int batchSize,
         int maxFetchRecords,
         BrokerTopicStats brokerTopicStats
@@ -90,7 +90,7 @@ public class ShareFetch {
         this.groupId = groupId;
         this.memberId = memberId;
         this.future = future;
-        this.partitionMaxBytes = partitionMaxBytes;
+        this.topicIdPartitions = topicIdPartitions;
         this.batchSize = batchSize;
         this.maxFetchRecords = maxFetchRecords;
         this.brokerTopicStats = brokerTopicStats;
@@ -104,8 +104,8 @@ public class ShareFetch {
         return memberId;
     }
 
-    public LinkedHashMap<TopicIdPartition, Integer> partitionMaxBytes() {
-        return partitionMaxBytes;
+    public List<TopicIdPartition> topicIdPartitions() {
+        return topicIdPartitions;
     }
 
     public FetchParams fetchParams() {
@@ -151,7 +151,7 @@ public class ShareFetch {
      * @return true if all the partitions in the request have errored, false otherwise.
      */
     public synchronized boolean errorInAllPartitions() {
-        return erroneous != null && erroneous.size() == partitionMaxBytes().size();
+        return erroneous != null && erroneous.size() == topicIdPartitions().size();
     }
 
     /**

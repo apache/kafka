@@ -33,6 +33,7 @@ import kafka.server.FetcherThreadTestUtils.{initialFetchState, mkBatch}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
+import java.util.Optional
 import java.util.concurrent.atomic.AtomicInteger
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Map, Set}
@@ -406,7 +407,7 @@ class AbstractFetcherThreadTest {
           super.truncate(topicPartition, truncationState)
         }
 
-        override def latestEpoch(topicPartition: TopicPartition): Option[Int] = None
+        override def latestEpoch(topicPartition: TopicPartition): Optional[Integer] = Optional.empty
       }
 
     val replicaLog = Seq(
@@ -439,7 +440,7 @@ class AbstractFetcherThreadTest {
         super.truncateToHighWatermark(partitions)
       }
 
-      override def latestEpoch(topicPartition: TopicPartition): Option[Int] = None
+      override def latestEpoch(topicPartition: TopicPartition): Optional[Integer] = Optional.empty
     }
 
     val replicaLog = Seq(
