@@ -14,17 +14,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.admin;
+package org.apache.kafka.clients;
 
-import org.apache.kafka.clients.CommonClientConfigs;
-import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
-
-import org.junit.jupiter.api.Assertions;
 
 import java.time.Duration;
 import java.util.List;
@@ -32,21 +29,21 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-public class AdminClientRebootstrapTest {
+public class ClientRebootstrapTest {
     private static final String TOPIC = "topic";
     private static final int PARTITIONS = 2;
 
     @ClusterTest(
-        brokers = 2,
+        brokers = PARTITIONS,
         types = {Type.KRAFT},
         serverProperties = {
-            @ClusterConfigProperty(key = TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, value = "true"),
             @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "2")
         }
     )
-    public void testRebootstrap(ClusterInstance clusterInstance) {
+    public void testAdminRebootstrap(ClusterInstance clusterInstance) {
         var broker0 = 0;
         var broker1 = 1;
         var timeout = 60;
@@ -57,7 +54,7 @@ public class AdminClientRebootstrapTest {
             admin.createTopics(List.of(new NewTopic(TOPIC, PARTITIONS, (short) 2)));
 
             // Only the broker 1 is available for the admin client during the bootstrap.
-            Assertions.assertDoesNotThrow(() -> admin.listTopics().names().get(timeout, TimeUnit.SECONDS).contains(TOPIC));
+            assertDoesNotThrow(() -> admin.listTopics().names().get(timeout, TimeUnit.SECONDS).contains(TOPIC));
 
             clusterInstance.shutdownBroker(broker1);
             clusterInstance.startBroker(broker0);
@@ -65,19 +62,18 @@ public class AdminClientRebootstrapTest {
             // The broker 1, originally cached during the bootstrap, is offline.
             // However, the broker 0 from the bootstrap list is online.
             // Should be able to list topics again.
-            Assertions.assertDoesNotThrow(() -> admin.listTopics().names().get(timeout, TimeUnit.SECONDS).contains(TOPIC));
+            assertDoesNotThrow(() -> admin.listTopics().names().get(timeout, TimeUnit.SECONDS).contains(TOPIC));
         }
     }
 
     @ClusterTest(
-        brokers = 2,
+        brokers = PARTITIONS,
         types = {Type.KRAFT},
         serverProperties = {
-            @ClusterConfigProperty(key = TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, value = "true"),
             @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "2")
         }
     )
-    public void testRebootstrapDisabled(ClusterInstance clusterInstance) {
+    public void testAdminRebootstrapDisabled(ClusterInstance clusterInstance) {
         var broker0 = 0;
         var broker1 = 1;
 
@@ -87,7 +83,7 @@ public class AdminClientRebootstrapTest {
         admin.createTopics(List.of(new NewTopic(TOPIC, PARTITIONS, (short) 2)));
 
         // Only the broker 1 is available for the admin client during the bootstrap.
-        Assertions.assertDoesNotThrow(() -> admin.listTopics().names().get(60, TimeUnit.SECONDS).contains(TOPIC));
+        assertDoesNotThrow(() -> admin.listTopics().names().get(60, TimeUnit.SECONDS).contains(TOPIC));
 
         clusterInstance.shutdownBroker(broker1);
         clusterInstance.startBroker(broker0);
