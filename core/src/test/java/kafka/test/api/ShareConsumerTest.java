@@ -290,6 +290,25 @@ public class ShareConsumerTest {
     }
 
     @ClusterTest
+    public void testPollRecordsGreaterThanMaxBytes() {
+        setup();
+        alterShareAutoOffsetReset("group1", "earliest");
+        try (Producer<byte[], byte[]> producer = createProducer();
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(
+                 "group1",
+                 Map.of(ConsumerConfig.FETCH_MAX_BYTES_CONFIG, 1))
+        ) {
+            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
+            producer.send(record);
+            producer.flush();
+            shareConsumer.subscribe(List.of(tp.topic()));
+            ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(5000));
+            assertEquals(1, records.count());
+            verifyShareGroupStateTopicRecordsProduced();
+        }
+    }
+
+    @ClusterTest
     public void testAcknowledgementSentOnSubscriptionChange() throws ExecutionException, InterruptedException {
         setup();
         alterShareAutoOffsetReset("group1", "earliest");

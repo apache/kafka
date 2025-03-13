@@ -66,6 +66,7 @@ import org.apache.kafka.common.requests.AlterPartitionRequest;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.common.test.api.Flaky;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -375,6 +376,7 @@ public class QuorumControllerTest {
         }
     }
 
+    @Flaky("KAFKA-18845")
     @Test
     public void testUncleanShutdownBrokerElrEnabled() throws Throwable {
         List<Integer> allBrokers = List.of(1, 2, 3);
@@ -1588,15 +1590,16 @@ public class QuorumControllerTest {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         FeatureControlManager featureControlManager = new FeatureControlManager.Builder()
                 .setSnapshotRegistry(snapshotRegistry)
-                .setMetadataVersion(metadataVersion)
                 .build();
+        featureControlManager.replay(new FeatureLevelRecord()
+            .setName(MetadataVersion.FEATURE_NAME)
+            .setFeatureLevel(metadataVersion.featureLevel()));
 
         ControllerResult<Void> result = ActivationRecordsGenerator.generate(
             msg -> { },
-            true,
             -1L,
             BootstrapMetadata.fromVersion(metadataVersion, "test"),
-            metadataVersion,
+            Optional.empty(),
             3);
         RecordTestUtils.replayAll(featureControlManager, result.records());
         return featureControlManager;
@@ -1607,7 +1610,7 @@ public class QuorumControllerTest {
         FeatureControlManager featureControl;
 
         featureControl = getActivationRecords(MetadataVersion.IBP_3_3_IV3);
-        assertEquals(MetadataVersion.IBP_3_3_IV3, featureControl.metadataVersion());
+        assertEquals(MetadataVersion.IBP_3_3_IV3, featureControl.metadataVersionOrThrow());
     }
 
     @Test
@@ -1615,24 +1618,23 @@ public class QuorumControllerTest {
         FeatureControlManager featureControl;
 
         featureControl = getActivationRecords(MetadataVersion.IBP_3_4_IV0);
-        assertEquals(MetadataVersion.IBP_3_4_IV0, featureControl.metadataVersion());
+        assertEquals(MetadataVersion.IBP_3_4_IV0, featureControl.metadataVersionOrThrow());
     }
 
     @Test
     public void testActivationRecordsNonEmptyLog() {
         FeatureControlManager featureControl = getActivationRecords(
             MetadataVersion.IBP_3_9_IV0);
-        assertEquals(MetadataVersion.IBP_3_9_IV0, featureControl.metadataVersion());
+        assertEquals(MetadataVersion.IBP_3_9_IV0, featureControl.metadataVersionOrThrow());
     }
 
     @Test
     public void testActivationRecordsPartialBootstrap() {
         ControllerResult<Void> result = ActivationRecordsGenerator.generate(
             logMsg -> { },
-            true,
             0L,
             BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_6_IV1, "test"),
-            MetadataVersion.IBP_3_6_IV1,
+            Optional.empty(),
             3);
         assertFalse(result.isAtomic());
         assertTrue(RecordTestUtils.recordAtIndexAs(
@@ -1678,10 +1680,9 @@ public class QuorumControllerTest {
 
         ControllerResult<Void> result = ActivationRecordsGenerator.generate(
             logMsg -> { },
-            false,
             offsetControlManager.transactionStartOffset(),
             BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_6_IV1, "test"),
-            MetadataVersion.IBP_3_6_IV1,
+            Optional.of(MetadataVersion.IBP_3_6_IV1),
             3);
 
         assertTrue(result.isAtomic());
@@ -1702,10 +1703,9 @@ public class QuorumControllerTest {
         assertThrows(RuntimeException.class, () ->
             ActivationRecordsGenerator.generate(
                 msg -> { },
-                false,
                 offsetControlManager.transactionStartOffset(),
                 BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_6_IV0, "test"),
-                MetadataVersion.IBP_3_6_IV0,
+                Optional.of(MetadataVersion.IBP_3_6_IV0),
                 3));
     }
 }

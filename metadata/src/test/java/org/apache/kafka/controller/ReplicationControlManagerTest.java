@@ -237,8 +237,10 @@ public class ReplicationControlManagerTest {
                 setQuorumFeatures(new QuorumFeatures(0,
                     QuorumFeatures.defaultSupportedFeatureMap(true),
                     List.of(0))).
-                setMetadataVersion(metadataVersion).
                 build();
+            this.featureControl.replay(new FeatureLevelRecord().
+                setName(MetadataVersion.FEATURE_NAME).
+                setFeatureLevel(metadataVersion.featureLevel()));
             featureControl.replay(new FeatureLevelRecord()
                 .setName(EligibleLeaderReplicasVersion.FEATURE_NAME)
                     .setFeatureLevel(isElrEnabled ?
@@ -3268,7 +3270,7 @@ public class ReplicationControlManagerTest {
                         put(new TopicIdPartition(topicB, 1), NONE);
                     }});
             }})), AssignmentsHelper.normalize(controllerResult.response()));
-        short recordVersion = ctx.featureControl.metadataVersion().partitionChangeRecordVersion();
+        short recordVersion = ctx.featureControl.metadataVersionOrThrow().partitionChangeRecordVersion();
         assertEquals(sortPartitionChangeRecords(List.of(
                 new ApiMessageAndVersion(
                         new PartitionChangeRecord().setTopicId(topicA).setPartitionId(0)
@@ -3347,7 +3349,7 @@ public class ReplicationControlManagerTest {
                     .setLogDirs(List.of(dir2b1)), (short) 2)),
             filter(records, BrokerRegistrationChangeRecord.class)
         );
-        short partitionChangeRecordVersion = ctx.featureControl.metadataVersion().partitionChangeRecordVersion();
+        short partitionChangeRecordVersion = ctx.featureControl.metadataVersionOrThrow().partitionChangeRecordVersion();
         assertEquals(
             sortPartitionChangeRecords(List.of(
                 new ApiMessageAndVersion(new PartitionChangeRecord().setTopicId(topicA).setPartitionId(0)
