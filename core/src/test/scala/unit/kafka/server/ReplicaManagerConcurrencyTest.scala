@@ -26,7 +26,7 @@ import kafka.utils.TestUtils.waitUntilTrue
 import kafka.utils.{CoreUtils, Logging, TestUtils}
 import org.apache.kafka.common.metadata.{FeatureLevelRecord, PartitionChangeRecord, PartitionRecord, RegisterBrokerRecord, TopicRecord}
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.SimpleRecord
 import org.apache.kafka.common.replica.ClientMetadata.DefaultClientMetadata
 import org.apache.kafka.common.requests.{FetchRequest, ProduceResponse}
@@ -253,7 +253,6 @@ class ReplicaManagerConcurrencyTest extends Logging {
       }
 
       val fetchParams = new FetchParams(
-        ApiKeys.FETCH.latestVersion,
         replicaId,
         defaultBrokerEpoch(replicaId),
         random.nextInt(100),
