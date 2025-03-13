@@ -23,6 +23,7 @@ import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
+
 import org.junit.jupiter.api.Assertions;
 
 import java.time.Duration;
