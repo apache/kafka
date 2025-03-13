@@ -15,11 +15,8 @@
  * limitations under the License.
  */
 
-package kafka.admin;
+package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.AdminClientConfig;
-import org.apache.kafka.clients.admin.FenceProducersOptions;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -64,7 +61,7 @@ public class AdminFenceProducersTest {
 
     private Producer<byte[], byte[]> createProducer() {
         return clusterInstance.producer(Map.of(ProducerConfig.TRANSACTIONAL_ID_CONFIG, TXN_ID,
-                ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, "2000"));
+            ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, "2000"));
     }
 
     @ClusterTest

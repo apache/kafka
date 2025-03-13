@@ -66,6 +66,7 @@ import org.apache.kafka.common.requests.AlterPartitionRequest;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.common.test.api.Flaky;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -378,6 +379,7 @@ public class QuorumControllerTest {
         }
     }
 
+    @Flaky("KAFKA-18845")
     @Test
     public void testUncleanShutdownBrokerElrEnabled() throws Throwable {
         List<Integer> allBrokers = Arrays.asList(1, 2, 3);
