@@ -2675,17 +2675,12 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
         var describeWithFakeGroupResult: DescribeShareGroupsResult = null
 
-        def check(): Unit = {
+        TestUtils.waitUntilTrue(() => {
           describeWithFakeGroupResult = client.describeShareGroups(util.Arrays.asList(testGroupId, fakeGroupId),
             new DescribeShareGroupsOptions().includeAuthorizedOperations(true))
           val members = describeWithFakeGroupResult.describedGroups().get(testGroupId).get().members()
-          val topicPartitionsByTopic = members.asScala.flatMap(_.assignment().topicPartitions().asScala).groupBy(_.topic())
-          if (topicPartitionsByTopic.isEmpty) {
-            check()
-          }
-        }
-
-        check()
+          members.asScala.flatMap(_.assignment().topicPartitions().asScala).groupBy(_.topic()).nonEmpty
+        }, s"Could not get partitions assigned. Last response $describeWithFakeGroupResult.")
 
         assertEquals(2, describeWithFakeGroupResult.describedGroups().size())
 
