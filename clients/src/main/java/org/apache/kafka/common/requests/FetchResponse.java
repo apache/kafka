@@ -36,7 +36,6 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -90,7 +89,7 @@ public class FetchResponse extends AbstractResponse {
      */
     public FetchResponse(FetchResponseData fetchResponseData) {
         super(ApiKeys.FETCH);
-        this.data = throwIfHasNullRecords(fetchResponseData);
+        this.data = convertNullRecordsToEmpty(fetchResponseData);
     }
 
     public Errors error() {
@@ -290,10 +289,11 @@ public class FetchResponse extends AbstractResponse {
                 .setResponses(topicResponseList);
     }
 
-    private static FetchResponseData throwIfHasNullRecords(FetchResponseData fetchResponseData) {
+    private static FetchResponseData convertNullRecordsToEmpty(FetchResponseData fetchResponseData) {
         fetchResponseData.responses().stream()
             .flatMap(response -> response.partitions().stream())
-            .forEach(partition -> Objects.requireNonNull(partition.records(), "[Partition " + partition.partitionIndex() + "] has null records"));
+            .filter(partition -> partition.records() == null)
+            .forEach(partition -> partition.setRecords(MemoryRecords.EMPTY));
         return fetchResponseData;
     }
 }

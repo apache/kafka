@@ -317,7 +317,6 @@ import static org.apache.kafka.common.protocol.ApiKeys.SASL_AUTHENTICATE;
 import static org.apache.kafka.common.protocol.ApiKeys.SYNC_GROUP;
 import static org.apache.kafka.common.requests.EndTxnRequest.LAST_STABLE_VERSION_BEFORE_TRANSACTION_V2;
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -595,20 +594,23 @@ public class RequestResponseTest {
             .setPartitions(List.of(partitionData))
             .setTopicId(id);
         FetchResponseData data = new FetchResponseData().setResponses(List.of(response));
-        assertThrows(NullPointerException.class, () -> new FetchResponse(data));
+        FetchResponse fetchResponse = new FetchResponse(data);
+        validateNoNullRecords(fetchResponse);
 
         response.setPartitions(List.of(FetchResponse.partitionResponse(0, Errors.NONE)));
-        FetchResponse fetchResponse = assertDoesNotThrow(() -> new FetchResponse(data));
-        fetchResponse.data().responses().stream()
-            .flatMap(res -> res.partitions().stream())
-            .forEach(partition -> assertEquals(MemoryRecords.EMPTY, partition.records()));
+        fetchResponse = new FetchResponse(data);
+        validateNoNullRecords(fetchResponse);
 
         TopicIdPartition topicIdPartition = new TopicIdPartition(id, new TopicPartition("test", 0));
         LinkedHashMap<TopicIdPartition, FetchResponseData.PartitionData> tpToData = new LinkedHashMap<>(Map.of(topicIdPartition, partitionData));
-        fetchResponse = assertDoesNotThrow(() -> FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, tpToData));
+        fetchResponse = FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, tpToData);
+        validateNoNullRecords(fetchResponse);
+    }
+
+    private void validateNoNullRecords(FetchResponse fetchResponse) {
         fetchResponse.data().responses().stream()
-                .flatMap(res -> res.partitions().stream())
-                .forEach(partition -> assertEquals(MemoryRecords.EMPTY, partition.records()));
+            .flatMap(response -> response.partitions().stream())
+            .forEach(partition -> assertEquals(MemoryRecords.EMPTY, partition.records()));
     }
 
     @Test
