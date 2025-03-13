@@ -628,7 +628,10 @@ class LogManager(logDirs: Seq[File],
                          initialTaskDelayMs)
     }
     if (cleanerConfig.enableCleaner) {
-      _cleaner = new LogCleaner(cleanerConfig, liveLogDirs, currentLogs, logDirFailureChannel, time = time)
+      val logs = new ConcurrentHashMap[TopicPartition, UnifiedLog]()
+      currentLogs.foreach(log => logs.put(log._1, log._2))
+
+      _cleaner = new LogCleaner(cleanerConfig, liveLogDirs, logs, logDirFailureChannel, time = time)
       _cleaner.startup()
     }
   }
