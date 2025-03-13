@@ -2390,9 +2390,9 @@ public class GroupMetadataManager {
      * Computes the diff between the subscribed metadata and the initialized share topic
      * partitions corresponding to a share group.
      *
-     * @param group The share group for which diff is being calculated
-     * @param subscriptionMetadata The subscription metadata corresponding to the share group.
-     * @return A map of topic partitions which are subscribed by the share group but not initialized yet.
+     * @param groupId               The share group id for which diff is being calculated
+     * @param subscriptionMetadata  The subscription metadata corresponding to the share group.
+     * @return  A map of topic partitions which are subscribed by the share group but not initialized yet.
      */
     // Visibility for testing
     Map<Uuid, Map.Entry<String, Set<Integer>>> subscribedTopicsChangeMap(String groupId, Map<String, TopicMetadata> subscriptionMetadata) {
@@ -2424,9 +2424,9 @@ public class GroupMetadataManager {
      * Based on the diff between the subscribed topic partitions and the initialized topic partitions,
      * created initialize request for the non-initialized ones.
      *
-     * @param groupId The share group for which partitions need to be initialized.
-     * @param groupEpoch The group epoch of the share group.
-     * @param subscriptionMetadata The subscription metadata for the share group.
+     * @param groupId               The share group id for which partitions need to be initialized.
+     * @param groupEpoch            The group epoch of the share group.
+     * @param subscriptionMetadata  The subscription metadata for the share group.
      * @return An optional representing the persister initialize request.
      */
     private Optional<InitializeShareGroupStateParameters> maybeCreateInitializeShareGroupStateRequest(

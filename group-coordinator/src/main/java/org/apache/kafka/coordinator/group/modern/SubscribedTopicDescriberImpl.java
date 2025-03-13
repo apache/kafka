@@ -94,14 +94,14 @@ public class SubscribedTopicDescriberImpl implements SubscribedTopicDescriber {
      * @throws UnknownTopicIdException if the topicId is not found in the metadata.
      */
     @Override
-    public Set<Integer> assignablePartitions(Uuid topicId) throws UnknownTopicIdException {
+    public Set<Integer> assignablePartitions(Uuid topicId) {
         TopicMetadata topic = this.topicMetadata.get(topicId);
         if (topic == null) {
-            throw new UnknownTopicIdException(topicId.toString());
+            return Set.of();
         }
 
         if (topicPartitionAllowedMap == null) {
-            return IntStream.range(0, topic.numPartitions()).boxed().collect(Collectors.toSet());
+            return IntStream.range(0, topic.numPartitions()).boxed().collect(Collectors.toUnmodifiableSet());
         }
 
         return topicPartitionAllowedMap.getOrDefault(topicId, Set.of());

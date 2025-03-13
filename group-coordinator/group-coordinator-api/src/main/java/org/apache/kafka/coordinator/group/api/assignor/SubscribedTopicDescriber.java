@@ -17,7 +17,6 @@
 package org.apache.kafka.coordinator.group.api.assignor;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.errors.UnknownTopicIdException;
 
 import java.util.Set;
 
@@ -31,7 +30,7 @@ public interface SubscribedTopicDescriber {
      *
      * @param topicId   Uuid corresponding to the topic.
      * @return The number of partitions corresponding to the given topic Id,
-     *         or -1 if the topic Id does not exist.
+     *         or -1 if the topic id does not exist.
      */
     int numPartitions(Uuid topicId);
 
@@ -52,7 +51,6 @@ public interface SubscribedTopicDescriber {
      *
      * @param topicId   The uuid of the topic
      * @return The set of integers representing assignable partitions. Could be empty, or contain all partitions.
-     * @throws UnknownTopicIdException if topic id does not exist.
      */
-    Set<Integer> assignablePartitions(Uuid topicId) throws UnknownTopicIdException;
+    Set<Integer> assignablePartitions(Uuid topicId);
 }
