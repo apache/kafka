@@ -41,7 +41,7 @@ plugins {
 
   id "com.github.spotbugs" version '6.0.25' apply false
   id 'org.scoverage' version '8.0.3' apply false
-  id 'io.github.goooler.shadow' version '8.1.3' apply false
+  id 'com.gradleup.shadow' version '8.3.6' apply false
   id 'com.diffplug.spotless' version "6.25.0"
 }
 
@@ -364,17 +364,14 @@ subprojects {
           if (!shouldPublishWithShadow) {
             from components.java
           } else {
-            apply plugin: 'io.github.goooler.shadow'
-            project.shadow.component(mavenJava)
+            apply plugin: 'com.gradleup.shadow'
+            from components.shadow
 
             // Fix for avoiding inclusion of runtime dependencies marked as 'shadow' in MANIFEST Class-Path.
-            // https://github.com/johnrengelman/shadow/issues/324
+            // https://github.com/GradleUp/shadow/issues/324
             afterEvaluate {
               pom.withXml { xml ->
-                if (xml.asNode().get('dependencies') == null) {
-                  xml.asNode().appendNode('dependencies')
-                }
-                def dependenciesNode = xml.asNode().get('dependencies').get(0)
+                def dependenciesNode = xml.asNode().get('dependencies') ?: xml.asNode().appendNode('dependencies')
                 project.configurations.shadowed.allDependencies.each {
                   def dependencyNode = dependenciesNode.appendNode('dependency')
                   dependencyNode.appendNode('groupId', it.group)
@@ -1301,6 +1298,7 @@ project(':metadata') {
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':raft').sourceSets.test.output
     testImplementation project(':server-common').sourceSets.test.output
+    testImplementation project(':test-common:test-common-util')
 
     testRuntimeOnly runtimeTestLibs
 
@@ -1825,6 +1823,10 @@ project(':clients') {
     generator project(':generator')
   }
 
+  tasks.withType(GenerateModuleMetadata) {
+    enabled = false
+  }
+
   task createVersionFile() {
     def receiptFile = file("${layout.buildDirectory.get().asFile.path}/kafka/$buildVersionFileName")
     inputs.property "commitId", commitId
@@ -1859,7 +1861,7 @@ project(':clients') {
     // dependencies excluded from the final jar, since they are declared as runtime dependencies
     dependencies {
       project.configurations.shadowed.allDependencies.each {
-        exclude(dependency(it.group + ':' + it.name))
+        exclude(dependency(it))
       }
       // exclude proto files from the jar
       exclude "**/opentelemetry/proto/**/*.proto"
@@ -2234,6 +2236,7 @@ project(':storage') {
     testImplementation project(':core').sourceSets.test.output
     testImplementation project(':test-common:test-common-internal-api')
     testImplementation project(':test-common:test-common-runtime')
+    testImplementation project(':test-common:test-common-util')
     testImplementation project(':server')
     testImplementation project(':server-common')
     testImplementation project(':server-common').sourceSets.test.output
@@ -3243,7 +3246,7 @@ project(':streams:upgrade-system-tests-39') {
 
 project(':jmh-benchmarks') {
 
-  apply plugin: 'io.github.goooler.shadow'
+  apply plugin: 'com.gradleup.shadow'
 
   shadowJar {
     archiveBaseName = 'kafka-jmh-benchmarks'
