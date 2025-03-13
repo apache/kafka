@@ -170,7 +170,7 @@ object StorageTool extends Logging {
     printStream: PrintStream,
     validFeatures: java.util.List[Feature]
   ): Unit = {
-    val releaseVersion = Option(namespace.getString("release_version")).getOrElse(MetadataVersion.latestTesting().version())
+    val releaseVersion = Option(namespace.getString("release_version")).getOrElse(MetadataVersion.LATEST_PRODUCTION.toString)
     try {
       val metadataVersion = MetadataVersion.fromVersionString(releaseVersion)
 
