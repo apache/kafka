@@ -225,6 +225,11 @@ public class FeatureControlManager {
         if (featureName.equals(MetadataVersion.FEATURE_NAME)) {
             // Perform additional checks if we're updating metadata.version
             return updateMetadataVersion(newVersion, upgradeType.equals(FeatureUpdate.UpgradeType.UNSAFE_DOWNGRADE), records::add);
+        } else if (featureName.equals(KRaftVersion.FEATURE_NAME)) {
+            // TODO: send the call to RaftClient instead of generating a record
+
+            // TODO: what error code to return?
+            return ApiError.NONE;
         } else {
             // Validate dependencies for features that are not metadata.version
             try {
