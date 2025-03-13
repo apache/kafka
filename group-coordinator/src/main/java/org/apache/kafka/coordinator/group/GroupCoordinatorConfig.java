@@ -68,9 +68,7 @@ public class GroupCoordinatorConfig {
             "The " + Group.GroupType.SHARE + " rebalance protocol is in early access and therefore must not be used in production.";
     public static final List<String> GROUP_COORDINATOR_REBALANCE_PROTOCOLS_DEFAULT = List.of(
         Group.GroupType.CLASSIC.toString(),
-        Group.GroupType.CONSUMER.toString(),
-        Group.GroupType.STREAMS.toString()
-    );
+        Group.GroupType.CONSUMER.toString());
     public static final String GROUP_COORDINATOR_APPEND_LINGER_MS_CONFIG = "group.coordinator.append.linger.ms";
     public static final String GROUP_COORDINATOR_APPEND_LINGER_MS_DOC = "The duration in milliseconds that the coordinator will " +
         "wait for writes to accumulate before flushing them to disk. Transactional writes are not accumulated.";

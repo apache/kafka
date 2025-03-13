@@ -160,7 +160,6 @@ class KafkaApisTest extends Logging {
   }
 
   def createKafkaApis(
-    newGroupCoordiantorEnable: Boolean = true,
     authorizer: Option[Authorizer] = None,
     configRepository: ConfigRepository = new MockConfigRepository(),
     overrideProperties: Map[String, String] = Map.empty,
@@ -168,7 +167,6 @@ class KafkaApisTest extends Logging {
   ): KafkaApis = {
 
     val properties = TestUtils.createBrokerConfig(brokerId)
-    properties.put(GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG, newGroupCoordiantorEnable)
     properties.put(KRaftConfigs.NODE_ID_CONFIG, brokerId.toString)
     properties.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker")
     val voterId = brokerId + 1
@@ -341,7 +339,6 @@ class KafkaApisTest extends Logging {
     cgConfigs.put(STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_HEARTBEAT_INTERVAL_MS_DEFAULT.toString)
     cgConfigs.put(STREAMS_SESSION_TIMEOUT_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_SESSION_TIMEOUT_MS_DEFAULT.toString)
     cgConfigs.put(STREAMS_NUM_STANDBY_REPLICAS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT.toString)
-
 
     when(configRepository.groupConfig(consumerGroupId)).thenReturn(cgConfigs)
 
@@ -9934,7 +9931,7 @@ class KafkaApisTest extends Logging {
       cache.setImage(delta.apply(MetadataProvenance.EMPTY))
       cache
     }
-    kafkaApis = createKafkaApis(newGroupCoordiantorEnable = false)
+    kafkaApis = createKafkaApis()
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
 
     val expectedHeartbeatResponse = new StreamsGroupHeartbeatResponseData()
@@ -10405,7 +10402,7 @@ class KafkaApisTest extends Logging {
       cache.setImage(delta.apply(MetadataProvenance.EMPTY))
       cache
     }
-    kafkaApis = createKafkaApis(newGroupCoordiantorEnable = false)
+    kafkaApis = createKafkaApis()
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
     val response = verifyNoThrottling[StreamsGroupDescribeResponse](requestChannelRequest)
 
