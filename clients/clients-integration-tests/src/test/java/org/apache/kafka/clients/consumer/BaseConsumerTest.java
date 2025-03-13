@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.clients.consumer;
 
-import org.apache.kafka.common.ClusterResource;
-import org.apache.kafka.common.ClusterResourceListener;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
@@ -26,41 +24,14 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
 
 public class BaseConsumerTest {
-    public static final AtomicInteger updateProducerCount = new AtomicInteger();
-    public static final AtomicInteger updateConsumerCount = new AtomicInteger();
-
-    public static class TestClusterResourceListenerSerializer implements Serializer<byte[]>, ClusterResourceListener {
-        @Override
-        public void onUpdate(ClusterResource clusterResource) {
-            updateProducerCount.incrementAndGet();
-        }
-
-        @Override
-        public byte[] serialize(String topic, byte[] data) {
-            return data;
-        }
-    }
-
-    public static class TestClusterResourceListenerDeserializer implements Deserializer<byte[]>, ClusterResourceListener {
-        @Override
-        public void onUpdate(ClusterResource clusterResource) {
-            updateConsumerCount.incrementAndGet();
-        }
-
-        @Override
-        public byte[] deserialize(String topic, byte[] data) {
-            return data;
-        }
-    }
 
     public static class SerializerImpl implements Serializer<byte[]> {
-        private ByteArraySerializer serializer = new ByteArraySerializer();
+        private final ByteArraySerializer serializer = new ByteArraySerializer();
 
         @Override
         public byte[] serialize(String topic, Headers headers, byte[] data) {
@@ -86,7 +57,7 @@ public class BaseConsumerTest {
     }
 
     public static class DeserializerImpl implements Deserializer<byte[]> {
-        private ByteArrayDeserializer deserializer = new ByteArrayDeserializer();
+        private final ByteArrayDeserializer deserializer = new ByteArrayDeserializer();
 
         @Override
         public byte[] deserialize(String topic, Headers headers, byte[] data) {
