@@ -43,7 +43,6 @@ import org.apache.kafka.common.requests.ShareFetchResponse;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
 
 import org.slf4j.Logger;
@@ -67,8 +66,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
-
-import static org.apache.kafka.clients.consumer.internals.TimedRequestState.deadlineTimer;
 
 /**
  * {@code ShareConsumeRequestManager} is responsible for generating {@link ShareFetchRequest} and
@@ -514,7 +511,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                 if (!acknowledgementsMapForNode.isEmpty()) {
                     acknowledgeRequestStates.get(nodeId).addSyncRequest(new AcknowledgeRequestState(logContext,
                         ShareConsumeRequestManager.class.getSimpleName() + ":1",
-                        deadlineTimer(time, deadlineMs),
+                        deadlineMs,
                         retryBackoffMs,
                         retryBackoffMaxMs,
                         sessionHandler,
@@ -536,12 +533,12 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
      * Enqueue an AcknowledgeRequestState to be picked up on the next poll.
      *
      * @param acknowledgementsMap The acknowledgements to commit
-     * @param defaultTimeoutMs    Timeout which would be used when the request is retried, i.e. if it fails with
+     * @param deadlineMs          Time until which the request will be retried if it fails with
      *                            an expected retriable error.
      */
     public void commitAsync(
             final Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap,
-            final long defaultTimeoutMs) {
+            final long deadlineMs) {
         final Cluster cluster = metadata.fetch();
         final ResultHandler resultHandler = new ResultHandler(Optional.empty());
 
@@ -565,7 +562,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                             if (asyncRequestState == null) {
                                 acknowledgeRequestStates.get(nodeId).setAsyncRequest(new AcknowledgeRequestState(logContext,
                                         ShareConsumeRequestManager.class.getSimpleName() + ":2",
-                                        time.timer(defaultTimeoutMs),
+                                        deadlineMs,
                                         retryBackoffMs,
                                         retryBackoffMaxMs,
                                         sessionHandler,
@@ -667,7 +664,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                     // There can only be one close() happening at a time. So per node, there will be one acknowledge request state.
                     acknowledgeRequestStates.get(nodeId).setCloseRequest(new AcknowledgeRequestState(logContext,
                             ShareConsumeRequestManager.class.getSimpleName() + ":3",
-                            deadlineTimer(time, deadlineMs),
+                            deadlineMs,
                             retryBackoffMs,
                             retryBackoffMaxMs,
                             sessionHandler,
@@ -1109,7 +1106,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
 
         AcknowledgeRequestState(LogContext logContext,
                                 String owner,
-                                Timer timer,
+                                long deadlineMs,
                                 long retryBackoffMs,
                                 long retryBackoffMaxMs,
                                 ShareSessionHandler sessionHandler,
@@ -1117,7 +1114,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                                 Map<TopicIdPartition, Acknowledgements> acknowledgementsMap,
                                 ResultHandler resultHandler,
                                 AcknowledgeRequestType acknowledgeRequestType) {
-            super(logContext, owner, retryBackoffMs, retryBackoffMaxMs, timer);
+            super(logContext, owner, retryBackoffMs, retryBackoffMaxMs, deadlineTimer(time, deadlineMs));
             this.sessionHandler = sessionHandler;
             this.nodeId = nodeId;
             this.acknowledgementsToSend = acknowledgementsMap;
@@ -1126,7 +1123,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             this.incompleteAcknowledgements = new HashMap<>();
             this.requestType = acknowledgeRequestType;
             this.isProcessed = false;
-            this.timeoutMs = timer.timeoutMs();
+            this.timeoutMs = remainingMs();
         }
 
         UnsentRequest buildRequest() {
@@ -1271,6 +1268,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             processPendingInFlightAcknowledgements(new InvalidRecordStateException(INVALID_RESPONSE));
             resultHandler.completeIfEmpty();
             isProcessed = true;
+            resetTimerAndRequestState();
         }
 
         /**

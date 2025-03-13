@@ -651,7 +651,8 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                 applicationEventHandler.wakeupNetworkThread();
             } else if (!acknowledgementsMap.isEmpty()) {
                 // Asynchronously commit any waiting acknowledgements
-                applicationEventHandler.add(new ShareAcknowledgeAsyncEvent(acknowledgementsMap, defaultApiTimeoutMs));
+                Timer timer = time.timer(defaultApiTimeoutMs);
+                applicationEventHandler.add(new ShareAcknowledgeAsyncEvent(acknowledgementsMap, calculateDeadlineMs(timer)));
 
                 // Notify the network thread to wake up and start the next round of fetching
                 applicationEventHandler.wakeupNetworkThread();
@@ -660,7 +661,8 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         } else {
             if (!acknowledgementsMap.isEmpty()) {
                 // Asynchronously commit any waiting acknowledgements
-                applicationEventHandler.add(new ShareAcknowledgeAsyncEvent(acknowledgementsMap, defaultApiTimeoutMs));
+                Timer timer = time.timer(defaultApiTimeoutMs);
+                applicationEventHandler.add(new ShareAcknowledgeAsyncEvent(acknowledgementsMap, calculateDeadlineMs(timer)));
 
                 // Notify the network thread to wake up and start the next round of fetching
                 applicationEventHandler.wakeupNetworkThread();
@@ -758,7 +760,8 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
 
             Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap = acknowledgementsToSend();
             if (!acknowledgementsMap.isEmpty()) {
-                ShareAcknowledgeAsyncEvent event = new ShareAcknowledgeAsyncEvent(acknowledgementsMap, defaultApiTimeoutMs);
+                Timer timer = time.timer(defaultApiTimeoutMs);
+                ShareAcknowledgeAsyncEvent event = new ShareAcknowledgeAsyncEvent(acknowledgementsMap, calculateDeadlineMs(timer));
                 applicationEventHandler.add(event);
             }
         } finally {

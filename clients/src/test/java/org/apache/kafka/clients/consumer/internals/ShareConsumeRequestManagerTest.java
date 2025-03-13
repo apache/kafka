@@ -813,7 +813,6 @@ public class ShareConsumeRequestManagerTest {
 
         // Further requests which came before the timeout are processed as expected.
         assertEquals(1, shareConsumeRequestManager.sendAcknowledgements());
-
         assertEquals(4, shareConsumeRequestManager.requestStates(0).getAsyncRequest().getInFlightAcknowledgementsCount(tip0));
 
         client.prepareResponse(fullAcknowledgeResponse(tip0, Errors.NONE));
