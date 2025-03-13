@@ -1,0 +1,264 @@
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+name: Client and Streams Tests
+
+on:
+  push:
+    branches:
+      - trunk
+
+jobs:
+  test-modules:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        java: [ 11 ]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ matrix.java }}
+          distribution: temurin
+
+      - name: Setup Gradle
+        uses: ./.github/actions/setup-gradle
+        with:
+          java-version: ${{ matrix.java }}
+          develocity-access-key: ${{ secrets.DEVELOCITY_ACCESS_KEY }}
+
+      - name: Run Tests
+        id: run-tests
+        continue-on-error: false
+        run: |
+          start_time=$(date +%s)
+          
+          ./gradlew :clients:test :streams:test \
+            --no-daemon \
+            --build-cache \
+            --continue \
+            --no-scan \
+            -PtestLoggingEvents=started,passed,skipped,failed \
+            -PmaxParallelForks=4 \
+            -PmaxTestRetries=1 \
+            -PmaxTestRetryFailures=3 \
+            -Dorg.gradle.jvmargs="-Xmx2g" \
+            -Pcompiler.options.forkOptions.jvmArgs="-Xlint:none" \
+            -Pcompiler.warning.mode=none \
+            -Pcompiler.args="-nowarn" \
+            -Pcompiler.options.compilerArgs="-nowarn" \
+            -Pcompiler.options.forkOptions.compilerArgs="-nowarn" \
+            -Pkafka.test.verbose=true
+          
+          end_time=$(date +%s)
+          duration=$((end_time - start_time))
+          
+          hours=$((duration / 3600))
+          minutes=$(( (duration % 3600) / 60 ))
+          seconds=$((duration % 60))
+          
+          if [ $hours -gt 0 ]; then
+            duration_str="${hours}h${minutes}m${seconds}s"
+          else
+            duration_str="${minutes}m${seconds}s"
+          fi
+          
+          echo "TOTAL_DURATION=$duration_str" >> $GITHUB_ENV
+          
+          if [ $? -ne 0 ]; then
+            echo "Tests failed"
+            exit 1
+          fi
+      - name: Generate Test Summary
+        if: always()
+        run: |
+          {
+            if find . -path "*/build/test-results/test" -type d | grep -q .; then
+          
+              TOTAL_TESTS=$(find . -path "*/build/test-results/test/TEST-*.xml" -type f -exec grep -c "<testcase" {} \; | awk '{sum += $1} END {print sum}')
+              TOTAL_FAILED=$(find . -path "*/build/test-results/test/TEST-*.xml" -type f -exec grep -c "<failure" {} \; | awk '{sum += $1} END {print sum}')
+              TOTAL_SKIPPED=$(find . -path "*/build/test-results/test/TEST-*.xml" -type f -exec grep -c "<skipped" {} \; | awk '{sum += $1} END {print sum}')
+              TOTAL_ERRORS=$(find . -path "*/build/test-results/test/TEST-*.xml" -type f -exec grep -c "<error" {} \; | awk '{sum += $1} END {print sum}')
+              TOTAL_QUARANTINED=$(find . -type f \( -name "*.java" -o -name "TEST-*.xml" \) -exec grep -l "@Quarantined\|org.apache.kafka.test.Quarantined" {} \; | wc -l)
+          
+              # Create temporary files to store test results
+              touch /tmp/failed_tests.txt /tmp/passed_tests.txt /tmp/flaky_tests.txt /tmp/skipped_tests.txt
+          
+              find . -path "*/build/test-results/test/TEST-*.xml" -type f | while read -r file; do
+                while IFS= read -r line; do
+                  if [[ $line == *"<testcase"* ]]; then
+                    current_test=$(echo "$line" | grep -o 'name="[^"]*"' | cut -d'"' -f2)
+                    current_class=$(echo "$line" | grep -o 'classname="[^"]*"' | cut -d'"' -f2)
+                    current_module=$(echo "$current_class" | rev | cut -d'.' -f1 | rev)
+                    test_key="${current_module}|${current_test}"
+          
+                    found_result=false
+                    while IFS= read -r subline; do
+                      if [[ $subline == *"<failure"* ]]; then
+                        # Store failed test with normalized module name
+                        echo "$test_key" >> /tmp/failed_tests.txt
+                        found_result=true
+                        break
+                      elif [[ $subline == *"<skipped"* ]]; then
+                        # Store skipped test with normalized module name
+                        echo "$test_key" >> /tmp/skipped_tests.txt
+                        found_result=true
+                        break
+                      elif [[ $subline == *"</testcase>"* ]]; then
+                        break
+                      fi
+                    done
+          
+                    # If no failure or skip was found, it's a passed test
+                    if [ "$found_result" = false ]; then
+                      echo "$test_key" >> /tmp/passed_tests.txt
+                    fi
+                  fi
+                done < "$file"
+              done
+          
+              # Find flaky tests by identifying tests that both passed and failed
+              sort -u /tmp/passed_tests.txt > /tmp/passed_tests.txt.sorted
+              sort -u /tmp/failed_tests.txt > /tmp/failed_tests.txt.sorted
+              comm -12 /tmp/passed_tests.txt.sorted /tmp/failed_tests.txt.sorted > /tmp/flaky_tests.txt
+          
+              # Remove flaky tests from failed tests list since they eventually passed
+              comm -23 /tmp/failed_tests.txt.sorted /tmp/flaky_tests.txt > /tmp/failed_tests.txt.final
+              mv /tmp/failed_tests.txt.final /tmp/failed_tests.txt
+          
+              TOTAL_FLAKY=$(sort -u /tmp/flaky_tests.txt | wc -l)
+              TOTAL_FAILED=$(sort -u /tmp/failed_tests.txt | wc -l)
+          
+              TOTAL_PASSED=$((TOTAL_TESTS - TOTAL_FAILED - TOTAL_SKIPPED - TOTAL_ERRORS))
+          
+              echo "TOTAL_TESTS=${TOTAL_TESTS}" >> $GITHUB_ENV
+              echo "TOTAL_PASSED=${TOTAL_PASSED}" >> $GITHUB_ENV
+              echo "TOTAL_FAILED=${TOTAL_FAILED}" >> $GITHUB_ENV
+              echo "TOTAL_SKIPPED=${TOTAL_SKIPPED}" >> $GITHUB_ENV
+              echo "TOTAL_QUARANTINED=${TOTAL_QUARANTINED}" >> $GITHUB_ENV
+              echo "TOTAL_ERRORS=${TOTAL_ERRORS}" >> $GITHUB_ENV
+              echo "TOTAL_FLAKY=${TOTAL_FLAKY}" >> $GITHUB_ENV
+
+              if [ "$TOTAL_FAILED" -gt 0 ] || [ "$TOTAL_ERRORS" -gt 0 ]; then
+                echo "BUILD_STATUS=failed" >> $GITHUB_ENV
+              else
+                echo "BUILD_STATUS=success" >> $GITHUB_ENV
+              fi
+          
+            else
+              echo "No test results found."
+              echo "BUILD_STATUS=failed" >> $GITHUB_ENV
+            fi
+          } >> $GITHUB_STEP_SUMMARY
+
+      - name: Report Failed Tests
+        if: always()
+        run: |
+          {
+            echo "# Test Summary"
+            echo
+            echo "## Test Results"
+            echo
+            if [ "${{ env.BUILD_STATUS }}" = "success" ]; then
+              echo "${{ env.TOTAL_TESTS }} tests cases run in ${{ env.TOTAL_DURATION }}. ✅"
+            else
+              echo "${{ env.TOTAL_TESTS }} tests cases run in ${{ env.TOTAL_DURATION }}. ❌"
+            fi
+            echo
+            echo "${{ env.TOTAL_PASSED }} PASSED ✅, ${{ env.TOTAL_FAILED }} FAILED ❌, ${{ env.TOTAL_FLAKY }} FLAKY ⚠️, ${{ env.TOTAL_SKIPPED }} SKIPPED 🙈, ${{ env.TOTAL_QUARANTINED }} QUARANTINED 😷, and ${{ env.TOTAL_ERRORS }} errors."
+            echo
+
+            if [ "${{ env.TOTAL_FAILED }}" -gt 0 ]; then
+              echo "<details open=\"true\">"
+              echo "<summary>Failed Tests ❌ (${{ env.TOTAL_FAILED }})</summary>"
+              echo
+              echo "| Module | Test |"
+              echo "| ------ | ---- |"
+              while IFS='|' read -r module test; do
+                if [ ! -z "$module" ] && [ ! -z "$test" ]; then
+                  echo "| $module | $test |"
+                fi
+              done < /tmp/failed_tests.txt
+              echo "</details>"
+            fi
+
+            if [ -n "${{ env.TOTAL_FLAKY }}" ] && [ "${{ env.TOTAL_FLAKY }}" -gt 0 ]; then
+              echo "<details open=\"true\">"
+              echo "<summary>Flaky Tests ⚠️ (${{ env.TOTAL_FLAKY }})</summary>"
+              echo
+              echo "| Module | Test |"
+              echo "| ------ | ---- |"
+              while IFS='|' read -r module test; do
+                if [ ! -z "$module" ] && [ ! -z "$test" ]; then
+                  echo "| $module | $test |"
+                fi
+              done < /tmp/flaky_tests.txt
+              echo "</details>"
+            fi
+          
+            if [ "${{ env.TOTAL_SKIPPED }}" -gt 0 ]; then
+              echo "<details>"
+              echo "<summary>Skipped Tests 🙈 (${{ env.TOTAL_SKIPPED }})</summary>"
+              echo
+              echo "| Module | Test |"
+              echo "| ------ | ---- |"
+              sort -u /tmp/skipped_tests.txt | while IFS='|' read -r module test; do
+                if [ ! -z "$module" ] && [ ! -z "$test" ]; then
+                  echo "| $module | $test |"
+                fi
+              done
+              echo "</details>"
+            fi
+
+            if [ "${{ env.TOTAL_QUARANTINED }}" -gt 0 ]; then
+              echo "<details>"
+              echo "<summary>Quarantined Tests 😷 (${{ env.TOTAL_QUARANTINED }})</summary>"
+              echo
+              echo "| Module | Test |"
+              echo "| ------ | ---- |"
+              while IFS= read -r file; do
+                classname=$(basename "$file" .java)
+                module=$(dirname "$file" | rev | cut -d'/' -f2 | rev)
+                echo "| ${module} | ${classname} |"
+              done < <(find . -name "*.java" -type f -exec grep -l "@Quarantined" {} \;)
+              echo "</details>"
+            fi
+          
+            rm -f /tmp/failed_tests.txt /tmp/flaky_tests.txt /tmp/skipped_tests.txt
+          } >> $GITHUB_STEP_SUMMARY
+
+      - name: Set Build Status
+        if: always()
+        run: |
+          if [ "${{ env.BUILD_STATUS }}" = "failed" ]; then
+            exit 1
+          fi
+
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-java${{ matrix.java }}
+          path: |
+            **/build/reports/tests/
+            **/build/test-results/
+          compression-level: 9
+          if-no-files-found: ignore
