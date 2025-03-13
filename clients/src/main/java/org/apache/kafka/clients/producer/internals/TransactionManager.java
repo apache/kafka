@@ -737,7 +737,6 @@ public class TransactionManager {
     }
 
     synchronized void handleFailedBatch(ProducerBatch batch, RuntimeException exception, boolean adjustSequenceNumbers) {
-        maybeTransitionToErrorState(exception);
         removeInFlightBatch(batch);
 
         if (hasFatalError()) {
@@ -747,6 +746,7 @@ public class TransactionManager {
             return;
         }
 
+        maybeTransitionToErrorState(exception);
         if (exception instanceof OutOfOrderSequenceException && !isTransactional()) {
             log.error("The broker returned {} for topic-partition {} with producerId {}, epoch {}, and sequence number {}",
                     exception, batch.topicPartition, batch.producerId(), batch.producerEpoch(), batch.baseSequence());
