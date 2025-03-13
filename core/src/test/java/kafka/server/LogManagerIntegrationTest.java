@@ -67,10 +67,9 @@ public class LogManagerIntegrationTest {
         }
         cluster.waitForTopic("foo", 1);
 
-        Optional<PartitionMetadataFile> partitionMetadataFile = Optional.ofNullable(
-                cluster.brokers().get(0).logManager()
-                        .getLog(new TopicPartition("foo", 0), false).get()
-                        .partitionMetadataFile().getOrElse(null));
+        Optional<PartitionMetadataFile> partitionMetadataFile = cluster.brokers().get(0).logManager()
+                .getLog(new TopicPartition("foo", 0), false).get()
+                .partitionMetadataFile();
         assertTrue(partitionMetadataFile.isPresent());
 
         cluster.brokers().get(0).shutdown();

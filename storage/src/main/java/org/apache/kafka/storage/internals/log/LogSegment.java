@@ -490,7 +490,7 @@ public class LogSegment implements Closeable {
 
                 if (batch.magic() >= RecordBatch.MAGIC_VALUE_V2) {
                     if (batch.partitionLeaderEpoch() >= 0 &&
-                            (leaderEpochCache.latestEpoch().isEmpty() || batch.partitionLeaderEpoch() > leaderEpochCache.latestEpoch().getAsInt()))
+                            (leaderEpochCache.latestEpoch().isEmpty() || batch.partitionLeaderEpoch() > leaderEpochCache.latestEpoch().get()))
                         leaderEpochCache.assign(batch.partitionLeaderEpoch(), batch.baseOffset());
                     updateProducerState(producerStateManager, batch);
                 }

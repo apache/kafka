@@ -408,11 +408,11 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
         "This is part of the early access of KIP-932 and MUST NOT be used in production.")
     }
     if (protocols.contains(GroupType.STREAMS)) {
-      if (processRoles.isEmpty || !isNewGroupCoordinatorEnabled) {
-        throw new ConfigException(s"The new '${GroupType.STREAMS}' rebalance protocol is only supported in KRaft cluster with the new group coordinator.")
+      if (!isNewGroupCoordinatorEnabled) {
+        warn(s"The new '${GroupType.STREAMS}' rebalance protocol is only supported with the new group coordinator.")
       }
-      warn(s"The new '${GroupType.STREAMS}' rebalance protocol is enabled along with the new group coordinator. " +
-        "This is part of the preview of KIP-1071 and MUST NOT be used in production.")
+      warn(s"Streams groups and the new '${GroupType.STREAMS}' rebalance protocol are enabled. " +
+        "This is part of the early access of KIP-1071 and MUST NOT be used in production.")
     }
     protocols
   }
