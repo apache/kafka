@@ -415,6 +415,8 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
       if (processRoles.isEmpty || !isNewGroupCoordinatorEnabled) {
         warn(s"The new '${GroupType.STREAMS}' rebalance protocol is only supported in KRaft cluster with the new group coordinator.")
       }
+      warn(s"The new '${GroupType.STREAMS}' rebalance protocol is enabled along with the new group coordinator. " +
+        "This is part of the preview of KIP-1071 and MUST NOT be used in production.")
     }
     protocols
   }
