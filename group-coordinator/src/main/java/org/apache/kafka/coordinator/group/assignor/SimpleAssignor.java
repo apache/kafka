@@ -373,9 +373,13 @@ public class SimpleAssignor implements ShareGroupPartitionAssignor {
                 );
             }
 
-            for (Integer i : subscribedTopicDescriber.assignablePartitions(topicId)) {
-                targetPartitions.add(new TopicIdPartition(topicId, i));
-            }
+            // Since we are returning a list here, we can keep it sorted
+            // to add determinism while testing and iterating.
+            targetPartitions.addAll(subscribedTopicDescriber.assignablePartitions(topicId).stream()
+                .sorted()
+                .map(partition -> new TopicIdPartition(topicId, partition))
+                .toList()
+            );
         });
         return targetPartitions;
     }
