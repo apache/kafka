@@ -171,18 +171,38 @@ public final class ConsumeAction implements TieredStorageTestAction {
                     expectedCountAndOp = new RemoteFetchCount.FetchCountAndOp(-1, RemoteFetchCount.OperationType.EQUALS_TO);
             }
 
-            String message = String.format("Number of %s requests from broker %d to the tier storage does not match the expected value for topic-partition %s",
-                    eventType, remoteFetchSpec.getSourceBrokerId(), remoteFetchSpec.getTopicPartition());
-            if (expectedCountAndOp.getCount() != -1) {
-                if (expectedCountAndOp.getOperationType() == RemoteFetchCount.OperationType.EQUALS_TO) {
-                    assertEquals(expectedCountAndOp.getCount(), eventsInScope.size(), message);
-                } else if (expectedCountAndOp.getOperationType() == RemoteFetchCount.OperationType.LESS_THAN_OR_EQUALS_TO) {
-                    assertTrue(eventsInScope.size() <= expectedCountAndOp.getCount(), message);
+            RemoteFetchCount.OperationType exceptedOperationType = expectedCountAndOp.getOperationType();
+            int exceptedCount = expectedCountAndOp.getCount();
+            int actualCount = eventsInScope.size();
+            String message = errorMessage(eventType, actualCount, exceptedOperationType, exceptedCount);
+            if (exceptedCount != -1) {
+                if (exceptedOperationType == RemoteFetchCount.OperationType.EQUALS_TO) {
+                    assertEquals(exceptedCount, actualCount, message);
+                } else if (exceptedOperationType == RemoteFetchCount.OperationType.LESS_THAN_OR_EQUALS_TO) {
+                    assertTrue(actualCount <= exceptedCount, message);
                 } else {
-                    assertTrue(eventsInScope.size() >= expectedCountAndOp.getCount(), message);
+                    assertTrue(actualCount >= exceptedCount, message);
                 }
             }
         }
+    }
+
+    private String errorMessage(
+            LocalTieredStorageEvent.EventType eventType, 
+            int actualCount, 
+            RemoteFetchCount.OperationType exceptedOperationType, 
+            int exceptedCount
+    ) {
+        return String.format(
+                "Number of %s requests from broker %d to the tier storage does not match the expected " +
+                        "value for topic-partition %s. But was %d %s %d.",
+                eventType,
+                remoteFetchSpec.getSourceBrokerId(),
+                remoteFetchSpec.getTopicPartition(),
+                actualCount,
+                exceptedOperationType,
+                exceptedCount
+        );
     }
 
     @Override
