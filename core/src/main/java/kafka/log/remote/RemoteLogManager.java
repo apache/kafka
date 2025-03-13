@@ -1963,9 +1963,12 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
      *
      * @throws java.util.concurrent.RejectedExecutionException if the task cannot be accepted for execution (task queue is full)
      */
-    public Future<Void> asyncRead(RemoteStorageFetchInfo fetchInfo, Consumer<RemoteLogReadResult> callback) {
-        return remoteStorageReaderThreadPool.submit(
-                new RemoteLogReader(fetchInfo, this, callback, brokerTopicStats, rlmFetchQuotaManager, remoteReadTimer));
+    public Future<Void> asyncRead(RemoteLogReader remoteLogReader) {
+        return remoteStorageReaderThreadPool.submit(remoteLogReader);
+    }
+
+    public RemoteLogReader remoteLogReaderTask(RemoteStorageFetchInfo fetchInfo, Consumer<RemoteLogReadResult> callback) {
+        return new RemoteLogReader(fetchInfo, this, callback, brokerTopicStats, rlmFetchQuotaManager, remoteReadTimer);
     }
 
     void doHandleLeaderPartition(TopicIdPartition topicPartition, Boolean remoteLogCopyDisable) {

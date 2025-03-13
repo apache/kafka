@@ -3743,15 +3743,17 @@ class ReplicaManagerTest {
 
       val remoteStorageFetchInfoArg: ArgumentCaptor[RemoteStorageFetchInfo] = ArgumentCaptor.forClass(classOf[RemoteStorageFetchInfo])
       if (isFromFollower) {
-        verify(mockRemoteLogManager, never()).asyncRead(remoteStorageFetchInfoArg.capture(), any())
+        verify(mockRemoteLogManager, never()).remoteLogReaderTask(remoteStorageFetchInfoArg.capture(), any())
+        verify(mockRemoteLogManager, never()).asyncRead(any())
       } else {
-        verify(mockRemoteLogManager).asyncRead(remoteStorageFetchInfoArg.capture(), any())
+        val rlr = verify(mockRemoteLogManager).remoteLogReaderTask(remoteStorageFetchInfoArg.capture(), any())
         val remoteStorageFetchInfo = remoteStorageFetchInfoArg.getValue
         assertEquals(tp0, remoteStorageFetchInfo.topicPartition)
         assertEquals(fetchOffset, remoteStorageFetchInfo.fetchInfo.fetchOffset)
         assertEquals(topicId, remoteStorageFetchInfo.fetchInfo.topicId)
         assertEquals(startOffset, remoteStorageFetchInfo.fetchInfo.logStartOffset)
         assertEquals(leaderEpoch, remoteStorageFetchInfo.fetchInfo.currentLeaderEpoch.get())
+        verify(mockRemoteLogManager).asyncRead(rlr)
       }
     } finally {
       replicaManager.shutdown(checkpointHW = false)

@@ -19,7 +19,7 @@ package kafka.server
 import com.yammer.metrics.core.Meter
 import kafka.cluster.{Partition, PartitionListener}
 import kafka.controller.StateChangeLogger
-import kafka.log.remote.RemoteLogManager
+import kafka.log.remote.{RemoteLogManager, RemoteLogReader}
 import kafka.log.LogManager
 import kafka.server.HostedPartition.Online
 import kafka.server.QuotaFactory.QuotaManagers
@@ -1546,11 +1546,13 @@ class ReplicaManager(val config: KafkaConfig,
     val key = new TopicPartitionOperationKey(remoteFetchInfo.topicPartition.topic(), remoteFetchInfo.topicPartition.partition())
     val remoteFetchResult = new CompletableFuture[RemoteLogReadResult]
     var remoteFetchTask: Future[Void] = null
+    var remoteLogReader: RemoteLogReader = null
     try {
-      remoteFetchTask = remoteLogManager.get.asyncRead(remoteFetchInfo, (result: RemoteLogReadResult) => {
+      remoteLogReader = remoteLogManager.get.remoteLogReaderTask(remoteFetchInfo, (result: RemoteLogReadResult) => {
         remoteFetchResult.complete(result)
         delayedRemoteFetchPurgatory.checkAndComplete(key)
       })
+      remoteFetchTask = remoteLogManager.get.asyncRead(remoteLogReader)
     } catch {
       case e: RejectedExecutionException =>
         // Return the error if any in scheduling the remote fetch task
@@ -1559,7 +1561,7 @@ class ReplicaManager(val config: KafkaConfig,
     }
 
     val remoteFetchMaxWaitMs = config.remoteLogManagerConfig.remoteFetchMaxWaitMs().toLong
-    val remoteFetch = new DelayedRemoteFetch(remoteFetchTask, remoteFetchResult, remoteFetchInfo, remoteFetchMaxWaitMs,
+    val remoteFetch = new DelayedRemoteFetch(remoteFetchTask, remoteLogReader, remoteFetchResult, remoteFetchInfo, remoteFetchMaxWaitMs,
       fetchPartitionStatus, params, logReadResults, this, responseCallback)
     delayedRemoteFetchPurgatory.tryCompleteElseWatch(remoteFetch, util.Collections.singletonList(key))
     None

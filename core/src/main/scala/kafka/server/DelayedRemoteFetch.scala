@@ -18,6 +18,7 @@
 package kafka.server
 
 import com.yammer.metrics.core.Meter
+import kafka.log.remote.RemoteLogReader
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicIdPartition
 import org.apache.kafka.common.errors._
@@ -36,6 +37,7 @@ import scala.collection._
  * in the remote fetch operation purgatory
  */
 class DelayedRemoteFetch(remoteFetchTask: Future[Void],
+                         remoteLogReader: RemoteLogReader,
                          remoteFetchResult: CompletableFuture[RemoteLogReadResult],
                          remoteFetchInfo: RemoteStorageFetchInfo,
                          remoteFetchMaxWaitMs: Long,
@@ -88,8 +90,9 @@ class DelayedRemoteFetch(remoteFetchTask: Future[Void],
 
   override def onExpiration(): Unit = {
     // cancel the remote storage read task, if it has not been executed yet
-    val cancelled = remoteFetchTask.cancel(true)
-    if (!cancelled) debug(s"Remote fetch task for RemoteStorageFetchInfo: $remoteFetchInfo could not be cancelled and its isDone value is ${remoteFetchTask.isDone}")
+    val cancelled = remoteFetchTask.cancel(false)
+    if (cancelled) remoteLogReader.cancel()
+    else debug(s"Remote fetch task for RemoteStorageFetchInfo: $remoteFetchInfo could not be cancelled and its isDone value is ${remoteFetchTask.isDone}")
 
     DelayedRemoteFetchMetrics.expiredRequestMeter.mark()
   }

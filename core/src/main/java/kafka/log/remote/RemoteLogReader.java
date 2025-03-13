@@ -41,6 +41,8 @@ public class RemoteLogReader implements Callable<Void> {
     private final RLMQuotaManager quotaManager;
     private final Timer remoteReadTimer;
 
+    private volatile boolean cancelled = false;
+
     public RemoteLogReader(RemoteStorageFetchInfo fetchInfo,
                            RemoteLogManager rlm,
                            Consumer<RemoteLogReadResult> callback,
@@ -57,8 +59,18 @@ public class RemoteLogReader implements Callable<Void> {
         this.remoteReadTimer = remoteReadTimer;
     }
 
+    public void cancel() {
+        LOGGER.debug("Cancelling remote log reader for topic partition {}", fetchInfo.topicPartition);
+        callback.accept(new RemoteLogReadResult(Optional.empty(), Optional.of(new InterruptedException("Cancelled remote log reader"))));
+        this.cancelled = true;
+    }
+
     @Override
     public Void call() {
+        if (cancelled) {
+            LOGGER.debug("Skipping reading records from remote storage for topic partition {} as it has been cancelled", fetchInfo.topicPartition);
+            return null;
+        }
         RemoteLogReadResult result;
         try {
             LOGGER.debug("Reading records from remote storage for topic partition {}", fetchInfo.topicPartition);
