@@ -41,7 +41,7 @@ public class ProducerRebootstrapTest {
     private static final int PARTITIONS = 2;
 
     @ClusterTest(
-        brokers = 2,
+        brokers = PARTITIONS,
         types = {Type.KRAFT},
         serverProperties = {
             @ClusterConfigProperty(key = TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, value = "true"),
@@ -77,7 +77,7 @@ public class ProducerRebootstrapTest {
     }
 
     @ClusterTest(
-        brokers = 2,
+        brokers = PARTITIONS,
         types = {Type.KRAFT},
         serverProperties = {
             @ClusterConfigProperty(key = TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, value = "true"),
