@@ -27,17 +27,14 @@ public class RemoteStorageFetchInfo {
     public final TopicPartition topicPartition;
     public final FetchRequest.PartitionData fetchInfo;
     public final FetchIsolation fetchIsolation;
-    public final boolean hardMaxBytesLimit;
 
     public RemoteStorageFetchInfo(int fetchMaxBytes, boolean minOneMessage, TopicPartition topicPartition,
-                                  FetchRequest.PartitionData fetchInfo, FetchIsolation fetchIsolation,
-                                  boolean hardMaxBytesLimit) {
+                                  FetchRequest.PartitionData fetchInfo, FetchIsolation fetchIsolation) {
         this.fetchMaxBytes = fetchMaxBytes;
         this.minOneMessage = minOneMessage;
         this.topicPartition = topicPartition;
         this.fetchInfo = fetchInfo;
         this.fetchIsolation = fetchIsolation;
-        this.hardMaxBytesLimit = hardMaxBytesLimit;
     }
 
     @Override
@@ -48,7 +45,6 @@ public class RemoteStorageFetchInfo {
                 ", topicPartition=" + topicPartition +
                 ", fetchInfo=" + fetchInfo +
                 ", fetchIsolation=" + fetchIsolation +
-                ", hardMaxBytesLimit=" + hardMaxBytesLimit +
                 '}';
     }
 }
