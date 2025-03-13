@@ -23,8 +23,6 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.message.ShareFetchResponseData.PartitionData;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.requests.ShareFetchRequest;
-import org.apache.kafka.common.requests.ShareFetchRequest.SharePartitionData;
 import org.apache.kafka.common.requests.ShareFetchResponse;
 import org.apache.kafka.common.requests.ShareRequestMetadata;
 import org.apache.kafka.server.share.CachedSharePartition;
@@ -34,6 +32,7 @@ import org.apache.kafka.server.share.session.ShareSession;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -52,7 +51,7 @@ public class ShareSessionContext extends ShareFetchContext {
 
     private final ShareRequestMetadata reqMetadata;
     private final boolean isSubsequent;
-    private Map<TopicIdPartition, SharePartitionData> shareFetchData;
+    private List<TopicIdPartition> shareFetchData;
     private ShareSession session;
 
     /**
@@ -62,7 +61,7 @@ public class ShareSessionContext extends ShareFetchContext {
      * @param shareFetchData     The share partition data from the share fetch request.
      */
     public ShareSessionContext(ShareRequestMetadata reqMetadata,
-                               Map<TopicIdPartition, ShareFetchRequest.SharePartitionData> shareFetchData) {
+                               List<TopicIdPartition> shareFetchData) {
         this.reqMetadata = reqMetadata;
         this.shareFetchData = shareFetchData;
         this.isSubsequent = false;
@@ -81,7 +80,7 @@ public class ShareSessionContext extends ShareFetchContext {
     }
 
     // Visible for testing
-    public Map<TopicIdPartition, ShareFetchRequest.SharePartitionData> shareFetchData() {
+    public List<TopicIdPartition> shareFetchData() {
         return shareFetchData;
     }
 
@@ -229,17 +228,16 @@ public class ShareSessionContext extends ShareFetchContext {
             return new ErroneousAndValidPartitionData(shareFetchData);
         }
         Map<TopicIdPartition, PartitionData> erroneous = new HashMap<>();
-        Map<TopicIdPartition, ShareFetchRequest.SharePartitionData> valid = new HashMap<>();
+        List<TopicIdPartition> valid = new ArrayList<>();
         // Take the session lock and iterate over all the cached partitions.
         synchronized (session) {
             session.partitionMap().forEach(cachedSharePartition -> {
                 TopicIdPartition topicIdPartition = new TopicIdPartition(cachedSharePartition.topicId(), new
                         TopicPartition(cachedSharePartition.topic(), cachedSharePartition.partition()));
-                ShareFetchRequest.SharePartitionData reqData = cachedSharePartition.reqData();
                 if (topicIdPartition.topic() == null) {
                     erroneous.put(topicIdPartition, ShareFetchResponse.partitionResponse(topicIdPartition, Errors.UNKNOWN_TOPIC_ID));
                 } else {
-                    valid.put(topicIdPartition, reqData);
+                    valid.add(topicIdPartition);
                 }
             });
             return new ErroneousAndValidPartitionData(erroneous, valid);

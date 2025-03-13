@@ -355,11 +355,13 @@
 
     <!-- storage -->
     <suppress checks="CyclomaticComplexity"
-              files="(LogLoader|LogValidator|RemoteLogManagerConfig|RemoteLogManager).java"/>
+              files="(LogLoader|LogValidator|RemoteLogManagerConfig|RemoteLogManager|UnifiedLog).java"/>
     <suppress checks="NPathComplexity"
-              files="(LocalLog|LogLoader|LogValidator|RemoteLogManager|RemoteIndexCache).java"/>
+              files="(LocalLog|LogLoader|LogValidator|RemoteLogManager|RemoteIndexCache|UnifiedLog).java"/>
     <suppress checks="ParameterNumber"
-              files="(LogAppendInfo|LogLoader|RemoteLogManagerConfig).java"/>
+              files="(LogAppendInfo|LogLoader|RemoteLogManagerConfig|UnifiedLog).java"/>
+    <suppress checks="(ClassDataAbstractionCoupling|ClassFanOutComplexity)"
+              files="(UnifiedLog).java"/>
 
     <!-- benchmarks -->
     <suppress checks="(ClassDataAbstractionCoupling|ClassFanOutComplexity)"

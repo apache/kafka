@@ -145,7 +145,7 @@ class LocalLeaderEndPointTest extends Logging {
     bumpLeaderEpoch()
     appendRecords(replicaManager, topicPartition, records)
       .onFire(response => assertEquals(Errors.NONE, response.error))
-    replicaManager.logManager.getLog(topicPartition).foreach(log => log._localLogStartOffset = 3)
+    replicaManager.logManager.getLog(topicPartition).foreach(log => log.updateLocalLogStartOffset(3))
     assertEquals(new OffsetAndEpoch(0L, 0), endPoint.fetchEarliestOffset(topicPartition, currentLeaderEpoch = 7))
     assertEquals(new OffsetAndEpoch(3L, 1), endPoint.fetchEarliestLocalOffset(topicPartition, currentLeaderEpoch = 7))
   }
