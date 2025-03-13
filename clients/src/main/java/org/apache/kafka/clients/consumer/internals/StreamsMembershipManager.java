@@ -591,7 +591,7 @@ public class StreamsMembershipManager implements RequestManager {
      * @return True if the member should send heartbeat to the coordinator without waiting for
      * the interval.
      */
-    public boolean shouldHeartbeatNow() {
+    public boolean shouldNotWaitForHeartbeatInterval() {
         return state == MemberState.ACKNOWLEDGING || state == MemberState.LEAVING || state == MemberState.JOINING;
     }
 

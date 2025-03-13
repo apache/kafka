@@ -100,6 +100,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   private val metricsGroup = new KafkaMetricsGroup(getClass.getPackage.getName, "Log")
 
   this.logIdent = s"[UnifiedLog partition=$topicPartition, dir=$parentDir] "
+  private val futureTimestampLogger = new LogFutureTimestampLogger(logIdent)
 
   /* A lock that guards all modifications to the log */
   private val lock = new Object
@@ -1522,6 +1523,9 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     val startMs = time.milliseconds
 
     def shouldDelete(segment: LogSegment, nextSegmentOpt: Option[LogSegment]): Boolean = {
+      if (startMs < segment.largestTimestamp()) {
+        futureTimestampLogger.warn(s"$segment contains future timestamp(s), making it ineligible to be deleted")
+      }
       val shouldDelete = startMs - segment.largestTimestamp > retentionMs
       debug(s"$segment retentionMs breached: $shouldDelete, startMs=$startMs, retentionMs=$retentionMs")
       shouldDelete
@@ -1991,6 +1995,10 @@ object UnifiedLog extends Logging {
       None
   }
 
+}
+
+class LogFutureTimestampLogger(parentLogIdent: String) extends Logging {
+  this.logIdent = parentLogIdent
 }
 
 case class RetentionMsBreach(log: UnifiedLog, remoteLogEnabledAndRemoteCopyEnabled: Boolean) extends SegmentDeletionReason {
