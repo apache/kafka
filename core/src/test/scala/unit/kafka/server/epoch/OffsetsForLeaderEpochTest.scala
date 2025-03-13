@@ -17,7 +17,7 @@
 package kafka.server.epoch
 
 import java.io.File
-import kafka.log.{LogManager, UnifiedLog}
+import kafka.log.LogManager
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server._
 import kafka.server.metadata.KRaftMetadataCache
@@ -31,11 +31,12 @@ import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import org.apache.kafka.server.common.{KRaftVersion, OffsetAndEpoch}
 import org.apache.kafka.server.util.MockTime
-import org.apache.kafka.storage.internals.log.LogDirFailureChannel
+import org.apache.kafka.storage.internals.log.{LogDirFailureChannel, UnifiedLog}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.Mockito.{mock, when}
 
+import java.util.Optional
 import scala.jdk.CollectionConverters._
 
 class OffsetsForLeaderEpochTest {
@@ -62,7 +63,7 @@ class OffsetsForLeaderEpochTest {
     //Stubs
     val mockLog: UnifiedLog = mock(classOf[UnifiedLog])
     val logManager: LogManager = mock(classOf[LogManager])
-    when(mockLog.endOffsetForEpoch(epochRequested)).thenReturn(Some(offsetAndEpoch))
+    when(mockLog.endOffsetForEpoch(epochRequested)).thenReturn(Optional.of(offsetAndEpoch))
     when(logManager.liveLogDirs).thenReturn(Array.empty[File])
 
     // create a replica manager with 1 partition that has 1 replica

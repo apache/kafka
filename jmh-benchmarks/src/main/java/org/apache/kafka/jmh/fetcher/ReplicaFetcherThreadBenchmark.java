@@ -310,8 +310,8 @@ public class ReplicaFetcherThreadBenchmark {
         }
 
         @Override
-        public Option<Object> latestEpoch(TopicPartition topicPartition) {
-            return Option.apply(0);
+        public Optional<Integer> latestEpoch(TopicPartition topicPartition) {
+            return Optional.of(0);
         }
 
         @Override
@@ -330,8 +330,8 @@ public class ReplicaFetcherThreadBenchmark {
         }
 
         @Override
-        public Option<OffsetAndEpoch> endOffsetForEpoch(TopicPartition topicPartition, int epoch) {
-            return Option.apply(new OffsetAndEpoch(0, 0));
+        public Optional<OffsetAndEpoch> endOffsetForEpoch(TopicPartition topicPartition, int epoch) {
+            return Optional.of(new OffsetAndEpoch(0, 0));
         }
 
         @Override

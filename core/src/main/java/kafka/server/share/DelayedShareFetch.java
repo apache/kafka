@@ -181,7 +181,7 @@ public class DelayedShareFetch extends DelayedOperation {
                 return;
             } else {
                 // Update metric to record acquired to requested partitions.
-                double requestTopicToAcquired = (double) topicPartitionData.size() / shareFetch.partitionMaxBytes().size();
+                double requestTopicToAcquired = (double) topicPartitionData.size() / shareFetch.topicIdPartitions().size();
                 shareGroupMetrics.recordTopicPartitionsFetchRatio(shareFetch.groupId(), (int) (requestTopicToAcquired * 100));
             }
             log.trace("Fetchable share partitions data: {} with groupId: {} fetch params: {}",

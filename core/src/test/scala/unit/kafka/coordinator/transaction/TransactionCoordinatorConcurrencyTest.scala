@@ -23,7 +23,6 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest._
 import kafka.coordinator.transaction.TransactionCoordinatorConcurrencyTest._
-import kafka.log.UnifiedLog
 import kafka.server.KafkaConfig
 import kafka.utils.{Pool, TestUtils}
 import org.apache.kafka.clients.{ClientResponse, NetworkClient}
@@ -40,7 +39,7 @@ import org.apache.kafka.coordinator.transaction.ProducerIdManager
 import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.server.common.{FinalizedFeatures, MetadataVersion, RequestLocal, TransactionVersion}
 import org.apache.kafka.server.storage.log.FetchIsolation
-import org.apache.kafka.storage.internals.log.{FetchDataInfo, LogConfig, LogOffsetMetadata}
+import org.apache.kafka.storage.internals.log.{FetchDataInfo, LogConfig, LogOffsetMetadata, UnifiedLog}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.{ArgumentCaptor, ArgumentMatchers}
@@ -482,9 +481,9 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
 
     when(logMock.logStartOffset).thenReturn(startOffset)
     when(logMock.read(ArgumentMatchers.eq(startOffset),
-      maxLength = anyInt,
-      isolation = ArgumentMatchers.eq(FetchIsolation.LOG_END),
-      minOneMessage = ArgumentMatchers.eq(true)))
+      anyInt,
+      ArgumentMatchers.eq(FetchIsolation.LOG_END),
+      ArgumentMatchers.eq(true)))
       .thenReturn(new FetchDataInfo(new LogOffsetMetadata(startOffset), fileRecordsMock))
 
     when(fileRecordsMock.sizeInBytes()).thenReturn(records.sizeInBytes)

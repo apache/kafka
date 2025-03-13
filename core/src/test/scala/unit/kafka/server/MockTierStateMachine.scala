@@ -20,6 +20,8 @@ package kafka.server
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.FetchResponseData
 
+import java.util.Optional
+
 class MockTierStateMachine(leader: LeaderEndPoint) extends TierStateMachine(leader, null, false) {
 
   var fetcher: MockFetcherThread = _
@@ -32,7 +34,7 @@ class MockTierStateMachine(leader: LeaderEndPoint) extends TierStateMachine(lead
     val initialLag = leaderEndOffset - offsetToFetch
     fetcher.truncateFullyAndStartAt(topicPartition, offsetToFetch)
     PartitionFetchState(currentFetchState.topicId, offsetToFetch, Option.apply(initialLag), currentFetchState.currentLeaderEpoch,
-      Fetching, Some(currentFetchState.currentLeaderEpoch))
+      Fetching, Optional.of(currentFetchState.currentLeaderEpoch))
   }
 
   def setFetcher(mockFetcherThread: MockFetcherThread): Unit = {
