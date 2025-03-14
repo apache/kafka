@@ -2361,19 +2361,16 @@ public class GroupMetadataManager {
 
     private boolean initializedAssignmentPending(ShareGroup group) {
         if (!shareGroupPartitionMetadata.containsKey(group.groupId())) {
-            // No initialized share partitions for the group
-            // so nothing can be assigned.
+            // No initialized share partitions for the group so nothing can be assigned.
             return false;
         }
 
         if (group.isEmpty()) {
-            // No members then no point of computing
-            // assignment.
+            // No members then no point of computing assignment.
             return false;
         }
 
-        // We need to check if all the group initialized share partitions
-        // are part of the group assignment.
+        // We need to check if all the group initialized share partitions are part of the group assignment.
         Map<Uuid, Set<Integer>> initializedTps = shareGroupPartitionMetadata.get(group.groupId()).initializedTopics();
         Map<Uuid, Set<Integer>> currentAssigned = new HashMap<>();
         for (Assignment assignment : group.targetAssignment().values()) {
@@ -3242,7 +3239,7 @@ public class GroupMetadataManager {
                     .withSubscriptionMetadata(subscriptionMetadata)
                     .withSubscriptionType(subscriptionType)
                     .withTargetAssignment(group.targetAssignment())
-                    .withAllowedTopicPartitionMap(initializedTopicPartitions)
+                    .withTopicAssignablePartitionsMap(initializedTopicPartitions)
                     .withInvertedTargetAssignment(group.invertedTargetAssignment())
                     .withTopicsImage(metadataImage.topics())
                     .addOrUpdateMember(updatedMember.memberId(), updatedMember);

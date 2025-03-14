@@ -17,7 +17,6 @@
 package org.apache.kafka.coordinator.group.modern;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.errors.UnknownTopicIdException;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.SubscribedTopicDescriber;
 
@@ -91,7 +90,6 @@ public class SubscribedTopicDescriberImpl implements SubscribedTopicDescriber {
      *
      * @param topicId The uuid of the topic
      * @return Set of integers if assignable partitions available, empty otherwise.
-     * @throws UnknownTopicIdException if the topicId is not found in the metadata.
      */
     @Override
     public Set<Integer> assignablePartitions(Uuid topicId) {

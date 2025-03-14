@@ -288,9 +288,9 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
     private Map<String, String> staticMembers = new HashMap<>();
 
     /**
-     * Topic partition allow map.
+     * Topic partition assignable map.
      */
-    private Map<Uuid, Set<Integer>> topicPartitionAllowedMap = new HashMap<>();
+    private Map<Uuid, Set<Integer>> topicAssignablePartitionsMap = new HashMap<>();
 
     /**
      * Constructs the object.
@@ -400,10 +400,10 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
         return self();
     }
 
-    public U withAllowedTopicPartitionMap(
-        Map<Uuid, Set<Integer>> topicPartitionAllowedMap
+    public U withTopicAssignablePartitionsMap(
+        Map<Uuid, Set<Integer>> topicAssignablePartitionsMap
     ) {
-        this.topicPartitionAllowedMap = topicPartitionAllowedMap;
+        this.topicAssignablePartitionsMap = topicAssignablePartitionsMap;
         return self();
     }
 
@@ -495,11 +495,10 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
                 subscriptionType,
                 invertedTargetAssignment
             ),
-            new SubscribedTopicDescriberImpl(topicMetadataMap, topicPartitionAllowedMap)
+            new SubscribedTopicDescriberImpl(topicMetadataMap, topicAssignablePartitionsMap)
         );
 
-        // Compute delta from previous to new target assignment and create the
-        // relevant records.
+        // Compute delta from previous to new target assignment and create the relevant records.
         List<CoordinatorRecord> records = new ArrayList<>();
 
         for (String memberId : memberSpecs.keySet()) {
