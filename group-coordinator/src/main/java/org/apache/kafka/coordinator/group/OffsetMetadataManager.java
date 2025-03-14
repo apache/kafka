@@ -56,12 +56,10 @@ import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
-import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
@@ -858,7 +856,6 @@ public class OffsetMetadataManager {
 
         // We expect the group to exist.
         Group group = groupMetadataManager.group(groupId);
-        Set<String> expiredPartitions = new HashSet<>();
         long currentTimestampMs = time.milliseconds();
         Optional<OffsetExpirationCondition> offsetExpirationCondition = group.offsetExpirationCondition();
 
@@ -875,7 +872,7 @@ public class OffsetMetadataManager {
                     // We don't expire the offset yet if there is a pending transactional offset for the partition.
                     if (condition.isOffsetExpired(offsetAndMetadata, currentTimestampMs, config.offsetsRetentionMs()) &&
                         !hasPendingTransactionalOffsets(groupId, topic, partition)) {
-                        expiredPartitions.add(appendOffsetCommitTombstone(groupId, topic, partition, records).toString());
+                        appendOffsetCommitTombstone(groupId, topic, partition, records);
                         log.debug("[GroupId {}] Expired offset for partition={}-{}", groupId, topic, partition);
                     } else {
                         allOffsetsExpired.set(false);
@@ -885,7 +882,7 @@ public class OffsetMetadataManager {
                 allOffsetsExpired.set(false);
             }
         });
-        metrics.record(OFFSET_EXPIRED_SENSOR_NAME, expiredPartitions.size());
+        metrics.record(OFFSET_EXPIRED_SENSOR_NAME, records.size());
 
         // We don't want to remove the group if there are ongoing transactions.
         return allOffsetsExpired.get() && !openTransactionsByGroup.containsKey(groupId);
