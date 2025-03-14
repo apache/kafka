@@ -22,10 +22,16 @@ import java.lang.annotation.Target;
 import static java.lang.annotation.ElementType.METHOD;
 import static java.lang.annotation.RetentionPolicy.RUNTIME;
 
+/**
+ * Used to indicate that a cluster test may ignore some new threads remaining after the execution,
+ * rather than fail due to {@link DetectThreadLeak}.
+ * Useful when such threads are created by client libraries or plugins (e.g. metrics reporters).
+ */
 @Target({METHOD})
 @Retention(RUNTIME)
 public @interface ClusterTestThreadLeakIgnore {
-    // ignore threads left running that have names matching these prefixes
-    // useful when threads are created by client libraries or plugins (e.g. metrics reporters)
+    /**
+     * ignore threads whose names match any of these prefixes
+     */
     String[] prefixes() default {};
 }
