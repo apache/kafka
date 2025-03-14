@@ -18,6 +18,7 @@
 package org.apache.kafka.image;
 
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
+import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.common.MetadataVersionTestUtils;
 
@@ -25,6 +26,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -41,4 +43,10 @@ class FeaturesDeltaTest {
             "Expected substring missing from exception message: " + exception.getMessage());
     }
 
+    @Test
+    public void testReplayKraftVersionFeatureLevel() {
+        var featuresDelta = new FeaturesDelta(new FeaturesImage(Map.of(), MetadataVersion.MINIMUM_VERSION));
+        featuresDelta.replay(new FeatureLevelRecord().setName(KRaftVersion.FEATURE_NAME).setFeatureLevel(KRaftVersion.LATEST_PRODUCTION.featureLevel()));
+        assertEquals(Map.of(), featuresDelta.changes());
+    }
 }

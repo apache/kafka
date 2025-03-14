@@ -27,6 +27,7 @@ import org.apache.kafka.metadata.VersionRange;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
 import org.apache.kafka.server.common.Feature;
+import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.mutable.BoundedList;
 import org.apache.kafka.timeline.SnapshotRegistry;
@@ -370,6 +371,10 @@ public class FeatureControlManager {
             MetadataVersion mv = MetadataVersion.fromFeatureLevel(record.featureLevel());
             metadataVersion.set(Optional.of(mv));
             log.info("Replayed a FeatureLevelRecord setting metadata.version to {}", mv);
+        } else if (record.name().equals(KRaftVersion.FEATURE_NAME)) {
+            // KAFKA-18979 - Skip any feature level record for kraft.version. This has two benefits:
+            // 1. It removes from snapshots any FeatureLevelRecord for kraft.version that was incorrectly written to the log
+            // 2. Allows ApiVersions to report the correct finalized kraft.version
         } else {
             if (record.featureLevel() == 0) {
                 finalizedVersions.remove(record.name());
