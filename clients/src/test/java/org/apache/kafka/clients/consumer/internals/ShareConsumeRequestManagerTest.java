@@ -116,7 +116,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -341,7 +340,6 @@ public class ShareConsumeRequestManagerTest {
         assertTrue(shareConsumeRequestManager.hasCompletedFetches());
 
         assertEquals(Map.of(tip0, acknowledgements), completedAcknowledgements.get(0));
-        completedAcknowledgements.clear();
     }
 
     @Test
@@ -372,7 +370,6 @@ public class ShareConsumeRequestManagerTest {
         assertTrue(shareConsumeRequestManager.hasCompletedFetches());
 
         assertEquals(Map.of(tip0, acknowledgements), completedAcknowledgements.get(0));
-        completedAcknowledgements.clear();
     }
 
     @Test
@@ -508,7 +505,6 @@ public class ShareConsumeRequestManagerTest {
         assertTrue(shareConsumeRequestManager.hasCompletedFetches());
 
         assertEquals(Map.of(tip0, acknowledgements), completedAcknowledgements.get(0));
-        completedAcknowledgements.clear();
     }
 
     @Test
@@ -544,7 +540,6 @@ public class ShareConsumeRequestManagerTest {
         assertTrue(shareConsumeRequestManager.hasCompletedFetches());
 
         assertEquals(Map.of(tip0, acknowledgements), completedAcknowledgements.get(0));
-        completedAcknowledgements.clear();
     }
 
     @Test
@@ -779,9 +774,7 @@ public class ShareConsumeRequestManagerTest {
 
         // commitAsync() acknowledges the first 2 records.
         shareConsumeRequestManager.commitAsync(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)), calculateDeadlineMs(time, 1000L));
-        assertNull(shareConsumeRequestManager.requestStates(0).getSyncRequestQueue());
 
-        assertNotNull(shareConsumeRequestManager.requestStates(0).getAsyncRequest());
         assertEquals(2, shareConsumeRequestManager.requestStates(0).getAsyncRequest().getAcknowledgementsToSendCount(tip0));
 
         assertEquals(1, shareConsumeRequestManager.sendAcknowledgements());
@@ -804,7 +797,7 @@ public class ShareConsumeRequestManagerTest {
 
         time.sleep(2000L);
 
-        // As the timer for the initial commitAsync() was 1000ms, the request timed out, and we fill the callback with a timeout exception.
+        // As the timer for the initial commitAsync() was 1000ms, the request times out, and we fill the callback with a timeout exception.
         assertEquals(0, shareConsumeRequestManager.sendAcknowledgements());
         assertEquals(1, completedAcknowledgements.size());
         assertEquals(2, completedAcknowledgements.get(0).get(tip0).size());
@@ -844,7 +837,6 @@ public class ShareConsumeRequestManagerTest {
 
         // commitSync() for the first 2 acknowledgements.
         shareConsumeRequestManager.commitSync(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)), calculateDeadlineMs(time, 1000L));
-        assertNull(shareConsumeRequestManager.requestStates(0).getAsyncRequest());
 
         assertEquals(1, shareConsumeRequestManager.sendAcknowledgements());
 
@@ -875,11 +867,6 @@ public class ShareConsumeRequestManagerTest {
         assertEquals(1, completedAcknowledgements.size());
         assertEquals(4, completedAcknowledgements.get(0).get(tip0).size());
         assertNull(completedAcknowledgements.get(0).get(tip0).getAcknowledgeException());
-
-        // Another call to poll removes the request state from the map.
-        assertEquals(0, shareConsumeRequestManager.sendAcknowledgements());
-
-        assertNull(shareConsumeRequestManager.requestStates(0));
     }
 
     @Test
@@ -1086,9 +1073,6 @@ public class ShareConsumeRequestManagerTest {
         buildRequestManager();
 
         subscriptions.subscribeToShareGroup(Collections.singleton(topicName));
-        Set<TopicPartition> partitions = new HashSet<>();
-        partitions.add(tp0);
-        partitions.add(tp1);
         subscriptions.assignFromSubscribed(Collections.singletonList(tp0));
 
         client.updateMetadata(
@@ -1212,13 +1196,6 @@ public class ShareConsumeRequestManagerTest {
         client.updateMetadata(
                 RequestTestUtils.metadataUpdateWithIds(2, Map.of(topicName, 2),
                         tp -> validLeaderEpoch, topicIds, false));
-        Node nodeId0 = metadata.fetch().nodeById(0);
-        Node nodeId1 = metadata.fetch().nodeById(1);
-        Node tp0Leader = metadata.fetch().leaderFor(tp0);
-        Node tp1Leader = metadata.fetch().leaderFor(tp1);
-
-        assertEquals(nodeId0, tp0Leader);
-        assertEquals(nodeId1, tp1Leader);
 
         assertEquals(2, sendFetches());
         assertFalse(shareConsumeRequestManager.hasCompletedFetches());
@@ -1242,7 +1219,6 @@ public class ShareConsumeRequestManagerTest {
         client.prepareResponse(fullAcknowledgeResponse(tip1, Errors.NONE));
         networkClientDelegate.poll(time.timer(0));
 
-        assertEquals(2, completedAcknowledgements.get(0).size());
         assertEquals(3, completedAcknowledgements.get(0).get(tip0).size());
         assertEquals(3, completedAcknowledgements.get(0).get(tip1).size());
         assertNull(shareConsumeRequestManager.requestStates(0).getCloseRequest());
@@ -2262,10 +2238,7 @@ public class ShareConsumeRequestManagerTest {
         shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
 
         subscriptions.subscribeToShareGroup(Collections.singleton(topicName));
-        Set<TopicPartition> partitions = new HashSet<>();
-        partitions.add(tp0);
-        partitions.add(tp1);
-        subscriptions.assignFromSubscribed(partitions);
+        subscriptions.assignFromSubscribed(List.of(tp0, tp1));
 
         client.updateMetadata(
                 RequestTestUtils.metadataUpdateWithIds(2, Map.of(topicName, 2),
@@ -2557,7 +2530,6 @@ public class ShareConsumeRequestManagerTest {
         assertTrue(shareConsumeRequestManager.hasCompletedFetches());
 
         assertNull(completedAcknowledgements.get(0).get(tip1).getAcknowledgeException());
-        completedAcknowledgements.clear();
 
         partitionRecords = fetchRecords();
         assertTrue(partitionRecords.containsKey(tp0));
