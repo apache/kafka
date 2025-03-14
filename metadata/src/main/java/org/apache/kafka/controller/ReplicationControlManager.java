@@ -240,7 +240,7 @@ public class ReplicationControlManager {
 
         @Override
         public Uuid defaultDir(int brokerId) {
-            if (featureControl.metadataVersion().isDirectoryAssignmentSupported()) {
+            if (featureControl.metadataVersionOrThrow().isDirectoryAssignmentSupported()) {
                 return clusterControl.defaultDir(brokerId);
             } else {
                 return DirectoryId.MIGRATING;
@@ -844,7 +844,7 @@ public class ReplicationControlManager {
         for (Entry<Integer, PartitionRegistration> partEntry : newParts.entrySet()) {
             int partitionIndex = partEntry.getKey();
             PartitionRegistration info = partEntry.getValue();
-            records.add(info.toRecord(topicId, partitionIndex, new ImageWriterOptions.Builder(featureControl.metadataVersion()).
+            records.add(info.toRecord(topicId, partitionIndex, new ImageWriterOptions.Builder(featureControl.metadataVersionOrThrow()).
                 setEligibleLeaderReplicasEnabled(featureControl.isElrFeatureEnabled()).
                 build()));
         }
@@ -1121,7 +1121,7 @@ public class ReplicationControlManager {
                     topic.id,
                     partitionId,
                     new LeaderAcceptor(clusterControl, partition),
-                    featureControl.metadataVersion(),
+                    featureControl.metadataVersionOrThrow(),
                     getTopicEffectiveMinIsr(topic.name)
                 )
                     .setEligibleLeaderReplicasEnabled(featureControl.isElrFeatureEnabled());
@@ -1583,7 +1583,7 @@ public class ReplicationControlManager {
             topicId,
             partitionId,
             new LeaderAcceptor(clusterControl, partition),
-            featureControl.metadataVersion(),
+            featureControl.metadataVersionOrThrow(),
             getTopicEffectiveMinIsr(topic)
         )
             .setElection(election)
@@ -1629,7 +1629,7 @@ public class ReplicationControlManager {
         heartbeatManager.touch(brokerId,
             states.next().fenced(),
             request.currentMetadataOffset());
-        if (featureControl.metadataVersion().isDirectoryAssignmentSupported()) {
+        if (featureControl.metadataVersionOrThrow().isDirectoryAssignmentSupported()) {
             handleDirectoriesOffline(brokerId, brokerEpoch, request.offlineLogDirs(), records);
         }
         boolean isCaughtUp = request.currentMetadataOffset() >= registerBrokerRecordOffset;
@@ -1747,7 +1747,7 @@ public class ReplicationControlManager {
                 topicPartition.topicId(),
                 topicPartition.partitionId(),
                 new LeaderAcceptor(clusterControl, partition),
-                featureControl.metadataVersion(),
+                featureControl.metadataVersionOrThrow(),
                 getTopicEffectiveMinIsr(topic.name)
             )
                 .setElection(PartitionChangeBuilder.Election.PREFERRED)
@@ -1916,7 +1916,7 @@ public class ReplicationControlManager {
                         " time(s): All brokers are currently fenced or in controlled shutdown.");
             }
             records.add(buildPartitionRegistration(partitionAssignment, isr)
-                .toRecord(topicId, partitionId, new ImageWriterOptions.Builder(featureControl.metadataVersion()).
+                .toRecord(topicId, partitionId, new ImageWriterOptions.Builder(featureControl.metadataVersionOrThrow()).
                         setEligibleLeaderReplicasEnabled(featureControl.isElrFeatureEnabled()).
                         build()));
             partitionId++;
@@ -2017,7 +2017,7 @@ public class ReplicationControlManager {
                 topicIdPart.topicId(),
                 topicIdPart.partitionId(),
                 new LeaderAcceptor(clusterControl, partition, isAcceptableLeader),
-                featureControl.metadataVersion(),
+                featureControl.metadataVersionOrThrow(),
                 getTopicEffectiveMinIsr(topic.name)
             );
             builder.setEligibleLeaderReplicasEnabled(featureControl.isElrFeatureEnabled());
@@ -2138,7 +2138,7 @@ public class ReplicationControlManager {
             tp.topicId(),
             tp.partitionId(),
             new LeaderAcceptor(clusterControl, part),
-            featureControl.metadataVersion(),
+            featureControl.metadataVersionOrThrow(),
             getTopicEffectiveMinIsr(topicName)
         );
         builder.setEligibleLeaderReplicasEnabled(featureControl.isElrFeatureEnabled());
@@ -2204,7 +2204,7 @@ public class ReplicationControlManager {
             tp.topicId(),
             tp.partitionId(),
             new LeaderAcceptor(clusterControl, part),
-            featureControl.metadataVersion(),
+            featureControl.metadataVersionOrThrow(),
             getTopicEffectiveMinIsr(topics.get(tp.topicId()).name)
         );
         builder.setEligibleLeaderReplicasEnabled(featureControl.isElrFeatureEnabled());
@@ -2244,7 +2244,7 @@ public class ReplicationControlManager {
     }
 
     ControllerResult<AssignReplicasToDirsResponseData> handleAssignReplicasToDirs(AssignReplicasToDirsRequestData request) {
-        if (!featureControl.metadataVersion().isDirectoryAssignmentSupported()) {
+        if (!featureControl.metadataVersionOrThrow().isDirectoryAssignmentSupported()) {
             throw new UnsupportedVersionException("Directory assignment is not supported yet.");
         }
         int brokerId = request.brokerId();
@@ -2287,7 +2287,7 @@ public class ReplicationControlManager {
                                     topicId,
                                     partitionIndex,
                                     new LeaderAcceptor(clusterControl, partitionRegistration),
-                                    featureControl.metadataVersion(),
+                                    featureControl.metadataVersionOrThrow(),
                                     getTopicEffectiveMinIsr(topicName)
                             )
                                     .setDirectory(brokerId, dirId)
