@@ -19,7 +19,6 @@ package org.apache.kafka.image;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metadata.RemoveAccessControlEntryRecord;
-import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.image.writer.RecordListWriter;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metadata.authorizer.StandardAcl;
@@ -116,7 +115,7 @@ public class AclsImageTest {
 
     private static List<ApiMessageAndVersion> getImageRecords(AclsImage image) {
         RecordListWriter writer = new RecordListWriter();
-        image.write(writer, new ImageWriterOptions.Builder().build());
+        image.write(writer);
         return writer.records();
     }
 }

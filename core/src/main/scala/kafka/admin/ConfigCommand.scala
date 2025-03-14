@@ -541,7 +541,6 @@ object ConfigCommand extends Logging {
       .withRequiredArg
       .ofType(classOf[String])
       .withValuesSeparatedBy(',')
-    val forceOpt: OptionSpecBuilder = parser.accepts("force", "Suppress console prompts")
     val topic: OptionSpec[String] = parser.accepts("topic", "The topic's name.")
       .withRequiredArg
       .ofType(classOf[String])

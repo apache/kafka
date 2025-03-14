@@ -27,7 +27,6 @@ import org.apache.kafka.coordinator.group.modern.MemberAssignmentImpl;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -238,7 +237,7 @@ public class UniformHeterogeneousAssignmentBuilder {
      */
     public GroupAssignment build() {
         if (subscribedTopicIds.isEmpty()) {
-            return new GroupAssignment(Collections.emptyMap());
+            return new GroupAssignment(Map.of());
         }
 
         maybeRevokePartitions();

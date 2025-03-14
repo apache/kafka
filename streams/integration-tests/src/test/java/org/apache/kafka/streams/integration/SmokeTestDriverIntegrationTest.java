@@ -77,7 +77,7 @@ public class SmokeTestDriverIntegrationTest {
             try {
                 final Map<String, Set<Integer>> allData =
                     generate(bootstrapServers, numKeys, maxRecordsPerKey, Duration.ofSeconds(20));
-                result = verify(bootstrapServers, allData, maxRecordsPerKey);
+                result = verify(bootstrapServers, allData, maxRecordsPerKey, false);
 
             } catch (final Exception ex) {
                 this.exception = ex;

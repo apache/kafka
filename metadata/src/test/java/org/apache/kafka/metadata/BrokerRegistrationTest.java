@@ -25,6 +25,7 @@ import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -143,7 +144,7 @@ public class BrokerRegistrationTest {
     }
 
     private void testRoundTrip(BrokerRegistration registration) {
-        ImageWriterOptions options = new ImageWriterOptions.Builder().build();
+        ImageWriterOptions options = new ImageWriterOptions.Builder(MetadataVersion.latestProduction()).build();
         ApiMessageAndVersion messageAndVersion = registration.
             toRecord(options);
         BrokerRegistration registration2 = BrokerRegistration.fromRecord(

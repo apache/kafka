@@ -25,12 +25,14 @@ import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.PolicyViolationException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.metadata.ConfigRecord;
+import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.metadata.KafkaConfigSchema;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.config.ConfigSynonym;
 import org.apache.kafka.server.policy.AlterConfigPolicy;
 import org.apache.kafka.server.policy.AlterConfigPolicy.RequestMetadata;
@@ -64,7 +66,9 @@ import static org.apache.kafka.common.config.ConfigResource.Type.TOPIC;
 import static org.apache.kafka.common.metadata.MetadataRecordType.CONFIG_RECORD;
 import static org.apache.kafka.server.config.ConfigSynonym.HOURS_TO_MILLISECONDS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 @Timeout(value = 40)
@@ -157,6 +161,7 @@ public class ConfigurationControlManagerTest {
     @Test
     public void testIncrementalAlterConfigs() {
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
+            setFeatureControl(createFeatureControlManager()).
             setKafkaConfigSchema(SCHEMA).
             build();
 
@@ -188,6 +193,7 @@ public class ConfigurationControlManagerTest {
     @Test
     public void testIncrementalAlterConfig() {
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
+            setFeatureControl(createFeatureControlManager()).
             setKafkaConfigSchema(SCHEMA).
             build();
         Map<String, Entry<AlterConfigOp.OpType, String>> keyToOps = toMap(entry("abc", entry(APPEND, "123")));
@@ -207,11 +213,21 @@ public class ConfigurationControlManagerTest {
                         setName("abc").setValue(null), CONFIG_RECORD.highestSupportedVersion())),
                 ApiError.NONE),
             manager.incrementalAlterConfig(MYTOPIC, toMap(entry("abc", entry(DELETE, "xyz"))), true));
+
+        // The configuration value exceeding the maximum size is not allowed to be added.
+        String largeValue = new String(new char[Short.MAX_VALUE - APPEND.id() - 1]);
+        Map<String, Entry<AlterConfigOp.OpType, String>> largeValueOfOps = toMap(entry("abc", entry(APPEND, largeValue)));
+
+        ControllerResult<ApiError> invalidConfigValueResult = manager.incrementalAlterConfig(MYTOPIC, largeValueOfOps, true);
+        assertEquals(Errors.INVALID_CONFIG, invalidConfigValueResult.response().error());
+        assertEquals("The configuration value cannot be added because it exceeds the maximum value size of " + Short.MAX_VALUE + " bytes.",
+                invalidConfigValueResult.response().message());
     }
 
     @Test
     public void testIncrementalAlterMultipleConfigValues() {
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
+            setFeatureControl(createFeatureControlManager()).
             setKafkaConfigSchema(SCHEMA).
             build();
 
@@ -258,6 +274,7 @@ public class ConfigurationControlManagerTest {
     @Test
     public void testIncrementalAlterConfigsWithoutExistence() {
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
+            setFeatureControl(createFeatureControlManager()).
             setKafkaConfigSchema(SCHEMA).
             setExistenceChecker(TestExistenceChecker.INSTANCE).
             build();
@@ -319,6 +336,7 @@ public class ConfigurationControlManagerTest {
                 entry("quux", "456"),
                 entry("broker.config.to.remove", null)))));
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
+            setFeatureControl(createFeatureControlManager()).
             setKafkaConfigSchema(SCHEMA).
             setAlterConfigPolicy(Optional.of(policy)).
             build();
@@ -377,6 +395,7 @@ public class ConfigurationControlManagerTest {
     @Test
     public void testLegacyAlterConfigs() {
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
+            setFeatureControl(createFeatureControlManager()).
             setKafkaConfigSchema(SCHEMA).
             setAlterConfigPolicy(Optional.of(new CheckForNullValuesPolicy())).
             build();
@@ -412,6 +431,7 @@ public class ConfigurationControlManagerTest {
     @ValueSource(booleans = {false, true})
     public void testMaybeGenerateElrSafetyRecords(boolean setStaticConfig) {
         ConfigurationControlManager.Builder builder = new ConfigurationControlManager.Builder().
+            setFeatureControl(createFeatureControlManager()).
             setKafkaConfigSchema(SCHEMA);
         if (setStaticConfig) {
             builder.setStaticConfig(Map.of(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2"));
@@ -461,6 +481,9 @@ public class ConfigurationControlManagerTest {
                 QuorumFeatures.defaultSupportedFeatureMap(true),
                 Collections.emptyList())).
             build();
+        featureManager.replay(new FeatureLevelRecord().
+            setName(MetadataVersion.FEATURE_NAME).
+            setFeatureLevel(MetadataVersion.LATEST_PRODUCTION.featureLevel()));
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
             setStaticConfig(Map.of(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2")).
             setFeatureControl(featureManager).
@@ -472,7 +495,8 @@ public class ConfigurationControlManagerTest {
             Collections.singletonMap(EligibleLeaderReplicasVersion.FEATURE_NAME,
                 FeatureUpdate.UpgradeType.UPGRADE),
             false);
-        assertNull(result.response());
+        assertNotNull(result.response());
+        assertEquals(Errors.NONE, result.response().error());
         RecordTestUtils.replayAll(manager, result.records());
         RecordTestUtils.replayAll(featureManager, result.records());
 
@@ -497,5 +521,47 @@ public class ConfigurationControlManagerTest {
         } else {
             assertEquals(Errors.NONE, result.response().error());
         }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testElrUpgrade(boolean isMetadataVersionElrEnabled) {
+        FeatureControlManager featureManager = new FeatureControlManager.Builder().
+            setQuorumFeatures(new QuorumFeatures(0,
+                QuorumFeatures.defaultSupportedFeatureMap(true),
+                Collections.emptyList())).
+            build();
+        featureManager.replay(new FeatureLevelRecord().
+            setName(MetadataVersion.FEATURE_NAME).
+            setFeatureLevel(isMetadataVersionElrEnabled ? MetadataVersion.IBP_4_0_IV1.featureLevel() : MetadataVersion.IBP_4_0_IV0.featureLevel()));
+        ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
+            setStaticConfig(Map.of(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2")).
+            setFeatureControl(featureManager).
+            setKafkaConfigSchema(SCHEMA).
+            build();
+        assertFalse(featureManager.isElrFeatureEnabled());
+        ControllerResult<ApiError> result = manager.updateFeatures(
+            Collections.singletonMap(EligibleLeaderReplicasVersion.FEATURE_NAME,
+                EligibleLeaderReplicasVersion.ELRV_1.featureLevel()),
+            Collections.singletonMap(EligibleLeaderReplicasVersion.FEATURE_NAME,
+                FeatureUpdate.UpgradeType.UPGRADE),
+            false);
+        assertNotNull(result.response());
+        if (isMetadataVersionElrEnabled) {
+            assertEquals(Errors.NONE, result.response().error());
+            RecordTestUtils.replayAll(manager, result.records());
+            RecordTestUtils.replayAll(featureManager, result.records());
+            assertTrue(featureManager.isElrFeatureEnabled());
+        } else {
+            assertEquals(Errors.INVALID_UPDATE_VERSION, result.response().error());
+        }
+    }
+
+    private FeatureControlManager createFeatureControlManager() {
+        FeatureControlManager featureControlManager = new FeatureControlManager.Builder().build();
+        featureControlManager.replay(new FeatureLevelRecord().
+            setName(MetadataVersion.FEATURE_NAME).
+            setFeatureLevel(MetadataVersion.LATEST_PRODUCTION.featureLevel()));
+        return featureControlManager;
     }
 }

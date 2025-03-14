@@ -33,7 +33,7 @@ import java.nio.ByteBuffer
 import java.util.Optional
 import scala.collection.{Map, Set, mutable}
 import scala.jdk.CollectionConverters._
-import scala.jdk.OptionConverters.{RichOption, RichOptional}
+import scala.jdk.OptionConverters.RichOptional
 import scala.util.Random
 
 class MockLeaderEndPoint(sourceBroker: BrokerEndPoint = new BrokerEndPoint(1, "localhost", Random.nextInt()),
@@ -154,7 +154,7 @@ class MockLeaderEndPoint(sourceBroker: BrokerEndPoint = new BrokerEndPoint(1, "l
       if (state.isReadyForFetch) {
         val replicaState = replicaPartitionStateCallback(partition).getOrElse(throw new IllegalArgumentException(s"Unknown partition $partition"))
         val lastFetchedEpoch = if (isTruncationOnFetchSupported)
-          state.lastFetchedEpoch.map(_.asInstanceOf[Integer]).toJava
+          state.lastFetchedEpoch
         else
           Optional.empty[Integer]
         fetchData.put(partition,
