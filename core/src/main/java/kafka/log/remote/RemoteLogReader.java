@@ -61,7 +61,6 @@ public class RemoteLogReader implements Callable<Void> {
 
     public void cancel() {
         LOGGER.debug("Cancelling remote log reader for topic partition {}", fetchInfo.topicPartition);
-        callback.accept(new RemoteLogReadResult(Optional.empty(), Optional.of(new InterruptedException("Cancelled remote log reader"))));
         this.cancelled = true;
     }
 
@@ -69,6 +68,7 @@ public class RemoteLogReader implements Callable<Void> {
     public Void call() {
         if (cancelled) {
             LOGGER.debug("Skipping reading records from remote storage for topic partition {} as it has been cancelled", fetchInfo.topicPartition);
+            callback.accept(new RemoteLogReadResult(Optional.empty(), Optional.of(new InterruptedException("Cancelled remote log reader"))));
             return null;
         }
         RemoteLogReadResult result;

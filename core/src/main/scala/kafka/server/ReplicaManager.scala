@@ -1545,14 +1545,14 @@ class ReplicaManager(val config: KafkaConfig,
                                  fetchPartitionStatus: Seq[(TopicIdPartition, FetchPartitionStatus)]): Option[LogReadResult] = {
     val key = new TopicPartitionOperationKey(remoteFetchInfo.topicPartition.topic(), remoteFetchInfo.topicPartition.partition())
     val remoteFetchResult = new CompletableFuture[RemoteLogReadResult]
-    var remoteFetchTask: Future[Void] = null
-    var remoteLogReader: RemoteLogReader = null
+    var remoteFetchFuture: RemoteFetchFuture = null
     try {
-      remoteLogReader = remoteLogManager.get.remoteLogReaderTask(remoteFetchInfo, (result: RemoteLogReadResult) => {
+      val remoteLogReader = remoteLogManager.get.remoteLogReaderTask(remoteFetchInfo, (result: RemoteLogReadResult) => {
         remoteFetchResult.complete(result)
         delayedRemoteFetchPurgatory.checkAndComplete(key)
       })
-      remoteFetchTask = remoteLogManager.get.asyncRead(remoteLogReader)
+      val remoteFetchTask = remoteLogManager.get.asyncRead(remoteLogReader)
+      remoteFetchFuture = new RemoteFetchFuture(remoteLogReader, remoteFetchTask)
     } catch {
       case e: RejectedExecutionException =>
         // Return the error if any in scheduling the remote fetch task
@@ -1561,7 +1561,7 @@ class ReplicaManager(val config: KafkaConfig,
     }
 
     val remoteFetchMaxWaitMs = config.remoteLogManagerConfig.remoteFetchMaxWaitMs().toLong
-    val remoteFetch = new DelayedRemoteFetch(remoteFetchTask, remoteLogReader, remoteFetchResult, remoteFetchInfo, remoteFetchMaxWaitMs,
+    val remoteFetch = new DelayedRemoteFetch(remoteFetchFuture, remoteFetchInfo, remoteFetchMaxWaitMs,
       fetchPartitionStatus, params, logReadResults, this, responseCallback)
     delayedRemoteFetchPurgatory.tryCompleteElseWatch(remoteFetch, util.Collections.singletonList(key))
     None
