@@ -2112,7 +2112,6 @@ public class TaskManagerTest {
         when(activeTaskCreator.createTasks(any(), eq(taskId00Assignment))).thenReturn(singletonList(task00));
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
-        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
         assertThat(task00.state(), is(Task.State.RUNNING));
 
         taskManager.handleRevocation(taskId00Partitions);
@@ -2176,7 +2175,6 @@ public class TaskManagerTest {
         assertThat(taskManager.lockedTaskDirectories(), Matchers.is(Set.of(taskId00, taskId01)));
 
         taskManager.handleAssignment(taskId00Assignment, taskId01Assignment);
-        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
         assertThat(task00.state(), is(Task.State.RUNNING));
         assertThat(task01.state(), is(Task.State.RUNNING));
 
@@ -2255,7 +2253,6 @@ public class TaskManagerTest {
         when(activeTaskCreator.createTasks(any(), eq(taskId00Assignment))).thenReturn(singletonList(task00));
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
-        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), tp -> assertThat(tp, is(empty()))), is(true));
         assertThat(task00.state(), is(Task.State.RUNNING));
 
         task00.setChangelogOffsets(singletonMap(t1p0, 0L));
@@ -2289,7 +2286,6 @@ public class TaskManagerTest {
         when(activeTaskCreator.createTasks(any(), eq(taskId00Assignment))).thenReturn(singletonList(task00));
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
-        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), tp -> assertThat(tp, is(empty()))), is(true));
         assertThat(task00.state(), is(Task.State.RUNNING));
 
         task00.setChangelogOffsets(singletonMap(t1p0, 0L));
@@ -2322,7 +2318,6 @@ public class TaskManagerTest {
             .thenReturn(taskId00Partitions);
 
         taskManager.handleAssignment(firstAssignment, emptyMap());
-        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), tp -> assertThat(tp, is(empty()))), is(true));
 
         assertThat(nonCorruptedTask.state(), is(Task.State.RUNNING));
         nonCorruptedTask.setCommitNeeded();
@@ -2447,7 +2442,6 @@ public class TaskManagerTest {
         when(consumer.assignment()).thenReturn(assignment);
 
         taskManager.handleAssignment(taskId01Assignment, taskId00Assignment);
-        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
 
         // make sure this will be committed and throw
         assertThat(runningNonCorruptedActive.state(), is(Task.State.RUNNING));
@@ -2490,7 +2484,6 @@ public class TaskManagerTest {
         uncorruptedActive.setCommittableOffsetsAndMetadata(offsets);
 
         taskManager.handleAssignment(firstAssignement, emptyMap());
-        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
 
         assertThat(uncorruptedActive.state(), is(Task.State.RUNNING));
 
@@ -2537,7 +2530,6 @@ public class TaskManagerTest {
         doThrow(new TimeoutException()).when(consumer).commitSync(offsets);
 
         taskManager.handleAssignment(firstAssignment, emptyMap());
-        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
 
         assertThat(uncorruptedActive.state(), is(Task.State.RUNNING));
         assertThat(corruptedActive.state(), is(Task.State.RUNNING));
@@ -2611,7 +2603,6 @@ public class TaskManagerTest {
         doThrow(new TimeoutException()).when(producer).commitTransaction(offsets, groupMetadata);
 
         taskManager.handleAssignment(firstAssignment, emptyMap());
-        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
 
         assertThat(uncorruptedActiveTask.state(), is(Task.State.RUNNING));
         assertThat(corruptedActiveTask.state(), is(Task.State.RUNNING));
@@ -2687,7 +2678,6 @@ public class TaskManagerTest {
         doThrow(new TimeoutException()).when(consumer).commitSync(expectedCommittedOffsets);
 
         taskManager.handleAssignment(assignmentActive, emptyMap());
-        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
         assertThat(revokedActiveTask.state(), is(Task.State.RUNNING));
         assertThat(unrevokedActiveTaskWithCommitNeeded.state(), is(State.RUNNING));
         assertThat(unrevokedActiveTaskWithoutCommitNeeded.state(), is(Task.State.RUNNING));
@@ -2748,7 +2738,6 @@ public class TaskManagerTest {
         doThrow(new TimeoutException()).when(producer).commitTransaction(expectedCommittedOffsets, groupMetadata);
 
         taskManager.handleAssignment(assignmentActive, emptyMap());
-        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
         assertThat(revokedActiveTask.state(), is(Task.State.RUNNING));
         assertThat(unrevokedActiveTask.state(), is(Task.State.RUNNING));
         assertThat(unrevokedActiveTaskWithoutCommitNeeded.state(), is(State.RUNNING));
@@ -2776,7 +2765,6 @@ public class TaskManagerTest {
         when(standbyTaskCreator.createTasks(taskId00Assignment)).thenReturn(singletonList(task00));
 
         taskManager.handleAssignment(emptyMap(), taskId00Assignment);
-        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
         assertThat(task00.state(), is(Task.State.RUNNING));
 
         taskManager.handleAssignment(emptyMap(), emptyMap());
@@ -2795,12 +2783,10 @@ public class TaskManagerTest {
         when(standbyTaskCreator.createTasks(taskId01Assignment)).thenReturn(singletonList(task01));
 
         taskManager.handleAssignment(taskId00Assignment, taskId01Assignment);
-        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
         assertThat(task00.state(), is(Task.State.RUNNING));
         assertThat(task01.state(), is(Task.State.RUNNING));
 
         taskManager.handleAssignment(taskId00Assignment, taskId01Assignment);
-        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
         assertThat(task00.state(), is(Task.State.RUNNING));
         assertThat(task01.state(), is(Task.State.RUNNING));
 
@@ -2818,13 +2804,11 @@ public class TaskManagerTest {
         when(activeTaskCreator.createTasks(any(), eq(taskId00Assignment))).thenReturn(singletonList(task00));
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
-        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
         assertThat(task00.state(), is(Task.State.RUNNING));
 
         final Set<TopicPartition> newPartitionsSet = Set.of(t1p1);
         final Map<TaskId, Set<TopicPartition>> taskIdSetMap = singletonMap(taskId00, newPartitionsSet);
         taskManager.handleAssignment(taskIdSetMap, emptyMap());
-        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
         assertThat(task00.state(), is(Task.State.RUNNING));
         assertEquals(newPartitionsSet, task00.inputPartitions());
         // expect these calls twice (because we're going to tryToCompleteRestoration twice)
@@ -2843,8 +2827,6 @@ public class TaskManagerTest {
         taskManager.handleAssignment(assignment, emptyMap());
 
         assertThat(task00.state(), is(Task.State.CREATED));
-
-        taskManager.tryToCompleteRestoration(time.milliseconds(), noOpResetter -> { });
 
         assertThat(task00.state(), is(Task.State.RUNNING));
         assertThat(taskManager.activeTaskMap(), Matchers.equalTo(singletonMap(taskId00, task00)));
@@ -2880,8 +2862,6 @@ public class TaskManagerTest {
         assertThat(task00.state(), is(Task.State.CREATED));
         assertThat(task01.state(), is(Task.State.CREATED));
 
-        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(false));
-
         assertThat(task00.state(), is(Task.State.CREATED));
         assertThat(task01.state(), is(Task.State.CREATED));
         assertThat(
@@ -2911,8 +2891,6 @@ public class TaskManagerTest {
 
         assertThat(task00.state(), is(Task.State.CREATED));
 
-        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(false));
-
         assertThat(task00.state(), is(Task.State.RESTORING));
         assertThat(
             taskManager.activeTaskMap(),
@@ -2933,7 +2911,6 @@ public class TaskManagerTest {
         when(activeTaskCreator.createTasks(any(), eq(taskId00Assignment))).thenReturn(singletonList(task00));
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
-        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
         assertThat(task00.state(), is(Task.State.RUNNING));
 
         taskManager.handleRevocation(taskId00Partitions);
@@ -2992,7 +2969,6 @@ public class TaskManagerTest {
         task10.committedOffsets();
 
         taskManager.handleAssignment(assignmentActive, assignmentStandby);
-        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
         assertThat(task00.state(), is(Task.State.RUNNING));
         assertThat(task01.state(), is(Task.State.RUNNING));
         assertThat(task02.state(), is(Task.State.RUNNING));
@@ -3047,7 +3023,6 @@ public class TaskManagerTest {
             .thenReturn(singletonList(task10));
 
         taskManager.handleAssignment(assignmentActive, assignmentStandby);
-        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
         assertThat(task00.state(), is(Task.State.RUNNING));
         assertThat(task01.state(), is(Task.State.RUNNING));
         assertThat(task02.state(), is(Task.State.RUNNING));
@@ -3083,7 +3058,6 @@ public class TaskManagerTest {
         when(standbyTaskCreator.createTasks(assignmentStandby)).thenReturn(singletonList(task10));
 
         taskManager.handleAssignment(assignmentActive, assignmentStandby);
-        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
         assertThat(task00.state(), is(Task.State.RUNNING));
         assertThat(task10.state(), is(Task.State.RUNNING));
 
@@ -3111,7 +3085,6 @@ public class TaskManagerTest {
         when(standbyTaskCreator.createTasks(assignmentStandby)).thenReturn(singletonList(task10));
 
         taskManager.handleAssignment(assignmentActive, assignmentStandby);
-        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
         assertThat(task00.state(), is(Task.State.RUNNING));
         assertThat(task10.state(), is(Task.State.RUNNING));
 
@@ -3149,7 +3122,6 @@ public class TaskManagerTest {
         when(consumer.assignment()).thenReturn(assignment);
         when(activeTaskCreator.createTasks(any(), eq(taskId00Assignment))).thenReturn(singletonList(task00));
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
-        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
         assertThat(task00.state(), is(Task.State.RUNNING));
 
         assertThrows(RuntimeException.class, () -> taskManager.handleRevocation(taskId00Partitions));
@@ -3236,8 +3208,6 @@ public class TaskManagerTest {
         assertThat(task02.state(), is(Task.State.CREATED));
         assertThat(task03.state(), is(Task.State.CREATED));
 
-        taskManager.tryToCompleteRestoration(time.milliseconds(), null);
-
         assertThat(task00.state(), is(Task.State.RESTORING));
         assertThat(task01.state(), is(Task.State.RUNNING));
         assertThat(task02.state(), is(Task.State.RUNNING));
@@ -3295,8 +3265,6 @@ public class TaskManagerTest {
         taskManager.handleAssignment(assignment, emptyMap());
 
         assertThat(task00.state(), is(Task.State.CREATED));
-
-        taskManager.tryToCompleteRestoration(time.milliseconds(), null);
 
         assertThat(task00.state(), is(Task.State.RESTORING));
         assertThat(
@@ -3420,8 +3388,6 @@ public class TaskManagerTest {
         assertThat(task01.state(), is(Task.State.CREATED));
         assertThat(task02.state(), is(Task.State.CREATED));
 
-        taskManager.tryToCompleteRestoration(time.milliseconds(), null);
-
         assertThat(task00.state(), is(Task.State.RESTORING));
         assertThat(task01.state(), is(Task.State.RUNNING));
         assertThat(task02.state(), is(Task.State.RUNNING));
@@ -3461,7 +3427,6 @@ public class TaskManagerTest {
         taskManager.handleAssignment(emptyMap(), assignment);
         assertThat(task00.state(), is(Task.State.CREATED));
 
-        taskManager.tryToCompleteRestoration(time.milliseconds(), null);
         assertThat(task00.state(), is(Task.State.RUNNING));
         assertThat(taskManager.activeTaskMap(), Matchers.anEmptyMap());
         assertThat(taskManager.standbyTaskMap(), Matchers.equalTo(singletonMap(taskId00, task00)));
@@ -3592,7 +3557,6 @@ public class TaskManagerTest {
             .thenReturn(singletonList(task00));
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
-        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
 
         assertThat(task00.state(), is(Task.State.RUNNING));
         assertThat(taskManager.activeTaskMap(), Matchers.equalTo(singletonMap(taskId00, task00)));
@@ -3609,7 +3573,6 @@ public class TaskManagerTest {
         when(standbyTaskCreator.createTasks(taskId01Assignment)).thenReturn(singletonList(task01));
 
         taskManager.handleAssignment(emptyMap(), taskId01Assignment);
-        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
 
         assertThat(task01.state(), is(Task.State.RUNNING));
         assertThat(taskManager.activeTaskMap(), Matchers.anEmptyMap());
@@ -3642,7 +3605,6 @@ public class TaskManagerTest {
             .thenReturn(singletonList(task01));
 
         taskManager.handleAssignment(taskId00Assignment, taskId01Assignment);
-        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
 
         assertThat(task00.state(), is(Task.State.RUNNING));
         assertThat(task01.state(), is(Task.State.RUNNING));
@@ -3684,7 +3646,6 @@ public class TaskManagerTest {
             .thenReturn(Arrays.asList(task03, task04, task05));
 
         taskManager.handleAssignment(assignmentActive, assignmentStandby);
-        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
 
         assertThat(task00.state(), is(Task.State.RUNNING));
         assertThat(task01.state(), is(Task.State.RUNNING));
@@ -3711,7 +3672,6 @@ public class TaskManagerTest {
         when(standbyTaskCreator.createTasks(taskId00Assignment)).thenReturn(singletonList(task00));
 
         taskManager.handleAssignment(Collections.emptyMap(), taskId00Assignment);
-        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
 
         assertThat(task00.state(), is(Task.State.RUNNING));
 
@@ -3736,7 +3696,6 @@ public class TaskManagerTest {
             .thenReturn(singletonList(task01));
 
         taskManager.handleAssignment(taskId00Assignment, taskId01Assignment);
-        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
 
         assertThat(task00.state(), is(Task.State.RUNNING));
         assertThat(task01.state(), is(Task.State.RUNNING));
@@ -3813,7 +3772,6 @@ public class TaskManagerTest {
         when(activeTaskCreator.createTasks(any(), eq(taskId00Assignment))).thenReturn(singletonList(task00));
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
-        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
 
         assertThat(task00.state(), is(Task.State.RUNNING));
 
@@ -3837,7 +3795,6 @@ public class TaskManagerTest {
         when(standbyTaskCreator.createTasks(taskId01Assignment)).thenReturn(singletonList(task01));
 
         taskManager.handleAssignment(emptyMap(), taskId01Assignment);
-        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
 
         assertThat(task01.state(), is(Task.State.RUNNING));
 
@@ -3869,7 +3826,6 @@ public class TaskManagerTest {
         when(activeTaskCreator.createTasks(any(), eq(taskId00Assignment))).thenReturn(singletonList(task00));
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
-        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
 
         assertThat(task00.state(), is(Task.State.RUNNING));
 
@@ -3902,7 +3858,6 @@ public class TaskManagerTest {
         when(activeTaskCreator.createTasks(any(), eq(taskId00Assignment))).thenReturn(singletonList(task00));
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
-        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
 
         assertThat(task00.state(), is(Task.State.RUNNING));
 
@@ -3928,7 +3883,6 @@ public class TaskManagerTest {
         when(adminClient.deleteRecords(any())).thenReturn(deleteRecordsResult);
 
         taskManager.addTask(task00);
-        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
 
         assertThat(task00.state(), is(Task.State.RUNNING));
 
@@ -3974,7 +3928,6 @@ public class TaskManagerTest {
             .thenReturn(singletonList(task04));
 
         taskManager.handleAssignment(assignmentActive, assignmentStandby);
-        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
 
         assertThat(task00.state(), is(Task.State.RUNNING));
         assertThat(task01.state(), is(Task.State.RUNNING));
@@ -4014,7 +3967,6 @@ public class TaskManagerTest {
             .thenReturn(Arrays.asList(task00, task01));
 
         taskManager.handleAssignment(firstAssignment, emptyMap());
-        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
 
         assertThat(task00.state(), is(Task.State.RUNNING));
         assertThat(task01.state(), is(Task.State.RUNNING));
@@ -4125,7 +4077,6 @@ public class TaskManagerTest {
         when(activeTaskCreator.createTasks(any(), eq(taskId00Assignment))).thenReturn(singletonList(task00));
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
-        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
 
         assertThat(task00.state(), is(Task.State.RUNNING));
 
@@ -4149,7 +4100,6 @@ public class TaskManagerTest {
             .thenReturn(singletonList(task00));
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
-        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
 
         assertThat(task00.state(), is(Task.State.RUNNING));
 
@@ -4175,7 +4125,6 @@ public class TaskManagerTest {
         when(activeTaskCreator.createTasks(any(), eq(taskId00Assignment))).thenReturn(singletonList(task00));
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
-        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
 
         assertThat(task00.state(), is(Task.State.RUNNING));
 
@@ -4195,7 +4144,6 @@ public class TaskManagerTest {
         when(activeTaskCreator.createTasks(any(), eq(taskId00Assignment))).thenReturn(singletonList(task00));
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
-        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
 
         assertThat(task00.state(), is(Task.State.RUNNING));
 
@@ -4220,7 +4168,6 @@ public class TaskManagerTest {
         when(activeTaskCreator.createTasks(any(), eq(taskId00Assignment))).thenReturn(singletonList(task00));
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
-        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
 
         assertThat(task00.state(), is(Task.State.RUNNING));
 
@@ -4240,7 +4187,6 @@ public class TaskManagerTest {
         when(activeTaskCreator.createTasks(any(), eq(taskId00Assignment))).thenReturn(singletonList(task00));
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
-        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(false));
         assertThat(task00.state(), is(Task.State.RESTORING));
         verifyNoInteractions(consumer);
     }
@@ -4257,7 +4203,6 @@ public class TaskManagerTest {
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(TaskManager.class)) {
             appender.setClassLogger(TaskManager.class, Level.DEBUG);
             taskManager.handleAssignment(taskId00Assignment, emptyMap());
-            assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
             assertThat(task00.state(), is(Task.State.RUNNING));
 
             taskManager.handleRevocation(Set.of(t1p0, new TopicPartition("unknown", 0)));
@@ -4411,7 +4356,6 @@ public class TaskManagerTest {
         lenient().when(consumer.assignment()).thenReturn(assignment);
 
         taskManager.handleAssignment(allActiveTasksAssignment, standbyAssignment);
-        taskManager.tryToCompleteRestoration(time.milliseconds(), null);
 
         final Map<TaskId, StateMachineTask> allTasks = new HashMap<>();
 

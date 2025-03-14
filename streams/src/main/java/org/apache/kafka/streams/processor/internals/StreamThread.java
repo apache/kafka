@@ -975,10 +975,6 @@ public class StreamThread extends Thread implements ProcessingThread {
             return;
         }
 
-        if (!stateUpdaterEnabled) {
-            initializeAndRestorePhase();
-        }
-
         // TODO: we should record the restore latency and its relative time spent ratio after
         //       we figure out how to move this method out of the stream thread
         advanceNowAndComputeLatency();
@@ -988,7 +984,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         long totalProcessLatency = 0L;
         long totalPunctuateLatency = 0L;
         if (state == State.RUNNING
-            || (stateUpdaterEnabled && isStartingRunningOrPartitionAssigned())) {
+            || isStartingRunningOrPartitionAssigned()) {
 
             taskManager.updateLags();
 
@@ -1002,10 +998,7 @@ public class StreamThread extends Thread implements ProcessingThread {
              *  6. Otherwise, increment N.
              */
             do {
-
-                if (stateUpdaterEnabled) {
-                    checkStateUpdater();
-                }
+                checkStateUpdater();
 
                 log.debug("Processing tasks with {} iterations.", numIterations);
                 final int processed = taskManager.process(numIterations, time);
@@ -1160,37 +1153,6 @@ public class StreamThread extends Thread implements ProcessingThread {
             totalCommittedSinceLastSummary = 0L;
             lastLogSummaryMs = now;
         }
-    }
-
-    private void initializeAndRestorePhase() {
-        final java.util.function.Consumer<Set<TopicPartition>> offsetResetter = partitions -> resetOffsets(partitions, null);
-        final State stateSnapshot = state;
-        // only try to initialize the assigned tasks
-        // if the state is still in PARTITION_ASSIGNED after the poll call
-        if (stateSnapshot == State.PARTITIONS_ASSIGNED
-            || stateSnapshot == State.RUNNING && taskManager.needsInitializationOrRestoration()) {
-
-            log.debug("State is {}; initializing tasks if necessary", stateSnapshot);
-
-            if (taskManager.tryToCompleteRestoration(now, offsetResetter)) {
-                log.info("Restoration took {} ms for all active tasks {}", time.milliseconds() - lastPartitionAssignedMs,
-                    taskManager.activeTaskIds());
-                setState(State.RUNNING);
-            }
-
-            if (log.isDebugEnabled()) {
-                log.debug("Initialization call done. State is {}", state);
-            }
-        }
-
-        if (log.isDebugEnabled()) {
-            log.debug("Idempotently invoking restoration logic in state {}", state);
-        }
-        // we can always let changelog reader try restoring in order to initialize the changelogs;
-        // if there's no active restoring or standby updating it would not try to fetch any data
-        // After KAFKA-13873, we only restore the not paused tasks.
-        changelogReader.restore(taskManager.notPausedTasks());
-        log.debug("Idempotent restore call done. Thread state has not changed.");
     }
 
     private void checkStateUpdater() {
