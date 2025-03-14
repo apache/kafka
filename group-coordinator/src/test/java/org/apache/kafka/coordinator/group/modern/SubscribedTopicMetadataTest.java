@@ -95,15 +95,17 @@ public class SubscribedTopicMetadataTest {
         assertEquals(Set.of(), subscribedTopicMetadata.assignablePartitions(t1Id));
 
         // few assignable partitions
-        subscribedTopicMetadata = new SubscribedTopicDescriberImpl(topicMetadataMap, Map.of(
-            t1Id, Set.of(0, 5)
-        ));
+        subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
+            topicMetadataMap,
+            Map.of(t1Id, Set.of(0, 5))
+        );
         assertEquals(Set.of(0, 5), subscribedTopicMetadata.assignablePartitions(t1Id));
 
         // all assignable partitions
-        subscribedTopicMetadata = new SubscribedTopicDescriberImpl(topicMetadataMap, Map.of(
-            t1Id, Set.of(0, 1, 2, 3, 4)
-        ));
+        subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
+            topicMetadataMap,
+            Map.of(t1Id, Set.of(0, 1, 2, 3, 4))
+        );
         assertEquals(Set.of(0, 1, 2, 3, 4), subscribedTopicMetadata.assignablePartitions(t1Id));
     }
 }
