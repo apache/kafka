@@ -75,7 +75,7 @@ class ControllerMutationQuotaTest(Test):
         # now apply the mutation quota configs
         node = self.kafka.nodes[0]
         alter_mutation_quota_cmd = "%s --entity-type users --entity-default --alter --add-config 'controller_mutation_rate=%f'" % \
-               (self.kafka.kafka_configs_cmd_with_optional_security_settings(node, force_use_zk_connection=False), mutation_rate)
+               (self.kafka.kafka_configs_cmd_with_optional_security_settings(node), mutation_rate)
         node.account.ssh(alter_mutation_quota_cmd)
 
         # now invoke the same steps with the mutation quota applied to ensure it fails
@@ -95,7 +95,7 @@ class ControllerMutationQuotaTest(Test):
             # alter the partition count
             node = self.kafka.nodes[0]
             alter_topic_cmd = "%s --alter --topic %s --partitions %i" % \
-                   (self.kafka.kafka_topics_cmd_with_optional_security_settings(node, force_use_zk_connection=False),
+                   (self.kafka.kafka_topics_cmd_with_optional_security_settings(node),
                    topic_name, 2 * self.partition_count)
             node.account.ssh(alter_topic_cmd)
 
