@@ -18,9 +18,7 @@ package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.Task;
-import org.apache.kafka.connect.runtime.isolation.LoaderSwap;
 import org.apache.kafka.connect.runtime.isolation.PluginType;
-import org.apache.kafka.connect.runtime.isolation.PluginUtils;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorType;
 import org.apache.kafka.connect.storage.Converter;
@@ -29,7 +27,6 @@ import org.apache.kafka.connect.storage.HeaderConverter;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 public class TaskPluginsMetadata {
@@ -64,8 +61,6 @@ public class TaskPluginsMetadata {
         assert valueConverter != null;
         assert headerConverter != null;
         assert transformationStageInfo != null;
-
-        Function<ClassLoader, LoaderSwap> pluginLoaderSwapper = plugins.safeLoaderSwapper();
 
         this.connectorClass = connectorClass.getName();
         this.connectorVersion = plugins.pluginVersion(connectorClass.getName(), connectorClass.getClassLoader(), PluginType.SINK, PluginType.SOURCE);

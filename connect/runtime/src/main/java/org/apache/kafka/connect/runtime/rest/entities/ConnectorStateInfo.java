@@ -61,7 +61,6 @@ public class ConnectorStateInfo {
         return type;
     }
 
-
     public abstract static class AbstractState {
         private final String state;
         private final String trace;
