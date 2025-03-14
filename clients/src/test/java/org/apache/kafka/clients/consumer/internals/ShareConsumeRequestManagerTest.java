@@ -1202,6 +1202,54 @@ public class ShareConsumeRequestManagerTest {
     }
 
     @Test
+    public void testShareFetchAndCloseMultipleNodes() {
+        buildRequestManager();
+        shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
+
+        subscriptions.subscribeToShareGroup(Collections.singleton(topicName));
+        subscriptions.assignFromSubscribed(List.of(tp0, tp1));
+
+        client.updateMetadata(
+                RequestTestUtils.metadataUpdateWithIds(2, Map.of(topicName, 2),
+                        tp -> validLeaderEpoch, topicIds, false));
+        Node nodeId0 = metadata.fetch().nodeById(0);
+        Node nodeId1 = metadata.fetch().nodeById(1);
+        Node tp0Leader = metadata.fetch().leaderFor(tp0);
+        Node tp1Leader = metadata.fetch().leaderFor(tp1);
+
+        assertEquals(nodeId0, tp0Leader);
+        assertEquals(nodeId1, tp1Leader);
+
+        assertEquals(2, sendFetches());
+        assertFalse(shareConsumeRequestManager.hasCompletedFetches());
+
+        client.prepareResponse(fullFetchResponse(tip0, records, acquiredRecords, Errors.NONE));
+        client.prepareResponse(fullFetchResponse(tip1, records, acquiredRecords, Errors.NONE));
+        networkClientDelegate.poll(time.timer(0));
+        assertTrue(shareConsumeRequestManager.hasCompletedFetches());
+
+        Acknowledgements acknowledgements = getAcknowledgements(1, acknowledgeTypes.toArray(new AcknowledgeType[0]));
+        Acknowledgements acknowledgements1 = getAcknowledgements(1, acknowledgeTypes.toArray(new AcknowledgeType[0]));
+
+        Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap = new HashMap<>();
+        acknowledgementsMap.put(tip0, new NodeAcknowledgements(0, acknowledgements));
+        acknowledgementsMap.put(tip1, new NodeAcknowledgements(1, acknowledgements1));
+        shareConsumeRequestManager.acknowledgeOnClose(acknowledgementsMap, calculateDeadlineMs(time, 1000L));
+
+        assertEquals(2, shareConsumeRequestManager.sendAcknowledgements());
+
+        client.prepareResponse(fullAcknowledgeResponse(tip0, Errors.NONE));
+        client.prepareResponse(fullAcknowledgeResponse(tip1, Errors.NONE));
+        networkClientDelegate.poll(time.timer(0));
+
+        assertEquals(2, completedAcknowledgements.get(0).size());
+        assertEquals(3, completedAcknowledgements.get(0).get(tip0).size());
+        assertEquals(3, completedAcknowledgements.get(0).get(tip1).size());
+        assertNull(shareConsumeRequestManager.requestStates(0).getCloseRequest());
+        assertNull(shareConsumeRequestManager.requestStates(1).getCloseRequest());
+    }
+
+    @Test
     public void testRetryAcknowledgementsWithLeaderChange() {
         buildRequestManager();
 

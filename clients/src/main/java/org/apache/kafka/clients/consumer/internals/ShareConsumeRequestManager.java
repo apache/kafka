@@ -385,7 +385,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                 }
                 acknowledgeRequestState.incompleteAcknowledgements.clear();
                 // Reset timer for any future processing on the same request state.
-                acknowledgeRequestState.resetTimerAndRequestState();
+                acknowledgeRequestState.maybeResetTimerAndRequestState();
                 return Optional.empty();
             }
 
@@ -1208,10 +1208,13 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
 
         /**
          * Resets the timer with the configured timeout and resets the RequestState.
+         * This is only applicable for commitAsync() requests as these states could be re-used.
          */
-        void resetTimerAndRequestState() {
-            resetTimeout(timeoutMs);
-            reset();
+        void maybeResetTimerAndRequestState() {
+            if (requestType == AcknowledgeRequestType.COMMIT_ASYNC) {
+                resetTimeout(timeoutMs);
+                reset();
+            }
         }
 
         /**
@@ -1268,7 +1271,10 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             processPendingInFlightAcknowledgements(new InvalidRecordStateException(INVALID_RESPONSE));
             resultHandler.completeIfEmpty();
             isProcessed = true;
-            resetTimerAndRequestState();
+            maybeResetTimerAndRequestState();
+            if (requestType == AcknowledgeRequestType.CLOSE) {
+                acknowledgeRequestStates.get(nodeId).setCloseRequest(null);
+            }
         }
 
         /**
