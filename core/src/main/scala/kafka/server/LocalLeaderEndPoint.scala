@@ -35,7 +35,6 @@ import java.util
 import java.util.Optional
 import scala.collection.{Map, Seq, Set, mutable}
 import scala.jdk.CollectionConverters._
-import scala.jdk.OptionConverters.RichOption
 
 /**
  * Facilitates fetches from a local replica leader.
@@ -205,7 +204,7 @@ class LocalLeaderEndPoint(sourceBroker: BrokerEndPoint,
     try {
       val logStartOffset = replicaManager.futureLocalLogOrException(topicPartition).logStartOffset
       val lastFetchedEpoch = if (isTruncationOnFetchSupported)
-        fetchState.lastFetchedEpoch.map(_.asInstanceOf[Integer]).toJava
+        fetchState.lastFetchedEpoch
       else
         Optional.empty[Integer]
       val topicId = fetchState.topicId.getOrElse(Uuid.ZERO_UUID)

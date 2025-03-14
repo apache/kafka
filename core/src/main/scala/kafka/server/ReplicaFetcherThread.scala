@@ -23,6 +23,7 @@ import org.apache.kafka.common.requests.FetchResponse
 import org.apache.kafka.server.common.{MetadataVersion, OffsetAndEpoch}
 import org.apache.kafka.storage.internals.log.{LogAppendInfo, LogStartOffsetIncrementReason}
 
+import java.util.Optional
 import scala.collection.mutable
 
 class ReplicaFetcherThread(name: String,
@@ -47,7 +48,7 @@ class ReplicaFetcherThread(name: String,
   // Visible for testing
   private[server] val partitionsWithNewHighWatermark = mutable.Buffer[TopicPartition]()
 
-  override protected def latestEpoch(topicPartition: TopicPartition): Option[Int] = {
+  override protected def latestEpoch(topicPartition: TopicPartition): Optional[Integer] = {
     replicaMgr.localLogOrException(topicPartition).latestEpoch
   }
 
@@ -59,7 +60,7 @@ class ReplicaFetcherThread(name: String,
     replicaMgr.localLogOrException(topicPartition).logEndOffset
   }
 
-  override protected def endOffsetForEpoch(topicPartition: TopicPartition, epoch: Int): Option[OffsetAndEpoch] = {
+  override protected def endOffsetForEpoch(topicPartition: TopicPartition, epoch: Int): Optional[OffsetAndEpoch] = {
     replicaMgr.localLogOrException(topicPartition).endOffsetForEpoch(epoch)
   }
 
@@ -130,7 +131,7 @@ class ReplicaFetcherThread(name: String,
     // For the follower replica, we do not need to keep its segment base offset and physical position.
     // These values will be computed upon becoming leader or handling a preferred read replica fetch.
     var maybeUpdateHighWatermarkMessage = s"but did not update replica high watermark"
-    log.maybeUpdateHighWatermark(partitionData.highWatermark).foreach { newHighWatermark =>
+    log.maybeUpdateHighWatermark(partitionData.highWatermark).ifPresent { newHighWatermark =>
       maybeUpdateHighWatermarkMessage = s"and updated replica high watermark to $newHighWatermark"
       partitionsWithNewHighWatermark += topicPartition
     }
