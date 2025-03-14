@@ -284,7 +284,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
         workerTask = new ExactlyOnceWorkerSourceTask(taskId, sourceTask, statusListener, initialState, keyConverterPlugin, valueConverterPlugin, headerConverterPlugin,
                 transformationChain, producer, admin, TopicCreationGroup.configuredGroups(sourceConfig), offsetReader, offsetWriter, offsetStore,
                 config, clusterConfigState, metrics, errorHandlingMetrics, plugins.delegatingLoader(), time, RetryWithToleranceOperatorTest.noneOperator(), statusBackingStore,
-                sourceConfig, Runnable::run, preProducerCheck, postProducerCheck, Collections::emptyList, TestPlugins.noOpLoaderSwap());
+                sourceConfig, Runnable::run, preProducerCheck, postProducerCheck, Collections::emptyList, null, TestPlugins.noOpLoaderSwap());
     }
 
     @ParameterizedTest

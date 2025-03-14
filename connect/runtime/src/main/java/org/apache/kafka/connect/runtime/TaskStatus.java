@@ -24,10 +24,6 @@ public class TaskStatus extends AbstractStatus<ConnectorTaskId> {
         super(id, state, workerUrl, generation, trace, version);
     }
 
-    public TaskStatus(ConnectorTaskId id, State state, String workerUrl, int generation, String trace) {
-        super(id, state, workerUrl, generation, trace);
-    }
-
     public TaskStatus(ConnectorTaskId id, State state, String workerUrl, int generation) {
         super(id, state, workerUrl, generation, null);
     }

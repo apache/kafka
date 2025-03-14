@@ -18,13 +18,11 @@ package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.Task;
-import org.apache.kafka.connect.health.ConnectorType;
 import org.apache.kafka.connect.runtime.isolation.LoaderSwap;
 import org.apache.kafka.connect.runtime.isolation.PluginType;
 import org.apache.kafka.connect.runtime.isolation.PluginUtils;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
-import org.apache.kafka.connect.sink.SinkConnector;
-import org.apache.kafka.connect.source.SourceConnector;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorType;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
 
@@ -71,30 +69,17 @@ public class TaskPluginsMetadata {
 
         this.connectorClass = connectorClass.getName();
         this.connectorVersion = plugins.pluginVersion(connectorClass.getName(), connectorClass.getClassLoader(), PluginType.SINK, PluginType.SOURCE);
-        this.connectorType = getConnectorType(connectorClass, pluginLoaderSwapper);
+        this.connectorType = ConnectorType.from(connectorClass);
         this.taskClass = task.getClass().getName();
         this.taskVersion = task.version();
         this.keyConverterClass = keyConverter.getClass().getName();
-        this.keyConverterVersion = PluginUtils.getVersionOrUndefined(keyConverter, pluginLoaderSwapper);
+        this.keyConverterVersion = plugins.pluginVersion(keyConverter.getClass().getName(), keyConverter.getClass().getClassLoader(), PluginType.CONVERTER);
         this.valueConverterClass = valueConverter.getClass().getName();
-        this.valueConverterVersion = PluginUtils.getVersionOrUndefined(valueConverter, pluginLoaderSwapper);
+        this.valueConverterVersion = plugins.pluginVersion(valueConverter.getClass().getName(), valueConverter.getClass().getClassLoader(), PluginType.CONVERTER);
         this.headerConverterClass = headerConverter.getClass().getName();
-        this.headerConverterVersion = PluginUtils.getVersionOrUndefined(headerConverter, pluginLoaderSwapper);
+        this.headerConverterVersion = plugins.pluginVersion(headerConverter.getClass().getName(), headerConverter.getClass().getClassLoader(), PluginType.HEADER_CONVERTER);
         this.transformations = transformationStageInfo.stream().map(TransformationStage.StageInfo::transform).collect(Collectors.toSet());
         this.predicates = transformationStageInfo.stream().map(TransformationStage.StageInfo::predicate).filter(Objects::nonNull).collect(Collectors.toSet());
-    }
-
-
-    public ConnectorType getConnectorType(Class<? extends Connector> connectorClass, Function<ClassLoader, LoaderSwap> pluginLoaderSwapper) {
-        try (LoaderSwap ignored = pluginLoaderSwapper.apply(connectorClass.getClassLoader())) {
-            if (SinkConnector.class.isAssignableFrom(connectorClass)) {
-                return ConnectorType.SINK;
-            } else if (SourceConnector.class.isAssignableFrom(connectorClass)) {
-                return ConnectorType.SOURCE;
-            } else {
-                return ConnectorType.UNKNOWN;
-            }
-        }
     }
 
     public String connectorClass() {

@@ -563,17 +563,19 @@ public final class Worker {
     }
 
     public String connectorVersion(String connName) {
-        if (connectors.get(connName) == null) {
+        WorkerConnector conn = connectors.get(connName);
+        if (conn == null) {
             return null;
         }
-        return connectors.get(connName).connectorVersion();
+        return conn.connectorVersion();
     }
 
     public String taskVersion(ConnectorTaskId taskId) {
-        if (tasks.get(taskId) == null) {
+        WorkerTask<?, ?> task = tasks.get(taskId);
+        if (task == null) {
             return null;
         }
-        return tasks.get(taskId).taskVersion();
+        return task.taskVersion();
     }
 
     /**
@@ -1858,13 +1860,10 @@ public final class Worker {
             TaskPluginsMetadata taskPluginsMetadata = new TaskPluginsMetadata(
                     connectorClass, task, keyConverterPlugin.get(), valueConverterPlugin.get(), headerConverterPlugin.get(), transformationChain.transformationChainInfo(), plugins);
 
-            WorkerTask<T, R> workerTask = doBuild(task, id, configState, statusListener, initialState,
+            return doBuild(task, id, configState, statusListener, initialState,
                 connectorConfig, keyConverterPlugin, valueConverterPlugin, headerConverterPlugin, classLoader,
                 retryWithToleranceOperator, transformationChain,
-                errorHandlingMetrics, connectorClass);
-
-            workerTask.addPluginsMetrics(taskPluginsMetadata);
-            return workerTask;
+                errorHandlingMetrics, connectorClass, taskPluginsMetadata);
         }
 
         abstract WorkerTask<T, R> doBuild(
@@ -1881,7 +1880,8 @@ public final class Worker {
                 RetryWithToleranceOperator<T> retryWithToleranceOperator,
                 TransformationChain<T, R> transformationChain,
                 ErrorHandlingMetrics errorHandlingMetrics,
-                Class<? extends Connector> connectorClass
+                Class<? extends Connector> connectorClass,
+                TaskPluginsMetadata pluginsMetadata
         );
 
     }
@@ -1909,7 +1909,8 @@ public final class Worker {
                 RetryWithToleranceOperator<ConsumerRecord<byte[], byte[]>> retryWithToleranceOperator,
                 TransformationChain<ConsumerRecord<byte[], byte[]>, SinkRecord> transformationChain,
                 ErrorHandlingMetrics errorHandlingMetrics,
-                Class<? extends Connector> connectorClass
+                Class<? extends Connector> connectorClass,
+                TaskPluginsMetadata taskPluginsMetadata
         ) {
             SinkConnectorConfig sinkConfig = new SinkConnectorConfig(plugins, connectorConfig.originalsStrings());
             WorkerErrantRecordReporter workerErrantRecordReporter = createWorkerErrantRecordReporter(sinkConfig, retryWithToleranceOperator,
@@ -1923,7 +1924,7 @@ public final class Worker {
             return new WorkerSinkTask(id, (SinkTask) task, statusListener, initialState, config, configState, metrics, keyConverterPlugin,
                     valueConverterPlugin, errorHandlingMetrics, headerConverterPlugin, transformationChain, consumer, classLoader, time,
                     retryWithToleranceOperator, workerErrantRecordReporter, herder.statusBackingStore(),
-                    () -> sinkTaskReporters(id, sinkConfig, errorHandlingMetrics, connectorClass), plugins.safeLoaderSwapper());
+                    () -> sinkTaskReporters(id, sinkConfig, errorHandlingMetrics, connectorClass), taskPluginsMetadata, plugins.safeLoaderSwapper());
         }
     }
 
@@ -1950,7 +1951,8 @@ public final class Worker {
                 RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator,
                 TransformationChain<SourceRecord, SourceRecord> transformationChain,
                 ErrorHandlingMetrics errorHandlingMetrics,
-                Class<? extends Connector> connectorClass
+                Class<? extends Connector> connectorClass,
+                TaskPluginsMetadata pluginsMetadata
         ) {
             SourceConnectorConfig sourceConfig = new SourceConnectorConfig(plugins,
                     connectorConfig.originalsStrings(), config.topicCreationEnable());
@@ -1983,7 +1985,7 @@ public final class Worker {
             return new WorkerSourceTask(id, (SourceTask) task, statusListener, initialState, keyConverterPlugin, valueConverterPlugin, errorHandlingMetrics,
                     headerConverterPlugin, transformationChain, producer, topicAdmin, topicCreationGroups,
                     offsetReader, offsetWriter, offsetStore, config, configState, metrics, classLoader, time,
-                    retryWithToleranceOperator, herder.statusBackingStore(), executor, () -> sourceTaskReporters(id, sourceConfig, errorHandlingMetrics), plugins.safeLoaderSwapper());
+                    retryWithToleranceOperator, herder.statusBackingStore(), executor, () -> sourceTaskReporters(id, sourceConfig, errorHandlingMetrics), pluginsMetadata, plugins.safeLoaderSwapper());
         }
     }
 
@@ -2017,7 +2019,8 @@ public final class Worker {
                 RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator,
                 TransformationChain<SourceRecord, SourceRecord> transformationChain,
                 ErrorHandlingMetrics errorHandlingMetrics,
-                Class<? extends Connector> connectorClass
+                Class<? extends Connector> connectorClass,
+                TaskPluginsMetadata pluginsMetadata
         ) {
             SourceConnectorConfig sourceConfig = new SourceConnectorConfig(plugins,
                     connectorConfig.originalsStrings(), config.topicCreationEnable());
@@ -2048,7 +2051,7 @@ public final class Worker {
                     headerConverterPlugin, transformationChain, producer, topicAdmin, topicCreationGroups,
                     offsetReader, offsetWriter, offsetStore, config, configState, metrics, errorHandlingMetrics, classLoader, time, retryWithToleranceOperator,
                     herder.statusBackingStore(), sourceConfig, executor, preProducerCheck, postProducerCheck,
-                    () -> sourceTaskReporters(id, sourceConfig, errorHandlingMetrics), plugins.safeLoaderSwapper());
+                    () -> sourceTaskReporters(id, sourceConfig, errorHandlingMetrics), pluginsMetadata, plugins.safeLoaderSwapper());
         }
     }
 

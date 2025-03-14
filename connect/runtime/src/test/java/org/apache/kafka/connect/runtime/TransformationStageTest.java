@@ -62,9 +62,11 @@ public class TransformationStageTest {
         TransformationStage<SourceRecord> stage = new TransformationStage<>(
                 predicatePlugin,
                 "testPredicate",
+                null,
                 negate,
                 transformationPlugin,
                 "testTransformation",
+                null,
                 TestPlugins.noOpLoaderSwap()
         );
 

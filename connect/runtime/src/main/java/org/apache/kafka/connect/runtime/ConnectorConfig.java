@@ -386,9 +386,23 @@ public class ConnectorConfig extends AbstractConfig {
                     Predicate<R> predicate = getTransformationOrPredicate(plugins, predicateTypeConfig, predicateVersionConfig);
                     predicate.configure(originalsWithPrefix(predicatePrefix));
                     Plugin<Predicate<R>> predicatePlugin = metrics.wrap(predicate, connectorTaskId, predicateAlias);
-                    transformations.add(new TransformationStage<>(predicatePlugin, predicateAlias, negate != null && Boolean.parseBoolean(negate.toString()), transformationPlugin, alias, plugins.safeLoaderSwapper()));
+                    transformations.add(new TransformationStage<>(
+                        predicatePlugin,
+                        predicateAlias,
+                        plugins.pluginVersion(predicate.getClass().getName(), predicate.getClass().getClassLoader(), PluginType.PREDICATE),
+                        negate != null && Boolean.parseBoolean(negate.toString()),
+                        transformationPlugin,
+                        plugins.pluginVersion(transformation.getClass().getName(), transformation.getClass().getClassLoader(), PluginType.TRANSFORMATION),
+                        alias,
+                        plugins.safeLoaderSwapper())
+                    );
                 } else {
-                    transformations.add(new TransformationStage<>(transformationPlugin, alias, plugins.safeLoaderSwapper()));
+                    transformations.add(new TransformationStage<>(
+                        transformationPlugin,
+                        alias,
+                        plugins.pluginVersion(transformation.getClass().getName(), transformation.getClass().getClassLoader(), PluginType.TRANSFORMATION),
+                        plugins.safeLoaderSwapper())
+                    );
                 }
             } catch (Exception e) {
                 throw new ConnectException(e);

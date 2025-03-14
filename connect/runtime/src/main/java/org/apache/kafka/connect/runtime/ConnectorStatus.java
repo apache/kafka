@@ -23,10 +23,6 @@ public class ConnectorStatus extends AbstractStatus<String> {
         super(connector, state, workerUrl, generation, msg, version);
     }
 
-    public ConnectorStatus(String connector, State state, String msg, String workerUrl, int generation) {
-        super(connector, state, workerUrl, generation, msg);
-    }
-
     public ConnectorStatus(String connector, State state, String workerUrl, int generation, String version) {
         super(connector, state, workerUrl, generation, null, version);
     }

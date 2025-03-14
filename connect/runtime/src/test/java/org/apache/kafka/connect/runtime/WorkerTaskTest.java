@@ -300,7 +300,7 @@ public class WorkerTaskTest {
                               Supplier<List<ErrorReporter<Object>>> errorReporterSupplier,
                               Time time, StatusBackingStore statusBackingStore) {
             super(id, statusListener, initialState, loader, connectMetrics, errorHandlingMetrics,
-                    retryWithToleranceOperator, transformationChain, errorReporterSupplier, time, statusBackingStore, TestPlugins.noOpLoaderSwap());
+                    retryWithToleranceOperator, transformationChain, errorReporterSupplier, time, statusBackingStore, null, TestPlugins.noOpLoaderSwap());
         }
 
         @Override

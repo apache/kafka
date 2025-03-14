@@ -806,11 +806,11 @@ public class WorkerTest {
 
         // Each time we check the task metrics, the worker will call the herder
         when(herder.taskStatus(TASK_ID)).thenReturn(
-                new ConnectorStateInfo.TaskState(0, "RUNNING", "worker", "msg"),
-                new ConnectorStateInfo.TaskState(0, "PAUSED", "worker", "msg"),
-                new ConnectorStateInfo.TaskState(0, "FAILED", "worker", "msg"),
-                new ConnectorStateInfo.TaskState(0, "DESTROYED", "worker", "msg"),
-                new ConnectorStateInfo.TaskState(0, "UNASSIGNED", "worker", "msg")
+                new ConnectorStateInfo.TaskState(0, "RUNNING", "worker", "msg", null),
+                new ConnectorStateInfo.TaskState(0, "PAUSED", "worker", "msg", null),
+                new ConnectorStateInfo.TaskState(0, "FAILED", "worker", "msg", null),
+                new ConnectorStateInfo.TaskState(0, "DESTROYED", "worker", "msg", null),
+                new ConnectorStateInfo.TaskState(0, "UNASSIGNED", "worker", "msg", null)
         );
 
         worker = new Worker(WORKER_ID,

@@ -107,10 +107,6 @@ public class ConnectorStateInfo {
                               @JsonProperty("version") String version) {
             super(state, worker, msg, version);
         }
-
-        public ConnectorState(String state, String worker, String trace) {
-            super(state, worker, trace, null);
-        }
     }
 
     public static class TaskState extends AbstractState implements Comparable<TaskState> {
@@ -123,11 +119,6 @@ public class ConnectorStateInfo {
                          @JsonProperty("msg") String msg,
                          @JsonProperty("version") String version) {
             super(state, worker, msg, version);
-            this.id = id;
-        }
-
-        public TaskState(int id, String state, String worker, String trace) {
-            super(state, worker, trace, null);
             this.id = id;
         }
 

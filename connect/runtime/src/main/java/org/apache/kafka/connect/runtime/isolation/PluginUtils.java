@@ -512,16 +512,4 @@ public class PluginUtils {
         version = "[" + version + "]";
         return VersionRange.createFromVersionSpec(version);
     }
-
-    public static <T> String getVersionOrUndefined(T obj, Function<ClassLoader, LoaderSwap> pluginLoaderSwapper) {
-        if (obj == null) {
-            return PluginDesc.UNDEFINED_VERSION;
-        }
-        try (LoaderSwap swap = pluginLoaderSwapper.apply(obj.getClass().getClassLoader())) {
-            if (obj instanceof Versioned) {
-                return ((Versioned) obj).version();
-            }
-        }
-        return PluginDesc.UNDEFINED_VERSION;
-    }
 }

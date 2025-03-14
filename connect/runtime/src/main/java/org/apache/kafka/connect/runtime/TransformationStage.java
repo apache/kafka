@@ -44,20 +44,38 @@ public class TransformationStage<R extends ConnectRecord<R>> implements AutoClos
     private final boolean negate;
     private final String transformAlias;
     private final String predicateAlias;
+    private final String transformVersion;
+    private final String predicateVersion;
     private final Function<ClassLoader, LoaderSwap> pluginLoaderSwapper;
 
 
-    TransformationStage(Plugin<Transformation<R>> transformationPlugin, String transformAlias, Function<ClassLoader, LoaderSwap> pluginLoaderSwapper) {
-        this(null, null, false, transformationPlugin, transformAlias, pluginLoaderSwapper);
+    TransformationStage(
+        Plugin<Transformation<R>> transformationPlugin,
+        String transformAlias,
+        String transformVersion,
+        Function<ClassLoader, LoaderSwap> pluginLoaderSwapper
+    ) {
+        this(null, null, null, false, transformationPlugin, transformAlias, transformVersion, pluginLoaderSwapper);
     }
 
-    TransformationStage(Plugin<Predicate<R>> predicatePlugin, String predicateAlias, boolean negate, Plugin<Transformation<R>> transformationPlugin, String transformAlias, Function<ClassLoader, LoaderSwap> pluginLoaderSwapper) {
+    TransformationStage(
+        Plugin<Predicate<R>> predicatePlugin,
+        String predicateAlias,
+        String predicateVersion,
+        boolean negate,
+        Plugin<Transformation<R>> transformationPlugin,
+        String transformAlias,
+        String transformVersion,
+        Function<ClassLoader, LoaderSwap> pluginLoaderSwapper
+    ) {
         this.predicatePlugin = predicatePlugin;
         this.negate = negate;
         this.transformationPlugin = transformationPlugin;
         this.pluginLoaderSwapper = pluginLoaderSwapper;
         this.transformAlias = transformAlias;
         this.predicateAlias = predicateAlias;
+        this.transformVersion = transformVersion;
+        this.predicateVersion = predicateVersion;
     }
 
     public Class<? extends Transformation<R>> transformClass() {
@@ -97,68 +115,31 @@ public class TransformationStage<R extends ConnectRecord<R>> implements AutoClos
                 '}';
     }
 
-    public static class AliasedPluginInfo {
-        private final String alias;
-        private final String className;
-        private final String version;
-
-        private AliasedPluginInfo(String alias, String className, String version) {
-            this.alias = alias;
-            this.className = className;
-            this.version = version;
-        }
-
-        public String alias() {
-            return alias;
-        }
-
-        public String className() {
-            return className;
-        }
-
-        public String version() {
-            return version;
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-            AliasedPluginInfo that = (AliasedPluginInfo) o;
-            return Objects.equals(alias, that.alias) &&
-                    Objects.equals(className, that.className) &&
-                    Objects.equals(version, that.version);
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(alias, className, version);
+    public record AliasedPluginInfo(String alias, String className, String version) {
+        public AliasedPluginInfo {
+            Objects.requireNonNull(alias, "alias cannot be null");
+            Objects.requireNonNull(className, "className cannot be null");
         }
     }
 
-    public static class StageInfo {
-        private final AliasedPluginInfo transform;
-        private final AliasedPluginInfo predicate;
 
-        private StageInfo(AliasedPluginInfo transform, AliasedPluginInfo predicate) {
-            this.transform = transform;
-            this.predicate = predicate;
-        }
-
-        public AliasedPluginInfo transform() {
-            return transform;
-        }
-
-        public AliasedPluginInfo predicate() {
-            return predicate;
+    public record StageInfo(AliasedPluginInfo transform, AliasedPluginInfo predicate) {
+        public StageInfo {
+            Objects.requireNonNull(transform, "transform cannot be null");
         }
     }
+
 
     public StageInfo transformationStageInfo() {
-        AliasedPluginInfo transformInfo = new AliasedPluginInfo(transformAlias,
-                transformationPlugin.get().getClass().getName(), PluginUtils.getVersionOrUndefined(transformationPlugin.get(), pluginLoaderSwapper));
-        AliasedPluginInfo predicateInfo = predicatePlugin != null ? new AliasedPluginInfo(predicateAlias,
-                predicatePlugin.get().getClass().getName(), PluginUtils.getVersionOrUndefined(predicatePlugin.get(), pluginLoaderSwapper)) : null;
+        AliasedPluginInfo transformInfo = new AliasedPluginInfo(
+            transformAlias,
+            transformationPlugin.get().getClass().getName(),
+            transformVersion
+        );
+        AliasedPluginInfo predicateInfo = predicatePlugin != null ? new AliasedPluginInfo(
+            predicateAlias,
+            predicatePlugin.get().getClass().getName(), predicateVersion
+        ) : null;
         return new StageInfo(transformInfo, predicateInfo);
     }
 }

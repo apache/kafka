@@ -78,6 +78,7 @@ public class WorkerConnector implements Runnable {
     private volatile Throwable externalFailure;
     private volatile boolean stopping;  // indicates whether the Worker has asked the connector to stop
     private volatile boolean cancelled; // indicates whether the Worker has cancelled the connector (e.g. because of slow shutdown)
+    private final String version;
 
     private State state;
     private final CloseableOffsetStorageReader offsetStorageReader;
@@ -97,6 +98,7 @@ public class WorkerConnector implements Runnable {
         this.loader = loader;
         this.ctx = ctx;
         this.connector = connector;
+        this.version = connector.version();
         this.state = State.INIT;
         this.metrics = new ConnectorMetricsGroup(connectMetrics, AbstractStatus.State.UNASSIGNED, statusListener);
         this.statusListener = this.metrics;
@@ -419,7 +421,7 @@ public class WorkerConnector implements Runnable {
     }
 
     public String connectorVersion() {
-        return connector.version();
+        return version;
     }
 
     protected final String connectorType() {

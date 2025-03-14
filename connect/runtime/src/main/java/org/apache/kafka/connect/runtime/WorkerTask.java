@@ -95,9 +95,11 @@ abstract class WorkerTask<T, R extends ConnectRecord<R>> implements Runnable {
                       Supplier<List<ErrorReporter<T>>> errorReportersSupplier,
                       Time time,
                       StatusBackingStore statusBackingStore,
+                      TaskPluginsMetadata pluginsMetadata,
                       Function<ClassLoader, LoaderSwap> pluginLoaderSwapper) {
         this.id = id;
         this.taskMetricsGroup = new TaskMetricsGroup(this.id, connectMetrics, statusListener);
+        this.taskMetricsGroup.addPluginInfoMetric(pluginsMetadata);
         this.errorMetrics = errorMetrics;
         this.statusListener = taskMetricsGroup;
         this.loader = loader;
@@ -173,10 +175,6 @@ abstract class WorkerTask<T, R extends ConnectRecord<R>> implements Runnable {
         } catch (InterruptedException e) {
             return false;
         }
-    }
-
-    public void addPluginsMetrics(TaskPluginsMetadata pluginsMetadata) {
-        taskMetricsGroup.addPluginInfoMetric(pluginsMetadata);
     }
 
     /**
@@ -457,6 +455,9 @@ abstract class WorkerTask<T, R extends ConnectRecord<R>> implements Runnable {
         }
 
         public void addPluginInfoMetric(TaskPluginsMetadata pluginsMetadata) {
+            if (pluginsMetadata == null) {
+                return;
+            }
             ConnectMetricsRegistry registry = connectMetrics.registry();
             metricGroup.addValueMetric(registry.taskConnectorClass, now -> pluginsMetadata.connectorClass());
             metricGroup.addValueMetric(registry.taskConnectorClassVersion, now -> pluginsMetadata.connectorVersion());
@@ -476,7 +477,6 @@ abstract class WorkerTask<T, R extends ConnectRecord<R>> implements Runnable {
                             registry.connectorTagName(), id.connector(),
                             registry.taskTagName(), Integer.toString(id.task()),
                             registry.transformsTagName(), entry.alias());
-                    transformationGroup.close();
                     transformationGroup.addValueMetric(registry.transformClass, now -> entry.className());
                     transformationGroup.addValueMetric(registry.transformVersion, now -> entry.version());
                     this.transformationGroups.add(transformationGroup);
@@ -489,7 +489,6 @@ abstract class WorkerTask<T, R extends ConnectRecord<R>> implements Runnable {
                             registry.connectorTagName(), id.connector(),
                             registry.taskTagName(), Integer.toString(id.task()),
                             registry.predicateTagName(), entry.alias());
-                    predicateGroup.close();
                     predicateGroup.addValueMetric(registry.predicateClass, now -> entry.className());
                     predicateGroup.addValueMetric(registry.predicateVersion, now -> entry.version());
                     this.predicateGroups.add(predicateGroup);

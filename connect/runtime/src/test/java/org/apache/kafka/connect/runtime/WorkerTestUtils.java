@@ -196,9 +196,11 @@ public class WorkerTestUtils {
         TransformationStage<R> stage = new TransformationStage<>(
                 predicatePlugin,
                 "testPredicate",
+                null,
                 false,
                 transformationPlugin,
                 "testTransformation",
+                null,
                 TestPlugins.noOpLoaderSwap());
         TransformationChain<T, R> realTransformationChainRetriableException = new TransformationChain(List.of(stage), toleranceOperator);
         TransformationChain<T, R> transformationChainRetriableException = Mockito.spy(realTransformationChainRetriableException);
