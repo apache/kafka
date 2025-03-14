@@ -25,7 +25,6 @@ import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.predicates.Predicate;
 
 import java.util.Objects;
-
 import java.util.function.Function;
 
 /**
