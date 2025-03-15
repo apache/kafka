@@ -200,8 +200,8 @@ public final class LeaderEpochFileCache {
      * Returns the current Leader Epoch if one exists. This is the latest epoch
      * which has messages assigned to it.
      */
-    public OptionalInt latestEpoch() {
-        return latestEntry().map(epochEntry -> OptionalInt.of(epochEntry.epoch)).orElseGet(OptionalInt::empty);
+    public Optional<Integer> latestEpoch() {
+        return latestEntry().map(epochEntry -> epochEntry.epoch);
     }
 
     public OptionalInt previousEpoch() {
@@ -290,7 +290,7 @@ public final class LeaderEpochFileCache {
                 // This may happen if a bootstrapping follower sends a request with undefined epoch or
                 // a follower is on the older message format where leader epochs are not recorded
                 epochAndOffset = new AbstractMap.SimpleImmutableEntry<>(UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET);
-            } else if (latestEpoch().isPresent() && latestEpoch().getAsInt() == requestedEpoch) {
+            } else if (latestEpoch().isPresent() && latestEpoch().get() == requestedEpoch) {
                 // For the leader, the latest epoch is always the current leader epoch that is still being written to.
                 // Followers should not have any reason to query for the end offset of the current epoch, but a consumer
                 // might if it is verifying its committed offset following a group rebalance. In this case, we return
