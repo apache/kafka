@@ -286,6 +286,8 @@ public class OffsetsRequestManagerTest {
         assertFalse(fetchOffsetsFuture.isDone());
         assertEquals(1, requestManager.requestsToRetry());
         assertEquals(0, requestManager.requestsToSend());
+        // A retriable error should be followed by a metadata update request
+        verify(metadata).requestUpdate(false);
 
         // Cluster metadata update. Failed requests should be retried and succeed
         mockSuccessfulRequest(Collections.singletonMap(TEST_PARTITION_1, LEADER_1));
@@ -384,6 +386,8 @@ public class OffsetsRequestManagerTest {
         assertFalse(fetchOffsetsFuture.isDone());
         assertEquals(1, requestManager.requestsToRetry());
         assertEquals(0, requestManager.requestsToSend());
+        // A retriable error should be followed by a metadata update request
+        verify(metadata).requestUpdate(false);
 
         // Cluster metadata update. Failed requests should be retried
         mockSuccessfulRequest(partitionLeaders);
@@ -561,7 +565,7 @@ public class OffsetsRequestManagerTest {
         CompletableFuture<Void> nextReset = assertDoesNotThrow(() -> requestManager.resetPositionsIfNeeded());
         assertEquals(0, requestManager.requestsToSend());
         assertTrue(nextReset.isCompletedExceptionally());
-        assertFutureThrows(nextReset, TopicAuthorizationException.class);
+        assertFutureThrows(TopicAuthorizationException.class, nextReset);
     }
 
     @Test

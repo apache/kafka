@@ -18,7 +18,6 @@
 package kafka.admin
 
 import java.util.Collections
-import kafka.controller.ReplicaAssignment
 import kafka.server.{BaseRequestTest, BrokerServer}
 import kafka.utils.TestUtils
 import kafka.utils.TestUtils._
@@ -43,25 +42,26 @@ class AddPartitionsTest extends BaseRequestTest {
   val partitionId = 0
 
   val topic1 = "new-topic1"
-  val topic1Assignment = Map(0 -> ReplicaAssignment(Seq(0,1), List(), List()))
+  val topic1Assignment = Map(0 -> Seq(0,1))
   val topic2 = "new-topic2"
-  val topic2Assignment = Map(0 -> ReplicaAssignment(Seq(1,2), List(), List()))
+  val topic2Assignment = Map(0 -> Seq(1,2))
   val topic3 = "new-topic3"
-  val topic3Assignment = Map(0 -> ReplicaAssignment(Seq(2,3,0,1), List(), List()))
+  val topic3Assignment = Map(0 -> Seq(2,3,0,1))
   val topic4 = "new-topic4"
-  val topic4Assignment = Map(0 -> ReplicaAssignment(Seq(0,3), List(), List()))
+  val topic4Assignment = Map(0 -> Seq(0,3))
   val topic5 = "new-topic5"
-  val topic5Assignment = Map(1 -> ReplicaAssignment(Seq(0,1), List(), List()))
+  val topic5Assignment = Map(1 -> Seq(0,1))
   var admin: Admin = _
+
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
     super.setUp(testInfo)
     brokers.foreach(broker => broker.asInstanceOf[BrokerServer].lifecycleManager.initialUnfenceFuture.get())
-    createTopicWithAssignment(topic1, partitionReplicaAssignment = topic1Assignment.map { case (k, v) => k -> v.replicas })
-    createTopicWithAssignment(topic2, partitionReplicaAssignment = topic2Assignment.map { case (k, v) => k -> v.replicas })
-    createTopicWithAssignment(topic3, partitionReplicaAssignment = topic3Assignment.map { case (k, v) => k -> v.replicas })
-    createTopicWithAssignment(topic4, partitionReplicaAssignment = topic4Assignment.map { case (k, v) => k -> v.replicas })
+    createTopicWithAssignment(topic1, partitionReplicaAssignment = topic1Assignment)
+    createTopicWithAssignment(topic2, partitionReplicaAssignment = topic2Assignment)
+    createTopicWithAssignment(topic3, partitionReplicaAssignment = topic3Assignment)
+    createTopicWithAssignment(topic4, partitionReplicaAssignment = topic4Assignment)
     admin = createAdminClient()
   }
 

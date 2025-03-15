@@ -30,9 +30,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
-import static org.apache.kafka.server.common.MetadataVersion.MINIMUM_BOOTSTRAP_VERSION;
-
-
 /**
  * The bootstrap metadata. On startup, if the metadata log is empty, we will populate the log with
  * these records. Alternately, if log is not empty, but the metadata version is not set, we will
@@ -97,8 +94,7 @@ public class BootstrapMetadata {
     }
 
     public static Optional<MetadataVersion> recordToMetadataVersion(ApiMessage record) {
-        if (record instanceof FeatureLevelRecord) {
-            FeatureLevelRecord featureLevel = (FeatureLevelRecord) record;
+        if (record instanceof FeatureLevelRecord featureLevel) {
             if (featureLevel.name().equals(MetadataVersion.FEATURE_NAME)) {
                 return Optional.of(MetadataVersion.fromFeatureLevel(featureLevel.featureLevel()));
             }
@@ -112,11 +108,6 @@ public class BootstrapMetadata {
         String source
     ) {
         this.records = Objects.requireNonNull(records);
-        if (metadataVersion.isLessThan(MINIMUM_BOOTSTRAP_VERSION)) {
-            throw new RuntimeException("Bootstrap metadata.version before " +
-                    MINIMUM_BOOTSTRAP_VERSION + " are not supported. Can't load metadata from " +
-                    source);
-        }
         this.metadataVersion = metadataVersion;
         Objects.requireNonNull(source);
         this.source = source;
@@ -137,8 +128,7 @@ public class BootstrapMetadata {
     public short featureLevel(String featureName) {
         short result = 0;
         for (ApiMessageAndVersion record : records) {
-            if (record.message() instanceof FeatureLevelRecord) {
-                FeatureLevelRecord message = (FeatureLevelRecord) record.message();
+            if (record.message() instanceof FeatureLevelRecord message) {
                 if (message.name().equals(featureName)) {
                     result = message.featureLevel();
                 }
@@ -151,8 +141,7 @@ public class BootstrapMetadata {
         List<ApiMessageAndVersion> newRecords = new ArrayList<>();
         int i = 0;
         while (i < records.size()) {
-            if (records.get(i).message() instanceof FeatureLevelRecord) {
-                FeatureLevelRecord record = (FeatureLevelRecord) records.get(i).message();
+            if (records.get(i).message() instanceof FeatureLevelRecord record) {
                 if (record.name().equals(featureName)) {
                     FeatureLevelRecord newRecord = record.duplicate();
                     newRecord.setFeatureLevel(level);

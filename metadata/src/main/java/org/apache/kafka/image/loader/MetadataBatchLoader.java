@@ -100,7 +100,7 @@ public class MetadataBatchLoader {
      */
     public final void resetToImage(MetadataImage image) {
         this.image = image;
-        this.hasSeenRecord = true;
+        this.hasSeenRecord = !image.isEmpty();
         this.delta = new MetadataDelta.Builder().setImage(image).build();
         this.transactionState = TransactionState.NO_TRANSACTION;
         this.lastOffset = image.provenance().lastContainedOffset();

@@ -28,14 +28,7 @@
       { "name": "TopicName", "versions": "0+", "type": "string",
         "about": "The topic name." },
       { "name": "NumPartitions", "versions": "0+", "type": "int32",
-        "about": "The number of partitions of the topic." },
-      { "name": "PartitionMetadata", "versions": "0+", "type": "[]PartitionMetadata",
-        "about": "Partitions mapped to a set of racks. If the rack information is unavailable for all the partitions, an empty list is stored.", "fields": [
-          { "name": "Partition", "versions": "0+", "type": "int32",
-            "about": "The partition number." },
-          { "name": "Racks", "versions": "0+", "type": "[]string",
-            "about": "The set of racks that the partition is mapped to." }
-      ]}
+        "about": "The number of partitions of the topic." }
     ]}
   ]
 }

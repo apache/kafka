@@ -29,7 +29,8 @@ import java.util.Map;
  * A class that implements this interface is expected to have a constructor with no parameters.
  * <p>
  * Implement {@link org.apache.kafka.common.ClusterResourceListener} to receive cluster metadata once it's available. Please see the class documentation for ClusterResourceListener for more information.
- *
+ * Implement {@link org.apache.kafka.common.metrics.Monitorable} to enable the deserializer to register metrics. The following tags are automatically added to
+ * all metrics registered: <code>config</code> set to either <code>key.deserializer</code> or <code>value.deserializer</code>, and <code>class</code> set to the Deserializer class name.
  * @param <T> Type to be deserialized into.
  */
 public interface Deserializer<T> extends Closeable {
@@ -63,7 +64,15 @@ public interface Deserializer<T> extends Closeable {
     }
 
     /**
-     * Deserialize a record value from a ByteBuffer into a value or object.
+     * Deserialize a record value from a {@link ByteBuffer} into a value or object.
+     *
+     * <p>If {@code ByteBufferDeserializer} is used by an application, the application code cannot make any assumptions
+     * about the returned {@link ByteBuffer} like the position, limit, capacity, etc., or if it is backed by
+     * {@link ByteBuffer#hasArray() an array or not}.
+     *
+     * <p>Similarly, if this method is overridden, the implementation cannot make any assumptions about the
+     * passed in {@link ByteBuffer} either.
+     *
      * @param topic topic associated with the data
      * @param headers headers associated with the record; may be empty.
      * @param data serialized ByteBuffer; may be null; implementations are recommended to handle null by returning a value or null rather than throwing an exception.

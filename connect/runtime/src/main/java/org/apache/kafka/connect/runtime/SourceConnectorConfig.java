@@ -248,10 +248,9 @@ public final class SourceConnectorConfig extends ConnectorConfig {
         short defaultGroupReplicationFactor = defaultGroupConfig.getShort(defaultGroupPrefix + REPLICATION_FACTOR_CONFIG);
         int defaultGroupPartitions = defaultGroupConfig.getInt(defaultGroupPrefix + PARTITIONS_CONFIG);
         topicCreationGroups.stream().distinct().forEach(group -> {
-            if (!(group instanceof String)) {
+            if (!(group instanceof String alias)) {
                 throw new ConfigException("Item in " + TOPIC_CREATION_GROUPS_CONFIG + " property is not of type String");
             }
-            String alias = (String) group;
             String prefix = TOPIC_CREATION_PREFIX + alias + ".";
             String configGroup = TOPIC_CREATION_GROUP + ": " + alias;
             newDef.embed(prefix, configGroup, 0,

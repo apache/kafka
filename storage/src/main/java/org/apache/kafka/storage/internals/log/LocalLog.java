@@ -220,7 +220,6 @@ public class LocalLog {
      * @param newConfig the new configuration to be updated to
      */
     public void updateConfig(LogConfig newConfig) {
-        LogConfig oldConfig = config;
         config = newConfig;
     }
 
@@ -358,7 +357,7 @@ public class LocalLog {
      */
     public List<LogSegment> deleteAllSegments() {
         return maybeHandleIOException(
-            () -> "Error while deleting all segments for $topicPartition in dir ${dir.getParent}",
+            () -> String.format("Error while deleting all segments for %s in dir %s", topicPartition, dir.getParent()),
             () -> {
                 List<LogSegment> deletableSegments = new ArrayList<>(segments.values());
                 removeAndDeleteSegments(
@@ -470,8 +469,8 @@ public class LocalLog {
         return maybeHandleIOException(
                 () -> "Exception while reading from " + topicPartition + " in dir " + dir.getParent(),
                 () -> {
-                    logger.trace("Reading maximum $maxLength bytes at offset {} from log with total length {} bytes",
-                            startOffset, segments.sizeInBytes());
+                    logger.trace("Reading maximum {} bytes at offset {} from log with total length {} bytes",
+                            maxLength, startOffset, segments.sizeInBytes());
 
                     LogOffsetMetadata endOffsetMetadata = nextOffsetMetadata;
                     long endOffset = endOffsetMetadata.messageOffset;
@@ -525,8 +524,8 @@ public class LocalLog {
         );
     }
 
-    public void append(long lastOffset, long largestTimestamp, long shallowOffsetOfMaxTimestamp, MemoryRecords records) throws IOException {
-        segments.activeSegment().append(lastOffset, largestTimestamp, shallowOffsetOfMaxTimestamp, records);
+    public void append(long lastOffset, MemoryRecords records) throws IOException {
+        segments.activeSegment().append(lastOffset, records);
         updateLogEndOffset(lastOffset + 1);
     }
 
@@ -810,7 +809,7 @@ public class LocalLog {
     public static <T> T maybeHandleIOException(LogDirFailureChannel logDirFailureChannel,
                                                String logDir,
                                                Supplier<String> errorMsgSupplier,
-                                               StorageAction<T, IOException> function) {
+                                               StorageAction<T, IOException> function) throws KafkaStorageException {
         if (logDirFailureChannel.hasOfflineLogDir(logDir)) {
             throw new KafkaStorageException("The log dir " + logDir + " is already offline due to a previous IO exception.");
         }
@@ -943,7 +942,7 @@ public class LocalLog {
                 throw new IllegalStateException("Inconsistent segment sizes after split before: " + segment.log().sizeInBytes() + " after: " + totalSizeOfNewSegments);
             }
             // replace old segment with new ones
-            LOG.info("{}Replacing overflowed segment $segment with split segments {}", logPrefix, newSegments);
+            LOG.info("{}Replacing overflowed segment {} with split segments {}", logPrefix, segment, newSegments);
             List<LogSegment> deletedSegments = replaceSegments(existingSegments, newSegments, singletonList(segment),
                     dir, topicPartition, config, scheduler, logDirFailureChannel, logPrefix, false);
             return new SplitSegmentResult(deletedSegments, newSegments);
@@ -1013,7 +1012,7 @@ public class LocalLog {
         List<LogSegment> sortedOldSegments = oldSegments.stream()
                 .filter(seg -> existingSegments.contains(seg.baseOffset()))
                 .sorted(Comparator.comparingLong(LogSegment::baseOffset))
-                .collect(Collectors.toList());
+                .toList();
 
         // need to do this in two phases to be crash safe AND do the deletion asynchronously
         // if we crash in the middle of this we complete the swap in loadSegments()

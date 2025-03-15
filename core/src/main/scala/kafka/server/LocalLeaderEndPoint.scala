@@ -35,7 +35,6 @@ import java.util
 import java.util.Optional
 import scala.collection.{Map, Seq, Set, mutable}
 import scala.jdk.CollectionConverters._
-import scala.jdk.OptionConverters.RichOption
 
 /**
  * Facilitates fetches from a local replica leader.
@@ -92,7 +91,6 @@ class LocalLeaderEndPoint(sourceBroker: BrokerEndPoint,
     val fetchData = request.fetchData(topicNames.asJava)
 
     val fetchParams = new FetchParams(
-      request.version,
       FetchRequest.FUTURE_LOCAL_REPLICA_ID,
       -1,
       0L, // timeout is 0 so that the callback will be executed immediately
@@ -118,21 +116,21 @@ class LocalLeaderEndPoint(sourceBroker: BrokerEndPoint,
   override def fetchEarliestOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): OffsetAndEpoch = {
     val partition = replicaManager.getPartitionOrException(topicPartition)
     val logStartOffset = partition.localLogOrException.logStartOffset
-    val epoch = partition.localLogOrException.leaderEpochCache.get.epochForOffset(logStartOffset)
+    val epoch = partition.localLogOrException.leaderEpochCache.epochForOffset(logStartOffset)
     new OffsetAndEpoch(logStartOffset, epoch.orElse(0))
   }
 
   override def fetchLatestOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): OffsetAndEpoch = {
     val partition = replicaManager.getPartitionOrException(topicPartition)
     val logEndOffset = partition.localLogOrException.logEndOffset
-    val epoch = partition.localLogOrException.leaderEpochCache.get.epochForOffset(logEndOffset)
+    val epoch = partition.localLogOrException.leaderEpochCache.epochForOffset(logEndOffset)
     new OffsetAndEpoch(logEndOffset, epoch.orElse(0))
   }
 
   override def fetchEarliestLocalOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): OffsetAndEpoch = {
     val partition = replicaManager.getPartitionOrException(topicPartition)
     val localLogStartOffset = partition.localLogOrException.localLogStartOffset()
-    val epoch = partition.localLogOrException.leaderEpochCache.get.epochForOffset(localLogStartOffset)
+    val epoch = partition.localLogOrException.leaderEpochCache.epochForOffset(localLogStartOffset)
     new OffsetAndEpoch(localLogStartOffset, epoch.orElse(0))
   }
 
@@ -206,7 +204,7 @@ class LocalLeaderEndPoint(sourceBroker: BrokerEndPoint,
     try {
       val logStartOffset = replicaManager.futureLocalLogOrException(topicPartition).logStartOffset
       val lastFetchedEpoch = if (isTruncationOnFetchSupported)
-        fetchState.lastFetchedEpoch.map(_.asInstanceOf[Integer]).toJava
+        fetchState.lastFetchedEpoch
       else
         Optional.empty[Integer]
       val topicId = fetchState.topicId.getOrElse(Uuid.ZERO_UUID)
