@@ -100,7 +100,7 @@ public class WorkerConnector implements Runnable {
         this.connector = connector;
         this.version = connector.version();
         this.state = State.INIT;
-        this.metrics = new ConnectorMetricsGroup(connectMetrics, AbstractStatus.State.UNASSIGNED, statusListener);
+        this.metrics = new ConnectorMetricsGroup(connectMetrics, AbstractStatus.State.UNASSIGNED, this.version, statusListener);
         this.statusListener = this.metrics;
         this.offsetStorageReader = offsetStorageReader;
         this.offsetStore = offsetStore;
@@ -455,8 +455,14 @@ public class WorkerConnector implements Runnable {
         private volatile AbstractStatus.State state;
         private final MetricGroup metricGroup;
         private final ConnectorStatus.Listener delegate;
+        private final String connectorVersion;
 
-        public ConnectorMetricsGroup(ConnectMetrics connectMetrics, AbstractStatus.State initialState, ConnectorStatus.Listener delegate) {
+        public ConnectorMetricsGroup(
+            ConnectMetrics connectMetrics,
+            AbstractStatus.State initialState,
+            String connectorVersion,
+            ConnectorStatus.Listener delegate
+        ) {
             Objects.requireNonNull(connectMetrics);
             Objects.requireNonNull(connector);
             Objects.requireNonNull(initialState);
@@ -471,7 +477,7 @@ public class WorkerConnector implements Runnable {
 
             metricGroup.addImmutableValueMetric(registry.connectorType, connectorType());
             metricGroup.addImmutableValueMetric(registry.connectorClass, connector.getClass().getName());
-            metricGroup.addImmutableValueMetric(registry.connectorVersion, connectorVersion());
+            metricGroup.addImmutableValueMetric(registry.connectorVersion, connectorVersion);
             metricGroup.addValueMetric(registry.connectorStatus, now -> state.toString().toLowerCase(Locale.getDefault()));
         }
 
