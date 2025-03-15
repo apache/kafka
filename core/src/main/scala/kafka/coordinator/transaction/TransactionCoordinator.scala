@@ -129,10 +129,12 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
       responseCallback(initTransactionError(Errors.INVALID_REQUEST))
     } else if (enableTwoPCFlag && !txnManager.isTransaction2pcEnabled()) {
       // if the request is to enable two-phase commit but the broker 2PC config is set to false,
-      // then return an error.
-      responseCallback(initTransactionError(Errors.INVALID_TXN_STATE))
+      // 2PC functionality is disabled, clients that attempt to use this functionality
+      // would receive an authorization failed error.
+      responseCallback(initTransactionError(Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED))
     } else if (keepPreparedTxn) {
-      // if the request is to keep the prepared transaction, then return an unsupported version error.
+      // if the request is to keep the prepared transaction, then return an
+      // unsupported version error since the feature hasn't been implemented yet.
       responseCallback(initTransactionError(Errors.UNSUPPORTED_VERSION))
     } else if (!txnManager.validateTransactionTimeoutMs(enableTwoPCFlag, transactionTimeoutMs)) {
       // check transactionTimeoutMs is not larger than the broker configured maximum allowed value

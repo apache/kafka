@@ -50,7 +50,7 @@ public final class TransactionStateManagerConfig {
 
     public static final String TRANSACTIONS_2PC_ENABLED_CONFIG = "transaction.two.phase.commit.enable";
     public static final boolean TRANSACTIONS_2PC_ENABLED_DEFAULT = false;
-    public static final String TRANSACTIONS_2PC_ENABLED_DOC = "Enable to allow participation in Two-Phase Commit (2PC) transactions with an external transaction coordinator";
+    public static final String TRANSACTIONS_2PC_ENABLED_DOC = "Allow participation in Two-Phase Commit (2PC) transactions with an external transaction coordinator";
 
     public static final String METRICS_GROUP = "transaction-coordinator-metrics";
     public static final String LOAD_TIME_SENSOR = "TransactionsPartitionLoadTime";
