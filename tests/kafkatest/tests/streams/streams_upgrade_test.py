@@ -22,10 +22,9 @@ from kafkatest.services.kafka import KafkaService, quorum
 from kafkatest.services.streams import StreamsSmokeTestDriverService, StreamsSmokeTestJobRunnerService, \
     StreamsUpgradeTestJobRunnerService
 from kafkatest.tests.streams.utils import extract_generation_from_logs, extract_generation_id
-from kafkatest.version import (LATEST_0_11, LATEST_1_0, LATEST_1_1,
-    LATEST_2_0, LATEST_2_1, LATEST_2_2, LATEST_2_3, LATEST_2_4, LATEST_2_5, LATEST_2_6, LATEST_2_7, LATEST_2_8, \
+from kafkatest.version import LATEST_2_1, LATEST_2_2, LATEST_2_3, LATEST_2_4, LATEST_2_5, LATEST_2_6, LATEST_2_7, LATEST_2_8, \
     LATEST_3_0, LATEST_3_1, LATEST_3_2, LATEST_3_3, LATEST_3_4, LATEST_3_5, LATEST_3_6, LATEST_3_7, LATEST_3_8, LATEST_3_9, \
-    DEV_BRANCH, DEV_VERSION, KafkaVersion)
+    DEV_BRANCH, DEV_VERSION, KafkaVersion
 
 # broker 0.10.0 is not compatible with newer Kafka Streams versions
 # broker 0.10.1 and 0.10.2 do not support headers, as required by suppress() (since v2.2.1)
@@ -121,12 +120,7 @@ class StreamsUpgradeTest(Test):
         else:
             extra_properties = {}
 
-        broker_version = DEV_BRANCH
-        # the protocol which is used by versions <= LATEST_2_0 are dropped in 4.0, so setting broker version to 3.9
-        if KafkaVersion(from_version) < LATEST_2_1:
-            broker_version = LATEST_3_9
-
-        self.set_up_services(version=broker_version)
+        self.set_up_services()
 
         self.driver.start()
 
@@ -218,8 +212,8 @@ class StreamsUpgradeTest(Test):
 
         self.stop_and_await()
 
-    def set_up_services(self, version=DEV_BRANCH):
-        self.kafka = KafkaService(self.test_context, num_nodes=1, zk=None, topics=self.topics, version=version)
+    def set_up_services(self):
+        self.kafka = KafkaService(self.test_context, num_nodes=1, zk=None, topics=self.topics)
         self.kafka.start()
 
         self.driver = StreamsSmokeTestDriverService(self.test_context, self.kafka)

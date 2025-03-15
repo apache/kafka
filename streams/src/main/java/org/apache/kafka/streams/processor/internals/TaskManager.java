@@ -1135,12 +1135,16 @@ public class TaskManager {
         final Set<TaskId> lockedTaskIds = activeRunningTaskIterable().stream().map(Task::id).collect(Collectors.toSet());
         maybeLockTasks(lockedTaskIds);
 
+        boolean revokedTasksNeedCommit = false;
         for (final Task task : activeRunningTaskIterable()) {
             if (remainingRevokedPartitions.containsAll(task.inputPartitions())) {
                 // when the task input partitions are included in the revoked list,
                 // this is an active task and should be revoked
+
                 revokedActiveTasks.add(task);
                 remainingRevokedPartitions.removeAll(task.inputPartitions());
+
+                revokedTasksNeedCommit |= task.commitNeeded();
             } else if (task.commitNeeded()) {
                 commitNeededActiveTasks.add(task);
             }
@@ -1154,11 +1158,9 @@ public class TaskManager {
                          "have been cleaned up by the handleAssignment callback.", remainingRevokedPartitions);
         }
 
-        prepareCommitAndAddOffsetsToMap(revokedActiveTasks, consumedOffsetsPerTask);
-
-        // if we need to commit any revoking task then we just commit all of those needed committing together
-        final boolean shouldCommitAdditionalTasks = !consumedOffsetsPerTask.isEmpty();
-        if (shouldCommitAdditionalTasks) {
+        if (revokedTasksNeedCommit) {
+            prepareCommitAndAddOffsetsToMap(revokedActiveTasks, consumedOffsetsPerTask);
+            // if we need to commit any revoking task then we just commit all of those needed committing together
             prepareCommitAndAddOffsetsToMap(commitNeededActiveTasks, consumedOffsetsPerTask);
         }
 
@@ -1167,10 +1169,12 @@ public class TaskManager {
         // as such we just need to skip those dirty tasks in the checkpoint
         final Set<Task> dirtyTasks = new HashSet<>();
         try {
-            // in handleRevocation we must call commitOffsetsOrTransaction() directly rather than
-            // commitAndFillInConsumedOffsetsAndMetadataPerTaskMap() to make sure we don't skip the
-            // offset commit because we are in a rebalance
-            taskExecutor.commitOffsetsOrTransaction(consumedOffsetsPerTask);
+            if (revokedTasksNeedCommit) {
+                // in handleRevocation we must call commitOffsetsOrTransaction() directly rather than
+                // commitAndFillInConsumedOffsetsAndMetadataPerTaskMap() to make sure we don't skip the
+                // offset commit because we are in a rebalance
+                taskExecutor.commitOffsetsOrTransaction(consumedOffsetsPerTask);
+            }
         } catch (final TaskCorruptedException e) {
             log.warn("Some tasks were corrupted when trying to commit offsets, these will be cleaned and revived: {}",
                      e.corruptedTasks());
@@ -1203,7 +1207,7 @@ public class TaskManager {
             }
         }
 
-        if (shouldCommitAdditionalTasks) {
+        if (revokedTasksNeedCommit) {
             for (final Task task : commitNeededActiveTasks) {
                 if (!dirtyTasks.contains(task)) {
                     try {
