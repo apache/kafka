@@ -392,8 +392,8 @@ public class ConnectorConfig extends AbstractConfig {
                         plugins.pluginVersion(predicate.getClass().getName(), predicate.getClass().getClassLoader(), PluginType.PREDICATE),
                         negate != null && Boolean.parseBoolean(negate.toString()),
                         transformationPlugin,
-                        plugins.pluginVersion(transformation.getClass().getName(), transformation.getClass().getClassLoader(), PluginType.TRANSFORMATION),
                         alias,
+                        plugins.pluginVersion(transformation.getClass().getName(), transformation.getClass().getClassLoader(), PluginType.TRANSFORMATION),
                         plugins.safeLoaderSwapper())
                     );
                 } else {
