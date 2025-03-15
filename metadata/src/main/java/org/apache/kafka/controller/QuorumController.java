@@ -1156,7 +1156,6 @@ public final class QuorumController implements Controller {
             try {
                 return ActivationRecordsGenerator.generate(
                     log::warn,
-                    logReplayTracker.empty(),
                     offsetControl.transactionStartOffset(),
                     bootstrapMetadata,
                     featureControl.metadataVersion(),
@@ -1213,7 +1212,6 @@ public final class QuorumController implements Controller {
                         recordRedactor.toLoggableString(message), offset);
             }
         }
-        logReplayTracker.replay(message);
         MetadataRecordType type = MetadataRecordType.fromId(message.apiKey());
         switch (type) {
             case REGISTER_BROKER_RECORD:
@@ -1431,12 +1429,6 @@ public final class QuorumController implements Controller {
     private final AclControlManager aclControlManager;
 
     /**
-     * Tracks replaying the log.
-     * This must be accessed only by the event queue thread.
-     */
-    private final LogReplayTracker logReplayTracker;
-
-    /**
      * The interface that we use to mutate the Raft log.
      */
     private final RaftClient<ApiMessageAndVersion> raftClient;
@@ -1591,9 +1583,6 @@ public final class QuorumController implements Controller {
         this.aclControlManager = new AclControlManager.Builder().
             setLogContext(logContext).
             setSnapshotRegistry(snapshotRegistry).
-            build();
-        this.logReplayTracker = new LogReplayTracker.Builder().
-            setLogContext(logContext).
             build();
         this.raftClient = raftClient;
         this.bootstrapMetadata = bootstrapMetadata;
@@ -1755,7 +1744,7 @@ public final class QuorumController implements Controller {
             return CompletableFuture.completedFuture(new AlterUserScramCredentialsResponseData());
         }
         return appendWriteEvent("alterUserScramCredentials", context.deadlineNs(),
-            () -> scramControlManager.alterCredentials(request, featureControl.metadataVersion()));
+            () -> scramControlManager.alterCredentials(request, featureControl.metadataVersionOrThrow()));
     }
 
     @Override
@@ -1764,7 +1753,7 @@ public final class QuorumController implements Controller {
         CreateDelegationTokenRequestData request
     ) {
         return appendWriteEvent("createDelegationToken", context.deadlineNs(),
-            () -> delegationTokenControlManager.createDelegationToken(context, request, featureControl.metadataVersion()));
+            () -> delegationTokenControlManager.createDelegationToken(context, request, featureControl.metadataVersionOrThrow()));
     }
 
     @Override
@@ -1773,7 +1762,7 @@ public final class QuorumController implements Controller {
         RenewDelegationTokenRequestData request
     ) {
         return appendWriteEvent("renewDelegationToken", context.deadlineNs(),
-            () -> delegationTokenControlManager.renewDelegationToken(context, request, featureControl.metadataVersion()));
+            () -> delegationTokenControlManager.renewDelegationToken(context, request, featureControl.metadataVersionOrThrow()));
     }
 
     @Override
@@ -1782,7 +1771,7 @@ public final class QuorumController implements Controller {
         ExpireDelegationTokenRequestData request
     ) {
         return appendWriteEvent("expireDelegationToken", context.deadlineNs(),
-            () -> delegationTokenControlManager.expireDelegationToken(context, request, featureControl.metadataVersion()));
+            () -> delegationTokenControlManager.expireDelegationToken(context, request, featureControl.metadataVersionOrThrow()));
     }
 
     @Override
