@@ -120,7 +120,16 @@ public class ClientMetricsCommand {
             String entityName = opts.hasGenerateNameOption() ? Uuid.randomUuid().toString() : opts.name().get();
 
             Map<String, String> configsToBeSet = new HashMap<>();
-            opts.interval().map(intervalVal -> configsToBeSet.put("interval.ms", intervalVal.toString()));
+            opts.interval().ifPresent(intervalStr -> {
+                if (!intervalStr.isEmpty()) {
+                    try {
+                        Integer.parseInt(intervalStr);
+                    } catch (NumberFormatException e) {
+                        throw new IllegalArgumentException("Invalid interval value. Must be a valid integer or empty to delete the setting.");
+                    }
+                }
+                configsToBeSet.put("interval.ms", intervalStr);
+            });
             opts.metrics().map(metricslist -> configsToBeSet.put("metrics", String.join(",", metricslist)));
             opts.match().map(matchlist -> configsToBeSet.put("match", String.join(",", matchlist)));
 
@@ -211,7 +220,7 @@ public class ClientMetricsCommand {
 
         private final OptionSpecBuilder generateNameOpt;
 
-        private final ArgumentAcceptingOptionSpec<Integer> intervalOpt;
+        private final ArgumentAcceptingOptionSpec<String> intervalOpt;
 
         private final ArgumentAcceptingOptionSpec<String> matchOpt;
 
@@ -241,7 +250,7 @@ public class ClientMetricsCommand {
             intervalOpt = parser.accepts("interval", "The metrics push interval in milliseconds.")
                 .withRequiredArg()
                 .describedAs("push interval")
-                .ofType(java.lang.Integer.class);
+                .ofType(String.class);
 
             String nl = System.lineSeparator();
 
@@ -334,7 +343,7 @@ public class ClientMetricsCommand {
             return valuesAsOption(metricsOpt);
         }
 
-        public Optional<Integer> interval() {
+        public Optional<String> interval() {
             return valueAsOption(intervalOpt);
         }
 
