@@ -40,10 +40,12 @@ import org.apache.kafka.common.errors.InvalidRecordStateException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
+import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -128,7 +130,9 @@ public class ShareConsumerTest {
     private final TopicPartition tp2 = new TopicPartition("topic2", 0);
     private final TopicPartition warmupTp = new TopicPartition("warmup", 0);
     private List<TopicPartition> sgsTopicPartitions;
-
+    private static final String KEY = "content-type";
+    private static final String VALUE = "application/octet-stream";
+    
     public ShareConsumerTest(ClusterInstance cluster) {
         this.cluster = cluster;
     }
@@ -495,7 +499,7 @@ public class ShareConsumerTest {
 
     @ClusterTest
     public void testHeadersSerializerDeserializer() {
-        testHeadersSerializeDeserialize(new BaseConsumerTest.SerializerImpl(), new BaseConsumerTest.DeserializerImpl());
+        testHeadersSerializeDeserialize(new SerializerImpl(), new DeserializerImpl());
         verifyShareGroupStateTopicRecordsProduced();
     }
 
@@ -2408,6 +2412,59 @@ public class ShareConsumerTest {
         } catch (Exception e) {
             service.shutdownNow();
             Thread.currentThread().interrupt();
+        }
+    }
+
+    public static class SerializerImpl implements Serializer<byte[]> {
+        private final ByteArraySerializer serializer = new ByteArraySerializer();
+
+        @Override
+        public byte[] serialize(String topic, Headers headers, byte[] data) {
+            headers.add(KEY, VALUE.getBytes());
+            return serializer.serialize(topic, data);
+        }
+
+        @Override
+        public void configure(Map<String, ?> configs, boolean isKey) {
+            serializer.configure(configs, isKey);
+        }
+
+        @Override
+        public void close() {
+            serializer.close();
+        }
+
+        @Override
+        public byte[] serialize(String topic, byte[] data) {
+            fail("method should not be invoked");
+            return null;
+        }
+    }
+
+    public static class DeserializerImpl implements Deserializer<byte[]> {
+        private final ByteArrayDeserializer deserializer = new ByteArrayDeserializer();
+
+        @Override
+        public byte[] deserialize(String topic, Headers headers, byte[] data) {
+            Header header = headers.lastHeader(KEY);
+            assertEquals("application/octet-stream", header == null ? null : new String(header.value()));
+            return deserializer.deserialize(topic, data);
+        }
+
+        @Override
+        public void configure(Map<String, ?> configs, boolean isKey) {
+            deserializer.configure(configs, isKey);
+        }
+
+        @Override
+        public void close() {
+            deserializer.close();
+        }
+
+        @Override
+        public byte[] deserialize(String topic, byte[] data) {
+            fail("method should not be invoked");
+            return null;
         }
     }
 }
