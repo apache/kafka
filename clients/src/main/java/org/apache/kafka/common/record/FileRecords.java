@@ -30,7 +30,6 @@ import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.StandardOpenOption;
-import java.util.Iterator;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -299,28 +298,38 @@ public class FileRecords extends AbstractRecords implements Closeable {
      * @return the batch's base offset, its physical position, and its size (including log overhead)
      */
     public LogOffsetPosition searchForOffsetWithSize(long targetOffset, int startingPosition) {
-        FileChannelRecordBatch matchedBatch = null;
-        FileChannelRecordBatch nextBatch = null;
+        FileChannelRecordBatch prevBatch = null;
 
-        Iterator<FileChannelRecordBatch> batchIter = batchesFrom(startingPosition).iterator();
-        while (batchIter.hasNext()) {
-            FileChannelRecordBatch batch = batchIter.next();
-            if (targetOffset > batch.baseOffset()) {
-                matchedBatch = batch;
-                continue;
+        for (FileChannelRecordBatch batch : batchesFrom(startingPosition)) {
+            // Special case: if baseOffset exactly equals targetOffset, return immediately
+            if (batch.baseOffset() == targetOffset) {
+                return new LogOffsetPosition(batch);
             }
-            nextBatch = batch;
-            break;
+
+            // If we find the first batch with baseOffset greater than targetOffset
+            if (batch.baseOffset() > targetOffset) {
+                // If there's no previous batch, return the current batch
+                if (prevBatch == null) {
+                    return new LogOffsetPosition(batch);
+                }
+
+                // Check if the previous batch contains the target
+                if (prevBatch.lastOffset() >= targetOffset) {
+                    return new LogOffsetPosition(prevBatch);
+                } else {
+                    // If the previous batch doesn't contain the target, return the current batch
+                    return new LogOffsetPosition(batch);
+                }
+            }
+            prevBatch = batch;
         }
 
-        if (matchedBatch != null) {
-            long lastOffset = matchedBatch.lastOffset();
-            if (nextBatch != null && lastOffset < targetOffset && nextBatch.baseOffset() >= targetOffset) {
-                return new LogOffsetPosition(nextBatch.baseOffset(), nextBatch.position(), nextBatch.sizeInBytes());
-            } else if (lastOffset >= targetOffset) {
-                return new LogOffsetPosition(matchedBatch.baseOffset(), matchedBatch.position(), matchedBatch.sizeInBytes());
-            }
+        // Only one case would reach here: all batches have baseOffset less than or equal to targetOffset
+        // Check if the last batch contains the target
+        if (prevBatch != null && prevBatch.lastOffset() >= targetOffset) {
+            return new LogOffsetPosition(prevBatch.baseOffset(), prevBatch.position(), prevBatch.sizeInBytes());
         }
+
         return null;
     }
 
@@ -481,6 +490,12 @@ public class FileRecords extends AbstractRecords implements Closeable {
         public final long offset;
         public final int position;
         public final int size;
+
+        public LogOffsetPosition(FileChannelRecordBatch batch) {
+            this.offset = batch.baseOffset();
+            this.position = batch.position();
+            this.size = batch.sizeInBytes();
+        }
 
         public LogOffsetPosition(long offset, int position, int size) {
             this.offset = offset;
