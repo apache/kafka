@@ -298,15 +298,23 @@ public class FileRecords extends AbstractRecords implements Closeable {
      * @return the batch's base offset, its physical position, and its size (including log overhead)
      */
     public LogOffsetPosition searchForOffsetWithSize(long targetOffset, int startingPosition) {
+        System.out.println("targetOffset = " + targetOffset);
         FileChannelRecordBatch matchedBatch = null;
+        FileChannelRecordBatch nextBatch = null;
         for (FileChannelRecordBatch batch : batchesFrom(startingPosition)) {
+            System.out.println("batch.baseOffset() = " + batch.baseOffset());
+            System.out.println("batch.lastOffset() = " + batch.lastOffset());
             if (matchedBatch != null && targetOffset < batch.baseOffset()) {
+                nextBatch = batch;
                 break;
             }
             matchedBatch = batch;
         }
-        if (matchedBatch != null && matchedBatch.lastOffset() >= targetOffset)
+        if (matchedBatch != null && nextBatch != null && matchedBatch.lastOffset() < targetOffset && nextBatch.baseOffset() >= targetOffset) {
+            return new LogOffsetPosition(nextBatch.baseOffset(), nextBatch.position(), nextBatch.sizeInBytes());
+        } else if (matchedBatch != null && matchedBatch.lastOffset() >= targetOffset) {
             return new LogOffsetPosition(matchedBatch.baseOffset(), matchedBatch.position(), matchedBatch.sizeInBytes());
+        }
         return null;
     }
 
