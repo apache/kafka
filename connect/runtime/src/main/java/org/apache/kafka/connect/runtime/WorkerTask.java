@@ -98,8 +98,7 @@ abstract class WorkerTask<T, R extends ConnectRecord<R>> implements Runnable {
                       TaskPluginsMetadata pluginsMetadata,
                       Function<ClassLoader, LoaderSwap> pluginLoaderSwapper) {
         this.id = id;
-        this.taskMetricsGroup = new TaskMetricsGroup(this.id, connectMetrics, statusListener);
-        this.taskMetricsGroup.addPluginInfoMetric(pluginsMetadata);
+        this.taskMetricsGroup = new TaskMetricsGroup(this.id, connectMetrics, statusListener, pluginsMetadata);
         this.errorMetrics = errorMetrics;
         this.statusListener = taskMetricsGroup;
         this.loader = loader;
@@ -413,6 +412,10 @@ abstract class WorkerTask<T, R extends ConnectRecord<R>> implements Runnable {
         private final ConnectorTaskId id;
 
         public TaskMetricsGroup(ConnectorTaskId id, ConnectMetrics connectMetrics, TaskStatus.Listener statusListener) {
+            this(id, connectMetrics, statusListener, null);
+        }
+
+        public TaskMetricsGroup(ConnectorTaskId id, ConnectMetrics connectMetrics, TaskStatus.Listener statusListener, TaskPluginsMetadata pluginsMetadata) {
             delegateListener = statusListener;
             this.connectMetrics = connectMetrics;
             this.id = id;
@@ -446,6 +449,7 @@ abstract class WorkerTask<T, R extends ConnectRecord<R>> implements Runnable {
             Frequencies commitFrequencies = Frequencies.forBooleanValues(offsetCommitFailures, offsetCommitSucceeds);
             commitAttempts = metricGroup.sensor("offset-commit-completion");
             commitAttempts.add(commitFrequencies);
+            addPluginInfoMetric(pluginsMetadata);
         }
 
         private void addRatioMetric(final State matchingState, MetricNameTemplate template) {
@@ -454,7 +458,7 @@ abstract class WorkerTask<T, R extends ConnectRecord<R>> implements Runnable {
                     taskStateTimer.durationRatio(matchingState, now));
         }
 
-        public void addPluginInfoMetric(TaskPluginsMetadata pluginsMetadata) {
+        private void addPluginInfoMetric(TaskPluginsMetadata pluginsMetadata) {
             if (pluginsMetadata == null) {
                 return;
             }
