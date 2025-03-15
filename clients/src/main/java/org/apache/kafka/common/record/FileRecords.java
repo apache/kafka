@@ -299,7 +299,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
      */
     public LogOffsetPosition searchForOffsetWithSize(long targetOffset, int startingPosition) {
         for (FileChannelRecordBatch batch : batchesFrom(startingPosition)) {
-            long offset = batch.lastOffset();
+            long offset = batch.baseOffset();
             if (offset >= targetOffset)
                 return new LogOffsetPosition(batch.baseOffset(), batch.position(), batch.sizeInBytes());
         }
