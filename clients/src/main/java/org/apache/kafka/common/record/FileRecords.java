@@ -30,6 +30,7 @@ import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.StandardOpenOption;
+import java.util.Iterator;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -298,22 +299,27 @@ public class FileRecords extends AbstractRecords implements Closeable {
      * @return the batch's base offset, its physical position, and its size (including log overhead)
      */
     public LogOffsetPosition searchForOffsetWithSize(long targetOffset, int startingPosition) {
-        System.out.println("targetOffset = " + targetOffset);
         FileChannelRecordBatch matchedBatch = null;
         FileChannelRecordBatch nextBatch = null;
-        for (FileChannelRecordBatch batch : batchesFrom(startingPosition)) {
-            System.out.println("batch.baseOffset() = " + batch.baseOffset());
-            System.out.println("batch.lastOffset() = " + batch.lastOffset());
-            if (matchedBatch != null && targetOffset < batch.baseOffset()) {
-                nextBatch = batch;
-                break;
+
+        Iterator<FileChannelRecordBatch> batchIter = batchesFrom(startingPosition).iterator();
+        while (batchIter.hasNext()) {
+            FileChannelRecordBatch batch = batchIter.next();
+            if (targetOffset > batch.baseOffset()) {
+                matchedBatch = batch;
+                continue;
             }
-            matchedBatch = batch;
+            nextBatch = batch;
+            break;
         }
-        if (matchedBatch != null && nextBatch != null && matchedBatch.lastOffset() < targetOffset && nextBatch.baseOffset() >= targetOffset) {
-            return new LogOffsetPosition(nextBatch.baseOffset(), nextBatch.position(), nextBatch.sizeInBytes());
-        } else if (matchedBatch != null && matchedBatch.lastOffset() >= targetOffset) {
-            return new LogOffsetPosition(matchedBatch.baseOffset(), matchedBatch.position(), matchedBatch.sizeInBytes());
+
+        if (matchedBatch != null) {
+            long lastOffset = matchedBatch.lastOffset();
+            if (nextBatch != null && lastOffset < targetOffset && nextBatch.baseOffset() >= targetOffset) {
+                return new LogOffsetPosition(nextBatch.baseOffset(), nextBatch.position(), nextBatch.sizeInBytes());
+            } else if (lastOffset >= targetOffset) {
+                return new LogOffsetPosition(matchedBatch.baseOffset(), matchedBatch.position(), matchedBatch.sizeInBytes());
+            }
         }
         return null;
     }
