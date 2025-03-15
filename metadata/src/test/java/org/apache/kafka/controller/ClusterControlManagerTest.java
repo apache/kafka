@@ -289,8 +289,10 @@ public class ClusterControlManagerTest {
             setQuorumFeatures(new QuorumFeatures(0,
                 QuorumFeatures.defaultSupportedFeatureMap(true),
                 Collections.singletonList(0))).
-            setMetadataVersion(metadataVersion).
             build();
+        featureControl.replay(new FeatureLevelRecord().
+            setName(MetadataVersion.FEATURE_NAME).
+            setFeatureLevel(metadataVersion.featureLevel()));
         ClusterControlManager clusterControl = new ClusterControlManager.Builder().
             setClusterId("fPZv1VBsRFmnlRvmGcOW9w").
             setTime(new MockTime(0, 0, 0)).
@@ -460,8 +462,10 @@ public class ClusterControlManagerTest {
             setQuorumFeatures(new QuorumFeatures(0,
                 QuorumFeatures.defaultSupportedFeatureMap(true),
                 Collections.singletonList(0))).
-            setMetadataVersion(metadataVersion).
             build();
+        featureControl.replay(new FeatureLevelRecord().
+            setName(MetadataVersion.FEATURE_NAME).
+            setFeatureLevel(metadataVersion.featureLevel()));
         ClusterControlManager clusterControl = new ClusterControlManager.Builder().
             setTime(time).
             setSnapshotRegistry(snapshotRegistry).
@@ -541,8 +545,10 @@ public class ClusterControlManagerTest {
         FeatureControlManager featureControl = new FeatureControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
             setQuorumFeatures(new QuorumFeatures(0, supportedFeatures, Collections.singletonList(0))).
-            setMetadataVersion(MetadataVersion.IBP_3_7_IV0).
             build();
+        featureControl.replay(new FeatureLevelRecord().
+            setName(MetadataVersion.FEATURE_NAME).
+            setFeatureLevel(MetadataVersion.IBP_3_7_IV0.featureLevel()));
         ClusterControlManager clusterControl = new ClusterControlManager.Builder().
             setClusterId("fPZv1VBsRFmnlRvmGcOW9w").
             setTime(new MockTime(0, 0, 0)).
@@ -590,8 +596,10 @@ public class ClusterControlManagerTest {
         FeatureControlManager featureControl = new FeatureControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
             setQuorumFeatures(new QuorumFeatures(0, supportedFeatures, Collections.singletonList(0))).
-            setMetadataVersion(MetadataVersion.IBP_3_9_IV0).
             build();
+        featureControl.replay(new FeatureLevelRecord().
+            setName(MetadataVersion.FEATURE_NAME).
+            setFeatureLevel(MetadataVersion.IBP_3_9_IV0.featureLevel()));
         ClusterControlManager clusterControl = new ClusterControlManager.Builder().
             setClusterId("fPZv1VBsRFmnlRvmGcOW9w").
             setTime(new MockTime(0, 0, 0)).
@@ -671,8 +679,10 @@ public class ClusterControlManagerTest {
                                 MetadataVersion.IBP_3_5_IV0.featureLevel(),
                                 MetadataVersion.IBP_3_6_IV0.featureLevel())),
                         Collections.singletonList(0))).
-                setMetadataVersion(MetadataVersion.IBP_3_5_IV0).
                 build();
+        featureControl.replay(new FeatureLevelRecord().
+            setName(MetadataVersion.FEATURE_NAME).
+            setFeatureLevel(MetadataVersion.IBP_3_5_IV0.featureLevel()));
         ClusterControlManager clusterControl = new ClusterControlManager.Builder().
                 setClusterId("fPZv1VBsRFmnlRvmGcOW9w").
                 setTime(new MockTime(0, 0, 0)).
@@ -722,8 +732,10 @@ public class ClusterControlManagerTest {
     @Test
     public void testRegisterControlWithUnsupportedMetadataVersion() {
         FeatureControlManager featureControl = new FeatureControlManager.Builder().
-                setMetadataVersion(MetadataVersion.IBP_3_6_IV2).
                 build();
+        featureControl.replay(new FeatureLevelRecord().
+            setName(MetadataVersion.FEATURE_NAME).
+            setFeatureLevel(MetadataVersion.IBP_3_6_IV2.featureLevel()));
         ClusterControlManager clusterControl = new ClusterControlManager.Builder().
                 setClusterId("fPZv1VBsRFmnlRvmGcOW9w").
                 setFeatureControlManager(featureControl).
@@ -739,7 +751,7 @@ public class ClusterControlManagerTest {
     public void testRegisterWithDuplicateDirectoryId() {
         ClusterControlManager clusterControl = new ClusterControlManager.Builder().
                 setClusterId("QzZZEtC7SxucRM29Xdzijw").
-                setFeatureControlManager(new FeatureControlManager.Builder().build()).
+                setFeatureControlManager(createFeatureControlManager()).
                 setBrokerShutdownHandler((brokerId, isCleanShutdown, records) -> { }).
                 build();
         RegisterBrokerRecord brokerRecord = new RegisterBrokerRecord().setBrokerEpoch(100).setBrokerId(0).setLogDirs(asList(
@@ -788,7 +800,7 @@ public class ClusterControlManagerTest {
     public void testHasOnlineDir() {
         ClusterControlManager clusterControl = new ClusterControlManager.Builder().
                 setClusterId("pjvUwj3ZTEeSVQmUiH3IJw").
-                setFeatureControlManager(new FeatureControlManager.Builder().build()).
+                setFeatureControlManager(createFeatureControlManager()).
                 setBrokerShutdownHandler((brokerId, isCleanShutdown, records) -> { }).
                 build();
         clusterControl.activate();
@@ -807,7 +819,7 @@ public class ClusterControlManagerTest {
     public void testDefaultDir() {
         ClusterControlManager clusterControl = new ClusterControlManager.Builder().
                 setClusterId("pjvUwj3ZTEeSVQmUiH3IJw").
-                setFeatureControlManager(new FeatureControlManager.Builder().build()).
+                setFeatureControlManager(createFeatureControlManager()).
                 setBrokerShutdownHandler((brokerId, isCleanShutdown, records) -> { }).
                 build();
         clusterControl.activate();
@@ -827,7 +839,7 @@ public class ClusterControlManagerTest {
     public void testReRegistrationAndBrokerEpoch(boolean newIncarnationId) {
         ClusterControlManager clusterControl = new ClusterControlManager.Builder().
             setClusterId("pjvUwj3ZTEeSVQmUiH3IJw").
-            setFeatureControlManager(new FeatureControlManager.Builder().build()).
+            setFeatureControlManager(createFeatureControlManager()).
             setBrokerShutdownHandler((brokerId, isCleanShutdown, records) -> { }).
             build();
         clusterControl.activate();
@@ -882,7 +894,7 @@ public class ClusterControlManagerTest {
     public void testReRegistrationWithCleanShutdownDetection(boolean isCleanShutdown) {
         ClusterControlManager clusterControl = new ClusterControlManager.Builder().
             setClusterId("pjvUwj3ZTEeSVQmUiH3IJw").
-            setFeatureControlManager(new FeatureControlManager.Builder().build()).
+            setFeatureControlManager(createFeatureControlManager()).
             setBrokerShutdownHandler((brokerId, cleanShutdown, records) -> {
                 if (!cleanShutdown) {
                     records.add(new ApiMessageAndVersion(new PartitionChangeRecord(), PartitionChangeRecord.HIGHEST_SUPPORTED_VERSION));
@@ -966,5 +978,13 @@ public class ClusterControlManagerTest {
             contactTime(new BrokerIdAndEpoch(1, 124)));
         assertEquals(OptionalLong.empty(), clusterControl.heartbeatManager().tracker().
             contactTime(new BrokerIdAndEpoch(2, 100)));
+    }
+
+    private FeatureControlManager createFeatureControlManager() {
+        FeatureControlManager featureControlManager = new FeatureControlManager.Builder().build();
+        featureControlManager.replay(new FeatureLevelRecord().
+            setName(MetadataVersion.FEATURE_NAME).
+            setFeatureLevel(MetadataVersion.LATEST_PRODUCTION.featureLevel()));
+        return featureControlManager;
     }
 }
