@@ -2415,7 +2415,7 @@ public class ShareConsumerTest {
         }
     }
 
-    public static class SerializerImpl implements Serializer<byte[]> {
+    private static class SerializerImpl implements Serializer<byte[]> {
         private final ByteArraySerializer serializer = new ByteArraySerializer();
 
         @Override
@@ -2441,7 +2441,7 @@ public class ShareConsumerTest {
         }
     }
 
-    public static class DeserializerImpl implements Deserializer<byte[]> {
+    private static class DeserializerImpl implements Deserializer<byte[]> {
         private final ByteArrayDeserializer deserializer = new ByteArrayDeserializer();
 
         @Override
