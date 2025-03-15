@@ -346,7 +346,7 @@ public final class Worker {
                     }
                     workerConnector = new WorkerConnector(
                         connName, connector, connConfig, ctx, metrics, connectorStatusListener, offsetReader, offsetStore, connectorLoader);
-                    log.info("Instantiated connector {} with version {} of type {}", connName, connector.version(), connector.getClass());
+                    log.info("Instantiated connector {} with version {} of type {}", connName, workerConnector.connectorVersion(), connector.getClass());
                     workerConnector.transitionTo(initialState, onConnectorStateChange);
                 }
             } catch (Throwable t) {

@@ -471,7 +471,7 @@ public class WorkerConnector implements Runnable {
 
             metricGroup.addImmutableValueMetric(registry.connectorType, connectorType());
             metricGroup.addImmutableValueMetric(registry.connectorClass, connector.getClass().getName());
-            metricGroup.addImmutableValueMetric(registry.connectorVersion, connector.version());
+            metricGroup.addImmutableValueMetric(registry.connectorVersion, connectorVersion());
             metricGroup.addValueMetric(registry.connectorStatus, now -> state.toString().toLowerCase(Locale.getDefault()));
         }
 
