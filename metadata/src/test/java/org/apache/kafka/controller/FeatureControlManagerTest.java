@@ -27,6 +27,7 @@ import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metadata.VersionRange;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.Feature;
+import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.common.MetadataVersionTestUtils;
 import org.apache.kafka.server.common.TestFeatureVersion;
@@ -151,6 +152,29 @@ public class FeatureControlManagerTest {
         assertEquals(
             new FinalizedControllerFeatures(versionMap("metadata.version", MetadataVersion.MINIMUM_VERSION.featureLevel(), "foo", 2), 123),
             manager.finalizedFeatures(123));
+    }
+
+    @Test
+    public void testReplayKraftVersionFeatureLevel() {
+        LogContext logContext = new LogContext();
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
+
+        snapshotRegistry.idempotentCreateSnapshot(-1);
+        FeatureControlManager manager = new FeatureControlManager.Builder().
+                setLogContext(logContext).
+                setQuorumFeatures(features("foo", 1, 2)).
+                setSnapshotRegistry(snapshotRegistry).
+                build();
+        manager.replay(new FeatureLevelRecord().setName(MetadataVersion.FEATURE_NAME).setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel()));
+        // Replay a kraft.version feature level record and shot that the level doesn't get updated
+        manager.replay(new FeatureLevelRecord().setName(KRaftVersion.FEATURE_NAME).setFeatureLevel(KRaftVersion.LATEST_PRODUCTION.featureLevel()));
+        snapshotRegistry.idempotentCreateSnapshot(123);
+        assertEquals(
+            new FinalizedControllerFeatures(
+                versionMap("metadata.version", MetadataVersion.MINIMUM_VERSION.featureLevel()), 123
+            ),
+            manager.finalizedFeatures(123)
+        );
     }
 
     static ClusterFeatureSupportDescriber createFakeClusterFeatureSupportDescriber(
