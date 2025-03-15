@@ -34,10 +34,10 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class ClientRebootstrapTest {
     private static final String TOPIC = "topic";
-    private static final int PARTITIONS = 2;
+    private static final int REPLICAS = 2;
 
     @ClusterTest(
-        brokers = PARTITIONS,
+        brokers = REPLICAS,
         types = {Type.KRAFT},
         serverProperties = {
             @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "2")
@@ -51,7 +51,7 @@ public class ClientRebootstrapTest {
         clusterInstance.shutdownBroker(broker0);
 
         try (var admin = clusterInstance.admin()) {
-            admin.createTopics(List.of(new NewTopic(TOPIC, PARTITIONS, (short) 2)));
+            admin.createTopics(List.of(new NewTopic(TOPIC, 1, (short) REPLICAS)));
 
             // Only the broker 1 is available for the admin client during the bootstrap.
             assertDoesNotThrow(() -> admin.listTopics().names().get(timeout, TimeUnit.SECONDS).contains(TOPIC));
@@ -67,7 +67,7 @@ public class ClientRebootstrapTest {
     }
 
     @ClusterTest(
-        brokers = PARTITIONS,
+        brokers = REPLICAS,
         types = {Type.KRAFT},
         serverProperties = {
             @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "2")
@@ -80,7 +80,7 @@ public class ClientRebootstrapTest {
         clusterInstance.shutdownBroker(broker0);
 
         var admin = clusterInstance.admin(Map.of(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG, "none"));
-        admin.createTopics(List.of(new NewTopic(TOPIC, PARTITIONS, (short) 2)));
+        admin.createTopics(List.of(new NewTopic(TOPIC, 1, (short) REPLICAS)));
 
         // Only the broker 1 is available for the admin client during the bootstrap.
         assertDoesNotThrow(() -> admin.listTopics().names().get(60, TimeUnit.SECONDS).contains(TOPIC));
