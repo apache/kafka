@@ -62,7 +62,6 @@ import org.slf4j.LoggerFactory;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
@@ -85,8 +84,8 @@ public class ClientMetricsManager implements AutoCloseable {
     public static final String CLIENT_METRICS_REAPER_THREAD_NAME = "client-metrics-reaper";
 
     private static final Logger log = LoggerFactory.getLogger(ClientMetricsManager.class);
-    private static final List<Byte> SUPPORTED_COMPRESSION_TYPES = Collections.unmodifiableList(
-        Arrays.asList(CompressionType.ZSTD.id, CompressionType.LZ4.id, CompressionType.GZIP.id, CompressionType.SNAPPY.id));
+    private static final List<Byte> SUPPORTED_COMPRESSION_TYPES = List.of(CompressionType.ZSTD.id, CompressionType.LZ4.id,
+        CompressionType.GZIP.id, CompressionType.SNAPPY.id);
     // Max cache size (16k active client connections per broker)
     private static final int CACHE_MAX_SIZE = 16384;
     private static final int DEFAULT_CACHE_EXPIRY_MS = 60 * 1000;
@@ -597,7 +596,7 @@ public class ClientMetricsManager implements AutoCloseable {
             Sensor unknownSubscriptionRequestCountSensor = metrics.sensor(
                 ClientMetricsStats.UNKNOWN_SUBSCRIPTION_REQUEST);
             unknownSubscriptionRequestCountSensor.add(createMeter(metrics, new WindowedCount(),
-                ClientMetricsStats.UNKNOWN_SUBSCRIPTION_REQUEST, Collections.emptyMap()));
+                ClientMetricsStats.UNKNOWN_SUBSCRIPTION_REQUEST, Map.of()));
             sensorsName.add(unknownSubscriptionRequestCountSensor.name());
         }
 
@@ -608,7 +607,7 @@ public class ClientMetricsManager implements AutoCloseable {
                 return;
             }
 
-            Map<String, String> tags = Collections.singletonMap(ClientMetricsConfigs.CLIENT_INSTANCE_ID, clientInstanceId.toString());
+            Map<String, String> tags = Map.of(ClientMetricsConfigs.CLIENT_INSTANCE_ID, clientInstanceId.toString());
 
             Sensor throttleCount = metrics.sensor(ClientMetricsStats.THROTTLE + "-" + clientInstanceId);
             throttleCount.add(createMeter(metrics, new WindowedCount(), ClientMetricsStats.THROTTLE, tags));

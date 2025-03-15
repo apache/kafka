@@ -379,10 +379,10 @@ public class AdjustStreamThreadCountTest {
                 executor.execute(() -> {
                     try {
                         for (int i = 0; i < loop + 1; i++) {
-                            if (!kafkaStreams.addStreamThread().isPresent())
+                            if (kafkaStreams.addStreamThread().isEmpty())
                                 throw new RuntimeException("failed to create stream thread");
                             kafkaStreams.metadataForLocalThreads();
-                            if (!kafkaStreams.removeStreamThread().isPresent())
+                            if (kafkaStreams.removeStreamThread().isEmpty())
                                 throw new RuntimeException("failed to delete a stream thread");
                         }
                     } catch (final Exception e) {

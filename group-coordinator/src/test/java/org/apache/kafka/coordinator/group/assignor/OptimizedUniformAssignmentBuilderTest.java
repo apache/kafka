@@ -29,7 +29,6 @@ import org.apache.kafka.coordinator.group.modern.TopicMetadata;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -63,7 +62,7 @@ public class OptimizedUniformAssignmentBuilderTest {
     @Test
     public void testOneMemberNoTopicSubscription() {
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            Collections.singletonMap(
+            Map.of(
                 topic1Uuid,
                 new TopicMetadata(
                     topic1Uuid,
@@ -73,12 +72,12 @@ public class OptimizedUniformAssignmentBuilderTest {
             )
         );
 
-        Map<String, MemberSubscriptionAndAssignmentImpl> members = Collections.singletonMap(
+        Map<String, MemberSubscriptionAndAssignmentImpl> members = Map.of(
             memberA,
             new MemberSubscriptionAndAssignmentImpl(
                 Optional.empty(),
                 Optional.empty(),
-                Collections.emptySet(),
+                Set.of(),
                 Assignment.EMPTY
             )
         );
@@ -86,7 +85,7 @@ public class OptimizedUniformAssignmentBuilderTest {
         GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HOMOGENEOUS,
-            Collections.emptyMap()
+            Map.of()
         );
 
         GroupAssignment groupAssignment = assignor.assign(
@@ -94,13 +93,13 @@ public class OptimizedUniformAssignmentBuilderTest {
             subscribedTopicMetadata
         );
 
-        assertEquals(Collections.emptyMap(), groupAssignment.members());
+        assertEquals(Map.of(), groupAssignment.members());
     }
 
     @Test
     public void testOneMemberSubscribedToNonexistentTopic() {
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
-            Collections.singletonMap(
+            Map.of(
                 topic1Uuid,
                 new TopicMetadata(
                     topic1Uuid,
@@ -110,12 +109,12 @@ public class OptimizedUniformAssignmentBuilderTest {
             )
         );
 
-        Map<String, MemberSubscriptionAndAssignmentImpl> members = Collections.singletonMap(
+        Map<String, MemberSubscriptionAndAssignmentImpl> members = Map.of(
             memberA,
             new MemberSubscriptionAndAssignmentImpl(
                 Optional.empty(),
                 Optional.empty(),
-                Collections.singleton(topic2Uuid),
+                Set.of(topic2Uuid),
                 Assignment.EMPTY
             )
         );
@@ -123,7 +122,7 @@ public class OptimizedUniformAssignmentBuilderTest {
         GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HOMOGENEOUS,
-            Collections.emptyMap()
+            Map.of()
         );
 
         assertThrows(PartitionAssignorException.class,
@@ -172,7 +171,7 @@ public class OptimizedUniformAssignmentBuilderTest {
         GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HOMOGENEOUS,
-            Collections.emptyMap()
+            Map.of()
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(topicMetadata);
 
@@ -199,21 +198,21 @@ public class OptimizedUniformAssignmentBuilderTest {
         members.put(memberA, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             Optional.empty(),
-            Collections.singleton(topic3Uuid),
+            Set.of(topic3Uuid),
             Assignment.EMPTY
         ));
 
         members.put(memberB, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             Optional.empty(),
-            Collections.singleton(topic3Uuid),
+            Set.of(topic3Uuid),
             Assignment.EMPTY
         ));
 
         members.put(memberC, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             Optional.empty(),
-            Collections.singleton(topic3Uuid),
+            Set.of(topic3Uuid),
             Assignment.EMPTY
         ));
 
@@ -226,13 +225,13 @@ public class OptimizedUniformAssignmentBuilderTest {
             mkTopicAssignment(topic3Uuid, 1)
         ));
         expectedAssignment.put(memberC,
-            Collections.emptyMap()
+            Map.of()
         );
 
         GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HOMOGENEOUS,
-            Collections.emptyMap()
+            Map.of()
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(topicMetadata);
 
@@ -270,7 +269,7 @@ public class OptimizedUniformAssignmentBuilderTest {
         GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HOMOGENEOUS,
-            Collections.emptyMap()
+            Map.of()
         );
         SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(topicMetadata);
 
@@ -563,7 +562,7 @@ public class OptimizedUniformAssignmentBuilderTest {
         members.put(memberA, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             Optional.empty(),
-            Collections.singleton(topic2Uuid),
+            Set.of(topic2Uuid),
             new Assignment(mkAssignment(
                 mkTopicAssignment(topic1Uuid, 0),
                 mkTopicAssignment(topic2Uuid, 0)
@@ -573,7 +572,7 @@ public class OptimizedUniformAssignmentBuilderTest {
         members.put(memberB, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             Optional.empty(),
-            Collections.singleton(topic2Uuid),
+            Set.of(topic2Uuid),
             new Assignment(mkAssignment(
                 mkTopicAssignment(topic1Uuid, 1),
                 mkTopicAssignment(topic2Uuid, 1)

@@ -196,15 +196,12 @@ public class FetchResponse extends AbstractResponse {
         return new FetchResponseData.PartitionData()
             .setPartitionIndex(partition)
             .setErrorCode(error.code())
-            .setHighWatermark(FetchResponse.INVALID_HIGH_WATERMARK);
+            .setHighWatermark(FetchResponse.INVALID_HIGH_WATERMARK)
+            .setRecords(MemoryRecords.EMPTY);
     }
 
     /**
      * Returns `partition.records` as `Records` (instead of `BaseRecords`). If `records` is `null`, returns `MemoryRecords.EMPTY`.
-     *
-     * If this response was deserialized after a fetch, this method should never fail. An example where this would
-     * fail is a down-converted response (e.g. LazyDownConversionRecords) on the broker (before it's serialized and
-     * sent on the wire).
      *
      * @param partition partition data
      * @return Records or empty record if the records in PartitionData is null.

@@ -44,6 +44,7 @@ import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.GroupNotEmptyException;
 import org.apache.kafka.common.errors.GroupSubscribedToTopicException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
+import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.utils.ThreadUtils;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
@@ -279,6 +280,8 @@ public final class Worker {
 
         workerConfigTransformer.close();
         ThreadUtils.shutdownExecutorServiceQuietly(executor, EXECUTOR_SHUTDOWN_TERMINATION_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+        Utils.closeQuietly(internalKeyConverter, "internal key converter");
+        Utils.closeQuietly(internalValueConverter, "internal value converter");
     }
 
     public WorkerConfig config() {
@@ -317,7 +320,7 @@ public final class Worker {
             final ClassLoader connectorLoader;
 
             try {
-                connectorLoader = instantiateConnectorClassLoader(connProps);
+                connectorLoader = connectorClassLoader(connProps);
                 try (LoaderSwap loaderSwap = plugins.withClassLoader(connectorLoader)) {
                     log.info("Creating connector {} of type {}", connName, connClass);
                     final Connector connector = instantiateConnector(connProps);
@@ -343,7 +346,7 @@ public final class Worker {
                     }
                     workerConnector = new WorkerConnector(
                         connName, connector, connConfig, ctx, metrics, connectorStatusListener, offsetReader, offsetStore, connectorLoader);
-                    log.info("Instantiated connector {} with version {} of type {}", connName, connector.version(), connector.getClass());
+                    log.info("Instantiated connector {} with version {} of type {}", connName, workerConnector.connectorVersion(), connector.getClass());
                     workerConnector.transitionTo(initialState, onConnectorStateChange);
                 }
             } catch (Throwable t) {
@@ -560,17 +563,19 @@ public final class Worker {
     }
 
     public String connectorVersion(String connName) {
-        if (connectors.get(connName) == null) {
+        WorkerConnector conn = connectors.get(connName);
+        if (conn == null) {
             return null;
         }
-        return connectors.get(connName).connectorVersion();
+        return conn.connectorVersion();
     }
 
     public String taskVersion(ConnectorTaskId taskId) {
-        if (tasks.get(taskId) == null) {
+        WorkerTask<?, ?> task = tasks.get(taskId);
+        if (task == null) {
             return null;
         }
-        return tasks.get(taskId).taskVersion();
+        return task.taskVersion();
     }
 
     /**
@@ -678,7 +683,7 @@ public final class Worker {
 
             final ClassLoader connectorLoader;
             try {
-                connectorLoader = instantiateConnectorClassLoader(connProps);
+                connectorLoader = connectorClassLoader(connProps);
                 try (LoaderSwap loaderSwap = plugins.withClassLoader(connectorLoader)) {
                     final ConnectorConfig connConfig = new ConnectorConfig(plugins, connProps);
 
@@ -722,9 +727,9 @@ public final class Worker {
                     workerTask = taskBuilder
                         .withTask(task)
                         .withConnectorConfig(connConfig)
-                        .withKeyConverter(keyConverter)
-                        .withValueConverter(valueConverter)
-                        .withHeaderConverter(headerConverter)
+                        .withKeyConverterPlugin(metrics.wrap(keyConverter, id, true))
+                        .withValueConverterPlugin(metrics.wrap(valueConverter, id, false))
+                        .withHeaderConverterPlugin(metrics.wrap(headerConverter, id))
                         .withClassLoader(connectorLoader)
                         .build();
 
@@ -760,9 +765,8 @@ public final class Worker {
     public KafkaFuture<Void> fenceZombies(String connName, int numTasks, Map<String, String> connProps) {
         log.debug("Fencing out {} task producers for source connector {}", numTasks, connName);
         try (LoggingContext loggingContext = LoggingContext.forConnector(connName)) {
-            String connType = connProps.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
-            Connector connector = instantiateConnector(connProps);
-            ClassLoader classLoader = instantiateConnectorClassLoader(connProps);
+            Class<? extends Connector> connectorClass = connectorClass(connProps);
+            ClassLoader classLoader = connectorClassLoader(connProps);
             try (LoaderSwap loaderSwap = plugins.withClassLoader(classLoader)) {
                 final SourceConnectorConfig connConfig = new SourceConnectorConfig(plugins, connProps, config.topicCreationEnable());
 
@@ -771,7 +775,7 @@ public final class Worker {
                         "connector-worker-adminclient-" + connName,
                         config,
                         connConfig,
-                        connector.getClass(),
+                        connectorClass,
                         connectorClientConfigOverridePolicy,
                         kafkaClusterId,
                         ConnectorType.SOURCE);
@@ -1219,7 +1223,7 @@ public final class Worker {
      */
     public void connectorOffsets(String connName, Map<String, String> connectorConfig, Callback<ConnectorOffsets> cb) {
         Connector connector = instantiateConnector(connectorConfig);
-        ClassLoader connectorLoader = instantiateConnectorClassLoader(connectorConfig);
+        ClassLoader connectorLoader = connectorClassLoader(connectorConfig);
         try (LoaderSwap loaderSwap = plugins.withClassLoader(connectorLoader)) {
             if (ConnectUtils.isSinkConnector(connector)) {
                 log.debug("Fetching offsets for sink connector: {}", connName);
@@ -1244,7 +1248,7 @@ public final class Worker {
         }
     }
 
-    private ClassLoader instantiateConnectorClassLoader(Map<String, String> connProps) throws ConnectException {
+    private ClassLoader connectorClassLoader(Map<String, String> connProps) throws ConnectException {
         final String klass = connProps.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
         final String version = connProps.get(ConnectorConfig.CONNECTOR_VERSION);
 
@@ -1252,9 +1256,22 @@ public final class Worker {
             return plugins.pluginLoader(klass, PluginUtils.connectorVersionRequirement(version));
         } catch (InvalidVersionSpecificationException  | VersionedPluginLoadingException e) {
             throw new ConnectException(
-                    String.format("Failed to instantiate class loader for connector %s, class %s", klass, connProps.get(ConnectorConfig.NAME_CONFIG)), e);
+                    String.format("Failed to get class loader for connector %s, class %s", klass, connProps.get(ConnectorConfig.NAME_CONFIG)), e);
         }
     }
+
+    private Class<? extends Connector> connectorClass(Map<String, String> connProps) throws ConnectException {
+        final String klass = connProps.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
+        final String version = connProps.get(ConnectorConfig.CONNECTOR_VERSION);
+
+        try {
+            return plugins.connectorClass(klass, PluginUtils.connectorVersionRequirement(version));
+        } catch (InvalidVersionSpecificationException | VersionedPluginLoadingException e) {
+            throw new ConnectException(
+                String.format("Failed to get class for connector %s, class %s", klass, connProps.get(ConnectorConfig.NAME_CONFIG)), e);
+        }
+    }
+
     /**
      * Get the current consumer group offsets for a sink connector.
      * <p>
@@ -1355,7 +1372,7 @@ public final class Worker {
                                       Map<Map<String, ?>, Map<String, ?>> offsets, Callback<Message> cb) {
 
         final Connector connector = instantiateConnector(connectorConfig);
-        ClassLoader connectorLoader = instantiateConnectorClassLoader(connectorConfig);
+        ClassLoader connectorLoader = connectorClassLoader(connectorConfig);
         try (LoaderSwap loaderSwap = plugins.withClassLoader(connectorLoader)) {
             if (ConnectUtils.isSinkConnector(connector)) {
                 log.debug("Modifying offsets for sink connector: {}", connName);
@@ -1777,9 +1794,9 @@ public final class Worker {
 
         private Task task = null;
         private ConnectorConfig connectorConfig = null;
-        private Converter keyConverter = null;
-        private Converter valueConverter = null;
-        private HeaderConverter headerConverter = null;
+        private Plugin<Converter> keyConverterPlugin = null;
+        private Plugin<Converter> valueConverterPlugin = null;
+        private Plugin<HeaderConverter> headerConverterPlugin = null;
         private ClassLoader classLoader = null;
 
         public TaskBuilder(ConnectorTaskId id,
@@ -1802,18 +1819,18 @@ public final class Worker {
             return this;
         }
 
-        public TaskBuilder<T, R> withKeyConverter(Converter keyConverter) {
-            this.keyConverter = keyConverter;
+        public TaskBuilder<T, R> withKeyConverterPlugin(Plugin<Converter> keyConverterPlugin) {
+            this.keyConverterPlugin = keyConverterPlugin;
             return this;
         }
 
-        public TaskBuilder<T, R> withValueConverter(Converter valueConverter) {
-            this.valueConverter = valueConverter;
+        public TaskBuilder<T, R> withValueConverterPlugin(Plugin<Converter> valueConverterPlugin) {
+            this.valueConverterPlugin = valueConverterPlugin;
             return this;
         }
 
-        public TaskBuilder<T, R> withHeaderConverter(HeaderConverter headerConverter) {
-            this.headerConverter = headerConverter;
+        public TaskBuilder<T, R> withHeaderConverterPlugin(Plugin<HeaderConverter> headerConverterPlugin) {
+            this.headerConverterPlugin = headerConverterPlugin;
             return this;
         }
 
@@ -1826,29 +1843,27 @@ public final class Worker {
         public WorkerTask<T, R> build() {
             Objects.requireNonNull(task, "Task cannot be null");
             Objects.requireNonNull(connectorConfig, "Connector config used by task cannot be null");
-            Objects.requireNonNull(keyConverter, "Key converter used by task cannot be null");
-            Objects.requireNonNull(valueConverter, "Value converter used by task cannot be null");
-            Objects.requireNonNull(headerConverter, "Header converter used by task cannot be null");
+            Objects.requireNonNull(keyConverterPlugin.get(), "Key converter used by task cannot be null");
+            Objects.requireNonNull(valueConverterPlugin.get(), "Value converter used by task cannot be null");
+            Objects.requireNonNull(headerConverterPlugin.get(), "Header converter used by task cannot be null");
             Objects.requireNonNull(classLoader, "Classloader used by task cannot be null");
 
             ErrorHandlingMetrics errorHandlingMetrics = errorHandlingMetrics(id);
-
-            final Connector connector = instantiateConnector(connectorConfig.originalsStrings());
+            final Class<? extends Connector> connectorClass = connectorClass(connectorConfig.originalsStrings());
 
             RetryWithToleranceOperator<T> retryWithToleranceOperator = new RetryWithToleranceOperator<>(connectorConfig.errorRetryTimeout(),
                     connectorConfig.errorMaxDelayInMillis(), connectorConfig.errorToleranceType(), Time.SYSTEM, errorHandlingMetrics);
 
-            TransformationChain<T, R> transformationChain = new TransformationChain<>(connectorConfig.<R>transformationStages(plugins), retryWithToleranceOperator);
+            TransformationChain<T, R> transformationChain = new TransformationChain<>(connectorConfig.<R>transformationStages(plugins, id, metrics), retryWithToleranceOperator);
             log.info("Initializing: {}", transformationChain);
 
-            TaskPluginsMetadata teskPluginsMetadata = new TaskPluginsMetadata(
-                    connector, task, keyConverter, valueConverter, headerConverter, transformationChain.transformationStageInfo(), plugins.safeLoaderSwapper());
-            WorkerTask<T, R> workerTask = doBuild(task, id, configState, statusListener, initialState,
-                    connectorConfig, keyConverter, valueConverter, headerConverter, classLoader,
-                    retryWithToleranceOperator, transformationChain,
-                    errorHandlingMetrics, connector.getClass());
-            workerTask.addPluginsMetrics(teskPluginsMetadata);
-            return workerTask;
+            TaskPluginsMetadata taskPluginsMetadata = new TaskPluginsMetadata(
+                    connectorClass, task, keyConverterPlugin.get(), valueConverterPlugin.get(), headerConverterPlugin.get(), transformationChain.transformationChainInfo(), plugins);
+
+            return doBuild(task, id, configState, statusListener, initialState,
+                connectorConfig, keyConverterPlugin, valueConverterPlugin, headerConverterPlugin, classLoader,
+                retryWithToleranceOperator, transformationChain,
+                errorHandlingMetrics, connectorClass, taskPluginsMetadata);
         }
 
         abstract WorkerTask<T, R> doBuild(
@@ -1858,14 +1873,15 @@ public final class Worker {
                 TaskStatus.Listener statusListener,
                 TargetState initialState,
                 ConnectorConfig connectorConfig,
-                Converter keyConverter,
-                Converter valueConverter,
-                HeaderConverter headerConverter,
+                Plugin<Converter> keyConverterPlugin,
+                Plugin<Converter> valueConverterPlugin,
+                Plugin<HeaderConverter> headerConverterPlugin,
                 ClassLoader classLoader,
                 RetryWithToleranceOperator<T> retryWithToleranceOperator,
                 TransformationChain<T, R> transformationChain,
                 ErrorHandlingMetrics errorHandlingMetrics,
-                Class<? extends Connector> connectorClass
+                Class<? extends Connector> connectorClass,
+                TaskPluginsMetadata pluginsMetadata
         );
 
     }
@@ -1886,28 +1902,29 @@ public final class Worker {
                 TaskStatus.Listener statusListener,
                 TargetState initialState,
                 ConnectorConfig connectorConfig,
-                Converter keyConverter,
-                Converter valueConverter,
-                HeaderConverter headerConverter,
+                Plugin<Converter> keyConverterPlugin,
+                Plugin<Converter> valueConverterPlugin,
+                Plugin<HeaderConverter> headerConverterPlugin,
                 ClassLoader classLoader,
                 RetryWithToleranceOperator<ConsumerRecord<byte[], byte[]>> retryWithToleranceOperator,
                 TransformationChain<ConsumerRecord<byte[], byte[]>, SinkRecord> transformationChain,
                 ErrorHandlingMetrics errorHandlingMetrics,
-                Class<? extends Connector> connectorClass
+                Class<? extends Connector> connectorClass,
+                TaskPluginsMetadata taskPluginsMetadata
         ) {
             SinkConnectorConfig sinkConfig = new SinkConnectorConfig(plugins, connectorConfig.originalsStrings());
             WorkerErrantRecordReporter workerErrantRecordReporter = createWorkerErrantRecordReporter(sinkConfig, retryWithToleranceOperator,
-                    keyConverter, valueConverter, headerConverter);
+                    keyConverterPlugin.get(), valueConverterPlugin.get(), headerConverterPlugin.get());
 
             Map<String, Object> consumerProps = baseConsumerConfigs(
                     id.connector(),  "connector-consumer-" + id, config, connectorConfig, connectorClass,
                     connectorClientConfigOverridePolicy, kafkaClusterId, ConnectorType.SINK);
             KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(consumerProps);
 
-            return new WorkerSinkTask(id, (SinkTask) task, statusListener, initialState, config, configState, metrics, keyConverter,
-                    valueConverter, errorHandlingMetrics, headerConverter, transformationChain, consumer, classLoader, time,
+            return new WorkerSinkTask(id, (SinkTask) task, statusListener, initialState, config, configState, metrics, keyConverterPlugin,
+                    valueConverterPlugin, errorHandlingMetrics, headerConverterPlugin, transformationChain, consumer, classLoader, time,
                     retryWithToleranceOperator, workerErrantRecordReporter, herder.statusBackingStore(),
-                    () -> sinkTaskReporters(id, sinkConfig, errorHandlingMetrics, connectorClass), plugins.safeLoaderSwapper());
+                    () -> sinkTaskReporters(id, sinkConfig, errorHandlingMetrics, connectorClass), taskPluginsMetadata, plugins.safeLoaderSwapper());
         }
     }
 
@@ -1927,14 +1944,15 @@ public final class Worker {
                 TaskStatus.Listener statusListener,
                 TargetState initialState,
                 ConnectorConfig connectorConfig,
-                Converter keyConverter,
-                Converter valueConverter,
-                HeaderConverter headerConverter,
+                Plugin<Converter> keyConverterPlugin,
+                Plugin<Converter> valueConverterPlugin,
+                Plugin<HeaderConverter> headerConverterPlugin,
                 ClassLoader classLoader,
                 RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator,
                 TransformationChain<SourceRecord, SourceRecord> transformationChain,
                 ErrorHandlingMetrics errorHandlingMetrics,
-                Class<? extends Connector> connectorClass
+                Class<? extends Connector> connectorClass,
+                TaskPluginsMetadata pluginsMetadata
         ) {
             SourceConnectorConfig sourceConfig = new SourceConnectorConfig(plugins,
                     connectorConfig.originalsStrings(), config.topicCreationEnable());
@@ -1964,10 +1982,10 @@ public final class Worker {
             OffsetStorageWriter offsetWriter = new OffsetStorageWriter(offsetStore, id.connector(), internalKeyConverter, internalValueConverter);
 
             // Note we pass the configState as it performs dynamic transformations under the covers
-            return new WorkerSourceTask(id, (SourceTask) task, statusListener, initialState, keyConverter, valueConverter, errorHandlingMetrics,
-                    headerConverter, transformationChain, producer, topicAdmin, topicCreationGroups,
+            return new WorkerSourceTask(id, (SourceTask) task, statusListener, initialState, keyConverterPlugin, valueConverterPlugin, errorHandlingMetrics,
+                    headerConverterPlugin, transformationChain, producer, topicAdmin, topicCreationGroups,
                     offsetReader, offsetWriter, offsetStore, config, configState, metrics, classLoader, time,
-                    retryWithToleranceOperator, herder.statusBackingStore(), executor, () -> sourceTaskReporters(id, sourceConfig, errorHandlingMetrics), plugins.safeLoaderSwapper());
+                    retryWithToleranceOperator, herder.statusBackingStore(), executor, () -> sourceTaskReporters(id, sourceConfig, errorHandlingMetrics), pluginsMetadata, plugins.safeLoaderSwapper());
         }
     }
 
@@ -1994,14 +2012,15 @@ public final class Worker {
                 TaskStatus.Listener statusListener,
                 TargetState initialState,
                 ConnectorConfig connectorConfig,
-                Converter keyConverter,
-                Converter valueConverter,
-                HeaderConverter headerConverter,
+                Plugin<Converter> keyConverterPlugin,
+                Plugin<Converter> valueConverterPlugin,
+                Plugin<HeaderConverter> headerConverterPlugin,
                 ClassLoader classLoader,
                 RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator,
                 TransformationChain<SourceRecord, SourceRecord> transformationChain,
                 ErrorHandlingMetrics errorHandlingMetrics,
-                Class<? extends Connector> connectorClass
+                Class<? extends Connector> connectorClass,
+                TaskPluginsMetadata pluginsMetadata
         ) {
             SourceConnectorConfig sourceConfig = new SourceConnectorConfig(plugins,
                     connectorConfig.originalsStrings(), config.topicCreationEnable());
@@ -2028,11 +2047,11 @@ public final class Worker {
             OffsetStorageWriter offsetWriter = new OffsetStorageWriter(offsetStore, id.connector(), internalKeyConverter, internalValueConverter);
 
             // Note we pass the configState as it performs dynamic transformations under the covers
-            return new ExactlyOnceWorkerSourceTask(id, (SourceTask) task, statusListener, initialState, keyConverter, valueConverter,
-                    headerConverter, transformationChain, producer, topicAdmin, topicCreationGroups,
+            return new ExactlyOnceWorkerSourceTask(id, (SourceTask) task, statusListener, initialState, keyConverterPlugin, valueConverterPlugin,
+                    headerConverterPlugin, transformationChain, producer, topicAdmin, topicCreationGroups,
                     offsetReader, offsetWriter, offsetStore, config, configState, metrics, errorHandlingMetrics, classLoader, time, retryWithToleranceOperator,
                     herder.statusBackingStore(), sourceConfig, executor, preProducerCheck, postProducerCheck,
-                    () -> sourceTaskReporters(id, sourceConfig, errorHandlingMetrics), plugins.safeLoaderSwapper());
+                    () -> sourceTaskReporters(id, sourceConfig, errorHandlingMetrics), pluginsMetadata, plugins.safeLoaderSwapper());
         }
     }
 

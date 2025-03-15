@@ -610,7 +610,7 @@ public class StreamsResetter {
             toOffsetOption = parser.accepts("to-offset", "Reset offsets to a specific offset.")
                 .withRequiredArg()
                 .ofType(Long.class);
-            toDatetimeOption = parser.accepts("to-datetime", "Reset offsets to offset from datetime. Format: 'YYYY-MM-DDTHH:mm:SS.sss'")
+            toDatetimeOption = parser.accepts("to-datetime", "Reset offsets to offset from datetime. Format: 'YYYY-MM-DDThh:mm:ss.sss'")
                 .withRequiredArg()
                 .ofType(String.class);
             byDurationOption = parser.accepts("by-duration", "Reset offsets to offset by duration from current timestamp. Format: 'PnDTnHnMnS'")

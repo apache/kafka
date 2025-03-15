@@ -97,12 +97,13 @@ class TimeOrderedCachingWindowStore
         hasIndex = timeOrderedWindowStore.hasIndex();
     }
 
+    @SuppressWarnings("unchecked")
     private RocksDBTimeOrderedWindowStore getWrappedStore(final StateStore wrapped) {
         if (wrapped instanceof RocksDBTimeOrderedWindowStore) {
             return (RocksDBTimeOrderedWindowStore) wrapped;
         }
         if (wrapped instanceof WrappedStateStore) {
-            return getWrappedStore(((WrappedStateStore<?, ?, ?>) wrapped).wrapped());
+            return getWrappedStore(((WrappedStateStore<?, Bytes, byte[]>) wrapped).wrapped());
         }
         return null;
     }
@@ -255,12 +256,13 @@ class TimeOrderedCachingWindowStore
         final LRUCacheEntry entry =
             new LRUCacheEntry(
                 value,
-                internalContext.headers(),
+                internalContext.recordContext().headers(),
                 true,
-                internalContext.offset(),
-                internalContext.timestamp(),
-                internalContext.partition(),
-                internalContext.topic());
+                internalContext.recordContext().offset(),
+                internalContext.recordContext().timestamp(),
+                internalContext.recordContext().partition(),
+                internalContext.recordContext().topic()
+            );
 
         // Put to index first so that base can be evicted later
         if (hasIndex) {
@@ -274,10 +276,11 @@ class TimeOrderedCachingWindowStore
                     new byte[0],
                     new RecordHeaders(),
                     true,
-                    internalContext.offset(),
-                    internalContext.timestamp(),
-                    internalContext.partition(),
-                    "");
+                    internalContext.recordContext().offset(),
+                    internalContext.recordContext().timestamp(),
+                    internalContext.recordContext().partition(),
+                    ""
+                );
             final Bytes indexKey = KeyFirstWindowKeySchema.toStoreKeyBinary(key, windowStartTimestamp, 0);
             internalContext.cache().put(cacheName, indexKeyCacheFunction.cacheKey(indexKey), emptyEntry);
         } else {

@@ -44,26 +44,24 @@ import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.ThrottlingQuotaExceededException;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.internals.Topic;
-import org.apache.kafka.common.message.UpdateMetadataRequestData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfig;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
-import org.apache.kafka.common.test.api.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTemplate;
 import org.apache.kafka.common.test.api.ClusterTest;
-import org.apache.kafka.common.test.api.ClusterTestExtensions;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.metadata.LeaderAndIsr;
 import org.apache.kafka.server.common.AdminCommandFailedException;
 import org.apache.kafka.server.common.AdminOperationException;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -99,7 +97,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-@ExtendWith(ClusterTestExtensions.class)
 public class TopicCommandTest {
     private final short defaultReplicationFactor = 1;
     private final int defaultNumPartitions = 1;
@@ -1112,8 +1109,8 @@ public class TopicCommandTest {
             TestUtils.waitForCondition(
                     () -> clusterInstance.aliveBrokers().values().stream().allMatch(
                             broker -> {
-                                Optional<UpdateMetadataRequestData.UpdateMetadataPartitionState> partitionState =
-                                        Optional.ofNullable(broker.metadataCache().getPartitionInfo(testTopicName, 0).getOrElse(null));
+                                Optional<LeaderAndIsr> partitionState = Optional.ofNullable(
+                                        broker.metadataCache().getLeaderAndIsr(testTopicName, 0).getOrElse(null));
                                 return partitionState.map(s -> FetchRequest.isValidBrokerId(s.leader())).orElse(false);
                             }
                     ), CLUSTER_WAIT_MS, String.format("Meta data propogation fail in %s ms", CLUSTER_WAIT_MS));
@@ -1141,7 +1138,7 @@ public class TopicCommandTest {
             assertEquals(2, clusterInstance.aliveBrokers().size());
 
             TestUtils.waitForCondition(
-                    () -> clusterInstance.aliveBrokers().values().stream().allMatch(broker -> broker.metadataCache().getPartitionInfo(testTopicName, 0).get().isr().size() == 2),
+                    () -> clusterInstance.aliveBrokers().values().stream().allMatch(broker -> broker.metadataCache().getLeaderAndIsr(testTopicName, 0).get().isr().size() == 2),
                     CLUSTER_WAIT_MS, String.format("Timeout waiting for partition metadata propagating to brokers for %s topic", testTopicName)
             );
 
@@ -1244,7 +1241,7 @@ public class TopicCommandTest {
             assertEquals(4, clusterInstance.aliveBrokers().size());
 
             TestUtils.waitForCondition(
-                    () -> clusterInstance.aliveBrokers().values().stream().allMatch(broker -> broker.metadataCache().getPartitionInfo(testTopicName, 0).get().isr().size() == 4),
+                    () -> clusterInstance.aliveBrokers().values().stream().allMatch(broker -> broker.metadataCache().getLeaderAndIsr(testTopicName, 0).get().isr().size() == 4),
                     CLUSTER_WAIT_MS, String.format("Timeout waiting for partition metadata propagating to brokers for %s topic", testTopicName)
             );
 
@@ -1302,8 +1299,8 @@ public class TopicCommandTest {
 
             TestUtils.waitForCondition(
                     () -> clusterInstance.aliveBrokers().values().stream().allMatch(broker ->
-                            broker.metadataCache().getPartitionInfo(underMinIsrTopic, 0).get().isr().size() < 6 &&
-                            broker.metadataCache().getPartitionInfo(offlineTopic, 0).get().leader() == MetadataResponse.NO_LEADER_ID),
+                            broker.metadataCache().getLeaderAndIsr(underMinIsrTopic, 0).get().isr().size() < 6 &&
+                            broker.metadataCache().getLeaderAndIsr(offlineTopic, 0).get().leader() == MetadataResponse.NO_LEADER_ID),
                     CLUSTER_WAIT_MS, "Timeout waiting for partition metadata propagating to brokers for underMinIsrTopic topic"
             );
 

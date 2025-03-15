@@ -198,7 +198,7 @@ public class PluginsTest {
 
         HeaderConverter headerConverter = plugins.newHeaderConverter(config,
                                                      WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG,
-                                                     ClassLoaderUsage.PLUGINS);
+                                                     ClassLoaderUsage.CURRENT_CLASSLOADER);
         assertNotNull(headerConverter);
         assertInstanceOf(SimpleHeaderConverter.class, headerConverter);
     }

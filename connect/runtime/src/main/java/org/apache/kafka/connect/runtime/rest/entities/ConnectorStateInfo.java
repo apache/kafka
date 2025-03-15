@@ -61,7 +61,6 @@ public class ConnectorStateInfo {
         return type;
     }
 
-
     public abstract static class AbstractState {
         private final String state;
         private final String trace;
@@ -107,10 +106,6 @@ public class ConnectorStateInfo {
                               @JsonProperty("version") String version) {
             super(state, worker, msg, version);
         }
-
-        public ConnectorState(String state, String worker, String trace) {
-            super(state, worker, trace, null);
-        }
     }
 
     public static class TaskState extends AbstractState implements Comparable<TaskState> {
@@ -123,11 +118,6 @@ public class ConnectorStateInfo {
                          @JsonProperty("msg") String msg,
                          @JsonProperty("version") String version) {
             super(state, worker, msg, version);
-            this.id = id;
-        }
-
-        public TaskState(int id, String state, String worker, String trace) {
-            super(state, worker, trace, null);
             this.id = id;
         }
 
@@ -145,9 +135,8 @@ public class ConnectorStateInfo {
         public boolean equals(Object o) {
             if (o == this)
                 return true;
-            if (!(o instanceof TaskState))
+            if (!(o instanceof TaskState other))
                 return false;
-            TaskState other = (TaskState) o;
             return compareTo(other) == 0;
         }
 

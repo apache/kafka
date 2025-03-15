@@ -38,7 +38,6 @@ public class TaskConfig extends AbstractConfig {
 
     private static final ConfigDef CONFIG;
 
-
     static {
         CONFIG = new ConfigDef()
                 .define(TASK_CLASS_CONFIG, Type.CLASS, Importance.HIGH, TASK_CLASS_DOC);

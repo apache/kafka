@@ -22,6 +22,7 @@ import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigDef.Width;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -37,6 +38,7 @@ import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.predicates.Predicate;
 import org.apache.kafka.connect.util.ConcreteSubClassValidator;
+import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.InstantiableClassValidator;
 
 import org.apache.maven.artifact.versioning.InvalidVersionSpecificationException;
@@ -359,42 +361,8 @@ public class ConnectorConfig extends AbstractConfig {
      * Returns the initialized list of {@link TransformationStage} which apply the
      * {@link Transformation transformations} and {@link Predicate predicates}
      * as they are specified in the {@link #TRANSFORMS_CONFIG} and {@link #PREDICATES_CONFIG}
-     *
-     * This is kept for tests and should be deprecated in the future. Use the following method instead.
      */
-    public <R extends ConnectRecord<R>> List<TransformationStage<R>> transformationStages() {
-        final List<String> transformAliases = getList(TRANSFORMS_CONFIG);
-
-        final List<TransformationStage<R>> transformations = new ArrayList<>(transformAliases.size());
-        for (String alias : transformAliases) {
-            final String prefix = TRANSFORMS_CONFIG + "." + alias + ".";
-
-            try {
-                @SuppressWarnings("unchecked")
-                final Transformation<R> transformation = Utils.newInstance(getClass(prefix + "type"), Transformation.class);
-                Map<String, Object> configs = originalsWithPrefix(prefix);
-                String predicateAlias = (String) configs.remove(TransformationStage.PREDICATE_CONFIG);
-                Object negate = configs.remove(TransformationStage.NEGATE_CONFIG);
-                transformation.configure(configs);
-                if (predicateAlias != null) {
-                    String predicatePrefix = PREDICATES_PREFIX + predicateAlias + ".";
-                    @SuppressWarnings("unchecked")
-                    Predicate<R> predicate = Utils.newInstance(getClass(predicatePrefix + "type"), Predicate.class);
-                    predicate.configure(originalsWithPrefix(predicatePrefix));
-                    transformations.add(new TransformationStage<>(
-                            predicate, predicateAlias, negate != null && Boolean.parseBoolean(negate.toString()), transformation, alias, PluginUtils.noOpLoaderSwap()));
-                } else {
-                    transformations.add(new TransformationStage<>(transformation, alias, PluginUtils.noOpLoaderSwap()));
-                }
-            } catch (Exception e) {
-                throw new ConnectException(e);
-            }
-        }
-
-        return transformations;
-    }
-
-    public <R extends ConnectRecord<R>> List<TransformationStage<R>> transformationStages(Plugins plugins) {
+    public <R extends ConnectRecord<R>> List<TransformationStage<R>> transformationStages(Plugins plugins, ConnectorTaskId connectorTaskId, ConnectMetrics metrics) {
         final List<String> transformAliases = getList(TRANSFORMS_CONFIG);
 
         final List<TransformationStage<R>> transformations = new ArrayList<>(transformAliases.size());
@@ -409,6 +377,7 @@ public class ConnectorConfig extends AbstractConfig {
                 String predicateAlias = (String) configs.remove(TransformationStage.PREDICATE_CONFIG);
                 Object negate = configs.remove(TransformationStage.NEGATE_CONFIG);
                 transformation.configure(configs);
+                Plugin<Transformation<R>> transformationPlugin = metrics.wrap(transformation, connectorTaskId, alias);
                 if (predicateAlias != null) {
                     String predicatePrefix = PREDICATES_PREFIX + predicateAlias + ".";
                     final String predicateTypeConfig = predicatePrefix + "type";
@@ -416,10 +385,24 @@ public class ConnectorConfig extends AbstractConfig {
                     @SuppressWarnings("unchecked")
                     Predicate<R> predicate = getTransformationOrPredicate(plugins, predicateTypeConfig, predicateVersionConfig);
                     predicate.configure(originalsWithPrefix(predicatePrefix));
+                    Plugin<Predicate<R>> predicatePlugin = metrics.wrap(predicate, connectorTaskId, predicateAlias);
                     transformations.add(new TransformationStage<>(
-                            predicate, predicateAlias, negate != null && Boolean.parseBoolean(negate.toString()), transformation, alias, plugins.safeLoaderSwapper()));
+                        predicatePlugin,
+                        predicateAlias,
+                        plugins.pluginVersion(predicate.getClass().getName(), predicate.getClass().getClassLoader(), PluginType.PREDICATE),
+                        negate != null && Boolean.parseBoolean(negate.toString()),
+                        transformationPlugin,
+                        plugins.pluginVersion(transformation.getClass().getName(), transformation.getClass().getClassLoader(), PluginType.TRANSFORMATION),
+                        alias,
+                        plugins.safeLoaderSwapper())
+                    );
                 } else {
-                    transformations.add(new TransformationStage<>(transformation, alias, plugins.safeLoaderSwapper()));
+                    transformations.add(new TransformationStage<>(
+                        transformationPlugin,
+                        alias,
+                        plugins.pluginVersion(transformation.getClass().getName(), transformation.getClass().getClassLoader(), PluginType.TRANSFORMATION),
+                        plugins.safeLoaderSwapper())
+                    );
                 }
             } catch (Exception e) {
                 throw new ConnectException(e);
@@ -638,11 +621,10 @@ public class ConnectorConfig extends AbstractConfig {
 
             LinkedHashSet<?> uniqueAliases = new LinkedHashSet<>((List<?>) aliases);
             for (Object o : uniqueAliases) {
-                if (!(o instanceof String)) {
+                if (!(o instanceof String alias)) {
                     throw new ConfigException("Item in " + aliasConfig + " property is not of "
                             + "type String");
                 }
-                String alias = (String) o;
                 final String prefix = aliasConfig + "." + alias + ".";
                 final String group = aliasGroup + ": " + alias;
                 int orderInGroup = 0;

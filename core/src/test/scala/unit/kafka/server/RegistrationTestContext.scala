@@ -43,7 +43,7 @@ class SimpleControllerNodeProvider extends ControllerNodeProvider {
   def saslMechanism: String = SaslConfigs.DEFAULT_SASL_MECHANISM
 
   override def getControllerInfo(): ControllerInformation = ControllerInformation(Option(node.get()),
-    listenerName, securityProtocol, saslMechanism, isZkController = false)
+    listenerName, securityProtocol, saslMechanism)
 }
 
 class RegistrationTestContext(

@@ -19,7 +19,9 @@ package org.apache.kafka.connect.runtime;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.MetricNameTemplate;
 import org.apache.kafka.common.metrics.Gauge;
+import org.apache.kafka.common.metrics.PluginMetrics;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.internals.PluginMetricsImpl;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Frequencies;
 import org.apache.kafka.common.metrics.stats.Max;
@@ -80,6 +82,7 @@ abstract class WorkerTask<T, R extends ConnectRecord<R>> implements Runnable {
     protected final TransformationChain<T, R> transformationChain;
     private final Supplier<List<ErrorReporter<T>>> errorReportersSupplier;
     protected final Function<ClassLoader, LoaderSwap> pluginLoaderSwapper;
+    protected final PluginMetricsImpl pluginMetrics;
 
     public WorkerTask(ConnectorTaskId id,
                       TaskStatus.Listener statusListener,
@@ -92,9 +95,11 @@ abstract class WorkerTask<T, R extends ConnectRecord<R>> implements Runnable {
                       Supplier<List<ErrorReporter<T>>> errorReportersSupplier,
                       Time time,
                       StatusBackingStore statusBackingStore,
+                      TaskPluginsMetadata pluginsMetadata,
                       Function<ClassLoader, LoaderSwap> pluginLoaderSwapper) {
         this.id = id;
         this.taskMetricsGroup = new TaskMetricsGroup(this.id, connectMetrics, statusListener);
+        this.taskMetricsGroup.addPluginInfoMetric(pluginsMetadata);
         this.errorMetrics = errorMetrics;
         this.statusListener = taskMetricsGroup;
         this.loader = loader;
@@ -109,6 +114,7 @@ abstract class WorkerTask<T, R extends ConnectRecord<R>> implements Runnable {
         this.time = time;
         this.statusBackingStore = statusBackingStore;
         this.pluginLoaderSwapper = pluginLoaderSwapper;
+        this.pluginMetrics = connectMetrics.taskPluginMetrics(id);
     }
 
     public ConnectorTaskId id() {
@@ -117,6 +123,10 @@ abstract class WorkerTask<T, R extends ConnectRecord<R>> implements Runnable {
 
     public ClassLoader loader() {
         return loader;
+    }
+
+    public PluginMetrics pluginMetrics() {
+        return pluginMetrics;
     }
 
     /**
@@ -165,10 +175,6 @@ abstract class WorkerTask<T, R extends ConnectRecord<R>> implements Runnable {
         } catch (InterruptedException e) {
             return false;
         }
-    }
-
-    public void addPluginsMetrics(TaskPluginsMetadata pluginsMetadata) {
-        taskMetricsGroup.addPluginInfoMetric(pluginsMetadata);
     }
 
     /**
@@ -449,6 +455,9 @@ abstract class WorkerTask<T, R extends ConnectRecord<R>> implements Runnable {
         }
 
         public void addPluginInfoMetric(TaskPluginsMetadata pluginsMetadata) {
+            if (pluginsMetadata == null) {
+                return;
+            }
             ConnectMetricsRegistry registry = connectMetrics.registry();
             metricGroup.addValueMetric(registry.taskConnectorClass, now -> pluginsMetadata.connectorClass());
             metricGroup.addValueMetric(registry.taskConnectorClassVersion, now -> pluginsMetadata.connectorVersion());
@@ -463,13 +472,11 @@ abstract class WorkerTask<T, R extends ConnectRecord<R>> implements Runnable {
             metricGroup.addValueMetric(registry.taskHeaderConverterVersion, now -> pluginsMetadata.headerConverterVersion());
 
             if (!pluginsMetadata.transformations().isEmpty()) {
-                this.transformationGroups.clear();
                 for (TransformationStage.AliasedPluginInfo entry : pluginsMetadata.transformations()) {
                     MetricGroup transformationGroup = connectMetrics.group(registry.transformsGroupName(),
                             registry.connectorTagName(), id.connector(),
                             registry.taskTagName(), Integer.toString(id.task()),
                             registry.transformsTagName(), entry.alias());
-                    transformationGroup.close();
                     transformationGroup.addValueMetric(registry.transformClass, now -> entry.className());
                     transformationGroup.addValueMetric(registry.transformVersion, now -> entry.version());
                     this.transformationGroups.add(transformationGroup);
@@ -477,13 +484,11 @@ abstract class WorkerTask<T, R extends ConnectRecord<R>> implements Runnable {
             }
 
             if (!pluginsMetadata.predicates().isEmpty()) {
-                this.predicateGroups.clear();
                 for (TransformationStage.AliasedPluginInfo entry : pluginsMetadata.predicates()) {
                     MetricGroup predicateGroup = connectMetrics.group(registry.predicatesGroupName(),
                             registry.connectorTagName(), id.connector(),
                             registry.taskTagName(), Integer.toString(id.task()),
                             registry.predicateTagName(), entry.alias());
-                    predicateGroup.close();
                     predicateGroup.addValueMetric(registry.predicateClass, now -> entry.className());
                     predicateGroup.addValueMetric(registry.predicateVersion, now -> entry.version());
                     this.predicateGroups.add(predicateGroup);

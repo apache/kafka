@@ -176,8 +176,7 @@ public final class ClientQuotasImage {
 
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof ClientQuotasImage)) return false;
-        ClientQuotasImage other = (ClientQuotasImage) o;
+        if (!(o instanceof ClientQuotasImage other)) return false;
         return entities.equals(other.entities);
     }
 

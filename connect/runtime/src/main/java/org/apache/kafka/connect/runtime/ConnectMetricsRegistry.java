@@ -435,7 +435,6 @@ public class ConnectMetricsRegistry {
                 "The number of failed writes to the dead letter queue.", taskErrorHandlingTags);
         lastErrorTimestamp = createTemplate("last-error-timestamp", TASK_ERROR_HANDLING_GROUP_NAME,
                 "The epoch timestamp when this task last encountered an error.", taskErrorHandlingTags);
-
     }
 
     private MetricNameTemplate createTemplate(String name, String group, String doc, Set<String> tags) {

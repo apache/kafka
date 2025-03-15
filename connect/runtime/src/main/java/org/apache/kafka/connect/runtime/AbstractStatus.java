@@ -105,7 +105,8 @@ public abstract class AbstractStatus<T> {
                 && Objects.equals(id, that.id)
                 && state == that.state
                 && Objects.equals(trace, that.trace)
-                && Objects.equals(workerId, that.workerId);
+                && Objects.equals(workerId, that.workerId)
+                && Objects.equals(version, that.version);
     }
 
     @Override
@@ -114,6 +115,7 @@ public abstract class AbstractStatus<T> {
         result = 31 * result + (state != null ? state.hashCode() : 0);
         result = 31 * result + (trace != null ? trace.hashCode() : 0);
         result = 31 * result + (workerId != null ? workerId.hashCode() : 0);
+        result = 31 * result + (version != null ? version.hashCode() : 0);
         result = 31 * result + generation;
         return result;
     }

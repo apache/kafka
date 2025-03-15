@@ -45,7 +45,6 @@ class StreamsEosTest(KafkaTest):
                            StreamsEosTestJobRunnerService(self.test_context, self.kafka),
                            StreamsEosTestJobRunnerService(self.test_context, self.kafka),
                            StreamsEosTestVerifyRunnerService(self.test_context, self.kafka))
-
     @cluster(num_nodes=9)
     @matrix(metadata_quorum=[quorum.combined_kraft])
     def test_rebalance_complex(self, metadata_quorum):
@@ -87,7 +86,6 @@ class StreamsEosTest(KafkaTest):
                                       StreamsEosTestJobRunnerService(self.test_context, self.kafka),
                                       StreamsEosTestJobRunnerService(self.test_context, self.kafka),
                                       StreamsEosTestVerifyRunnerService(self.test_context, self.kafka))
-
     @cluster(num_nodes=9)
     @matrix(metadata_quorum=[quorum.combined_kraft])
     def test_failure_and_recovery_complex(self, metadata_quorum):
