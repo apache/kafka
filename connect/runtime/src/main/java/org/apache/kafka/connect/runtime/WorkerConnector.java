@@ -455,7 +455,6 @@ public class WorkerConnector implements Runnable {
         private volatile AbstractStatus.State state;
         private final MetricGroup metricGroup;
         private final ConnectorStatus.Listener delegate;
-        private final String connectorVersion;
 
         public ConnectorMetricsGroup(
             ConnectMetrics connectMetrics,
