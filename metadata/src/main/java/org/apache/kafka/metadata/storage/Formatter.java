@@ -284,10 +284,6 @@ public class Formatter {
     }
 
     MetadataVersion verifyReleaseVersion(MetadataVersion metadataVersion) {
-        if (!metadataVersion.isKRaftSupported()) {
-            throw new FormatterException(MetadataVersion.FEATURE_NAME + " " + metadataVersion +
-                " is too old to be supported.");
-        }
         if (!unstableFeatureVersionsEnabled) {
             if (!metadataVersion.isProduction()) {
                 throw new FormatterException(MetadataVersion.FEATURE_NAME + " " + metadataVersion +
@@ -435,7 +431,7 @@ public class Formatter {
                     directoryTypes.get(writeLogDir).description(), writeLogDir,
                     MetadataVersion.FEATURE_NAME, releaseVersion);
                 Files.createDirectories(Paths.get(writeLogDir));
-                BootstrapDirectory bootstrapDirectory = new BootstrapDirectory(writeLogDir, Optional.empty());
+                BootstrapDirectory bootstrapDirectory = new BootstrapDirectory(writeLogDir);
                 bootstrapDirectory.writeBinaryFile(bootstrapMetadata);
                 if (directoryTypes.get(writeLogDir).isDynamicMetadataDirectory()) {
                     writeDynamicQuorumSnapshot(writeLogDir,
@@ -514,7 +510,7 @@ public class Formatter {
                 Snapshots.BOOTSTRAP_SNAPSHOT_ID)).
             setKraftVersion(KRaftVersion.fromFeatureLevel(kraftVersion)).
             setVoterSet(Optional.of(voterSet));
-        try (RecordsSnapshotWriter writer = builder.build(new MetadataRecordSerde())) {
+        try (RecordsSnapshotWriter<ApiMessageAndVersion> writer = builder.build(new MetadataRecordSerde())) {
             writer.freeze();
         }
     }

@@ -60,18 +60,6 @@ public class ControllerMetricsChangesTest {
             setInControlledShutdown(false).build();
     }
 
-    private static BrokerRegistration zkBrokerRegistration(
-        int brokerId
-    ) {
-        return new BrokerRegistration.Builder().
-            setId(brokerId).
-            setEpoch(100L).
-            setIncarnationId(Uuid.fromString("Pxi6QwS2RFuN8VSKjqJZyQ")).
-            setFenced(false).
-            setInControlledShutdown(false).
-            setIsMigratingZkBroker(true).build();
-    }
-
     @Test
     public void testInitialValues() {
         ControllerMetricsChanges changes = new ControllerMetricsChanges();
@@ -116,20 +104,6 @@ public class ControllerMetricsChangesTest {
     }
 
     @Test
-    public void testHandleZkBroker() {
-        ControllerMetricsChanges changes = new ControllerMetricsChanges();
-        changes.handleBrokerChange(null, zkBrokerRegistration(1));
-        assertEquals(1, changes.migratingZkBrokersChange());
-        changes.handleBrokerChange(null, zkBrokerRegistration(2));
-        changes.handleBrokerChange(null, zkBrokerRegistration(3));
-        assertEquals(3, changes.migratingZkBrokersChange());
-
-        changes.handleBrokerChange(zkBrokerRegistration(3), brokerRegistration(3, true));
-        changes.handleBrokerChange(brokerRegistration(3, true), brokerRegistration(3, false));
-        assertEquals(2, changes.migratingZkBrokersChange());
-    }
-
-    @Test
     public void testHandleDeletedTopic() {
         ControllerMetricsChanges changes = new ControllerMetricsChanges();
         Map<Integer, PartitionRegistration> partitions = new HashMap<>();
@@ -156,8 +130,7 @@ public class ControllerMetricsChangesTest {
     static final TopicDelta TOPIC_DELTA2;
 
     static {
-        ImageWriterOptions options = new ImageWriterOptions.Builder().
-                setMetadataVersion(MetadataVersion.IBP_3_7_IV0).build(); // highest MV for PartitionRecord v0
+        ImageWriterOptions options = new ImageWriterOptions.Builder(MetadataVersion.IBP_3_7_IV0).build(); // highest MV for PartitionRecord v0
         TOPIC_DELTA1 = new TopicDelta(new TopicImage("foo", FOO_ID, Collections.emptyMap()));
         TOPIC_DELTA1.replay((PartitionRecord) fakePartitionRegistration(NORMAL).
                 toRecord(FOO_ID, 0, options).message());

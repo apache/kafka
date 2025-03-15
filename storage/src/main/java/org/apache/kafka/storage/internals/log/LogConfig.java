@@ -31,7 +31,6 @@ import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.ConfigUtils;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.config.QuotaConfig;
 import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.server.config.ServerTopicConfigSynonyms;
@@ -63,7 +62,6 @@ import static org.apache.kafka.common.config.ConfigDef.Type.LIST;
 import static org.apache.kafka.common.config.ConfigDef.Type.LONG;
 import static org.apache.kafka.common.config.ConfigDef.Type.STRING;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
-import static org.apache.kafka.server.common.MetadataVersion.IBP_3_0_IV1;
 
 public class LogConfig extends AbstractConfig {
 
@@ -159,7 +157,7 @@ public class LogConfig extends AbstractConfig {
             .define(ServerLogConfigs.NUM_PARTITIONS_CONFIG, INT, ServerLogConfigs.NUM_PARTITIONS_DEFAULT, atLeast(1), MEDIUM, ServerLogConfigs.NUM_PARTITIONS_DOC)
             .define(ServerLogConfigs.LOG_DIR_CONFIG, STRING, ServerLogConfigs.LOG_DIR_DEFAULT, HIGH, ServerLogConfigs.LOG_DIR_DOC)
             .define(ServerLogConfigs.LOG_DIRS_CONFIG, STRING, null, HIGH, ServerLogConfigs.LOG_DIRS_DOC)
-            .define(ServerLogConfigs.LOG_SEGMENT_BYTES_CONFIG, INT, DEFAULT_SEGMENT_BYTES, atLeast(LegacyRecord.RECORD_OVERHEAD_V0), HIGH, ServerLogConfigs.LOG_SEGMENT_BYTES_DOC)
+            .define(ServerLogConfigs.LOG_SEGMENT_BYTES_CONFIG, INT, DEFAULT_SEGMENT_BYTES, atLeast(1024 * 1024), HIGH, ServerLogConfigs.LOG_SEGMENT_BYTES_DOC)
 
             .define(ServerLogConfigs.LOG_ROLL_TIME_MILLIS_CONFIG, LONG, null, HIGH, ServerLogConfigs.LOG_ROLL_TIME_MILLIS_DOC)
             .define(ServerLogConfigs.LOG_ROLL_TIME_HOURS_CONFIG, INT, (int) TimeUnit.MILLISECONDS.toHours(DEFAULT_SEGMENT_MS), atLeast(1), HIGH, ServerLogConfigs.LOG_ROLL_TIME_HOURS_DOC)
@@ -444,10 +442,6 @@ public class LogConfig extends AbstractConfig {
         return new LogConfigDef(CONFIG);
     }
 
-    public static boolean shouldIgnoreMessageFormatVersion(MetadataVersion interBrokerProtocolVersion) {
-        return interBrokerProtocolVersion.isAtLeast(IBP_3_0_IV1);
-    }
-
     public static Optional<Type> configType(String configName) {
         return Optional.ofNullable(CONFIG.configKeys().get(configName)).map(c -> c.type);
     }
@@ -512,17 +506,12 @@ public class LogConfig extends AbstractConfig {
      * @param existingConfigs                   The existing properties
      * @param newConfigs                        The new properties to be validated
      * @param isRemoteLogStorageSystemEnabled   true if system wise remote log storage is enabled
-     * @param fromZK                            true if this is a ZK cluster
      */
     private static void validateTopicLogConfigValues(Map<String, String> existingConfigs,
                                                      Map<?, ?> newConfigs,
-                                                     boolean isRemoteLogStorageSystemEnabled,
-                                                     boolean fromZK) {
+                                                     boolean isRemoteLogStorageSystemEnabled) {
         validateValues(newConfigs);
 
-        if (fromZK) {
-            validateNoInvalidRemoteStorageConfigsInZK(newConfigs);
-        }
         boolean isRemoteLogStorageEnabled = (Boolean) newConfigs.get(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG);
         if (isRemoteLogStorageEnabled) {
             validateRemoteStorageOnlyIfSystemEnabled(newConfigs, isRemoteLogStorageSystemEnabled, false);
@@ -561,15 +550,6 @@ public class LogConfig extends AbstractConfig {
                 throw new InvalidConfigurationException("When `remote.log.copy.disable` is set to true, the `local.retention.ms` " +
                         "and `retention.ms` must be set to the identical value because there will be no more logs copied to the remote storage.");
             }
-        }
-    }
-
-    public static void validateNoInvalidRemoteStorageConfigsInZK(Map<?, ?> newConfigs) {
-        boolean isRemoteLogDeleteOnDisable = (Boolean) Utils.castToStringObjectMap(newConfigs).getOrDefault(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG, false);
-        boolean isRemoteLogCopyDisabled = (Boolean) Utils.castToStringObjectMap(newConfigs).getOrDefault(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG, false);
-        if (isRemoteLogDeleteOnDisable || isRemoteLogCopyDisabled) {
-            throw new InvalidConfigurationException("It is invalid to set `remote.log.delete.on.disable` or " +
-                    "`remote.log.copy.disable` under Zookeeper's mode.");
         }
     }
 
@@ -630,14 +610,13 @@ public class LogConfig extends AbstractConfig {
      * Check that the given properties contain only valid log config names and that all values can be parsed and are valid
      */
     public static void validate(Properties props) {
-        validate(Collections.emptyMap(), props, Collections.emptyMap(), false, false);
+        validate(Collections.emptyMap(), props, Collections.emptyMap(), false);
     }
 
     public static void validate(Map<String, String> existingConfigs,
                                 Properties props,
                                 Map<?, ?> configuredProps,
-                                boolean isRemoteLogStorageSystemEnabled,
-                                boolean fromZK) {
+                                boolean isRemoteLogStorageSystemEnabled) {
         validateNames(props);
         if (configuredProps == null || configuredProps.isEmpty()) {
             Map<?, ?> valueMaps = CONFIG.parse(props);
@@ -646,7 +625,7 @@ public class LogConfig extends AbstractConfig {
             Map<Object, Object> combinedConfigs = new HashMap<>(configuredProps);
             combinedConfigs.putAll(props);
             Map<?, ?> valueMaps = CONFIG.parse(combinedConfigs);
-            validateTopicLogConfigValues(existingConfigs, valueMaps, isRemoteLogStorageSystemEnabled, fromZK);
+            validateTopicLogConfigValues(existingConfigs, valueMaps, isRemoteLogStorageSystemEnabled);
         }
     }
 

@@ -24,13 +24,16 @@ import org.slf4j.{LoggerFactory, Marker, MarkerFactory}
 object Log4jControllerRegistration {
   private val logger = Logger(this.getClass.getName)
 
-  try {
-    val log4jController = Class.forName("kafka.utils.Log4jController").asInstanceOf[Class[Object]]
-    val instance = log4jController.getDeclaredConstructor().newInstance()
-    CoreUtils.registerMBean(instance, "kafka:type=kafka.Log4jController")
-    logger.info("Registered kafka:type=kafka.Log4jController MBean")
-  } catch {
-    case _: Exception => logger.info("Couldn't register kafka:type=kafka.Log4jController MBean")
+  private val loggingMBean = new LoggingController
+  registerMBean(loggingMBean, "kafka.Log4jController")
+
+  private def registerMBean(mbean: LoggingController, typeAttr: String): Unit = {
+    try {
+      CoreUtils.registerMBean(mbean, s"kafka:type=$typeAttr")
+      logger.info("Registered `kafka:type={}` MBean", typeAttr)
+    } catch {
+      case e: Exception => logger.warn("Couldn't register `kafka:type={}` MBean", typeAttr, e)
+    }
   }
 }
 

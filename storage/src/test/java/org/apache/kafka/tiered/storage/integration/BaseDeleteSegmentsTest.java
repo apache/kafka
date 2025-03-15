@@ -56,7 +56,9 @@ public abstract class BaseDeleteSegmentsTest extends TieredStorageTestHarness {
                 .expectSegmentToBeOffloaded(broker0, topicA, p0, 2, new KeyValueSpec("k2", "v2"))
                 .expectEarliestLocalOffsetInLogDirectory(topicA, p0, 3L)
                 .produceWithTimestamp(topicA, p0, new KeyValueSpec("k0", "v0"), new KeyValueSpec("k1", "v1"),
-                        new KeyValueSpec("k2", "v2"), new KeyValueSpec("k3", "v3", System.currentTimeMillis() + TimeUnit.DAYS.toMillis(1)))
+                        // DeleteSegmentsByRetentionTimeTest uses a tiny retention time, which could cause the active 
+                        // segment to be rolled and deleted. We use a future timestamp to prevent that from happening.
+                        new KeyValueSpec("k2", "v2"), new KeyValueSpec("k3", "v3", System.currentTimeMillis() + TimeUnit.HOURS.toMillis(1)))
                 // update the topic config such that it triggers the deletion of segments
                 .updateTopicConfig(topicA, configsToBeAdded(), Collections.emptyList())
                 // expect that the three offloaded remote log segments are deleted

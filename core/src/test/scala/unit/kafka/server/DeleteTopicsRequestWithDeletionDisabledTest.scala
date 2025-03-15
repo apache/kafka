@@ -40,7 +40,7 @@ class DeleteTopicsRequestWithDeletionDisabledTest extends BaseRequestTest {
   }
 
   override def generateConfigs = {
-    val props = TestUtils.createBrokerConfigs(brokerCount, null,
+    val props = TestUtils.createBrokerConfigs(brokerCount,
       enableControlledShutdown = false, enableDeleteTopic = false,
       interBrokerSecurityProtocol = Some(securityProtocol),
       trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties, logDirCount = logDirCount)

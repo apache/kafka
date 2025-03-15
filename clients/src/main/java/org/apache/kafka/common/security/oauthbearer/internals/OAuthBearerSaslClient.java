@@ -29,7 +29,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
 import java.util.Map;
 import java.util.Objects;
 
@@ -131,14 +130,14 @@ public class OAuthBearerSaslClient implements SaslClient {
     public byte[] unwrap(byte[] incoming, int offset, int len) {
         if (!isComplete())
             throw new IllegalStateException("Authentication exchange has not completed");
-        return Arrays.copyOfRange(incoming, offset, offset + len);
+        throw new IllegalStateException("OAUTHBEARER supports neither integrity nor privacy");
     }
 
     @Override
     public byte[] wrap(byte[] outgoing, int offset, int len) {
         if (!isComplete())
             throw new IllegalStateException("Authentication exchange has not completed");
-        return Arrays.copyOfRange(outgoing, offset, offset + len);
+        throw new IllegalStateException("OAUTHBEARER supports neither integrity nor privacy");
     }
 
     @Override

@@ -31,6 +31,9 @@ import java.util.Map;
 public class LogAndContinueExceptionHandler implements DeserializationExceptionHandler {
     private static final Logger log = LoggerFactory.getLogger(LogAndContinueExceptionHandler.class);
 
+    /**
+     * @deprecated Since 3.9. Use {@link #handle(ErrorHandlerContext, ConsumerRecord, Exception)} instead.
+     */
     @SuppressWarnings("deprecation")
     @Deprecated
     @Override

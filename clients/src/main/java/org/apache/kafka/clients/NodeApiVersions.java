@@ -49,8 +49,6 @@ public class NodeApiVersions {
 
     private final Map<String, SupportedVersionRange> supportedFeatures;
 
-    private final boolean zkMigrationEnabled;
-
     private final Map<String, Short> finalizedFeatures;
 
     private final long finalizedFeaturesEpoch;
@@ -83,7 +81,7 @@ public class NodeApiVersions {
             }
             if (!exists) apiVersions.add(ApiVersionsResponse.toApiVersion(apiKey));
         }
-        return new NodeApiVersions(apiVersions, Collections.emptyList(), false, Collections.emptyList(), -1);
+        return new NodeApiVersions(apiVersions, Collections.emptyList(), Collections.emptyList(), -1);
     }
 
 
@@ -104,16 +102,14 @@ public class NodeApiVersions {
 
     public NodeApiVersions(
             Collection<ApiVersion> nodeApiVersions,
-            Collection<SupportedFeatureKey> nodeSupportedFeatures,
-            boolean zkMigrationEnabled
+            Collection<SupportedFeatureKey> nodeSupportedFeatures
     ) {
-        this(nodeApiVersions, nodeSupportedFeatures, zkMigrationEnabled, Collections.emptyList(), -1);
+        this(nodeApiVersions, nodeSupportedFeatures, Collections.emptyList(), -1);
     }
 
     public NodeApiVersions(
             Collection<ApiVersion> nodeApiVersions,
             Collection<SupportedFeatureKey> nodeSupportedFeatures,
-            boolean zkMigrationEnabled,
             Collection<ApiVersionsResponseData.FinalizedFeatureKey> nodeFinalizedFeatures,
             long finalizedFeaturesEpoch
     ) {
@@ -133,8 +129,6 @@ public class NodeApiVersions {
                     new SupportedVersionRange(supportedFeature.minVersion(), supportedFeature.maxVersion()));
         }
         this.supportedFeatures = Collections.unmodifiableMap(supportedFeaturesBuilder);
-        this.zkMigrationEnabled = zkMigrationEnabled;
-
         this.finalizedFeaturesEpoch = finalizedFeaturesEpoch;
         this.finalizedFeatures = new HashMap<>();
         for (ApiVersionsResponseData.FinalizedFeatureKey finalizedFeature : nodeFinalizedFeatures) {
@@ -262,10 +256,6 @@ public class NodeApiVersions {
 
     public Map<String, SupportedVersionRange> supportedFeatures() {
         return supportedFeatures;
-    }
-
-    public boolean zkMigrationEnabled() {
-        return zkMigrationEnabled;
     }
 
     public Map<String, Short> finalizedFeatures() {

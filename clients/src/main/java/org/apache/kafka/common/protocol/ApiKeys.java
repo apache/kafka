@@ -132,7 +132,10 @@ public enum ApiKeys {
     DELETE_SHARE_GROUP_STATE(ApiMessageType.DELETE_SHARE_GROUP_STATE, true),
     READ_SHARE_GROUP_STATE_SUMMARY(ApiMessageType.READ_SHARE_GROUP_STATE_SUMMARY, true),
     STREAMS_GROUP_HEARTBEAT(ApiMessageType.STREAMS_GROUP_HEARTBEAT),
-    STREAMS_GROUP_DESCRIBE(ApiMessageType.STREAMS_GROUP_DESCRIBE);
+    STREAMS_GROUP_DESCRIBE(ApiMessageType.STREAMS_GROUP_DESCRIBE),
+    DESCRIBE_SHARE_GROUP_OFFSETS(ApiMessageType.DESCRIBE_SHARE_GROUP_OFFSETS),
+    ALTER_SHARE_GROUP_OFFSETS(ApiMessageType.ALTER_SHARE_GROUP_OFFSETS),
+    DELETE_SHARE_GROUP_OFFSETS(ApiMessageType.DELETE_SHARE_GROUP_OFFSETS);
     
 
     private static final Map<ApiMessageType.ListenerType, EnumSet<ApiKeys>> APIS_BY_LISTENER =
@@ -147,6 +150,11 @@ public enum ApiKeys {
     // The generator ensures every `ApiMessageType` has a unique id
     private static final Map<Integer, ApiKeys> ID_TO_TYPE = Arrays.stream(ApiKeys.values())
         .collect(Collectors.toMap(key -> (int) key.id, Function.identity()));
+
+    // Versions 0-2 were removed in Apache Kafka 4.0, version 3 is the new baseline. Due to a bug in librdkafka,
+    // version `0` has to be included in the api versions response (see KAFKA-18659). In order to achieve that,
+    // we adjust `toApiVersion` to return `0` for the min version of `produce` in the broker listener.
+    public static final short PRODUCE_API_VERSIONS_RESPONSE_MIN_VERSION = 0;
 
     /** the permanent and immutable id of an API - this can't change ever */
     public final short id;
@@ -254,8 +262,39 @@ public enum ApiKeys {
         return apiVersion >= messageType.lowestDeprecatedVersion() && apiVersion <= messageType.highestDeprecatedVersion();
     }
 
+    /**
+     * Returns `true` if there is at least one valid version, `false` otherwise. When `false` is returned, it typically
+     * means that the protocol api is no longer supported, but the api key remains assigned to the removed api so we
+     * do not accidentally reuse it for a different api.
+     */
+    public boolean hasValidVersion() {
+        return oldestVersion() <= latestVersion();
+    }
+
+    /**
+     * To workaround a critical bug in librdkafka, the api versions response is inconsistent with the actual versions
+     * supported by `produce` - this method handles that. It should be called in the context of the api response protocol
+     * handling.
+     *
+     * It should not be used by code generating protocol documentation - we keep that consistent with the actual versions
+     * supported by `produce`.
+     *
+     * See `PRODUCE_API_VERSIONS_RESPONSE_MIN_VERSION` for details.
+     */
+    public Optional<ApiVersionsResponseData.ApiVersion> toApiVersionForApiResponse(boolean enableUnstableLastVersion,
+                                                                                   ApiMessageType.ListenerType listenerType) {
+        return toApiVersion(enableUnstableLastVersion, Optional.of(listenerType));
+    }
+
     public Optional<ApiVersionsResponseData.ApiVersion> toApiVersion(boolean enableUnstableLastVersion) {
-        short oldestVersion = oldestVersion();
+        return toApiVersion(enableUnstableLastVersion, Optional.empty());
+    }
+
+    private Optional<ApiVersionsResponseData.ApiVersion> toApiVersion(boolean enableUnstableLastVersion,
+                                                                     Optional<ApiMessageType.ListenerType> listenerType) {
+        // see `PRODUCE_API_VERSIONS_RESPONSE_MIN_VERSION` for details on why we do this
+        short oldestVersion = (this == PRODUCE && listenerType.map(l -> l == ApiMessageType.ListenerType.BROKER).orElse(false)) ?
+            PRODUCE_API_VERSIONS_RESPONSE_MIN_VERSION : oldestVersion();
         short latestVersion = latestVersion(enableUnstableLastVersion);
 
         // API is entirely disabled if latestStableVersion is smaller than oldestVersion.
@@ -289,7 +328,7 @@ public enum ApiKeys {
         b.append("<th>Key</th>\n");
         b.append("</tr>");
         clientApis().stream()
-            .filter(apiKey -> apiKey.toApiVersion(false).isPresent())
+            .filter(apiKey -> apiKey.toApiVersion(false, Optional.empty()).isPresent())
             .forEach(apiKey -> {
                 b.append("<tr>\n");
                 b.append("<td>");
@@ -322,11 +361,7 @@ public enum ApiKeys {
         return hasBuffer.get();
     }
 
-    public static EnumSet<ApiKeys> zkBrokerApis() {
-        return apisForListener(ApiMessageType.ListenerType.ZK_BROKER);
-    }
-
-    public static EnumSet<ApiKeys> kraftBrokerApis() {
+    public static EnumSet<ApiKeys> brokerApis() {
         return apisForListener(ApiMessageType.ListenerType.BROKER);
     }
 
@@ -335,10 +370,7 @@ public enum ApiKeys {
     }
 
     public static EnumSet<ApiKeys> clientApis() {
-        List<ApiKeys> apis = Arrays.stream(ApiKeys.values())
-            .filter(apiKey -> apiKey.inScope(ApiMessageType.ListenerType.ZK_BROKER) || apiKey.inScope(ApiMessageType.ListenerType.BROKER))
-            .collect(Collectors.toList());
-        return EnumSet.copyOf(apis);
+        return brokerApis();
     }
 
     public static EnumSet<ApiKeys> apisForListener(ApiMessageType.ListenerType listener) {

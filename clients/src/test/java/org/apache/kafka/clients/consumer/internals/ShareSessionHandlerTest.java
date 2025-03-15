@@ -337,7 +337,7 @@ public class ShareSessionHandlerTest {
     }
 
     @Test
-    public void testForgottenPartitions() {
+    public void testPartitionForgottenOnAcknowledgeOnly() {
         String groupId = "G1";
         Uuid memberId = Uuid.randomUuid();
         ShareSessionHandler handler = new ShareSessionHandler(LOG_CONTEXT, 1, memberId);
@@ -360,6 +360,42 @@ public class ShareSessionHandlerTest {
                         .setThrottleTimeMs(0)
                         .setResponses(respList(
                                 new RespEntry("foo", 0, topicId))));
+        handler.handleResponse(resp, ApiKeys.SHARE_FETCH.latestVersion(true));
+
+        // Remove the topic from the session by setting acknowledgements only - this is not asking to fetch records
+        ShareFetchRequestData requestData2 = handler.newShareFetchBuilder(groupId, fetchConfig).build().data();
+        handler.addPartitionToAcknowledgeOnly(foo0, Acknowledgements.empty());
+        assertEquals(Collections.singletonList(foo0), reqForgetList(requestData2, topicNames));
+
+        // Should have the same session ID, next epoch, and same ID usage
+        assertEquals(memberId.toString(), requestData2.memberId(), "Did not use same session");
+        assertEquals(1, requestData2.shareSessionEpoch(), "Did not have correct epoch");
+    }
+
+    @Test
+    public void testForgottenPartitions() {
+        String groupId = "G1";
+        Uuid memberId = Uuid.randomUuid();
+        ShareSessionHandler handler = new ShareSessionHandler(LOG_CONTEXT, 1, memberId);
+
+        // We want to test when all topics are removed from the session
+        Map<String, Uuid> topicIds = new HashMap<>();
+        Map<Uuid, String> topicNames = new HashMap<>();
+        Uuid topicId = addTopicId(topicIds, topicNames, "foo");
+        TopicIdPartition foo0 = new TopicIdPartition(topicId, 0, "foo");
+        handler.addPartitionToFetch(foo0, null);
+        ShareFetchRequestData requestData1 = handler.newShareFetchBuilder(groupId, fetchConfig).build().data();
+        assertMapsEqual(reqMap(foo0), handler.sessionPartitionMap());
+        ArrayList<TopicIdPartition> expectedToSend1 = new ArrayList<>();
+        expectedToSend1.add(new TopicIdPartition(topicId, 0, "foo"));
+        assertListEquals(expectedToSend1, reqFetchList(requestData1, topicNames));
+
+        ShareFetchResponse resp = new ShareFetchResponse(
+            new ShareFetchResponseData()
+                .setErrorCode(Errors.NONE.code())
+                .setThrottleTimeMs(0)
+                .setResponses(respList(
+                    new RespEntry("foo", 0, topicId))));
         handler.handleResponse(resp, ApiKeys.SHARE_FETCH.latestVersion(true));
 
         // Remove the topic from the session
