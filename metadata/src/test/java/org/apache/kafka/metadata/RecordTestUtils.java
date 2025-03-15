@@ -31,8 +31,7 @@ import org.apache.kafka.server.util.MockRandom;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.util.Arrays;
-import java.util.Collections;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -268,7 +267,7 @@ public class RecordTestUtils {
             setIncarnationId(new Uuid(3465346L, id)).
             setZkMigrationReady(zkMigrationReady).
             setEndPoints(new RegisterControllerRecord.ControllerEndpointCollection(
-                Arrays.asList(
+                List.of(
                     new RegisterControllerRecord.ControllerEndpoint().
                         setName("CONTROLLER").
                         setHost("localhost").
@@ -282,7 +281,7 @@ public class RecordTestUtils {
                 ).iterator()
             )).
             setFeatures(new RegisterControllerRecord.ControllerFeatureCollection(
-                Collections.singletonList(
+                List.of(
                     new RegisterControllerRecord.ControllerFeature().
                         setName(MetadataVersion.FEATURE_NAME).
                         setMinSupportedVersion(MetadataVersion.MINIMUM_VERSION.featureLevel()).
