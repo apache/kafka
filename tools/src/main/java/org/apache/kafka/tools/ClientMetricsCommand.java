@@ -120,16 +120,7 @@ public class ClientMetricsCommand {
             String entityName = opts.hasGenerateNameOption() ? Uuid.randomUuid().toString() : opts.name().get();
 
             Map<String, String> configsToBeSet = new HashMap<>();
-            opts.interval().ifPresent(intervalStr -> {
-                if (!intervalStr.isEmpty()) {
-                    try {
-                        Integer.parseInt(intervalStr);
-                    } catch (NumberFormatException e) {
-                        throw new IllegalArgumentException("Invalid interval value. Must be a valid integer or empty to delete the setting.");
-                    }
-                }
-                configsToBeSet.put("interval.ms", intervalStr);
-            });
+            opts.interval().map(intervalVal -> configsToBeSet.put("interval.ms", intervalVal.toString()));
             opts.metrics().map(metricslist -> configsToBeSet.put("metrics", String.join(",", metricslist)));
             opts.match().map(matchlist -> configsToBeSet.put("match", String.join(",", matchlist)));
 
@@ -376,6 +367,16 @@ public class ClientMetricsCommand {
             if (has(alterOpt)) {
                 if ((isNamePresent && has(generateNameOpt)) || (!isNamePresent && !has(generateNameOpt)))
                     throw new IllegalArgumentException("One of --name or --generate-name must be specified with --alter.");
+
+                interval().ifPresent(intervalStr -> {
+                    if (!intervalStr.isEmpty()) {
+                        try {
+                            Integer.parseInt(intervalStr);
+                        } catch (NumberFormatException e) {
+                            throw new IllegalArgumentException("Invalid interval value. Must be a valid integer or empty to delete the setting.");
+                        }
+                    }
+                });
             }
 
             if (has(deleteOpt) && !isNamePresent)
