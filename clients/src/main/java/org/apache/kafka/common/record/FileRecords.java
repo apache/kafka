@@ -327,7 +327,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
         // Only one case would reach here: all batches have baseOffset less than or equal to targetOffset
         // Check if the last batch contains the target
         if (prevBatch != null && prevBatch.lastOffset() >= targetOffset) {
-            return new LogOffsetPosition(prevBatch.baseOffset(), prevBatch.position(), prevBatch.sizeInBytes());
+            return new LogOffsetPosition(prevBatch);
         }
 
         return null;
