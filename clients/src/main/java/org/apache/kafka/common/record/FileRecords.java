@@ -301,29 +301,17 @@ public class FileRecords extends AbstractRecords implements Closeable {
         FileChannelRecordBatch prevBatch = null;
 
         for (FileChannelRecordBatch batch : batchesFrom(startingPosition)) {
-            // if baseOffset exactly equals targetOffset, return immediately
-            if (batch.baseOffset() == targetOffset) {
-                return new LogOffsetPosition(batch);
-            }
-
-            // If we find the first batch with baseOffset greater than targetOffset
-            if (batch.baseOffset() > targetOffset) {
-                // If there's no previous batch, return the current batch
-                if (prevBatch == null) {
-                    return new LogOffsetPosition(batch);
-                }
-
+            if (batch.baseOffset() >= targetOffset) {
                 // Check if the previous batch contains the target
-                if (prevBatch.lastOffset() >= targetOffset) {
+                if (prevBatch != null && prevBatch.lastOffset() >= targetOffset)
                     return new LogOffsetPosition(prevBatch);
-                } else {
-                    // If the previous batch doesn't contain the target, return the current batch
+                else
+                    // If there's no previous batch, return the current batch or the
+                    // previous batch doesn't contain the target, return the current batch
                     return new LogOffsetPosition(batch);
-                }
             }
             prevBatch = batch;
         }
-
         // Only one case would reach here: all batches have baseOffset less than or equal to targetOffset
         // Check if the last batch contains the target
         if (prevBatch != null && prevBatch.lastOffset() >= targetOffset) {
